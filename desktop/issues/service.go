@@ -1,8 +1,11 @@
 package issues
 
-import "context"
+import (
+	"context"
 
-import "github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/project"
+)
 
 // Service is bound to the front end.
 type Service struct {
@@ -22,10 +25,11 @@ func (s *Service) Issues(refresh bool) ([]Issue, error) {
 	return s.issues.WithSessions(list), nil
 }
 
-// StartIssue opens a session for the issue and types the command of the action with that name, the section's
-// default for ""; an issue that has a live session gets it back.
-func (s *Service) StartIssue(number int, action string) (sessions.Session, error) {
-	v, _, err := s.issues.Start(s.ctx(), number, action, "", "")
+// StartIssue opens a session for the issue and gives it the command of the action with that name, the section's
+// default for "", followed by the prompt. A model or effort that is not empty wins over the action's and the labels'.
+// An issue that has a live session gets it back, and neither the prompt nor the model reaches it.
+func (s *Service) StartIssue(number int, action, prompt, model, effort string) (sessions.Session, error) {
+	v, _, err := s.issues.Start(s.ctx(), number, action, "", "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
 	return v, err
 }
 

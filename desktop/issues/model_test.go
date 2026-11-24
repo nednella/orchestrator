@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
@@ -149,5 +150,50 @@ func TestAnotherAgentIsNotGivenAModel(t *testing.T) {
 	}
 	if s.Model != "" || s.Effort != "" {
 		t.Errorf("a bash session claims %q %q", s.Model, s.Effort)
+	}
+}
+
+func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+
+	s, err := h.StartIssueOwn(7, "", "be careful", "haiku", "low")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(argsOf(t, dir, s.ID), "\n")
+	if got := args[len(args)-2:]; !slices.Equal(got, []string{"--", "/ship 7 be careful"}) {
+		t.Errorf("start argument = %q, want the command then the prompt", got)
+	}
+	if model, effort := flagsOf(t, dir, s.ID); model != "haiku" || effort != "low" {
+		t.Errorf("claude got --model %q --effort %q, want haiku low", model, effort)
+	}
+
+	plan, err := h.StartIssueOwn(8, "", "", "", "max")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model, effort := flagsOf(t, dir, plan.ID); model != "opus" || effort != "max" {
+		t.Errorf("claude got --model %q --effort %q, want the action's model and the owner's effort", model, effort)
+	}
+}
+
+func TestOwnersPromptDoesNotReachALiveSession(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	first, err := h.StartIssueOwn(7, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := h.StartIssueOwn(7, "", "type this", "haiku", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ID != first.ID {
+		t.Fatalf("started %s, want the live session %s", again.ID, first.ID)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if pane := h.Pane(t, first.ID); strings.Contains(pane, "type this") {
+		t.Errorf("the prompt was typed into the live session:\n%s", pane)
 	}
 }

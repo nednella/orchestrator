@@ -132,16 +132,72 @@ func TestSessionLifecycle(t *testing.T) {
 	})
 }
 
-func TestPrefillIsTypedNotSubmitted(t *testing.T) {
+func TestOwnersPromptIsSentOnceTheAgentIsReady(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.NewSession("p", "typed prefill text")
+	s, err := h.NewSession("", "printf 'ran-%s' prompt\nignored second line")
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "prefill on the prompt", func() bool { return strings.Contains(h.Pane(t, s.ID), "typed prefill text") })
-	time.Sleep(300 * time.Millisecond)
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "not found") {
-		t.Errorf("prefill was submitted:\n%s", pane)
+	if s.Title != "printf 'ran-%s' prompt" {
+		t.Errorf("title = %q, want the first line of the prompt", s.Title)
+	}
+	eventually(t, "the prompt submitted", func() bool { return strings.Contains(h.Pane(t, s.ID), "ran-prompt") })
+}
+
+func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	long := strings.Repeat("é", 80)
+
+	tests := []struct {
+		name, title, prompt, model, effort string
+		chat                               bool
+		wantTitle                          string
+	}{
+		{"task", "", "Fix the cart\nwith detail", "opus", "high", false, "Fix the cart"},
+		{"chat", "", "What is this?", "haiku", "", true, "What is this?"},
+		{"long first line", "", long, "", "low", false, strings.Repeat("é", 60)},
+		{"given title", "mine", "do it", "", "", false, "mine"},
+		{"empty chat", "", "", "", "", true, "chat"},
+	}
+	for _, tt := range tests {
+		var s sessions.Session
+		var err error
+		if tt.chat {
+			s, err = h.NewChatWith(tt.title, tt.prompt, tt.model, tt.effort)
+		} else {
+			s, err = h.NewSessionWith(tt.title, tt.prompt, tt.model, tt.effort)
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if s.Title != tt.wantTitle {
+			t.Errorf("%s: title = %q, want %q", tt.name, s.Title, tt.wantTitle)
+		}
+		args := claudeArgs(t, dir, s.ID)
+		flag := func(name string) string {
+			if i := slices.Index(args, name); i >= 0 {
+				return args[i+1]
+			}
+			return ""
+		}
+		if flag("--model") != tt.model || flag("--effort") != tt.effort {
+			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, flag("--model"), flag("--effort"), tt.model, tt.effort)
+		}
+		if tt.prompt != "" && !slices.Contains(args, "--") {
+			t.Errorf("%s: the prompt is not the start argument: %q", tt.name, args)
+		}
+	}
+}
+
+func TestThreadWithAnUnknownModelDoesNotStart(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	if s, err := h.NewSessionWith("", "hi", "nope", ""); err == nil {
+		t.Errorf("started %+v with a model claude does not take", s)
+	}
+	if s, err := h.NewChatWith("", "hi", "", "huge"); err == nil {
+		t.Errorf("started %+v with an effort claude does not take", s)
 	}
 }
 

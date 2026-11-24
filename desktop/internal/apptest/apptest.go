@@ -899,11 +899,19 @@ func (h *Harness) SetUpProject() (sessions.Session, error)  { return h.projects.
 func (h *Harness) DismissSetup() (projects.Snapshot, error) { return h.projects.DismissSetup() }
 
 func (h *Harness) NewChat(title string) (sessions.Session, error) {
-	return h.sessions.NewChat(title)
+	return h.sessions.NewChat(title, "", "", "")
 }
 
-func (h *Harness) NewSession(title, prefill string) (sessions.Session, error) {
-	return h.sessions.NewSession(title, prefill)
+func (h *Harness) NewChatWith(title, prompt, model, effort string) (sessions.Session, error) {
+	return h.sessions.NewChat(title, prompt, model, effort)
+}
+
+func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
+	return h.sessions.NewSession(title, prompt, "", "")
+}
+
+func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
+	return h.sessions.NewSession(title, prompt, model, effort)
 }
 func (h *Harness) ShellOpen() (sessions.ShellInfo, error) { return h.sessions.ShellOpen() }
 func (h *Harness) ShellNew() (sessions.ShellInfo, error)  { return h.sessions.ShellNew() }
@@ -932,10 +940,13 @@ func (h *Harness) TermClose(id string) { h.terminal.TermClose(id) }
 
 func (h *Harness) Issues(refresh bool) ([]issues.Issue, error) { return h.issues.Issues(refresh) }
 func (h *Harness) StartIssue(number int) (sessions.Session, error) {
-	return h.issues.StartIssue(number, "")
+	return h.issues.StartIssue(number, "", "", "", "")
 }
 func (h *Harness) StartIssueWith(number int, action string) (sessions.Session, error) {
-	return h.issues.StartIssue(number, action)
+	return h.issues.StartIssue(number, action, "", "", "")
+}
+func (h *Harness) StartIssueOwn(number int, action, prompt, model, effort string) (sessions.Session, error) {
+	return h.issues.StartIssue(number, action, prompt, model, effort)
 }
 func (h *Harness) MoveIssue(number int, section string) error {
 	return h.issues.MoveIssue(number, section)

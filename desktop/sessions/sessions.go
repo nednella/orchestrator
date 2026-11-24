@@ -1200,6 +1200,38 @@ func (s *Sessions) CreateChat(title, text string, send bool, agentName string) (
 	return s.createIn(s.Current(), cmp.Or(strings.TrimSpace(title), chatTitle), text, send, 0, project.Model{}, "", "", "", true, "", agentName)
 }
 
+// StartOptions is what the owner chose for a new thread: the first message, sent as it is, and the model and effort,
+// which win over every other choice. Empty fields leave the choice to the defaults.
+type StartOptions struct {
+	Prompt string
+	Model  project.Model
+}
+
+const titleLength = 60
+
+// titleFromPrompt is the first line of the prompt, cut to the length of a title.
+func titleFromPrompt(prompt string) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(prompt), "\n")
+	title := []rune(strings.TrimSpace(first))
+	if len(title) > titleLength {
+		title = title[:titleLength]
+	}
+	return strings.TrimSpace(string(title))
+}
+
+// CreateWith starts a thread in the current project as Create or CreateChat does, with the owner's first message
+// sent through the same path and the owner's model and effort. A blank title is the first line of the prompt.
+func (s *Sessions) CreateWith(title string, chat bool, o StartOptions) (Session, error) {
+	if err := s.Provider("").ValidModel(o.Model.Model, o.Model.Effort); err != nil {
+		return Session{}, err
+	}
+	title = cmp.Or(strings.TrimSpace(title), titleFromPrompt(o.Prompt))
+	if chat {
+		title = cmp.Or(title, chatTitle)
+	}
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", "", chat, "", "")
+}
+
 // CreateBriefed is Create for a session with a job of its own: brief is added to the agent's system prompt, and the
 // project says whether text is sent.
 func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
@@ -1211,12 +1243,22 @@ func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 // is ready; the project says whether that is sent. The agent is the provider named, else the one the issue's labels
 // and the action pick, else the default; the labels and the action pick the model it takes. A handover from the
 // session that asked for this one is added to the agent's system prompt. An issue that has a live session of that
-// kind gets that session back, and created is false.
-func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover, agentName string) (view Session, created bool, err error) {
+// kind gets that session back, and created is false. The owner's prompt follows the action's command in the same
+// first message, and the owner's model and effort win over the labels' and the action's; a session that is
+// already live gets neither.
+func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover, agentName string, o StartOptions) (view Session, created bool, err error) {
 	proj := s.Current()
 	agentName = cmp.Or(agentName, project.PickAgent(action, labels))
+	if err := s.Provider(agentName).ValidModel(o.Model.Model, o.Model.Effort); err != nil {
+		return Session{}, false, err
+	}
 	model, _ := project.Pick(action, labels, s.Provider(agentName).ValidModel)
-	view, live, err := s.createForIssue(proj, title, fromApp(text), proj.SendsPrompt(), issue, model, "", handover, action.Chat(), action.Name, agentName)
+	model = project.Model{Model: cmp.Or(o.Model.Model, model.Model), Effort: cmp.Or(o.Model.Effort, model.Effort)}
+	text = fromApp(text)
+	if extra := strings.TrimSpace(o.Prompt); extra != "" {
+		text = strings.TrimSpace(text + " " + extra)
+	}
+	view, live, err := s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, "", handover, action.Chat(), action.Name, agentName)
 	if live == "" {
 		return view, err == nil, err
 	}

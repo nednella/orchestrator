@@ -27,7 +27,7 @@ type Sessions interface {
 	Current() project.Project
 	IssueSessions() map[int]string
 	List() []sessions.Session
-	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover, agent string) (view sessions.Session, created bool, err error)
+	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover, agent string, o sessions.StartOptions) (view sessions.Session, created bool, err error)
 	Provider(name string) agent.Provider
 }
 
@@ -293,7 +293,7 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 // section's default action when action is "", with the agent named, or the default for "". An issue that
 // already has a live session gets that session back instead of a second agent, and created is false. An
 // issue not in the cached list may be new: the list is read again once.
-func (i *Issues) Start(ctx context.Context, number int, action, handover, agent string) (view sessions.Session, created bool, err error) {
+func (i *Issues) Start(ctx context.Context, number int, action, handover, agent string, o sessions.StartOptions) (view sessions.Session, created bool, err error) {
 	proj := i.sessions.Current()
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)
@@ -313,7 +313,7 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover, agent 
 		if !ok {
 			return sessions.Session{}, false, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
-		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, agent)
+		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, agent, o)
 	}
 	return sessions.Session{}, false, fmt.Errorf("issue #%d is not open in this project", number)
 }

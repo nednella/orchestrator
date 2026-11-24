@@ -420,7 +420,7 @@ func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
 	if err := h.KillSession(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", "")
+	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", "", sessions.StartOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

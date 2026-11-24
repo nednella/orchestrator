@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/agent"
 	ctl "github.com/nednella/agentos/internal/control"
 )
@@ -38,7 +39,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, created, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], req.Opts["agent"])
+		s, created, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], req.Opts["agent"], sessions.StartOptions{})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))
