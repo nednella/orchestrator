@@ -46,7 +46,8 @@ export function ProjectPicker() {
     report(async () => run())
   }
 
-  const onMenuKeyDown = (e: KeyboardEvent) => {
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && !open) return
     e.stopPropagation()
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -57,19 +58,30 @@ export function ProjectPicker() {
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
     if (step === 0) return
     e.preventDefault()
+    if (!open) {
+      if (e.target === trigger.current && step === 1) setOpen(true)
+      return
+    }
     const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
     const at = items.indexOf(document.activeElement as HTMLElement)
     items[(at + step + items.length) % items.length]?.focus()
   }
 
   return (
-    <div ref={root} className="relative flex min-w-0 flex-1 items-center gap-1">
+    <div
+      ref={root}
+      className="relative flex min-w-0 flex-1 items-center gap-1"
+      onKeyDown={onKeyDown}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false)
+      }}
+    >
       <button
         ref={trigger}
         className="btn btn-ghost h-7 min-w-0 flex-1 justify-start gap-1.5 px-2"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Project ${project?.name ?? ''}`}
+        aria-label={`Project ${project?.name ?? ''}${elsewhere > 0 ? `, ${elsewhere} in other projects need you` : ''}`}
         title="Switch project"
         onClick={() => setOpen(!open)}
       >
@@ -95,7 +107,6 @@ export function ProjectPicker() {
           className="fade-in absolute top-8 left-0 max-h-80 w-full min-w-48 overflow-y-auto rounded-md border border-line-strong bg-raised py-1"
           style={{ zIndex: 'var(--z-popup)' }}
           role="menu"
-          onKeyDown={onMenuKeyDown}
         >
           {projects.map((p) => (
             <button
