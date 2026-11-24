@@ -9,6 +9,8 @@ const EDGE_PX = 4
 // off the bottom. Escape, a click outside and a resize close it; focus goes back where it was if it was left nowhere.
 export function useFloatingAt(popup: RefObject<HTMLElement | null>, at: Point, onClose: () => void): CSSProperties {
   const [place, setPlace] = useState<Point | null>(null)
+  // Read at the first render, before the popup takes the focus: React's StrictMode runs effects twice in development.
+  const [before] = useState(() => document.activeElement as HTMLElement | null)
   const close = useRef(onClose)
 
   useLayoutEffect(() => {
@@ -26,7 +28,6 @@ export function useFloatingAt(popup: RefObject<HTMLElement | null>, at: Point, o
   }, [popup, at])
 
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null
     const outside = (e: MouseEvent) => {
       if (!popup.current?.contains(e.target as Node)) close.current()
     }
@@ -46,7 +47,7 @@ export function useFloatingAt(popup: RefObject<HTMLElement | null>, at: Point, o
       window.removeEventListener('resize', resize)
       if (document.activeElement === document.body || !document.activeElement) before?.focus()
     }
-  }, [popup])
+  }, [popup, before])
 
   return place ? { left: place.x, top: place.y } : { left: at.x, top: at.y, opacity: 0 }
 }
