@@ -1095,6 +1095,13 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
+  [data-section='notes'] .note-jot,
+  [data-section='notes'] .note-search {
+    background: var(--bg-note-card);
+    border-color: var(--border-note);
+    color: var(--text-note);
+  }
+
   .reveal {
     display: inline-flex;
     flex: none;

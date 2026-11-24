@@ -15,21 +15,23 @@ const newestFirst = (x: Note, y: Note) => y.createdAt - x.createdAt
 
 export function NotesView() {
   const a = useAgentos('notes', 'report', 'setNotePinned', 'setNoteArchived')
+  const [query, setQuery] = useState('')
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
 
-  const { active, archived } = useMemo(
-    () => ({
-      active: a.notes.filter((n) => !n.archived).sort((x, y) => Number(y.pinned) - Number(x.pinned) || newestFirst(x, y)),
-      archived: a.notes.filter((n) => n.archived).sort(newestFirst),
-    }),
-    [a.notes],
-  )
+  const { active, archived } = useMemo(() => {
+    const matches = a.notes.filter((n) => n.text.toLowerCase().includes(query.trim().toLowerCase()))
+    return {
+      active: matches.filter((n) => !n.archived).sort((x, y) => Number(y.pinned) - Number(x.pinned) || newestFirst(x, y)),
+      archived: matches.filter((n) => n.archived).sort(newestFirst),
+    }
+  }, [a.notes, query])
 
-  const visible = archivedOpen ? [...active, ...archived] : active
+  const showArchived = archivedOpen || Boolean(query)
+  const visible = showArchived ? [...active, ...archived] : active
 
   const listNav = useListNav(
     visible.map((n) => n.id),
@@ -74,22 +76,44 @@ export function NotesView() {
   )
 
   return (
-    <div ref={root} tabIndex={-1} className="flex h-full min-h-0 flex-col outline-none" onKeyDown={onKeyDown}>
-      <div className="flex-none px-2 pt-2 pb-1">
+    <div ref={root} tabIndex={-1} data-section="notes" className="flex h-full min-h-0 flex-col outline-none" onKeyDown={onKeyDown}>
+      <div className="flex flex-none flex-col gap-1.5 px-2 pt-2 pb-1">
         <NoteJot />
+        {a.notes.length > 0 && (
+          <div className="relative">
+            <span className="pointer-events-none absolute top-1.5 left-2 text-dim">
+              <Icon name="search" size={13} />
+            </span>
+            <input
+              value={query}
+              placeholder="Search notes"
+              aria-label="Search notes"
+              spellCheck={false}
+              className="field note-search w-full pl-7 text-small"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return
+                e.stopPropagation()
+                if (query) setQuery('')
+                else e.currentTarget.blur()
+              }}
+            />
+          </div>
+        )}
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pt-1 pb-3">
         {a.notes.length === 0 && <Notice title="Nothing jotted yet" hint="Half ideas, things to ask, bugs you noticed. Start a thread or file an issue from any note later." centered />}
+        {a.notes.length > 0 && visible.length === 0 && <Notice title="No notes match" hint="Clear the search to see them all." centered />}
         {active.map(card)}
         {archived.length > 0 && (
           <>
-            <button className="flex items-center gap-1.5 px-1 py-1 text-small text-dim hover:text-ink" aria-expanded={archivedOpen} onClick={() => setArchivedOpen(!archivedOpen)}>
-              <span style={{ transform: archivedOpen ? 'none' : 'rotate(-90deg)' }}>
+            <button className="flex items-center gap-1.5 px-1 py-1 text-small text-dim hover:text-ink" aria-expanded={showArchived} onClick={() => setArchivedOpen(!archivedOpen)}>
+              <span style={{ transform: showArchived ? 'none' : 'rotate(-90deg)' }}>
                 <Icon name="chevron" size={12} />
               </span>
               Archived ({archived.length})
             </button>
-            <Collapse open={archivedOpen}>
+            <Collapse open={showArchived}>
               <div className="flex flex-col gap-2">{archived.map(card)}</div>
             </Collapse>
           </>
