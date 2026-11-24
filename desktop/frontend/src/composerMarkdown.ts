@@ -200,10 +200,9 @@ type Token = { type: string; raw: string; task?: boolean; tokens?: Token[]; item
 const unsupported = (token: Token): boolean =>
   token.type === 'table' || token.type === 'image' || Boolean(token.task) || [...(token.tokens ?? []), ...(token.items ?? [])].some(unsupported)
 
-const literal = (text: string): JSONContent => (text ? { type: 'paragraph', content: [{ type: 'text', text }] } : { type: 'paragraph' })
-const paragraphs = (text: string) => text.replace(/^\n+|\n+$/g, '').split(/\n(?:[ \t]*\n)+/).map(literal)
+const literalParagraph = (text: string): JSONContent => (text ? { type: 'paragraph', content: [{ type: 'text', text, marks: [{ type: 'literal' }] }] } : { type: 'paragraph' })
 
-// Markdown the composer cannot show loads as its source text, so no draft loses text.
+// Markdown the composer cannot show loads as its source text, kept literal, so it is sent as it came in.
 function parseBlocks(text: string): JSONContent[] {
   const blocks: JSONContent[] = []
   let run = ''
@@ -218,7 +217,7 @@ function parseBlocks(text: string): JSONContent[] {
       continue
     }
     flush()
-    blocks.push(...paragraphs(token.raw))
+    blocks.push(literalParagraph(token.raw.replace(/^\n+|\n+$/g, '')))
   }
   flush()
   return blocks
@@ -237,13 +236,12 @@ export function fromMarkdown(text: string): JSONContent {
   const content = parseBlocks(text)
   if (content.length === 0) return { type: 'doc', content: [{ type: 'paragraph' }] }
   const doc = splitLines({ type: 'doc', content })[0]
-  return isValid(doc) ? doc : splitLines({ type: 'doc', content: paragraphs(text) })[0]
+  return isValid(doc) ? doc : splitLines({ type: 'doc', content: [literalParagraph(text)] })[0]
 }
 
 // Pasted text goes in as it is, not read as markdown, and is sent as it is.
 export function fromPlainText(text: string): JSONContent {
-  const pasted = text.replace(/\r\n?/g, '\n')
-  return splitLines({ type: 'doc', content: [pasted ? { type: 'paragraph', content: [{ type: 'text', text: pasted, marks: [{ type: 'literal' }] }] } : { type: 'paragraph' }] })[0]
+  return splitLines({ type: 'doc', content: [literalParagraph(text.replace(/\r\n?/g, '\n'))] })[0]
 }
 
 // A draft is saved as the editor's document, so it reloads as it was; its markdown is what is sent. A draft saved

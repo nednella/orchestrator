@@ -134,11 +134,23 @@ test('empty markdown reads as one empty paragraph', () => {
   assert.deepEqual(fromMarkdown(''), doc({ type: 'paragraph' }))
 })
 
-test('markdown the composer cannot show loads as its source text', () => {
-  assert.deepEqual(fromMarkdown('see ![img](x.png) here'), doc(p(text('see ![img](x.png) here'))))
-  assert.deepEqual(fromMarkdown('- [ ] task\n- [x] done'), doc(p(text('- [ ] task'), { type: 'hardBreak' }, text('- [x] done'))))
-  assert.deepEqual(fromMarkdown('| a |\n| - |'), doc(p(text('| a |'), { type: 'hardBreak' }, text('| - |'))))
-})
+const unshown = {
+  table: '| a | b |\n| - | - |\n| 1 | 2 |',
+  image: '**bold** and ![img](x.png)',
+  tasks: '- [ ] fix *this*\n- [x] read  the_issue',
+  nestedTask: '- a\n\n  - [ ] t',
+}
+
+for (const [name, source] of Object.entries(unshown)) {
+  test(`a loaded ${name} is literal and sent as its source, also after an edit elsewhere`, () => {
+    const loaded = fromMarkdown(source)
+    const literalOnly = loaded.content?.every((block) => block.content?.every((node) => node.marks?.some((m) => m.type === 'literal')))
+    assert.equal(literalOnly, true)
+    assert.equal(toMarkdown(loaded), source)
+    const edited = doc(...(loaded.content ?? []), p(text('typed a*b')))
+    assert.equal(toMarkdown(edited), `${source}\n\ntyped a\\*b`)
+  })
+}
 
 const traceback = [
   'Traceback (most recent call last):',
