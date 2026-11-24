@@ -9,6 +9,7 @@ import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
 import { RightPanel } from './components/RightPanel'
 import { Palette } from './components/Palette'
+import { ProjectRail } from './components/ProjectRail'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
@@ -58,6 +59,9 @@ export function App() {
       >
         <TopBar />
         <main className={`relative flex min-h-0 min-w-0 flex-1 ${narrow ? 'p-2' : 'p-3'}`}>
+          <div className={narrow ? 'mr-2 flex' : 'mr-3 flex'}>
+            <ProjectRail />
+          </div>
           {sidebarOpen && <ThreadSidebar />}
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
           <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>

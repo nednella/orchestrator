@@ -1,0 +1,24 @@
+import { useAgentos } from '../AgentosContext'
+import type { Project } from '../types'
+
+type ProjectTileProps = { project: Project; label: string; waiting: number }
+
+export function ProjectTile({ project, label, waiting }: ProjectTileProps) {
+  const { project: current, switchProject, report } = useAgentos('project', 'switchProject', 'report')
+  const selected = project.key === current?.key
+  const needs = selected ? 0 : waiting
+  return (
+    <button
+      className="btn btn-ghost relative h-9 w-9 flex-none justify-center px-0 font-semibold"
+      style={selected ? { background: 'var(--bg-raised)', borderColor: 'var(--border-strong)', color: 'var(--text)' } : undefined}
+      title={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
+      aria-label={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
+      aria-current={selected}
+      data-rail-item
+      onClick={() => report(() => switchProject(project.name))}
+    >
+      {label}
+      {needs > 0 && <span className="dot absolute top-1 right-1" data-state="waiting" />}
+    </button>
+  )
+}

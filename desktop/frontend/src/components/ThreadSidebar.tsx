@@ -9,7 +9,6 @@ import { useListNav } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
-import { ProjectPicker } from './ProjectPicker'
 import { SETTLED_KEY, SettledSection } from './SettledSection'
 import { SidebarFooter } from './SidebarFooter'
 import { ThreadSection } from './ThreadSection'
@@ -113,9 +112,6 @@ export function ThreadSidebar() {
         if (e.target === e.currentTarget && selectedId) nav.setCursorKey(selectedId)
       }}
     >
-      <div className="flex flex-none items-center border-b border-line px-1.5 py-1.5">
-        <ProjectPicker />
-      </div>
       <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2">
         <Icon name="search" />
         <input
