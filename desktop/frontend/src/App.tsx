@@ -33,8 +33,7 @@ const appEnterClass: Record<SplashStage, string> = {
   done: '',
 }
 
-// Where the sidebar toggle sits, and where the title bar's own content starts after it.
-const titleInsets = (toggleLeft: string) => ({ '--sidebar-toggle-left': toggleLeft, '--title-start': `calc(${toggleLeft} + 40px)` }) as CSSProperties
+const titleInsets = (toggleLeft: string) => ({ '--sidebar-toggle-left': toggleLeft, '--title-start': `calc(${toggleLeft} + var(--sidebar-toggle-span))` }) as CSSProperties
 
 export function App() {
   const network = useNetwork()
