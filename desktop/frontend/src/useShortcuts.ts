@@ -28,11 +28,7 @@ export function useShortcuts(enabled: boolean) {
         agentos.setOverlay(null)
         return
       }
-      if (lay.newsOpen && lay.newsPage !== 'index') {
-        lay.closeNewsPage()
-        return
-      }
-      if (lay.statsOpen || lay.newsOpen) {
+      if (lay.statsOpen || lay.digestOpen) {
         lay.closeCentre()
         agentos.focus('terminal')
         return

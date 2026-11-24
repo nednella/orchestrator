@@ -18,7 +18,6 @@ import (
 	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
-	"github.com/nednella/agentos/desktop/news"
 	"github.com/nednella/agentos/desktop/notes"
 	"github.com/nednella/agentos/desktop/projects"
 	"github.com/nednella/agentos/desktop/sessions"
@@ -53,7 +52,6 @@ type App struct {
 	browsers *browser.Browsers
 	awake    *awake.Awake
 	digests  *digest.Manager
-	news     *news.Manager
 	updates  *update.Updater
 	router   *control.Router
 	registry *projects.Registry
@@ -119,7 +117,6 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	}, sess.Touch)
 	mgr := digest.NewManager(digest.New(c.DataDir), sess, store, claude, h.Emit, c.StateDir, ctx)
 	a.digests = mgr
-	a.news = news.NewManager(news.NewStore(c.DataDir), news.HTTPFetch(&http.Client{Timeout: 30 * time.Second, Transport: watch.Transport(http.DefaultTransport)}), h.Emit, ctx)
 	a.updates = update.New(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runner(ctx, "", name, args...)
 	}, c.StateDir, Bundle(), h.Emit, upd.Relaunch, h.Quit)
@@ -152,7 +149,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"pr":      sc.PR,
 		"cleanup": sc.Cleanup,
 	})
-	for _, view := range []string{"queue", "notes", "evidence", "term", "next", "filter", "news"} {
+	for _, view := range []string{"queue", "notes", "evidence", "term", "next", "filter"} {
 		a.router.Handle(view, a.router.View(view))
 	}
 	a.services = []any{
@@ -164,7 +161,6 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		evidence.NewService(proofs, changes),
 		browser.NewService(browsers, proofs, changes, ctx),
 		digest.NewService(mgr),
-		news.NewService(a.news),
 		awake.NewService(stayAwake),
 		stats.NewService(waits, c.Registry, stats.NewBooks(events, c.Registry)),
 		update.NewService(a.updates, ctx),
@@ -201,7 +197,6 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	a.router.Listen(a.stateDir)
 	go a.digests.Loop(ctx)
-	go a.news.Loop(ctx)
 	go a.updates.Loop(ctx)
 	go a.followConfig(ctx)
 	return nil
@@ -262,9 +257,6 @@ func (a *App) Browsers() *browser.Browsers { return a.browsers }
 
 // Digests is the digest manager, for tests.
 func (a *App) Digests() *digest.Manager { return a.digests }
-
-// News is the news manager, for tests.
-func (a *App) News() *news.Manager { return a.news }
 
 // Updates is the updater, for tests.
 func (a *App) Updates() *update.Updater { return a.updates }

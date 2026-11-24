@@ -39,8 +39,6 @@ type AllPrefs = Record<Band, BandPrefs>
 
 const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, shellOpen: true, sidebar: null, right: null, shell: null })
 
-export type NewsPage = 'index' | 'tldr' | 'digest'
-
 export type Layout = {
   mode: LayoutMode
   width: number
@@ -53,8 +51,7 @@ export type Layout = {
   mobilePanel: MobilePanel
   widths: Record<SidePanel, number>
   statsOpen: boolean
-  newsOpen: boolean
-  newsPage: NewsPage
+  digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
   setMobilePanel(panel: MobilePanel): void
   setWidth(panel: SidePanel, rem: number, commit: boolean): void
@@ -71,9 +68,7 @@ export type Layout = {
   showHome(part: HomePart): void
   toggleStats(): void
   toggleDigest(): void
-  toggleNews(): void
-  openNews(page: NewsPage): void
-  closeNewsPage(): void
+  openDigest(): void
   closeCentre(): void
   returnToTerminal(): void
   focusPanel(panel: Panel): void
@@ -144,8 +139,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
-  const [newsOpen, setNewsOpen] = useState(devFlags.view === 'news' || devFlags.view === 'digest')
-  const [newsPage, setNewsPage] = useState<NewsPage>(devFlags.view === 'digest' ? 'digest' : 'index')
+  const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const zoomToast = useRef<number | null>(null)
 
   useLayoutEffect(() => {
@@ -158,7 +152,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
   const narrow = mode === 'narrow'
-  const showsThread = selectedId !== null && !statsOpen && !newsOpen
+  const showsThread = selectedId !== null && !statsOpen && !digestOpen
   const { widths: fittedWidths, rightForcedClosed } = fit(width, { ...prefs, rightOpen: prefs.rightOpen && showsThread }, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
   const rightOpen = !narrow && prefs.rightOpen && showsThread && !rightForcedClosed
@@ -180,7 +174,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     previousSelected.current = selectedId
     if (first) return
     setStatsOpen(false)
-    setNewsOpen(false)
+    setDigestOpen(false)
     if (narrow) setMobilePanel('session')
   }, [selectedId, narrow])
 
@@ -195,7 +189,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const showHome = useCallback(
     (part: HomePart) => {
       setStatsOpen(false)
-      setNewsOpen(false)
+      setDigestOpen(false)
       if (narrow) setMobilePanel(part === 'composer' ? 'session' : part)
       if (project && (!narrow || part === 'composer')) selectHome(project.key)
     },
@@ -229,8 +223,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       mobilePanel,
       widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
       statsOpen,
-      newsOpen,
-      newsPage,
+      digestOpen,
       zoom(step) {
         const at = SCALES.indexOf(scale)
         const next = step === 0 ? DEFAULT_SCALE : SCALES[Math.min(Math.max((at < 0 ? 2 : at) + step, 0), SCALES.length - 1)]
@@ -288,40 +281,29 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       showHome,
       toggleStats() {
         setStatsOpen(!statsOpen)
-        setNewsOpen(false)
+        setDigestOpen(false)
         if (!statsOpen && narrow) setMobilePanel('session')
       },
-      toggleNews() {
-        const close = newsOpen && newsPage === 'index'
-        setNewsPage('index')
-        setNewsOpen(!close)
-        setStatsOpen(false)
-        if (!close && narrow) setMobilePanel('session')
-      },
       toggleDigest() {
-        const close = newsOpen && newsPage === 'digest'
-        setNewsPage('digest')
-        setNewsOpen(!close)
+        setDigestOpen(!digestOpen)
         setStatsOpen(false)
-        if (!close && narrow) setMobilePanel('session')
+        if (!digestOpen && narrow) setMobilePanel('session')
       },
-      openNews(page) {
-        setNewsPage(page)
-        setNewsOpen(true)
+      openDigest() {
+        setDigestOpen(true)
         setStatsOpen(false)
         if (narrow) setMobilePanel('session')
       },
-      closeNewsPage: () => setNewsPage('index'),
       closeCentre() {
         setStatsOpen(false)
-        setNewsOpen(false)
+        setDigestOpen(false)
       },
       returnToTerminal() {
         focus('terminal')
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, showsThread, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, showsThread, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, digestOpen, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

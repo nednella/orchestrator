@@ -1,5 +1,5 @@
 import { createMock } from './mock'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, News, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -60,8 +60,6 @@ type Backend = {
   RunDigest(): Promise<void>
   DigestToNote(itemId: string): Promise<Note>
   DismissDigestItem(itemId: string): Promise<void>
-  News(): Promise<News>
-  RefreshNews(): Promise<void>
   Update(): Promise<void>
   PatchNotes(): Promise<Release[]>
   Changelog(): Promise<Release[]>
@@ -106,7 +104,6 @@ const namespaces = {
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
-  news: ['News', 'RefreshNews'],
   update: ['Update', 'PatchNotes', 'Changelog'],
   awake: ['Awake'],
   settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetAgent', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'PickDataDir', 'SetDataDir'],
@@ -207,8 +204,6 @@ export const api = {
   runDigest: () => backend.RunDigest(),
   digestToNote: (itemId: string) => backend.DigestToNote(itemId),
   dismissDigestItem: (itemId: string) => backend.DismissDigestItem(itemId),
-  news: () => backend.News(),
-  refreshNews: () => backend.RefreshNews(),
   update: () => backend.Update(),
   patchNotes: () => backend.PatchNotes(),
   changelog: () => backend.Changelog(),

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { readStored, writeStored } from './storage'
 import { liveThreads, sidebarThreads } from './threads'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -43,10 +43,6 @@ type AgentosState = {
   digest: Digest | null
   digestSeen: number
   digestUnseenCount: number
-  news: News | null
-  newsSeen: number
-  newsUnseen: number
-  newsUnread: string[]
   awake: boolean
   memory: Memory | null
   settings: Settings
@@ -107,9 +103,6 @@ type AgentosActions = {
   digestToNote(itemId: string): Promise<void>
   dismissDigestItem(itemId: string): Promise<void>
   markDigestSeen(): void
-  markNewsSeen(unread: string[]): void
-  markNewsRead(id: string): void
-  refreshNews(): Promise<void>
   ackPR(id: string): Promise<void>
   openPR(session: Session): Promise<void>
   typeInto(id: string, text: string): Promise<void>
@@ -205,8 +198,6 @@ const cleanupToast = (entry: Cleanup): Omit<Toast, 'key'> => {
 const WARNING_SOURCES: Record<Warning['source'], string> = { tmux: 'tmux', github: 'GitHub', 'pull requests': 'Pull requests', worktrees: 'Worktrees', config: 'Config', agent: 'Agent' }
 
 const digestKey = (project: string) => `agentos.digestSeen.${project}`
-const NEWS_SEEN_KEY = 'agentos.newsSeen'
-const NEWS_UNREAD_KEY = 'agentos.newsUnread'
 
 const filterKey = (project: string) => `agentos.filter.${project}`
 const draftKey = (project: string) => `agentos.draft.${project}`
@@ -243,9 +234,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [views, setViews] = useState<Record<string, SessionView>>({})
   const [digest, setDigest] = useState<Digest | null>(null)
   const [digestSeen, setDigestSeen] = useState(0)
-  const [news, setNews] = useState<News | null>(null)
-  const [newsSeen, setNewsSeen] = useState(() => readStored(NEWS_SEEN_KEY, 0))
-  const [newsUnread, setNewsUnread] = useState(() => readStored<string[]>(NEWS_UNREAD_KEY, []))
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
   const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '', dataDirFixed: true })
@@ -492,10 +480,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   useEffect(() => on('awake', setAwake), [])
   useEffect(() => on('memory', setMemory), [])
   useEffect(() => on('issues', ifCurrent(setRawIssues)), [])
-  useEffect(() => on('news', setNews), [])
-  useEffect(() => {
-    report(async () => setNews(await api.news()))
-  }, [report])
   useEffect(() => on('update', ({ version }) => setUpdate(version)), [])
   useEffect(() => on('evidence', ({ id, items }) => setEvidence((map) => ({ ...map, [id]: items }))), [])
   useEffect(() => on('browser:state', (state) => setBrowserStates((map) => ({ ...map, [state.id]: state }))), [])
@@ -591,24 +575,12 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   )
 
   const digestUnseenCount = digest?.items.filter((i) => !i.noteId && i.at > digestSeen).length ?? 0
-  const newsUnseen = news?.issues.filter((i) => i.fetchedAt > newsSeen).reduce((total, i) => total + i.items.length, 0) ?? 0
 
   const markDigestSeen = useCallback(() => {
     const now = Date.now()
     setDigestSeen(now)
     if (projectRef.current) writeStored(digestKey(projectRef.current.name), now)
   }, [])
-
-  const markNewsSeen = useCallback((unread: string[]) => {
-    const now = Date.now()
-    setNewsSeen(now)
-    writeStored(NEWS_SEEN_KEY, now)
-    setNewsUnread(unread)
-  }, [])
-
-  const markNewsRead = useCallback((id: string) => setNewsUnread((ids) => ids.filter((i) => i !== id)), [])
-
-  useEffect(() => writeStored(NEWS_UNREAD_KEY, newsUnread), [newsUnread])
 
   const projectSessions = useMemo(() => sessions.filter((s) => s.project === project?.key), [sessions, project?.key])
 
@@ -803,11 +775,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async dismissDigestItem(itemId) {
         await api.dismissDigestItem(itemId)
       },
-      async refreshNews() {
-        await api.refreshNews()
-      },
-      markNewsSeen,
-      markNewsRead,
       markDigestSeen,
       async addNote(text, images = []) {
         const trimmed = text.trim()
@@ -920,7 +887,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, markNewsSeen, markNewsRead, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, focus, report, pushToast, dismissToast],
   )
 
   const value = useMemo<Agentos>(
@@ -941,10 +908,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       digest,
       digestSeen,
       digestUnseenCount,
-      news,
-      newsSeen,
-      newsUnseen,
-      newsUnread,
       awake,
       memory,
       settings,
@@ -964,7 +927,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

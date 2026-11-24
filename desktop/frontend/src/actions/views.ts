@@ -97,18 +97,10 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   },
   {
     id: 'digest',
-    label: 'News: weekly digest',
+    label: 'Weekly digest',
     group: 'App',
     uiCommand: 'digest',
     run: layout.toggleDigest,
-  },
-  {
-    id: 'news',
-    label: 'News',
-    group: 'App',
-    shortcut: { key: 'n', code: 'KeyN', alt: true },
-    uiCommand: 'news',
-    run: layout.toggleNews,
   },
   {
     id: 'patch-notes',

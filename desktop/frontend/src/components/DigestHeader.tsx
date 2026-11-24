@@ -2,50 +2,32 @@ import type { ReactNode } from "react";
 import { useLayout } from "../LayoutContext";
 import { Icon } from "./Icon";
 
-type NewsHeaderProps = {
-  source: string;
+type DigestHeaderProps = {
   updated: string;
-  action: string;
   running: boolean;
   onRun(): void;
   children: ReactNode;
 };
 
-export function NewsHeader({
-  source,
+export function DigestHeader({
   updated,
-  action,
   running,
   onRun,
   children,
-}: NewsHeaderProps) {
-  const { closeNewsPage, closeCentre } = useLayout();
+}: DigestHeaderProps) {
+  const { closeCentre } = useLayout();
 
   return (
     <>
       <header className="panel-head flex h-10 flex-none items-center gap-2 border-b border-line px-4">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-2 text-body"
-        >
-          <button
-            className="inline-flex items-center gap-1 text-soft hover:text-ink"
-            title="Back to news (Esc)"
-            onClick={closeNewsPage}
-          >
-            <Icon name="chevron-left" size={13} />
-            News
-          </button>
-          <span className="text-dim">/</span>
-          <h2 className="truncate font-semibold">{source}</h2>
-        </nav>
+        <h2 className="truncate text-body font-semibold">Weekly digest</h2>
         <span className="mono ml-auto flex-none text-small text-dim">
           {updated}
         </span>
         <button
           className="btn h-7 w-7 flex-none justify-center px-0"
-          title={action}
-          aria-label={action}
+          title="Run now"
+          aria-label="Run now"
           disabled={running}
           onClick={onRun}
         >
@@ -57,8 +39,8 @@ export function NewsHeader({
         </button>
         <button
           className="btn btn-ghost h-7 w-7 flex-none justify-center px-0"
-          title="Close"
-          aria-label="Close news"
+          title="Close (Esc)"
+          aria-label="Close the digest"
           onClick={closeCentre}
         >
           <Icon name="close" />

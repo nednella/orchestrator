@@ -318,29 +318,6 @@ export type Release = {
   sections: ReleaseSection[]
 }
 
-export type NewsItem = {
-  id: string
-  title: string
-  readTime: string
-  summary: string
-  url: string
-}
-
-export type NewsIssue = {
-  date: string
-  title: string
-  url: string
-  fetchedAt: number
-  items: NewsItem[]
-}
-
-export type News = {
-  running: boolean
-  lastFetchAt: number
-  error: string
-  issues: NewsIssue[]
-}
-
 export type ProjectList<T> = { project: string; items: T[] }
 
 export type Warning = {
@@ -362,7 +339,6 @@ export type EventMap = {
   'ui:command': { name: string; args: string[] }
   evidence: { id: string; items: Evidence[] }
   digest: Digest
-  news: News
   'browser:state': BrowserState
   'term:data': { id: string; data: string }
   'term:exit': { id: string }

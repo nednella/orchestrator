@@ -5,7 +5,7 @@ import type { DigestItem } from "../types";
 import { DigestItemRow } from "./DigestItemRow";
 import { useMinimumLoading } from "../useMinimumLoading";
 import { Loading } from "./Loading";
-import { NewsHeader } from "./NewsHeader";
+import { DigestHeader } from "./DigestHeader";
 
 const dayLabel = (at: number) =>
   new Date(at).toLocaleDateString(undefined, {
@@ -66,17 +66,15 @@ export function DigestView() {
       aria-label="Weekly digest"
       className="panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
-      <NewsHeader
-        source="Weekly digest"
+      <DigestHeader
         updated={lastRun}
-        action="Run now"
         running={!digest || digest.running}
         onRun={() => report(runDigest)}
       >
         From the dependencies in{" "}
         <span className="text-soft">{project?.name ?? "this project"}</span>'s
         source code · {nextRun}
-      </NewsHeader>
+      </DigestHeader>
       {digest?.error && (
         <p className="flex-none border-b border-line px-4 py-2 text-small text-danger">
           {digest.error}

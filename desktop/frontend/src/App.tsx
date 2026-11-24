@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { DigestView } from './components/DigestView'
-import { NewsIndex } from './components/NewsIndex'
-import { NewsView } from './components/NewsView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
 import { IssueDialog } from './components/IssueDialog'
@@ -26,8 +24,8 @@ import { Viewport } from './components/Viewport'
 import { useAgentos } from './AgentosContext'
 import { useLayout } from './LayoutContext'
 import { useFocusedPanel } from './useFocusedPanel'
+import { useDigestToasts } from './useDigestToasts'
 import { useNetwork } from './useNetwork'
-import { useNewsToasts } from './useNewsToasts'
 import { useShortcuts } from './useShortcuts'
 import { useUiCommands } from './useUiCommands'
 
@@ -43,10 +41,10 @@ export function App() {
   const network = useNetwork()
   useShortcuts(network.online)
   useUiCommands()
-  useNewsToasts()
+  useDigestToasts()
   useFocusedPanel()
   const { selectedId } = useAgentos('selectedId')
-  const { mode, sidebarOpen, rightOpen, mobilePanel, statsOpen, newsOpen, newsPage } = useLayout()
+  const { mode, sidebarOpen, rightOpen, mobilePanel, statsOpen, digestOpen } = useLayout()
   const narrow = mode === 'narrow'
   const showCentre = !narrow || mobilePanel === 'session' || mobilePanel === 'queue' || mobilePanel === 'notes'
   const home = narrow ? mobilePanel === 'queue' || mobilePanel === 'notes' || (mobilePanel === 'session' && !selectedId) : !selectedId
@@ -75,7 +73,7 @@ export function App() {
             <main className="relative flex min-h-0 min-w-0 flex-1">
               <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>
                 <div className="min-h-0 flex-1">
-                  <div className={statsOpen || newsOpen ? 'hidden' : 'h-full'}>
+                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>
                     {selectedId && (
                       <div className={home ? 'hidden' : 'h-full'}>
                         <Viewport />
@@ -84,9 +82,7 @@ export function App() {
                     {home && <Home />}
                   </div>
                   {statsOpen && <Stats />}
-                  {newsOpen && newsPage === 'index' && <NewsIndex />}
-                  {newsOpen && newsPage === 'tldr' && <NewsView />}
-                  {newsOpen && newsPage === 'digest' && <DigestView />}
+                  {digestOpen && <DigestView />}
                 </div>
                 {!narrow && <ShellStrip />}
               </div>
