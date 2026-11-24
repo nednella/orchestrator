@@ -687,6 +687,20 @@
     background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
 
+  .thread-search {
+    border: 1px solid transparent;
+    background: var(--bg-raised);
+    transition: border-color 0.12s;
+  }
+
+  .thread-search:hover {
+    border-color: var(--border-strong);
+  }
+
+  .thread-search:focus-within {
+    border-color: var(--accent);
+  }
+
   .shell-tabs {
     position: relative;
     background: var(--bg-app);

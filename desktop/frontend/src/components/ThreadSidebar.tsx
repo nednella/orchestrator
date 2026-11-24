@@ -120,17 +120,19 @@ export function ThreadSidebar() {
         if (e.target === e.currentTarget && selectedId) nav.setCursorKey(selectedId)
       }}
     >
-      <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2">
-        <Icon name="search" />
-        <input
-          ref={search}
-          value={query}
-          placeholder="Search threads"
-          aria-label="Search threads"
-          className="min-w-0 flex-1 bg-transparent py-0.5 outline-none"
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onSearchKeyDown}
-        />
+      <div className="flex flex-none items-center gap-1.5 px-1.5 pt-2 pb-2.5">
+        <label className="thread-search flex h-[1.875rem] min-w-0 flex-1 cursor-text items-center gap-2 rounded-lg px-2.5 text-dim">
+          <Icon name="search" />
+          <input
+            ref={search}
+            value={query}
+            placeholder="Search threads"
+            aria-label="Search threads"
+            className="min-w-0 flex-1 bg-transparent text-ink outline-none"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+          />
+        </label>
       </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto py-1">
         <ThreadSection label="Attention" sessions={sections.waiting} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />
