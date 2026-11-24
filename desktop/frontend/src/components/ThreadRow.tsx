@@ -81,12 +81,13 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           <button
             className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pr-2 pl-3 text-left"
             aria-current={selected}
-            disabled={ended}
+            aria-disabled={ended}
             title={ended ? `${session.title} (ended)` : session.title}
-            style={ended ? { cursor: 'default', opacity: 1 } : undefined}
+            style={ended ? { cursor: 'default' } : undefined}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (selected) return a.showHome(session.project)
+              if (ended) return
               a.select(session.id)
               a.focus('terminal')
             }}
