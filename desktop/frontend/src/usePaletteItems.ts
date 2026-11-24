@@ -66,7 +66,7 @@ export function usePaletteItems(query: string): PaletteItem[] {
       group: 'Notes',
       label: n.text.split('\n')[0],
       hint: 'note',
-      run: () => layout.showSidebarTab('notes'),
+      run: () => layout.showHome('notes'),
     }))
 
   const issues: PaletteItem[] = a.issues

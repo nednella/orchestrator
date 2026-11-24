@@ -19,9 +19,9 @@ export type SessionView = 'terminal' | 'browser' | 'evidence'
 export const SESSION_VIEWS: SessionView[] = ['terminal', 'browser', 'evidence']
 
 export type Overlay = 'palette' | 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
-export type SidebarTab = 'queue' | 'notes'
-export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'note-input'
-export type Composing = 'session' | 'chat' | null
+export type HomePart = 'queue' | 'notes' | 'composer'
+export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'note-input' | 'composer'
+export type ComposerKind = 'session' | 'chat'
 export type PendingImage = { base64: string; mime: string }
 
 type AgentosState = {
@@ -50,9 +50,8 @@ type AgentosState = {
   settings: Settings
   toasts: Toast[]
   overlay: Overlay
-  sidebarTab: SidebarTab
   noteDraft: string
-  composing: Composing
+  composerKind: ComposerKind
   focusRequest: { target: FocusTarget; n: number }
   shellIds: string[]
   shellId: string
@@ -74,7 +73,7 @@ type AgentosActions = {
   showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
-  newSession(title?: string): Promise<Session>
+  newSession(title?: string, prefill?: string): Promise<Session>
   newChat(title?: string): Promise<Session>
   killSession(id: string): Promise<void>
   dismissSession(id: string): Promise<void>
@@ -114,7 +113,6 @@ type AgentosActions = {
   noteToIssue(id: string): Promise<void>
   noteToSession(id: string): Promise<void>
   nextAttention(): void
-  setSidebarTab(tab: SidebarTab): void
   setNoteDraft(text: string): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
@@ -126,7 +124,7 @@ type AgentosActions = {
   setPromptSend(mode: PromptSend): Promise<void>
   setBrowserEnabled(on: boolean): Promise<void>
   setDigestSchedule(schedule: DigestSchedule): Promise<void>
-  setComposing(kind: Composing): void
+  setComposerKind(kind: ComposerKind): void
   setIssueFilter(query: string): void
   focus(target: FocusTarget): void
   report(run: () => unknown): void
@@ -253,9 +251,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(devFlags.tab === 'notes' ? 'notes' : 'queue')
   const [noteDraft, setNoteDraft] = useState('')
-  const [composing, setComposing] = useState<Composing>(null)
+  const [composerKind, setComposerKind] = useState<ComposerKind>('session')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
 
   const sessionsRef = useRef(sessions)
@@ -684,8 +681,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = list.findIndex((s) => s.id === selectedRef.current)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
-      async newSession(title = '') {
-        return addSession(await api.newSession(title, ''))
+      async newSession(title = '', prefill = '') {
+        return addSession(await api.newSession(title, prefill))
       },
       async newChat(title = '') {
         return addSession(await api.newChat(title))
@@ -858,7 +855,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = urgent.findIndex((s) => s.id === selectedRef.current)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
-      setSidebarTab,
       setNoteDraft,
       setOverlay,
       async setTheme(theme) {
@@ -888,7 +884,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async setDigestSchedule(schedule) {
         setSettings(await api.setDigestSchedule(schedule))
       },
-      setComposing,
+      setComposerKind,
       setIssueFilter(query) {
         setIssueFilterState(query)
         if (projectRef.current) writeStored(filterKey(projectRef.current.name), query)
@@ -928,9 +924,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       settings,
       toasts,
       overlay,
-      sidebarTab,
       noteDraft,
-      composing,
+      composerKind,
       focusRequest,
       shellIds,
       shellId,
@@ -941,7 +936,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, sidebarTab, noteDraft, composing, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, noteDraft, composerKind, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

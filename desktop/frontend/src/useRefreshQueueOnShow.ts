@@ -3,13 +3,12 @@ import { useAgentos, useAgentosSelector } from './AgentosContext'
 
 const MIN_GAP_MS = 5000
 
-// Issues change on GitHub with no event the app hears, so a queue on screen is read again when it is
+// Issues change on GitHub with no event the app hears, so a queue on screen is read again when Home is
 // shown, when the project changes and when the window comes back into focus. The caller is mounted only
-// while the queue and notes are on screen.
+// while Home is on screen.
 export function useRefreshQueueOnShow() {
-  const { sidebarTab, refreshIssues, report } = useAgentos('sidebarTab', 'refreshIssues', 'report')
+  const { refreshIssues, report } = useAgentos('refreshIssues', 'report')
   const projectKey = useAgentosSelector((a) => a.project?.key)
-  const shown = sidebarTab === 'queue'
   const refresh = useRef<(force?: boolean) => void>(() => {})
   const last = useRef(Date.now())
   refresh.current = (force = false) => {
@@ -22,11 +21,10 @@ export function useRefreshQueueOnShow() {
   useEffect(() => {
     const switched = seen.current !== undefined && seen.current !== projectKey
     seen.current = projectKey
-    if (shown) refresh.current(switched)
-  }, [shown, projectKey])
+    refresh.current(switched)
+  }, [projectKey])
 
   useEffect(() => {
-    if (!shown) return
     const onFocus = () => document.visibilityState === 'visible' && refresh.current()
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
@@ -34,5 +32,5 @@ export function useRefreshQueueOnShow() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
     }
-  }, [shown])
+  }, [])
 }

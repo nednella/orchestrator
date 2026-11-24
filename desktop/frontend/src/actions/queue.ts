@@ -26,7 +26,7 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     group: 'Queue',
     uiCommand: 'queue',
     run() {
-      layout.showSidebarTab('queue')
+      layout.showHome('queue')
       a.focus('queue-filter')
     },
   },
@@ -37,7 +37,7 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     palette: { prompt: 'Filter, e.g. @alex-r label:idea -type:bug', initial: a.issueFilter },
     uiCommand: 'filter',
     run(args) {
-      layout.showSidebarTab('queue')
+      layout.showHome('queue')
       a.setIssueFilter(args.join(' '))
       return isFiltering(args.join(' ')) ? 'Filter set' : 'Filter cleared'
     },

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { useLayout } from '../LayoutContext'
 import { imageFiles, readImage } from '../images'
 import type { PreviewImage } from '../images'
 import { AutoTextarea } from './AutoTextarea'
@@ -8,8 +7,7 @@ import { Keycap } from './Keycap'
 import { NoteImages } from './NoteImages'
 
 export function NoteInput() {
-  const { addNote, report, focusRequest, noteDraft, setNoteDraft } = useAgentos('addNote', 'report', 'focusRequest', 'noteDraft', 'setNoteDraft')
-  const { returnToTerminal } = useLayout()
+  const { addNote, report, focus, focusRequest, noteDraft, setNoteDraft } = useAgentos('addNote', 'report', 'focus', 'focusRequest', 'noteDraft', 'setNoteDraft')
   const input = useRef<HTMLTextAreaElement>(null)
   const [images, setImages] = useState<PreviewImage[]>([])
 
@@ -47,7 +45,7 @@ export function NoteInput() {
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.stopPropagation()
-              returnToTerminal()
+              focus('composer')
             }
             if (e.key !== 'Enter' || e.shiftKey) return
             e.preventDefault()

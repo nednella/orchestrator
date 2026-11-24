@@ -10,7 +10,6 @@ import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { headerKey, ProjectGroup, settledKey } from './ProjectGroup'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
-import { NewSessionRow } from './NewSessionRow'
 import { SidebarFooter } from './SidebarFooter'
 
 const FOLDED_KEY = 'agentos.sidebar.folded'
@@ -168,7 +167,6 @@ export function ThreadSidebar() {
         ))}
         {searching && groups.length === 0 && <p className="px-4 py-4 text-small text-dim">No thread matches.</p>}
       </div>
-      <NewSessionRow cursor={false} compact={false} />
       <SidebarFooter />
     </aside>
   )

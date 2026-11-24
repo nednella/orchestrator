@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { useFocusRequest } from '../useFocusRequest'
 import { BrowserTab } from './BrowserTab'
-import { EmptyState } from './EmptyState'
 import { EvidenceTab } from './EvidenceTab'
 import { Terminal } from './Terminal'
 import { ViewTabs } from './ViewTabs'
@@ -17,13 +16,7 @@ export function Viewport() {
 
   useFocusRequest('terminal', panel, !selected || view !== 'terminal')
 
-  if (!selected) {
-    return (
-      <section ref={panel} data-panel="terminal" tabIndex={-1} className="panel h-full min-h-0 min-w-0">
-        <EmptyState />
-      </section>
-    )
-  }
+  if (!selected) return null
 
   return (
     <section

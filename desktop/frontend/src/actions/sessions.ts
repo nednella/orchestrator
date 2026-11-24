@@ -33,8 +33,9 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     group: 'Sessions',
     shortcut: { key: 'm' },
     run() {
-      layout.setSidebarOpen(true)
-      a.setComposing('session')
+      layout.showHome('composer')
+      a.setComposerKind('session')
+      a.focus('composer')
     },
   },
   {
@@ -43,8 +44,9 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     group: 'Sessions',
     shortcut: { key: 'n' },
     run() {
-      layout.setSidebarOpen(true)
-      a.setComposing('chat')
+      layout.showHome('composer')
+      a.setComposerKind('chat')
+      a.focus('composer')
     },
   },
   {

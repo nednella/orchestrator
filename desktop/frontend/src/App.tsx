@@ -3,12 +3,12 @@ import { DigestView } from './components/DigestView'
 import { NewsIndex } from './components/NewsIndex'
 import { NewsView } from './components/NewsView'
 import { Divider } from './components/Divider'
+import { Home } from './components/Home'
 import { IssueDialog } from './components/IssueDialog'
 import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
 import { Palette } from './components/Palette'
 import { PatchNotes } from './components/PatchNotes'
-import { QueueNotes } from './components/QueueNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ShellPanel } from './components/ShellPanel'
@@ -43,7 +43,7 @@ export function App() {
   const { mode, sidebarOpen, mobilePanel, statsOpen, newsOpen, newsPage } = useLayout()
   const narrow = mode === 'narrow'
   const showCentre = !narrow || mobilePanel === 'session' || mobilePanel === 'queue' || mobilePanel === 'notes'
-  const home = narrow ? mobilePanel === 'queue' || mobilePanel === 'notes' : !selectedId
+  const home = narrow ? mobilePanel === 'queue' || mobilePanel === 'notes' || (mobilePanel === 'session' && !selectedId) : !selectedId
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
   )
@@ -61,12 +61,12 @@ export function App() {
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
           <div className={`min-h-0 min-w-0 flex-1 ${showCentre ? '' : 'hidden'}`}>
             <div className={statsOpen || newsOpen ? 'hidden' : 'h-full'}>
-              {(narrow || selectedId) && (
+              {selectedId && (
                 <div className={home ? 'hidden' : 'h-full'}>
                   <Viewport />
                 </div>
               )}
-              {home && <QueueNotes />}
+              {home && <Home />}
             </div>
             {statsOpen && <Stats />}
             {newsOpen && newsPage === 'index' && <NewsIndex />}

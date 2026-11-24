@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { useLayout } from '../LayoutContext'
 import { activeValue, applyCompletion, completionAt, facet, TYPES, withToken } from '../issueFilter'
 import { FacetMenu } from './FacetMenu'
 import { Icon } from './Icon'
@@ -8,8 +7,7 @@ import { Icon } from './Icon'
 type QueueSearchProps = { shown: number | null }
 
 export function QueueSearch({ shown }: QueueSearchProps) {
-  const { issues, issuesLoading, issueFilter, setIssueFilter, focusRequest, refreshIssues, report } = useAgentos('issues', 'issuesLoading', 'issueFilter', 'setIssueFilter', 'focusRequest', 'refreshIssues', 'report')
-  const { returnToTerminal } = useLayout()
+  const { issues, issuesLoading, issueFilter, setIssueFilter, focusRequest, refreshIssues, focus, report } = useAgentos('issues', 'issuesLoading', 'issueFilter', 'setIssueFilter', 'focusRequest', 'refreshIssues', 'focus', 'report')
   const input = useRef<HTMLInputElement>(null)
   const [cursor, setCursor] = useState(0)
   const [dismissed, setDismissed] = useState(false)
@@ -65,7 +63,7 @@ export function QueueSearch({ shown }: QueueSearchProps) {
                 setCursor((c) => Math.max(c - 1, 0))
               } else if (e.key === 'Escape') {
                 if (completion) setDismissed(true)
-                else returnToTerminal()
+                else focus('composer')
                 e.stopPropagation()
               }
             }}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import type { RefObject } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
 import { filterIssues, isFiltering } from '../issueFilter'
@@ -17,26 +18,15 @@ import { QueueSection } from './QueueSection'
 import { QueueSearch } from './QueueSearch'
 import { QueueUnsortedHeader } from './QueueUnsortedHeader'
 import { SectionHeader } from './SectionHeader'
-import { SetupOffer } from './SetupOffer'
-import type { NavRef } from './QueueNotes'
+import type { NavRef } from './Home'
 
 type Item = { kind: 'section'; name: string; count: number } | { kind: 'issue'; issue: Issue }
 
 const itemKey = (item: Item) => (item.kind === 'section' ? `section:${item.name}` : `issue:${item.issue.number}`)
 
-type QueueProps = { nav: NavRef }
+type QueueProps = { nav: NavRef; scroller: RefObject<HTMLElement> }
 
-export function Queue({ nav }: QueueProps) {
-  const offersSetup = useAgentosSelector((a) => Boolean(a.project?.needsSetup && !a.project.setupDismissed))
-  return (
-    <>
-      {offersSetup && <SetupOffer />}
-      <QueueBody nav={nav} />
-    </>
-  )
-}
-
-function QueueBody({ nav }: QueueProps) {
+export function Queue({ nav, scroller }: QueueProps) {
   const { issues, issuesDisabled, issueFilter, report } = useAgentos('issues', 'issuesDisabled', 'issueFilter', 'report')
   const projectName = useAgentosSelector((a) => a.project?.name)
   const repo = useAgentosSelector((a) => a.project?.repo ?? '')
@@ -57,14 +47,14 @@ function QueueBody({ nav }: QueueProps) {
   return (
     <>
       <QueueSearch shown={filtering ? shown.length : null} />
-      <QueueList nav={nav} shown={shown} filtering={filtering} />
+      <QueueList nav={nav} scroller={scroller} shown={shown} filtering={filtering} />
     </>
   )
 }
 
-type QueueListProps = { nav: NavRef; shown: Issue[]; filtering: boolean }
+type QueueListProps = { nav: NavRef; scroller: RefObject<HTMLElement>; shown: Issue[]; filtering: boolean }
 
-function QueueList({ nav, shown: coreShown, filtering }: QueueListProps) {
+function QueueList({ nav, scroller, shown: coreShown, filtering }: QueueListProps) {
   const { issues: coreIssues, issuesLoading, setOverlay } = useAgentos('issues', 'issuesLoading', 'setOverlay')
   const drag = useIssueDrag(coreIssues)
   const issues = drag.place(coreIssues)
@@ -143,7 +133,7 @@ function QueueList({ nav, shown: coreShown, filtering }: QueueListProps) {
   }, [nav, listNav.handle])
 
   useScrollCursorIntoView(list, listNav.cursorKey)
-  useDragEdgeScroll(list, drag.dragging !== null)
+  useDragEdgeScroll(scroller, drag.dragging !== null)
   const loading = useMinimumLoading(issuesLoading && issues.length === 0)
 
   if (loading) return <Loading />
@@ -151,7 +141,7 @@ function QueueList({ nav, shown: coreShown, filtering }: QueueListProps) {
   if (filtering && shown.length === 0) return <Notice title="No issues match" hint="Clear the search to see all of them." centered />
 
   return (
-    <div ref={list} className="min-h-0 flex-1 overflow-y-auto pb-2">
+    <div ref={list} className="pb-2">
       {sections.map((section) => (
         <QueueSection key={section.name} name={section.name} drag={drag}>
           {section.name ? (

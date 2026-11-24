@@ -846,11 +846,6 @@
     }
   }
 
-  [data-panel='home'][data-tab='notes'] {
-    background: var(--bg-note);
-    border-color: var(--border-note);
-  }
-
   .note-jot {
     min-height: 2rem;
     padding-top: 0.3125rem;
@@ -862,21 +857,16 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
-  [data-panel='home'][data-tab='notes'] .composer,
-  [data-panel='home'][data-tab='notes'] .note-jot,
-  [data-panel='home'][data-tab='notes'] .note-search {
+  [data-section='notes'] .composer,
+  [data-section='notes'] .note-jot,
+  [data-section='notes'] .note-search {
     background: var(--bg-note-card);
     border-color: var(--border-note);
     color: var(--text-note);
   }
 
-  [data-panel='home'][data-tab='notes'] .composer:focus-within {
+  [data-section='notes'] .composer:focus-within {
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
-  }
-
-  [data-panel='home'][data-tab='notes'] .panel-head,
-  [data-panel='home'][data-tab='notes'] .border-line {
-    border-color: var(--border-note);
   }
 
   .reveal {

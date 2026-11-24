@@ -8,7 +8,7 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     palette: { prompt: 'Note text' },
     async run(args) {
       if (args.length === 0) {
-        layout.showSidebarTab('notes')
+        layout.showHome('notes')
         a.focus('note-input')
         return
       }
@@ -22,7 +22,7 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     group: 'Notes',
     uiCommand: 'notes',
     run() {
-      layout.showSidebarTab('notes')
+      layout.showHome('notes')
       a.focus('note-input')
     },
   },

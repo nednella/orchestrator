@@ -8,7 +8,7 @@ import { ImageViewer } from './ImageViewer'
 import { NoteCard } from './NoteCard'
 import { NoteInput } from './NoteInput'
 import { Notice } from './Notice'
-import type { NavRef } from './QueueNotes'
+import type { NavRef } from './Home'
 
 type NotesProps = { nav: NavRef }
 
@@ -96,7 +96,7 @@ export function Notes({ nav }: NotesProps) {
           />
         </div>
       )}
-      <div ref={list} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3 pb-3">
+      <div ref={list} className="flex flex-col gap-2.5 px-3 pb-3">
         {a.notes.length === 0 && (
           <Notice title="Nothing jotted yet" hint="Ramble here: half ideas, things to ask, bugs you noticed. Start a task or file an issue from any note later." centered />
         )}

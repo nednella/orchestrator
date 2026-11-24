@@ -57,8 +57,8 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     group: 'Navigate',
     shortcut: { key: 'a', shift: true },
     run() {
-      layout.showSidebarTab(a.sidebarTab)
-      a.focus(a.sidebarTab === 'queue' ? 'queue-filter' : 'home')
+      layout.showHome('queue')
+      a.focus('home')
     },
   },
   {

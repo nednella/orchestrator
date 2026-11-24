@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
-import type { SidebarTab } from './AgentosContext'
+import type { HomePart } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
 import type { ThemeName } from './types'
@@ -64,7 +64,7 @@ export type Layout = {
   toggleSidebar(): void
   togglePanels(): void
   setSidebarOpen(open: boolean): void
-  showSidebarTab(tab: SidebarTab): void
+  showHome(part: HomePart): void
   toggleStats(): void
   toggleDigest(): void
   toggleNews(): void
@@ -129,7 +129,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, project, settings, setTextScale, setSidebarTab, showHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'setSidebarTab', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
@@ -187,13 +187,14 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     [narrow, updatePrefs],
   )
 
-  const showSidebarTab = useCallback(
-    (tab: SidebarTab) => {
-      setSidebarTab(tab)
-      if (narrow) setMobilePanel(tab)
-      else if (project) showHome(project.key)
+  const showHome = useCallback(
+    (part: HomePart) => {
+      setStatsOpen(false)
+      setNewsOpen(false)
+      if (narrow) setMobilePanel(part === 'composer' ? 'session' : part)
+      if (project && (!narrow || part === 'composer')) selectHome(project.key)
     },
-    [narrow, project, setSidebarTab, showHome],
+    [narrow, project, selectHome],
   )
 
   const focusPanel = useCallback(
@@ -260,7 +261,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (!open) focus('terminal')
       },
       setSidebarOpen,
-      showSidebarTab,
+      showHome,
       toggleStats() {
         setStatsOpen(!statsOpen)
         setNewsOpen(false)
@@ -296,7 +297,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showSidebarTab, focusPanel, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>
