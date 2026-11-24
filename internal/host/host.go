@@ -345,16 +345,7 @@ func (h *host) handle(conn net.Conn) {
 func (h *host) do(req request) error {
 	switch req.Op {
 	case opSend:
-		h.stdinMu.Lock()
-		failed := h.stdinErr
-		h.stdinMu.Unlock()
-		if failed != nil {
-			return failed
-		}
-		if _, err := h.publish(chat.Event{Kind: chat.KindUser, Text: req.Text}); err != nil {
-			return err
-		}
-		return h.write(chat.UserMessage(req.Text))
+		return h.send(req.Text)
 	case opDraft:
 		_, err := h.publish(chat.Event{Kind: chat.KindDraft, Text: req.Text})
 		return err
@@ -367,6 +358,19 @@ func (h *host) do(req request) error {
 		return h.answer(req.ID, req.Allow, req.Message)
 	}
 	return fmt.Errorf("unknown op %q", req.Op)
+}
+
+// send logs the user message and writes it to Claude under stdinMu, so the log and stdin hold messages in the same order. The lock order is stdinMu, then h.mu.
+func (h *host) send(text string) error {
+	h.stdinMu.Lock()
+	defer h.stdinMu.Unlock()
+	if h.stdinErr != nil {
+		return h.stdinErr
+	}
+	if _, err := h.publish(chat.Event{Kind: chat.KindUser, Text: text}); err != nil {
+		return err
+	}
+	return h.writeLocked(chat.UserMessage(text))
 }
 
 func (h *host) answer(id string, allow bool, message string) error {

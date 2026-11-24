@@ -695,9 +695,39 @@ func TestConcurrentSendsStayWholeLines(t *testing.T) {
 		return count
 	}
 	eventually(t, "50 user lines on stdin", func() bool { return users() == n })
+	var sent []string
 	for i, l := range stdinLines(t, h.stdin) {
-		if !json.Valid([]byte(l)) {
+		var line struct {
+			Type    string `json:"type"`
+			Message struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(l), &line); err != nil {
 			t.Fatalf("stdin line %d is not valid JSON: %.80s", i, l)
+		}
+		if line.Type == "user" {
+			sent = append(sent, line.Message.Content[0].Text)
+		}
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inLog []string
+	for _, e := range logged {
+		if e.Kind == chat.KindUser {
+			inLog = append(inLog, e.Text)
+		}
+	}
+	if len(inLog) != len(sent) {
+		t.Fatalf("log has %d user events, stdin %d", len(inLog), len(sent))
+	}
+	for i := range sent {
+		if inLog[i] != sent[i] {
+			t.Fatalf("user message %d: log has %.12q, stdin %.12q; want the same order", i, inLog[i], sent[i])
 		}
 	}
 }
