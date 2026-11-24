@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,15 @@ func TestHelperFakeClaude(t *testing.T) {
 	}
 	if os.Getenv("AOS_FAKE_IGNORE_TERM") == "1" {
 		signal.Ignore(syscall.SIGTERM)
+	}
+	if pidFile := os.Getenv("AOS_FAKE_GRANDCHILD"); pidFile != "" {
+		holder := exec.Command("sleep", "30")
+		holder.Stdout = os.Stdout
+		if err := holder.Start(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		os.WriteFile(pidFile, []byte(fmt.Sprint(holder.Process.Pid)), 0o600)
 	}
 	fakeClaude(os.Stdin, os.Stdout, os.Getenv("AOS_FAKE_STDIN"))
 	os.Exit(0)
@@ -764,17 +774,25 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 
 func TestCancelStopsClaude(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_IGNORE_TERM=1")
+	pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
+	h := startHost(t, "AOS_FAKE_IGNORE_TERM=1", "AOS_FAKE_GRANDCHILD="+pidFile)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
+	var grandchild int
+	eventually(t, "the grandchild's pid", func() bool {
+		raw, _ := os.ReadFile(pidFile)
+		_, err := fmt.Sscan(string(raw), &grandchild)
+		return err == nil
+	})
+	t.Cleanup(func() { syscall.Kill(grandchild, syscall.SIGKILL) })
 
 	start := time.Now()
 	h.cancel()
 	select {
 	case <-h.done:
 		h.done <- nil
-	case <-time.After(6 * time.Second):
-		t.Fatal("Run did not return within 6s of cancel")
+	case <-time.After(8 * time.Second):
+		t.Fatal("Run did not return within 8s of cancel")
 	}
 	t.Logf("Run returned %s after cancel", time.Since(start).Round(time.Millisecond))
 	logged, err := chat.ReadLog(h.log, 0)
@@ -787,4 +805,7 @@ func TestCancelStopsClaude(t *testing.T) {
 	if _, err := os.Stat(h.socket); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("socket left behind: %v", err)
 	}
+	eventually(t, "claude's grandchild to be killed", func() bool {
+		return errors.Is(syscall.Kill(grandchild, 0), syscall.ESRCH)
+	})
 }

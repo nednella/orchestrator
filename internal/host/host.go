@@ -64,7 +64,7 @@ type host struct {
 	approvals map[string]json.RawMessage
 }
 
-// Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude: SIGTERM, then SIGKILL after 5 s.
+// Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
 func Run(ctx context.Context, c Config) error {
 	if len(c.Argv) == 0 {
 		return errors.New("host: no command to run")
@@ -92,11 +92,11 @@ func Run(ctx context.Context, c Config) error {
 	}
 	defer h.shutdown(ln)
 
-	cmd := exec.CommandContext(ctx, c.Argv[0], c.Argv[1:]...)
+	cmd := exec.Command(c.Argv[0], c.Argv[1:]...)
 	cmd.Dir = c.Dir
 	cmd.Env = c.Env
 	cmd.Stderr = h.echo
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = stopGrace
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -111,6 +111,8 @@ func Run(ctx context.Context, c Config) error {
 		return err
 	}
 	h.stdin = stdin
+	waited := make(chan struct{})
+	go stopOnCancel(ctx, cmd.Process.Pid, waited)
 	if err := h.write(chat.Initialize(h.nextID())); err != nil {
 		fmt.Fprintf(h.echo, "host: initialize: %v\n", err)
 	}
@@ -122,8 +124,24 @@ func Run(ctx context.Context, c Config) error {
 	h.exited = true
 	h.mu.Unlock()
 	err = cmd.Wait()
+	close(waited)
 	h.publishExit(err)
 	return err
+}
+
+// stopOnCancel stops Claude's whole process group when ctx ends: SIGTERM, then SIGKILL after stopGrace. The group takes in a process Claude started that still holds its stdout, which would keep Run reading.
+func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
+	select {
+	case <-ctx.Done():
+	case <-waited:
+		return
+	}
+	syscall.Kill(-pid, syscall.SIGTERM)
+	select {
+	case <-waited:
+	case <-time.After(stopGrace):
+		syscall.Kill(-pid, syscall.SIGKILL)
+	}
 }
 
 var errExited = errors.New("claude has exited")
