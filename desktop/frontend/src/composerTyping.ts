@@ -118,6 +118,8 @@ export const ComposerTyping = Extension.create<ComposerTypingOptions>({
           })
         }
         if (inList($from)) return newListItem(editor)
+        // On an empty line in a quote it leaves the quote.
+        if ($from.parent.content.size === 0 && $from.depth > 1) return editor.commands.liftEmptyBlock()
         if ($from.parent.type.name !== 'paragraph' || $from.parent.content.size === 0) return editor.commands.splitBlock({ keepMarks: false })
         // A second line break in a row starts a new paragraph instead.
         if ($from.nodeBefore?.type.name === 'hardBreak') return editor.chain().deleteRange({ from: $from.pos - 1, to: $from.pos }).splitBlock({ keepMarks: false }).run()
