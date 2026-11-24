@@ -921,3 +921,25 @@ func TestCancelStopsClaude(t *testing.T) {
 		return errors.Is(syscall.Kill(grandchild, 0), syscall.ESRCH)
 	})
 }
+
+func TestSocketFolderWiderThan0700Fails(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []os.FileMode{0o755, 0o750, 0o770} {
+		dir := socketDir(t)
+		if err := os.Chmod(dir, mode); err != nil {
+			t.Fatal(err)
+		}
+		socket := filepath.Join(dir, "s")
+		err := Run(context.Background(), Config{
+			Log:    filepath.Join(t.TempDir(), "chat.jsonl"),
+			Socket: socket,
+			Argv:   []string{os.Args[0], "-test.run=^TestHelperFakeClaude$"},
+		})
+		if err == nil || !strings.Contains(err.Error(), dir) {
+			t.Fatalf("mode %o: Run = %v, want an error naming %s", mode, err, dir)
+		}
+		if _, statErr := os.Lstat(socket); statErr == nil {
+			t.Fatalf("mode %o: a socket was made in the folder", mode)
+		}
+	}
+}

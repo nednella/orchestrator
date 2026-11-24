@@ -499,7 +499,11 @@ func listen(path string) (net.Listener, error) {
 	if len(path) > maxSocketPath {
 		return nil, fmt.Errorf("socket path %s is %d bytes, over the %d a unix socket allows", path, len(path), maxSocketPath)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	if err := checkPrivateDir(dir); err != nil {
 		return nil, err
 	}
 	if err := removeStale(path); err != nil {
@@ -514,6 +518,21 @@ func listen(path string) (net.Listener, error) {
 		return nil, err
 	}
 	return ln, nil
+}
+
+// checkPrivateDir refuses a socket folder another user could reach: the socket is open to anyone in the folder until it is made 0600.
+func checkPrivateDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() != 0o700 {
+		return fmt.Errorf("socket folder %s has mode %o, want 700", dir, info.Mode().Perm())
+	}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
+		return fmt.Errorf("socket folder %s is owned by another user", dir)
+	}
+	return nil
 }
 
 // removeStale removes a socket file left by a host that died, and refuses one a live host still listens on.
