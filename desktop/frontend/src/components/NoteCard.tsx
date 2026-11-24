@@ -107,46 +107,6 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
   const iconButton = 'btn btn-ghost h-6 w-6 justify-center px-0'
   return (
     <article className="note-card group p-3" data-cursor={cursor} style={{ opacity: note.archived ? 0.6 : 1 }}>
-      <div className="mb-1 flex min-h-6 items-center gap-2">
-        <span className="mono text-label" style={{ color: 'var(--text-note-dim)' }}>
-          <Ago at={note.createdAt} />
-        </span>
-        <span className="ml-auto flex items-center">
-          <span className="reveal">
-            <button className={iconButton} title="Start a task from this note" aria-label="Start task" onClick={() => a.report(() => a.noteToSession(note.id))}>
-              <Icon name="play" size={12} />
-            </button>
-            {canFile && (
-              <button className={iconButton} title="File as an issue" aria-label="File as issue" onClick={() => confirm.arm('file')}>
-                <Icon name="issue" size={13} />
-              </button>
-            )}
-            <button
-              className={iconButton}
-              title={note.archived ? 'Restore from the archive (E)' : 'Archive (E)'}
-              aria-label={note.archived ? 'Restore note' : 'Archive note'}
-              onClick={() => a.report(() => a.setNoteArchived(note.id, !note.archived))}
-            >
-              <Icon name="archive" size={13} />
-            </button>
-            <button className={iconButton} title="Delete" aria-label="Delete note" onClick={() => confirm.arm('delete')}>
-              <Icon name="trash" size={13} />
-            </button>
-          </span>
-          {!note.archived && (
-            <button
-              className={`${iconButton} -mr-1.5`}
-              style={{ color: note.pinned ? 'var(--accent)' : 'var(--text-note-dim)' }}
-              title={note.pinned ? 'Pinned. Click to unpin (P)' : 'Pin to the top (P)'}
-              aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
-              aria-pressed={note.pinned}
-              onClick={() => a.report(() => a.setNotePinned(note.id, !note.pinned))}
-            >
-              <Icon name="pin" size={13} />
-            </button>
-          )}
-        </span>
-      </div>
       <div
         role="button"
         tabIndex={0}
@@ -182,6 +142,45 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           <NoteImages urls={note.images} onOpen={onOpenImage} />
         </div>
       )}
+      <div className="mt-2 flex min-h-6 flex-wrap items-center gap-x-1.5 gap-y-1">
+        <span className="mono mr-auto text-label" style={{ color: 'var(--text-note-dim)' }}>
+          <Ago at={note.createdAt} />
+        </span>
+        <span className="reveal">
+          <button className="btn btn-primary h-6 px-2" title="Start a thread from this note" onClick={() => a.report(() => a.noteToSession(note.id))}>
+            <Icon name="play" size={10} />
+            Start thread
+          </button>
+          {canFile && (
+            <button className="btn h-6 px-2" title="File the note as an issue" onClick={() => confirm.arm('file')}>
+              File as issue
+            </button>
+          )}
+          <button
+            className={iconButton}
+            title={note.archived ? 'Restore from the archive (E)' : 'Archive (E)'}
+            aria-label={note.archived ? 'Restore note' : 'Archive note'}
+            onClick={() => a.report(() => a.setNoteArchived(note.id, !note.archived))}
+          >
+            <Icon name="archive" size={13} />
+          </button>
+          <button className={iconButton} title="Delete" aria-label="Delete note" onClick={() => confirm.arm('delete')}>
+            <Icon name="trash" size={13} />
+          </button>
+        </span>
+        {!note.archived && (
+          <button
+            className={`${iconButton} -mr-1.5`}
+            style={{ color: note.pinned ? 'var(--accent)' : 'var(--text-note-dim)' }}
+            title={note.pinned ? 'Pinned. Click to unpin (P)' : 'Pin to the top (P)'}
+            aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
+            aria-pressed={note.pinned}
+            onClick={() => a.report(() => a.setNotePinned(note.id, !note.pinned))}
+          >
+            <Icon name="pin" size={13} />
+          </button>
+        )}
+      </div>
       {confirm.armed === 'file' && (
         <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: 'var(--border-note)' }}>
           <ConfirmRow

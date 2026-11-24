@@ -44,8 +44,8 @@ export function App() {
   const { selectedId } = useAgentos('selectedId')
   const { mode, sidebarOpen, rightOpen, mobilePanel, statsOpen, digestOpen } = useLayout()
   const narrow = mode === 'narrow'
-  const showCentre = !narrow || mobilePanel === 'session' || mobilePanel === 'queue' || mobilePanel === 'notes'
-  const home = narrow ? mobilePanel === 'queue' || mobilePanel === 'notes' || (mobilePanel === 'session' && !selectedId) : !selectedId
+  const showCentre = !narrow || mobilePanel === 'session'
+  const home = !selectedId && showCentre
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
   )
@@ -86,7 +86,7 @@ export function App() {
               </div>
               {rightOpen && <Divider panel="right" />}
               {rightOpen && <RightPanel />}
-              {narrow && mobilePanel === 'details' && <RightPanel />}
+              {narrow && mobilePanel === 'panel' && <RightPanel />}
               {narrow && mobilePanel === 'shell' && <ShellPanel />}
             </main>
           </div>

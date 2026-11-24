@@ -75,21 +75,23 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   },
   {
     id: 'view-previous',
-    label: 'Previous right panel tab (PR, evidence, browser)',
+    label: 'Previous thread details tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: '[', code: 'BracketLeft', shift: true, label: '[' },
     run() {
-      layout.setRightOpen(true)
+      if (!current) throw 'No session selected'
+      layout.showPanel('details')
       a.cycleSessionView(-1)
     },
   },
   {
     id: 'view-next',
-    label: 'Next right panel tab (PR, evidence, browser)',
+    label: 'Next thread details tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: ']', code: 'BracketRight', shift: true, label: ']' },
     run() {
-      layout.setRightOpen(true)
+      if (!current) throw 'No session selected'
+      layout.showPanel('details')
       a.cycleSessionView(1)
     },
   },

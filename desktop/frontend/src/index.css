@@ -208,6 +208,16 @@
     color: var(--accent);
   }
 
+  .btn-primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--text-on-accent);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 88%, var(--text));
+  }
+
   .btn-danger {
     border-color: var(--danger);
     color: var(--danger);
@@ -1075,13 +1085,6 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
-  [data-section='notes'] .note-jot,
-  [data-section='notes'] .note-search {
-    background: var(--bg-note-card);
-    border-color: var(--border-note);
-    color: var(--text-note);
-  }
-
   .reveal {
     display: inline-flex;
     flex: none;
@@ -1098,7 +1101,8 @@
     }
 
     .group:hover .reveal,
-    .group:focus-within .reveal {
+    .group:focus-within .reveal,
+    [data-panel][data-focused] [data-cursor='true'] .reveal {
       max-width: 20rem;
       opacity: 1;
     }

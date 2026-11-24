@@ -21,7 +21,7 @@ export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
 export type HomePart = 'queue' | 'notes' | 'composer'
-export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'composer'
+export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerKind = 'session' | 'chat'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }

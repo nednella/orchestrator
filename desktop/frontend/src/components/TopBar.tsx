@@ -22,8 +22,8 @@ export function TopBar() {
     return shortcut ? `${label} (${formatShortcut(shortcut)})` : label
   }
   const narrow = mode === 'narrow'
-  const rightShown = narrow ? mobilePanel === 'details' : rightOpen
-  const showsThread = selectedId !== null && !statsOpen && !digestOpen && !(narrow && (mobilePanel === 'queue' || mobilePanel === 'notes'))
+  const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
+  const showsThread = selectedId !== null && !statsOpen && !digestOpen
   const inset = fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)'
   // With the thread list hidden the bar starts at the rail, under the window buttons.
   const left = sidebarOpen ? '0px' : `max(0px, calc(${inset} - ${RAIL_REM}rem - 0.75rem))`
@@ -61,7 +61,6 @@ export function TopBar() {
           label={rightShown ? 'Hide right panel' : 'Show right panel'}
           icon="panel-right"
           pressed={rightShown}
-          disabled={!showsThread}
           onClick={() => report(() => find('toggle-right').run([]))}
         />
       </div>

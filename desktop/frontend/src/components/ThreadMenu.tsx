@@ -22,7 +22,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onTimelin
   const a = useAgentos('select', 'resumeSession', 'dismissSession', 'openPR', 'pushToast', 'report')
   const { mode, mobilePanel, rightOpen, setRightOpen, toggleRight } = useLayout()
   const ended = session.state === 'ended'
-  const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'details' : rightOpen)
+  const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'panel' : rightOpen)
 
   const toggleOwnPanel = () => {
     if (selected) return a.report(toggleRight)

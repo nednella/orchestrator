@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
-import type { HomePart, SessionView } from './AgentosContext'
+import type { SessionView } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
 import type { ThemeName } from './types'
@@ -11,7 +11,7 @@ const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
-export type MobilePanel = 'queue' | 'notes' | 'session' | 'details' | 'threads' | 'shell'
+export type MobilePanel = 'session' | 'panel' | 'threads' | 'shell'
 export type SidePanel = 'sidebar' | 'right'
 
 export const SCALES = [0.85, 0.92, 1, 1.1, 1.2, 1.35, 1.5]
@@ -28,6 +28,7 @@ const DEFAULT_RANGE: Record<SidePanel, [number, number]> = { sidebar: [15, 22], 
 const MIN_REM: Record<SidePanel, number> = { sidebar: 13, right: 9.5 }
 const MAX_REM = 32
 const LAYOUT_KEY = 'agentos.layout.v3'
+const PANEL_VIEW_KEY = 'agentos.panelView'
 const SHELL_ROW_REM = 1.0325
 const SHELL_PAD_REM = 0.5
 export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PAD_REM
@@ -50,6 +51,7 @@ export type Layout = {
   shellRem: number
   mobilePanel: MobilePanel
   widths: Record<SidePanel, number>
+  panelView: string
   statsOpen: boolean
   digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
@@ -59,12 +61,14 @@ export type Layout = {
   setShellOpen(open: boolean): void
   setRightOpen(open: boolean): void
   toggleRight(): void
+  setPanelView(view: string): void
+  showPanel(view: string): void
   showView(id: string, view: SessionView): void
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
   toggleSidebar(): void
   setSidebarOpen(open: boolean): void
-  showHome(part: HomePart): void
+  showHome(): void
   toggleStats(): void
   toggleDigest(): void
   openDigest(): void
@@ -139,6 +143,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
+  const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
   const zoomToast = useRef<number | null>(null)
 
   useLayoutEffect(() => {
@@ -151,10 +156,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
   const narrow = mode === 'narrow'
-  const showsThread = selectedId !== null && !statsOpen && !digestOpen
-  const { widths: fittedWidths, rightForcedClosed } = fit(width, { ...prefs, rightOpen: prefs.rightOpen && showsThread }, 16 * scale)
+  const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
-  const rightOpen = !narrow && prefs.rightOpen && showsThread && !rightForcedClosed
+  const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
+  const projectName = project?.name ?? ''
+  const panelView = panelViews[projectName] ?? ''
 
   const updatePrefs = useCallback(
     (patch: Partial<BandPrefs>) =>
@@ -185,14 +191,30 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     [narrow, updatePrefs],
   )
 
-  const showHome = useCallback(
-    (part: HomePart) => {
-      setStatsOpen(false)
-      setDigestOpen(false)
-      if (narrow) setMobilePanel(part === 'composer' ? 'session' : part)
-      if (project && (!narrow || part === 'composer')) selectHome(project.key)
+  const showHome = useCallback(() => {
+    setStatsOpen(false)
+    setDigestOpen(false)
+    if (narrow) setMobilePanel('session')
+    if (project) selectHome(project.key)
+  }, [narrow, project, selectHome])
+
+  const setPanelView = useCallback(
+    (view: string) =>
+      setPanelViews((all) => {
+        const next = { ...all, [projectName]: view }
+        writeStored(PANEL_VIEW_KEY, next)
+        return next
+      }),
+    [projectName],
+  )
+
+  const showPanel = useCallback(
+    (view: string) => {
+      if (narrow) setMobilePanel('panel')
+      else updatePrefs({ rightOpen: true })
+      setPanelView(view)
     },
-    [narrow, project, selectHome],
+    [narrow, updatePrefs, setPanelView],
   )
 
   const focusPanel = useCallback(
@@ -221,6 +243,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
       mobilePanel,
       widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
+      panelView,
       statsOpen,
       digestOpen,
       zoom(step) {
@@ -242,22 +265,22 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         else updatePrefs({ shellOpen: open })
       },
       setRightOpen(open) {
-        if (narrow) setMobilePanel(open ? 'details' : 'session')
+        if (narrow) setMobilePanel(open ? 'panel' : 'session')
         else updatePrefs({ rightOpen: open })
       },
       toggleRight() {
         if (narrow) {
-          setMobilePanel(mobilePanel === 'details' ? 'session' : 'details')
+          setMobilePanel(mobilePanel === 'panel' ? 'session' : 'panel')
           return
         }
-        if (!showsThread) throw 'Open a thread to see its details'
         const open = !rightOpen
         if (open && fit(width, { ...prefs, rightOpen: true }, 16 * scale).rightForcedClosed) throw 'The window is too narrow for the right panel'
         updatePrefs({ rightOpen: open })
       },
+      setPanelView,
+      showPanel,
       showView(id, view) {
-        if (narrow) setMobilePanel('details')
-        else updatePrefs({ rightOpen: true })
+        showPanel('details')
         setSessionView(id, view)
       },
       setShellHeight(rem, commit) {
@@ -293,7 +316,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, showsThread, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, digestOpen, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

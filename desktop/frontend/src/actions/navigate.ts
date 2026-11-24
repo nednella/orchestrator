@@ -1,6 +1,6 @@
 import type { Action, ActionContext } from './types'
 
-export const navigateActions = ({ a, layout, current }: ActionContext): Action[] => [
+export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   {
     id: 'search-threads',
     label: 'Search threads',
@@ -30,19 +30,16 @@ export const navigateActions = ({ a, layout, current }: ActionContext): Action[]
     id: 'toggle-right',
     label: 'Toggle right panel',
     group: 'Navigate',
-    run() {
-      if (!current) throw 'No session selected'
-      layout.toggleRight()
-    },
+    run: layout.toggleRight,
   },
   {
     id: 'panel-sidebar',
-    label: 'Project home: queue and notes',
+    label: 'Project home',
     group: 'Navigate',
     shortcut: { key: 'a', shift: true },
     run() {
-      layout.showHome('queue')
-      a.focus('home')
+      layout.showHome()
+      a.focus('composer')
     },
   },
   {

@@ -1,19 +1,17 @@
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
-import type { MobilePanel } from '../LayoutContext'
+import { panelViewFor, shownPanelViews, usePanelContext } from '../panelViews'
 
-type TabProps = { panel: MobilePanel; label: string; badge?: string; urgent?: boolean }
+type TabProps = { label: string; active: boolean; badge?: string; urgent?: boolean; onPick(): void }
 
-function Tab({ panel, label, badge, urgent }: TabProps) {
-  const { mobilePanel, setMobilePanel, showHome } = useLayout()
-  const active = mobilePanel === panel
+function Tab({ label, active, badge, urgent, onPick }: TabProps) {
   return (
     <button
       role="tab"
       aria-selected={active}
       className="flex h-11 min-w-0 flex-1 flex-col short:h-8 items-center justify-center gap-0.5 border-t-2 text-small font-medium"
       style={{ borderColor: active ? 'var(--accent)' : 'transparent', color: active ? 'var(--text)' : 'var(--text-soft)' }}
-      onClick={() => (panel === 'queue' || panel === 'notes' ? showHome(panel) : setMobilePanel(panel))}
+      onClick={onPick}
     >
       <span className="flex items-center gap-1.5">
         {label}
@@ -25,17 +23,20 @@ function Tab({ panel, label, badge, urgent }: TabProps) {
 }
 
 export function MobileTabs() {
-  const { sessions, selectedId, issues, notes } = useAgentos('sessions', 'selectedId', 'issues', 'notes')
-  const selected = sessions.find((s) => s.id === selectedId)
+  const { sessions } = useAgentos('sessions')
+  const { mobilePanel, setMobilePanel, panelView, showPanel } = useLayout()
+  const ctx = usePanelContext()
+  const shown = panelViewFor(panelView, ctx)
   const needsYou = sessions.some((s) => s.state === 'waiting')
   return (
     <nav role="tablist" aria-label="Panels" className="flex flex-none border-t border-line bg-app">
-      <Tab panel="queue" label="Queue" badge={String(issues.length)} />
-      <Tab panel="notes" label="Notes" badge={String(notes.filter((n) => !n.archived).length)} />
-      <Tab panel="session" label="Session" badge={selected ? `#${selected.n}` : '–'} />
-      {selected && <Tab panel="details" label="Details" />}
-      <Tab panel="threads" label="Threads" badge={String(sessions.length)} urgent={needsYou} />
-      <Tab panel="shell" label="Shell" badge="❯" />
+      <Tab label="Session" active={mobilePanel === 'session'} badge={ctx.session ? `#${ctx.session.n}` : '–'} onPick={() => setMobilePanel('session')} />
+      {shownPanelViews(ctx).map((view) => {
+        const count = view.count?.(ctx)
+        return <Tab key={view.id} label={view.label} active={mobilePanel === 'panel' && shown.id === view.id} badge={count === undefined ? undefined : String(count)} onPick={() => showPanel(view.id)} />
+      })}
+      <Tab label="Threads" active={mobilePanel === 'threads'} badge={String(sessions.length)} urgent={needsYou} onPick={() => setMobilePanel('threads')} />
+      <Tab label="Shell" active={mobilePanel === 'shell'} badge="❯" onPick={() => setMobilePanel('shell')} />
     </nav>
   )
 }
