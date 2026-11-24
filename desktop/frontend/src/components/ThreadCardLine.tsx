@@ -7,8 +7,8 @@ type ThreadCardLineProps = { icon: IconName; iconColor?: string; danger?: boolea
 export function ThreadCardLine({ icon, iconColor, danger = false, children }: ThreadCardLineProps) {
   return (
     <div className={`flex min-w-0 items-start gap-2 ${danger ? 'text-danger' : ''}`}>
-      <span className="flex h-4 flex-none items-center" style={{ color: iconColor ?? (danger ? undefined : 'var(--text-dim)') }}>
-        <Icon name={icon} size={12} />
+      <span className="flex h-5 flex-none items-center" style={{ color: iconColor ?? (danger ? undefined : 'var(--text-dim)') }}>
+        <Icon name={icon} size={14} />
       </span>
       <span className="min-w-0 break-words">{children}</span>
     </div>

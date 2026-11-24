@@ -2,9 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAgentos } from '../AgentosContext'
 import { EFFORTS, modelName } from '../model'
-import { cleanupNote } from '../threads'
 import type { Session } from '../types'
-import { PILL } from './PRCard'
 import { ThreadCardLine } from './ThreadCardLine'
 
 // anchor is the row's box: the card sits beside the sidebar, or below or above the row when the window is too narrow.
@@ -16,13 +14,12 @@ const MARGIN = 8
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
 export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
-  const { projects, machine } = useAgentos('projects', 'machine')
+  const { machine } = useAgentos('machine')
   const card = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
-  const project = projects.find((p) => p.key === session.project)?.name ?? session.project
-  const model = [modelName(session.model), EFFORTS[session.effort] ?? session.effort].filter(Boolean).join(' · ')
-  const note = cleanupNote(session)
-  const { pr } = session
+  const model = modelName(session.model)
+  const effort = EFFORTS[session.effort] ?? session.effort
+  const claude = session.agent === 'claude'
 
   useLayoutEffect(() => {
     const el = card.current
@@ -46,24 +43,15 @@ export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
       className="popup pointer-events-none flex w-[17.5rem] max-w-[calc(100vw-1rem)] flex-col gap-2 px-3 py-2.5"
       style={place ?? { left: anchor.right, top: anchor.top, opacity: 0 }}
     >
-      <p className="text-small font-medium break-words text-ink">{session.title}</p>
-      <div className="flex flex-col gap-1.5 text-label text-soft">
-        <ThreadCardLine icon="folder">{project}</ThreadCardLine>
+      <p className="text-body font-semibold break-words text-ink">{session.title}</p>
+      <div className="flex flex-col gap-1.5 text-small text-soft">
         {machine && <ThreadCardLine icon="machine">{machine}</ThreadCardLine>}
-        {session.branch && (
-          <ThreadCardLine icon="git-branch">
-            <span className="mono">{session.branch}</span>
-          </ThreadCardLine>
-        )}
-        {model && <ThreadCardLine icon="model">{model}</ThreadCardLine>}
-        {pr && (
-          <ThreadCardLine icon={PILL[pr.state].icon} iconColor={`var(--pr-${pr.state})`}>
-            PR #{pr.number} · {PILL[pr.state].label}
-          </ThreadCardLine>
-        )}
-        {note && (
-          <ThreadCardLine icon={session.cleanup === 'blocked' ? 'alert' : 'broom'} danger={session.cleanup === 'blocked'}>
-            {note}
+        {(model || effort) && (
+          <ThreadCardLine icon={claude ? 'claude' : 'agent'} iconColor={claude ? 'var(--agent-claude)' : undefined}>
+            <span className="flex gap-1.5">
+              {model && <span className="text-ink">{model}</span>}
+              {effort && <span>{effort}</span>}
+            </span>
           </ThreadCardLine>
         )}
       </div>

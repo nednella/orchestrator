@@ -64,6 +64,8 @@ export type IconName =
   | 'idle'
   | 'ended'
   | 'pull-request'
+  | 'claude'
+  | 'agent'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -159,7 +161,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'queue') return <path d="M2.5 4h11M2.5 8h11M2.5 12h7" />
   if (name === 'x') return <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
   if (name === 'image') return <path d="M2.5 3h11v10h-11ZM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.2v.01" />
-  if (name === 'machine') return <path d="M3 3.5h10v7H3ZM1.5 12.5h13" />
+  if (name === 'machine') return <path d="M13.3 10.7V4.7A1.3 1.3 0 0 0 12 3.3H4a1.3 1.3 0 0 0-1.3 1.4v6M13.3 10.7H2.7M13.3 10.7l.9 1.7a.7.7 0 0 1-.6 1H2.4a.7.7 0 0 1-.6-1l.9-1.7" />
   if (name === 'model') return <path d="M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8 6.7 6.7Z" />
   if (name === 'digest') return <path d="M3.5 13.5h9a1.5 1.5 0 0 0 1.5-1.5V3.5a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1V12a1.5 1.5 0 0 1-1.5 1.5Zm0 0A1.5 1.5 0 0 1 2 12V7a1 1 0 0 1 1-1h2M7.5 5.5h4M7.5 8h4M7.5 10.5h2.5" />
   if (name === 'back') return <path d="M9.5 3.5 5 8l4.5 4.5M5 8h8" />
@@ -190,6 +192,8 @@ function IconShape({ name }: IconShapeProps) {
         <path d="M8.7 4h2A1.3 1.3 0 0 1 12 5.3V10M4 6v8" />
       </>
     )
+  if (name === 'claude') return <path d="M8 1.7v4M8 10.3v4M1.7 8h4M10.3 8h4M3.5 3.5l2.8 2.8M9.7 9.7l2.8 2.8M12.5 3.5 9.7 6.3M6.3 9.7l-2.8 2.8" />
+  if (name === 'agent') return <path d="M4.7 3.3h6.6a1.3 1.3 0 0 1 1.4 1.4v6.6a1.3 1.3 0 0 1-1.4 1.4H4.7a1.3 1.3 0 0 1-1.4-1.4V4.7a1.3 1.3 0 0 1 1.4-1.4ZM6 1.3v2M10 1.3v2M6 12.7v2M10 12.7v2M1.3 6h2M1.3 10h2M12.7 6h2M12.7 10h2" />
   if (name === 'issue') return <path d="M8 13.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM8 5.5v3.2M8 10.8v.01" />
   return <path d="M2 4h4l1.5 1.5H14V13H2Z" />
 }
