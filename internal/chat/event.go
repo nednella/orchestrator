@@ -24,6 +24,7 @@ type Event struct {
 	At     int64           `json:"at"`
 	Kind   Kind            `json:"kind"`
 	ID     string          `json:"id,omitempty"`
+	UUID   string          `json:"uuid,omitempty"`
 	Parent string          `json:"parent,omitempty"`
 	Text   string          `json:"text,omitempty"`
 	Tool   string          `json:"tool,omitempty"`

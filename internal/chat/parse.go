@@ -73,18 +73,19 @@ func parseStreamEvent(l line) ([]Event, error) {
 	return []Event{{Kind: KindDelta, ID: l.APIMessageID, Text: ev.Delta.Text}}, nil
 }
 
-func blocks(raw json.RawMessage) ([]block, error) {
+func blocks(raw json.RawMessage) (id string, content []block, err error) {
 	var m struct {
+		ID      string  `json:"id"`
 		Content []block `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("parse message: %w", err)
+		return "", nil, fmt.Errorf("parse message: %w", err)
 	}
-	return m.Content, nil
+	return m.ID, m.Content, nil
 }
 
 func parseAssistant(l line) ([]Event, error) {
-	content, err := blocks(l.Message)
+	id, content, err := blocks(l.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -92,16 +93,16 @@ func parseAssistant(l line) ([]Event, error) {
 	for _, b := range content {
 		switch b.Type {
 		case "text":
-			events = append(events, Event{Kind: KindMessage, ID: l.UUID, Text: b.Text})
+			events = append(events, Event{Kind: KindMessage, ID: id, UUID: l.UUID, Text: b.Text})
 		case "tool_use":
-			events = append(events, Event{Kind: KindToolUse, ID: b.ID, Tool: b.Name, Input: b.Input})
+			events = append(events, Event{Kind: KindToolUse, ID: b.ID, UUID: l.UUID, Tool: b.Name, Input: b.Input})
 		}
 	}
 	return events, nil
 }
 
 func parseUser(l line) ([]Event, error) {
-	content, err := blocks(l.Message)
+	_, content, err := blocks(l.Message)
 	if err != nil {
 		return nil, err
 	}

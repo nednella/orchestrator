@@ -62,6 +62,14 @@ func TestParseReplyStreamsDeltasThenMessage(t *testing.T) {
 	if !ok || msg.ID == "" {
 		t.Fatalf("no message with an id in %+v", events)
 	}
+	if msg.UUID == "" {
+		t.Error("message has no uuid")
+	}
+	for _, e := range events {
+		if e.Kind == KindDelta && e.ID != msg.ID {
+			t.Errorf("delta id %q, message id %q", e.ID, msg.ID)
+		}
+	}
 	if msg.Text != deltas.String() {
 		t.Errorf("message %q, deltas %q", msg.Text, deltas.String())
 	}
