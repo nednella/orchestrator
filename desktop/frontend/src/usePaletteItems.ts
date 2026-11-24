@@ -49,15 +49,13 @@ export function usePaletteItems(query: string): PaletteItem[] {
       run: (args) => action.run(args),
     }))
 
-  const projects: PaletteItem[] = a.projects
-    .filter((p) => p.name !== a.project?.name)
-    .map((p) => ({
-      key: `p-${p.name}`,
-      group: 'Projects',
-      label: `Switch to ${p.name}`,
-      hint: p.needsYou > 0 ? `${p.needsYou} need you` : `${p.sessions} sessions`,
-      run: () => a.switchProject(p.name),
-    }))
+  const projects: PaletteItem[] = a.projects.map((p) => ({
+    key: `p-${p.name}`,
+    group: 'Projects',
+    label: `Home: ${p.name}`,
+    hint: p.needsYou > 0 ? `${p.needsYou} need you` : `${p.sessions} sessions`,
+    run: () => a.showHome(p.key),
+  }))
 
   const notes: PaletteItem[] = a.notes
     .filter((n) => !n.archived)

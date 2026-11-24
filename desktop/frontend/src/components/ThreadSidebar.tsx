@@ -7,12 +7,14 @@ import { matchesThread, splitThreads } from '../threads'
 import { useFocusRequest } from '../useFocusRequest'
 import { useListNav } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
-import { headerKey, ProjectGroup, settledKey } from './ProjectGroup'
+import { headerKey, ProjectGroup } from './ProjectGroup'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
+import { SETTLED_KEY, SettledSection } from './SettledSection'
 import { SidebarFooter } from './SidebarFooter'
 
 const FOLDED_KEY = 'agentos.sidebar.folded'
+const SETTLED_OPEN_KEY = 'agentos.sidebar.settled-open'
 
 const toggled = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key])
 
@@ -24,34 +26,29 @@ export function ThreadSidebar() {
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [folded, setFolded] = useState(() => readStored<string[]>(FOLDED_KEY, []))
-  const [settledOpen, setSettledOpen] = useState<string[]>([])
+  const [settledOpen, setSettledOpen] = useState(() => readStored<boolean>(SETTLED_OPEN_KEY, false))
   const narrow = mode === 'narrow'
   const searching = query.trim() !== ''
 
   useFocusRequest('sidebar', panel)
   useFocusRequest('thread-search', search)
 
-  const groups = useMemo(
-    () =>
-      projects
-        .map((project) => {
-          const own = sessions.filter((s) => s.project === project.key && matchesThread(s, query))
-          return { project, sessions: own, folded: !searching && folded.includes(project.key), settledOpen: searching || settledOpen.includes(project.key) }
-        })
-        .filter((g) => !searching || g.sessions.length > 0),
-    [projects, sessions, query, searching, folded, settledOpen],
-  )
+  const { groups, settled } = useMemo(() => {
+    const found = sessions.filter((s) => matchesThread(s, query))
+    return {
+      groups: projects
+        .map((project) => ({ project, sessions: splitThreads(found.filter((s) => s.project === project.key)).live, folded: !searching && folded.includes(project.key) }))
+        .filter((g) => g.sessions.length > 0),
+      settled: splitThreads(found).settled.sort((a, b) => b.lastEventAt - a.lastEventAt),
+    }
+  }, [projects, sessions, query, searching, folded])
+  const settledShown = searching || settledOpen
 
-  const items = groups.flatMap((g) => {
-    const { live, settled } = splitThreads(g.sessions)
-    if (g.folded) return [{ key: headerKey(g.project), session: null }]
-    return [
-      { key: headerKey(g.project), session: null },
-      ...live.map((s) => ({ key: s.id, session: s })),
-      ...(settled.length > 0 ? [{ key: settledKey(g.project), session: null }] : []),
-      ...(g.settledOpen ? settled.map((s) => ({ key: s.id, session: s })) : []),
-    ]
-  })
+  const items = [
+    ...groups.flatMap((g) => [{ key: headerKey(g.project), session: null }, ...(g.folded ? [] : g.sessions.map((s) => ({ key: s.id, session: s })))]),
+    ...(settled.length > 0 ? [{ key: SETTLED_KEY, session: null }] : []),
+    ...(settledShown ? settled.map((s) => ({ key: s.id, session: s })) : []),
+  ]
 
   const toggleFold = (key: string) =>
     setFolded((current) => {
@@ -59,18 +56,20 @@ export function ThreadSidebar() {
       writeStored(FOLDED_KEY, next)
       return next
     })
-  const toggleSettled = (key: string) => setSettledOpen((current) => toggled(current, key))
-
-  const groupOf = (index: number) => groups.find((g) => items[index]?.key === headerKey(g.project) || items[index]?.key === settledKey(g.project))
+  const toggleSettled = () =>
+    setSettledOpen((open) => {
+      writeStored(SETTLED_OPEN_KEY, !open)
+      return !open
+    })
 
   // Folds or unfolds the header or Settled row at `index`; `to` limits it to one direction.
   const toggleAt = (index: number, to?: boolean) => {
-    const group = groupOf(index)
-    if (!group || items[index].session) return false
-    const header = items[index].key === headerKey(group.project)
-    if (to !== undefined && (header ? !group.folded : group.settledOpen) === to) return false
-    if (header) toggleFold(group.project.key)
-    else toggleSettled(group.project.key)
+    const item = items[index]
+    if (!item || item.session) return false
+    const group = groups.find((g) => headerKey(g.project) === item.key)
+    if (to !== undefined && (group ? !group.folded : settledShown) === to) return false
+    if (group) toggleFold(group.project.key)
+    else toggleSettled()
     return true
   }
 
@@ -153,19 +152,25 @@ export function ThreadSidebar() {
             project={g.project}
             sessions={g.sessions}
             folded={g.folded}
-            settledOpen={g.settledOpen}
             cursorKey={nav.cursorKey}
             onToggleFold={() => {
               nav.setCursorKey(headerKey(g.project))
               toggleFold(g.project.key)
             }}
-            onToggleSettled={() => {
-              nav.setCursorKey(settledKey(g.project))
-              toggleSettled(g.project.key)
-            }}
           />
         ))}
-        {searching && groups.length === 0 && <p className="px-4 py-4 text-small text-dim">No thread matches.</p>}
+        <SettledSection
+          sessions={settled}
+          projects={projects}
+          open={settledShown}
+          cursorKey={nav.cursorKey}
+          selectedId={selectedId}
+          onToggle={() => {
+            nav.setCursorKey(SETTLED_KEY)
+            toggleSettled()
+          }}
+        />
+        {searching && groups.length === 0 && settled.length === 0 && <p className="px-4 py-4 text-small text-dim">No thread matches.</p>}
       </div>
       <SidebarFooter />
     </aside>

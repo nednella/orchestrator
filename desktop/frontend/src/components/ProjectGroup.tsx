@@ -5,21 +5,18 @@ import { Icon } from './Icon'
 import { ThreadRow } from './ThreadRow'
 
 export const headerKey = (project: Project) => `project:${project.key}`
-export const settledKey = (project: Project) => `settled:${project.key}`
 
 type ProjectGroupProps = {
   project: Project
   sessions: Session[]
   folded: boolean
-  settledOpen: boolean
   cursorKey: string | null
   onToggleFold(): void
-  onToggleSettled(): void
 }
 
-export function ProjectGroup({ project, sessions, folded, settledOpen, cursorKey, onToggleFold, onToggleSettled }: ProjectGroupProps) {
+export function ProjectGroup({ project, sessions, folded, cursorKey, onToggleFold }: ProjectGroupProps) {
   const { project: current, selectedId, showHome, report } = useAgentos('project', 'selectedId', 'showHome', 'report')
-  const { live, settled } = splitThreads(sessions)
+  const { live } = splitThreads(sessions)
   const needsYou = live.some((s) => s.state === 'waiting')
 
   const row = (s: Session) => <ThreadRow key={s.id} session={s} selected={s.id === selectedId} cursor={cursorKey === s.id} />
@@ -44,26 +41,7 @@ export function ProjectGroup({ project, sessions, folded, settledOpen, cursorKey
           <Icon name="home" size={13} />
         </button>
       </div>
-      {!folded && (
-        <>
-          {live.map(row)}
-          {sessions.length === 0 && <p className="px-3 py-1.5 pl-7 text-small text-dim">No threads yet</p>}
-          {settled.length > 0 && (
-            <button
-              className="row row-inset h-7 items-center gap-1.5 pl-3 text-small text-dim"
-              aria-expanded={settledOpen}
-              data-cursor={cursorKey === settledKey(project)}
-              onClick={onToggleSettled}
-            >
-              <span data-chevron className="flex-none transition-transform duration-150" style={{ transform: settledOpen ? 'none' : 'rotate(-90deg)' }}>
-                <Icon name="chevron" size={12} />
-              </span>
-              Settled · {settled.length}
-            </button>
-          )}
-          {settledOpen && settled.map(row)}
-        </>
-      )}
+      {!folded && live.map(row)}
     </section>
   )
 }
