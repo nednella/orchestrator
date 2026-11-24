@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
 import { actionsFor, formatShortcut } from '../actions'
-import { useLayout } from '../LayoutContext'
+import { RAIL_REM, useLayout } from '../LayoutContext'
 import { useFullscreen } from '../useFullscreen'
 import { Icon } from './Icon'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
@@ -25,7 +25,7 @@ export function TopBar() {
   const showsThread = selectedId !== null && !statsOpen && !newsOpen && !(narrow && (mobilePanel === 'queue' || mobilePanel === 'notes'))
   const inset = fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)'
   const toggleZone = `calc(${inset} + 40px)`
-  const left = sidebarOpen && !narrow ? `max(${toggleZone}, calc(var(--rail-w) + ${widths.sidebar}rem + 2px))` : toggleZone
+  const left = sidebarOpen && !narrow ? `max(${toggleZone}, calc(${RAIL_REM + widths.sidebar}rem + 2px))` : toggleZone
 
   return (
     <header className="relative flex flex-none items-center border-b border-line" style={{ ...drag, height: 'var(--topbar-h)', paddingRight: 'var(--corner-pad)' }}>

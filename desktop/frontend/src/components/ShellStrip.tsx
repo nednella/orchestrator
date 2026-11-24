@@ -39,7 +39,7 @@ export function ShellStrip() {
   }
 
   return (
-    <div data-panel="shell" tabIndex={-1} className={`panel relative mt-3 flex-none ${shellOpen ? 'bg-term' : 'bg-surface'}`}>
+    <div data-panel="shell" tabIndex={-1} className={`panel relative flex-none border-t border-line ${shellOpen ? 'bg-term' : ''}`}>
       {shellOpen && (
         <div
           className="divider"
@@ -55,7 +55,7 @@ export function ShellStrip() {
           onDoubleClick={resetShellHeight}
         />
       )}
-      <div className="overflow-hidden rounded-[inherit]">
+      <div className="overflow-hidden">
         <ShellTabs />
         {shellOpen && (
           <div className="relative" style={{ height: `${shellRem}rem` }}>

@@ -5,6 +5,7 @@ import { BrowserTab } from './BrowserTab'
 import { EvidenceTab } from './EvidenceTab'
 import { Icon } from './Icon'
 import { PRTab } from './PRTab'
+import { ThreadFacts } from './ThreadFacts'
 
 export function RightPanel() {
   const { selectedId, viewOf, setSessionView, browserStates } = useAgentos('selectedId', 'viewOf', 'setSessionView', 'browserStates')
@@ -22,6 +23,7 @@ export function RightPanel() {
 
   return (
     <aside data-panel="right" tabIndex={-1} className={`panel flex h-full min-h-0 flex-col overflow-hidden ${narrow ? 'min-w-0 flex-1' : 'flex-none'}`} style={narrow ? undefined : { width: `${widths.right}rem` }}>
+      <ThreadFacts session={session} />
       <div className="flex flex-none items-center border-b border-line pr-2 pl-2">
         <div role="tablist" aria-label="Thread details" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {tabs.map((tab) => {

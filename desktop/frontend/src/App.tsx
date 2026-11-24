@@ -58,10 +58,8 @@ export function App() {
         {...(network.online ? {} : { inert: '' })}
       >
         <TopBar />
-        <main className={`relative flex min-h-0 min-w-0 flex-1 ${narrow ? 'p-2' : 'p-3'}`}>
-          <div className={narrow ? 'mr-2 flex' : 'mr-3 flex'}>
-            <ProjectRail />
-          </div>
+        <main className="relative flex min-h-0 min-w-0 flex-1">
+          <ProjectRail />
           {sidebarOpen && <ThreadSidebar />}
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
           <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>

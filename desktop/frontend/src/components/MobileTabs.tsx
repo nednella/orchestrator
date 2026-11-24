@@ -29,7 +29,7 @@ export function MobileTabs() {
   const selected = sessions.find((s) => s.id === selectedId)
   const needsYou = sessions.some((s) => s.state === 'waiting')
   return (
-    <nav role="tablist" aria-label="Panels" className="flex flex-none border-t border-line bg-surface">
+    <nav role="tablist" aria-label="Panels" className="flex flex-none border-t border-line bg-app">
       <Tab panel="queue" label="Queue" badge={String(issues.length)} />
       <Tab panel="notes" label="Notes" badge={String(notes.filter((n) => !n.archived).length)} />
       <Tab panel="session" label="Session" badge={selected ? `#${selected.n}` : '–'} />

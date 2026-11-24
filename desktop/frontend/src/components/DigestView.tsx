@@ -97,7 +97,7 @@ export function DigestView() {
           <div className="mx-auto max-w-3xl">
             {groups.map((group) => (
               <section key={group.day}>
-                <h3 className="label sticky top-0 border-b border-line bg-surface px-4 py-2">
+                <h3 className="label sticky top-0 border-b border-line bg-app px-4 py-2">
                   {group.day}
                 </h3>
                 <ul className="divide-y divide-line">

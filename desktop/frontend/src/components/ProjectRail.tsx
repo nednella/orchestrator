@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { RAIL_REM } from '../LayoutContext'
 import { waitingByProject } from '../threads'
 import type { Project } from '../types'
 import { ProjectTile } from './ProjectTile'
@@ -41,7 +42,7 @@ export function ProjectRail() {
   }
 
   return (
-    <nav className="flex w-9 flex-none flex-col items-center gap-1" aria-label="Projects" onKeyDown={onKeyDown}>
+    <nav className="flex flex-none flex-col items-center gap-1 border-r border-line py-2" style={{ width: `${RAIL_REM}rem` }} aria-label="Projects" onKeyDown={onKeyDown}>
       {projects.map((p, i) => (
         <ProjectTile key={p.key} project={p} label={labels[i]} waiting={waiting.get(p.key) ?? 0} />
       ))}

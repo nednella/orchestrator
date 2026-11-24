@@ -11,7 +11,7 @@ export function BrowserStatusHeader({ id, state }: BrowserStatusHeaderProps) {
   const { report } = useAgentos('report')
 
   return (
-    <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-4 py-3">
+    <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-app px-4 py-3">
       <div className="min-w-0 flex-1 basis-48">
         <h3 className="truncate text-title font-semibold" title={state.title}>
           {state.title || 'Untitled page'}

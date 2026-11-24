@@ -20,8 +20,9 @@ const TABS_BELOW = 640
 const COMPACT_BELOW = 900
 const MEDIUM_BELOW = 1250
 const TERMINAL_MIN_PX = 280
-const MAIN_PAD_PX = 24
-const GAPS_PX = 24
+export const RAIL_REM = 3
+// The rail's border and the line beside each side panel.
+const LINES_PX = 3
 const SHARE: Record<SidePanel, number> = { sidebar: 0.2, right: 0.24 }
 const DEFAULT_RANGE: Record<SidePanel, [number, number]> = { sidebar: [15, 22], right: [9.5, 22] }
 const MIN_REM: Record<SidePanel, number> = { sidebar: 13, right: 9.5 }
@@ -110,7 +111,7 @@ function fit(width: number, prefs: BandPrefs, root: number): Fitted {
   const preferred = (panel: SidePanel) => prefs[panel] ?? clamp((SHARE[panel] * width) / root, DEFAULT_RANGE[panel])
   let sidebar = prefs.sidebarOpen ? preferred('sidebar') * root : 0
   let right = prefs.rightOpen ? preferred('right') * root : 0
-  const over = () => MAIN_PAD_PX + GAPS_PX + sidebar + right + TERMINAL_MIN_PX - width
+  const over = () => RAIL_REM * root + LINES_PX + sidebar + right + TERMINAL_MIN_PX - width
   if (over() > 0 && prefs.rightOpen) right = Math.max(MIN_REM.right * root, right - over())
   if (over() > 0 && prefs.sidebarOpen) sidebar = Math.max(MIN_REM.sidebar * root, sidebar - over())
   const forced = over() > 0 && prefs.rightOpen

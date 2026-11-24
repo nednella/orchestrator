@@ -44,7 +44,7 @@ export function EvidenceTab({ session }: EvidenceTabProps) {
 
   return (
     <div className="absolute inset-0 flex flex-col">
-      <div className="flex flex-none flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-2">
+      <div className="flex flex-none flex-wrap items-center gap-2 border-b border-line bg-app px-3 py-2">
         <span className="mono text-small text-dim">{items.length} items</span>
         <span className="ml-auto" />
         {comparing && (
