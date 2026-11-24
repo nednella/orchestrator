@@ -11,6 +11,8 @@ type ComposerMenuChipProps = {
 export function ComposerMenuChip({ label, children, menu }: ComposerMenuChipProps) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  // A menu with its own field takes the focus; it goes back where it was, the composer, when the menu closes.
+  const returnTo = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -28,12 +30,23 @@ export function ComposerMenuChip({ label, children, menu }: ComposerMenuChipProp
     return () => {
       window.removeEventListener('mousedown', outside)
       window.removeEventListener('keydown', escape, true)
+      if (document.activeElement === document.body || !document.activeElement) returnTo.current?.focus()
     }
   }, [open])
 
   return (
     <div ref={root} className="relative flex-none">
-      <button className="composer-chip" aria-label={label} aria-haspopup="dialog" aria-expanded={open} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)}>
+      <button
+        className="composer-chip"
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          if (!open) returnTo.current = document.activeElement as HTMLElement | null
+          setOpen(!open)
+        }}
+      >
         {children}
         <Icon name="chevron" size={12} />
       </button>

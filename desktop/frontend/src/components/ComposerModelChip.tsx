@@ -1,13 +1,12 @@
+import { useEffect, useState } from 'react'
+import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { api } from '../api'
+import { EFFORTS, modelShortName } from '../model'
+import type { ModelChoice } from '../types'
 import { ComposerMenuChip } from './ComposerMenuChip'
-import { Icon } from './Icon'
+import { ModelPicker } from './ModelPicker'
 
-const MODELS = ['best', 'fable', 'opus', 'sonnet', 'haiku', 'opusplan']
-const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
-
-const NAMES: Record<string, string> = { '': 'Default', opusplan: 'Opus plan', xhigh: 'Extra high' }
-
-const named = (value: string) => NAMES[value] ?? value[0].toUpperCase() + value.slice(1)
-
+// model and effort are the user's picks, '' to leave them to the issue's labels, the action and Claude's settings.
 type ComposerModelChipProps = {
   model: string
   effort: string
@@ -15,54 +14,41 @@ type ComposerModelChipProps = {
   onEffort(effort: string): void
 }
 
-type ChoicesProps = { title: string; values: string[]; value: string; onPick(value: string): void }
-
-function Choices({ title, values, value, onPick }: ChoicesProps) {
-  return (
-    <div role="group" aria-label={title} className="flex flex-col gap-0.5">
-      <div className="px-2 pt-1 pb-0.5 text-label text-dim">{title}</div>
-      {['', ...values].map((v) => (
-        <button key={v} aria-pressed={v === value} className="composer-option" onClick={() => onPick(v)}>
-          <span className="min-w-0 flex-1 truncate">{named(v)}</span>
-          {v === value && <Icon name="check" size={13} />}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 export function ComposerModelChip({ model, effort, onModel, onEffort }: ComposerModelChipProps) {
+  const { report } = useAgentos('report')
+  const projectKey = useAgentosSelector((a) => a.project?.key ?? '')
+  const [defaults, setDefaults] = useState<ModelChoice>({ model: '', effort: '' })
+
+  useEffect(() => {
+    let current = true
+    report(async () => {
+      const [base, picked] = await Promise.all([api.defaultModel(), model ? api.defaultModel(model) : null])
+      if (current) setDefaults({ model: base.model, effort: (picked ?? base).effort })
+    })
+    return () => {
+      current = false
+    }
+  }, [projectKey, model, report])
+
+  const shownModel = model || defaults.model
+  const shownEffort = effort || defaults.effort
+  const modelName = shownModel ? modelShortName(shownModel) : ''
+  const effortName = EFFORTS[shownEffort] ?? shownEffort
+  const label = [modelName, effortName].filter(Boolean).join(' ') || 'Default'
+
   return (
     <ComposerMenuChip
-      label={`Model ${named(model)}, effort ${named(effort)}`}
-      menu={(close) => (
-        <div className="grid w-72 grid-cols-2 gap-1">
-          <Choices
-            title="Model"
-            values={MODELS}
-            value={model}
-            onPick={(v) => {
-              onModel(v)
-              close()
-            }}
-          />
-          <div className="flex flex-col">
-            <Choices
-              title="Effort"
-              values={EFFORTS}
-              value={effort}
-              onPick={(v) => {
-                onEffort(v)
-                close()
-              }}
-            />
-            <p className="px-2 pt-1.5 pb-1 text-label text-dim">More effort thinks longer. Default lets the issue or Claude’s settings choose.</p>
-          </div>
-        </div>
-      )}
+      label={`Model and reasoning: ${label}`}
+      menu={(close) => <ModelPicker model={model} effort={effort} defaults={defaults} onModel={onModel} onEffort={onEffort} onDone={close} />}
     >
-      <span className="max-w-24 truncate">{named(model)}</span>
-      {effort && <span className="max-w-24 truncate text-label text-soft">{named(effort)}</span>}
+      {modelName || effortName ? (
+        <>
+          {modelName && <span className="max-w-24 truncate">{modelName}</span>}
+          {effortName && <span className="max-w-24 truncate text-soft">{effortName}</span>}
+        </>
+      ) : (
+        <span>Default</span>
+      )}
     </ComposerMenuChip>
   )
 }
