@@ -63,7 +63,6 @@ export type Layout = {
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
   toggleSidebar(): void
-  togglePanels(): void
   setSidebarOpen(open: boolean): void
   showHome(part: HomePart): void
   toggleStats(): void
@@ -268,15 +267,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       resetShellHeight: () => updatePrefs({ shell: null }),
       toggleSidebar: () => setSidebarOpen(!sidebarOpen),
-      togglePanels() {
-        if (narrow) {
-          setMobilePanel('session')
-          return
-        }
-        const open = !sidebarOpen && !prefs.shellOpen
-        updatePrefs({ sidebarOpen: open, shellOpen: open })
-        if (!open) focus('terminal')
-      },
       setSidebarOpen,
       showHome,
       toggleStats() {

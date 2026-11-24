@@ -6,7 +6,7 @@ One composer at the bottom of a project's Home, after T3 Code's: a rounded box w
 
 ## How a user reaches it
 
-⌘N opens Home in Thread mode with Read, ⌘M with Write; the palette's "New note" opens it in Note mode. Esc on Home puts the focus in the composer. Typing `#` starts the issue picker; Up and Down move in it, Enter or Tab picks, Esc closes it.
+⌘N opens Home in Thread mode with Read, ⌘M with Write; the mode switch's Note puts it in Note mode. Esc on Home puts the focus in the composer. Typing `#` starts the issue picker; Up and Down move in it, Enter or Tab picks, Esc closes it.
 
 ## How to drive it
 

@@ -49,7 +49,7 @@ function SettingRow({ label, hint, children }: SettingRowProps) {
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, project, settings, setTheme, setThemes, setKeepAwake, setAgent, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setAgent', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
+  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setAgent, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setAgent', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
   const { scale, zoom } = useLayout()
   if (overlay !== 'settings') return null
 
@@ -61,6 +61,11 @@ export function SettingsPanel() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <h3 className="label pb-1">App</h3>
+        <SettingRow label="Version" hint={version ? `agentos ${version}` : 'A development build'}>
+          <button className="btn h-7 flex-none px-2.5" onClick={() => setOverlay('changelog')}>
+            Patch notes
+          </button>
+        </SettingRow>
         <DataDirRow dir={settings.dataDir} fixed={settings.dataDirFixed} />
         <SettingRow label="Theme" hint="System follows the macOS appearance.">
           <SegmentedControl label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />

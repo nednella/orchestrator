@@ -6,7 +6,6 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'start-issue',
     label: 'Start issue',
     group: 'Queue',
-    palette: false,
     async run(args) {
       const numbers = args.map((x) => Number(x.replace(/^#/, '')))
       if (numbers.length === 0 || numbers.some((n) => !Number.isInteger(n))) throw 'Give issue numbers: issue 394 393'
@@ -34,7 +33,6 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'filter-queue',
     label: 'Filter the queue…',
     group: 'Queue',
-    palette: { prompt: 'Filter, e.g. @alex-r label:idea -type:bug', initial: a.issueFilter },
     uiCommand: 'filter',
     run(args) {
       layout.showHome('queue')

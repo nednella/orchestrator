@@ -1,4 +1,3 @@
-import { api } from '../api'
 import type { Action, ActionContext } from './types'
 
 export const navigateActions = ({ a, layout, current }: ActionContext): Action[] => [
@@ -13,28 +12,11 @@ export const navigateActions = ({ a, layout, current }: ActionContext): Action[]
     },
   },
   {
-    id: 'open-repo',
-    label: 'Open repository on GitHub',
-    group: 'Projects',
-    async run() {
-      if (!a.project?.repo) throw 'This project has no GitHub repo'
-      await api.openURL(`https://github.com/${a.project.repo}`)
-    },
-  },
-  {
     id: 'add-project',
     label: 'Add project…',
     group: 'Projects',
     async run() {
       await a.addProject()
-    },
-  },
-  {
-    id: 'set-up-project',
-    label: 'Set up project',
-    group: 'Projects',
-    async run() {
-      await a.setUpProject()
     },
   },
   {
@@ -54,12 +36,6 @@ export const navigateActions = ({ a, layout, current }: ActionContext): Action[]
     },
   },
   {
-    id: 'toggle-panels',
-    label: 'Toggle all panels',
-    group: 'Navigate',
-    run: layout.togglePanels,
-  },
-  {
     id: 'panel-sidebar',
     label: 'Project home: queue and notes',
     group: 'Navigate',
@@ -67,15 +43,6 @@ export const navigateActions = ({ a, layout, current }: ActionContext): Action[]
     run() {
       layout.showHome('queue')
       a.focus('home')
-    },
-  },
-  {
-    id: 'panel-terminal',
-    label: 'Centre panel: the active session',
-    group: 'Navigate',
-    run() {
-      layout.closeCentre()
-      layout.focusPanel('centre')
     },
   },
   {
@@ -98,13 +65,5 @@ export const navigateActions = ({ a, layout, current }: ActionContext): Action[]
     group: 'Navigate',
     shortcut: { key: ']' },
     run: () => a.stepSession(1),
-  },
-  {
-    id: 'palette',
-    label: 'Command palette',
-    group: 'Navigate',
-    shortcut: { key: 'k' },
-    palette: false,
-    run: () => a.setOverlay(a.overlay === 'palette' ? null : 'palette'),
   },
 ]

@@ -20,8 +20,6 @@ export type Action = {
   group: ActionGroup
   shortcut?: Shortcut
   uiCommand?: string
-  palette?: false | { prompt?: string; initial?: string }
-  confirm?: boolean
   run(args: string[]): string | void | Promise<string | void>
 }
 

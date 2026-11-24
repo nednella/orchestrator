@@ -31,18 +31,18 @@ The script puts `agentos.app` and Chrome for Testing, the agent browser, in `~/A
 ## Start
 
 1. Open `agentos`.
-2. Add a project: `⌘K` → _Add project…_, or `agentos project add` in its folder.
+2. Add a project: _+_ in the project rail, or `agentos project add` in its folder.
 3. Start a task: `⌘M`, or `Enter` on an issue in the queue to open it, then start one from it.
 4. Ask about the project without starting work: `⌘N` starts a chat. A chat reads the project and changes nothing; it files an issue or hands off to a task when the talk turns into work. Chats stay out of the stats.
 
-`⌘K` opens the command palette. `⌘/` lists every shortcut. `agentos --help` lists the commands.
+`⌘/` lists every shortcut. `agentos --help` lists the commands.
 
 ## Set up a project
 
 A project with no queue sections shows _Set up this project for agentos_ at the top of its queue.
 
 - **Set up** adds an Inbox whose _Work_ action runs `/work <n>`, plus branch, clean-up and PR commands. If accepted, a session is started that writes the `/work` command, the issue template and `AGENTS.md` with you.
-- **Not now** hides the offer. `⌘K` → _Set up project_ still works.
+- **Not now** hides the offer. Right-click the project in the rail → _Set up project_ still works.
 
 To change the config by hand, edit `~/.config/agentos/config.yaml`; the app picks the change up while it runs. `docs/config.md` describes every key.
 

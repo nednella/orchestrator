@@ -11,7 +11,7 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 export function TopBar() {
-  const { selectedId, setOverlay, report, update, updating, applyUpdate, digestUnseenCount } = useAgentos('selectedId', 'setOverlay', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount')
+  const { selectedId, report, update, updating, applyUpdate, digestUnseenCount } = useAgentos('selectedId', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount')
   const layout = useLayout()
   const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
@@ -55,7 +55,6 @@ export function TopBar() {
             )}
           </button>
         )}
-        <TitleBarButton label={named('Command palette', 'palette')} icon="search" onClick={() => setOverlay('palette')} />
         <TitleBarButton label={named(sidebarOpen ? 'Hide thread list' : 'Show thread list', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton

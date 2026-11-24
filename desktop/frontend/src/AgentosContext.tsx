@@ -19,7 +19,7 @@ export type Toast = {
 export type SessionView = 'pr' | 'evidence' | 'browser'
 export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
-export type Overlay = 'palette' | 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
+export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
 export type HomePart = 'queue' | 'notes' | 'composer'
 export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'composer'
 export type ComposerKind = 'session' | 'chat'

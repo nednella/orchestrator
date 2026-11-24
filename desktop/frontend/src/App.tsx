@@ -7,7 +7,6 @@ import { IssueDialog } from './components/IssueDialog'
 import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
 import { RightPanel } from './components/RightPanel'
-import { Palette } from './components/Palette'
 import { ProjectRail } from './components/ProjectRail'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -93,7 +92,6 @@ export function App() {
           </div>
         </div>
         {narrow && <MobileTabs />}
-        <Palette />
         <IssueDialog />
         <ShortcutsSheet />
         <SettingsPanel />

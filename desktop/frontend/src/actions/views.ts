@@ -78,7 +78,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     label: 'Previous right panel tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: '[', code: 'BracketLeft', shift: true, label: '[' },
-    palette: false,
     run() {
       layout.setRightOpen(true)
       a.cycleSessionView(-1)
@@ -89,7 +88,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     label: 'Next right panel tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: ']', code: 'BracketRight', shift: true, label: ']' },
-    palette: false,
     run() {
       layout.setRightOpen(true)
       a.cycleSessionView(1)
@@ -101,12 +99,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     group: 'App',
     uiCommand: 'digest',
     run: layout.toggleDigest,
-  },
-  {
-    id: 'patch-notes',
-    label: 'Patch notes',
-    group: 'App',
-    run: () => a.setOverlay('changelog'),
   },
   {
     id: 'shortcuts',

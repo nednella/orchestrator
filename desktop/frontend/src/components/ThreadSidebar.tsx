@@ -8,7 +8,6 @@ import { useFocusRequest } from '../useFocusRequest'
 import { useListNav } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { Icon } from './Icon'
-import { Keycap } from './Keycap'
 import { SETTLED_KEY, SettledSection } from './SettledSection'
 import { ThreadSection } from './ThreadSection'
 
@@ -18,7 +17,7 @@ const SETTLED_OPEN_KEY = 'agentos.sidebar.settled-open'
 export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
-  const { projectSessions, selectedId, select, focus, setOverlay } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setOverlay')
+  const { projectSessions, selectedId, select, focus } = useAgentos('projectSessions', 'selectedId', 'select', 'focus')
   const { mode, widths, returnToTerminal } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
@@ -132,9 +131,6 @@ export function ThreadSidebar() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onSearchKeyDown}
         />
-        <button className="flex-none" title="Command palette" aria-label="Command palette" onClick={() => setOverlay('palette')}>
-          <Keycap>⌘K</Keycap>
-        </button>
       </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto py-1">
         <ThreadSection label="Attention" sessions={sections.waiting} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />

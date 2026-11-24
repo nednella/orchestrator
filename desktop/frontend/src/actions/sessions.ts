@@ -18,14 +18,6 @@ function findSession(sessions: Session[], query: string): Session {
 
 const describe = (s: Session) => `${s.n} ${s.title}`
 
-const resumable = (sessions: Session[]) => sessions.filter((s) => s.resumable)
-
-function resumePrompt(sessions: Session[]): Action['palette'] {
-  const ended = resumable(sessions)
-  if (ended.length === 0) return false
-  return { prompt: 'Session number or title', initial: ended.length === 1 ? String(ended[0].n) : '' }
-}
-
 export const sessionActions = ({ a, layout, current }: ActionContext): Action[] => [
   {
     id: 'new-session',
@@ -55,7 +47,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     id: 'open-session',
     label: 'Open session',
     group: 'Sessions',
-    palette: false,
     uiCommand: 'open',
     run(args) {
       const session = findSession(a.projectSessions, args.join(' '))
@@ -82,65 +73,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     uiCommand: 'next',
     run() {
       a.nextAttention()
-    },
-  },
-  {
-    id: 'kill-session',
-    label: current ? `Kill session ${describe(current)}` : 'Kill session',
-    group: 'Sessions',
-    confirm: true,
-    async run(args) {
-      const target = args.length ? findSession(a.projectSessions, args.join(' ')) : current
-      if (!target) throw 'No session to kill'
-      await a.killSession(target.id)
-      return `Killed ${describe(target)}`
-    },
-  },
-  {
-    id: 'resume-session',
-    label: 'Resume ended session',
-    group: 'Sessions',
-    palette: resumePrompt(a.projectSessions),
-    uiCommand: 'resume',
-    async run(args) {
-      const target = findSession(resumable(a.projectSessions), args.join(' '))
-      const resumed = await a.resumeSession(target.id)
-      return `Resumed ${describe(target)} as ${describe(resumed)}`
-    },
-  },
-  {
-    id: 'rename-session',
-    label: current ? `Rename session ${describe(current)}` : 'Rename session',
-    group: 'Sessions',
-    palette: { prompt: 'New title', initial: current?.title },
-    async run(args) {
-      if (!current) throw 'No session to rename'
-      if (args.length === 0) throw 'Give the new title: rename <title>'
-      await a.renameSession(current.id, args.join(' '))
-      return `Renamed to "${args.join(' ')}"`
-    },
-  },
-  {
-    id: 'open-pr',
-    label: current?.pr ? `Open PR #${current.pr.number}` : 'Open the pull request',
-    group: 'Sessions',
-    uiCommand: 'pr',
-    async run() {
-      if (!current) throw 'No session selected'
-      await a.openPR(current)
-      return `Opened PR #${current.pr?.number}`
-    },
-  },
-  {
-    id: 'cleanup',
-    label: current ? `Clean up task ${describe(current)}` : 'Clean up task',
-    group: 'Sessions',
-    confirm: true,
-    async run(args) {
-      const target = args.length ? findSession(a.projectSessions, args.join(' ')) : current
-      if (!target) throw 'No task to clean up'
-      await a.cleanupSession(target.id, false)
-      return `Cleaned up ${describe(target)}`
     },
   },
 ]

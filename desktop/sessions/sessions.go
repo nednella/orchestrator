@@ -98,7 +98,7 @@ type Project struct {
 	Sessions int    `json:"sessions"`
 
 	NeedsSetup     bool `json:"needsSetup"`     // the project has no queue sections, so the app offers to set it up
-	SetupDismissed bool `json:"setupDismissed"` // the owner turned the offer down; it stays in the palette
+	SetupDismissed bool `json:"setupDismissed"` // the owner turned the offer down; it stays in the project's menu on the rail
 }
 
 // Sessions tracks the agents in the private tmux server and tells the front end when they change.
