@@ -371,7 +371,8 @@
     color: color-mix(in srgb, var(--text) 80%, transparent);
   }
 
-  .composer-chip > svg {
+  .composer-chip > svg,
+  .composer-chip[data-active='false'] {
     color: var(--text-soft);
   }
 
