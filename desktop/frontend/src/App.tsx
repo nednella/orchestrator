@@ -14,7 +14,6 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ShellPanel } from './components/ShellPanel'
 import { ShellStrip } from './components/ShellStrip'
-import { SidebarToggle } from './components/SidebarToggle'
 import { ThreadSidebar } from './components/ThreadSidebar'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
@@ -92,7 +91,6 @@ export function App() {
               {narrow && mobilePanel === 'shell' && <ShellPanel />}
             </main>
           </div>
-          <SidebarToggle />
         </div>
         {narrow && <MobileTabs />}
         <Palette />
