@@ -58,6 +58,7 @@ export type IconName =
   | 'branch'
   | 'update'
   | 'more'
+  | 'compose'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -171,6 +172,7 @@ function IconShape({ name }: IconShapeProps) {
       </>
     )
   if (name === 'more') return <path d="M3.5 8h.01M8 8h.01M12.5 8h.01" strokeWidth="2.5" />
+  if (name === 'compose') return <path d="M8 2H3.3A1.3 1.3 0 0 0 2 3.3v9.4A1.3 1.3 0 0 0 3.3 14h9.4a1.3 1.3 0 0 0 1.3-1.3V8M12.3 1.7a1.4 1.4 0 1 1 2 2L8 10l-2.7.7.7-2.7Z" />
   if (name === 'issue') return <path d="M8 13.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM8 5.5v3.2M8 10.8v.01" />
   return <path d="M2 4h4l1.5 1.5H14V13H2Z" />
 }

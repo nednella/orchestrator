@@ -17,8 +17,8 @@ const SETTLED_OPEN_KEY = 'agentos.sidebar.settled-open'
 export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
-  const { projectSessions, selectedId, select, focus } = useAgentos('projectSessions', 'selectedId', 'select', 'focus')
-  const { mode, widths, returnToTerminal } = useLayout()
+  const { projectSessions, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setComposerMode')
+  const { mode, widths, returnToTerminal, showHome } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
@@ -93,6 +93,12 @@ export function ThreadSidebar() {
     if (nav.handle(e)) e.preventDefault()
   }
 
+  const newThread = () => {
+    showHome()
+    setComposerMode('thread')
+    focus('composer')
+  }
+
   const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.stopPropagation()
@@ -133,6 +139,9 @@ export function ThreadSidebar() {
             onKeyDown={onSearchKeyDown}
           />
         </label>
+        <button className="btn btn-ghost h-[1.875rem] w-[1.875rem] justify-center border-line px-0 hover:text-ink" title="New thread" aria-label="New thread" onClick={newThread}>
+          <Icon name="compose" />
+        </button>
       </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto py-1">
         <ThreadSection label="Attention" sessions={sections.waiting} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />
