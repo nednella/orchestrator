@@ -196,7 +196,8 @@
     color: var(--text-soft);
   }
 
-  .btn-ghost[data-selected='true'] {
+  .btn-ghost[data-selected='true'],
+  .btn-ghost[data-selected='true']:hover:not(:disabled) {
     border-color: var(--border-strong);
     background: var(--bg-raised);
     color: var(--text);
