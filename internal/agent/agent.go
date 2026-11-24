@@ -36,6 +36,7 @@ const (
 	StartArg                      // take the first prompt on its command line and submit it once ready
 	ModelEffort                   // take a model and an effort
 	Browser                       // drive the session's browser tab with agent-browser
+	Hosted                        // run headless under agentos host, which takes its messages over a socket
 )
 
 // Provider is one agent CLI as agentos runs it: the command and environment a session starts with, and the way its

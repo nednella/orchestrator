@@ -115,11 +115,11 @@ func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
 	}
 }
 
-func TestCommandEndsWithTheStartPrompt(t *testing.T) {
+func TestClaudeCommandLeavesTheStartPromptToTheHost(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{}}
 	for _, brief := range []string{"", "set it up"} {
 		argv := s.commandFor(agent.Claude{Exe: "/x"}, project.Project{Name: "p"}, project.Model{}, "", brief, "", "-v is a flag", false)
-		if !slices.Equal(argv[len(argv)-2:], []string{"--", "-v is a flag"}) {
+		if slices.Contains(argv, "--") || slices.Contains(argv, "-v is a flag") {
 			t.Errorf("argv with brief %q = %q", brief, argv)
 		}
 	}

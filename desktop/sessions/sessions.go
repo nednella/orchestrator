@@ -25,6 +25,7 @@ import (
 	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
@@ -44,6 +45,7 @@ const (
 	startCols     = 120
 	startRows     = 32
 	prefillWait   = 6 * time.Second
+	hostWait      = 10 * time.Second // for a new session's host to listen
 	promptSettles = 300 * time.Millisecond
 )
 
@@ -556,6 +558,8 @@ func (s *Sessions) drop(id string) {
 		go os.RemoveAll(s.tmpDir(name))
 		_ = os.Remove(s.handoverPath(name))
 		_ = os.Remove(s.usageMarkPath(name))
+		_ = os.Remove(s.chatLogPath(name))
+		_ = os.Remove(s.hostSocket(name))
 	}
 }
 
@@ -563,6 +567,17 @@ func (s *Sessions) drop(id string) {
 // without asking, so the screenshots and scratch files it makes there need no approval, and it goes with the session.
 func (s *Sessions) tmpDir(name session.Name) string {
 	return filepath.Join(s.localDir, name.Project, "tmp", name.Token)
+}
+
+// chatLogPath is the chat log the session's host keeps.
+func (s *Sessions) chatLogPath(name session.Name) string {
+	return filepath.Join(s.localDir, name.Project, "chats", name.Token+".jsonl")
+}
+
+// hostSocket is where the session's host listens. It sits in the state folder, whose path is short: a unix socket's
+// path may be 103 bytes at most.
+func (s *Sessions) hostSocket(name session.Name) string {
+	return filepath.Join(s.stateDir, "hosts", name.Project, name.Token+".sock")
 }
 
 // handoverPath is where the handover a session started with is kept: a session that resumes its conversation
@@ -1361,12 +1376,16 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	}
 	model = fill(p, proj.Dir, model)
 	// Typed in while the agent still starts, the text and Enter reach it as one paste, where Enter is a newline. An
-	// agent that takes a prompt on its command line submits it itself once it is ready.
-	start := ""
-	if p.Can(agent.StartArg) && send {
-		start, text = text, ""
+	// agent that takes a prompt on its command line submits it itself once it is ready, and a hosted one gets it from
+	// its host.
+	start, typed := "", text
+	switch {
+	case p.Can(agent.Hosted):
+		typed = ""
+	case p.Can(agent.StartArg) && send:
+		start, typed = text, ""
 	}
-	name, ctx, ready := s.reserve(proj, text)
+	name, ctx, ready := s.reserve(proj, typed)
 	created := time.Now()
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
@@ -1389,7 +1408,10 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		s.life.claim(proj, name.String(), branch)
 	}
 	if ready != nil {
-		go s.typeWhenReady(name, ready, text, send)
+		go s.typeWhenReady(name, ready, typed, send)
+	}
+	if p.Can(agent.Hosted) && text != "" {
+		go s.giveHost(ctx, name, text, send)
 	}
 	if issue > 0 {
 		s.life.ensureWatchers(ctx)
@@ -1471,7 +1493,28 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if !p.Can(agent.ModelEffort) {
 		model = project.Model{} // the agent takes no model flags, so none was chosen
 	}
-	return s.start(ctx, name, title, proj.Dir, env, p.Command(l), issue, model, chat, action, p.Name())
+	argv := p.Command(l)
+	if p.Can(agent.Hosted) {
+		var err error
+		if argv, err = s.hosted(name, argv); err != nil {
+			return err
+		}
+	}
+	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, action, p.Name())
+}
+
+// hosted is argv run under agentos host, with the session's chat log and socket. It makes the socket's folder
+// private, as the host asks; a folder an older run made may be wider, and it is the app's own.
+func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
+	socket := s.hostSocket(name)
+	dir := filepath.Dir(socket)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("making the session's socket folder: %w", err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("making the session's socket folder private: %w", err)
+	}
+	return append([]string{s.agents.Exe, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
 }
 
 // register adds the new session to the list and returns its row. continues is the session whose conversation it
@@ -1562,6 +1605,25 @@ func (s *Sessions) typeWhenReady(name session.Name, ready <-chan struct{}, text 
 	delete(s.ready, name.String())
 	s.mu.Unlock()
 	s.send(ctx, name, text, send)
+}
+
+// giveHost gives text to the session's host once its socket takes connections: sent to the agent when send is set,
+// else left as a draft.
+func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string, send bool) {
+	ctx, cancel := context.WithTimeout(ctx, hostWait)
+	defer cancel()
+	socket := s.hostSocket(name)
+	give := host.Draft
+	if send {
+		give = host.Send
+	}
+	err := host.Ready(ctx, socket)
+	if err == nil {
+		err = give(ctx, socket, text)
+	}
+	if err != nil {
+		log.Printf("agentos: session %s did not get its first prompt: %v", name, err)
+	}
 }
 
 // send types text into the session's prompt and, when submit is set, presses Enter.

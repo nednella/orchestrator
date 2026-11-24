@@ -18,7 +18,7 @@ projects:
     # everything below is optional; the values shown are the defaults
     queue_sections: []         # the groups of the queue, in order; see below
     note_session_command: ""   # typed into a session started from a note; {text} is the note; "" types the note itself
-    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as its start argument); manual types it on the prompt for Enter. The settings panel writes it
+    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual types it on the prompt for Enter, or leaves it as a draft in Claude's chat log. The settings panel writes it
     session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
     session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
     session_cleanup_mode:      # does the app clean up by itself? The settings panel writes it
@@ -131,8 +131,8 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 |---|---|
 | notes, note images, evidence, digest | `<data_dir>/<key>/` (`data_dir` defaults to `~/.local/share/agentos`) |
 | the event log, which holds all stats: one file of events per machine per day, gzipped from the day before yesterday | `<data_dir>/<key>/events/YYYY-MM-DD.<machine>.jsonl[.gz]` |
-| PR tracking, clean-up log, browser profile, session temp folders | `~/.local/share/agentos/<key>/` |
-| state files, sockets, tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/agentos` |
+| PR tracking, clean-up log, browser profile, session temp folders, chat logs (`chats/`) | `~/.local/share/agentos/<key>/` |
+| state files, sockets (each Claude session's host under `hosts/<key>/`), tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/agentos` |
 
 ## Command line
 

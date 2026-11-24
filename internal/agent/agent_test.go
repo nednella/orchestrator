@@ -13,9 +13,12 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
+// headlessFlags are what claude needs to run under agentos host.
+var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+
 func TestClaudeCommand(t *testing.T) {
 	argv := Claude{Exe: "/opt/it's here/agentos"}.Command(Launch{})
-	if len(argv) != 3 || argv[0] != "claude" || argv[1] != "--settings" {
+	if len(argv) != 3+len(headlessFlags) || argv[0] != "claude" || argv[1] != "--settings" {
 		t.Fatalf("argv = %q", argv)
 	}
 	var settings struct {
@@ -62,13 +65,16 @@ func TestClaudeLaunch(t *testing.T) {
 		{"chat", Launch{Chat: true}, []string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"}},
 		{"browser", Launch{Browser: true}, []string{"--allowedTools", "Bash(agent-browser:*)"}},
 		{"prompt", Launch{Prompt: "where you run"}, []string{"--append-system-prompt", "where you run"}},
-		{"start", Launch{Start: "-v is a flag"}, []string{"--", "-v is a flag"}},
+		{"start, which goes to the host", Launch{Start: "-v is a flag"}, nil},
 		{"all, in order", Launch{Chat: true, Browser: true, Prompt: "p", Start: "s"},
-			[]string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)", "--append-system-prompt", "p", "--", "s"}},
+			[]string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)", "--append-system-prompt", "p"}},
 	}
 	for _, tt := range tests {
 		argv := Claude{Exe: "/x"}.Command(tt.l)
-		if got := argv[3:]; !slices.Equal(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
+		if !slices.Equal(argv[3:3+len(headlessFlags)], headlessFlags) {
+			t.Errorf("%s: argv = %q, want the headless flags after --settings", tt.name, argv)
+		}
+		if got := argv[3+len(headlessFlags):]; !slices.Equal(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 			t.Errorf("%s: flags = %q, want %q", tt.name, got, tt.want)
 		}
 	}
@@ -85,12 +91,15 @@ func TestPlainIgnoresLaunch(t *testing.T) {
 }
 
 func TestPlainCanNothing(t *testing.T) {
-	for _, c := range []Capability{Resume, StartArg, ModelEffort, Browser} {
+	for _, c := range []Capability{Resume, StartArg, ModelEffort, Browser, Hosted} {
 		if (Plain{}).Can(c) {
 			t.Errorf("a plain agent can %d", c)
 		}
-		if !(Claude{}).Can(c) {
-			t.Errorf("claude cannot %d", c)
+		if (Claude{}).Can(c) == (c == StartArg) {
+			t.Errorf("claude can %d: %v", c, (Claude{}).Can(c))
+		}
+		if (Agy{}).Can(c) == (c == Hosted) {
+			t.Errorf("agy can %d: %v", c, (Agy{}).Can(c))
 		}
 	}
 	if _, _, ok := (Plain{}).ParseEvent("Stop", strings.NewReader("{}")); ok {

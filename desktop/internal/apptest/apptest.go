@@ -820,9 +820,21 @@ func CLIPath(t *testing.T) string {
 }
 
 // ClaudeOnPath puts a stand-in `claude` and the built agentos command first on PATH, so the app runs its Claude
-// adapter and tmux starts the stand-in. The stand-in writes its arguments to <dir>/<session id, "/" as "_">.args and
-// waits. Call it before New. It returns dir.
-func ClaudeOnPath(t *testing.T) string { return agentOnPath(t, "claude", "") }
+// adapter and the session's host starts the stand-in. The stand-in writes its arguments to <dir>/<session id, "/" as
+// "_">.args, prints an init line, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin and answers
+// each user message with a reply and a result, until its stdin ends. Call it before New. It returns dir.
+func ClaudeOnPath(t *testing.T) string { return agentOnPath(t, "claude", "", fakeClaudeTurns) }
+
+// fakeClaudeTurns is the stand-in claude's stream-json side.
+const fakeClaudeTurns = `printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+while IFS= read -r line; do
+	printf '%s\n' "$line" >> "$f.stdin"
+	case "$line" in
+	*'"type":"user"'*)
+		printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}' ;;
+	esac
+done
+`
 
 // AgyModels is what the stand-in agy answers to agy models: each model's id and name.
 var AgyModels = [][2]string{{"gemini-4-argon-medium", "Gemini 4 Argon (Medium)"}, {"gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"}}
@@ -841,17 +853,17 @@ func agyOnPath(t *testing.T, pane string) string {
 	for _, m := range AgyModels {
 		models += m[0] + "\t" + m[1] + "\n"
 	}
-	return agentOnPath(t, "agy", "if [ \"$1\" = models ]; then printf '"+models+"'; exit 0; fi\nprintf 'AGENTOS_PROMPT=%s\\nAGENTOS_CHAT=%s\\n' \"$AGENTOS_PROMPT\" \"$AGENTOS_CHAT\" > \"$f.env\"\nprintf '%s' '"+pane+"'\n")
+	return agentOnPath(t, "agy", "if [ \"$1\" = models ]; then printf '"+models+"'; exit 0; fi\nprintf 'AGENTOS_PROMPT=%s\\nAGENTOS_CHAT=%s\\n' \"$AGENTOS_PROMPT\" \"$AGENTOS_CHAT\" > \"$f.env\"\nprintf '%s' '"+pane+"'\n", "exec sleep 60\n")
 }
 
-// agentOnPath writes the stand-in named so, with first run before it records its arguments, and puts it first on
-// PATH. first may use f, the path of the args file without its extension.
-func agentOnPath(t *testing.T, name, first string) string {
+// agentOnPath writes the stand-in named so, with first run before it records its arguments and then run after it,
+// and puts it first on PATH. Both may use f, the path of the args file without its extension.
+func agentOnPath(t *testing.T, name, first, then string) string {
 	t.Helper()
 	dir := t.TempDir()
 	// The rename makes the args file appear whole, so a test never reads it half written.
 	script := "#!/bin/sh\nf=\"" + dir + "/$(echo \"$AGENTOS_SESSION\" | tr / _)\"\n" + first +
-		"printf '%s\\n' \"$@\" > \"$f.args.tmp\" && mv \"$f.args.tmp\" \"$f.args\"\nexec sleep 60\n"
+		"printf '%s\\n' \"$@\" > \"$f.args.tmp\" && mv \"$f.args.tmp\" \"$f.args\"\n" + then
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}

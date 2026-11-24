@@ -75,8 +75,8 @@ func runsAs(path string) bool {
 	return err == nil && real == want
 }
 
-func (a Agy) Name() string        { return "agy" }
-func (a Agy) Can(Capability) bool { return true }
+func (a Agy) Name() string          { return "agy" }
+func (a Agy) Can(c Capability) bool { return c != Hosted }
 
 // Command is agy's command line. The model id carries an effort agy lists (gemini-4-argon-medium); any other effort
 // goes to --effort. A chat runs in plan mode, which only tells agy to plan: the PreToolUse hook is what keeps it from

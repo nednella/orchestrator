@@ -47,11 +47,16 @@ type hookGroup struct {
 	Hooks   []hookCommand `json:"hooks"`
 }
 
-func (c Claude) Name() string        { return "claude" }
-func (c Claude) Can(Capability) bool { return true }
+func (c Claude) Name() string { return "claude" }
 
-// Command is claude's command line. The "--" before the start prompt keeps one that starts with "-" from being
-// read as a flag, and from being taken as one more value of a list flag such as --allowedTools.
+// Can is every capability but StartArg: claude runs under agentos host, which gives it the first prompt as a message.
+func (c Claude) Can(want Capability) bool { return want != StartArg }
+
+// headless makes claude read user messages as stream-json on stdin and write its turns as stream-json on stdout,
+// partial messages too, and ask for each permission with a control request on stdout.
+var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+
+// Command is claude's command line, run headless for agentos host.
 func (c Claude) Command(l Launch) []string {
 	hooks := make(map[string][]hookGroup, len(claudeEvents))
 	for _, ev := range claudeEvents {
@@ -64,7 +69,7 @@ func (c Claude) Command(l Launch) []string {
 		Hooks       map[string][]hookGroup `json:"hooks"`
 		Permissions permissions            `json:"permissions"`
 	}{hooks, permissions{c.Dirs}})
-	argv := []string{"claude", "--settings", string(settings)}
+	argv := append([]string{"claude", "--settings", string(settings)}, headless...)
 	if l.Model != "" {
 		argv = append(argv, "--model", l.Model)
 	}
@@ -87,9 +92,6 @@ func (c Claude) Command(l Launch) []string {
 	}
 	if l.Prompt != "" {
 		argv = append(argv, "--append-system-prompt", l.Prompt)
-	}
-	if l.Start != "" {
-		argv = append(argv, "--", l.Start)
 	}
 	return argv
 }

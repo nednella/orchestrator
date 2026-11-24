@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -201,35 +202,163 @@ func TestThreadWithAnUnknownModelDoesNotStart(t *testing.T) {
 	}
 }
 
-func TestClaudeGetsASentPromptOnItsCommandLine(t *testing.T) {
+// hostFiles are the chat log and the socket of a session's host.
+func hostFiles(h *apptest.Harness, id string) (chatLog, socket string) {
+	name, _ := session.ParseName(id)
+	return filepath.Join(h.State, "data", name.Project, "chats", name.Token+".jsonl"), filepath.Join(h.State, "hosts", name.Project, name.Token+".sock")
+}
+
+// userLines are the user messages the stand-in claude read on its stdin.
+func userLines(t *testing.T, dir, id string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(id, "/", "_")+".stdin"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	var users []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if strings.HasPrefix(line, `{"type":"user"`) {
+			users = append(users, line)
+		}
+	}
+	return users
+}
+
+func TestClaudeRunsUnderTheHost(t *testing.T) {
 	dir := apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
-	for _, tt := range []struct {
-		name            string
-		send, wantTyped bool
-	}{
-		{"sent", true, false},
-		{"not sent", false, true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			s, err := h.Sessions().Create("#7 work", "/work 7", tt.send, 7, "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			args := claudeArgs(t, dir, s.ID)
-			onCommandLine := len(args) > 2 && slices.Equal(args[len(args)-2:], []string{"--", "/work 7"})
-			if onCommandLine == tt.wantTyped {
-				t.Errorf("args = %q", args)
-			}
-			if tt.wantTyped {
-				eventually(t, "the prompt typed", func() bool { return strings.Contains(h.Pane(t, s.ID), "/work 7") })
-				return
-			}
-			time.Sleep(600 * time.Millisecond)
-			if pane := h.Pane(t, s.ID); strings.Contains(pane, "/work 7") {
-				t.Errorf("the prompt was typed as well:\n%s", pane)
-			}
-		})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatLog, socket := hostFiles(h, s.ID)
+	if len(socket) > 103 {
+		t.Fatalf("socket path %s is %d bytes, over the 103 a unix socket takes", socket, len(socket))
+	}
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", s.ID, "#{pane_start_command}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := apptest.CLIPath(t) + " host --log " + chatLog + " --socket " + socket + " -- claude "
+	if got := strings.TrimSpace(string(out)); !strings.HasPrefix(got, want) {
+		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
+	}
+	args := claudeArgs(t, dir, s.ID)
+	joined := strings.Join(args, " ")
+	for _, flag := range []string{"-p", "--input-format stream-json", "--output-format stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool stdio"} {
+		if !strings.Contains(" "+joined+" ", " "+flag+" ") {
+			t.Errorf("claude lacks %s: %q", flag, args)
+		}
+	}
+	if slices.Contains(args, "--") {
+		t.Errorf("claude got a start prompt: %q", args)
+	}
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	info, err := os.Stat(filepath.Dir(socket))
+	if err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("socket folder = %v, %v; want mode 700", info.Mode(), err)
+	}
+}
+
+func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	folder := filepath.Join(h.State, "hosts", "main")
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	if info, err := os.Stat(folder); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("socket folder = %v, %v; want mode 700", info.Mode(), err)
+	}
+}
+
+func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("#7 work", "/work 7; and a ';' at the end;", true, 7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) > 0 })
+	time.Sleep(300 * time.Millisecond)
+	users := userLines(t, dir, s.ID)
+	if len(users) != 1 || !strings.Contains(users[0], `"text":"/work 7; and a ';' at the end;"`) {
+		t.Errorf("user lines = %q, want one with the prompt", users)
+	}
+	chatLog, _ := hostFiles(h, s.ID)
+	eventually(t, "the prompt and the reply in the chat log", func() bool {
+		data, _ := os.ReadFile(chatLog)
+		return strings.Contains(string(data), `"kind":"user","text":"/work 7; and a ';' at the end;"`) && strings.Contains(string(data), `"kind":"turn_end"`)
+	})
+}
+
+func TestAppPromptKeepsItsMark(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
+		t.Fatal(err)
+	}
+	id := h.Sessions().List()[0].ID
+	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, id)) == 1 })
+	if users := userLines(t, dir, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
+		t.Errorf("user line = %s", users[0])
+	}
+}
+
+func TestUnsentPromptIsADraft(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("#7 work", "/work 7", false, 7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatLog, _ := hostFiles(h, s.ID)
+	eventually(t, "the draft in the chat log", func() bool {
+		data, _ := os.ReadFile(chatLog)
+		return strings.Contains(string(data), `"kind":"draft","text":"/work 7"`)
+	})
+	time.Sleep(300 * time.Millisecond)
+	if users := userLines(t, dir, s.ID); len(users) != 0 {
+		t.Errorf("claude got %q, want no message", users)
+	}
+	if pane := h.Pane(t, s.ID); strings.Contains(pane, "you: /work 7") {
+		t.Errorf("the draft was sent:\n%s", pane)
+	}
+}
+
+func TestDismissRemovesTheChatLog(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "hello", true, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatLog, socket := hostFiles(h, s.ID)
+	eventually(t, "the chat log", func() bool {
+		data, _ := os.ReadFile(chatLog)
+		return strings.Contains(string(data), `"kind":"user"`)
+	})
+	if err := h.KillSession(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the killed session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+	if got, _ := h.Session(s.ID); got.Detail != "" {
+		t.Errorf("ended row = %+v, want no failure shown", got)
+	}
+	if err := h.DismissSession(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if exists(chatLog) || exists(socket) {
+		t.Errorf("after dismiss, chat log there: %v, socket there: %v", exists(chatLog), exists(socket))
 	}
 }
 
