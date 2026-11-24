@@ -454,6 +454,7 @@ export function createMock(params: URLSearchParams) {
     seed('#430 thumbnail ratio', 430, 'ended', [['working', 60], ['ended', 18]])
     seed('spike: websocket retry', 0, 'ended', [['working', 140], ['idle', 110], ['ended', 95]])
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
+    seed('retry banner experiment', 0, 'ended', [['working', 400], ['idle', 380], ['ended', 300]])
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
     sessions.find((x) => x.title === 'spike: websocket retry')!.resumable = false
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
@@ -471,6 +472,13 @@ export function createMock(params: URLSearchParams) {
     Object.assign(byIssue(437), { pr: pr(445, 'merged', 'passing', { title: 'Show the coupon strip' }), git: git({ notInMain: 1, ahead: 2 }), cleanup: 'pending' })
     Object.assign(byIssue(430), { pr: pr(447, 'closed', 'failing', { title: 'Fix the thumbnail ratio', failedChecks: ['unit-tests'] }), git: git(), cleanup: 'ask' })
     Object.assign(sessions.find((x) => x.title === 'checkout tests scratch')!, { branch: 'scratch-checkout', git: git({ unpushed: 2, ahead: 2 }) })
+    Object.assign(sessions.find((x) => x.title === 'retry banner experiment')!, {
+      branch: 'experiment/websocket-retry-banner-with-backoff',
+      pr: pr(438, 'merged', 'passing', { title: 'Show a retry banner' }),
+      git: git({ uncommitted: 2 }),
+      cleanup: 'blocked',
+      cleanupReason: 'the worktree of experiment/websocket-retry-banner-with-backoff has uncommitted changes',
+    })
     seed('#8 drop old flag', 8, 'ended', [['working', 300], ['ended', 240]], data[2])
     seed('#12 session memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])

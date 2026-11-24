@@ -167,7 +167,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
               )}
             </span>
             {ended ? (
-              <span className="relative z-[1] flex flex-none gap-1.5">
+              <span className="relative z-[1] flex flex-none items-center gap-1.5">
+                <CleanupMark session={session} />
                 {session.resumable && (
                   <button className="btn h-[1.375rem] px-2 text-label" title="Start a session that continues this conversation" onClick={() => a.report(() => a.resumeSession(session.id))}>
                     Resume
