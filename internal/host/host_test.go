@@ -850,12 +850,15 @@ func TestSecondHostOnASocketFails(t *testing.T) {
 func TestStaleSocketIsReplaced(t *testing.T) {
 	t.Parallel()
 	socket := filepath.Join(socketDir(t), "h.sock")
-	l, err := net.Listen("unix", socket)
+	// A bound socket that never listened refuses connections, even while a test running in parallel forks with its fd open.
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	l.(*net.UnixListener).SetUnlinkOnClose(false)
-	l.Close()
+	if err := syscall.Bind(fd, &syscall.SockaddrUnix{Name: socket}); err != nil {
+		t.Fatal(err)
+	}
+	syscall.Close(fd)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -875,13 +878,10 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 	if err := Ready(ctxT(t), socket); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("socket mode = %o, want 600", perm)
-	}
+	eventually(t, "socket mode 600", func() bool {
+		info, err := os.Stat(socket)
+		return err == nil && info.Mode().Perm() == 0o600
+	})
 }
 
 func TestCancelStopsClaude(t *testing.T) {
