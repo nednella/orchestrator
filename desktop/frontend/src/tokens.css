@@ -35,6 +35,7 @@
   --danger: #f5586a;
 
   --bg-thread-waiting: rgba(255, 90, 74, 0.06);
+  --bg-thread-waiting-hover: rgba(255, 90, 74, 0.11);
   --border-thread-waiting: rgba(255, 90, 74, 0.22);
   --bg-thread-question: rgba(255, 255, 255, 0.04);
   --agent-claude: #e0875f;
@@ -117,6 +118,7 @@
   --text-on-accent: #0d0f13;
 
   --bg-thread-waiting: rgba(255, 90, 74, 0.07);
+  --bg-thread-waiting-hover: rgba(255, 90, 74, 0.12);
   --border-thread-waiting: rgba(255, 90, 74, 0.24);
   --bg-thread-question: rgba(255, 255, 255, 0.04);
 
@@ -159,6 +161,7 @@
   --danger: #d02a3e;
 
   --bg-thread-waiting: rgba(217, 58, 43, 0.06);
+  --bg-thread-waiting-hover: rgba(217, 58, 43, 0.11);
   --border-thread-waiting: rgba(217, 58, 43, 0.25);
   --bg-thread-question: rgba(0, 0, 0, 0.04);
   --agent-claude: #c15f3c;
