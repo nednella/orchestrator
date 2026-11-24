@@ -4,7 +4,7 @@ import type { Session } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
 
-// The row keeps what the menu starts in it: the rename field, the timeline and the confirms.
+// The row keeps what the menu starts in it: the rename field, the timeline and the clean-up confirm.
 type ThreadMenuProps = {
   session: Session
   selected: boolean
@@ -13,13 +13,12 @@ type ThreadMenuProps = {
   onRename(): void
   onTimeline(): void
   onCleanup(): void
-  onKill(): void
 }
 
 const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
 
-export function ThreadMenu({ session, selected, at, onClose, onRename, onTimeline, onCleanup, onKill }: ThreadMenuProps) {
-  const a = useAgentos('select', 'resumeSession', 'dismissSession', 'openPR', 'pushToast', 'report')
+export function ThreadMenu({ session, selected, at, onClose, onRename, onTimeline, onCleanup }: ThreadMenuProps) {
+  const a = useAgentos('select', 'killSession', 'resumeSession', 'dismissSession', 'openPR', 'pushToast', 'report')
   const { mode, mobilePanel, rightOpen, showPanel, toggleRight } = useLayout()
   const ended = session.state === 'ended'
   const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'panel' : rightOpen)
@@ -49,7 +48,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onTimelin
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         ended && session.resumable && { label: 'Resume', separated: true, run: () => a.report(() => a.resumeSession(session.id)) },
         ended && { label: 'Dismiss', separated: !session.resumable, run: () => a.report(() => a.dismissSession(session.id)) },
-        !ended && { label: 'Kill thread', danger: true, separated: true, run: onKill },
+        !ended && { label: 'Kill thread', danger: true, separated: true, run: () => a.report(() => a.killSession(session.id)) },
       ]}
     />
   )

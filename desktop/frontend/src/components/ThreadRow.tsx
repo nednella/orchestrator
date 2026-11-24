@@ -7,7 +7,6 @@ import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
 import { CleanupControls } from './CleanupControls'
 import { CleanupMark } from './CleanupMark'
-import { ConfirmRow } from './ConfirmRow'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
@@ -24,12 +23,11 @@ type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; me
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'killSession', 'resumeSession', 'dismissSession', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'resumeSession', 'dismissSession', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [timelineAt, setTimelineAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
-  const kill = useArmedConfirm()
   const cleanup = useArmedConfirm()
   const card = useHoverCard(400)
   const cardId = useId()
@@ -188,26 +186,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           <CleanupControls session={session} remove={cleanup} />
         </div>
       )}
-      {kill.armed && (
-        <div className="flex w-full pr-3 pb-2 pl-9">
-          <ConfirmRow
-            danger
-            stacked
-            label="Kill this thread"
-            message={
-              <>
-                Kill this thread? The agent stops now. Its conversation stays on disk and can be resumed from a terminal with <code className="mono">claude --resume</code>.
-              </>
-            }
-            confirmLabel="Kill"
-            onCancel={kill.disarm}
-            onConfirm={() => {
-              kill.disarm()
-              a.report(() => a.killSession(session.id))
-            }}
-          />
-        </div>
-      )}
       {menuAt && (
         <ThreadMenu
           session={session}
@@ -217,7 +195,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           onRename={() => setRenaming(true)}
           onTimeline={() => setTimelineAt(menuAt)}
           onCleanup={() => cleanup.arm()}
-          onKill={() => kill.arm()}
         />
       )}
       {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}
