@@ -31,7 +31,7 @@ export function BrowserStatusHeader({ id, state }: BrowserStatusHeaderProps) {
           {state.pages > 1 && <span className="flex-none">· {state.pages} tabs</span>}
         </p>
       </div>
-      <div className="flex flex-none items-center gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <button className="btn" onClick={() => report(() => api.browserShow(id))}>
           <Icon name="external" />
           Show window

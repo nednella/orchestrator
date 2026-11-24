@@ -5,9 +5,6 @@ import { ShellTabs } from './ShellTabs'
 import { ShellTerminal } from './ShellTerminal'
 
 const KEY_STEP_REM = 1
-// The strip sits on the window's rounded bottom corners; the terminal pads itself 0.75rem, so this margin
-// keeps its text clear of the curve.
-const terminalInset = { marginLeft: 'calc(var(--corner-pad) - 0.75rem)', marginRight: 'calc(var(--corner-pad) - 0.75rem)', marginBottom: '0.375rem' }
 
 export function ShellStrip() {
   const { shellOpen, shellRem, setShellHeight, resetShellHeight } = useLayout()
@@ -42,7 +39,7 @@ export function ShellStrip() {
   }
 
   return (
-    <div data-panel="shell" tabIndex={-1} className={`relative flex-none border-t border-line ${shellOpen ? 'bg-term' : 'bg-surface'}`}>
+    <div data-panel="shell" tabIndex={-1} className={`panel relative mt-3 flex-none ${shellOpen ? 'bg-term' : 'bg-surface'}`}>
       {shellOpen && (
         <div
           className="divider"
@@ -58,12 +55,14 @@ export function ShellStrip() {
           onDoubleClick={resetShellHeight}
         />
       )}
-      <ShellTabs />
-      {shellOpen && (
-        <div className="relative" style={{ ...terminalInset, height: `${shellRem}rem` }}>
-          <ShellTerminal visible />
-        </div>
-      )}
+      <div className="overflow-hidden rounded-[inherit]">
+        <ShellTabs />
+        {shellOpen && (
+          <div className="relative" style={{ height: `${shellRem}rem` }}>
+            <ShellTerminal visible />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

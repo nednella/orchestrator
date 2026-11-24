@@ -45,7 +45,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
-      a.setSessionView(current.id, 'terminal')
+      layout.focusPanel('centre')
     },
   },
   {
@@ -57,39 +57,46 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
       if (!current) throw 'No session selected'
       layout.closeCentre()
       if (args.length === 0) {
-        a.setSessionView(current.id, 'browser')
+        layout.showView(current.id, 'browser')
         return
       }
+      layout.showView(current.id, 'browser')
       await a.openBrowser(current.id, args.join(' '))
       return `Opened ${args.join(' ')}`
     },
   },
   {
     id: 'show-evidence',
-    label: 'Show media',
+    label: 'Show evidence',
     group: 'Sessions',
     uiCommand: 'evidence',
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
-      a.setSessionView(current.id, 'evidence')
+      layout.showView(current.id, 'evidence')
     },
   },
   {
     id: 'view-previous',
-    label: 'Previous view (terminal, browser, media)',
+    label: 'Previous right panel tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: '[', code: 'BracketLeft', shift: true, label: '[' },
     palette: false,
-    run: () => a.cycleSessionView(-1),
+    run() {
+      layout.setRightOpen(true)
+      a.cycleSessionView(-1)
+    },
   },
   {
     id: 'view-next',
-    label: 'Next view (terminal, browser, media)',
+    label: 'Next right panel tab (PR, evidence, browser)',
     group: 'Navigate',
     shortcut: { key: ']', code: 'BracketRight', shift: true, label: ']' },
     palette: false,
-    run: () => a.cycleSessionView(1),
+    run() {
+      layout.setRightOpen(true)
+      a.cycleSessionView(1)
+    },
   },
   {
     id: 'digest',

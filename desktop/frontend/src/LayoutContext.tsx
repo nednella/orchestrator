@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
-import type { HomePart } from './AgentosContext'
+import type { HomePart, SessionView } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
 import type { ThemeName } from './types'
@@ -59,6 +59,9 @@ export type Layout = {
   setWidth(panel: SidePanel, rem: number, commit: boolean): void
   resetWidth(panel: SidePanel): void
   setShellOpen(open: boolean): void
+  setRightOpen(open: boolean): void
+  toggleRight(): void
+  showView(id: string, view: SessionView): void
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
   toggleSidebar(): void
@@ -129,7 +132,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, setSessionView, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'setSessionView', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
@@ -153,10 +156,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   }, [theme])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
-  const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
   const narrow = mode === 'narrow'
+  const showsThread = selectedId !== null && !statsOpen && !newsOpen
+  const { widths: fittedWidths, rightForcedClosed } = fit(width, { ...prefs, rightOpen: prefs.rightOpen && showsThread }, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
-  const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
+  const rightOpen = !narrow && prefs.rightOpen && showsThread && !rightForcedClosed
 
   const updatePrefs = useCallback(
     (patch: Partial<BandPrefs>) =>
@@ -244,6 +248,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (narrow) setMobilePanel(open ? 'shell' : 'session')
         else updatePrefs({ shellOpen: open })
       },
+      setRightOpen: (open) => updatePrefs({ rightOpen: open }),
+      toggleRight: () => updatePrefs({ rightOpen: !prefs.rightOpen }),
+      showView(id, view) {
+        updatePrefs({ rightOpen: true })
+        setSessionView(id, view)
+      },
       setShellHeight(rem, commit) {
         const next = Math.max(rem, SHELL_MIN_REM)
         if (commit) updatePrefs({ shell: next })
@@ -297,7 +307,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

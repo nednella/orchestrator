@@ -1,7 +1,7 @@
 import { api } from '../api'
 import type { Action, ActionContext } from './types'
 
-export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
+export const navigateActions = ({ a, layout, current }: ActionContext): Action[] => [
   {
     id: 'search-threads',
     label: 'Search threads',
@@ -43,6 +43,15 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     group: 'Navigate',
     shortcut: { key: 'b' },
     run: layout.toggleSidebar,
+  },
+  {
+    id: 'toggle-right',
+    label: 'Toggle right panel',
+    group: 'Navigate',
+    run() {
+      if (!current) throw 'No session selected'
+      layout.toggleRight()
+    },
   },
   {
     id: 'toggle-panels',

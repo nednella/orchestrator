@@ -51,7 +51,7 @@ export function ShellTabs() {
   return (
     <div
       className={`shell-tabs group/tabs flex h-10 flex-none items-stretch border-b text-small ${shellOpen ? 'border-line' : 'border-transparent'}`}
-      style={{ paddingRight: 'var(--corner-pad)' }}
+      style={{ paddingRight: '0.5rem' }}
       onClick={(e) => {
         if (collapsible && e.target === e.currentTarget) toggle()
       }}

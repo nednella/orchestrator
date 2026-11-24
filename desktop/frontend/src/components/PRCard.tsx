@@ -14,7 +14,7 @@ type PRCardProps = { session: Session; anchor: DOMRect; hover: HoverHandlers }
 const WIDTH = 300
 const MARGIN = 8
 
-const PILL: Record<
+export const PILL: Record<
   PR['state'],
   {
     icon: 'git-pull-request' | 'git-pull-request-draft' | 'git-merge' | 'git-pull-request-closed'
@@ -102,7 +102,7 @@ export function PRCard({ session, anchor, hover }: PRCardProps) {
 
 type RefProps = { children: string }
 
-function Ref({ children }: RefProps) {
+export function Ref({ children }: RefProps) {
   return (
     <span className="mono inline-flex h-[18px] max-w-[9rem] items-center truncate rounded-sm bg-hover px-1.5 text-soft">{children}</span>
   )

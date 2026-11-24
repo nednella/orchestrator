@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { useLayout } from '../LayoutContext'
+import { gigabytes } from '../memory'
 import { dollars, tokenCount } from '../spend'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { Session } from '../types'
@@ -7,6 +9,8 @@ import { ActionTag } from './ActionTag'
 import { Ago } from './Ago'
 import { InlineInput } from './InlineInput'
 import { ChatTag } from './ChatTag'
+import { CleanupControls } from './CleanupControls'
+import { Icon } from './Icon'
 import { ModelTag } from './ModelTag'
 import { StateBadge } from './StateBadge'
 import { Timeline } from './Timeline'
@@ -14,7 +18,8 @@ import { Timeline } from './Timeline'
 type ViewportHeaderProps = { session: Session }
 
 export function ViewportHeader({ session }: ViewportHeaderProps) {
-  const { renameSession, report, focus, killSession } = useAgentos('renameSession', 'report', 'focus', 'killSession')
+  const { renameSession, report, focus, killSession, dismissSession, resumeSession } = useAgentos('renameSession', 'report', 'focus', 'killSession', 'dismissSession', 'resumeSession')
+  const { rightOpen, toggleRight, mode } = useLayout()
   const [renaming, setRenaming] = useState(false)
   const kill = useArmedConfirm()
 
@@ -50,6 +55,17 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
           )}
         </div>
         <span className="mono ml-auto flex-none text-small whitespace-nowrap text-dim"><Ago at={session.lastEventAt} /></span>
+        {session.cleanup !== '' && <CleanupControls session={session} />}
+        {session.state === 'ended' && session.resumable && (
+          <button className="btn" title="Start a session that continues this conversation" onClick={() => report(() => resumeSession(session.id))}>
+            Resume
+          </button>
+        )}
+        {session.state === 'ended' && (
+          <button className="btn" onClick={() => report(() => dismissSession(session.id))}>
+            Dismiss
+          </button>
+        )}
         {session.state === 'ended' ? null : kill.armed ? (
           <span
             className="contents"
@@ -80,6 +96,17 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
             Kill
           </button>
         )}
+        {mode !== 'narrow' && (
+          <button
+            className="btn btn-ghost h-8 w-8 flex-none justify-center px-0"
+            title={`${rightOpen ? 'Hide' : 'Show'} the right panel`}
+            aria-label={`${rightOpen ? 'Hide' : 'Show'} the right panel`}
+            aria-pressed={rightOpen}
+            onClick={toggleRight}
+          >
+            <Icon name="panel-right" />
+          </button>
+        )}
       </div>
       <div className={`short:hidden flex items-center gap-3 px-4 pt-2.5 ${session.chat ? 'pb-2' : 'pb-0.5'}`}>
         <StateBadge state={session.state} chat={session.chat} />
@@ -91,6 +118,11 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
           effort={session.effort}
           spend={session.tokens > 0 ? `${tokenCount(session.tokens)} tokens · ~${dollars(session.cost)}` : ''}
         />
+        {session.memory > 0 && (
+          <span className="mono text-small whitespace-nowrap text-dim" title="Memory this session's processes use">
+            {gigabytes(session.memory)}
+          </span>
+        )}
       </div>
       {!session.chat && <Timeline session={session} size="full" />}
       {kill.armed && (

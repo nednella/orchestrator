@@ -16,8 +16,8 @@ export type Toast = {
   action?: { label: string; run(): void }
 }
 
-export type SessionView = 'terminal' | 'browser' | 'evidence'
-export const SESSION_VIEWS: SessionView[] = ['terminal', 'browser', 'evidence']
+export type SessionView = 'pr' | 'evidence' | 'browser'
+export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
 export type Overlay = 'palette' | 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
 export type HomePart = 'queue' | 'notes' | 'composer'
@@ -636,7 +636,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, focus, report, enterFrom],
   )
 
-  const viewOf = useCallback((id: string | null) => (id && views[id]) || 'terminal', [views])
+  const viewOf = useCallback((id: string | null) => (id && views[id]) || 'pr', [views])
 
   const actions = useMemo<AgentosActions>(
     () => ({
@@ -759,15 +759,13 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       loadBrowserState,
       setSessionView(id, view) {
         setViews((map) => ({ ...map, [id]: view }))
-        if (view === 'terminal') focus('terminal')
       },
       cycleSessionView(delta) {
         const id = selectedRef.current
         if (!id) return
-        const at = SESSION_VIEWS.indexOf(viewsRef.current[id] ?? 'terminal')
+        const at = SESSION_VIEWS.indexOf(viewsRef.current[id] ?? 'pr')
         const next = SESSION_VIEWS[(at + delta + SESSION_VIEWS.length) % SESSION_VIEWS.length]
         setViews((map) => ({ ...map, [id]: next }))
-        if (next === 'terminal') focus('terminal')
       },
       async openBrowser(id, url) {
         setViews((map) => ({ ...map, [id]: 'browser' }))
