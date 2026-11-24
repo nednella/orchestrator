@@ -73,6 +73,13 @@ func (l *Log) Append(e Event) (Event, error) {
 	return e, nil
 }
 
+// Last returns the Seq of the newest event, 0 for an empty log.
+func (l *Log) Last() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.last
+}
+
 func (l *Log) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

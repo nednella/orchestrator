@@ -64,6 +64,9 @@ func TestReopenContinuesTheSequence(t *testing.T) {
 	}
 	l = openLog(t, p)
 	defer l.Close()
+	if got := l.Last(); got != 2 {
+		t.Fatalf("Last = %d, want 2", got)
+	}
 	if got := mustAppend(t, l, Event{Kind: KindUser}); got.Seq != 3 {
 		t.Fatalf("seq = %d, want 3", got.Seq)
 	}
