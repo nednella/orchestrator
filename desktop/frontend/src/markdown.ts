@@ -2,6 +2,7 @@ export type MarkdownKind = 'marker' | 'heading' | 'strong' | 'em' | 'code' | 'li
 export type MarkdownSpan = { text: string; kind?: MarkdownKind }
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 const HEADING = /^( {0,3}#{1,6})((?:[ \t].*)?)$/
 const QUOTE = /^( {0,3}>+ ?)(.*)$/
 const LIST = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+.*|)$/
@@ -65,13 +66,14 @@ export function markdownSpans(text: string): MarkdownSpan[] {
   let fence = ''
   text.split('\n').forEach((source, i) => {
     if (i > 0) spans.push({ text: '\n' })
-    const opens = FENCE.exec(source)
     if (fence) {
-      const closes = opens && opens[1][0] === fence[0] && opens[1].length >= fence.length
+      const close = FENCE_CLOSE.exec(source)
+      const closes = close !== null && close[1][0] === fence[0] && close[1].length >= fence.length
       spans.push({ text: source, kind: closes ? 'marker' : 'block' })
       if (closes) fence = ''
       return
     }
+    const opens = FENCE.exec(source)
     if (opens) {
       fence = opens[1]
       spans.push({ text: source, kind: 'marker' })
