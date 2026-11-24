@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ComposerMode } from '../AgentosContext'
-import { imageFiles, readImage } from '../images'
-import type { PreviewImage } from '../images'
 import type { Issue } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
+import { usePendingImages } from '../usePendingImages'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
 import { ComposerModelChip } from './ComposerModelChip'
@@ -35,7 +34,7 @@ export function HomeComposer() {
   const [dismissed, setDismissed] = useState(false)
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
-  const [images, setImages] = useState<PreviewImage[]>([])
+  const pending = usePendingImages()
   const sending = useRef(false)
 
   useFocusRequest('composer', input)
@@ -49,7 +48,7 @@ export function HomeComposer() {
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   const chat = a.composerKind === 'chat'
   const live = Boolean(pickedIssue?.sessionId)
-  const canSend = note ? text.trim() !== '' || images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
+  const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
 
   useEffect(() => {
     if (picked !== null && !a.issues.some((i) => i.number === picked)) setPicked(null)
@@ -85,24 +84,14 @@ export function HomeComposer() {
     requestAnimationFrame(() => el.setSelectionRange(at + lead.length, at + lead.length))
   }
 
-  const attach = (data: DataTransfer) => {
-    const files = imageFiles(data)
-    if (files.length === 0) return false
-    a.report(async () => {
-      const read = await Promise.all(files.map(readImage))
-      setImages((list) => [...list, ...read])
-    })
-    return true
-  }
-
   const send = () => {
     if (sending.current || !canSend) return
     sending.current = true
     a.report(async () => {
       try {
         if (note) {
-          await a.addNote(text, images)
-          setImages([])
+          await a.addNote(text, pending.images)
+          pending.clear()
         } else {
           const start = { prompt: text.trim(), model, effort }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
@@ -163,7 +152,7 @@ export function HomeComposer() {
         drawer={token && <IssuePickList issues={candidates} cursor={highlighted} onPick={pick} />}
         attachments={
           note
-            ? images.length > 0 && <NoteImages urls={images.map((i) => i.preview)} onRemove={(url) => setImages((list) => list.filter((i) => i.preview !== url))} />
+            ? pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} onRemove={pending.remove} />
             : pickedIssue && (
                 <span className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-small" style={{ boxShadow: 'inset 0 0 0 1px var(--border-strong)' }}>
                   <TypeMark type={pickedIssue.type} />
@@ -190,7 +179,7 @@ export function HomeComposer() {
         onChange={(e) => edit(e.currentTarget)}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown}
-        onAttach={note ? attach : undefined}
+        onAttach={note ? pending.attach : undefined}
         onSend={send}
       />
     </div>
