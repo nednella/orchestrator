@@ -39,10 +39,7 @@ The script puts `agentos.app` and Chrome for Testing, the agent browser, in `~/A
 
 ## Set up a project
 
-A project with no queue sections shows _Set up this project for agentos_ at the top of its queue.
-
-- **Set up** adds an Inbox whose _Work_ action runs `/work <n>`, plus branch, clean-up and PR commands. If accepted, a session is started that writes the `/work` command, the issue template and `AGENTS.md` with you.
-- **Not now** hides the offer. Right-click the project in the rail → _Set up project_ still works.
+Right-click the project in the rail → _Set up project_. For a project with no queue sections it adds an Inbox whose _Work_ action runs `/work <n>`, plus branch, clean-up and PR commands. Then it starts a session that writes the `/work` command, the issue template and `AGENTS.md` with you.
 
 To change the config by hand, edit `~/.config/agentos/config.yaml`; the app picks the change up while it runs. `docs/config.md` describes every key.
 
