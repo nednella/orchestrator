@@ -67,13 +67,13 @@
   --term-bright-cyan: #8fe6f8;
   --term-bright-white: #f4f6ff;
 
-  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  --fs-label: 0.75rem;
-  --fs-small: 0.8125rem;
-  --fs-body: 0.90625rem;
-  --fs-title: 1.0625rem;
+  --fs-label: 0.6875rem;
+  --fs-small: 0.75rem;
+  --fs-body: 0.875rem;
+  --fs-title: 1rem;
 
   --radius-sm: 4px;
   --radius-md: 6px;

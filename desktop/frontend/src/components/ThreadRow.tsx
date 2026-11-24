@@ -103,7 +103,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
         ) : (
           <>
             <button
-              className={`thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] ${selected ? 'font-semibold' : 'font-medium'}`}
+              className="thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] font-medium"
               aria-current={selected}
               aria-disabled={ended}
               aria-describedby={card.anchor ? cardId : undefined}

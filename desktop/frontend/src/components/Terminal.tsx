@@ -7,7 +7,7 @@ import { useAgentos } from '../AgentosContext'
 import { api, on } from '../api'
 import { decodeBase64 } from '../base64'
 import { useLayout } from '../LayoutContext'
-import { terminalFont, terminalThemeFrom } from '../terminalTheme'
+import { terminalFontFrom, terminalThemeFrom } from '../terminalTheme'
 
 type TerminalProps = { id: string; active: boolean; kind?: 'session' | 'shell'; onLeave?(): void }
 
@@ -73,7 +73,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
     generations.set(id, generation)
     opened.current = false
     const term = new Xterm({
-      fontFamily: terminalFont,
+      fontFamily: terminalFontFrom(document.documentElement),
       fontSize: Math.round(BASE_FONT_PX * scale * 2) / 2,
       lineHeight: 1.18,
       cursorBlink: true,

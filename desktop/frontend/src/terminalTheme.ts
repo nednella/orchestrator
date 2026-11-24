@@ -33,4 +33,4 @@ export function terminalThemeFrom(el: Element): ITheme {
   return theme
 }
 
-export const terminalFont = '"JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace'
+export const terminalFontFrom = (el: Element) => getComputedStyle(el).getPropertyValue('--font-mono').trim()
