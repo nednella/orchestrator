@@ -7,7 +7,7 @@ import { ShellTab, tabRowButton } from './ShellTab'
 export function ShellTabs() {
   const { shellIds, shellId, selectShell, newShell, closeShell, report } = useAgentos('shellIds', 'shellId', 'selectShell', 'newShell', 'closeShell', 'report')
   const projectName = useAgentosSelector((a) => a.project?.name ?? '')
-  const { mode, shellOpen, setShellOpen, focusPanel } = useLayout()
+  const { mode, togglePanel, focusPanel } = useLayout()
   const scroller = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ start: 0, end: 1 })
   const [projectShell = '', ...shells] = shellIds
@@ -45,15 +45,15 @@ export function ShellTabs() {
     selectShell(id)
     focusPanel('shell')
   }
-  const collapsible = mode !== 'narrow'
-  const toggle = () => setShellOpen(!shellOpen)
+  const closable = mode !== 'narrow'
+  const close = () => togglePanel('shell')
 
   return (
     <div
-      className={`shell-tabs group/tabs flex h-10 flex-none items-stretch border-b text-small ${shellOpen ? 'border-line' : 'border-transparent'}`}
+      className="shell-tabs group/tabs flex h-10 flex-none items-stretch border-b border-line text-small"
       style={{ paddingRight: '0.5rem' }}
       onClick={(e) => {
-        if (collapsible && e.target === e.currentTarget) toggle()
+        if (closable && e.target === e.currentTarget) close()
       }}
     >
       <div role="tablist" aria-label="Shells" className="flex min-w-0 items-stretch">
@@ -97,17 +97,9 @@ export function ShellTabs() {
       >
         <Icon name="add" size={14} />
       </button>
-      {collapsible && (
-        <button
-          className={`${tabRowButton} ml-auto self-center`}
-          title={shellOpen ? 'Collapse the shell (⌘⇧S)' : 'Open the shell (⌘⇧S)'}
-          aria-label={shellOpen ? 'Collapse the shell' : 'Open the shell'}
-          aria-expanded={shellOpen}
-          onClick={toggle}
-        >
-          <span className={`transition-transform duration-150 ${shellOpen ? '' : 'rotate-180'}`}>
-            <Icon name="chevron-down" size={14} />
-          </span>
+      {closable && (
+        <button className={`${tabRowButton} ml-auto self-center`} title="Close the shell (⌘⇧S)" aria-label="Close the shell" onClick={close}>
+          <Icon name="chevron-down" size={14} />
         </button>
       )}
     </div>

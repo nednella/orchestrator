@@ -40,10 +40,10 @@ export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PA
 const SHELL_DEFAULT_REM = shellRemForRows(6)
 const SHELL_MIN_REM = shellRemForRows(3)
 
-type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; shellOpen: boolean; sidebar: number | null; right: number | null; shell: number | null }
+type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; sidebar: number | null; right: number | null; shell: number | null }
 type AllPrefs = Record<Band, BandPrefs>
 
-const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, shellOpen: true, sidebar: null, right: null, shell: null })
+const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, sidebar: null, right: null, shell: null })
 
 export type Layout = {
   mode: LayoutMode
@@ -151,6 +151,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')
+  const [shellShown, setShellShown] = useState(false)
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
@@ -170,7 +171,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
   const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
-  const shellOpen = narrow ? mobilePanel === 'shell' : prefs.shellOpen
+  const shellOpen = narrow ? mobilePanel === 'shell' : shellShown
   const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
   const projectName = project?.name ?? ''
   const panelView = panelViews[projectName] ?? ''
@@ -213,9 +214,9 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const setShellOpen = useCallback(
     (open: boolean) => {
       if (narrow) setMobilePanel(open ? 'shell' : 'session')
-      else updatePrefs({ shellOpen: open })
+      else setShellShown(open)
     },
-    [narrow, updatePrefs],
+    [narrow],
   )
 
   const setRightOpen = useCallback(
@@ -260,7 +261,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (panel === 'centre') setMobilePanel('session')
         if (panel === 'shell') setMobilePanel('shell')
       } else if (panel === 'sidebar') updatePrefs({ sidebarOpen: true })
-      else if (panel === 'shell') updatePrefs({ shellOpen: true })
+      else if (panel === 'shell') setShellShown(true)
       focus(panel === 'centre' ? 'terminal' : panel)
     },
     [focus, narrow, updatePrefs],

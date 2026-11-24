@@ -38,30 +38,28 @@ export function ShellStrip() {
     setShellHeight(Math.min(shellRem + step, (0.6 * window.innerHeight) / root()), true)
   }
 
+  if (!shellOpen) return null
+
   return (
-    <div data-panel="shell" tabIndex={-1} className={`panel relative flex-none border-t border-line ${shellOpen ? 'bg-term' : ''}`}>
-      {shellOpen && (
-        <div
-          className="divider"
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="Resize shell"
-          tabIndex={0}
-          title="Drag to resize, double-click to reset"
-          onKeyDown={onKeyDown}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onDoubleClick={resetShellHeight}
-        />
-      )}
+    <div data-panel="shell" tabIndex={-1} className="panel relative flex-none border-t border-line bg-term">
+      <div
+        className="divider"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize shell"
+        tabIndex={0}
+        title="Drag to resize, double-click to reset"
+        onKeyDown={onKeyDown}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onDoubleClick={resetShellHeight}
+      />
       <div className="overflow-hidden">
         <ShellTabs />
-        {shellOpen && (
-          <div className="relative" style={{ height: `${shellRem}rem` }}>
-            <ShellTerminal visible />
-          </div>
-        )}
+        <div className="relative" style={{ height: `${shellRem}rem` }}>
+          <ShellTerminal visible />
+        </div>
       </div>
     </div>
   )
