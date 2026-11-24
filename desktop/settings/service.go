@@ -21,6 +21,8 @@ const (
 type Store interface {
 	Theme() string
 	SetTheme(theme string) error
+	Themes() (dark, light string)
+	SetThemes(dark, light string) error
 	TextScale() float64
 	SetTextScale(scale float64) error
 	KeepsAwake() bool
@@ -45,17 +47,19 @@ type Current interface {
 
 // Settings is what the settings panel shows.
 type Settings struct {
-	Theme     string          `json:"theme"`          // system, light or dark
-	TextScale float64         `json:"textScale"`      // a multiple of the default text size
-	KeepAwake bool            `json:"keepAwake"`      // hold off idle sleep while a session works, for projects that do not say otherwise
-	Agent     string          `json:"agent"`          // the provider, or the plain command, a new session starts with unless one is named
-	Agents    []string        `json:"agents"`         // the providers a session can be started with by name
-	Cleanup   project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
-	Prompt    string          `json:"promptSend"`     // the current project's: auto or manual
-	Browser   bool            `json:"browserEnabled"` // the current project's sessions get the browser and evidence commands
-	Digest    string          `json:"digestSchedule"` // the current project's: weekly or off
-	DataDir   string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
-	DataFixed bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
+	Theme      string          `json:"theme"`          // system, light or dark
+	DarkTheme  string          `json:"darkTheme"`      // the named theme of the dark appearance: black or violet
+	LightTheme string          `json:"lightTheme"`     // the named theme of the light appearance: light
+	TextScale  float64         `json:"textScale"`      // a multiple of the default text size
+	KeepAwake  bool            `json:"keepAwake"`      // hold off idle sleep while a session works, for projects that do not say otherwise
+	Agent      string          `json:"agent"`          // the provider, or the plain command, a new session starts with unless one is named
+	Agents     []string        `json:"agents"`         // the providers a session can be started with by name
+	Cleanup    project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
+	Prompt     string          `json:"promptSend"`     // the current project's: auto or manual
+	Browser    bool            `json:"browserEnabled"` // the current project's sessions get the browser and evidence commands
+	Digest     string          `json:"digestSchedule"` // the current project's: weekly or off
+	DataDir    string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
+	DataFixed  bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
 }
 
 // Service is bound to the front end.
@@ -83,18 +87,21 @@ func (s *Service) Settings() Settings {
 		scale = defaultScale
 	}
 	key := s.project.Current().Key()
+	dark, light := s.store.Themes()
 	return Settings{
-		Theme:     theme,
-		TextScale: scale,
-		KeepAwake: s.store.KeepsAwake(),
-		Agent:     cmp.Or(s.store.Agent(), agent.Names[0]),
-		Agents:    slices.Clone(agent.Names),
-		Cleanup:   s.store.Cleanup(key),
-		Prompt:    s.store.PromptSend(key),
-		Browser:   s.store.BrowserEnabled(key),
-		Digest:    s.store.DigestSchedule(key),
-		DataDir:   s.dataDir,
-		DataFixed: s.dataFixed,
+		Theme:      theme,
+		DarkTheme:  dark,
+		LightTheme: light,
+		TextScale:  scale,
+		KeepAwake:  s.store.KeepsAwake(),
+		Agent:      cmp.Or(s.store.Agent(), agent.Names[0]),
+		Agents:     slices.Clone(agent.Names),
+		Cleanup:    s.store.Cleanup(key),
+		Prompt:     s.store.PromptSend(key),
+		Browser:    s.store.BrowserEnabled(key),
+		Digest:     s.store.DigestSchedule(key),
+		DataDir:    s.dataDir,
+		DataFixed:  s.dataFixed,
 	}
 }
 
@@ -107,6 +114,17 @@ func (s *Service) SetTheme(theme string) (Settings, error) {
 		theme = ""
 	}
 	return s.saved(s.store.SetTheme(theme))
+}
+
+// SetThemes saves the named themes of the dark and the light appearance.
+func (s *Service) SetThemes(dark, light string) (Settings, error) {
+	if !slices.Contains(project.DarkThemes, dark) {
+		return Settings{}, fmt.Errorf("dark theme must be %s, not %q", strings.Join(project.DarkThemes, " or "), dark)
+	}
+	if !slices.Contains(project.LightThemes, light) {
+		return Settings{}, fmt.Errorf("light theme must be %s, not %q", strings.Join(project.LightThemes, " or "), light)
+	}
+	return s.saved(s.store.SetThemes(dark, light))
 }
 
 // SetCleanup saves how the current project cleans up after an event, "merge" or "close": "auto" or "manual".

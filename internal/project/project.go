@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,16 +47,30 @@ func (p Project) Present() bool {
 
 // Config is the optional ~/.config/agentos/config.yaml.
 type Config struct {
-	DataDir   string    `yaml:"data_dir,omitempty"` // where notes, stats and digests live; may sit in a synced folder
-	Agent     string    `yaml:"agent_command,omitempty"`
-	KeepAwake *bool     `yaml:"keep_mac_awake,omitempty"` // hold off idle sleep while a session works; on unless false
-	Theme     string    `yaml:"app_theme,omitempty"`      // light or dark; unset follows the system
-	TextScale float64   `yaml:"app_text_scale,omitempty"` // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
-	Projects  []Project `yaml:"projects"`
+	DataDir    string    `yaml:"data_dir,omitempty"` // where notes, stats and digests live; may sit in a synced folder
+	Agent      string    `yaml:"agent_command,omitempty"`
+	KeepAwake  *bool     `yaml:"keep_mac_awake,omitempty"`  // hold off idle sleep while a session works; on unless false
+	Theme      string    `yaml:"app_theme,omitempty"`       // light or dark; unset follows the system
+	ThemeDark  string    `yaml:"app_theme_dark,omitempty"`  // the dark theme: black (default) or violet
+	ThemeLight string    `yaml:"app_theme_light,omitempty"` // the light theme: light (default)
+	TextScale  float64   `yaml:"app_text_scale,omitempty"`  // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
+	Projects   []Project `yaml:"projects"`
 }
 
 // Themes are the values of Config.Theme.
 var Themes = []string{"light", "dark"}
+
+// DarkThemes and LightThemes are the named themes each appearance can show; the first is the default.
+var (
+	DarkThemes  = []string{"black", "violet"}
+	LightThemes = []string{"light"}
+)
+
+// DarkTheme is the theme shown in the dark appearance.
+func (c Config) DarkTheme() string { return cmp.Or(c.ThemeDark, DarkThemes[0]) }
+
+// LightTheme is the theme shown in the light appearance.
+func (c Config) LightTheme() string { return cmp.Or(c.ThemeLight, LightThemes[0]) }
 
 // The text sizes the app accepts, as a multiple of its default.
 const (
@@ -109,6 +124,12 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Theme != "" && !slices.Contains(Themes, cfg.Theme) {
 		return Config{}, fmt.Errorf("%s: app_theme must be %s, not %q", path, strings.Join(Themes, " or "), cfg.Theme)
+	}
+	if cfg.ThemeDark != "" && !slices.Contains(DarkThemes, cfg.ThemeDark) {
+		return Config{}, fmt.Errorf("%s: app_theme_dark must be %s, not %q", path, strings.Join(DarkThemes, " or "), cfg.ThemeDark)
+	}
+	if cfg.ThemeLight != "" && !slices.Contains(LightThemes, cfg.ThemeLight) {
+		return Config{}, fmt.Errorf("%s: app_theme_light must be %s, not %q", path, strings.Join(LightThemes, " or "), cfg.ThemeLight)
 	}
 	if cfg.TextScale != 0 {
 		if err := CheckTextScale(cfg.TextScale); err != nil {
@@ -203,6 +224,8 @@ func encode(path string, c Config) ([]byte, error) {
 	syncScalar(root, "agent_command", c.Agent, nil)
 	syncScalar(root, "data_dir", c.DataDir, ExpandHome)
 	syncScalar(root, "app_theme", c.Theme, nil)
+	syncScalar(root, "app_theme_dark", c.ThemeDark, nil)
+	syncScalar(root, "app_theme_light", c.ThemeLight, nil)
 	syncScalar(root, "app_text_scale", formatScale(c.TextScale), nil)
 	syncScalar(root, "keep_mac_awake", formatBool(c.KeepAwake), nil)
 	if err := syncProjects(root, c.Projects); err != nil {

@@ -1,5 +1,5 @@
 import { createMock } from './mock'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, Memory, News, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, News, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -67,6 +67,7 @@ type Backend = {
   Awake(): Promise<boolean>
   Settings(): Promise<Settings>
   SetTheme(theme: ThemeSetting): Promise<Settings>
+  SetThemes(dark: DarkTheme, light: LightTheme): Promise<Settings>
   SetCleanup(event: CleanupEvent, mode: CleanupMode): Promise<Settings>
   SetTextScale(scale: number): Promise<Settings>
   SetKeepAwake(on: boolean): Promise<Settings>
@@ -107,7 +108,7 @@ const namespaces = {
   news: ['News', 'RefreshNews'],
   update: ['Update', 'PatchNotes', 'Changelog'],
   awake: ['Awake'],
-  settings: ['Settings', 'SetTheme', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetAgent', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'PickDataDir', 'SetDataDir'],
+  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetAgent', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'PickDataDir', 'SetDataDir'],
 }
 
 // The Go side has no method for this: the window runtime opens web addresses itself.
@@ -190,6 +191,7 @@ export const api = {
   awake: () => backend.Awake(),
   settings: () => backend.Settings(),
   setTheme: (theme: ThemeSetting) => backend.SetTheme(theme),
+  setThemes: (dark: DarkTheme, light: LightTheme) => backend.SetThemes(dark, light),
   setCleanup: (event: CleanupEvent, mode: CleanupMode) => backend.SetCleanup(event, mode),
   setTextScale: (scale: number) => backend.SetTextScale(scale),
   setKeepAwake: (on: boolean) => backend.SetKeepAwake(on),

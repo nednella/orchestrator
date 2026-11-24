@@ -960,6 +960,10 @@ func (h *Harness) SetTheme(theme string) (settings.Settings, error) {
 	return h.settings.SetTheme(theme)
 }
 
+func (h *Harness) SetThemes(dark, light string) (settings.Settings, error) {
+	return h.settings.SetThemes(dark, light)
+}
+
 func (h *Harness) SetCleanup(event, mode string) (settings.Settings, error) {
 	return h.settings.SetCleanup(event, mode)
 }

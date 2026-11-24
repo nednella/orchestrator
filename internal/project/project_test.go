@@ -358,3 +358,28 @@ func TestLoadChecksAnActionsModelWithItsAgent(t *testing.T) {
 		}
 	}
 }
+
+func TestThemeKeysValidate(t *testing.T) {
+	load := func(yaml string) (Config, error) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	cfg, err := load("app_theme_dark: violet\n")
+	if err != nil || cfg.DarkTheme() != "violet" || cfg.LightTheme() != "light" {
+		t.Errorf("violet = %q, %q, %v", cfg.DarkTheme(), cfg.LightTheme(), err)
+	}
+	if _, err := load("app_theme_dark: pink\n"); err == nil || !strings.Contains(err.Error(), "app_theme_dark") {
+		t.Errorf("pink: err = %v, want one naming app_theme_dark", err)
+	}
+	if _, err := load("app_theme_light: black\n"); err == nil || !strings.Contains(err.Error(), "app_theme_light") {
+		t.Errorf("black as light: err = %v, want one naming app_theme_light", err)
+	}
+	cfg, err = load("projects: []\n")
+	if err != nil || cfg.DarkTheme() != "black" || cfg.LightTheme() != "light" {
+		t.Errorf("defaults = %q, %q, %v", cfg.DarkTheme(), cfg.LightTheme(), err)
+	}
+}

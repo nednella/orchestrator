@@ -131,6 +131,12 @@ export type Snapshot = {
 
 export type ThemeSetting = 'system' | 'light' | 'dark'
 
+export type DarkTheme = 'black' | 'violet'
+
+export type LightTheme = 'light'
+
+export type ThemeName = DarkTheme | LightTheme
+
 export type CleanupMode = 'auto' | 'manual'
 
 export type CleanupSettings = { merge: CleanupMode; close: CleanupMode }
@@ -143,6 +149,8 @@ export type PromptSend = 'auto' | 'manual'
 
 export type Settings = {
   theme: ThemeSetting
+  darkTheme: DarkTheme
+  lightTheme: LightTheme
   textScale: number
   keepAwake: boolean
   agent: string

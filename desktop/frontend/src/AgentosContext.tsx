@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { readStored, writeStored } from './storage'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, Digest, DigestSchedule, Evidence, Issue, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList } from './types'
 
 export type Toast = {
   key: number
@@ -116,6 +116,7 @@ type AgentosActions = {
   setNoteDraft(text: string): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
+  setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
   setCleanup(event: CleanupEvent, mode: CleanupMode): Promise<void>
   setTextScale(scale: number): Promise<void>
   setKeepAwake(on: boolean): Promise<void>
@@ -240,7 +241,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [newsUnread, setNewsUnread] = useState(() => readStored<string[]>(NEWS_UNREAD_KEY, []))
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
-  const [settings, setSettings] = useState<Settings>({ theme: 'system', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '', dataDirFixed: true })
+  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '', dataDirFixed: true })
   const [shellIds, setShellIds] = useState<string[]>([])
   const [pickedShell, setPickedShell] = useState('')
   const shellId = shellIds.includes(pickedShell) ? pickedShell : (shellIds[0] ?? '')
@@ -818,6 +819,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setOverlay,
       async setTheme(theme) {
         setSettings(await api.setTheme(theme))
+      },
+      async setThemes(dark, light) {
+        setSettings(await api.setThemes(dark, light))
       },
       async setCleanup(event, mode) {
         setSettings(await api.setCleanup(event, mode))

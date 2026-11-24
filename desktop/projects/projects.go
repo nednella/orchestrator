@@ -102,6 +102,21 @@ func (r *Registry) SetTheme(theme string) error {
 	})
 }
 
+// Themes are the named themes shown in the dark and the light appearance.
+func (r *Registry) Themes() (dark, light string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.DarkTheme(), r.cfg.LightTheme()
+}
+
+// SetThemes saves the named themes of the dark and the light appearance.
+func (r *Registry) SetThemes(dark, light string) error {
+	return r.edit(func(c *project.Config) error {
+		c.ThemeDark, c.ThemeLight = dark, light
+		return nil
+	})
+}
+
 // TextScale is the configured text size, 0 when the app uses its default.
 func (r *Registry) TextScale() float64 {
 	r.mu.Lock()

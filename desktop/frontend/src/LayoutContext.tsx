@@ -4,8 +4,9 @@ import { useAgentos } from './AgentosContext'
 import type { SidebarTab } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
+import type { ThemeName } from './types'
 
-export type Theme = 'dark' | 'light'
+type Appearance = 'dark' | 'light'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
@@ -44,7 +45,7 @@ export type Layout = {
   mode: LayoutMode
   width: number
   scale: number
-  theme: Theme
+  theme: ThemeName
   sidebarOpen: boolean
   sessionsOpen: boolean
   shellOpen: boolean
@@ -125,15 +126,15 @@ function fit(width: number, prefs: BandPrefs, root: number): Fitted {
 
 type LayoutProviderProps = { children: ReactNode }
 
-function useSystemTheme(): Theme {
-  const [theme, setTheme] = useState<Theme>(() => (matchMedia(DARK_QUERY).matches ? 'dark' : 'light'))
+function useSystemAppearance(): Appearance {
+  const [appearance, setAppearance] = useState<Appearance>(() => (matchMedia(DARK_QUERY).matches ? 'dark' : 'light'))
   useEffect(() => {
     const query = matchMedia(DARK_QUERY)
-    const onChange = (e: MediaQueryListEvent) => setTheme(e.matches ? 'dark' : 'light')
+    const onChange = (e: MediaQueryListEvent) => setAppearance(e.matches ? 'dark' : 'light')
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
   }, [])
-  return theme
+  return appearance
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
@@ -142,8 +143,9 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
   const scale = settings.textScale
-  const systemTheme = useSystemTheme()
-  const theme = settings.theme === 'system' ? systemTheme : settings.theme
+  const systemAppearance = useSystemAppearance()
+  const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
+  const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   const [peek, setPeek] = useState<SidePanel | null>(null)
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')

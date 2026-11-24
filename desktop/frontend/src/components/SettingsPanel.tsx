@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
-import type { CleanupMode, DigestSchedule, ThemeSetting } from '../types'
+import type { CleanupMode, DarkTheme, DigestSchedule, ThemeSetting } from '../types'
 import { AgentControl } from './AgentControl'
 import { DataDirRow } from './DataDirRow'
 import { Keycap } from './Keycap'
@@ -12,6 +12,11 @@ const THEMES: { value: ThemeSetting; label: string }[] = [
   { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
+]
+
+const DARK_THEMES: { value: DarkTheme; label: string }[] = [
+  { value: 'black', label: 'Black' },
+  { value: 'violet', label: 'Violet' },
 ]
 
 const MODES: { value: CleanupMode; label: string }[] = [
@@ -44,7 +49,7 @@ function SettingRow({ label, hint, children }: SettingRowProps) {
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, project, settings, setTheme, setKeepAwake, setAgent, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'project', 'settings', 'setTheme', 'setKeepAwake', 'setAgent', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
+  const { overlay, setOverlay, project, settings, setTheme, setThemes, setKeepAwake, setAgent, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setAgent', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
   const { scale, zoom } = useLayout()
   if (overlay !== 'settings') return null
 
@@ -59,6 +64,9 @@ export function SettingsPanel() {
         <DataDirRow dir={settings.dataDir} fixed={settings.dataDirFixed} />
         <SettingRow label="Theme" hint="System follows the macOS appearance.">
           <SegmentedControl label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />
+        </SettingRow>
+        <SettingRow label="Dark theme" hint="Shown when the theme is dark, or System follows a dark macOS.">
+          <SegmentedControl label="Dark theme" options={DARK_THEMES} value={settings.darkTheme} onChange={(value) => report(() => setThemes(value, settings.lightTheme))} />
         </SettingRow>
         <SettingRow label="Text size" hint="Scales the interface and the terminal.">
           <div role="group" aria-label="Text size" className="flex flex-none items-center gap-1">

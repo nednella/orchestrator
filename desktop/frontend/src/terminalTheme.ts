@@ -1,53 +1,36 @@
 import type { ITheme } from '@xterm/xterm'
 
-const dark: ITheme = {
-  background: '#0a0c10',
-  foreground: '#dfe3ec',
-  cursor: '#a78bfa',
-  cursorAccent: '#0a0c10',
-  selectionBackground: 'rgba(167, 139, 250, 0.35)',
-  black: '#1a1f36',
-  red: '#ff5c70',
-  green: '#3de08f',
-  yellow: '#ffc247',
-  blue: '#5a8dff',
-  magenta: '#d27cff',
-  cyan: '#3fd2f0',
-  white: '#cfd5ee',
-  brightBlack: '#5b6488',
-  brightRed: '#ff8794',
-  brightGreen: '#7af0b4',
-  brightYellow: '#ffd879',
-  brightBlue: '#8fb0ff',
-  brightMagenta: '#e5a8ff',
-  brightCyan: '#8fe6f8',
-  brightWhite: '#f4f6ff',
+const ansi = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'] as const
+
+// xterm parses only hex and rgb colours, so a value the CSS writes another way (oklch) goes through a canvas pixel.
+const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+
+function toRgb(color: string): string {
+  if (!probe || /^(#|rgb)/.test(color)) return color
+  probe.clearRect(0, 0, 1, 1)
+  probe.fillStyle = color
+  probe.fillRect(0, 0, 1, 1)
+  const [r, g, b] = probe.getImageData(0, 0, 1, 1).data
+  return `rgb(${r}, ${g}, ${b})`
 }
 
-const light: ITheme = {
-  background: '#fbfbfd',
-  foreground: '#23272f',
-  cursor: '#7c5ce0',
-  cursorAccent: '#fbfbfd',
-  selectionBackground: 'rgba(124, 92, 224, 0.25)',
-  black: '#23272f',
-  red: '#c8283c',
-  green: '#1a8a55',
-  yellow: '#9a6a00',
-  blue: '#2a5fd0',
-  magenta: '#9a3fd0',
-  cyan: '#12829c',
-  white: '#8b93a5',
-  brightBlack: '#5b6488',
-  brightRed: '#e0485a',
-  brightGreen: '#2aa86c',
-  brightYellow: '#b8820a',
-  brightBlue: '#4a7de8',
-  brightMagenta: '#b05ee8',
-  brightCyan: '#2aa0ba',
-  brightWhite: '#c4c9d6',
+// terminalThemeFrom reads the shell colours from the CSS variables in effect at el, so each named theme's shell matches it.
+export function terminalThemeFrom(el: Element): ITheme {
+  const style = getComputedStyle(el)
+  const get = (name: string) => toRgb(style.getPropertyValue(name).trim())
+  const background = get('--bg-term')
+  const theme: ITheme = {
+    background,
+    foreground: get('--text'),
+    cursor: get('--accent'),
+    cursorAccent: background,
+    selectionBackground: get('--term-selection'),
+  }
+  for (const name of ansi) {
+    theme[name] = get(`--term-${name}`)
+    theme[`bright${name[0].toUpperCase()}${name.slice(1)}` as 'brightBlack'] = get(`--term-bright-${name}`)
+  }
+  return theme
 }
-
-export const terminalThemes = { dark, light }
 
 export const terminalFont = '"JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace'

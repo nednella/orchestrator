@@ -9,6 +9,8 @@ data_dir: ~/Library/Mobile Documents/com~apple~CloudDocs/agentos   # optional; d
 agent_command: claude          # what a new session runs unless --agent names a provider: a provider's name (claude, the default, or agy, both with hooks) or any command, which runs plain. The settings panel writes it; the next session uses it
 keep_mac_awake: true           # stop the Mac idle-sleeping while a session works; a project may set its own. The settings panel writes it
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
+app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
+app_theme_light: light         # the theme the light appearance shows: light (the default)
 app_text_scale: 1.2            # text size as a multiple of the default, 0.85 to 1.5; unset is 1. The settings panel writes it
 projects:
   - name: storefront

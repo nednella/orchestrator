@@ -193,3 +193,22 @@ func TestDigestSchedule(t *testing.T) {
 		t.Errorf("a rejected schedule changed the setting to %q", got)
 	}
 }
+
+func TestThemes(t *testing.T) {
+	h := apptest.New(t)
+	if got := h.Settings(); got.DarkTheme != "black" || got.LightTheme != "light" {
+		t.Fatalf("default themes = %q, %q", got.DarkTheme, got.LightTheme)
+	}
+	if got, err := h.SetThemes("violet", "light"); err != nil || got.DarkTheme != "violet" {
+		t.Fatalf("SetThemes(violet) = %+v, %v", got, err)
+	}
+	if got := h.Restart(t).Settings().DarkTheme; got != "violet" {
+		t.Errorf("dark theme after restart = %q", got)
+	}
+	if _, err := h.SetThemes("pink", "light"); err == nil {
+		t.Error("an unknown dark theme was accepted")
+	}
+	if _, err := h.SetThemes("black", "black"); err == nil {
+		t.Error("black was accepted as the light theme")
+	}
+}
