@@ -66,7 +66,7 @@ export function IssueWorkflow({ issue, onMenu }: IssueWorkflowProps) {
           at={menuAt}
           onClose={() => showMenu(null)}
           items={[
-            ...rest.map((action) => ({ label: action, run: () => report(() => startIssue(issue.number, action)) })),
+            ...rest.map((action) => ({ label: action, run: (e: MouseEvent) => start(action, e) })),
             { label: 'Open on GitHub', separated: rest.length > 0, run: () => report(() => api.openURL(issue.url)) },
             { label: 'Copy link', run: () => report(copyLink) },
           ]}

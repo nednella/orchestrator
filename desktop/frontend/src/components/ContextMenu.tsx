@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useRef } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useFloatingAt } from '../useFloatingAt'
 import type { Point } from '../useFloatingAt'
 
-export type MenuItem = { label: string; run(): void; danger?: boolean; separated?: boolean }
+export type MenuItem = { label: string; run(e: MouseEvent): void; danger?: boolean; separated?: boolean }
 
 type ContextMenuProps = { label: string; at: Point; items: (MenuItem | false)[]; onClose(): void }
 
@@ -56,9 +56,9 @@ export function ContextMenu({ label, at, items, onClose }: ContextMenuProps) {
             className="composer-option"
             data-danger={item.danger}
             onMouseEnter={(e) => e.currentTarget.focus()}
-            onClick={() => {
+            onClick={(e) => {
               onClose()
-              item.run()
+              item.run(e)
             }}
           >
             {item.label}
