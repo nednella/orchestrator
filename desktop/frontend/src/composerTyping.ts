@@ -104,7 +104,6 @@ export const ComposerTyping = Extension.create<ComposerTypingOptions>({
       Enter: ({ editor }) => {
         const { $from } = editor.state.selection
         if (inCodeBlock($from)) return closeFence(editor)
-        if (inList($from)) return newListItem(editor)
         if (openFence(editor)) return true
         this.options.send()
         return true
