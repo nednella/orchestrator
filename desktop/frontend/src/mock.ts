@@ -122,7 +122,7 @@ const details: Record<State, string[]> = {
     'Edit Index.tsx',
     'Write ProductGallery.tsx',
   ],
-  waiting: ['Claude needs your permission', 'Claude has a question for you'],
+  waiting: ['Claude needs your permission to use Bash: npx tsc --noEmit', 'Should I keep the old cart hook or replace it?'],
   idle: ['Done: 4 files changed', 'Done: tests pass'],
   ended: ['Session ended'],
 }
@@ -476,6 +476,8 @@ export function createMock(params: URLSearchParams) {
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
+    byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
+    sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!.detail = 'Should I keep the old cart hook or replace it?'
   }
 
   if (flags.warn) {

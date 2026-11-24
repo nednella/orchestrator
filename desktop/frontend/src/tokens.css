@@ -34,6 +34,10 @@
   --text-on-accent: #fff;
   --danger: #f5586a;
 
+  --bg-thread-waiting: rgba(255, 90, 74, 0.06);
+  --border-thread-waiting: rgba(255, 90, 74, 0.22);
+  --bg-thread-question: rgba(255, 255, 255, 0.04);
+
   --pr-open: #238636;
   --pr-draft: #5a6270;
   --pr-merged: #8957e5;
@@ -111,6 +115,10 @@
   --ring-selected: rgba(255, 255, 255, 0.28);
   --text-on-accent: #0d0f13;
 
+  --bg-thread-waiting: rgba(255, 90, 74, 0.07);
+  --border-thread-waiting: rgba(255, 90, 74, 0.24);
+  --bg-thread-question: rgba(255, 255, 255, 0.04);
+
   --term-selection: rgba(167, 139, 250, 0.35);
   --composer-selection: rgba(167, 139, 250, 0.35);
 }
@@ -148,6 +156,10 @@
   --accent: #7c5ce0;
   --ring-selected: rgba(0, 0, 0, 0.28);
   --danger: #d02a3e;
+
+  --bg-thread-waiting: rgba(217, 58, 43, 0.06);
+  --border-thread-waiting: rgba(217, 58, 43, 0.25);
+  --bg-thread-question: rgba(0, 0, 0, 0.04);
 
   --pr-open: #238636;
   --pr-draft: #6e7781;

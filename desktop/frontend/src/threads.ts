@@ -1,4 +1,4 @@
-import type { Project, Session, State } from './types'
+import type { PR, Project, Session, State } from './types'
 
 export type ThreadSections = { waiting: Session[]; working: Session[]; idle: Session[]; settled: Session[] }
 
@@ -35,6 +35,34 @@ export function liveThreads(projects: Project[], sessions: Session[]): Session[]
     const { waiting, working, idle } = splitThreads(sessions.filter((s) => s.project === p.key))
     return [...waiting, ...working, ...idle]
   })
+}
+
+export type TaskTone = 'pending' | 'passing' | 'failing' | 'merged' | 'closed'
+export type CurrentTask = { kind: 'pr'; number: number; tone: TaskTone } | { kind: 'issue'; number: number } | null
+
+function prTone({ state, checks }: PR): TaskTone {
+  if (state === 'merged' || state === 'closed') return state
+  if (checks === 'passing' || checks === 'failing') return checks
+  return 'pending'
+}
+
+// What the thread works towards, first match wins: its PR, toned by its checks, else its issue.
+export function currentTask({ pr, issue }: Session): CurrentTask {
+  if (pr) return { kind: 'pr', number: pr.number, tone: prTone(pr) }
+  if (issue > 0) return { kind: 'issue', number: issue }
+  return null
+}
+
+// The time since at as the thread card shows it: now, 2m, 4h, 1d, 3w; '' for no time.
+export function shortAgo(at: number, now: number): string {
+  if (!at) return ''
+  const minutes = Math.floor(Math.max(0, now - at) / 60_000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return days < 7 ? `${days}d` : `${Math.floor(days / 7)}w`
 }
 
 // What the thread's clean-up waits on, in words; '' when nothing does.

@@ -59,6 +59,11 @@ export type IconName =
   | 'update'
   | 'more'
   | 'compose'
+  | 'needs-you'
+  | 'loader'
+  | 'idle'
+  | 'ended'
+  | 'pull-request'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -173,6 +178,18 @@ function IconShape({ name }: IconShapeProps) {
     )
   if (name === 'more') return <path d="M3.5 8h.01M8 8h.01M12.5 8h.01" strokeWidth="2.5" />
   if (name === 'compose') return <path d="M8 2H3.3A1.3 1.3 0 0 0 2 3.3v9.4A1.3 1.3 0 0 0 3.3 14h9.4a1.3 1.3 0 0 0 1.3-1.3V8M12.3 1.7a1.4 1.4 0 1 1 2 2L8 10l-2.7.7.7-2.7Z" />
+  if (name === 'needs-you') return <path d="M8 14.3A6.3 6.3 0 1 0 8 1.7a6.3 6.3 0 0 0 0 12.6ZM8 5v3.3M8 10.8h.01" />
+  if (name === 'loader') return <path d="M14 8a6 6 0 1 1-4.1-5.7" />
+  if (name === 'idle') return <circle cx="8" cy="8" r="6.3" strokeDasharray="2 2" />
+  if (name === 'ended') return <path d="M8 14.3A6.3 6.3 0 1 0 8 1.7a6.3 6.3 0 0 0 0 12.6ZM5.7 8l1.6 1.7 3-3.4" />
+  if (name === 'pull-request')
+    return (
+      <>
+        <circle cx="4" cy="4" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M8.7 4h2A1.3 1.3 0 0 1 12 5.3V10M4 6v8" />
+      </>
+    )
   if (name === 'issue') return <path d="M8 13.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM8 5.5v3.2M8 10.8v.01" />
   return <path d="M2 4h4l1.5 1.5H14V13H2Z" />
 }

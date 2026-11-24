@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { modelName } from '../model'
+import { currentTask } from '../threads'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
@@ -10,10 +10,11 @@ import { CleanupMark } from './CleanupMark'
 import { ConfirmRow } from './ConfirmRow'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
-import { PRMark } from './PRMark'
-import { StateDot } from './StateDot'
+import { LastActive } from './LastActive'
+import { StateIcon } from './StateIcon'
 import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
+import { ThreadTask } from './ThreadTask'
 import { TimelinePopover } from './TimelinePopover'
 import { useHoverCard } from './useHoverCard'
 
@@ -34,8 +35,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
   const ended = session.state === 'ended'
-  const model = modelName(session.model)
-  const facts = session.branch !== '' || session.pr !== null || model !== '' || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -64,6 +63,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     }
   }, [cursor, showCard, closeCard])
 
+  const line2 = session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
+
   return (
     <div
       ref={row}
@@ -72,7 +73,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
       data-selected={selected}
       data-cursor={cursor}
       data-menu-open={menuAt !== null}
-      style={{ opacity: ended ? 0.6 : 1 }}
       {...card.hover}
       onMouseDown={closeCard}
       onContextMenu={(e) => {
@@ -87,9 +87,12 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
         openMenuBelow()
       }}
     >
-      <div className="flex w-full items-center">
+      <div className="thread-card">
+        <span className="thread-dim flex h-[1.375rem] items-center">
+          <StateIcon state={session.state} />
+        </span>
         {renaming ? (
-          <div className="flex min-w-0 flex-1 py-1 pr-2 pl-3">
+          <div className="col-span-2 flex min-w-0">
             <InlineInput
               initial={session.title}
               blur="submit"
@@ -102,54 +105,82 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             />
           </div>
         ) : (
-          <button
-            className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pr-2 pl-3 text-left"
-            aria-current={selected}
-            aria-disabled={ended}
-            aria-describedby={card.anchor ? cardId : undefined}
-            style={ended ? { cursor: 'default' } : undefined}
-            onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
-            onBlur={closeCard}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              if (selected) return a.showHome(session.project)
-              if (ended) return
-              a.select(session.id)
-              a.focus('terminal')
-            }}
-          >
-            <span className="flex w-full items-center gap-2">
-              <StateDot state={session.state} />
-              <span className={`min-w-0 flex-1 truncate text-body ${selected ? 'font-semibold' : 'font-medium'}`}>{session.title}</span>
+          <>
+            <button
+              className={`thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] ${selected ? 'font-semibold' : 'font-medium'}`}
+              aria-current={selected}
+              aria-disabled={ended}
+              aria-describedby={card.anchor ? cardId : undefined}
+              style={ended ? { cursor: 'default' } : undefined}
+              onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
+              onBlur={closeCard}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (selected) return a.showHome(session.project)
+                if (ended) return
+                a.select(session.id)
+                a.focus('terminal')
+              }}
+            >
+              {session.title}
+            </button>
+            <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
+              <LastActive at={session.lastEventAt} />
             </span>
-            {facts && (
-              <span className="flex w-full items-center gap-2 pl-4 text-label text-dim">
-                <span className="mono min-w-0 flex-1 truncate">{session.branch}</span>
-                {session.pr && <PRMark pr={session.pr} />}
-                {model && <span className="flex-none">{model}</span>}
-                <CleanupMark session={session} />
-              </span>
-            )}
-          </button>
+            <span className="thread-actions relative z-[1] items-center gap-0.5 justify-self-end">
+              <button
+                className="btn btn-ghost h-5 w-6 justify-center px-0"
+                title="Thread actions"
+                aria-label={`Actions for ${session.title}`}
+                aria-haspopup="menu"
+                onClick={(e) => {
+                  const box = e.currentTarget.getBoundingClientRect()
+                  closeCard()
+                  setMenuAt({ x: box.left, y: box.bottom })
+                }}
+              >
+                <Icon name="more" size={14} />
+              </button>
+              {(selected || ended) && (
+                <button
+                  className="btn btn-ghost h-5 w-6 justify-center px-0"
+                  title={ended ? 'Dismiss' : 'Close thread'}
+                  aria-label={ended ? `Dismiss ${session.title}` : 'Close thread'}
+                  onClick={() => (ended ? a.report(() => a.dismissSession(session.id)) : a.showHome(session.project))}
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              )}
+            </span>
+          </>
         )}
-        {(selected || ended) && !renaming && (
-          <button
-            className={`btn btn-ghost mr-1 h-6 w-6 flex-none justify-center px-0 ${selected ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}`}
-            title={ended ? 'Dismiss' : 'Close thread'}
-            aria-label={ended ? `Dismiss ${session.title}` : 'Close thread'}
-            onClick={() => (ended ? a.report(() => a.dismissSession(session.id)) : a.showHome(session.project))}
-          >
-            <Icon name="close" size={12} />
-          </button>
+        {line2 && (
+          <>
+            <span className="thread-dim col-start-2 flex min-w-0 items-center gap-1.5 text-label text-soft">
+              {session.branch && (
+                <>
+                  <span className="flex flex-none text-dim">
+                    <Icon name="branch" size={12} />
+                  </span>
+                  <span className="truncate">{session.branch}</span>
+                </>
+              )}
+            </span>
+            <span className="thread-dim flex items-center gap-1.5 justify-self-end text-label">
+              <CleanupMark session={session} />
+              <ThreadTask session={session} />
+            </span>
+          </>
         )}
+        {session.state === 'waiting' && session.detail && <p className="thread-question col-span-2 col-start-2 truncate">{session.detail}</p>}
       </div>
       {cleanup.armed && (
-        <div className="flex w-full pr-2 pb-1.5 pl-7">
+        <div className="flex w-full pr-3 pb-2 pl-9">
           <CleanupControls session={session} remove={cleanup} />
         </div>
       )}
       {kill.armed && (
-        <div className="flex w-full pr-2 pb-1.5 pl-7">
+        <div className="flex w-full pr-3 pb-2 pl-9">
           <ConfirmRow
             danger
             stacked

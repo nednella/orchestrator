@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { sortThreads } from './threads.ts'
-import type { Session, State } from './types.ts'
+import { currentTask, shortAgo, sortThreads } from './threads.ts'
+import type { PR, Session, State } from './types.ts'
 
 function thread(id: string, state: State, lastEventAt = 0): Session {
   return {
@@ -59,4 +59,42 @@ test('ended threads come newest first', () => {
     sorted.map((s) => s.id),
     ['new', 'mid', 'old'],
   )
+})
+
+function pullRequest(state: PR['state'], checks: PR['checks']): PR {
+  return { number: 91, url: '', state, checks, comments: 0, updatedAt: 0, conflicting: false, title: '', review: '', failedChecks: [], runningChecks: 0, passedChecks: 0, newComments: 0 }
+}
+
+test('a thread with a PR shows the PR, toned by its checks', () => {
+  const tone = (state: PR['state'], checks: PR['checks']) => currentTask({ ...thread('t', 'idle'), issue: 444, pr: pullRequest(state, checks) })
+  assert.deepEqual(tone('open', 'pending'), { kind: 'pr', number: 91, tone: 'pending' })
+  assert.deepEqual(tone('draft', 'none'), { kind: 'pr', number: 91, tone: 'pending' })
+  assert.deepEqual(tone('open', 'passing'), { kind: 'pr', number: 91, tone: 'passing' })
+  assert.deepEqual(tone('open', 'failing'), { kind: 'pr', number: 91, tone: 'failing' })
+  assert.deepEqual(tone('merged', 'passing'), { kind: 'pr', number: 91, tone: 'merged' })
+  assert.deepEqual(tone('closed', 'failing'), { kind: 'pr', number: 91, tone: 'closed' })
+})
+
+test('a thread with an issue and no PR shows the issue', () => {
+  assert.deepEqual(currentTask({ ...thread('t', 'working'), issue: 389 }), { kind: 'issue', number: 389 })
+})
+
+test('a thread with no issue and no PR shows no task', () => {
+  assert.equal(currentTask(thread('t', 'idle')), null)
+})
+
+test('the time since the last event is compact', () => {
+  const now = 100 * 24 * 3_600_000
+  const minute = 60_000
+  assert.equal(shortAgo(0, now), '')
+  assert.equal(shortAgo(now - 59_000, now), 'now')
+  assert.equal(shortAgo(now + 5_000, now), 'now')
+  assert.equal(shortAgo(now - 2 * minute, now), '2m')
+  assert.equal(shortAgo(now - 59 * minute, now), '59m')
+  assert.equal(shortAgo(now - 60 * minute, now), '1h')
+  assert.equal(shortAgo(now - (4 * 60 + 30) * minute, now), '4h')
+  assert.equal(shortAgo(now - 24 * 60 * minute, now), '1d')
+  assert.equal(shortAgo(now - 6 * 24 * 60 * minute, now), '6d')
+  assert.equal(shortAgo(now - 7 * 24 * 60 * minute, now), '1w')
+  assert.equal(shortAgo(now - 23 * 24 * 60 * minute, now), '3w')
 })

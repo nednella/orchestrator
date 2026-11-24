@@ -541,8 +541,91 @@
     background: var(--bg-hover);
   }
 
+  .thread-row {
+    border-radius: 0.75rem;
+  }
+
+  .thread-row::before {
+    display: none;
+  }
+
+  .thread-row:hover,
+  .thread-row[data-menu-open='true'] {
+    background: var(--bg-raised);
+  }
+
+  .thread-row[data-state='waiting'] {
+    background: var(--bg-thread-waiting);
+    box-shadow: inset 0 0 0 1px var(--border-thread-waiting);
+  }
+
   .thread-row[data-selected='true'] {
-    box-shadow: inset 0 0 0 1px var(--ring-selected);
+    background: var(--bg-hover);
+  }
+
+  .thread-row[data-state='ended'] .thread-dim {
+    opacity: 0.55;
+  }
+
+  /* The title's button covers the whole card, so a click anywhere on it opens the thread; the card's own buttons sit above. */
+  .thread-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.5rem;
+    row-gap: 0.1875rem;
+    padding: 0.625rem 0.75rem 0.5625rem;
+  }
+
+  .thread-open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 0.75rem;
+  }
+
+  .thread-open:focus-visible {
+    outline: none;
+  }
+
+  .thread-open:focus-visible::after {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .thread-question {
+    margin-top: 0.25rem;
+    padding: 0.3125rem 0.5625rem;
+    border-radius: 0.5rem;
+    background: var(--bg-thread-question);
+    font-size: var(--fs-small);
+    color: var(--text-soft);
+  }
+
+  /* The time gives way to the card's buttons while it is pointed at, holds the focus or has the list's cursor. */
+  .thread-actions {
+    display: none;
+  }
+
+  .thread-row:is(:hover, :focus-within, [data-menu-open='true']) .thread-actions,
+  [data-panel][data-focused] .thread-row[data-cursor='true'] .thread-actions {
+    display: flex;
+  }
+
+  .thread-row:is(:hover, :focus-within, [data-menu-open='true']) .thread-age,
+  [data-panel][data-focused] .thread-row[data-cursor='true'] .thread-age {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .thread-actions {
+      display: flex;
+    }
+
+    .thread-age {
+      display: none;
+    }
   }
 
   :where([data-panel][data-focused]) .row[data-cursor='true'] {
