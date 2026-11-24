@@ -376,7 +376,8 @@
   }
 
   .composer-chip:hover,
-  .composer-chip[aria-expanded='true'] {
+  .composer-chip[aria-expanded='true'],
+  .composer-chip[data-active='true'] {
     background: var(--bg-hover);
     color: var(--text);
   }

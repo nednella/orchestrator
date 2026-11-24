@@ -174,15 +174,25 @@ export function HomeComposer() {
                 </span>
               )
         }
-        left={<SegmentedControl label="Composer mode" variant="track" options={MODES} value={a.composerMode} onChange={a.setComposerMode} />}
+        left={
+          <>
+            <SegmentedControl label="Composer mode" variant="track" options={MODES} value={a.composerMode} onChange={a.setComposerMode} />
+            {!note && (
+              <>
+                <span className="mx-1.5 h-[18px] w-px flex-none bg-line" aria-hidden="true" />
+                <button className="composer-chip" title="Pick an issue" data-active={Boolean(pickedIssue)} aria-expanded={Boolean(token)} onMouseDown={(e) => e.preventDefault()} onClick={openPicker}>
+                  <span className="font-mono">#</span>
+                  Issue
+                </button>
+              </>
+            )}
+          </>
+        }
         right={
           !note && (
             <>
               {!pickedIssue && <ComposerAccessChip kind={a.composerKind} onKind={a.setComposerKind} />}
               {!live && <ComposerModelChip model={model} effort={effort} onModel={setModel} onEffort={setEffort} />}
-              <button className="composer-chip w-7 justify-center px-0 font-mono" aria-label="Pick an issue" title="Pick an issue" aria-expanded={Boolean(token)} onMouseDown={(e) => e.preventDefault()} onClick={openPicker}>
-                #
-              </button>
             </>
           )
         }
