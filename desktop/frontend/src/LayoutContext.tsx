@@ -11,7 +11,7 @@ const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
-export type MobilePanel = 'queue' | 'notes' | 'session' | 'threads' | 'shell'
+export type MobilePanel = 'queue' | 'notes' | 'session' | 'details' | 'threads' | 'shell'
 export type SidePanel = 'sidebar' | 'right'
 
 export const SCALES = [0.85, 0.92, 1, 1.1, 1.2, 1.35, 1.5]
@@ -248,10 +248,23 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (narrow) setMobilePanel(open ? 'shell' : 'session')
         else updatePrefs({ shellOpen: open })
       },
-      setRightOpen: (open) => updatePrefs({ rightOpen: open }),
-      toggleRight: () => updatePrefs({ rightOpen: !prefs.rightOpen }),
+      setRightOpen(open) {
+        if (narrow) setMobilePanel(open ? 'details' : 'session')
+        else updatePrefs({ rightOpen: open })
+      },
+      toggleRight() {
+        if (narrow) {
+          setMobilePanel(mobilePanel === 'details' ? 'session' : 'details')
+          return
+        }
+        if (!showsThread) throw 'Open a thread to see its details'
+        const open = !rightOpen
+        if (open && fit(width, { ...prefs, rightOpen: true }, 16 * scale).rightForcedClosed) throw 'The window is too narrow for the right panel'
+        updatePrefs({ rightOpen: open })
+      },
       showView(id, view) {
-        updatePrefs({ rightOpen: true })
+        if (narrow) setMobilePanel('details')
+        else updatePrefs({ rightOpen: true })
         setSessionView(id, view)
       },
       setShellHeight(rem, commit) {
@@ -307,7 +320,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, showsThread, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showHome, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

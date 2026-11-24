@@ -9,7 +9,8 @@ import { PRTab } from './PRTab'
 export function RightPanel() {
   const { selectedId, viewOf, setSessionView, browserStates } = useAgentos('selectedId', 'viewOf', 'setSessionView', 'browserStates')
   const session = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
-  const { widths, setRightOpen } = useLayout()
+  const { widths, setRightOpen, mode } = useLayout()
+  const narrow = mode === 'narrow'
   if (!session) return null
   const view = viewOf(selectedId)
   const browserOpen = browserStates[session.id]?.open ?? session.browser
@@ -20,7 +21,7 @@ export function RightPanel() {
   ]
 
   return (
-    <aside data-panel="right" tabIndex={-1} className="panel flex h-full min-h-0 flex-none flex-col overflow-hidden" style={{ width: `${widths.right}rem` }}>
+    <aside data-panel="right" tabIndex={-1} className={`panel flex h-full min-h-0 flex-col overflow-hidden ${narrow ? 'min-w-0 flex-1' : 'flex-none'}`} style={narrow ? undefined : { width: `${widths.right}rem` }}>
       <div className="flex flex-none items-center border-b border-line pr-2 pl-2">
         <div role="tablist" aria-label="Thread details" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {tabs.map((tab) => {

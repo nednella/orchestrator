@@ -79,6 +79,7 @@ export function App() {
           </div>
           {rightOpen && <Divider panel="right" />}
           {rightOpen && <RightPanel />}
+          {narrow && mobilePanel === 'details' && <RightPanel />}
           {narrow && mobilePanel === 'shell' && <ShellPanel />}
         </main>
         {narrow && <MobileTabs />}

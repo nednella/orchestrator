@@ -56,11 +56,8 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     async run(args) {
       if (!current) throw 'No session selected'
       layout.closeCentre()
-      if (args.length === 0) {
-        layout.showView(current.id, 'browser')
-        return
-      }
       layout.showView(current.id, 'browser')
+      if (args.length === 0) return
       await a.openBrowser(current.id, args.join(' '))
       return `Opened ${args.join(' ')}`
     },
