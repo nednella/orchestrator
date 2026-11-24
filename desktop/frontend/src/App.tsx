@@ -12,7 +12,6 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ShellPanel } from './components/ShellPanel'
 import { ShellStrip } from './components/ShellStrip'
-import { SidebarToggle } from './components/SidebarToggle'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
 import { Toasts } from './components/Toasts'
@@ -32,8 +31,6 @@ const appEnterClass: Record<SplashStage, string> = {
   leaving: 'app-enter shown',
   done: '',
 }
-
-const titleInsets = (toggleLeft: string) => ({ '--sidebar-toggle-left': toggleLeft, '--title-start': `calc(${toggleLeft} + var(--sidebar-toggle-span))` }) as CSSProperties
 
 export function App() {
   const network = useNetwork()
@@ -55,12 +52,11 @@ export function App() {
     <>
       <div
         className={`flex h-full flex-col bg-app ${appEnterClass[splash]}`}
-        style={titleInsets(fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)')}
+        style={{ '--title-inset': fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)' } as CSSProperties}
         data-mode={mode}
         {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
-          <SidebarToggle />
           {sidebarOpen && <LeftSidebar />}
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
           <div className={`flex min-w-0 flex-1 flex-col ${narrow && sidebarOpen ? 'hidden' : ''}`}>

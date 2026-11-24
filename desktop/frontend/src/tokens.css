@@ -80,9 +80,7 @@
 
   /* px, not rem: the window buttons stay at 20pt down at every text size */
   --topbar-h: 40px;
-  --traffic-light-zone: 82px;
-  /* the sidebar toggle's 32px button and the gap after it */
-  --sidebar-toggle-span: 40px;
+  --traffic-light-zone: 112px;
   --corner-pad: 1.375rem;
 
   --bg-note: #181613;
