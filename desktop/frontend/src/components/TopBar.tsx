@@ -22,6 +22,7 @@ export function TopBar() {
     return shortcut ? `${label} (${formatShortcut(shortcut)})` : label
   }
   const narrow = mode === 'narrow'
+  const rightShown = narrow ? mobilePanel === 'details' : rightOpen
   const showsThread = selectedId !== null && !statsOpen && !newsOpen && !(narrow && (mobilePanel === 'queue' || mobilePanel === 'notes'))
   const inset = fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)'
   const toggleZone = `calc(${inset} + 40px)`
@@ -60,9 +61,9 @@ export function TopBar() {
         <TitleBarButton label={named('Command palette', 'palette')} icon="search" onClick={() => setOverlay('palette')} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton
-          label={rightOpen || mobilePanel === 'details' ? 'Hide right panel' : 'Show right panel'}
+          label={rightShown ? 'Hide right panel' : 'Show right panel'}
           icon="panel-right"
-          pressed={narrow ? mobilePanel === 'details' : rightOpen}
+          pressed={rightShown}
           disabled={!showsThread}
           onClick={() => report(() => find('toggle-right').run([]))}
         />
