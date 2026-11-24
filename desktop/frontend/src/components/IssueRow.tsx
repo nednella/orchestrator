@@ -1,32 +1,29 @@
+import { useState } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
-import { useLayout } from '../LayoutContext'
-import { api } from '../api'
 import type { Issue } from '../types'
 import type { IssueDrag } from '../useIssueDrag'
-import { ActionButton } from './ActionButton'
-import { Icon } from './Icon'
+import { IssueThread } from './IssueThread'
+import { IssueWorkflow } from './IssueWorkflow'
 import { ModelTag } from './ModelTag'
 import { PRMark } from './PRMark'
 import { SessionMark } from './SessionMark'
 import { TypeMark } from './TypeMark'
 
-type IssueRowProps = { issue: Issue; cursor: boolean; drag: IssueDrag; onOpen(): void }
+type IssueRowProps = { issue: Issue; drag: IssueDrag; onRead(): void }
 
-export function IssueRow({ issue, cursor, drag, onOpen }: IssueRowProps) {
-  const { settings, overlay, select, startIssue, setOverlay, report } = useAgentos('settings', 'overlay', 'select', 'startIssue', 'setOverlay', 'report')
-  const { mode } = useLayout()
+export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
+  const { settings, select } = useAgentos('settings', 'select')
   const session = useAgentosSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
   const chat = useAgentosSelector((a) => a.projectSessions.find((s) => s.chat && s.issue === issue.number))
-  const dense = mode === 'compact'
+  const [menuOpen, setMenuOpen] = useState(false)
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
   const agent = labelled('agent')
-  const open = typeof overlay === 'object' && overlay?.issue === issue.number
 
   return (
     <div
-      className="row row-inset group h-9 items-center gap-1 pr-1.5 pl-2.5"
-      data-cursor={cursor}
-      data-selected={open}
+      className="row row-inset group flex-col gap-0.5 rounded-lg px-2 py-1.5"
+      data-issue={issue.number}
+      data-menu-open={menuOpen}
       draggable={issue.moves.length > 0}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -34,49 +31,27 @@ export function IssueRow({ issue, cursor, drag, onOpen }: IssueRowProps) {
         drag.start(issue)
       }}
       onDragEnd={drag.end}
+      onClick={(e) => !(e.target as Element).closest('button') && onRead()}
     >
-      <button
-        className="@container flex h-full min-w-0 flex-1 items-center gap-2 text-left"
-        title="Read the issue"
-        onClick={() => {
-          onOpen()
-          setOverlay({ issue: issue.number })
-        }}
-      >
-        <span className={`mono flex-none text-small text-dim ${dense ? 'w-8' : 'w-10'}`}>{issue.number}</span>
-        <TypeMark type={issue.type} />
+      <button data-nav className="flex min-w-0 items-baseline gap-2 text-left" title="Read the issue" onClick={onRead}>
+        <span className="mono w-9 flex-none text-small text-dim">{issue.number}</span>
         <span className="min-w-0 flex-1 truncate text-body">{issue.title}</span>
-        <ModelTag
-          agent={agent === settings.agent ? '' : agent}
-          model={labelled('model')}
-          effort={labelled('effort')}
-          problem={issue.ignored.join('\n')}
-          className="hidden @[21rem]:inline"
-        />
+        {session?.pr && <PRMark pr={session.pr} />}
       </button>
-      <span className="reveal">
-        <button
-          className="btn btn-ghost h-6 w-6 justify-center px-0"
-          title="Open on GitHub"
-          aria-label={`Open #${issue.number} on GitHub`}
-          onClick={() => report(() => api.openURL(issue.url))}
-        >
-          <Icon name="external" size={12} />
-        </button>
-        {!session && (
-          <ActionButton issue={issue.number} actions={issue.actions} onStart={(action, e) => report(() => startIssue(issue.number, action, e.altKey))} />
+      <div className="flex min-w-0 items-center gap-2.5 pl-11 text-small text-dim empty:hidden">
+        {issue.type && <TypeMark type={issue.type} named />}
+        <ModelTag agent={agent === settings.agent ? '' : agent} model={labelled('model')} effort={labelled('effort')} problem={issue.ignored.join('\n')} className="min-w-0 truncate" />
+        {chat && (
+          <button className="flex flex-none items-center" title={`Open chat ${chat.n}`} onClick={() => select(chat.id)}>
+            <SessionMark session={chat} />
+          </button>
         )}
-      </span>
-      {chat && (
-        <button className="flex h-full flex-none items-center pl-1" title={`Open chat ${chat.n}`} onMouseDown={(e) => e.preventDefault()} onClick={() => select(chat.id)}>
-          <SessionMark session={chat} />
-        </button>
-      )}
-      {session && (
-        <button className="flex h-full flex-none items-center justify-end gap-2 pl-1" title={`Open task ${session.n}`} onMouseDown={(e) => e.preventDefault()} onClick={() => select(session.id)}>
-          {session.pr && !dense && <PRMark pr={session.pr} />}
-          <SessionMark session={session} />
-        </button>
+        {session && <IssueThread session={session} />}
+      </div>
+      {!session && (
+        <div className="issue-actions pt-1 pl-11">
+          <IssueWorkflow issue={issue} onMenu={setMenuOpen} />
+        </div>
       )}
     </div>
   )

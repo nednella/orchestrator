@@ -1,10 +1,10 @@
 import { Icon } from './Icon'
 
-type QueueUnsortedHeaderProps = { count: number; open: boolean; cursor: boolean; locked: boolean; onToggle(): void }
+type QueueUnsortedHeaderProps = { count: number; open: boolean; locked: boolean; onToggle(): void }
 
-export function QueueUnsortedHeader({ count, open, cursor, locked, onToggle }: QueueUnsortedHeaderProps) {
+export function QueueUnsortedHeader({ count, open, locked, onToggle }: QueueUnsortedHeaderProps) {
   return (
-    <button className="section-head text-small" aria-expanded={open} data-cursor={cursor} disabled={locked} onClick={onToggle}>
+    <button className="section-head text-small" aria-expanded={open} disabled={locked} onClick={onToggle}>
       <span>{`${count} ${open ? '' : 'more '}${count === 1 ? 'issue matches' : 'issues match'} no section`}</span>
       <span className="ml-auto flex items-center gap-2.5">
         {open ? 'Hide' : 'Show'}

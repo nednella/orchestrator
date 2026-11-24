@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { Icon } from './Icon'
 
-type SectionHeaderProps = { name: string; count: number; open: boolean; cursor: boolean; locked?: boolean; summary?: ReactNode; onToggle(): void }
+type SectionHeaderProps = { name: string; count: number; open: boolean; locked?: boolean; summary?: ReactNode; onToggle(): void }
 
-export function SectionHeader({ name, count, open, cursor, locked = false, summary, onToggle }: SectionHeaderProps) {
+export function SectionHeader({ name, count, open, locked = false, summary, onToggle }: SectionHeaderProps) {
   return (
-    <button className="section-head" aria-expanded={open} data-cursor={cursor} disabled={locked} onClick={onToggle}>
+    <button className="section-head" aria-expanded={open} disabled={locked} onClick={onToggle}>
       <span className="label">{name}</span>
       <span className="mono text-small text-dim">{count}</span>
       <span className="ml-auto flex items-center gap-2.5">

@@ -1,6 +1,6 @@
 import type { IssueType } from '../types'
 
-type TypeMarkProps = { type: IssueType }
+type TypeMarkProps = { type: IssueType; named?: boolean }
 
 const COLOR: Record<IssueType, string> = {
   feature: 'var(--type-feature)',
@@ -10,11 +10,18 @@ const COLOR: Record<IssueType, string> = {
   '': 'var(--text-dim)',
 }
 
-export function TypeMark({ type }: TypeMarkProps) {
-  return (
+export function TypeMark({ type, named = false }: TypeMarkProps) {
+  const mark = (
     <svg className="flex-none" width="12" height="12" viewBox="0 0 12 12" style={{ color: COLOR[type] }} aria-label={type || 'untyped'} role="img">
       <TypeShape type={type} />
     </svg>
+  )
+  if (!named || !type) return mark
+  return (
+    <span className="flex flex-none items-center gap-1.5" style={{ color: COLOR[type] }}>
+      {mark}
+      {type}
+    </span>
   )
 }
 

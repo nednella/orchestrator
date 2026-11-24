@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { useAgentos, useAgentosSelector } from './AgentosContext'
+import { IssuesView } from './components/IssuesView'
 import { NotesView } from './components/NotesView'
 import { ThreadDetailsView } from './components/ThreadDetailsView'
 import type { Issue, Note, Session } from './types'
@@ -17,6 +18,7 @@ export type PanelView = {
 // The right panel's views, in tab order. A new view is one entry here and its component.
 export const PANEL_VIEWS: PanelView[] = [
   { id: 'notes', label: 'Notes', count: (ctx) => ctx.notes.filter((n) => !n.archived).length, available: () => true, Component: NotesView },
+  { id: 'issues', label: 'Issues', count: (ctx) => ctx.issues.length, available: () => true, Component: IssuesView },
   { id: 'details', label: 'Details', available: (ctx) => ctx.session !== undefined, Component: ThreadDetailsView },
 ]
 

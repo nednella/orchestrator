@@ -37,7 +37,7 @@ export function QueueSearch({ shown }: QueueSearchProps) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5 border-b border-line px-3 pt-2.5 pb-2">
+    <div className="flex flex-none flex-col gap-1 px-2 pt-2 pb-1">
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-dim">
@@ -47,8 +47,9 @@ export function QueueSearch({ shown }: QueueSearchProps) {
             ref={input}
             value={issueFilter}
             spellCheck={false}
-            placeholder="Search: text, @author, label:, type:, is:running"
-            aria-label="Search issues"
+            placeholder="Filter · @author label: type: is:running"
+            aria-label="Filter issues"
+            title="Filter by text, @author, assignee:, label:, type:, section: and is:running; a leading - leaves matches out"
             className="field w-full pr-7 pl-8 text-small"
             onChange={(e) => update(e.target.value)}
             onKeyDown={(e) => {
@@ -63,7 +64,7 @@ export function QueueSearch({ shown }: QueueSearchProps) {
                 setCursor((c) => Math.max(c - 1, 0))
               } else if (e.key === 'Escape') {
                 if (completion) setDismissed(true)
-                else focus('composer')
+                else focus('terminal')
                 e.stopPropagation()
               }
             }}
@@ -71,7 +72,7 @@ export function QueueSearch({ shown }: QueueSearchProps) {
           {issueFilter && (
             <button
               className="btn btn-ghost absolute top-0.5 right-0.5 h-6 w-6 justify-center px-0"
-              aria-label="Clear search"
+              aria-label="Clear the filter"
               title="Clear"
               onClick={() => {
                 update('')

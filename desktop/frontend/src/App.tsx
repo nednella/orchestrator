@@ -3,7 +3,6 @@ import type { CSSProperties } from 'react'
 import { DigestView } from './components/DigestView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
-import { IssueDialog } from './components/IssueDialog'
 import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
 import { RightPanel } from './components/RightPanel'
@@ -92,7 +91,6 @@ export function App() {
           </div>
         </div>
         {narrow && <MobileTabs />}
-        <IssueDialog />
         <ShortcutsSheet />
         <SettingsPanel />
         <PatchNotes />

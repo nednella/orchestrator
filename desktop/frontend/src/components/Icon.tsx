@@ -57,6 +57,7 @@ export type IconName =
   | 'chat'
   | 'branch'
   | 'update'
+  | 'more'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -169,6 +170,7 @@ function IconShape({ name }: IconShapeProps) {
         <path d="M5 5v6M11 6.5c0 2.5-6 1.5-6 4.5" />
       </>
     )
+  if (name === 'more') return <path d="M3.5 8h.01M8 8h.01M12.5 8h.01" strokeWidth="2.5" />
   if (name === 'issue') return <path d="M8 13.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM8 5.5v3.2M8 10.8v.01" />
   return <path d="M2 4h4l1.5 1.5H14V13H2Z" />
 }

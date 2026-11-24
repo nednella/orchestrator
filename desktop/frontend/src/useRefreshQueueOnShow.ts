@@ -3,25 +3,24 @@ import { useAgentos, useAgentosSelector } from './AgentosContext'
 
 const MIN_GAP_MS = 5000
 
-// Issues change on GitHub with no event the app hears, so a queue on screen is read again when Home is
+// Shared by every caller, so two of them on screen at once read the queue once.
+let last = { at: 0, projectKey: undefined as string | undefined }
+
+// Issues change on GitHub with no event the app hears, so issues on screen are read again when they are
 // shown, when the project changes and when the window comes back into focus. The caller is mounted only
-// while Home is on screen.
+// while it shows issues.
 export function useRefreshQueueOnShow() {
   const { refreshIssues, report } = useAgentos('refreshIssues', 'report')
   const projectKey = useAgentosSelector((a) => a.project?.key)
-  const refresh = useRef<(force?: boolean) => void>(() => {})
-  const last = useRef(0)
-  refresh.current = (force = false) => {
-    if (!force && Date.now() - last.current < MIN_GAP_MS) return
-    last.current = Date.now()
+  const refresh = useRef<() => void>(() => {})
+  refresh.current = () => {
+    if (projectKey === undefined || (last.projectKey === projectKey && Date.now() - last.at < MIN_GAP_MS)) return
+    last = { at: Date.now(), projectKey }
     report(refreshIssues)
   }
 
-  const seen = useRef(projectKey)
   useEffect(() => {
-    const switched = seen.current !== undefined && seen.current !== projectKey
-    seen.current = projectKey
-    refresh.current(switched)
+    refresh.current()
   }, [projectKey])
 
   useEffect(() => {
