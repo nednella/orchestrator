@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { readStored, writeStored } from './storage'
-import { sidebarThreads } from './threads'
+import { liveThreads, sidebarThreads } from './threads'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
@@ -613,8 +613,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   )
 
   const inSidebarOrder = useCallback(() => {
-    const { groups, settled } = sidebarThreads(projectsRef.current, sessionsRef.current)
-    return [...groups.flatMap((g) => g.sessions), ...settled]
+    return sidebarThreads(sessionsRef.current, projectRef.current?.key)
   }, [])
 
   const selectSession = useCallback(
@@ -851,7 +850,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         addSession(await api.noteToSession(id))
       },
       nextAttention() {
-        const list = inSidebarOrder()
+        const list = liveThreads(projectsRef.current, sessionsRef.current)
         const urgent = [...list.filter((s) => s.state === 'waiting'), ...list.filter((s) => s.state === 'idle')]
         if (urgent.length === 0) throw 'Nothing needs you right now'
         const at = urgent.findIndex((s) => s.id === selectedRef.current)

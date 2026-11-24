@@ -7,9 +7,9 @@ import { Icon } from "./Icon";
 import { PRMark } from "./PRMark";
 import { StateDot } from "./StateDot";
 
-type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; projectName?: string };
+type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean };
 
-function ThreadRowView({ session, selected, cursor, projectName }: ThreadRowProps) {
+function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
   const { select, focus, dismissSession, report } = useAgentos(
     "select",
     "focus",
@@ -50,13 +50,8 @@ function ThreadRowView({ session, selected, cursor, projectName }: ThreadRowProp
               <Ago at={session.lastEventAt} />
             </span>
           </span>
-          {(projectName || session.branch || session.pr) && (
+          {(session.branch || session.pr) && (
             <span className="flex w-full items-center gap-2 pl-4">
-              {projectName && (
-                <span className="max-w-[50%] flex-none truncate text-label text-dim">
-                  {projectName}
-                </span>
-              )}
               <span className="mono min-w-0 flex-1 truncate text-label text-dim">
                 {session.branch}
               </span>

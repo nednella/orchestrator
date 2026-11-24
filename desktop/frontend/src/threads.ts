@@ -1,10 +1,10 @@
 import type { Project, Session, State } from './types'
 
-const LIVE_ORDER: State[] = ['waiting', 'working', 'idle']
+export type ThreadSections = { waiting: Session[]; working: Session[]; idle: Session[]; settled: Session[] }
 
-export function splitThreads(sessions: Session[]): { live: Session[]; settled: Session[] } {
-  const live = LIVE_ORDER.flatMap((state) => sessions.filter((s) => s.state === state))
-  return { live, settled: sessions.filter((s) => s.state === 'ended') }
+export function splitThreads(sessions: Session[]): ThreadSections {
+  const of = (state: State) => sessions.filter((s) => s.state === state)
+  return { waiting: of('waiting'), working: of('working'), idle: of('idle'), settled: of('ended').sort((a, b) => b.lastEventAt - a.lastEventAt) }
 }
 
 export function matchesThread(session: Session, query: string): boolean {
@@ -14,10 +14,20 @@ export function matchesThread(session: Session, query: string): boolean {
   return session.title.toLowerCase().includes(q) || session.branch.toLowerCase().includes(q) || (number !== '' && session.issue > 0 && String(session.issue).includes(number))
 }
 
-export function sidebarThreads(projects: Project[], sessions: Session[]): { groups: { project: Project; sessions: Session[] }[]; settled: Session[] } {
-  const { settled } = splitThreads(sessions)
-  return {
-    groups: projects.map((project) => ({ project, sessions: splitThreads(sessions.filter((s) => s.project === project.key)).live })).filter((g) => g.sessions.length > 0),
-    settled: settled.sort((a, b) => b.lastEventAt - a.lastEventAt),
-  }
+export function sidebarThreads(sessions: Session[], projectKey: string | undefined): Session[] {
+  const { waiting, working, idle, settled } = splitThreads(sessions.filter((s) => s.project === projectKey))
+  return [...waiting, ...working, ...idle, ...settled]
+}
+
+export function waitingByProject(sessions: Session[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const s of sessions) if (s.state === 'waiting') counts.set(s.project, (counts.get(s.project) ?? 0) + 1)
+  return counts
+}
+
+export function liveThreads(projects: Project[], sessions: Session[]): Session[] {
+  return projects.flatMap((p) => {
+    const { waiting, working, idle } = splitThreads(sessions.filter((s) => s.project === p.key))
+    return [...waiting, ...working, ...idle]
+  })
 }
