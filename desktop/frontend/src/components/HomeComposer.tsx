@@ -187,7 +187,7 @@ export function HomeComposer() {
           )
         }
         onChange={edit}
-        onCaret={(before, after) => setCaret({ before, after })}
+        onCaret={(before, after) => setCaret((caret) => (caret.before === before && caret.after === after ? caret : { before, after }))}
         onKeyDown={onKeyDown}
         onAttach={note ? pending.attach : undefined}
         onSend={send}
