@@ -13,7 +13,7 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 export function TopBar() {
   const { selectedId, setOverlay, report, update, updating, applyUpdate } = useAgentos('selectedId', 'setOverlay', 'report', 'update', 'updating', 'applyUpdate')
   const layout = useLayout()
-  const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, widths, statsOpen, newsOpen } = layout
+  const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, newsOpen } = layout
   const latestAgentos = useLatestAgentos()
   const fullscreen = useFullscreen()
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
@@ -25,16 +25,11 @@ export function TopBar() {
   const rightShown = narrow ? mobilePanel === 'details' : rightOpen
   const showsThread = selectedId !== null && !statsOpen && !newsOpen && !(narrow && (mobilePanel === 'queue' || mobilePanel === 'notes'))
   const inset = fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)'
-  const toggleZone = `calc(${inset} + 40px)`
-  const left = sidebarOpen && !narrow ? `max(${toggleZone}, calc(${RAIL_REM + widths.sidebar}rem + 2px))` : toggleZone
+  // With the thread list hidden the bar starts at the rail, under the window buttons and the list toggle.
+  const left = sidebarOpen ? '0px' : `max(0px, calc(${inset} + 40px - ${RAIL_REM}rem - 0.75rem))`
 
   return (
-    <header className="relative flex flex-none items-center border-b border-line" style={{ ...drag, height: 'var(--topbar-h)', paddingRight: 'var(--corner-pad)' }}>
-      <div className="flex flex-none items-center" style={{ width: left, paddingLeft: inset }}>
-        <span style={noDrag}>
-          <TitleBarButton label={named(sidebarOpen ? 'Hide thread list' : 'Show thread list', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
-        </span>
-      </div>
+    <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: 'var(--corner-pad)' }}>
       <div className="flex min-w-0 flex-1 items-center px-3">
         <TitleBreadcrumb showsThread={showsThread} />
       </div>

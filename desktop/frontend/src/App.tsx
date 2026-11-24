@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import { DigestView } from './components/DigestView'
 import { NewsIndex } from './components/NewsIndex'
 import { NewsView } from './components/NewsView'
@@ -15,6 +16,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ShellPanel } from './components/ShellPanel'
 import { ShellStrip } from './components/ShellStrip'
+import { SidebarToggle } from './components/SidebarToggle'
 import { ThreadSidebar } from './components/ThreadSidebar'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
@@ -28,6 +30,8 @@ import { useNetwork } from './useNetwork'
 import { useNewsToasts } from './useNewsToasts'
 import { useShortcuts } from './useShortcuts'
 import { useUiCommands } from './useUiCommands'
+
+const drag = { '--wails-draggable': 'drag' } as CSSProperties
 
 const appEnterClass: Record<SplashStage, string> = {
   playing: 'app-enter',
@@ -57,33 +61,43 @@ export function App() {
         data-mode={mode}
         {...(network.online ? {} : { inert: '' })}
       >
-        <TopBar />
-        <main className="relative flex min-h-0 min-w-0 flex-1">
-          <ProjectRail />
-          {sidebarOpen && <ThreadSidebar />}
-          {!narrow && sidebarOpen && <Divider panel="sidebar" />}
-          <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>
-            <div className="min-h-0 flex-1">
-              <div className={statsOpen || newsOpen ? 'hidden' : 'h-full'}>
-                {selectedId && (
-                  <div className={home ? 'hidden' : 'h-full'}>
-                    <Viewport />
-                  </div>
-                )}
-                {home && <Home />}
-              </div>
-              {statsOpen && <Stats />}
-              {newsOpen && newsPage === 'index' && <NewsIndex />}
-              {newsOpen && newsPage === 'tldr' && <NewsView />}
-              {newsOpen && newsPage === 'digest' && <DigestView />}
+        <div className="relative flex min-h-0 flex-1">
+          <div className={`flex min-h-0 flex-col ${narrow && sidebarOpen ? 'min-w-0 flex-1' : 'flex-none'}`}>
+            <div className="flex-none" style={{ ...drag, height: 'var(--topbar-h)' }} />
+            <div className="flex min-h-0 flex-1">
+              <ProjectRail />
+              {sidebarOpen && <ThreadSidebar />}
             </div>
-            {!narrow && <ShellStrip />}
           </div>
-          {rightOpen && <Divider panel="right" />}
-          {rightOpen && <RightPanel />}
-          {narrow && mobilePanel === 'details' && <RightPanel />}
-          {narrow && mobilePanel === 'shell' && <ShellPanel />}
-        </main>
+          {!narrow && sidebarOpen && <Divider panel="sidebar" />}
+          <div className={`flex min-w-0 flex-1 flex-col ${narrow && sidebarOpen ? 'hidden' : ''}`}>
+            <TopBar />
+            <main className="relative flex min-h-0 min-w-0 flex-1">
+              <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>
+                <div className="min-h-0 flex-1">
+                  <div className={statsOpen || newsOpen ? 'hidden' : 'h-full'}>
+                    {selectedId && (
+                      <div className={home ? 'hidden' : 'h-full'}>
+                        <Viewport />
+                      </div>
+                    )}
+                    {home && <Home />}
+                  </div>
+                  {statsOpen && <Stats />}
+                  {newsOpen && newsPage === 'index' && <NewsIndex />}
+                  {newsOpen && newsPage === 'tldr' && <NewsView />}
+                  {newsOpen && newsPage === 'digest' && <DigestView />}
+                </div>
+                {!narrow && <ShellStrip />}
+              </div>
+              {rightOpen && <Divider panel="right" />}
+              {rightOpen && <RightPanel />}
+              {narrow && mobilePanel === 'details' && <RightPanel />}
+              {narrow && mobilePanel === 'shell' && <ShellPanel />}
+            </main>
+          </div>
+          <SidebarToggle />
+        </div>
         {narrow && <MobileTabs />}
         <Palette />
         <IssueDialog />
