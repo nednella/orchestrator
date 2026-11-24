@@ -2,17 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
 import { readStored, writeStored } from '../storage'
+import { CleanupsList } from './CleanupsList'
 import { Icon } from './Icon'
 import { LedgerView } from './LedgerView'
+import { MemoryTotal } from './MemoryTotal'
 import { SegmentedControl } from './SegmentedControl'
 import { StatsInterruptions } from './StatsInterruptions'
 
-type Tab = 'interruptions' | 'work'
+type Tab = 'interruptions' | 'work' | 'cleanups'
 
 const TABS = [
   { value: 'work' as const, label: 'Stats' },
   { value: 'interruptions' as const, label: 'Interruptions' },
+  { value: 'cleanups' as const, label: 'Cleaned up' },
 ]
+const NAMES: Record<Tab, { label: string; heading: string }> = {
+  work: { label: 'Stats', heading: 'Stats' },
+  interruptions: { label: 'Interruption stats', heading: 'What interrupts you' },
+  cleanups: { label: 'Cleaned up tasks', heading: 'Cleaned up tasks' },
+}
 const lastDays = (days: number) => ({ value: days, label: `Last ${days} days` })
 const RANGES = [7, 14, 30].map(lastDays)
 const WORK_RANGES = [{ value: 1, label: 'Today' }, ...[7, 30, 90, 180, 365].map(lastDays), { value: 0, label: 'Lifetime' }]
@@ -61,41 +69,51 @@ export function Stats() {
       ref={panel}
       data-panel="terminal"
       tabIndex={-1}
-      aria-label={work ? 'Stats' : 'Interruption stats'}
+      aria-label={NAMES[tab].label}
       className="panel @container flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       onKeyDown={(e) => e.key === 'Escape' && closeCentre()}
     >
       <header className="panel-head grid flex-none grid-cols-[minmax(0,1fr)_auto] items-center justify-items-start min-h-10 gap-x-3 gap-y-2 border-b border-line px-4 py-1 @xl:flex">
-        <h2 className="sr-only">{work ? 'Stats' : 'What interrupts you'}</h2>
+        <h2 className="sr-only">{NAMES[tab].heading}</h2>
         <SegmentedControl label="View" options={TABS} value={tab} onChange={pickTab} />
         <button className="btn btn-ghost h-7 w-7 justify-center justify-self-end px-0 @xl:order-last" title="Back to the terminal (Esc)" aria-label="Back to the terminal" onClick={closeCentre}>
           <Icon name="close" />
         </button>
         <div className="col-span-2 flex flex-wrap justify-self-stretch items-center justify-between gap-x-3 gap-y-2 @xl:contents">
-          <select aria-label="Project" className="btn btn-ghost h-7 px-2 [field-sizing:content]" value={project} onChange={(e) => pickProject(e.target.value)}>
-            <option value="">All projects</option>
-            {projects.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <select aria-label="Range" className="btn btn-ghost h-7 px-2 [field-sizing:content] @xl:ml-auto" value={work ? workDays : days} onChange={(e) => pickRange(Number(e.target.value))}>
-            {(work ? WORK_RANGES : RANGES).map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+          {tab !== 'cleanups' && (
+            <>
+              <select aria-label="Project" className="btn btn-ghost h-7 px-2 [field-sizing:content]" value={project} onChange={(e) => pickProject(e.target.value)}>
+                <option value="">All projects</option>
+                {projects.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <select aria-label="Range" className="btn btn-ghost h-7 px-2 [field-sizing:content] @xl:ml-auto" value={work ? workDays : days} onChange={(e) => pickRange(Number(e.target.value))}>
+                {(work ? WORK_RANGES : RANGES).map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          <span className={tab === 'cleanups' ? 'ml-auto' : ''}>
+            <MemoryTotal />
+          </span>
         </div>
       </header>
-      {/* Both tabs stay mounted so a switch keeps their data. Hiding with visibility, not display, keeps each tab's scroll position. */}
+      {/* The tabs stay mounted so a switch keeps their data. Hiding with visibility, not display, keeps each tab's scroll position. */}
       <div className="grid min-h-0 flex-1 grid-rows-1">
         <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${work ? '' : 'invisible'}`}>
           <LedgerView days={workDays} project={project} />
         </div>
-        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${work ? 'invisible' : ''}`}>
+        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${tab === 'interruptions' ? '' : 'invisible'}`}>
           <StatsInterruptions days={days} project={project} />
+        </div>
+        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${tab === 'cleanups' ? '' : 'invisible'}`}>
+          <CleanupsList />
         </div>
       </div>
     </section>

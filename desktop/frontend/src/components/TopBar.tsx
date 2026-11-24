@@ -11,9 +11,9 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 export function TopBar() {
-  const { selectedId, setOverlay, report, update, updating, applyUpdate } = useAgentos('selectedId', 'setOverlay', 'report', 'update', 'updating', 'applyUpdate')
+  const { selectedId, setOverlay, report, update, updating, applyUpdate, digestUnseenCount, newsUnseen } = useAgentos('selectedId', 'setOverlay', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount', 'newsUnseen')
   const layout = useLayout()
-  const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, newsOpen } = layout
+  const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, newsOpen, newsPage } = layout
   const latestAgentos = useLatestAgentos()
   const fullscreen = useFullscreen()
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
@@ -53,6 +53,9 @@ export function TopBar() {
             )}
           </button>
         )}
+        <TitleBarButton label={named('Stats', 'stats')} icon="chart" pressed={statsOpen} onClick={() => find('stats').run([])} />
+        <TitleBarButton label={named('News', 'news')} icon="news" pressed={newsOpen && newsPage !== 'digest'} unseen={newsUnseen} onClick={() => find('news').run([])} />
+        <TitleBarButton label={named('Digest', 'digest')} icon="digest" pressed={newsOpen && newsPage === 'digest'} unseen={digestUnseenCount} onClick={() => find('digest').run([])} />
         <TitleBarButton label={named('Command palette', 'palette')} icon="search" onClick={() => setOverlay('palette')} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton

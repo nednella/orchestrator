@@ -10,7 +10,6 @@ import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
 import { SETTLED_KEY, SettledSection } from './SettledSection'
-import { SidebarFooter } from './SidebarFooter'
 import { ThreadSection } from './ThreadSection'
 
 const SETTLED_OPEN_KEY = 'agentos.sidebar.settled-open'
@@ -154,7 +153,6 @@ export function ThreadSidebar() {
         />
         {live.length === 0 && settled.length === 0 && <p className="px-4 py-4 text-small text-dim">{searching ? 'No thread matches.' : 'No threads'}</p>}
       </div>
-      <SidebarFooter />
     </aside>
   )
 }

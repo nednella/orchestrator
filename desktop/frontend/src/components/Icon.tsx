@@ -46,6 +46,7 @@ export type IconName =
   | 'x'
   | 'image'
   | 'news'
+  | 'digest'
   | 'settings'
   | 'back'
   | 'forward'
@@ -150,6 +151,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'queue') return <path d="M2.5 4h11M2.5 8h11M2.5 12h7" />
   if (name === 'x') return <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
   if (name === 'image') return <path d="M2.5 3h11v10h-11ZM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.2v.01" />
+  if (name === 'digest') return <path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11ZM2.5 5 8 7.5 13.5 5M8 7.5v6" />
   if (name === 'news') return <path d="M2.5 3h11v10h-11ZM5 6h6M5 8.5h6M5 11h3.5" />
   if (name === 'back') return <path d="M9.5 3.5 5 8l4.5 4.5M5 8h8" />
   if (name === 'forward') return <path d="M6.5 3.5 11 8l-4.5 4.5M11 8H3" />
