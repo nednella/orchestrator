@@ -57,6 +57,9 @@ func Parse(data []byte) ([]Event, error) {
 }
 
 func parseStreamEvent(l line) ([]Event, error) {
+	if len(l.Event) == 0 {
+		return nil, nil
+	}
 	var ev struct {
 		Type  string `json:"type"`
 		Delta struct {
@@ -73,15 +76,26 @@ func parseStreamEvent(l line) ([]Event, error) {
 	return []Event{{Kind: KindDelta, ID: l.APIMessageID, Text: ev.Delta.Text}}, nil
 }
 
+func isArray(raw json.RawMessage) bool {
+	return len(raw) > 0 && raw[0] == '['
+}
+
+// blocks reads a message's content blocks; content that is a plain string has none.
 func blocks(raw json.RawMessage) (id string, content []block, err error) {
 	var m struct {
-		ID      string  `json:"id"`
-		Content []block `json:"content"`
+		ID      string          `json:"id"`
+		Content json.RawMessage `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return "", nil, fmt.Errorf("parse message: %w", err)
 	}
-	return m.ID, m.Content, nil
+	if !isArray(m.Content) {
+		return m.ID, nil, nil
+	}
+	if err := json.Unmarshal(m.Content, &content); err != nil {
+		return "", nil, fmt.Errorf("parse message content: %w", err)
+	}
+	return m.ID, content, nil
 }
 
 func parseAssistant(l line) ([]Event, error) {
@@ -135,6 +149,9 @@ func resultText(raw json.RawMessage) string {
 }
 
 func parseControlRequest(l line) ([]Event, error) {
+	if len(l.Request) == 0 {
+		return nil, nil
+	}
 	var req struct {
 		Subtype  string          `json:"subtype"`
 		ToolName string          `json:"tool_name"`

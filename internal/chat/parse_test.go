@@ -132,3 +132,34 @@ func TestPersistedSkipsOnlyDeltas(t *testing.T) {
 		t.Error("only a delta is not persisted")
 	}
 }
+
+func TestParseAcceptsStringUserContent(t *testing.T) {
+	for _, in := range []string{
+		`{"type":"user","message":{"role":"user","content":"hi"}}`,
+		`{"type":"control_request","request_id":"r"}`,
+		`{"type":"stream_event"}`,
+	} {
+		events, err := Parse([]byte(in))
+		if err != nil || len(events) != 0 {
+			t.Errorf("%s: got %v, %v", in, events, err)
+		}
+	}
+}
+
+func TestParseToolResultWithTextBlocks(t *testing.T) {
+	events, err := Parse([]byte(`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"a"},{"type":"text","text":"b"}]}]}}`))
+	if err != nil || len(events) != 1 || events[0].Parent != "t1" || events[0].Text != "a\nb" {
+		t.Errorf("got %+v, %v", events, err)
+	}
+}
+
+func TestParseAssistantKeepsBlockOrder(t *testing.T) {
+	events, err := Parse([]byte(`{"type":"assistant","uuid":"u","message":{"id":"m","content":[{"type":"text","text":"one"},{"type":"tool_use","id":"t","name":"Bash","input":{}},{"type":"text","text":"two"}]}}`))
+	if err != nil || len(events) != 3 {
+		t.Fatalf("got %+v, %v", events, err)
+	}
+	kinds := []Kind{events[0].Kind, events[1].Kind, events[2].Kind}
+	if kinds[0] != KindMessage || kinds[1] != KindToolUse || kinds[2] != KindMessage || events[0].Text != "one" || events[2].Text != "two" {
+		t.Errorf("got %+v", events)
+	}
+}
