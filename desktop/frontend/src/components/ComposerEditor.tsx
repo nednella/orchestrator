@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { UseEditorOptions } from '@tiptap/react'
 import { Node as DocNode, Slice } from '@tiptap/pm/model'
-import { composerSchema, fromMarkdown, toMarkdown } from '../composerMarkdown'
+import { composerSchema, fromMarkdown, fromPlainText, toMarkdown } from '../composerMarkdown'
 import { ComposerTyping } from '../composerTyping'
 import { MarkEdges } from '../markEdges'
 
@@ -40,6 +40,8 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
   const [options] = useState<UseEditorOptions>(() => ({
     extensions: [composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() }), MarkEdges],
     content: fromMarkdown(value),
+    // Pasted text stays as it is: no `**bold**` turned bold.
+    enablePasteRules: false,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
@@ -53,12 +55,8 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
       handlePaste: (_view, e) => Boolean(e.clipboardData && handlers.current.onAttach?.(e.clipboardData)),
       // The composer's box takes dropped images; the editor must not insert the file's name.
       handleDrop: (_view, e) => Boolean(handlers.current.onAttach && e.dataTransfer?.types.includes('Files')),
-      clipboardTextParser: (text, _context, _plain, view) => {
-        const { content } = DocNode.fromJSON(view.state.schema, fromMarkdown(text))
-        // Pasted text joins the line it lands in; a pasted heading, list or block keeps its own.
-        const open = (node: DocNode | null) => (node?.type.name === 'paragraph' ? 1 : 0)
-        return new Slice(content, open(content.firstChild), open(content.lastChild))
-      },
+      // Pasted text is taken as it is and joins the line it lands in. Pasted HTML goes through the schema.
+      clipboardTextParser: (text, _context, _plain, view) => new Slice(DocNode.fromJSON(view.state.schema, fromPlainText(text)).content, 1, 1),
     },
     onTransaction: ({ editor, transaction }) => {
       if (transaction.docChanged && !transaction.getMeta('preventUpdate')) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fromMarkdown, toMarkdown } from './composerMarkdown.ts'
+import { fromMarkdown, fromPlainText, toMarkdown } from './composerMarkdown.ts'
 
 const roundTrip = (text: string) => toMarkdown(fromMarkdown(text))
 
@@ -136,4 +136,28 @@ test('markdown the composer cannot show loads as its source text', () => {
   assert.deepEqual(fromMarkdown('see ![img](x.png) here'), doc(p(text('see ![img](x.png) here'))))
   assert.deepEqual(fromMarkdown('- [ ] task\n- [x] done'), doc(p(text('- [ ] task'), { type: 'hardBreak' }, text('- [x] done'))))
   assert.deepEqual(fromMarkdown('| a |\n| - |'), doc(p(text('| a |'), { type: 'hardBreak' }, text('| - |'))))
+})
+
+const traceback = [
+  'Traceback (most recent call last):',
+  '  File "/app/pkg/__init__.py", line 3, in <module>',
+  '    main()',
+  '    # - not a list',
+  'ValueError: bad *value*',
+].join('\n')
+
+test('pasted text loads as it is, not as markdown', () => {
+  assert.deepEqual(fromPlainText('__init__.py\n    indented\n\n# not a heading'), doc(p(text('__init__.py'), { type: 'hardBreak' }, text('    indented')), p(text('# not a heading'))))
+})
+
+test('send value of pasted text reads back as the pasted text', () => {
+  const sent = toMarkdown(fromPlainText(traceback))
+  assert.equal(sent, traceback.replace('__init__', '\\_\\_init\\_\\_').replace('*value*', '\\*value\\*'))
+  assert.deepEqual(fromMarkdown(sent), fromPlainText(traceback))
+})
+
+test('send value drops the spaces that start a paragraph or end a line', () => {
+  const sent = toMarkdown(fromPlainText('def f():  \n    return 1\n\n    x = 2'))
+  assert.equal(sent, 'def f():\n    return 1\n\nx = 2')
+  assert.equal(toMarkdown(fromMarkdown(sent)), sent)
 })

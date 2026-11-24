@@ -107,6 +107,19 @@ const isEmptyParagraph = (node?: JSONContent) => node?.type === 'paragraph' && !
 const isEmptyList = (node: JSONContent): boolean =>
   (node.type === 'bulletList' || node.type === 'orderedList' || node.type === 'listItem') && (node.content ?? []).every((child) => isEmptyParagraph(child) || isEmptyList(child))
 
+// Markdown drops the spaces that start or end a paragraph and those that end a line, so they are not written.
+function trimParagraph(content: JSONContent[]) {
+  return content
+    .map((node, i) => {
+      if (node.type !== 'text') return node
+      let text = node.text?.replace(/[ \t]+\n/g, '\n') ?? ''
+      if (i === 0) text = text.replace(/^[ \t]+/, '')
+      if (i === content.length - 1) text = text.replace(/[ \t]+$/, '')
+      return { ...node, text }
+    })
+    .filter((node) => node.type !== 'text' || node.text)
+}
+
 // Hard breaks become newlines in the text, so a new line reaches the agent as one newline, as typed. Blank
 // paragraphs in a row become one and blank list items go, since the library writes them as `&nbsp;`.
 function prepare(node: JSONContent): JSONContent {
@@ -119,7 +132,7 @@ function prepare(node: JSONContent): JSONContent {
     if (next.type === 'text' && last?.type === 'text' && sameMarks(last, next)) content[content.length - 1] = { ...last, text: `${last.text}${next.text}` }
     else if (!(isEmptyParagraph(next) && isEmptyParagraph(last))) content.push(next)
   }
-  return { ...node, content }
+  return { ...node, content: node.type === 'paragraph' ? trimParagraph(content) : content }
 }
 
 function serialize(doc: JSONContent, level: Escaping) {
@@ -159,7 +172,7 @@ const unsupported = (token: Token): boolean =>
   token.type === 'table' || token.type === 'image' || Boolean(token.task) || [...(token.tokens ?? []), ...(token.items ?? [])].some(unsupported)
 
 const literal = (text: string): JSONContent => (text ? { type: 'paragraph', content: [{ type: 'text', text }] } : { type: 'paragraph' })
-const paragraphs = (text: string) => text.replace(/^\n+|\n+$/g, '').split(/\n[ \t]*\n\s*/).map(literal)
+const paragraphs = (text: string) => text.replace(/^\n+|\n+$/g, '').split(/\n(?:[ \t]*\n)+/).map(literal)
 
 // Markdown the composer cannot show loads as its source text, so no draft loses text.
 function parseBlocks(text: string): JSONContent[] {
@@ -196,4 +209,9 @@ export function fromMarkdown(text: string): JSONContent {
   if (content.length === 0) return { type: 'doc', content: [{ type: 'paragraph' }] }
   const doc = splitLines({ type: 'doc', content })[0]
   return isValid(doc) ? doc : splitLines({ type: 'doc', content: paragraphs(text) })[0]
+}
+
+// Pasted text goes in as it is, not read as markdown: each line stays a line and a blank line starts a paragraph.
+export function fromPlainText(text: string): JSONContent {
+  return splitLines({ type: 'doc', content: paragraphs(text.replace(/\r\n?/g, '\n')) })[0]
 }
