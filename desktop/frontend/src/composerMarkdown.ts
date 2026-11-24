@@ -1,5 +1,6 @@
 import { MarkdownManager } from '@tiptap/markdown'
 import { StarterKit } from '@tiptap/starter-kit'
+import { getSchema } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/react'
 
 export const composerSchema = StarterKit.configure({
@@ -116,7 +117,7 @@ function serialize(doc: JSONContent, typed: boolean) {
 export function toMarkdown(doc: JSONContent): string {
   const typed = serialize(doc, true)
   const escaped = serialize(doc, false)
-  return serialize(markdown.parse(typed), false) === escaped ? typed : escaped
+  return serialize(fromMarkdown(typed), false) === escaped ? typed : escaped
 }
 
 function splitLines(node: JSONContent): JSONContent[] {
@@ -128,7 +129,50 @@ function splitLines(node: JSONContent): JSONContent[] {
   return [{ ...node, content: node.content.flatMap(splitLines) }]
 }
 
+const schema = getSchema([composerSchema])
+
+type Token = { type: string; raw: string; task?: boolean; tokens?: Token[]; items?: Token[] }
+
+// Tables, images and task lists have no node in the composer; they would load empty or half.
+const unsupported = (token: Token): boolean =>
+  token.type === 'table' || token.type === 'image' || Boolean(token.task) || [...(token.tokens ?? []), ...(token.items ?? [])].some(unsupported)
+
+const literal = (text: string): JSONContent => (text ? { type: 'paragraph', content: [{ type: 'text', text }] } : { type: 'paragraph' })
+const paragraphs = (text: string) => text.replace(/^\n+|\n+$/g, '').split(/\n[ \t]*\n\s*/).map(literal)
+
+// Markdown the composer cannot show loads as its source text, so no draft loses text.
+function parseBlocks(text: string): JSONContent[] {
+  const blocks: JSONContent[] = []
+  let run = ''
+  const flush = () => {
+    const source = run.replace(/^\n+|\n+$/g, '')
+    if (source) blocks.push(...(markdown.parse(source).content ?? []))
+    run = ''
+  }
+  for (const token of markdown.instance.lexer(text) as Token[]) {
+    if (!unsupported(token)) {
+      run += token.raw
+      continue
+    }
+    flush()
+    blocks.push(...paragraphs(token.raw))
+  }
+  flush()
+  return blocks
+}
+
+function isValid(doc: JSONContent) {
+  try {
+    schema.nodeFromJSON(doc).check()
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function fromMarkdown(text: string): JSONContent {
-  const doc = splitLines(markdown.parse(text))[0]
-  return doc.content?.length ? doc : { type: 'doc', content: [{ type: 'paragraph' }] }
+  const content = parseBlocks(text)
+  if (content.length === 0) return { type: 'doc', content: [{ type: 'paragraph' }] }
+  const doc = splitLines({ type: 'doc', content })[0]
+  return isValid(doc) ? doc : splitLines({ type: 'doc', content: paragraphs(text) })[0]
 }

@@ -22,6 +22,9 @@ const samples = {
   paragraphs: 'one\n\ntwo',
   html: 'a Vec<String> and a < b and AT&T',
   issue: 'fix #123 then #45',
+  table: '| a | b |\n| - | - |\n| 1 | 2 |',
+  tableBetweenParagraphs: 'before\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nafter',
+  tasks: '- [ ] task\n- [x] done',
 }
 
 for (const [name, text] of Object.entries(samples)) {
@@ -92,4 +95,10 @@ test('a soft line break reads as a hard break', () => {
 
 test('empty markdown reads as one empty paragraph', () => {
   assert.deepEqual(fromMarkdown(''), doc({ type: 'paragraph' }))
+})
+
+test('markdown the composer cannot show loads as its source text', () => {
+  assert.deepEqual(fromMarkdown('see ![img](x.png) here'), doc(p(text('see ![img](x.png) here'))))
+  assert.deepEqual(fromMarkdown('- [ ] task\n- [x] done'), doc(p(text('- [ ] task'), { type: 'hardBreak' }, text('- [x] done'))))
+  assert.deepEqual(fromMarkdown('| a |\n| - |'), doc(p(text('| a |'), { type: 'hardBreak' }, text('| - |'))))
 })
