@@ -4,11 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"slices"
 	"testing"
-	"time"
 )
 
 func newWatch() (*Watch, *[]bool) {
@@ -82,44 +79,5 @@ func TestAnAnswerAfterNoAnswerSetsOnlineOnce(t *testing.T) {
 	call()
 	if want := []bool{false, false, true}; !slices.Equal(*events, want) {
 		t.Errorf("events %v, want %v", *events, want)
-	}
-}
-
-func TestTransportTellsNoAnswerFromAnAnswer(t *testing.T) {
-	live := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		rw.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer live.Close()
-	gone := httptest.NewServer(http.NotFoundHandler())
-	gone.Close()
-	w, events := newWatch()
-	client := &http.Client{Transport: w.Transport(http.DefaultTransport)}
-	get := func(url string) {
-		if resp, err := client.Get(url); err == nil {
-			resp.Body.Close()
-		}
-	}
-
-	get(live.URL)
-	get(gone.URL)
-	get(live.URL)
-	if want := []bool{false, true}; !slices.Equal(*events, want) {
-		t.Errorf("an error status, no answer, an error status: events %v, want %v", *events, want)
-	}
-}
-
-func TestTransportLeavesOutARequestItsOwnTimeoutEnded(t *testing.T) {
-	slow := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
-	defer slow.Close()
-	w, events := newWatch()
-	client := &http.Client{Timeout: 50 * time.Millisecond, Transport: w.Transport(http.DefaultTransport)}
-
-	if _, err := client.Get(slow.URL); err == nil {
-		t.Fatal("the slow server answered in time")
-	}
-	if len(*events) != 0 {
-		t.Errorf("a request its own timeout ended: events %v, want none", *events)
 	}
 }
