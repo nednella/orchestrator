@@ -12,6 +12,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ShellPanel } from './components/ShellPanel'
 import { ShellStrip } from './components/ShellStrip'
+import { SidebarToggle } from './components/SidebarToggle'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
 import { Toasts } from './components/Toasts'
@@ -31,6 +32,9 @@ const appEnterClass: Record<SplashStage, string> = {
   leaving: 'app-enter shown',
   done: '',
 }
+
+// Where the sidebar toggle sits, and where the title bar's own content starts after it.
+const titleInsets = (toggleLeft: string) => ({ '--sidebar-toggle-left': toggleLeft, '--title-start': `calc(${toggleLeft} + 40px)` }) as CSSProperties
 
 export function App() {
   const network = useNetwork()
@@ -52,7 +56,7 @@ export function App() {
     <>
       <div
         className={`flex h-full flex-col bg-app ${appEnterClass[splash]}`}
-        style={{ '--title-inset': fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)' } as CSSProperties}
+        style={titleInsets(fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)')}
         data-mode={mode}
         {...(network.online ? {} : { inert: '' })}
       >
@@ -83,6 +87,7 @@ export function App() {
               {narrow && mobilePanel === 'shell' && <ShellPanel />}
             </main>
           </div>
+          <SidebarToggle />
         </div>
         {narrow && <MobileTabs />}
         <ShortcutsSheet />

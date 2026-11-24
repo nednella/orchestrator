@@ -22,8 +22,8 @@ export function TopBar() {
   const narrow = mode === 'narrow'
   const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
-  // With the sidebar hidden the bar starts under the window buttons.
-  const left = sidebarOpen ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
+  // With the sidebar hidden the bar starts after the window buttons and the sidebar toggle.
+  const left = sidebarOpen ? '0px' : 'calc(var(--title-start) - 0.75rem)'
 
   return (
     <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: 'var(--corner-pad)' }}>
@@ -52,7 +52,6 @@ export function TopBar() {
             )}
           </button>
         )}
-        <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton
           label={named(rightShown ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
