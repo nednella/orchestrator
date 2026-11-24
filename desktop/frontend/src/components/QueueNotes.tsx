@@ -36,7 +36,7 @@ function TabButton({ tab, label, count }: TabButtonProps) {
 const TABS: SidebarTab[] = ['queue', 'notes']
 
 export function QueueNotes() {
-  const { sidebarTab, issues, notes } = useAgentos('sidebarTab', 'issues', 'notes')
+  const { project, sidebarTab, issues, notes } = useAgentos('project', 'sidebarTab', 'issues', 'notes')
   const { mode, returnToTerminal, showSidebarTab } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const nav: NavRef = useRef(null)
@@ -75,6 +75,9 @@ export function QueueNotes() {
             <TabButton tab="notes" label="Notes" count={notes.filter((n) => !n.archived).length} />
           </>
         )}
+        <span className="mr-4 ml-auto min-w-0 truncate text-small font-medium text-soft" title="Project on screen">
+          {project?.name}
+        </span>
       </div>
       {sidebarTab === 'queue' ? <Queue nav={nav} /> : <Notes nav={nav} />}
     </aside>

@@ -26,13 +26,14 @@ function resumePrompt(sessions: Session[]): Action['palette'] {
   return { prompt: 'Session number or title', initial: ended.length === 1 ? String(ended[0].n) : '' }
 }
 
-export const sessionActions = ({ a, current }: ActionContext): Action[] => [
+export const sessionActions = ({ a, layout, current }: ActionContext): Action[] => [
   {
     id: 'new-session',
     label: 'New task',
     group: 'Sessions',
     shortcut: { key: 'm' },
     run() {
+      layout.setSidebarOpen(true)
       a.setComposing('session')
     },
   },
@@ -42,6 +43,7 @@ export const sessionActions = ({ a, current }: ActionContext): Action[] => [
     group: 'Sessions',
     shortcut: { key: 'n' },
     run() {
+      layout.setSidebarOpen(true)
       a.setComposing('chat')
     },
   },

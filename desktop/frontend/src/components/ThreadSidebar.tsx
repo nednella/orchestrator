@@ -10,6 +10,7 @@ import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { headerKey, ProjectGroup, settledKey } from './ProjectGroup'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
+import { NewSessionRow } from './NewSessionRow'
 import { SidebarFooter } from './SidebarFooter'
 
 const FOLDED_KEY = 'agentos.sidebar.folded'
@@ -63,54 +64,33 @@ export function ThreadSidebar() {
 
   const groupOf = (index: number) => groups.find((g) => items[index]?.key === headerKey(g.project) || items[index]?.key === settledKey(g.project))
 
+  // Folds or unfolds the header or Settled row at `index`; `to` limits it to one direction.
+  const toggleAt = (index: number, to?: boolean) => {
+    const group = groupOf(index)
+    if (!group || items[index].session) return false
+    const header = items[index].key === headerKey(group.project)
+    if (to !== undefined && (header ? !group.folded : group.settledOpen) === to) return false
+    if (header) toggleFold(group.project.key)
+    else toggleSettled(group.project.key)
+    return true
+  }
+
   const nav = useListNav(
     items.map((i) => i.key),
     {
       onEnter(index) {
-        const item = items[index]
-        if (item.session) {
-          if (item.session.state === 'ended') return
-          select(item.session.id)
-          focus('terminal')
+        const session = items[index].session
+        if (!session) {
+          toggleAt(index)
           return
         }
-        const group = groupOf(index)
-        if (!group) return
-        if (item.key === headerKey(group.project)) toggleFold(group.project.key)
-        else toggleSettled(group.project.key)
+        if (session.state === 'ended') return
+        select(session.id)
+        focus('terminal')
       },
-      onSpace(index) {
-        const item = items[index]
-        const group = groupOf(index)
-        if (!group || item.session) return false
-        if (item.key === headerKey(group.project)) toggleFold(group.project.key)
-        else toggleSettled(group.project.key)
-        return true
-      },
-      onLeft(index) {
-        const group = groupOf(index)
-        if (!group || items[index].session) return false
-        if (items[index].key === headerKey(group.project)) {
-          if (group.folded) return false
-          toggleFold(group.project.key)
-        } else {
-          if (!group.settledOpen) return false
-          toggleSettled(group.project.key)
-        }
-        return true
-      },
-      onRight(index) {
-        const group = groupOf(index)
-        if (!group || items[index].session) return false
-        if (items[index].key === headerKey(group.project)) {
-          if (!group.folded) return false
-          toggleFold(group.project.key)
-        } else {
-          if (group.settledOpen) return false
-          toggleSettled(group.project.key)
-        }
-        return true
-      },
+      onSpace: (index) => toggleAt(index),
+      onLeft: (index) => toggleAt(index, false),
+      onRight: (index) => toggleAt(index, true),
     },
   )
 
@@ -188,6 +168,7 @@ export function ThreadSidebar() {
         ))}
         {searching && groups.length === 0 && <p className="px-4 py-4 text-small text-dim">No thread matches.</p>}
       </div>
+      <NewSessionRow cursor={false} compact={false} />
       <SidebarFooter />
     </aside>
   )

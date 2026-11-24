@@ -18,7 +18,7 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project, sessions, folded, settledOpen, cursorKey, onToggleFold, onToggleSettled }: ProjectGroupProps) {
-  const { selectedId, showHome, report } = useAgentos('selectedId', 'showHome', 'report')
+  const { project: current, selectedId, showHome, report } = useAgentos('project', 'selectedId', 'showHome', 'report')
   const { live, settled } = splitThreads(sessions)
   const needsYou = live.some((s) => s.state === 'waiting')
 
@@ -26,7 +26,7 @@ export function ProjectGroup({ project, sessions, folded, settledOpen, cursorKey
 
   return (
     <section className="flex flex-col pb-1">
-      <div className="row group h-8 items-center pr-1" data-cursor={cursorKey === headerKey(project)}>
+      <div className="row group h-8 items-center pr-1" data-selected={project.key === current?.key} data-cursor={cursorKey === headerKey(project)}>
         <button className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-3 text-left" aria-expanded={!folded} onClick={onToggleFold}>
           <span data-chevron className="flex-none text-dim transition-transform duration-150" style={{ transform: folded ? 'rotate(-90deg)' : 'none' }}>
             <Icon name="chevron" size={12} />
