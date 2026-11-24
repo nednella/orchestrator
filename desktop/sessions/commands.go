@@ -26,13 +26,16 @@ type Commands struct {
 
 func NewCommands(s *Sessions, scene Scene) *Commands { return &Commands{s: s, scene: scene} }
 
+// here is the sessions of the current project, the one the router made current for the command.
+func (c *Commands) here() []Session { return c.s.ListOf(c.s.Current().Key()) }
+
 // find is the session with that number in the current project.
 func (c *Commands) find(arg string) (Session, error) {
 	n, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
 	if err != nil {
 		return Session{}, fmt.Errorf("%q is not a session number", arg)
 	}
-	for _, s := range c.s.List() {
+	for _, s := range c.here() {
 		if s.N == n {
 			return s, nil
 		}
@@ -86,7 +89,7 @@ func (c *Commands) Open(_ context.Context, req ctl.Request) (string, error) {
 		return "", errors.New("usage: agentos open <n|title>")
 	}
 	want := strings.Join(req.Args, " ")
-	list := c.s.List()
+	list := c.here()
 	if n, err := strconv.Atoi(strings.TrimPrefix(want, "#")); err == nil {
 		for _, s := range list {
 			if s.N == n {
@@ -130,7 +133,7 @@ func (c *Commands) Kill(_ context.Context, req ctl.Request) (string, error) {
 
 // PR lists the pull requests of the sessions, or of one session.
 func (c *Commands) PR(_ context.Context, req ctl.Request) (string, error) {
-	list := c.s.List()
+	list := c.here()
 	one := len(req.Args) > 0
 	if one {
 		s, err := c.find(req.Args[0])
@@ -163,7 +166,7 @@ func (c *Commands) PR(_ context.Context, req ctl.Request) (string, error) {
 func (c *Commands) Cleanup(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		var lines []string
-		for _, s := range c.s.List() {
+		for _, s := range c.here() {
 			switch s.Cleanup {
 			case "ask":
 				lines = append(lines, fmt.Sprintf("%d: waiting for you: its pull request is closed or was merged before the session", s.N))

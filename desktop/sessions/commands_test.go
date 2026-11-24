@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/nednella/agentos/desktop/control"
+	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	ctl "github.com/nednella/agentos/internal/control"
 )
@@ -194,4 +195,58 @@ func TestSessionsOfEveryProjectAreListed(t *testing.T) {
 		return false
 	})
 	eventually(t, "attention for the other project's session", func() bool { return h.Rec.CountAttentionFor(id, "waiting") == 1 })
+}
+
+func twoProjectsEachWithSessionOne(t *testing.T) (h *apptest.Harness, other string) {
+	t.Helper()
+	h = newHarness(t)
+	if _, err := h.NewSession("mine", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	other = h.Snapshot().Project.Key
+	if _, err := h.NewSession("there", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+	return h, other
+}
+
+func TestNumberedCommandsActInTheCallersProject(t *testing.T) {
+	h, other := twoProjectsEachWithSessionOne(t)
+
+	if resp := h.Ask(t, ctl.Request{Cmd: "kill", Project: other, Args: []string{"1"}}); !resp.OK || !strings.Contains(resp.Out, "there") {
+		t.Fatalf("kill = %+v", resp)
+	}
+	if resp := h.Ask(t, ctl.Request{Cmd: "pr", Project: other, Args: []string{"1"}}); !resp.OK || strings.Contains(resp.Out, "mine") {
+		t.Errorf("pr = %+v", resp)
+	}
+	if resp := h.Ask(t, ctl.Request{Cmd: "cleanup", Project: other, Args: []string{"1"}}); strings.Contains(resp.Error, "mine") {
+		t.Errorf("cleanup = %+v", resp)
+	}
+	if resp := h.Ask(t, ctl.Request{Cmd: "open", Project: other, Args: []string{"mine"}}); resp.OK {
+		t.Errorf("open found a session of another project: %+v", resp)
+	}
+	for _, s := range h.Sessions().ListOf("main") {
+		if s.State == "ended" {
+			t.Errorf("the session of main was killed: %+v", s)
+		}
+	}
+}
+
+func TestIssueSessionsAreOfTheCurrentProject(t *testing.T) {
+	h, other := twoProjectsEachWithSessionOne(t)
+	if _, err := h.Sessions().Create("a", "", false, 5, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject(other); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := h.Sessions().IssueSessions()[5]; ok {
+		t.Errorf("issue 5 of the other project maps to %v", h.Sessions().IssueSessions())
+	}
 }

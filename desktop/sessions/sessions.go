@@ -1032,6 +1032,11 @@ func (s *Sessions) List() []Session {
 	return s.list()
 }
 
+// ListOf is the sessions of one project, in rail order.
+func (s *Sessions) ListOf(key string) []Session {
+	return slices.DeleteFunc(s.List(), func(v Session) bool { return v.Project != key })
+}
+
 // Title is the title of the live session with the given id, or "" when there is none.
 func (s *Sessions) Title(id string) string {
 	s.mu.Lock()
@@ -1175,7 +1180,7 @@ func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 // IssueSessions maps issue numbers to the live task started for each, in the current project.
 func (s *Sessions) IssueSessions() map[int]string {
 	out := map[int]string{}
-	for _, v := range s.List() {
+	for _, v := range s.ListOf(s.Current().Key()) {
 		if v.Issue > 0 && v.State != session.Ended && !v.Chat {
 			out[v.Issue] = v.ID
 		}
