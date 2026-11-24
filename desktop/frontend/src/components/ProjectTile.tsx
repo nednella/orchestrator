@@ -25,6 +25,12 @@ export function ProjectTile({ project, label, waiting }: ProjectTileProps) {
           e.preventDefault()
           setMenuAt({ x: e.clientX, y: e.clientY })
         }}
+        onKeyDown={(e) => {
+          if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return
+          e.preventDefault()
+          const box = e.currentTarget.getBoundingClientRect()
+          setMenuAt({ x: box.left + 12, y: box.bottom })
+        }}
       >
         {label}
         {needs > 0 && <span className="dot absolute top-1 right-1" data-state="waiting" />}
