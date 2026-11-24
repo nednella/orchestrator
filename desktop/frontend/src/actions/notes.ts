@@ -18,7 +18,6 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     uiCommand: 'notes',
     run() {
       layout.showHome('notes')
-      a.setComposerMode('note')
       a.focus('composer')
     },
   },

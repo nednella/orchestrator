@@ -33,12 +33,12 @@ export function ComposerMenuChip({ label, children, menu }: ComposerMenuChipProp
 
   return (
     <div ref={root} className="relative flex-none">
-      <button className="composer-chip" aria-label={label} aria-haspopup="menu" aria-expanded={open} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)}>
+      <button className="composer-chip" aria-label={label} aria-haspopup="dialog" aria-expanded={open} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)}>
         {children}
         <Icon name="chevron" size={12} />
       </button>
       {open && (
-        <div className="composer-menu fade-in right-0" role="menu" aria-label={label} onMouseDown={(e) => e.preventDefault()}>
+        <div className="composer-menu fade-in right-0" role="dialog" aria-label={label} onMouseDown={(e) => e.preventDefault()}>
           {menu(() => setOpen(false))}
         </div>
       )}

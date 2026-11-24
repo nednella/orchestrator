@@ -22,7 +22,7 @@ function Choices({ title, values, value, onPick }: ChoicesProps) {
     <div role="group" aria-label={title} className="flex flex-col gap-0.5">
       <div className="px-2 pt-1 pb-0.5 text-label text-dim">{title}</div>
       {['', ...values].map((v) => (
-        <button key={v} role="menuitemradio" aria-checked={v === value} className="composer-option" onClick={() => onPick(v)}>
+        <button key={v} aria-pressed={v === value} className="composer-option" onClick={() => onPick(v)}>
           <span className="min-w-0 flex-1 truncate">{named(v)}</span>
           {v === value && <Icon name="check" size={13} />}
         </button>

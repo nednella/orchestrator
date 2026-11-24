@@ -81,7 +81,7 @@ export function Home() {
           )}
         </div>
       </div>
-      <HomeComposer />
+      <HomeComposer key={project?.key} />
     </aside>
   )
 }

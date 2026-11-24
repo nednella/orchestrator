@@ -208,6 +208,8 @@ const NEWS_SEEN_KEY = 'agentos.newsSeen'
 const NEWS_UNREAD_KEY = 'agentos.newsUnread'
 
 const filterKey = (project: string) => `agentos.filter.${project}`
+const draftKey = (project: string) => `agentos.draft.${project}`
+const composerModeKey = (project: string) => `agentos.composerMode.${project}`
 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -255,8 +257,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
-  const [composerDraft, setComposerDraft] = useState('')
-  const [composerMode, setComposerMode] = useState<ComposerMode>('thread')
+  const [composerDraft, setComposerDraftState] = useState('')
+  const [composerMode, setComposerModeState] = useState<ComposerMode>('thread')
   const [composerKind, setComposerKind] = useState<ComposerKind>('session')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
 
@@ -392,6 +394,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setRawIssues([])
       setIssuesDisabled(false)
       setIssueFilterState(readStored(filterKey(snap.project.name), ''))
+      setComposerDraftState(readStored(draftKey(snap.project.name), ''))
+      setComposerModeState(readStored<ComposerMode>(composerModeKey(snap.project.name), 'thread'))
       report(async () => {
         const list = await api.cleanups()
         if (epoch !== projectEpoch.current) return
@@ -867,7 +871,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = urgent.findIndex((s) => s.id === selectedRef.current)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
-      setComposerDraft,
+      setComposerDraft(text) {
+        setComposerDraftState(text)
+        if (projectRef.current) writeStored(draftKey(projectRef.current.name), text)
+      },
       setOverlay,
       async setTheme(theme) {
         setSettings(await api.setTheme(theme))
@@ -896,7 +903,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async setDigestSchedule(schedule) {
         setSettings(await api.setDigestSchedule(schedule))
       },
-      setComposerMode,
+      setComposerMode(mode) {
+        setComposerModeState(mode)
+        if (projectRef.current) writeStored(composerModeKey(projectRef.current.name), mode)
+      },
       setComposerKind,
       setIssueFilter(query) {
         setIssueFilterState(query)

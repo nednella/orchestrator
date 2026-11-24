@@ -45,6 +45,7 @@ export function HomeComposer() {
   const token = note || dismissed ? null : TOKEN.exec(text.slice(0, caret))
   const query = token?.[2].toLowerCase()
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
+  const highlighted = Math.min(cursor, candidates.length - 1)
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   const chat = a.composerKind === 'chat'
   const live = Boolean(pickedIssue?.sessionId)
@@ -67,6 +68,7 @@ export function HomeComposer() {
     a.setComposerDraft((text.slice(0, start) + text.slice(caret)).replace(/ {2,}/g, ' '))
     setCaret(start)
     setPicked(number)
+    setCursor(-1)
     requestAnimationFrame(() => input.current?.setSelectionRange(start, start))
   }
 
@@ -77,6 +79,7 @@ export function HomeComposer() {
     const lead = at > 0 && !/\s/.test(text[at - 1]) ? ' #' : '#'
     a.setComposerDraft(text.slice(0, at) + lead + text.slice(at))
     setCaret(at + lead.length)
+    setCursor(-1)
     setDismissed(false)
     el.focus()
     requestAnimationFrame(() => el.setSelectionRange(at + lead.length, at + lead.length))
@@ -118,12 +121,12 @@ export function HomeComposer() {
     if (token && candidates.length > 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
-        setCursor((c) => (e.key === 'ArrowDown' ? Math.min(c + 1, candidates.length - 1) : Math.max(c - 1, 0)))
+        setCursor(e.key === 'ArrowDown' ? Math.min(highlighted + 1, candidates.length - 1) : Math.max(highlighted - 1, 0))
         return
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault()
-        pick(candidates[Math.max(cursor, 0)].number)
+        pick(candidates[Math.max(highlighted, 0)].number)
         return
       }
     }
@@ -157,7 +160,7 @@ export function HomeComposer() {
         sendLabel={note ? 'Add note' : live ? 'Open its thread' : pickedIssue ? `Start #${pickedIssue.number}` : chat ? 'Start chat' : 'Start task'}
         sendText={note ? 'Add note' : live ? 'Open thread' : undefined}
         banner={live && <p className="px-2 py-1 text-label text-soft">#{pickedIssue?.number} already has a thread; sending opens it.</p>}
-        drawer={token && <IssuePickList issues={candidates} cursor={cursor} onPick={pick} />}
+        drawer={token && <IssuePickList issues={candidates} cursor={highlighted} onPick={pick} />}
         attachments={
           note
             ? images.length > 0 && <NoteImages urls={images.map((i) => i.preview)} onRemove={(url) => setImages((list) => list.filter((i) => i.preview !== url))} />

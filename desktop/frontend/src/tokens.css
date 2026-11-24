@@ -10,7 +10,7 @@
   --bg-overlay: rgba(5, 6, 9, 0.6);
   --bg-overlay-strong: rgba(5, 6, 9, 0.92);
   --bg-code: rgba(255, 255, 255, 0.05);
-  --bg-composer: #111111;
+  --bg-composer: var(--bg-raised);
   --bg-segment: rgba(255, 255, 255, 0.045);
   --bg-segment-on: rgba(255, 255, 255, 0.08);
   --shadow-composer: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -94,7 +94,6 @@
   --bg-hover: #1e232c;
   --bg-term: #0a0c10;
   --bg-code: rgba(0, 0, 0, 0.3);
-  --bg-composer: #191d25;
 
   --border: #252a34;
   --border-strong: #353c4a;
