@@ -35,6 +35,11 @@ test('a stored scale off the ladder snaps to the nearest step', () => {
   assert.equal(snapScale(3), 2.0736)
 })
 
+test('a scale that is not a positive number snaps to 1', () => {
+  for (const scale of [NaN, Infinity, -Infinity, 0, -1]) assert.equal(snapScale(scale), 1, String(scale))
+  assert.equal(zoomedScale(NaN, 1), 1.0954)
+})
+
 test('zooming from a scale off the ladder moves from its nearest step', () => {
   assert.equal(zoomedScale(1.35, 1), 1.44)
   assert.equal(zoomedScale(0.85, -1), 0.7607)
