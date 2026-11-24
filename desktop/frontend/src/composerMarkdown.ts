@@ -12,21 +12,23 @@ export const composerSchema = StarterKit.configure({
 
 const markdown = new MarkdownManager({ extensions: [composerSchema] })
 
-// The library escapes every markdown character in plain text, so `snake_case` would reach the agent as
-// `snake\_case`. While `asTyped` is set, text is written as typed wherever it cannot be read as markup.
+// The library escapes every markdown character in plain text and encodes `<`, `>` and `&`, so `snake_case` would
+// reach the agent as `snake\_case`. Text is written as typed instead, escaped only where it could read as markup.
+// 'least' escapes what reads as inline markup wherever it stands; 'safe' also a line's block marker and `](`;
+// 'all' every markdown character.
+type Escaping = 'least' | 'safe' | 'all'
 type TextEncoder = { encodeTextForMarkdown(text: string, node: JSONContent, parent?: JSONContent): string }
 const encoder = markdown as unknown as TextEncoder
-const escapeAll = encoder.encodeTextForMarkdown.bind(markdown)
-let asTyped = false
+let escaping: Escaping = 'all'
 encoder.encodeTextForMarkdown = (text, node, parent) => {
-  if (!asTyped) return escapeAll(text, node, parent)
   if (parent?.type === 'codeBlock' || node.marks?.some((m) => m.type === 'code')) return text
   const siblings = parent?.content ?? []
-  return escapeWhereNeeded(text, siblings[0] === node, siblings.at(-1) === node)
+  return escapeWhereNeeded(text, siblings[0] === node, siblings.at(-1) === node, parent?.type === 'paragraph')
 }
 
 const URL_START = /https?:\/\/[^\s<>]+/y
 const ENTITY = /&#?[a-z0-9]+;/iy
+const BLOCK_START = /^[ \t]{0,3}(?:>|#{1,6}(?=[ \t]|$)|[-+*](?=[ \t]|$)|\d{1,9}[.)](?=[ \t]|$)|(?:=+|-+|(?:[-*_][ \t]*){3,})[ \t]*$)/
 const isSpace = (c: string) => /\s/.test(c)
 const isPunctuation = (c: string) => /[!-/:-@[-`{-~]/.test(c)
 
@@ -34,15 +36,27 @@ const isPunctuation = (c: string) => /[!-/:-@[-`{-~]/.test(c)
 // node is unknown, so it is assumed to.
 function mayDelimit(char: string, before: string | undefined, after: string | undefined) {
   if (before === undefined || after === undefined) return true
-  if (char === '*' && before === '\n' && isSpace(after)) return true
   const left = !isSpace(after) && (!isPunctuation(after) || isSpace(before) || isPunctuation(before))
   const right = !isSpace(before) && (!isPunctuation(before) || isSpace(after) || isPunctuation(after))
   if (char === '*') return left || right
   return (left && (!right || isPunctuation(before))) || (right && (!left || isPunctuation(after)))
 }
 
-function escapeWhereNeeded(text: string, atStart: boolean, atEnd: boolean) {
+// Where a line of a paragraph would start a heading, quote, list or rule, the offset of the character to escape.
+function blockMarkers(text: string, atStart: boolean) {
+  const at = new Set<number>()
+  let offset = 0
+  text.split('\n').forEach((line, i) => {
+    const marker = (i > 0 || atStart) && BLOCK_START.exec(line)
+    if (marker) at.add(offset + marker[0].search(/[^ \t\d]/))
+    offset += line.length + 1
+  })
+  return at
+}
+
+function escapeWhereNeeded(text: string, atStart: boolean, atEnd: boolean, inParagraph: boolean) {
   const charAt = (i: number) => (i < 0 ? (atStart ? '\n' : undefined) : i >= text.length ? (atEnd ? '\n' : undefined) : text[i])
+  const markers = escaping !== 'least' && inParagraph ? blockMarkers(text, atStart) : new Set<number>()
   let out = ''
   for (let i = 0; i < text.length; ) {
     const c = text[i]
@@ -51,6 +65,11 @@ function escapeWhereNeeded(text: string, atStart: boolean, atEnd: boolean) {
     if (url) {
       out += url[0]
       i += url[0].length
+      continue
+    }
+    if (markers.has(i) || (escaping === 'all' && '\\`*_[]~'.includes(c))) {
+      out += `\\${c}`
+      i++
       continue
     }
     if (c === '*' || c === '_') {
@@ -66,8 +85,8 @@ function escapeWhereNeeded(text: string, atStart: boolean, atEnd: boolean) {
     if (c === '`') out += '\\`'
     else if (c === '\\') out += next === undefined || next === '\n' || isPunctuation(next) ? '\\\\' : c
     else if (c === '~') out += next === '/' && text.indexOf('~') === text.lastIndexOf('~') ? c : '\\~'
-    else if (c === ']') out += next === undefined || '([:'.includes(next) ? '\\]' : c
-    else if (c === '&') out += ENTITY.test(text) ? '&amp;' : c
+    else if (c === ']' && escaping !== 'least') out += next === undefined || '([:'.includes(next) ? '\\]' : c
+    else if (c === '&') out += ENTITY.test(text) ? '\\&' : c
     else out += c
     i++
   }
@@ -103,21 +122,23 @@ function prepare(node: JSONContent): JSONContent {
   return { ...node, content }
 }
 
-function serialize(doc: JSONContent, typed: boolean) {
-  asTyped = typed
+function serialize(doc: JSONContent, level: Escaping) {
+  escaping = level
   try {
     return markdown.serialize(prepare(doc)).replace(/\n+$/, '')
   } finally {
-    asTyped = false
+    escaping = 'all'
   }
 }
 
-// Writes the text as typed, unless that reads back as a different document; then every markdown character is
-// escaped, as the library does.
+// Writes the text with the fewest escapes that still read back as the same document.
 export function toMarkdown(doc: JSONContent): string {
-  const typed = serialize(doc, true)
-  const escaped = serialize(doc, false)
-  return serialize(fromMarkdown(typed), false) === escaped ? typed : escaped
+  const exact = serialize(doc, 'all')
+  for (const level of ['least', 'safe'] as const) {
+    const text = serialize(doc, level)
+    if (serialize(fromMarkdown(text), 'all') === exact) return text
+  }
+  return exact
 }
 
 function splitLines(node: JSONContent): JSONContent[] {

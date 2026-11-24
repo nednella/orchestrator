@@ -25,6 +25,7 @@ const samples = {
   table: '| a | b |\n| - | - |\n| 1 | 2 |',
   tableBetweenParagraphs: 'before\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nafter',
   tasks: '- [ ] task\n- [x] done',
+  image: 'see ![img](x.png) here',
 }
 
 for (const [name, text] of Object.entries(samples)) {
@@ -85,8 +86,42 @@ test('send value writes styled text next to plain text', () => {
   assert.equal(toMarkdown(doc(p(text('run '), text('go test', 'code'), text(' then '), text('ship', 'bold')))), 'run `go test` then **ship**')
 })
 
-test('send value falls back to full escaping when the typed text would read differently', () => {
+test('send value escapes a tilde unless it is the one ~ of a path', () => {
   assert.equal(toMarkdown(doc(p(text('move ~/a to ~/b')))), 'move \\~/a to \\~/b')
+})
+
+const lines = (value: string) => p(...value.split('\n').flatMap((line, i) => [...(i > 0 ? [{ type: 'hardBreak' }] : []), text(line)]))
+
+const blockMarkers = {
+  '>foo': '\\>foo',
+  '# y': '\\# y',
+  '- y': '\\- y',
+  '+ y': '\\+ y',
+  '* y': '\\* y',
+  '1. y': '1\\. y',
+  '2) y': '2\\) y',
+  '---': '\\---',
+  '- - -': '\\- - -',
+  'a\n===': 'a\n\\===',
+  'a\n-': 'a\n\\-',
+  'a\n# y': 'a\n\\# y',
+}
+
+for (const [typed, expected] of Object.entries(blockMarkers)) {
+  test(`send value escapes the block marker in a typed ${JSON.stringify(typed)}`, () => {
+    const typedDoc = doc(lines(typed))
+    assert.equal(toMarkdown(typedDoc), expected)
+    assert.deepEqual(fromMarkdown(expected), typedDoc)
+  })
+}
+
+test('send value escapes only the paragraph that needs it', () => {
+  assert.equal(toMarkdown(doc(p(text('>foo')), p(text('use Vec<String> and snake_case')))), '\\>foo\n\nuse Vec<String> and snake_case')
+})
+
+test('send value never encodes <, > or &', () => {
+  assert.equal(toMarkdown(doc(p(text('a < b & c > d, AT&T')))), 'a < b & c > d, AT&T')
+  assert.equal(toMarkdown(doc(p(text('write &amp; it')))), 'write \\&amp; it')
 })
 
 test('a soft line break reads as a hard break', () => {
