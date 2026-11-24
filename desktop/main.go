@@ -106,7 +106,7 @@ func launch() error {
 		OnDomReady: func(context.Context) { refreshKeyWindow() },
 		OnShutdown: func(context.Context) { stop(a) },
 		Bind:       a.Services(),
-		// The Edit menu is what makes ⌘C, ⌘V and ⌘X reach the web view on macOS. Select All loses its key in stripMenuShortcuts.
+		// The Edit menu is what makes ⌘C, ⌘V, ⌘X and ⌘A reach the web view on macOS.
 		Menu: menu.NewMenuFromItems(menu.AppMenu(), menu.EditMenu(), menu.WindowMenu()),
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
