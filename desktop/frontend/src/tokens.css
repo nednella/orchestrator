@@ -3,9 +3,9 @@
   color-scheme: dark;
 
   --bg-app: #000;
-  --bg-surface: #0f0f0f;
-  --bg-raised: rgba(255, 255, 255, 0.04);
-  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-surface: #0a0a0a;
+  --bg-raised: #121212;
+  --bg-hover: #1a1a1a;
   --bg-term: #000;
   --bg-overlay: rgba(5, 6, 9, 0.6);
   --bg-overlay-strong: rgba(5, 6, 9, 0.92);
