@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
-import type { SessionView } from './AgentosContext'
+import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
 import type { ThemeName } from './types'
@@ -13,6 +13,11 @@ export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
 export type MobilePanel = 'session' | 'panel' | 'threads' | 'shell'
 export type SidePanel = 'sidebar' | 'right'
+export type TogglePanel = 'sidebar' | 'shell' | 'right'
+
+// The element that holds each panel and the focus target that moves the focus into it.
+const PANEL_SELECTOR: Record<TogglePanel, string> = { sidebar: '[data-sidebar]', shell: '[data-panel="shell"]', right: '[data-panel="right"]' }
+const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shell: 'shell', right: 'right' }
 
 export const SCALES = [0.85, 0.92, 1, 1.1, 1.2, 1.35, 1.5]
 const DEFAULT_SCALE = 1
@@ -61,12 +66,12 @@ export type Layout = {
   setShellOpen(open: boolean): void
   setRightOpen(open: boolean): void
   toggleRight(): void
+  togglePanel(panel: TogglePanel): void
   setPanelView(view: string): void
   showPanel(view: string): void
   showView(id: string, view: SessionView): void
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
-  toggleSidebar(): void
   setSidebarOpen(open: boolean): void
   showHome(): void
   toggleStats(): void
@@ -117,6 +122,10 @@ function fit(width: number, prefs: BandPrefs, root: number): Fitted {
   return { widths: { sidebar: sidebar / root, right: right / root }, rightForcedClosed: forced }
 }
 
+function checkRightFits(width: number, prefs: BandPrefs, root: number) {
+  if (fit(width, { ...prefs, rightOpen: true }, root).rightForcedClosed) throw 'The window is too narrow for the right panel'
+}
+
 type LayoutProviderProps = { children: ReactNode }
 
 function useSystemAppearance(): Appearance {
@@ -145,6 +154,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
   const zoomToast = useRef<number | null>(null)
+  const focusBefore = useRef<Partial<Record<TogglePanel, Element>>>({})
 
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--ui-scale', String(scale))
@@ -159,6 +169,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
   const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
+  const shellOpen = narrow ? mobilePanel === 'shell' : prefs.shellOpen
   const projectName = project?.name ?? ''
   const panelView = panelViews[projectName] ?? ''
 
@@ -187,6 +198,22 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     (open: boolean) => {
       if (narrow) setMobilePanel(open ? 'threads' : 'session')
       else updatePrefs({ sidebarOpen: open })
+    },
+    [narrow, updatePrefs],
+  )
+
+  const setShellOpen = useCallback(
+    (open: boolean) => {
+      if (narrow) setMobilePanel(open ? 'shell' : 'session')
+      else updatePrefs({ shellOpen: open })
+    },
+    [narrow, updatePrefs],
+  )
+
+  const setRightOpen = useCallback(
+    (open: boolean) => {
+      if (narrow) setMobilePanel(open ? 'panel' : 'session')
+      else updatePrefs({ rightOpen: open })
     },
     [narrow, updatePrefs],
   )
@@ -239,7 +266,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       theme,
       sidebarOpen,
       rightOpen,
-      shellOpen: narrow ? mobilePanel === 'shell' : prefs.shellOpen,
+      shellOpen,
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
       mobilePanel,
       widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
@@ -260,22 +287,36 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], [panel]: next } }))
       },
       resetWidth: (panel) => updatePrefs({ [panel]: null }),
-      setShellOpen(open) {
-        if (narrow) setMobilePanel(open ? 'shell' : 'session')
-        else updatePrefs({ shellOpen: open })
-      },
-      setRightOpen(open) {
-        if (narrow) setMobilePanel(open ? 'panel' : 'session')
-        else updatePrefs({ rightOpen: open })
-      },
+      setShellOpen,
+      setRightOpen,
       toggleRight() {
         if (narrow) {
           setMobilePanel(mobilePanel === 'panel' ? 'session' : 'panel')
           return
         }
         const open = !rightOpen
-        if (open && fit(width, { ...prefs, rightOpen: true }, 16 * scale).rightForcedClosed) throw 'The window is too narrow for the right panel'
+        if (open) checkRightFits(width, prefs, 16 * scale)
         updatePrefs({ rightOpen: open })
+      },
+      togglePanel(panel) {
+        const setOpen = { sidebar: setSidebarOpen, shell: setShellOpen, right: setRightOpen }[panel]
+        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: narrow ? mobilePanel === 'panel' : rightOpen }[panel]
+        const active = document.activeElement
+        if (!shown) {
+          if (panel === 'right' && !narrow) checkRightFits(width, prefs, 16 * scale)
+          focusBefore.current[panel] = active ?? undefined
+          setOpen(true)
+          focus(PANEL_FOCUS[panel])
+          return
+        }
+        const before = focusBefore.current[panel]
+        delete focusBefore.current[panel]
+        setOpen(false)
+        if (!active?.closest(PANEL_SELECTOR[panel])) return
+        requestAnimationFrame(() => {
+          if (before instanceof HTMLElement && before.isConnected && !before.closest(PANEL_SELECTOR[panel])) before.focus()
+          if (document.activeElement !== before) focus('terminal')
+        })
       },
       setPanelView,
       showPanel,
@@ -289,7 +330,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], shell: next } }))
       },
       resetShellHeight: () => updatePrefs({ shell: null }),
-      toggleSidebar: () => setSidebarOpen(!sidebarOpen),
       setSidebarOpen,
       showHome,
       toggleStats() {
@@ -316,7 +356,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs, prefs.shellOpen, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, narrow, prefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

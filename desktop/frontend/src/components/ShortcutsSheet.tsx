@@ -11,7 +11,7 @@ type Group = { title: string; ids: string[]; extra?: Row[] }
 
 const GROUPS: Group[] = [
   { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session', 'harness'] },
-  { title: 'Navigate', ids: ['panel-sidebar', 'focus-shell', 'panel-threads', 'toggle-sidebar', 'toggle-shell', 'toggle-right', 'search-threads', 'shortcuts'] },
+  { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-shell', 'toggle-right', 'search-threads', 'shortcuts'] },
   { title: 'Queue', ids: ['show-queue', 'filter-queue', 'refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
   { title: 'Notes', ids: ['show-notes'] },
   { title: 'Views', ids: ['stats', 'digest', 'show-terminal', 'show-browser', 'show-evidence', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },

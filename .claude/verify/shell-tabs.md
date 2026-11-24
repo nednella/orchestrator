@@ -6,7 +6,7 @@ The shell drawer at the bottom of the window has a row of tabs, one for each she
 
 ## How a user reaches it
 
-The drawer is always at the bottom of the window. ⌘S collapses and opens it, ⌘⇧S puts the focus in the shell, and a double Esc leaves the shell. In the narrow layout, the Shell tab in the bottom bar shows it.
+The drawer is always at the bottom of the window. ⌘⇧S opens it with the focus in the shell and collapses it again, and a double Esc leaves the shell. In the narrow layout, the Shell tab in the bottom bar shows it.
 
 ## How to drive it
 

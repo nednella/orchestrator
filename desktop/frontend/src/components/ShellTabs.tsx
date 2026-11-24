@@ -100,7 +100,7 @@ export function ShellTabs() {
       {collapsible && (
         <button
           className={`${tabRowButton} ml-auto self-center`}
-          title={shellOpen ? 'Collapse the shell (⌘J)' : 'Open the shell (⌘J)'}
+          title={shellOpen ? 'Collapse the shell (⌘⇧S)' : 'Open the shell (⌘⇧S)'}
           aria-label={shellOpen ? 'Collapse the shell' : 'Open the shell'}
           aria-expanded={shellOpen}
           onClick={toggle}

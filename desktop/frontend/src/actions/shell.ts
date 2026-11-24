@@ -2,17 +2,10 @@ import type { Action, ActionContext } from './types'
 
 export const shellActions = ({ layout }: ActionContext): Action[] => [
   {
-    id: 'focus-shell',
-    label: 'Focus the shell',
+    id: 'toggle-shell',
+    label: 'Toggle bottom panel (shell)',
     group: 'Navigate',
     shortcut: { key: 's', shift: true },
-    run: () => layout.focusPanel('shell'),
-  },
-  {
-    id: 'toggle-shell',
-    label: 'Toggle shell',
-    group: 'Navigate',
-    shortcut: { key: 'j' },
-    run: () => layout.setShellOpen(!layout.shellOpen),
+    run: () => layout.togglePanel('shell'),
   },
 ]

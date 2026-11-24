@@ -57,7 +57,7 @@ export function App() {
         {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
-          <div className={`flex min-h-0 flex-col ${narrow && sidebarOpen ? 'min-w-0 flex-1' : 'flex-none'}`}>
+          <div data-sidebar className={`flex min-h-0 flex-col ${narrow && sidebarOpen ? 'min-w-0 flex-1' : 'flex-none'}`}>
             <div className="flex-none" style={{ ...drag, height: 'var(--topbar-h)' }} />
             <div className="flex min-h-0 flex-1">
               <ProjectRail />

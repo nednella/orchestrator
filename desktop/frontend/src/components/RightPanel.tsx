@@ -1,6 +1,8 @@
+import { useRef } from 'react'
 import { useAgentosSelector } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
 import { panelViewFor, shownPanelViews, usePanelContext } from '../panelViews'
+import { useFocusRequest } from '../useFocusRequest'
 import { Icon } from './Icon'
 
 export function RightPanel() {
@@ -9,9 +11,12 @@ export function RightPanel() {
   const { widths, setRightOpen, mode, panelView, setPanelView } = useLayout()
   const narrow = mode === 'narrow'
   const view = panelViewFor(panelView, ctx)
+  const panel = useRef<HTMLElement>(null)
+
+  useFocusRequest('right', () => (panel.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? panel.current)?.focus())
 
   return (
-    <aside data-panel="right" tabIndex={-1} className={`panel flex h-full min-h-0 flex-col overflow-hidden ${narrow ? 'min-w-0 flex-1' : 'flex-none'}`} style={narrow ? undefined : { width: `${widths.right}rem` }}>
+    <aside ref={panel} data-panel="right" tabIndex={-1} className={`panel flex h-full min-h-0 flex-col overflow-hidden ${narrow ? 'min-w-0 flex-1' : 'flex-none'}`} style={narrow ? undefined : { width: `${widths.right}rem` }}>
       {!narrow && (
         <div className="flex h-10 flex-none items-center gap-1 border-b border-line px-2">
           <div role="tablist" aria-label="Right panel" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">

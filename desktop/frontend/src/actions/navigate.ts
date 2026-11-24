@@ -21,33 +21,26 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   },
   {
     id: 'toggle-sidebar',
-    label: 'Toggle thread list',
+    label: 'Toggle left sidebar',
     group: 'Navigate',
-    shortcut: { key: 'b' },
-    run: layout.toggleSidebar,
+    shortcut: { key: 'a', shift: true },
+    run: () => layout.togglePanel('sidebar'),
   },
   {
     id: 'toggle-right',
     label: 'Toggle right panel',
     group: 'Navigate',
-    run: layout.toggleRight,
+    shortcut: { key: 'd', shift: true },
+    run: () => layout.togglePanel('right'),
   },
   {
     id: 'panel-sidebar',
     label: 'Project home',
     group: 'Navigate',
-    shortcut: { key: 'a', shift: true },
     run() {
       layout.showHome()
       a.focus('composer')
     },
-  },
-  {
-    id: 'panel-threads',
-    label: 'Left panel: threads',
-    group: 'Navigate',
-    shortcut: { key: 'd', shift: true },
-    run: () => layout.focusPanel('sidebar'),
   },
   {
     id: 'previous-session',

@@ -55,10 +55,10 @@ export function TopBar() {
             )}
           </button>
         )}
-        <TitleBarButton label={named(sidebarOpen ? 'Hide thread list' : 'Show thread list', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
+        <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton
-          label={rightShown ? 'Hide right panel' : 'Show right panel'}
+          label={named(rightShown ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
           icon="panel-right"
           pressed={rightShown}
           onClick={() => report(() => find('toggle-right').run([]))}
