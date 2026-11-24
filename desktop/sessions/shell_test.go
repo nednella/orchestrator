@@ -1,8 +1,11 @@
 package sessions_test
 
 import (
+	"encoding/json"
 	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
@@ -26,14 +29,14 @@ func TestShellSession(t *testing.T) {
 	if got := h.Snapshot().Shells; len(got) != 0 {
 		t.Fatalf("shells before one is opened = %q", got)
 	}
-	shell, err := h.ShellOpen()
+	shell, err := h.ShellOpen("")
 	if err != nil || shell.ID != "main/shell" {
 		t.Fatalf("ShellOpen = %+v, %v", shell, err)
 	}
 	if got := h.Snapshot().Shells; !slices.Equal(got, []string{shell.ID}) {
 		t.Errorf("Snapshot.Shells = %q", got)
 	}
-	if again, err := h.ShellOpen(); err != nil || again != shell {
+	if again, err := h.ShellOpen(""); err != nil || again != shell {
 		t.Errorf("second ShellOpen = %+v, %v", again, err)
 	}
 	if !tmuxHas(h, shell.ID) {
@@ -80,7 +83,7 @@ func TestShellFollowsTheProject(t *testing.T) {
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}
-	shell, err := h.ShellOpen()
+	shell, err := h.ShellOpen("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +103,7 @@ func TestShellFollowsTheProject(t *testing.T) {
 
 func TestShellSurvivesARestart(t *testing.T) {
 	h := shellHarness(t)
-	shell, err := h.ShellOpen()
+	shell, err := h.ShellOpen("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +123,7 @@ func TestConcurrentShellOpensShareOneShell(t *testing.T) {
 	errs := make(chan error, calls)
 	for range calls {
 		go func() {
-			shell, err := h.ShellOpen()
+			shell, err := h.ShellOpen("")
 			ids <- shell.ID
 			errs <- err
 		}()
@@ -137,15 +140,15 @@ func TestConcurrentShellOpensShareOneShell(t *testing.T) {
 
 func TestShellTabs(t *testing.T) {
 	h := shellHarness(t)
-	first, err := h.ShellOpen()
+	first, err := h.ShellOpen("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := h.ShellNew()
+	second, err := h.ShellNew("")
 	if err != nil || second.ID != "main/shell-2" {
 		t.Fatalf("ShellNew = %+v, %v", second, err)
 	}
-	third, err := h.ShellNew()
+	third, err := h.ShellNew("")
 	if err != nil || third.ID != "main/shell-3" {
 		t.Fatalf("ShellNew = %+v, %v", third, err)
 	}
@@ -153,7 +156,7 @@ func TestShellTabs(t *testing.T) {
 	if got := h.Snapshot().Shells; !slices.Equal(got, want) {
 		t.Errorf("Shells = %q, want %q", got, want)
 	}
-	if again, err := h.ShellOpen(); err != nil || again != first {
+	if again, err := h.ShellOpen(""); err != nil || again != first {
 		t.Errorf("ShellOpen with shells = %+v, %v", again, err)
 	}
 
@@ -166,7 +169,7 @@ func TestShellTabs(t *testing.T) {
 	if got := h.Snapshot().Shells; !slices.Equal(got, []string{first.ID, third.ID}) {
 		t.Errorf("Shells after close = %q", got)
 	}
-	if again, err := h.ShellNew(); err != nil || again != second {
+	if again, err := h.ShellNew(""); err != nil || again != second {
 		t.Errorf("ShellNew reuses the free number: %+v, %v", again, err)
 	}
 
@@ -176,5 +179,40 @@ func TestShellTabs(t *testing.T) {
 	}
 	if err := h.ShellClose(agent.ID); err == nil {
 		t.Error("ShellClose stopped an agent")
+	}
+}
+
+func TestShellStartsInTheSessionsFolder(t *testing.T) {
+	apptest.CLIPath(t) // built before HOME moves, or the build fills the temp home with a read-only module cache
+	h := shellHarness(t)
+	s, err := h.NewSession("agent", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := t.TempDir()
+	cwd, _ := json.Marshal(map[string]string{"cwd": folder})
+	h.Hook(t, s.ID, "PostToolUse", string(cwd))
+	eventually(t, "the shell's folder", func() bool {
+		shell, err := h.ShellNew(s.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer h.ShellClose(shell.ID)
+		got, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", shell.ID, "#{pane_current_path}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, _ := filepath.EvalSymlinks(folder)
+		have, _ := filepath.EvalSymlinks(strings.TrimSpace(string(got)))
+		return have == want
+	})
+
+	project, err := h.ShellNew("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", project.ID, "#{pane_current_path}").Output()
+	if want, _ := filepath.EvalSymlinks(h.Dir); strings.TrimSpace(string(got)) != want {
+		t.Errorf("a shell with no session starts in %q, want the project folder %q", got, want)
 	}
 }

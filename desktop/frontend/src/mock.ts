@@ -297,7 +297,7 @@ export function createMock(params: URLSearchParams) {
     }))
   }
 
-  type Shell = { id: string; project: string; buffer: string; line: string; opened: boolean }
+  type Shell = { id: string; project: string; dir: string; buffer: string; line: string; opened: boolean }
   const shells: Shell[] = []
   const shellName = (project: string, n: number) => (n === 1 ? `shell-${project}` : `shell-${project}-${n}`)
 
@@ -318,7 +318,7 @@ export function createMock(params: URLSearchParams) {
       return
     }
     if (name === 'ls') shellWrite(shell, '\r\napp-frontend  api  e2e  locales  CLAUDE.md  package.json')
-    else if (name === 'pwd') shellWrite(shell, `\r\n${current.dir}`)
+    else if (name === 'pwd') shellWrite(shell, `\r\n${shell.dir}`)
     else if (name === 'clear') shellWrite(shell, '\x1bc')
     else shellWrite(shell, `\r\nzsh: command not found: ${name}`)
   }
@@ -326,11 +326,12 @@ export function createMock(params: URLSearchParams) {
   const shellsOf = (project: string) => shells.filter((x) => x.project === project)
   const findShell = (id: string) => shells.find((x) => x.id === id)
 
-  function startShell(): Shell {
+  function startShell(sessionId: string): Shell {
+    const dir = sessions.find((x) => x.id === sessionId)?.worktree || current.dir
     const taken = shellsOf(current.name).map((x) => x.id)
     let n = 1
     while (taken.includes(shellName(current.name, n))) n++
-    const shell: Shell = { id: shellName(current.name, n), project: current.name, buffer: `\x1b[2m${current.dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
+    const shell: Shell = { id: shellName(current.name, n), project: current.name, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
     shells.push(shell)
     return shell
   }
@@ -1121,10 +1122,10 @@ export function createMock(params: URLSearchParams) {
       if (!current.issues.some((i) => i.number === number)) throw `reading issue #${number}: gh api: HTTP 404: Not Found`
       return delay(buildIssueDetail(number), 350)
     },
-    ShellOpen: async () => {
-      return { id: (shellsOf(current.name)[0] ?? startShell()).id }
+    ShellOpen: async (sessionId: string) => {
+      return { id: (shellsOf(current.name)[0] ?? startShell(sessionId)).id }
     },
-    ShellNew: async () => ({ id: startShell().id }),
+    ShellNew: async (sessionId: string) => ({ id: startShell(sessionId).id }),
     ShellClose: async (id: string) => {
       const at = shells.findIndex((x) => x.id === id)
       if (at >= 0) shells.splice(at, 1)

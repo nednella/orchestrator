@@ -31,8 +31,8 @@ type Backend = {
   MoveIssue(number: number, section: string): Promise<void>
   UndoMove(number: number): Promise<void>
   IssueDetail(number: number): Promise<IssueDetail>
-  ShellOpen(): Promise<{ id: string }>
-  ShellNew(): Promise<{ id: string }>
+  ShellOpen(sessionId: string): Promise<{ id: string }>
+  ShellNew(sessionId: string): Promise<{ id: string }>
   ShellClose(id: string): Promise<void>
   TermOpen(id: string, cols: number, rows: number): Promise<void>
   TermWrite(id: string, data: string): Promise<void>
@@ -162,8 +162,8 @@ export const api = {
   moveIssue: (number: number, section: string) => backend.MoveIssue(number, section),
   undoMove: (number: number) => backend.UndoMove(number),
   issueDetail: (number: number) => backend.IssueDetail(number),
-  shellOpen: () => backend.ShellOpen(),
-  shellNew: () => backend.ShellNew(),
+  shellOpen: (sessionId: string) => backend.ShellOpen(sessionId),
+  shellNew: (sessionId: string) => backend.ShellNew(sessionId),
   shellClose: (id: string) => backend.ShellClose(id),
   termOpen: (id: string, cols: number, rows: number) => backend.TermOpen(id, cols, rows),
   // A terminal can close (project switch, session end) while keys or a resize

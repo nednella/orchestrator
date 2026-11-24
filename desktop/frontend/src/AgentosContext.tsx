@@ -651,11 +651,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async openShell() {
         if (shellIdsRef.current.length) return
-        const shell = await api.shellOpen()
+        const shell = await api.shellOpen(selectedRef.current ?? '')
         setShellIds([shell.id])
       },
       async newShell() {
-        const shell = await api.shellNew()
+        const shell = await api.shellNew(selectedRef.current ?? '')
         setShellIds((ids) => [...ids, shell.id])
         setPickedShell(shell.id)
       },

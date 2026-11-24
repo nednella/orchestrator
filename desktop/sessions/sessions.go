@@ -1873,27 +1873,34 @@ func (s *Sessions) ShellIDs() []string {
 }
 
 // OpenShell makes sure the current project has a shell session and returns the
-// first one's id. A shell is a login shell in the project folder; it reports
+// first one's id. A shell is a login shell in the folder its session works in, or
+// the project folder when sessionID is empty or its folder is gone; it reports
 // nothing: it is not an agent, so it gets no hooks and no session number.
-func (s *Sessions) OpenShell() (string, error) {
+func (s *Sessions) OpenShell(sessionID string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
 	if ids := s.ShellIDs(); len(ids) > 0 {
 		return ids[0], nil
 	}
-	return s.startShell()
+	return s.startShell(sessionID)
 }
 
 // NewShell starts another shell in the current project, numbered after the shells it has.
-func (s *Sessions) NewShell() (string, error) {
+func (s *Sessions) NewShell(sessionID string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	return s.startShell()
+	return s.startShell(sessionID)
 }
 
-func (s *Sessions) startShell() (string, error) {
+func (s *Sessions) startShell(sessionID string) (string, error) {
 	s.mu.Lock()
 	ctx, proj := s.ctx, s.project
+	dir := proj.Dir
+	if cwd := s.cwds[sessionID]; cwd != "" {
+		if info, err := os.Stat(cwd); err == nil && info.IsDir() {
+			dir = cwd
+		}
+	}
 	var used []int
 	for _, n := range s.shells {
 		if n.Project == proj.Key() {
@@ -1909,7 +1916,7 @@ func (s *Sessions) startShell() (string, error) {
 		"AGENTOS_PROJECT=" + proj.Key(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
 	}
-	if err := s.tmux.NewSession(tctx, name, "shell", proj.Dir, env, []string{login, "-l"}, startCols, startRows); err != nil {
+	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{login, "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}
 	s.mu.Lock()

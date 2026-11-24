@@ -913,17 +913,17 @@ func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
 func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
 	return h.sessions.NewSession(title, prompt, model, effort)
 }
-func (h *Harness) ShellOpen() (sessions.ShellInfo, error) { return h.sessions.ShellOpen() }
-func (h *Harness) ShellNew() (sessions.ShellInfo, error)  { return h.sessions.ShellNew() }
-func (h *Harness) ShellClose(id string) error             { return h.sessions.ShellClose(id) }
-func (h *Harness) KillSession(id string) error            { return h.sessions.KillSession(id) }
-func (h *Harness) DismissSession(id string) error         { return h.sessions.DismissSession(id) }
-func (h *Harness) RenameSession(id, title string) error   { return h.sessions.RenameSession(id, title) }
-func (h *Harness) TypeInto(id, text string) error         { return h.sessions.TypeInto(id, text) }
-func (h *Harness) RefreshPRs()                            { h.sessions.RefreshPRs() }
-func (h *Harness) AckPR(id string) error                  { return h.sessions.AckPR(id) }
-func (h *Harness) Cleanup(id string, force bool) error    { return h.sessions.Cleanup(id, force) }
-func (h *Harness) Cleanups() []sessions.Cleanup           { return h.sessions.Cleanups() }
+func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.sessions.ShellOpen(id) }
+func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }
+func (h *Harness) ShellClose(id string) error                      { return h.sessions.ShellClose(id) }
+func (h *Harness) KillSession(id string) error                     { return h.sessions.KillSession(id) }
+func (h *Harness) DismissSession(id string) error                  { return h.sessions.DismissSession(id) }
+func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
+func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
+func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }
+func (h *Harness) AckPR(id string) error                           { return h.sessions.AckPR(id) }
+func (h *Harness) Cleanup(id string, force bool) error             { return h.sessions.Cleanup(id, force) }
+func (h *Harness) Cleanups() []sessions.Cleanup                    { return h.sessions.Cleanups() }
 
 func (h *Harness) ResumeSession(id string) (sessions.Session, error) {
 	return h.sessions.ResumeSession(id)
