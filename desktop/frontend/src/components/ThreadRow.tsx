@@ -1,63 +1,44 @@
-import { memo } from "react";
-import { useAgentos } from "../AgentosContext";
-import type { Session } from "../types";
-import { Ago } from "./Ago";
-import { CleanupControls } from "./CleanupControls";
-import { Icon } from "./Icon";
-import { PRMark } from "./PRMark";
-import { StateDot } from "./StateDot";
+import { memo } from 'react'
+import { useAgentos } from '../AgentosContext'
+import type { Session } from '../types'
+import { Ago } from './Ago'
+import { CleanupControls } from './CleanupControls'
+import { Icon } from './Icon'
+import { PRMark } from './PRMark'
+import { StateDot } from './StateDot'
 
-type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean };
+type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean }
 
 function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
-  const { project, select, showHome, focus, dismissSession, report } = useAgentos(
-    "project",
-    "select",
-    "showHome",
-    "focus",
-    "dismissSession",
-    "report",
-  );
-  const ended = session.state === "ended";
+  const { project, select, showHome, focus, dismissSession, report } = useAgentos('project', 'select', 'showHome', 'focus', 'dismissSession', 'report')
+  const ended = session.state === 'ended'
 
   return (
-    <div
-      className="row row-inset group flex-col"
-      data-state={session.state}
-      data-selected={selected}
-      data-cursor={cursor}
-      style={{ opacity: ended ? 0.6 : 1 }}
-    >
+    <div className="row row-inset group flex-col" data-state={session.state} data-selected={selected} data-cursor={cursor} style={{ opacity: ended ? 0.6 : 1 }}>
       <div className="flex w-full items-center">
         <button
           className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pr-2 pl-3 text-left"
           aria-current={selected}
           disabled={ended}
           title={ended ? `${session.title} (ended)` : session.title}
-          style={ended ? { cursor: "default", opacity: 1 } : undefined}
+          style={ended ? { cursor: 'default', opacity: 1 } : undefined}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            if (selected && project) return showHome(project.key);
-            select(session.id);
-            focus("terminal");
+            if (selected && project) return showHome(project.key)
+            select(session.id)
+            focus('terminal')
           }}
         >
           <span className="flex w-full items-center gap-2">
             <StateDot state={session.state} />
-            <span
-              className={`min-w-0 flex-1 truncate text-body ${selected ? "font-semibold" : "font-medium"}`}
-            >
-              {session.title}
-            </span>
+            <span className={`min-w-0 flex-1 truncate text-body ${selected ? 'font-semibold' : 'font-medium'}`}>{session.title}</span>
             <span className="mono flex-none text-label text-dim">
               <Ago at={session.lastEventAt} />
             </span>
           </span>
           {(session.branch || session.pr) && (
             <span className="flex w-full items-center gap-2 pl-4">
-              <span className="mono min-w-0 flex-1 truncate text-label text-dim">
-                {session.branch}
-              </span>
+              <span className="mono min-w-0 flex-1 truncate text-label text-dim">{session.branch}</span>
               {session.pr && <PRMark pr={session.pr} />}
             </span>
           )}
@@ -83,13 +64,13 @@ function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
           </button>
         )}
       </div>
-      {session.cleanup !== "" && (
+      {session.cleanup !== '' && (
         <div className="flex w-full pr-2 pb-1.5 pl-7">
           <CleanupControls session={session} />
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export const ThreadRow = memo(ThreadRowView);
+export const ThreadRow = memo(ThreadRowView)
