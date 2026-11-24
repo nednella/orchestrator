@@ -380,6 +380,40 @@ func TestInterruptStopsTheTurn(t *testing.T) {
 	}
 }
 
+func TestAnswerAfterTheTurnEndedIsRefused(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := Send(ctxT(t), h.socket, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindApproval)
+	if err := Interrupt(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	err := Answer(ctxT(t), h.socket, "r1", true, "")
+	if err == nil || !strings.Contains(err.Error(), `no approval "r1" is waiting`) {
+		t.Fatalf("late answer = %v, want no approval waiting", err)
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range logged {
+		if e.Kind == chat.KindAnswer {
+			t.Fatalf("a late answer was logged: %+v", e)
+		}
+	}
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"control_response"`) {
+			t.Fatalf("a late answer reached claude: %s", l)
+		}
+	}
+}
+
 func TestDraftIsLoggedNotSent(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)

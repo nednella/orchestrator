@@ -213,8 +213,11 @@ func (h *host) publish(e chat.Event) (chat.Event, error) {
 	switch e.Kind {
 	case chat.KindApproval:
 		h.approvals[e.ID] = e.Input
+	case chat.KindTurnEnd:
+		clear(h.approvals)
 	case chat.KindExit:
 		h.exited = true
+		clear(h.approvals)
 	}
 	for s := range h.subs {
 		select {
