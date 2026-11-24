@@ -108,20 +108,22 @@ const OCTICONS: Record<OcticonName, string> = {
   'chevron-down': 'M12.78 5.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 6.28a.749.749 0 1 1 1.06-1.06L8 8.939l3.72-3.719a.749.749 0 0 1 1.06 0Z',
 }
 
-type IconProps = { name: IconName; size?: number }
+// size is in px at 100% text; the icon scales with the text unless fixed, as the window's title bar is.
+type IconProps = { name: IconName; size?: number; fixed?: boolean }
 
-export function Icon({ name, size = 14 }: IconProps) {
+export function Icon({ name, size = 14, fixed = false }: IconProps) {
+  const length = fixed ? size : `${size / 16}rem`
   if (name in OCTICONS) {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <svg width={length} height={length} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
         <path d={OCTICONS[name as OcticonName]} />
       </svg>
     )
   }
   return (
     <svg
-      width={size}
-      height={size}
+      width={length}
+      height={length}
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"

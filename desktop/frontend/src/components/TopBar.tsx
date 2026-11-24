@@ -46,7 +46,7 @@ export function TopBar() {
               <span className="spinner" role="status" />
             ) : (
               <>
-                <Icon name="update" />
+                <Icon name="update" fixed />
                 <span className="absolute top-[5px] right-[5px] h-[7px] w-[7px] rounded-full bg-accent" />
               </>
             )}

@@ -17,7 +17,7 @@ export function TitleBarButton({ label, icon, pressed, disabled, unseen = 0, onC
       disabled={disabled}
       onClick={onClick}
     >
-      <Icon name={icon} />
+      <Icon name={icon} fixed />
       {unseen > 0 && <span className="mono absolute top-[3px] right-[2px] text-[10px] leading-none text-accent">{unseen > 9 ? '9+' : unseen}</span>}
     </button>
   )

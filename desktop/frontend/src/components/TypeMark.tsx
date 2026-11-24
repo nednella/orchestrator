@@ -12,7 +12,7 @@ const COLOR: Record<IssueType, string> = {
 
 export function TypeMark({ type, named = false }: TypeMarkProps) {
   const mark = (
-    <svg className="flex-none" width="12" height="12" viewBox="0 0 12 12" style={{ color: COLOR[type] }} aria-label={type || 'untyped'} role="img">
+    <svg className="flex-none" width="0.75rem" height="0.75rem" viewBox="0 0 12 12" style={{ color: COLOR[type] }} aria-label={type || 'untyped'} role="img">
       <TypeShape type={type} />
     </svg>
   )

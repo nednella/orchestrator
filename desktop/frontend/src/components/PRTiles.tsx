@@ -92,7 +92,7 @@ function Tile({ label, title, divided = false, children }: TileProps) {
       className={`flex flex-col items-center gap-0.5 px-0.5 py-2 text-label text-dim ${divided ? 'border-l border-line' : ''}`}
       title={title}
     >
-      <span className="inline-flex h-[18px] items-center gap-1 text-soft">{children}</span>
+      <span className="inline-flex h-[1.125rem] items-center gap-1 text-soft">{children}</span>
       {label}
     </div>
   )
