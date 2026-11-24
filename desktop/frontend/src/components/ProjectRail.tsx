@@ -6,13 +6,21 @@ import { ProjectTile } from './ProjectTile'
 import { RailButton } from './RailButton'
 
 function tileLabels(projects: Project[]): string[] {
-  return projects.map((p) => {
-    const name = p.name.toUpperCase()
-    const others = projects.filter((o) => o !== p).map((o) => o.name.toUpperCase())
-    for (let n = 1; n < name.length; n++) {
-      if (!others.some((o) => o.startsWith(name.slice(0, n)))) return name.slice(0, n)
-    }
-    return name
+  const names = projects.map((p) => p.name.toUpperCase())
+  const taken = new Set<string>()
+  return names.map((name, i) => {
+    const words = name.split(/[^A-Z0-9]+/).filter(Boolean)
+    const unique = names.filter((o) => o[0] === name[0]).length === 1
+    const candidates = [
+      ...(unique ? [name[0]] : []),
+      name.slice(0, 2),
+      words.length > 1 ? words[0][0] + words[1][0] : '',
+      name[0] + name.slice(-1),
+      ...Array.from({ length: 10 }, (_, n) => `${name[0]}${n}`),
+    ]
+    const label = candidates.find((c) => c && !taken.has(c) && !names.some((o, j) => j !== i && o === c)) ?? name[0]
+    taken.add(label)
+    return label
   })
 }
 

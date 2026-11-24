@@ -10,12 +10,12 @@ export function ProjectTile({ project, label, waiting }: ProjectTileProps) {
   return (
     <button
       className="btn btn-ghost relative h-9 w-9 flex-none justify-center px-0 font-semibold"
-      style={selected ? { background: 'var(--bg-raised)', borderColor: 'var(--border-strong)', color: 'var(--text)' } : undefined}
       title={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
       aria-label={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
       aria-current={selected}
+      data-selected={selected}
       data-rail-item
-      onClick={() => report(() => switchProject(project.name))}
+      onClick={() => report(() => switchProject(project.name, true))}
     >
       {label}
       {needs > 0 && <span className="dot absolute top-1 right-1" data-state="waiting" />}

@@ -81,7 +81,7 @@ type AgentosActions = {
   resumeSession(id: string): Promise<Session>
   renameSession(id: string, title: string): Promise<void>
   startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
-  switchProject(name: string): Promise<void>
+  switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
   addProject(dir?: string): Promise<void>
   newProject(name: string): Promise<void>
   removeProject(name: string): Promise<void>
@@ -332,10 +332,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   )
 
   const selectAmong = useCallback(
-    (list: Session[]) => {
+    (list: Session[], homeUnlessRemembered = false) => {
       const current = selectedRef.current
       if (detached.current || (current && list.some((s) => s.id === current))) return
       const remembered = list.find((s) => s.id === lastSelected.current.get(projectRef.current?.name ?? ''))
+      if (homeUnlessRemembered && !remembered) {
+        detached.current = true
+        return
+      }
       const next = remembered ?? list[0]
       selectId(next ? next.id : null)
     },
@@ -369,7 +373,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   }, [])
 
   const enterProject = useCallback(
-    (snap: Snapshot, epoch: number) => {
+    (snap: Snapshot, epoch: number, homeUnlessRemembered = false) => {
       projectEpoch.current = epoch
       if (projectRef.current && selectedRef.current) lastSelected.current.set(projectRef.current.name, selectedRef.current)
       projectRef.current = snap.project
@@ -396,7 +400,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       })
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
-      selectAmong(snap.sessions.filter((s) => s.project === snap.project.key))
+      selectAmong(
+        snap.sessions.filter((s) => s.project === snap.project.key),
+        homeUnlessRemembered,
+      )
       report(() => loadIssues(false))
     },
     [selectAmong, loadIssues, report, selectId],
@@ -404,10 +411,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
   const enterFrom = useCallback(
-    async (request: Promise<Snapshot>) => {
+    async (request: Promise<Snapshot>, homeUnlessRemembered = false) => {
       const epoch = ++projectEpoch.current
       const snap = await request
-      if (epoch === projectEpoch.current) enterProject(snap, epoch)
+      if (epoch === projectEpoch.current) enterProject(snap, epoch, homeUnlessRemembered)
       return snap
     },
     [enterProject],
@@ -714,9 +721,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async startIssue(number, action = '', background = false, start) {
         return addSession(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort), background)
       },
-      async switchProject(name) {
+      async switchProject(name, homeUnlessRemembered) {
         if (name === projectRef.current?.name) return
-        await enterFrom(api.switchProject(name))
+        await enterFrom(api.switchProject(name), homeUnlessRemembered)
       },
       async addProject(dir) {
         await enterFrom(dir ? api.addProjectDir(dir) : api.addProject())
