@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ChangeEvent, DragEvent, KeyboardEvent, ReactNode, RefObject, SyntheticEvent } from 'react'
-import { AutoTextarea } from './AutoTextarea'
+import { ComposerEditor } from './ComposerEditor'
 import { Icon } from './Icon'
 
 type ComposerProps = {
@@ -61,12 +61,11 @@ export function Composer({ taRef, value, label, placeholder, canSend, sendLabel,
       >
         <div className="px-4 pt-3.5 pb-2 sm:pt-4">
           {attachments && <div className="mb-3 flex gap-2">{attachments}</div>}
-          <AutoTextarea
+          <ComposerEditor
             taRef={taRef}
             value={value}
-            aria-label={label}
+            label={label}
             placeholder={placeholder}
-            className="composer-editor block text-body"
             onChange={onChange}
             onSelect={onSelect}
             onKeyDown={keyDown}

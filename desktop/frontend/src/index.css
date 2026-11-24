@@ -277,11 +277,60 @@
     background: color-mix(in srgb, var(--bg-hover) 45%, var(--bg-composer));
   }
 
+  .composer-input {
+    position: relative;
+    line-height: 1.625;
+  }
+
+  .composer-editor,
+  .composer-mirror {
+    scrollbar-gutter: stable;
+  }
+
   .composer-editor {
+    position: relative;
     min-height: calc(2lh + 0.5rem);
     max-height: 13rem;
-    line-height: 1.625;
+    color: transparent;
+    caret-color: var(--text);
+  }
+
+  .composer-editor::selection {
+    background: var(--composer-selection);
+  }
+
+  .composer-mirror {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    pointer-events: none;
     color: var(--text);
+  }
+
+  .composer-input[data-composing='true'] .composer-editor {
+    color: var(--text);
+  }
+
+  .composer-input[data-composing='true'] .composer-mirror {
+    visibility: hidden;
+  }
+
+  .md-marker { color: var(--md-marker); }
+  .md-heading { color: var(--md-heading); }
+  .md-strong { color: var(--md-strong); }
+  .md-em { color: var(--md-em); }
+  .md-link { color: var(--md-link); }
+  .md-quote { color: var(--md-quote); }
+  .md-block { color: var(--md-code); }
+
+  .md-code {
+    border-radius: var(--radius-sm);
+    background: var(--md-code-bg);
+    color: var(--md-code);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   .composer-editor::placeholder {
