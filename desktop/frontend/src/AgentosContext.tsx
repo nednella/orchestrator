@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { readStored, writeStored } from './storage'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -73,13 +73,13 @@ type AgentosActions = {
   showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
-  newSession(title?: string, prefill?: string): Promise<Session>
-  newChat(title?: string): Promise<Session>
+  newSession(start: ThreadStart): Promise<Session>
+  newChat(start: ThreadStart): Promise<Session>
   killSession(id: string): Promise<void>
   dismissSession(id: string): Promise<void>
   resumeSession(id: string): Promise<Session>
   renameSession(id: string, title: string): Promise<void>
-  startIssue(number: number, action?: string, background?: boolean): Promise<Session>
+  startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
   switchProject(name: string): Promise<void>
   addProject(dir?: string): Promise<void>
   newProject(name: string): Promise<void>
@@ -681,11 +681,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = list.findIndex((s) => s.id === selectedRef.current)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
-      async newSession(title = '', prefill = '') {
-        return addSession(await api.newSession(title, prefill))
+      async newSession({ prompt, model, effort }) {
+        return addSession(await api.newSession('', prompt, model, effort))
       },
-      async newChat(title = '') {
-        return addSession(await api.newChat(title))
+      async newChat({ prompt, model, effort }) {
+        return addSession(await api.newChat('', prompt, model, effort))
       },
       async killSession(id) {
         await api.killSession(id)
@@ -708,8 +708,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         await api.renameSession(id, trimmed)
         setSessions((list) => list.map((s) => (s.id === id ? { ...s, title: trimmed } : s)))
       },
-      async startIssue(number, action = '', background = false) {
-        return addSession(await api.startIssue(number, action), background)
+      async startIssue(number, action = '', background = false, start) {
+        return addSession(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort), background)
       },
       async switchProject(name) {
         if (name === projectRef.current?.name) return

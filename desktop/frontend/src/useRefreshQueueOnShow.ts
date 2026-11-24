@@ -10,7 +10,7 @@ export function useRefreshQueueOnShow() {
   const { refreshIssues, report } = useAgentos('refreshIssues', 'report')
   const projectKey = useAgentosSelector((a) => a.project?.key)
   const refresh = useRef<(force?: boolean) => void>(() => {})
-  const last = useRef(Date.now())
+  const last = useRef(0)
   refresh.current = (force = false) => {
     if (!force && Date.now() - last.current < MIN_GAP_MS) return
     last.current = Date.now()

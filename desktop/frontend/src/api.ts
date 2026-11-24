@@ -3,8 +3,8 @@ import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataD
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
-  NewSession(title: string, prefill: string): Promise<Session>
-  NewChat(title: string): Promise<Session>
+  NewSession(title: string, prompt: string, model: string, effort: string): Promise<Session>
+  NewChat(title: string, prompt: string, model: string, effort: string): Promise<Session>
   KillSession(id: string): Promise<void>
   DismissSession(id: string): Promise<void>
   ResumeSession(id: string): Promise<Session>
@@ -27,7 +27,7 @@ type Backend = {
   NoteToIssue(id: string): Promise<void>
   NoteToSession(id: string): Promise<Session>
   Issues(refresh: boolean): Promise<Issue[]>
-  StartIssue(number: number, action: string): Promise<Session>
+  StartIssue(number: number, action: string, prompt: string, model: string, effort: string): Promise<Session>
   MoveIssue(number: number, section: string): Promise<void>
   UndoMove(number: number): Promise<void>
   IssueDetail(number: number): Promise<IssueDetail>
@@ -134,8 +134,8 @@ export const devFlags: DevFlags = mock?.flags ?? {}
 
 export const api = {
   snapshot: () => backend.Snapshot(),
-  newSession: (title: string, prefill = '') => backend.NewSession(title, prefill),
-  newChat: (title: string) => backend.NewChat(title),
+  newSession: (title: string, prompt = '', model = '', effort = '') => backend.NewSession(title, prompt, model, effort),
+  newChat: (title: string, prompt = '', model = '', effort = '') => backend.NewChat(title, prompt, model, effort),
   killSession: (id: string) => backend.KillSession(id),
   dismissSession: (id: string) => backend.DismissSession(id),
   resumeSession: (id: string) => backend.ResumeSession(id),
@@ -158,7 +158,7 @@ export const api = {
   noteToIssue: (id: string) => backend.NoteToIssue(id),
   noteToSession: (id: string) => backend.NoteToSession(id),
   issues: (refresh: boolean) => backend.Issues(refresh),
-  startIssue: (number: number, action: string) => backend.StartIssue(number, action),
+  startIssue: (number: number, action: string, prompt = '', model = '', effort = '') => backend.StartIssue(number, action, prompt, model, effort),
   moveIssue: (number: number, section: string) => backend.MoveIssue(number, section),
   undoMove: (number: number) => backend.UndoMove(number),
   issueDetail: (number: number) => backend.IssueDetail(number),

@@ -574,9 +574,13 @@ export function createMock(params: URLSearchParams) {
     emit('notes', { project: current.name, items: currentNotes() })
   }
 
-  function startSessionFor(title: string, issue: number, prefill: string, action = ''): Session {
+  const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
+
+  function startSessionFor(title: string, issue: number, prefill: string, action = '', model = '', effort = ''): Session {
     const s = create(title, issue, 'idle')
     s.action = action
+    if (model) s.model = model
+    if (effort) s.effort = effort
     s.buffer = term.banner(current.dir) + term.promptLine(prefill)
     publish()
     return view(s)
@@ -895,13 +899,19 @@ export function createMock(params: URLSearchParams) {
 
   let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude', 'agy'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
 
+  const issueRefreshes = { count: 0 }
+  Object.assign(window, { issueRefreshes })
+
   const backend = {
     Snapshot: async () => snapshot(),
     Awake: async () => data.some((p) => projectView(p).working > 0),
-    NewSession: async (title: string, prefill: string) => startSessionFor(title || `session ${nextN}`, 0, prefill),
-    NewChat: async (title: string) => {
-      const s = create(title || `chat ${nextN}`, 0, 'idle', [], Date.now(), current, true)
-      s.buffer = term.banner(current.dir) + term.promptLine('')
+    NewSession: async (title: string, prompt: string, model: string, effort: string) =>
+      startSessionFor(title.trim() || titleFromPrompt(prompt) || `session ${nextN}`, 0, prompt, '', model, effort),
+    NewChat: async (title: string, prompt: string, model: string, effort: string) => {
+      const s = create(title.trim() || titleFromPrompt(prompt) || `chat ${nextN}`, 0, 'idle', [], Date.now(), current, true)
+      if (model) s.model = model
+      if (effort) s.effort = effort
+      s.buffer = term.banner(current.dir) + term.promptLine(prompt)
       publish()
       return view(s)
     },
@@ -1069,8 +1079,11 @@ export function createMock(params: URLSearchParams) {
       const note = noteById(id)
       return startSessionFor(note.text.split('\n')[0], 0, note.text)
     },
-    Issues: async (refresh: boolean) => (refresh ? github(currentIssues(), 700) : delay(currentIssues())),
-    StartIssue: async (number: number, action: string) => {
+    Issues: async (refresh: boolean) => {
+      if (refresh) issueRefreshes.count++
+      return refresh ? github(currentIssues(), 700) : delay(currentIssues())
+    },
+    StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string) => {
       const issue = current.issues.find((i) => i.number === number)
       if (!issue) throw 'No such issue'
       const existing = sessions.find((s) => s.project === current.name && !s.chat && s.issue === number)
@@ -1079,7 +1092,7 @@ export function createMock(params: URLSearchParams) {
       const name = action || issue.actions[0]
       const command = { Work: `/work ${number}`, Plan: `/plan ${number}`, Investigate: `/investigate ${number}` }[name] ?? `Work on issue #${number}: ${issue.title}`
       const short = issue.title.split(' ').slice(0, 3).join(' ')
-      const session = startSessionFor(`#${number} ${short}`, number, command, name)
+      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort)
       emit('issues', { project: current.name, items: currentIssues() })
       return session
     },

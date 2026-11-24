@@ -79,6 +79,9 @@ export type Project = {
   setupDismissed: boolean
 }
 
+// ThreadStart is what the owner chose for a new thread; empty fields leave the choice to the defaults.
+export type ThreadStart = { prompt: string; model: string; effort: string }
+
 export type Note = {
   id: string
   text: string

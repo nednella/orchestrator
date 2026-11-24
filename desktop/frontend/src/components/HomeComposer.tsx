@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { Issue } from '../types'
@@ -12,19 +12,25 @@ import { TypeMark } from './TypeMark'
 const PICK_LIMIT = 8
 const TOKEN = /(^|\s)#(\w*)$/
 
+const MODELS = ['best', 'fable', 'opus', 'sonnet', 'haiku', 'opusplan']
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const { issues, composerKind, setComposerKind, newSession, newChat, startIssue, typeInto, report } = useAgentos('issues', 'composerKind', 'setComposerKind', 'newSession', 'newChat', 'startIssue', 'typeInto', 'report')
+  const { issues, composerKind, setComposerKind, newSession, newChat, startIssue, report } = useAgentos('issues', 'composerKind', 'setComposerKind', 'newSession', 'newChat', 'startIssue', 'report')
   const input = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
   const [caret, setCaret] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [cursor, setCursor] = useState(0)
   const [dismissed, setDismissed] = useState(false)
-  const [sending, setSending] = useState(false)
+  const [model, setModel] = useState('')
+  const [effort, setEffort] = useState('')
+  const sending = useRef(false)
 
   useFocusRequest('composer', input)
+  useFocusRequest('terminal', input)
 
   const token = TOKEN.exec(text.slice(0, caret))
   const query = token?.[2].toLowerCase()
@@ -34,6 +40,12 @@ export function HomeComposer() {
   )
   const pickedIssue = issues.find((i) => i.number === picked)
   const chat = composerKind === 'chat'
+  const live = Boolean(pickedIssue?.sessionId)
+  const canSend = picked !== null || text.trim() !== ''
+
+  useEffect(() => {
+    if (picked !== null && !pickedIssue) setPicked(null)
+  }, [picked, pickedIssue])
 
   const edit = (el: HTMLTextAreaElement) => {
     setText(el.value)
@@ -52,24 +64,18 @@ export function HomeComposer() {
   }
 
   const send = () => {
-    if (sending) return
+    if (sending.current || !canSend) return
+    sending.current = true
+    const start = { prompt: text.trim(), model, effort }
     report(async () => {
-      setSending(true)
       try {
-        const extra = text.trim()
-        if (picked !== null) {
-          const session = await startIssue(picked, '')
-          if (extra) await typeInto(session.id, extra)
-        } else if (chat) {
-          const session = await newChat('')
-          if (extra) await typeInto(session.id, extra)
-        } else {
-          await newSession('', extra)
-        }
+        if (picked !== null) await startIssue(picked, '', false, start)
+        else if (chat) await newChat(start)
+        else await newSession(start)
         setText('')
         setPicked(null)
       } finally {
-        setSending(false)
+        sending.current = false
       }
     })
   }
@@ -139,6 +145,7 @@ export function HomeComposer() {
                 <span className="mono flex-none text-dim">{pickedIssue.number}</span>
                 <TypeMark type={pickedIssue.type} />
                 <span className="min-w-0 truncate">{pickedIssue.title}</span>
+                {live && <span className="flex-none text-dim">opens its thread</span>}
                 <button className="flex-none text-dim hover:text-ink" aria-label="Remove issue" onClick={() => setPicked(null)}>
                   <Icon name="close" size={11} />
                 </button>
@@ -149,7 +156,7 @@ export function HomeComposer() {
             taRef={input}
             value={text}
             aria-label="New thread"
-            placeholder={pickedIssue ? 'Add to the issue’s command (optional)' : chat ? 'Ask about the project…' : 'Start a task…'}
+            placeholder={live ? 'The existing thread opens; this text is not sent' : pickedIssue ? 'Add to the issue’s command (optional)' : chat ? 'Ask about the project…' : 'Start a task…'}
             className="px-3 pt-2.5 pb-1 text-body"
             onChange={(e) => edit(e.currentTarget)}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -167,6 +174,22 @@ export function HomeComposer() {
                 onChange={setComposerKind}
               />
             )}
+            {!live && (
+              <>
+                <select className="field h-7 w-auto text-small" aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)}>
+                  <option value="">Default model</option>
+                  {MODELS.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+                <select className="field h-7 w-auto text-small" aria-label="Effort" value={effort} onChange={(e) => setEffort(e.target.value)}>
+                  <option value="">Default effort</option>
+                  {EFFORTS.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+              </>
+            )}
             <span className="ml-1 hidden min-w-0 items-center gap-3 truncate text-label text-dim @lg:flex">
               <span>
                 <Keycap>#</Keycap> picks an issue
@@ -175,7 +198,7 @@ export function HomeComposer() {
                 <Keycap>⇧Enter</Keycap> new line
               </span>
             </span>
-            <button className="btn btn-accent ml-auto h-7 px-3" disabled={sending} onMouseDown={(e) => e.preventDefault()} onClick={send}>
+            <button className="btn btn-accent ml-auto h-7 px-3" disabled={!canSend} onMouseDown={(e) => e.preventDefault()} onClick={send}>
               Start
             </button>
           </div>
