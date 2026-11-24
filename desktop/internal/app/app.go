@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,6 +38,7 @@ type Host struct {
 	PickDir   func() (string, error)          // "" when the user cancels
 	Quit      func()                          // closes the app, as the user would
 	Awake     func() (stop func(), err error) // holds off idle sleep until stop is called
+	Machine   func() string                   // this Mac's name, read once; nil leaves it empty
 }
 
 // App is the services, wired together.
@@ -121,7 +123,11 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.updates = update.New(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runner(ctx, "", name, args...)
 	}, c.StateDir, Bundle(), h.Emit, upd.Relaunch, h.Quit)
-	proj := projects.NewService(c.Registry, sess, store, iss, a.updates, runner, c.StateDir, h.PickDir, ctx)
+	machine := func() string { return "" }
+	if h.Machine != nil {
+		machine = sync.OnceValue(h.Machine)
+	}
+	proj := projects.NewService(c.Registry, sess, store, iss, a.updates, runner, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
 	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err }, h.Emit)
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}

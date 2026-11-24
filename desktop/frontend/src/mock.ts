@@ -350,6 +350,7 @@ export function createMock(params: URLSearchParams) {
       version: 'mock',
       update: flags.update ? '1.4.0' : '',
       shells: shellsOf(current.name).map((x) => x.id),
+      machine: 'Studio MacBook Pro',
     }
   }
 

@@ -134,6 +134,7 @@ export type Snapshot = {
   version: string
   update: string
   shells: string[]
+  machine: string
 }
 
 export type ThemeSetting = 'system' | 'light' | 'dark'

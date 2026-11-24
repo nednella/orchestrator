@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/agentos/desktop/devhttp"
 	"github.com/nednella/agentos/desktop/internal/app"
 	"github.com/nednella/agentos/desktop/internal/run"
+	"github.com/nednella/agentos/desktop/projects"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -54,7 +55,7 @@ func launch() error {
 		a := app.New(cfg, app.Host{
 			Emit: hub.Emit, Clipboard: func(string) {}, PickDir: func() (string, error) { return "", nil },
 			Quit:  func() { _ = syscall.Kill(os.Getpid(), syscall.SIGTERM) },
-			Awake: awake.Caffeinate,
+			Awake: awake.Caffeinate, Machine: computerName,
 		}, run.Exec, run.Stream, run.ExecEnv)
 		quitOnSignal(a)
 		return devhttp.Serve(devhttp.Options{Services: a.Services(), Start: a.Start, Stop: func() { stop(a) }, Hub: hub, Assets: assets, Media: a.Media(), Addr: addr})
@@ -80,7 +81,8 @@ func launch() error {
 				runtime.Quit(*c)
 			}
 		},
-		Awake: awake.Caffeinate,
+		Awake:   awake.Caffeinate,
+		Machine: computerName,
 	}, run.Exec, run.Stream, run.ExecEnv)
 	quitOnSignal(a)
 
@@ -128,3 +130,5 @@ func stop(a *app.App) {
 	a.Stop()
 	run.StopAll()
 }
+
+func computerName() string { return projects.ComputerName(context.Background(), run.Exec) }

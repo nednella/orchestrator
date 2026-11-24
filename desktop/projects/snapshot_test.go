@@ -65,3 +65,33 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 		}
 	})
 }
+
+func TestSnapshotNamesTheMachineFromOneRead(t *testing.T) {
+	dir := t.TempDir()
+	useConfig(t, "projects:\n  - {name: api, directory: "+dir+"}\n")
+	t.Setenv("AGENTOS_DIR", dir)
+	cfg, err := app.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := 0
+	machine := func() string {
+		reads++
+		return "Studio Mac"
+	}
+	a := app.New(cfg, app.Host{Emit: func(string, any) {}, Clipboard: func(string) {}, Machine: machine}, apptest.NoGH, apptest.NoStream, apptest.NoClaude)
+	for _, svc := range a.Services() {
+		s, ok := svc.(*projects.Service)
+		if !ok {
+			continue
+		}
+		for range 2 {
+			if got := s.Snapshot().Machine; got != "Studio Mac" {
+				t.Errorf("machine = %q", got)
+			}
+		}
+	}
+	if reads != 1 {
+		t.Errorf("read the machine name %d times, want once", reads)
+	}
+}

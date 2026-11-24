@@ -45,8 +45,9 @@ type Snapshot struct {
 	Sessions []sessions.Session `json:"sessions"`
 	Notes    []notes.Note       `json:"notes"`
 	Version  string             `json:"version"`
-	Update   string             `json:"update"` // a newer release's version, "" when the app is current
-	Shells   []string           `json:"shells"` // the current project's shell sessions in tab order, empty until one is opened
+	Update   string             `json:"update"`  // a newer release's version, "" when the app is current
+	Shells   []string           `json:"shells"`  // the current project's shell sessions in tab order, empty until one is opened
+	Machine  string             `json:"machine"` // this Mac's name, as its owner set it
 }
 
 // Service is bound to the front end.
@@ -59,11 +60,12 @@ type Service struct {
 	run      run.Runner
 	stateDir string
 	pickDir  func() (string, error) // "" when the user cancels
+	machine  func() string
 	ctx      func() context.Context
 }
 
-func NewService(r *Registry, s Sessions, n Notes, repos Repos, releases Releases, runner run.Runner, stateDir string, pickDir func() (string, error), ctx func() context.Context) *Service {
-	return &Service{registry: r, sessions: s, notes: n, repos: repos, releases: releases, run: runner, stateDir: stateDir, pickDir: pickDir, ctx: ctx}
+func NewService(r *Registry, s Sessions, n Notes, repos Repos, releases Releases, runner run.Runner, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
+	return &Service{registry: r, sessions: s, notes: n, repos: repos, releases: releases, run: runner, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
 }
 
 // Snapshot is everything the screen needs; call it on load.
@@ -71,7 +73,7 @@ func (s *Service) Snapshot() Snapshot {
 	cur := s.sessions.Current()
 	repo := s.repos.Repo(s.ctx(), cur.Dir)
 	projects := s.sessions.Projects()
-	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Version: version.Version, Update: s.releases.Available(), Shells: s.sessions.ShellIDs()}
+	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Version: version.Version, Update: s.releases.Available(), Shells: s.sessions.ShellIDs(), Machine: s.machine()}
 	snap.Project = sessions.Project{Key: cur.Key(), Name: cur.Name, Dir: cur.Dir}
 	for i, p := range projects {
 		if p.Dir == cur.Dir {
