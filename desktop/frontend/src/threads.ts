@@ -14,9 +14,14 @@ export function matchesThread(session: Session, query: string): boolean {
   return session.title.toLowerCase().includes(q) || session.branch.toLowerCase().includes(q) || (number !== '' && session.issue > 0 && String(session.issue).includes(number))
 }
 
-export function sidebarThreads(sessions: Session[], projectKey: string | undefined): Session[] {
-  const { waiting, working, idle, settled } = splitThreads(sessions.filter((s) => s.project === projectKey))
+// The thread list's order: needs you, working, idle, then ended, newest first.
+export function sortThreads(sessions: Session[]): Session[] {
+  const { waiting, working, idle, settled } = splitThreads(sessions)
   return [...waiting, ...working, ...idle, ...settled]
+}
+
+export function sidebarThreads(sessions: Session[], projectKey: string | undefined): Session[] {
+  return sortThreads(sessions.filter((s) => s.project === projectKey))
 }
 
 export function waitingByProject(sessions: Session[]): Map<string, number> {
