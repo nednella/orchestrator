@@ -781,6 +781,39 @@ func TestConcurrentSendsStayWholeLines(t *testing.T) {
 	}
 }
 
+func TestOversizedRequestIsRefused(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	conn, err := net.Dial("unix", h.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	go fmt.Fprintf(conn, `{"op":"draft","text":"%s"}`+"\n", strings.Repeat("x", 2<<20))
+
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	line, err := bufio.NewReader(conn).ReadBytes('\n')
+	if err != nil {
+		t.Fatalf("no reply to an oversized request: %v", err)
+	}
+	var rep reply
+	if err := json.Unmarshal(line, &rep); err != nil {
+		t.Fatal(err)
+	}
+	if rep.OK || !strings.Contains(rep.Error, "over 1 MB") {
+		t.Fatalf("reply = %+v, want an error about the size", rep)
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range logged {
+		if e.Kind == chat.KindDraft {
+			t.Fatal("an oversized draft was logged")
+		}
+	}
+}
+
 func TestLongSocketPathFails(t *testing.T) {
 	t.Parallel()
 	dir := socketDir(t)

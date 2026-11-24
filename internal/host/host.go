@@ -335,9 +335,11 @@ func (h *host) handle(conn net.Conn) {
 		conn.Close()
 	}()
 	conn.SetReadDeadline(time.Now().Add(requestTimeout))
-	r := bufio.NewReader(conn)
-	line, err := r.ReadBytes('\n')
+	line, err := bufio.NewReader(io.LimitReader(conn, maxRequest+1)).ReadBytes('\n')
 	if err != nil {
+		if len(line) > maxRequest {
+			writeReply(conn, errors.New("request is over 1 MB"))
+		}
 		return
 	}
 	conn.SetReadDeadline(time.Time{})
@@ -347,7 +349,7 @@ func (h *host) handle(conn net.Conn) {
 		return
 	}
 	if req.Op == opSubscribe {
-		h.subscribe(conn, r, req.After)
+		h.subscribe(conn, req.After)
 		return
 	}
 	writeReply(conn, h.do(req))
@@ -419,7 +421,7 @@ func (h *host) answer(id string, allow bool, message string) error {
 }
 
 // subscribe sends the logged events after `after`, then live events, until the client hangs up, falls too far behind or the host stops.
-func (h *host) subscribe(conn net.Conn, r *bufio.Reader, after int64) {
+func (h *host) subscribe(conn net.Conn, after int64) {
 	s, err := h.addSubscriber(conn)
 	if err != nil {
 		writeReply(conn, err)
@@ -445,7 +447,7 @@ func (h *host) subscribe(conn net.Conn, r *bufio.Reader, after int64) {
 	}
 	gone := make(chan struct{})
 	go func() {
-		io.Copy(io.Discard, r)
+		io.Copy(io.Discard, conn)
 		close(gone)
 	}()
 	for {
