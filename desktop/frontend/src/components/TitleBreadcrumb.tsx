@@ -17,7 +17,7 @@ export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-body">
       <button
-        className="max-w-[12rem] min-w-0 flex-none truncate rounded-sm text-soft hover:text-ink"
+        className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink"
         style={noDrag}
         title={`Show ${owner} home`}
         onClick={() => showHome(thread.project)}
