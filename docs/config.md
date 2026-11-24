@@ -34,7 +34,7 @@ projects:
     pr_review_drafts: false    # send pr_review_command while the PR is a draft too; when false, comments on a draft count as seen
     pr_checks_command: ""      # typed into a session whose PR has failing checks, {n} the PR number; "" sends nothing
     pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
-    setup_dismissed: false     # Not now was chosen on the offer to set the project up; the queue writes it
+    setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
 ```
 
 `session_cleanup_command` runs through `sh -c` in the project folder, once per branch of the session that has a worktree or a local branch, after the safety checks. `{branch}`, `{worktree}` (the folder the branch is checked out in, `''` if none) and `{dir}` (the project folder) are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A branch with no worktree has `{worktree}` `''`, which `git worktree remove` rejects; the command that *Set up* writes skips that step then. A command that fails blocks the clean-up with its error, unless the branch is already gone.
