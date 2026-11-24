@@ -5,6 +5,7 @@ import type { UseEditorOptions } from '@tiptap/react'
 import { Node as DocNode, Slice } from '@tiptap/pm/model'
 import { composerSchema, fromMarkdown, toMarkdown } from '../composerMarkdown'
 import { ComposerTyping } from '../composerTyping'
+import { MarkEdges } from '../markEdges'
 
 export type ComposerInput = {
   focus(): void
@@ -37,7 +38,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
   })
 
   const [options] = useState<UseEditorOptions>(() => ({
-    extensions: [composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() })],
+    extensions: [composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() }), MarkEdges],
     content: fromMarkdown(value),
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
