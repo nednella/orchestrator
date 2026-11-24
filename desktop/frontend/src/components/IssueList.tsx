@@ -75,7 +75,7 @@ export function IssueList({ shown: coreShown, filtering, hidden, onRead }: Issue
     if (issues.length === 0) return <Notice title="No open issues" hint="This repo has nothing in the queue." centered />
     if (filtering && shown.length === 0) return <Notice title="No issues match" hint="Clear the filter to see all of them." centered />
     return sections.map((section) => (
-      <QueueSection key={section.name} name={section.name} drag={drag}>
+      <QueueSection key={section.name} name={section.name} className="queue-section" drag={drag}>
         {section.name ? (
           <SectionHeader name={section.name} count={section.issues.length} open={section.open} locked={filtering} onToggle={() => toggle(section.name, isClosed(section.name))} />
         ) : (
