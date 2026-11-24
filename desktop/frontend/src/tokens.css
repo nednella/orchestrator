@@ -87,11 +87,11 @@
   --traffic-light-zone: 112px;
   --corner-pad: 1.375rem;
 
-  --bg-note: var(--bg-raised);
-  --bg-note-card: var(--bg-surface);
-  --border-note: var(--border);
-  --text-note: var(--text);
-  --text-note-dim: var(--text-dim);
+  --bg-note: #181613;
+  --bg-note-card: #211e19;
+  --border-note: #322d24;
+  --text-note: #ebe5d8;
+  --text-note-dim: #9a927f;
 
   --z-popup: 30;
   --z-overlay: 40;
