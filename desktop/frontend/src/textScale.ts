@@ -1,4 +1,4 @@
-// The text sizes form a ladder: each step scales the text by √1.2, from 1.2^-4 to 1.2^4.
+// The text sizes form a ladder in steps of √1.2 (about 9.5%), from about 0.48 to 2.07.
 const STEPS = 8
 const STEP_LOG = Math.log(1.2) / 2
 
