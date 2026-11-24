@@ -1,0 +1,14 @@
+// The text sizes form a ladder: each step scales the text by √1.2, from 1.2^-4 to 1.2^4.
+const STEPS = 8
+const STEP_LOG = Math.log(1.2) / 2
+
+const clampStep = (step: number) => Math.min(Math.max(step, -STEPS), STEPS)
+
+// Four decimals keep the saved value short; snapScale maps it back to its step.
+const scaleAt = (step: number) => Math.round(1.2 ** (clampStep(step) / 2) * 10000) / 10000
+
+const stepOf = (scale: number) => Math.round(Math.log(scale) / STEP_LOG)
+
+export const snapScale = (scale: number) => scaleAt(stepOf(scale))
+
+export const zoomedScale = (scale: number, change: -1 | 0 | 1) => (change === 0 ? 1 : scaleAt(stepOf(scale) + change))

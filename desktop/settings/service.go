@@ -132,7 +132,7 @@ func (s *Service) SetCleanup(event, mode string) (Settings, error) {
 	return s.saved(s.store.SetCleanup(s.project.Current().Key(), event, mode))
 }
 
-// SetTextScale saves the text size as a multiple of the default, from 0.85 to 1.5.
+// SetTextScale saves the text size as a multiple of the default, from 0.48 to 2.08.
 func (s *Service) SetTextScale(scale float64) (Settings, error) {
 	if err := project.CheckTextScale(scale); err != nil {
 		return Settings{}, err

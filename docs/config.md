@@ -11,7 +11,7 @@ keep_mac_awake: true           # stop the Mac idle-sleeping while a session work
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
 app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
 app_theme_light: light         # the theme the light appearance shows: light (the default)
-app_text_scale: 1.2            # text size as a multiple of the default, 0.85 to 1.5; unset is 1. The settings panel writes it
+app_text_scale: 1.2            # text size as a multiple of the default, 0.48 to 2.08; unset is 1. The settings panel writes it
 projects:
   - name: storefront
     directory: /Users/me/code/storefront

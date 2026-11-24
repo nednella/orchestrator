@@ -296,7 +296,7 @@ func TestLoadRejectsAnUnknownActionAgent(t *testing.T) {
 
 func TestLoadTextScale(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	for scale, ok := range map[string]bool{"1.2": true, "0.85": true, "1.5": true, "0.5": false, "3": false, "-1": false} {
+	for scale, ok := range map[string]bool{"1.2": true, "0.4823": true, "2.0736": true, "0.4": false, "3": false, "-1": false} {
 		if err := os.WriteFile(path, []byte("app_text_scale: "+scale+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

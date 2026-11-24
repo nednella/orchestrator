@@ -4,6 +4,7 @@ import { useAgentos } from './AgentosContext'
 import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
 import { readStored, writeStored } from './storage'
+import { snapScale, zoomedScale } from './textScale'
 import type { ThemeName } from './types'
 
 type Appearance = 'dark' | 'light'
@@ -19,8 +20,6 @@ export type TogglePanel = 'sidebar' | 'shell' | 'right'
 const PANEL_SELECTOR: Record<TogglePanel, string> = { sidebar: '[data-sidebar]', shell: '[data-panel="shell"]', right: '[data-panel="right"]' }
 const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shell: 'shell', right: 'right' }
 
-export const SCALES = [0.85, 0.92, 1, 1.1, 1.2, 1.35, 1.5]
-const DEFAULT_SCALE = 1
 const TABS_BELOW = 640
 const COMPACT_BELOW = 900
 const MEDIUM_BELOW = 1250
@@ -145,7 +144,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
-  const scale = settings.textScale
+  const scale = snapScale(settings.textScale)
   const systemAppearance = useSystemAppearance()
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
@@ -282,8 +281,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       statsOpen,
       digestOpen,
       zoom(step) {
-        const at = SCALES.indexOf(scale)
-        const next = step === 0 ? DEFAULT_SCALE : SCALES[Math.min(Math.max((at < 0 ? 2 : at) + step, 0), SCALES.length - 1)]
+        const next = zoomedScale(scale, step)
         report(() => setTextScale(next))
         if (zoomToast.current !== null) dismissToast(zoomToast.current)
         zoomToast.current = pushToast({ tone: 'info', text: `Text size ${Math.round(next * 100)}%` })

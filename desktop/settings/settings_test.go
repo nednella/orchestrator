@@ -99,7 +99,7 @@ func TestTextScale(t *testing.T) {
 	if data, _ := os.ReadFile(h.Conf); strings.Contains(string(data), "app_text_scale") {
 		t.Errorf("the default left the key in the file:\n%s", data)
 	}
-	for _, bad := range []float64{0, 0.5, 2, -1} {
+	for _, bad := range []float64{0, 0.4, 3, -1} {
 		if _, err := h.SetTextScale(bad); err == nil {
 			t.Errorf("SetTextScale(%v) was accepted", bad)
 		}

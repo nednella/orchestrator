@@ -74,8 +74,8 @@ func (c Config) LightTheme() string { return cmp.Or(c.ThemeLight, LightThemes[0]
 
 // The text sizes the app accepts, as a multiple of its default.
 const (
-	MinTextScale = 0.85
-	MaxTextScale = 1.5
+	MinTextScale = 0.48
+	MaxTextScale = 2.08
 )
 
 // CheckTextScale rejects a text size outside the accepted range.
