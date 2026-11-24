@@ -10,8 +10,10 @@ import { StateDot } from "./StateDot";
 type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean };
 
 function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
-  const { select, focus, dismissSession, report } = useAgentos(
+  const { project, select, showHome, focus, dismissSession, report } = useAgentos(
+    "project",
     "select",
+    "showHome",
     "focus",
     "dismissSession",
     "report",
@@ -35,6 +37,7 @@ function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
           style={ended ? { cursor: "default", opacity: 1 } : undefined}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
+            if (selected && project) return showHome(project.key);
             select(session.id);
             focus("terminal");
           }}
@@ -59,6 +62,16 @@ function ThreadRowView({ session, selected, cursor }: ThreadRowProps) {
             </span>
           )}
         </button>
+        {selected && !ended && project && (
+          <button
+            className="btn btn-ghost mr-1 h-6 w-6 flex-none justify-center px-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+            title="Close thread"
+            aria-label="Close thread"
+            onClick={() => showHome(project.key)}
+          >
+            <Icon name="close" size={12} />
+          </button>
+        )}
         {ended && (
           <button
             className="btn btn-ghost mr-1 h-6 w-6 flex-none justify-center px-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"

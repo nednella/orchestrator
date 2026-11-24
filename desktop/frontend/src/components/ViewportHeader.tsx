@@ -18,7 +18,7 @@ import { TimelineButton } from './TimelineButton'
 type ViewportHeaderProps = { session: Session }
 
 export function ViewportHeader({ session }: ViewportHeaderProps) {
-  const { renameSession, report, focus, killSession, dismissSession, resumeSession } = useAgentos('renameSession', 'report', 'focus', 'killSession', 'dismissSession', 'resumeSession')
+  const { project, showHome, renameSession, report, focus, killSession, dismissSession, resumeSession } = useAgentos('project', 'showHome', 'renameSession', 'report', 'focus', 'killSession', 'dismissSession', 'resumeSession')
   const { rightOpen, toggleRight, mode } = useLayout()
   const [renaming, setRenaming] = useState(false)
   const kill = useArmedConfirm()
@@ -31,6 +31,18 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
   return (
     <header className="flex flex-none flex-col">
       <div className="panel-head flex items-center gap-3 px-4 py-2.5 short:py-1.5">
+        {project && (
+          <>
+            <button
+              className="btn btn-ghost h-6 max-w-[10rem] flex-none truncate px-1.5 text-small text-soft"
+              title={`Show ${project.name} home`}
+              onClick={() => showHome(project.key)}
+            >
+              <span className="truncate">{project.name}</span>
+            </button>
+            <span className="-mx-1.5 flex-none text-soft" aria-hidden="true">›</span>
+          </>
+        )}
         <span className="mono w-4 flex-none text-title font-semibold text-soft">{session.n}</span>
         <div className="min-w-0">
           {renaming ? (
