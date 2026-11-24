@@ -171,6 +171,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
   const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
   const shellOpen = narrow ? mobilePanel === 'shell' : prefs.shellOpen
+  const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
   const projectName = project?.name ?? ''
   const panelView = panelViews[projectName] ?? ''
 
@@ -202,6 +203,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     },
     [narrow, updatePrefs],
   )
+
+  // A panel closed another way (its close button, a mobile tab) forgets where the focus was.
+  useEffect(() => {
+    const shown: Record<TogglePanel, boolean> = { sidebar: sidebarOpen, shell: shellOpen, right: rightShown }
+    for (const panel of Object.keys(shown) as TogglePanel[]) if (!shown[panel]) delete focusBefore.current[panel]
+  }, [sidebarOpen, shellOpen, rightShown])
 
   const setShellOpen = useCallback(
     (open: boolean) => {
@@ -301,7 +308,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       togglePanel(panel) {
         const setOpen = { sidebar: setSidebarOpen, shell: setShellOpen, right: setRightOpen }[panel]
-        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: narrow ? mobilePanel === 'panel' : rightOpen }[panel]
+        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightShown }[panel]
         const active = document.activeElement
         if (!shown) {
           if (panel === 'right' && !narrow) checkRightFits(width, prefs, 16 * scale)
@@ -357,7 +364,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, narrow, prefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, rightShown, narrow, prefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>
