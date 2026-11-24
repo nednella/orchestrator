@@ -14,7 +14,6 @@ import { StateIcon } from './StateIcon'
 import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
 import { ThreadTask } from './ThreadTask'
-import { TimelinePopover } from './TimelinePopover'
 import { useHoverCard } from './useHoverCard'
 
 // menuRequest changes when the list asks this row, from the keyboard, to open its menu.
@@ -26,7 +25,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'resumeSession', 'dismissSession', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
-  const [timelineAt, setTimelineAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
   const cleanup = useArmedConfirm()
   const card = useHoverCard(400)
@@ -193,12 +191,10 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           at={menuAt}
           onClose={() => setMenuAt(null)}
           onRename={() => setRenaming(true)}
-          onTimeline={() => setTimelineAt(menuAt)}
           onCleanup={() => cleanup.arm()}
         />
       )}
       {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}
-      {timelineAt && <TimelinePopover session={session} at={timelineAt} onClose={() => setTimelineAt(null)} />}
     </div>
   )
 }
