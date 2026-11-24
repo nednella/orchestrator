@@ -9,6 +9,9 @@ import type { EditorView } from '@tiptap/pm/view'
 type Side = 'before' | 'after'
 type Edge = { pos: number; before: readonly Mark[]; after: readonly Mark[]; side: Side | null; atEnd: boolean }
 
+// Literal text looks like any other text, so its mark makes no edge.
+const shown = (marks: readonly Mark[] = Mark.none) => marks.filter((mark) => mark.type.name !== 'literal')
+
 // Where the styles of the text before and after the caret differ, the caret has two stops: one takes the style
 // before the edge for what is typed next, the other the style after it. Stored marks record which one it is on.
 function edgeAt(state: EditorState): Edge | null {
@@ -16,10 +19,10 @@ function edgeAt(state: EditorState): Edge | null {
   if (!(selection instanceof TextSelection) || !selection.$cursor) return null
   const $pos = selection.$cursor
   if ($pos.textOffset > 0) return null
-  const before = $pos.nodeBefore?.marks ?? Mark.none
-  const after = $pos.nodeAfter?.marks ?? Mark.none
+  const before = shown($pos.nodeBefore?.marks)
+  const after = shown($pos.nodeAfter?.marks)
   if (Mark.sameSet(before, after)) return null
-  const typing = state.storedMarks ?? $pos.marks()
+  const typing = shown(state.storedMarks ?? $pos.marks())
   const side = Mark.sameSet(typing, after) ? 'after' : Mark.sameSet(typing, before) ? 'before' : null
   return { pos: $pos.pos, before, after, side, atEnd: $pos.pos === $pos.end() }
 }
@@ -38,8 +41,8 @@ function moveTo(editor: Editor, pos: number) {
   return editor.commands.command(({ tr }) => {
     tr.setSelection(TextSelection.create(tr.doc, pos))
     const $pos = tr.doc.resolve(pos)
-    const before = $pos.nodeBefore?.marks ?? Mark.none
-    const after = $pos.nodeAfter?.marks ?? Mark.none
+    const before = shown($pos.nodeBefore?.marks)
+    const after = shown($pos.nodeAfter?.marks)
     if ($pos.textOffset === 0 && !Mark.sameSet(before, after)) tr.setStoredMarks(pos < from ? after : before)
     return true
   })

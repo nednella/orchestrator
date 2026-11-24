@@ -1,16 +1,30 @@
 import { MarkdownManager } from '@tiptap/markdown'
 import { StarterKit } from '@tiptap/starter-kit'
-import { getSchema } from '@tiptap/react'
+import { Mark, getSchema } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/react'
 
-export const composerSchema = StarterKit.configure({
-  underline: false,
-  gapcursor: false,
-  hardBreak: { keepMarks: false },
-  link: { openOnClick: false, markdownLinks: true },
+// Text that goes to the agent exactly as it is, such as pasted text. It looks like any other text, and text typed
+// right after it is not part of it.
+const Literal = Mark.create({
+  name: 'literal',
+  inclusive: false,
+  parseHTML: () => [{ tag: 'span[data-literal]' }],
+  renderHTML: () => ['span', { 'data-literal': '' }, 0],
 })
 
-const markdown = new MarkdownManager({ extensions: [composerSchema] })
+export const composerSchema = [
+  StarterKit.configure({
+    underline: false,
+    gapcursor: false,
+    hardBreak: { keepMarks: false },
+    link: { openOnClick: false, markdownLinks: true },
+  }),
+  Literal,
+]
+
+const markdown = new MarkdownManager({ extensions: composerSchema })
+
+const isLiteral = (node?: JSONContent) => Boolean(node?.marks?.some((m) => m.type === 'literal'))
 
 // The library escapes every markdown character in plain text and encodes `<`, `>` and `&`, so `snake_case` would
 // reach the agent as `snake\_case`. Text is written as typed instead, escaped only where it could read as markup.
@@ -21,9 +35,11 @@ type TextEncoder = { encodeTextForMarkdown(text: string, node: JSONContent, pare
 const encoder = markdown as unknown as TextEncoder
 let escaping: Escaping = 'all'
 encoder.encodeTextForMarkdown = (text, node, parent) => {
-  if (parent?.type === 'codeBlock' || node.marks?.some((m) => m.type === 'code')) return text
+  if (parent?.type === 'codeBlock' || isLiteral(node) || node.marks?.some((m) => m.type === 'code')) return text
   const siblings = parent?.content ?? []
-  return escapeWhereNeeded(text, siblings[0] === node, siblings.at(-1) === node, parent?.type === 'paragraph')
+  const at = siblings.indexOf(node)
+  const atLineStart = at <= 0 || Boolean(siblings[at - 1].text?.endsWith('\n'))
+  return escapeWhereNeeded(text, atLineStart, at === siblings.length - 1, parent?.type === 'paragraph')
 }
 
 const URL_START = /https?:\/\/[^\s<>]+/y
@@ -111,7 +127,7 @@ const isEmptyList = (node: JSONContent): boolean =>
 function trimParagraph(content: JSONContent[]) {
   return content
     .map((node, i) => {
-      if (node.type !== 'text') return node
+      if (node.type !== 'text' || isLiteral(node)) return node
       let text = node.text?.replace(/[ \t]+\n/g, '\n') ?? ''
       if (i === 0) text = text.replace(/^[ \t]+/, '')
       if (i === content.length - 1) text = text.replace(/[ \t]+$/, '')
@@ -144,14 +160,27 @@ function serialize(doc: JSONContent, level: Escaping) {
   }
 }
 
+// Literal text is written as it is, so only typed text is checked: literal text stands in as characters with no
+// meaning in markdown, its line breaks kept.
+function standIn(node: JSONContent): JSONContent {
+  if (node.type === 'text' && isLiteral(node)) return { ...node, text: node.text?.replace(/[^\n]/g, '\uE000') }
+  if (!node.content) return node
+  const content = node.content.map(standIn)
+  return content.every((child, i) => child === node.content?.[i]) ? node : { ...node, content }
+}
+
+// Escaping changes which characters are markup, not where lines break, so the check ignores line layout.
+const sameText = (a: string, b: string) => a.replace(/\s+/g, ' ') === b.replace(/\s+/g, ' ')
+
 // Writes the text with the fewest escapes that still read back as the same document.
 export function toMarkdown(doc: JSONContent): string {
-  const exact = serialize(doc, 'all')
+  const typed = standIn(doc)
+  const exact = serialize(typed, 'all')
   for (const level of ['least', 'safe'] as const) {
-    const text = serialize(doc, level)
-    if (serialize(fromMarkdown(text), 'all') === exact) return text
+    const text = serialize(typed, level)
+    if (sameText(serialize(fromMarkdown(text), 'all'), exact)) return typed === doc ? text : serialize(doc, level)
   }
-  return exact
+  return typed === doc ? exact : serialize(doc, 'all')
 }
 
 function splitLines(node: JSONContent): JSONContent[] {
@@ -163,7 +192,7 @@ function splitLines(node: JSONContent): JSONContent[] {
   return [{ ...node, content: node.content.flatMap(splitLines) }]
 }
 
-const schema = getSchema([composerSchema])
+const schema = getSchema(composerSchema)
 
 type Token = { type: string; raw: string; task?: boolean; tokens?: Token[]; items?: Token[] }
 
@@ -211,9 +240,10 @@ export function fromMarkdown(text: string): JSONContent {
   return isValid(doc) ? doc : splitLines({ type: 'doc', content: paragraphs(text) })[0]
 }
 
-// Pasted text goes in as it is, not read as markdown: each line stays a line and a blank line starts a paragraph.
+// Pasted text goes in as it is, not read as markdown, and is sent as it is.
 export function fromPlainText(text: string): JSONContent {
-  return splitLines({ type: 'doc', content: paragraphs(text.replace(/\r\n?/g, '\n')) })[0]
+  const pasted = text.replace(/\r\n?/g, '\n')
+  return splitLines({ type: 'doc', content: [pasted ? { type: 'paragraph', content: [{ type: 'text', text: pasted, marks: [{ type: 'literal' }] }] } : { type: 'paragraph' }] })[0]
 }
 
 // A draft is saved as the editor's document, so it reloads as it was; its markdown is what is sent. A draft saved

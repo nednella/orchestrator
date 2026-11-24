@@ -38,7 +38,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
   })
 
   const [options] = useState<UseEditorOptions>(() => ({
-    extensions: [composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() }), MarkEdges],
+    extensions: [...composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() }), MarkEdges],
     content: value.doc,
     // Pasted text stays as it is: no `**bold**` turned bold.
     enablePasteRules: false,

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { EMPTY_DRAFT, draftOf, fromMarkdown, fromPlainText, readDraft, saveDraft, toMarkdown } from './composerMarkdown.ts'
+import { getSchema } from '@tiptap/react'
+import { EditorState, TextSelection } from '@tiptap/pm/state'
+import { EMPTY_DRAFT, composerSchema, draftOf, fromMarkdown, fromPlainText, readDraft, saveDraft, toMarkdown } from './composerMarkdown.ts'
 
 const roundTrip = (text: string) => toMarkdown(fromMarkdown(text))
 
@@ -142,24 +144,35 @@ const traceback = [
   'Traceback (most recent call last):',
   '  File "/app/pkg/__init__.py", line 3, in <module>',
   '    main()',
+  '',
+  '',
   '    # - not a list',
-  'ValueError: bad *value*',
+  'ValueError: bad *value*  ',
 ].join('\n')
+const literal = (value: string) => text(value, 'literal')
+const pasteBreak = { type: 'hardBreak', marks: [{ type: 'literal' }] }
 
 test('pasted text loads as it is, not as markdown', () => {
-  assert.deepEqual(fromPlainText('__init__.py\n    indented\n\n# not a heading'), doc(p(text('__init__.py'), { type: 'hardBreak' }, text('    indented')), p(text('# not a heading'))))
+  assert.deepEqual(fromPlainText('__init__.py\n    indented\r\n# not a heading'), doc(p(literal('__init__.py'), pasteBreak, literal('    indented'), pasteBreak, literal('# not a heading'))))
 })
 
-test('send value of pasted text reads back as the pasted text', () => {
-  const sent = toMarkdown(fromPlainText(traceback))
-  assert.equal(sent, traceback.replace('__init__', '\\_\\_init\\_\\_').replace('*value*', '\\*value\\*'))
-  assert.deepEqual(fromMarkdown(sent), fromPlainText(traceback))
+for (const pasted of ['    x = foo(a_b)\n\tindented\n__init__.py  ', traceback]) {
+  test(`pasted text is sent exactly as pasted: ${JSON.stringify(pasted.slice(0, 20))}`, () => {
+    assert.equal(toMarkdown(fromPlainText(pasted)), pasted)
+  })
+}
+
+test('text typed right after pasted text is not literal', () => {
+  const schema = getSchema(composerSchema)
+  const pasted = EditorState.create({ doc: schema.nodeFromJSON(fromPlainText('a_b')) })
+  const atEnd = pasted.apply(pasted.tr.setSelection(TextSelection.create(pasted.doc, pasted.doc.content.size - 1)))
+  const typed = atEnd.apply(atEnd.tr.insertText(' *x* and # y'))
+  assert.deepEqual(typed.doc.toJSON(), doc(p(literal('a_b'), text(' *x* and # y'))))
+  assert.equal(toMarkdown(typed.doc.toJSON()), 'a_b \\*x\\* and # y')
 })
 
-test('send value drops the spaces that start a paragraph or end a line', () => {
-  const sent = toMarkdown(fromPlainText('def f():  \n    return 1\n\n    x = 2'))
-  assert.equal(sent, 'def f():\n    return 1\n\nx = 2')
-  assert.equal(toMarkdown(fromMarkdown(sent)), sent)
+test('typed text on the line after pasted text is escaped as a line start', () => {
+  assert.equal(toMarkdown(doc(p(literal('foo'), pasteBreak, text('# x')))), 'foo\n\\# x')
 })
 
 test('a draft saved as a markdown string loads through the markdown reader', () => {
