@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
-import { EFFORTS, modelShortName } from '../model'
+import { EFFORTS, modelAlias, modelShortName } from '../model'
 import type { ModelChoice } from '../types'
 import { ComposerMenuChip } from './ComposerMenuChip'
 import { ModelPicker } from './ModelPicker'
@@ -23,7 +23,7 @@ export function ComposerModelChip({ model, effort, onModel, onEffort }: Composer
     let current = true
     report(async () => {
       const [base, picked] = await Promise.all([api.defaultModel(), model ? api.defaultModel(model) : null])
-      if (current) setDefaults({ model: base.model, effort: (picked ?? base).effort })
+      if (current) setDefaults({ model: modelAlias(base.model), effort: (picked ?? base).effort })
     })
     return () => {
       current = false
