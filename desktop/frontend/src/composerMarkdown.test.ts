@@ -199,8 +199,15 @@ test('a saved draft reloads as the same document', () => {
   assert.deepEqual(reloaded, draft)
 })
 
-test('a saved draft that is not a document loads empty', () => {
-  assert.equal(readDraft({ version: 1, doc: { type: 'doc', content: [{ type: 'nope' }] } }), EMPTY_DRAFT)
-  assert.equal(readDraft({ version: 2, doc: doc(p(text('x'))) }), EMPTY_DRAFT)
+test('a saved draft the schema does not fit keeps its text as literal text', () => {
+  const unknownMark = { type: 'text', text: 'keep me', marks: [{ type: 'gone' }] }
+  assert.equal(readDraft({ version: 1, doc: doc(p(text('a_b')), p(unknownMark, { type: 'hardBreak' }, text('two'))) }).text, 'a_b\nkeep me\ntwo')
+  assert.deepEqual(readDraft({ version: 1, doc: doc({ type: 'callout', content: [p(text('inside'))] }, p(text('after'))) }).doc, doc(p(literal('inside'), pasteBreak, literal('after'))))
+  assert.equal(readDraft({ version: 2, doc: doc(p(text('*x*'))) }).text, '*x*')
+})
+
+test('a saved draft with no text loads empty', () => {
+  assert.equal(readDraft({ version: 1, doc: doc({ type: 'nope' }) }), EMPTY_DRAFT)
+  assert.equal(readDraft({ version: 1, doc: 'not a document' }), EMPTY_DRAFT)
   assert.equal(readDraft(null), EMPTY_DRAFT)
 })

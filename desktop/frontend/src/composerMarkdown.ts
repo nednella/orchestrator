@@ -201,6 +201,7 @@ const unsupported = (token: Token): boolean =>
   token.type === 'table' || token.type === 'image' || Boolean(token.task) || [...(token.tokens ?? []), ...(token.items ?? [])].some(unsupported)
 
 const literalParagraph = (text: string): JSONContent => (text ? { type: 'paragraph', content: [{ type: 'text', text, marks: [{ type: 'literal' }] }] } : { type: 'paragraph' })
+const literalDoc = (text: string) => splitLines({ type: 'doc', content: [literalParagraph(text)] })[0]
 
 // Markdown the composer cannot show loads as its source text, kept literal, so it is sent as it came in.
 function parseBlocks(text: string): JSONContent[] {
@@ -236,12 +237,12 @@ export function fromMarkdown(text: string): JSONContent {
   const content = parseBlocks(text)
   if (content.length === 0) return { type: 'doc', content: [{ type: 'paragraph' }] }
   const doc = splitLines({ type: 'doc', content })[0]
-  return isValid(doc) ? doc : splitLines({ type: 'doc', content: [literalParagraph(text)] })[0]
+  return isValid(doc) ? doc : literalDoc(text)
 }
 
 // Pasted text goes in as it is, not read as markdown, and is sent as it is.
 export function fromPlainText(text: string): JSONContent {
-  return splitLines({ type: 'doc', content: [literalParagraph(text.replace(/\r\n?/g, '\n'))] })[0]
+  return literalDoc(text.replace(/\r\n?/g, '\n'))
 }
 
 // A draft is saved as the editor's document, so it reloads as it was; its markdown is what is sent. A draft saved
@@ -253,8 +254,21 @@ export const draftOf = (doc: JSONContent): ComposerDraft => ({ doc, text: toMark
 export const EMPTY_DRAFT = draftOf(fromMarkdown(''))
 export const saveDraft = (draft: ComposerDraft): SavedDraft => ({ version: 1, doc: draft.doc })
 
+// The text of a saved document, a line per block.
+function textOf(node: JSONContent): string {
+  if (typeof node.text === 'string') return node.text
+  if (node.type === 'hardBreak') return '\n'
+  const children = Array.isArray(node.content) ? node.content : []
+  const inline = children.some((child) => typeof child.text === 'string' || child.type === 'hardBreak')
+  return children.map(textOf).join(inline ? '' : '\n')
+}
+
 export function readDraft(saved: unknown): ComposerDraft {
   if (typeof saved === 'string') return draftOf(fromMarkdown(saved))
   const { version, doc } = (saved ?? {}) as Partial<SavedDraft>
-  return version === 1 && doc && isValid(doc) ? draftOf(doc) : EMPTY_DRAFT
+  if (typeof doc !== 'object' || doc === null) return EMPTY_DRAFT
+  if (version === 1 && isValid(doc)) return draftOf(doc)
+  // A document the schema no longer fits, after a rename say, keeps its text as it is.
+  const text = textOf(doc).replace(/^\n+|\n+$/g, '')
+  return text.trim() ? draftOf(literalDoc(text)) : EMPTY_DRAFT
 }
