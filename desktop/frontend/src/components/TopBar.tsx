@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
 import { actionsFor, formatShortcut } from '../actions'
-import { RAIL_REM, useLayout } from '../LayoutContext'
-import { useFullscreen } from '../useFullscreen'
+import { useLayout } from '../LayoutContext'
 import { Icon } from './Icon'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
@@ -15,7 +14,6 @@ export function TopBar() {
   const layout = useLayout()
   const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
-  const fullscreen = useFullscreen()
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => {
     const shortcut = find(id).shortcut
@@ -24,9 +22,8 @@ export function TopBar() {
   const narrow = mode === 'narrow'
   const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
-  const inset = fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)'
-  // With the thread list hidden the bar starts at the rail, under the window buttons.
-  const left = sidebarOpen ? '0px' : `max(0px, calc(${inset} - ${RAIL_REM}rem - 0.75rem))`
+  // With the sidebar hidden the bar starts under the window buttons.
+  const left = sidebarOpen ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
 
   return (
     <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: 'var(--corner-pad)' }}>

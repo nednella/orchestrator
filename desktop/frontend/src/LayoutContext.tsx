@@ -114,7 +114,8 @@ function fit(width: number, prefs: BandPrefs, root: number): Fitted {
   const preferred = (panel: SidePanel) => prefs[panel] ?? clamp((SHARE[panel] * width) / root, DEFAULT_RANGE[panel])
   let sidebar = prefs.sidebarOpen ? preferred('sidebar') * root : 0
   let right = prefs.rightOpen ? preferred('right') * root : 0
-  const over = () => RAIL_REM * root + LINES_PX + sidebar + right + TERMINAL_MIN_PX - width
+  const rail = prefs.sidebarOpen ? RAIL_REM * root : 0
+  const over = () => rail + LINES_PX + sidebar + right + TERMINAL_MIN_PX - width
   if (over() > 0 && prefs.rightOpen) right = Math.max(MIN_REM.right * root, right - over())
   if (over() > 0 && prefs.sidebarOpen) sidebar = Math.max(MIN_REM.sidebar * root, sidebar - over())
   const forced = over() > 0 && prefs.rightOpen
