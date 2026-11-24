@@ -15,6 +15,9 @@ import { ThreadSection } from './ThreadSection'
 
 const SETTLED_OPEN_KEY = 'agentos.sidebar.settled-open'
 
+// A request, from the keyboard, that the row of thread id opens its menu; n counts the requests.
+export type MenuRequest = { id: string; n: number }
+
 export function ThreadSidebar() {
   const { projectSessions, selectedId, select, focus, setOverlay } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setOverlay')
   const { mode, widths, returnToTerminal } = useLayout()
@@ -23,6 +26,7 @@ export function ThreadSidebar() {
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [settledOpen, setSettledOpen] = useState(() => readStored<boolean>(SETTLED_OPEN_KEY, false))
+  const [menuRequest, setMenuRequest] = useState<MenuRequest | null>(null)
   const narrow = mode === 'narrow'
   const searching = query.trim() !== ''
 
@@ -82,6 +86,12 @@ export function ThreadSidebar() {
       returnToTerminal()
       return
     }
+    const id = nav.cursorKey
+    if ((e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) && id && id !== SETTLED_KEY) {
+      e.preventDefault()
+      setMenuRequest((last) => ({ id, n: (last?.n ?? 0) + 1 }))
+      return
+    }
     if (nav.handle(e)) e.preventDefault()
   }
 
@@ -128,14 +138,15 @@ export function ThreadSidebar() {
         </button>
       </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto py-1">
-        <ThreadSection label="Attention" sessions={sections.waiting} cursorKey={nav.cursorKey} selectedId={selectedId} />
-        <ThreadSection label="Working" sessions={sections.working} cursorKey={nav.cursorKey} selectedId={selectedId} />
-        <ThreadSection label="Idle" sessions={sections.idle} cursorKey={nav.cursorKey} selectedId={selectedId} />
+        <ThreadSection label="Attention" sessions={sections.waiting} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />
+        <ThreadSection label="Working" sessions={sections.working} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />
+        <ThreadSection label="Idle" sessions={sections.idle} cursorKey={nav.cursorKey} selectedId={selectedId} menuRequest={menuRequest} />
         <SettledSection
           sessions={settled}
           open={settledShown}
           cursorKey={nav.cursorKey}
           selectedId={selectedId}
+          menuRequest={menuRequest}
           onToggle={() => {
             nav.setCursorKey(SETTLED_KEY)
             toggleSettled()

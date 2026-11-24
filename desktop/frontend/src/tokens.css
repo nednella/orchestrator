@@ -14,6 +14,7 @@
   --bg-segment: rgba(255, 255, 255, 0.045);
   --bg-segment-on: rgba(255, 255, 255, 0.08);
   --shadow-composer: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-popup: 0 10px 30px rgba(0, 0, 0, 0.5);
 
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.11);
@@ -126,6 +127,7 @@
   --bg-segment: rgba(212, 212, 216, 0.4);
   --bg-segment-on: rgba(212, 212, 216, 0.72);
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.12);
 
   --border: #dcdfe7;
   --border-strong: #c4c9d6;

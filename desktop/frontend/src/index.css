@@ -353,6 +353,28 @@
     background: var(--bg-hover);
   }
 
+  .composer-option[data-danger='true'] {
+    color: var(--danger);
+  }
+
+  .popup {
+    position: fixed;
+    z-index: var(--z-popup);
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+    background: var(--bg-composer);
+    box-shadow: 0 0 0 1px var(--border-strong), var(--shadow-popup);
+  }
+
+  .popup .composer-option:focus {
+    outline: none;
+    background: var(--bg-hover);
+  }
+
+  .popup .composer-option[data-danger='true']:is(:hover, :focus) {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+  }
+
   .segments-track {
     display: flex;
     flex: none;
@@ -434,6 +456,10 @@
 
   .row[data-selected='true'] {
     background: var(--bg-raised);
+  }
+
+  .row[data-menu-open='true'] {
+    background: var(--bg-hover);
   }
 
   .row-inset[data-selected='true'] {

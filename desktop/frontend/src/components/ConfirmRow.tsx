@@ -7,14 +7,15 @@ type ConfirmRowProps = {
   cancelLabel?: string
   danger?: boolean
   inline?: boolean
+  stacked?: boolean
   onConfirm(): void
   onCancel(): void
 }
 
-export function ConfirmRow({ message, label = 'Confirm', confirmLabel, cancelLabel = 'Cancel', danger = false, inline = false, onConfirm, onCancel }: ConfirmRowProps) {
+export function ConfirmRow({ message, label = 'Confirm', confirmLabel, cancelLabel = 'Cancel', danger = false, inline = false, stacked = false, onConfirm, onCancel }: ConfirmRowProps) {
   return (
     <div
-      className={`flex items-center gap-2 ${inline ? '' : 'w-full'}`}
+      className={`flex gap-2 ${stacked ? 'flex-col' : 'items-center'} ${inline ? '' : 'w-full'}`}
       role="alertdialog"
       aria-label={label}
       onKeyDown={(e) => {

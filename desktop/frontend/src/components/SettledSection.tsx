@@ -1,6 +1,7 @@
 import type { Session } from '../types'
 import { Icon } from './Icon'
 import { ThreadRow } from './ThreadRow'
+import type { MenuRequest } from './ThreadSidebar'
 
 export const SETTLED_KEY = 'settled'
 
@@ -9,10 +10,11 @@ type SettledSectionProps = {
   open: boolean
   cursorKey: string | null
   selectedId: string | null
+  menuRequest: MenuRequest | null
   onToggle(): void
 }
 
-export function SettledSection({ sessions, open, cursorKey, selectedId, onToggle }: SettledSectionProps) {
+export function SettledSection({ sessions, open, cursorKey, selectedId, menuRequest, onToggle }: SettledSectionProps) {
   if (sessions.length === 0) return null
 
   return (
@@ -23,7 +25,7 @@ export function SettledSection({ sessions, open, cursorKey, selectedId, onToggle
         </span>
         Settled · {sessions.length}
       </button>
-      {open && sessions.map((s) => <ThreadRow key={s.id} session={s} selected={s.id === selectedId} cursor={cursorKey === s.id} />)}
+      {open && sessions.map((s) => <ThreadRow key={s.id} session={s} selected={s.id === selectedId} cursor={cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />)}
     </section>
   )
 }
