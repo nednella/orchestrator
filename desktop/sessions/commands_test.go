@@ -155,3 +155,43 @@ func TestCommandsWorkInTheCallersProject(t *testing.T) {
 		return false
 	})
 }
+
+func TestSessionsOfEveryProjectAreListed(t *testing.T) {
+	h := newHarness(t)
+	if _, err := h.NewSession("here", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	other := h.Snapshot().Project.Key
+	if _, err := h.NewSession("there", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+
+	byTitle := map[string]string{}
+	var id string
+	for _, s := range h.Snapshot().Sessions {
+		byTitle[s.Title] = s.Project
+		if s.Title == "there" {
+			id = s.ID
+		}
+	}
+	if byTitle["here"] != "main" || byTitle["there"] != other {
+		t.Fatalf("project of each session = %v, want here in main and there in %q", byTitle, other)
+	}
+
+	h.Hook(t, id, "Notification", `{"notification_type":"permission_prompt","message":"ok?"}`)
+	eventually(t, "a sessions event for the other project", func() bool {
+		for _, s := range h.Rec.LastSessionsOf(other) {
+			if s.ID == id && s.State == "waiting" {
+				return true
+			}
+		}
+		return false
+	})
+	eventually(t, "attention for the other project's session", func() bool { return h.Rec.CountAttentionFor(id, "waiting") == 1 })
+}

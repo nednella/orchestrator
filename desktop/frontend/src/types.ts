@@ -29,6 +29,7 @@ export type BranchStatus = {
 
 export type Session = {
   id: string
+  project: string
   n: number
   title: string
   state: State

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -51,6 +52,7 @@ var errNotSession = errors.New("the shell is not a session")
 // Session is one agent as the front end sees it.
 type Session struct {
 	ID          string           `json:"id"`
+	Project     string           `json:"project"` // the key of the project the session belongs to
 	N           int              `json:"n"`
 	Title       string           `json:"title"`
 	State       session.State    `json:"state"`
@@ -137,9 +139,9 @@ type Sessions struct {
 	heads      map[string]string // the HEAD of the project folder at each session's latest PreToolUse
 	seen       map[string]session.State
 	history    map[string][]session.Change
-	loaded     bool // the first refresh is in, so later changes may raise attention
-	synced     bool // the first refresh is synced, so a session seen from now on is a new one
-	lastSent   []Session
+	loaded     bool                 // the first refresh is in, so later changes may raise attention
+	synced     bool                 // the first refresh is synced, so a session seen from now on is a new one
+	lastSent   map[string][]Session // by project key
 	lastProjs  []Project
 	lastIssues string
 	life       *Lifecycle
@@ -718,7 +720,6 @@ func (s *Sessions) readPrompt(asker agent.PaneAsker, rec session.Record) {
 // sync updates history and attention from what is known, and tells the front
 // end if the list changed. It needs mu.
 func (s *Sessions) sync() {
-	key := s.project.Key()
 	var attention [][2]string // session id and the attention state
 	waitsChanged := false
 	live := map[string]bool{}
@@ -763,7 +764,7 @@ func (s *Sessions) sync() {
 		}
 		rec := s.records[id]
 		replied := known && prev == session.Working && state == session.Idle && rec.Event == "Stop"
-		if s.loaded && in.Name.Project == key {
+		if s.loaded {
 			switch {
 			case state == session.Waiting:
 				attention = append(attention, [2]string{id, "waiting"})
@@ -812,11 +813,27 @@ func (s *Sessions) sync() {
 	s.announceProjects()
 	list := s.list()
 	s.announceIssues(list)
-	if reflect.DeepEqual(list, s.lastSent) {
+	byProject := map[string][]Session{}
+	for _, v := range list {
+		byProject[v.Project] = append(byProject[v.Project], v)
+	}
+	changed := false
+	for _, k := range slices.Sorted(maps.Keys(byProject)) {
+		if !reflect.DeepEqual(byProject[k], s.lastSent[k]) {
+			s.emit("sessions", scoped.Of(k, byProject[k]))
+			changed = true
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(s.lastSent)) {
+		if _, ok := byProject[k]; !ok {
+			s.emit("sessions", scoped.Of(k, []Session{}))
+			changed = true
+		}
+	}
+	if !changed {
 		return
 	}
-	s.lastSent = list
-	s.emit("sessions", scoped.Of(key, list))
+	s.lastSent = byProject
 	for _, a := range attention {
 		s.emit("attention", map[string]string{"id": a[0], "state": a[1]})
 	}
@@ -907,7 +924,7 @@ func (s *Sessions) announceIssues(list []Session) {
 	var sig strings.Builder
 	sig.WriteString(s.project.Key())
 	for _, v := range list {
-		if v.Issue > 0 && v.State != session.Ended && !v.Chat {
+		if v.Project == s.project.Key() && v.Issue > 0 && v.State != session.Ended && !v.Chat {
 			fmt.Fprintf(&sig, " %d=%s", v.Issue, v.ID)
 		}
 	}
@@ -949,15 +966,11 @@ func (s *Sessions) projectViews() []Project {
 	return views
 }
 
-// list is the current project's sessions in rail order. It needs mu.
+// list is every project's sessions, each project's in rail order. It needs mu.
 func (s *Sessions) list() []Session {
-	key := s.project.Key()
 	var rail []session.Session
 	byName := map[session.Name]term.Info{}
 	for _, in := range s.info {
-		if in.Name.Project != key {
-			continue
-		}
 		byName[in.Name] = in
 		ss := session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Idle}
 		if rec, ok := s.records[in.Name.String()]; ok {
@@ -966,19 +979,18 @@ func (s *Sessions) list() []Session {
 		rail = append(rail, ss)
 	}
 	for _, e := range s.ended {
-		if e.info.Name.Project == key {
-			byName[e.info.Name] = e.info
-			rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Ended, At: e.at})
-		}
+		byName[e.info.Name] = e.info
+		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Ended, At: e.at})
 	}
 	session.Sort(rail)
+	projs := s.projects()
 	out := make([]Session, 0, len(rail))
 	for _, ss := range rail {
 		in := byName[ss.Name]
 		id := ss.Name.String()
 		issue, _ := strconv.Atoi(in.Issue)
 		view := Session{
-			ID: id, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
+			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
 			CreatedAt: in.Created.UnixMilli(), Issue: issue, Chat: in.Chat, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
@@ -994,7 +1006,9 @@ func (s *Sessions) list() []Session {
 		view.Branch, view.Worktree, view.PR, view.Git = f.branch, f.worktree, f.pr, f.git
 		view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
 		if view.Branch == "" && issue > 0 {
-			view.Branch = s.project.BranchFor(issue)
+			if p, ok := projectIn(projs, in); ok {
+				view.Branch = p.BranchFor(issue)
+			}
 		}
 		if spent, ok := s.spent[id]; ok {
 			view.Tokens, view.Cost = spent.Total(), spent.Dollars()

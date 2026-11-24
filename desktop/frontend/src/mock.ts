@@ -7,7 +7,6 @@ import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Diges
 type Handler = (payload: never) => void
 
 type MockSession = Session & {
-  project: string
   buffer: string
   opened: boolean
   nextChangeAt: number
@@ -223,6 +222,7 @@ export function createMock(params: URLSearchParams) {
   function view(s: MockSession): Session {
     return {
       id: s.id,
+      project: s.project,
       n: s.n,
       title: s.title,
       state: s.state,
@@ -260,9 +260,9 @@ export function createMock(params: URLSearchParams) {
     return { app, browsers, sessions: live, total: app + browsers + live, machine: 16 * 2 ** 30 }
   }
 
-  function currentSessions(): Session[] {
+  function sessionsOf(project: string): Session[] {
     return sessions
-      .filter((s) => s.project === current.name)
+      .filter((s) => s.project === project)
       .map(view)
       .sort((a, b) => order[a.state] - order[b.state] || b.lastEventAt - a.lastEventAt)
   }
@@ -343,7 +343,7 @@ export function createMock(params: URLSearchParams) {
     return {
       project: projectView(current),
       projects: data.map(projectView),
-      sessions: currentSessions(),
+      sessions: data.flatMap((p) => sessionsOf(p.name)),
       notes: currentNotes(),
       version: 'mock',
       update: flags.update ? '1.4.0' : '',
@@ -352,7 +352,7 @@ export function createMock(params: URLSearchParams) {
   }
 
   function publish() {
-    emit('sessions', { project: current.name, items: currentSessions() })
+    data.forEach((p) => emit('sessions', { project: p.name, items: sessionsOf(p.name) }))
     emit('projects', data.map(projectView))
   }
 

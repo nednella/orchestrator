@@ -386,7 +386,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (epoch === projectEpoch.current) setDigest(next)
       })
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
-      applySessions(snap.sessions)
+      applySessions(snap.sessions.filter((s) => s.project === snap.project.key))
       report(() => loadIssues(false))
     },
     [applySessions, loadIssues, report, selectId],

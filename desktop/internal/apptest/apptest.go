@@ -212,6 +212,18 @@ func (r *Recorder) LastSessions() []sessions.Session {
 	return lastList[sessions.Session](r, "sessions").Items
 }
 
+// LastSessionsOf is the list of the latest sessions event of one project, nil when it has had none.
+func (r *Recorder) LastSessionsOf(project string) []sessions.Session {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range slices.Backward(r.events) {
+		if list, ok := e.payload.(scoped.List[sessions.Session]); ok && e.name == "sessions" && list.Project == project {
+			return list.Items
+		}
+	}
+	return nil
+}
+
 // LastNotes is the list of the latest notes event.
 func (r *Recorder) LastNotes() []notes.Note { return lastList[notes.Note](r, "notes").Items }
 
