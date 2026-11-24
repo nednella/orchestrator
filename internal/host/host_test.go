@@ -107,6 +107,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				continue
 			case "big":
 				text = strings.Repeat("x", 1<<20)
+			case "quit":
+				os.Stdout.Close()
+				time.Sleep(time.Second)
+				os.Exit(0)
 			default:
 				print(map[string]any{"type": "stream_event", "api_message_id": id, "event": map[string]any{
 					"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": text},
@@ -551,6 +555,47 @@ func TestSlowSubscriberIsDropped(t *testing.T) {
 	slow.SetReadDeadline(time.Now().Add(10 * time.Second))
 	if _, err := io.Copy(io.Discard, slow); err != nil {
 		t.Fatalf("slow subscriber was not dropped: %v", err)
+	}
+}
+
+func TestSendAfterClaudeExitsFails(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := Send(ctxT(t), h.socket, "quit"); err != nil {
+		t.Fatal(err)
+	}
+	var refused string
+	tries := 0
+	eventually(t, "a send to be refused", func() bool {
+		tries++
+		text := fmt.Sprint("late ", tries)
+		err := Send(ctxT(t), h.socket, text)
+		if err != nil && strings.Contains(err.Error(), "claude has exited") {
+			refused = text
+			return true
+		}
+		return false
+	})
+	select {
+	case <-h.done:
+		h.done <- nil
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return after claude exited")
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := logged[len(logged)-1]; last.Kind != chat.KindExit {
+		t.Fatalf("last event = %s, want exit", last.Kind)
+	}
+	for _, e := range logged {
+		if e.Text == refused {
+			t.Fatalf("a refused send was logged: %+v", e)
+		}
 	}
 }
 

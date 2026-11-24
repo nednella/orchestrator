@@ -49,14 +49,16 @@ type host struct {
 	log     *chat.Log
 	echo    io.Writer
 
-	stdinMu sync.Mutex
-	stdin   io.Writer
-	reqID   atomic.Int64
+	stdinMu  sync.Mutex
+	stdin    io.Writer
+	stdinErr error
+	reqID    atomic.Int64
 
 	handlers sync.WaitGroup
 
 	mu        sync.Mutex
 	closed    bool
+	exited    bool
 	subs      map[*subscriber]struct{}
 	conns     map[net.Conn]struct{}
 	approvals map[string]json.RawMessage
@@ -105,7 +107,7 @@ func Run(ctx context.Context, c Config) error {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		h.exited(err)
+		h.publishExit(err)
 		return err
 	}
 	h.stdin = stdin
@@ -116,12 +118,17 @@ func Run(ctx context.Context, c Config) error {
 	go h.serve(ln)
 
 	h.read(stdout)
+	h.mu.Lock()
+	h.exited = true
+	h.mu.Unlock()
 	err = cmd.Wait()
-	h.exited(err)
+	h.publishExit(err)
 	return err
 }
 
-func (h *host) exited(err error) {
+var errExited = errors.New("claude has exited")
+
+func (h *host) publishExit(err error) {
 	e := chat.Event{Kind: chat.KindExit}
 	if err != nil {
 		e.Text = err.Error()
@@ -191,16 +198,23 @@ func (h *host) handleLine(line []byte) {
 	}
 }
 
-// publish logs e and hands it to every subscriber. Both happen under h.mu, so a subscriber added in between sees e in the log or on its channel, never both and never neither.
+// publish logs e and hands it to every subscriber. Both happen under h.mu, so a subscriber added in between sees e in the log or on its channel, never both and never neither. Once Claude's stdout has ended, only the exit event is taken.
 func (h *host) publish(e chat.Event) (chat.Event, error) {
 	h.mu.Lock()
+	if h.exited && e.Kind != chat.KindExit {
+		h.mu.Unlock()
+		return chat.Event{}, errExited
+	}
 	e, err := h.log.Append(e)
 	if err != nil {
 		h.mu.Unlock()
 		return chat.Event{}, err
 	}
-	if e.Kind == chat.KindApproval {
+	switch e.Kind {
+	case chat.KindApproval:
 		h.approvals[e.ID] = e.Input
+	case chat.KindExit:
+		h.exited = true
 	}
 	for s := range h.subs {
 		select {
@@ -221,8 +235,28 @@ func (h *host) publish(e chat.Event) (chat.Event, error) {
 func (h *host) write(line []byte) error {
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
-	_, err := h.stdin.Write(line)
-	return err
+	return h.writeLocked(line)
+}
+
+// writeLocked must be called with stdinMu held. After one failed write every later one fails without trying, so a send can refuse before it logs anything.
+func (h *host) writeLocked(line []byte) error {
+	if h.stdinErr != nil {
+		return h.stdinErr
+	}
+	if _, err := h.stdin.Write(line); err != nil {
+		h.stdinErr = fmt.Errorf("claude's stdin is closed: %w", err)
+		return h.stdinErr
+	}
+	return nil
+}
+
+func (h *host) running() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.exited {
+		return errExited
+	}
+	return nil
 }
 
 func (h *host) nextID() string {
@@ -290,6 +324,12 @@ func (h *host) handle(conn net.Conn) {
 func (h *host) do(req request) error {
 	switch req.Op {
 	case opSend:
+		h.stdinMu.Lock()
+		failed := h.stdinErr
+		h.stdinMu.Unlock()
+		if failed != nil {
+			return failed
+		}
 		if _, err := h.publish(chat.Event{Kind: chat.KindUser, Text: req.Text}); err != nil {
 			return err
 		}
@@ -298,6 +338,9 @@ func (h *host) do(req request) error {
 		_, err := h.publish(chat.Event{Kind: chat.KindDraft, Text: req.Text})
 		return err
 	case opInterrupt:
+		if err := h.running(); err != nil {
+			return err
+		}
 		return h.write(chat.Interrupt(h.nextID()))
 	case opAnswer:
 		return h.answer(req.ID, req.Allow, req.Message)
@@ -307,6 +350,10 @@ func (h *host) do(req request) error {
 
 func (h *host) answer(id string, allow bool, message string) error {
 	h.mu.Lock()
+	if h.exited {
+		h.mu.Unlock()
+		return errExited
+	}
 	input, ok := h.approvals[id]
 	if !ok {
 		h.mu.Unlock()
