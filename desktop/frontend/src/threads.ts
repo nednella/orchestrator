@@ -31,3 +31,11 @@ export function liveThreads(projects: Project[], sessions: Session[]): Session[]
     return [...waiting, ...working, ...idle]
   })
 }
+
+// What the thread's clean-up waits on, in words; '' when nothing does.
+export function cleanupNote({ cleanup, cleanupReason, pr }: Session): string {
+  if (cleanup === 'blocked') return `Not cleaned up: ${cleanupReason}`
+  if (cleanup === 'pending') return 'Cleaning up…'
+  if (cleanup === 'ask') return pr?.state === 'merged' ? 'PR was already merged' : 'PR closed without merging'
+  return ''
+}

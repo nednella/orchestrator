@@ -22,3 +22,6 @@ export function modelAlias(model: string): string {
 }
 
 export const modelShortName = (model: string) => CLAUDE_MODELS[model]?.short ?? shortModel(model)
+
+// The short name of a model given as an alias or as a full id; '' for none.
+export const modelName = (model: string) => (model ? modelShortName(modelAlias(model)) : '')

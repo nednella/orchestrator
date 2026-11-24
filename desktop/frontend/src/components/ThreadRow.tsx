@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { modelName } from '../model'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
-import { Ago } from './Ago'
 import { CleanupControls } from './CleanupControls'
+import { CleanupMark } from './CleanupMark'
 import { ConfirmRow } from './ConfirmRow'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
@@ -28,6 +29,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const kill = useArmedConfirm()
   const cleanup = useArmedConfirm()
   const ended = session.state === 'ended'
+  const model = modelName(session.model)
+  const facts = session.branch !== '' || session.pr !== null || model !== '' || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -82,7 +85,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pr-2 pl-3 text-left"
             aria-current={selected}
             aria-disabled={ended}
-            title={ended ? `${session.title} (ended)` : session.title}
             style={ended ? { cursor: 'default' } : undefined}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
@@ -95,14 +97,13 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             <span className="flex w-full items-center gap-2">
               <StateDot state={session.state} />
               <span className={`min-w-0 flex-1 truncate text-body ${selected ? 'font-semibold' : 'font-medium'}`}>{session.title}</span>
-              <span className="mono flex-none text-label text-dim">
-                <Ago at={session.lastEventAt} />
-              </span>
             </span>
-            {(session.branch || session.pr) && (
-              <span className="flex w-full items-center gap-2 pl-4">
-                <span className="mono min-w-0 flex-1 truncate text-label text-dim">{session.branch}</span>
+            {facts && (
+              <span className="flex w-full items-center gap-2 pl-4 text-label text-dim">
+                <span className="mono min-w-0 flex-1 truncate">{session.branch}</span>
                 {session.pr && <PRMark pr={session.pr} />}
+                {model && <span className="flex-none">{model}</span>}
+                <CleanupMark session={session} />
               </span>
             )}
           </button>
@@ -118,7 +119,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           </button>
         )}
       </div>
-      {session.cleanup !== '' && (
+      {cleanup.armed && (
         <div className="flex w-full pr-2 pb-1.5 pl-7">
           <CleanupControls session={session} remove={cleanup} />
         </div>
