@@ -6,19 +6,33 @@ const HEADING = /^( {0,3}#{1,6})((?:[ \t].*)?)$/
 const QUOTE = /^( {0,3}>+ ?)(.*)$/
 const LIST = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+.*|)$/
 
-// One alternative per inline form, tried left to right: `code`, [text](url), a bare URL, **strong**, *em*.
+// Runs on every keystroke: no part may scan past the next delimiter of its own kind, or a long line with
+// openers and no closers takes quadratic time.
+const MAX_INLINE = 2000
+
+// One alternative per inline form, tried left to right: `code`, [text](url), a bare URL, **strong**, __strong__,
+// *em*, _em_.
 const INLINE = new RegExp(
   [
     '`[^`\\n]+`',
-    '\\[([^\\]\\n]+)\\]\\(([^)\\s]+)\\)',
+    '\\[([^\\[\\]\\n]+)\\]\\(([^()\\[\\]\\s]+)\\)',
     'https?:\\/\\/[^\\s<>()]*[^\\s<>().,;:!?\'"]',
-    '(\\*\\*|(?<!\\w)__)(?=\\S)(.+?)(?<=\\S)\\3(?!\\w)',
-    '(\\*|(?<!\\w)_)(?=[^\\s*_])(.+?)(?<=[^\\s*_])\\5(?!\\w)',
+    '\\*\\*([^*\\s](?:[^*\\n]*[^*\\s])?)\\*\\*',
+    '(?<!\\w)__([^_\\s](?:[^_\\n]*[^_\\s])?)__(?!\\w)',
+    '\\*([^*\\s](?:[^*\\n]*[^*\\s])?)\\*',
+    '(?<!\\w)_([^_\\s](?:[^_\\n]*[^_\\s])?)_(?!\\w)',
   ].join('|'),
   'g',
 )
 
+const delimited = (text: string, width: number, kind: MarkdownKind): MarkdownSpan[] => [
+  { text: text.slice(0, width), kind: 'marker' },
+  { text: text.slice(width, -width), kind },
+  { text: text.slice(-width), kind: 'marker' },
+]
+
 function inline(text: string, plain?: MarkdownKind): MarkdownSpan[] {
+  if (text.length > MAX_INLINE) return [{ text, kind: plain }]
   const spans: MarkdownSpan[] = []
   let at = 0
   for (const m of text.matchAll(INLINE)) {
@@ -26,8 +40,8 @@ function inline(text: string, plain?: MarkdownKind): MarkdownSpan[] {
     if (start > at) spans.push({ text: text.slice(at, start), kind: plain })
     if (m[0].startsWith('`')) spans.push({ text: m[0], kind: 'code' })
     else if (m[1] !== undefined) spans.push({ text: '[', kind: 'marker' }, { text: m[1], kind: 'link' }, { text: `](${m[2]})`, kind: 'marker' })
-    else if (m[3] !== undefined) spans.push({ text: m[3], kind: 'marker' }, { text: m[4], kind: 'strong' }, { text: m[3], kind: 'marker' })
-    else if (m[5] !== undefined) spans.push({ text: m[5], kind: 'marker' }, { text: m[6], kind: 'em' }, { text: m[5], kind: 'marker' })
+    else if (m[3] !== undefined || m[4] !== undefined) spans.push(...delimited(m[0], 2, 'strong'))
+    else if (m[5] !== undefined || m[6] !== undefined) spans.push(...delimited(m[0], 1, 'em'))
     else spans.push({ text: m[0], kind: 'link' })
     at = start + m[0].length
   }
