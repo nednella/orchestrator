@@ -141,13 +141,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
               >
                 <Icon name="more" size={14} />
               </button>
-              {(selected || ended) && (
-                <button
-                  className="btn btn-ghost h-5 w-6 justify-center px-0"
-                  title={ended ? 'Dismiss' : 'Close thread'}
-                  aria-label={ended ? `Dismiss ${session.title}` : 'Close thread'}
-                  onClick={() => (ended ? a.report(() => a.dismissSession(session.id)) : a.showHome(session.project))}
-                >
+              {selected && (
+                <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(session.project)}>
                   <Icon name="x" size={14} />
                 </button>
               )}
