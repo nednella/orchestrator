@@ -14,7 +14,7 @@ export function SetupOffer() {
       }
     })
   return (
-    <div className="mx-3 mt-3 mb-1 flex flex-col gap-2.5 rounded-md border border-line bg-raised p-3">
+    <div className="mb-8 flex flex-col gap-2.5 rounded-md border border-line bg-raised p-3">
       <div className="flex flex-col gap-1">
         <p className="text-body font-medium">Set up this project for agentos</p>
         <p className="text-small text-dim">

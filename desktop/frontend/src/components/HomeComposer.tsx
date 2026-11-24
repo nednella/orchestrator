@@ -9,12 +9,14 @@ import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
 import { ComposerModelChip } from './ComposerModelChip'
 import { Icon } from './Icon'
+import { IssueChips } from './IssueChips'
 import { IssuePickList } from './IssuePickList'
 import { NoteImages } from './NoteImages'
 import { SegmentedControl } from './SegmentedControl'
 import { TypeMark } from './TypeMark'
 
 const PICK_LIMIT = 8
+const CHIP_LIMIT = 3
 const TOKEN = /(^|\s)#(\w*)$/
 
 const MODES: { value: ComposerMode; label: string }[] = [
@@ -49,6 +51,8 @@ export function HomeComposer() {
   const chat = a.composerKind === 'chat'
   const live = Boolean(pickedIssue?.sessionId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
+  // The top of the queue: the issues of its first section, which the core lists first.
+  const chips = useMemo(() => a.issues.filter((i) => i.section === a.issues[0]?.section).slice(0, CHIP_LIMIT), [a.issues])
 
   useEffect(() => {
     if (picked !== null && !a.issues.some((i) => i.number === picked)) setPicked(null)
@@ -69,6 +73,12 @@ export function HomeComposer() {
     setPicked(number)
     setCursor(-1)
     requestAnimationFrame(() => input.current?.setSelectionRange(start, start))
+  }
+
+  const pickChip = (number: number) => {
+    a.setComposerMode('thread')
+    setPicked(number)
+    input.current?.focus()
   }
 
   const openPicker = () => {
@@ -139,7 +149,7 @@ export function HomeComposer() {
           : 'Describe a task. # picks an issue'
 
   return (
-    <div className="flex-none px-4 pt-2 pb-4">
+    <div className="flex flex-col">
       <Composer
         taRef={input}
         value={text}
@@ -182,6 +192,7 @@ export function HomeComposer() {
         onAttach={note ? pending.attach : undefined}
         onSend={send}
       />
+      <IssueChips issues={chips} picked={note ? null : picked} onPick={pickChip} />
     </div>
   )
 }

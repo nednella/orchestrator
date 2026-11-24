@@ -16,24 +16,18 @@ export function Home() {
   useRefreshQueueOnShow()
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (isTyping(e.target)) return
-    if (e.key !== 'Escape') return
+    if (e.key !== 'Escape' || isTyping(e.target)) return
     e.preventDefault()
     focus('composer')
   }
 
   return (
-    <aside ref={panel} data-panel="home" tabIndex={-1} className="panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden" onKeyDown={onKeyDown}>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col pb-6">
-          <div className="flex min-w-0 items-baseline gap-3 px-4 pt-5">
-            <h1 className="min-w-0 truncate text-title font-semibold">{project?.name}</h1>
-            {project?.repo && <span className="mono min-w-0 truncate text-small text-dim">{project.repo}</span>}
-          </div>
-          {offersSetup && <SetupOffer />}
-        </div>
+    <aside ref={panel} data-panel="home" tabIndex={-1} className="panel flex h-full min-h-0 min-w-0 flex-col overflow-y-auto" onKeyDown={onKeyDown}>
+      <div className="m-auto flex w-full max-w-[46rem] flex-col px-4 pt-6 pb-[12vh]">
+        {offersSetup && <SetupOffer />}
+        <h1 className="mb-5 text-center text-[1.375rem] font-semibold text-balance">{project ? `What should we build in ${project.name}?` : 'What should we build?'}</h1>
+        <HomeComposer key={project?.key} />
       </div>
-      <HomeComposer key={project?.key} />
     </aside>
   )
 }
