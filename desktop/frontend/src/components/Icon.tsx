@@ -144,7 +144,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'panel-right') return <path d="M2.5 3h11v10h-11ZM9.5 3v10" />
   if (name === 'panel-bottom') return <path d="M2.5 3h11v10h-11ZM2.5 9.5h11" />
   if (name === 'settings') return <path d="M6.6 3.2 6.9 1.6h2.2l.3 1.6 1 .4 1.3-.9 1.6 1.6-.9 1.3.4 1 1.6.3v2.2l-1.6.3-.4 1 .9 1.3-1.6 1.6-1.3-.9-1 .4-.3 1.6H6.9l-.3-1.6-1-.4-1.3.9-1.6-1.6.9-1.3-.4-1-1.6-.3V6.9l1.6-.3.4-1-.9-1.3 1.6-1.6 1.3.9ZM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-  if (name === 'chart') return <path d="M3 13V8M7 13V3M11 13V6M14 13H2" />
+  if (name === 'chart') return <path d="M2.5 2.5v11h11M5 10.5l2.5-3.5 2.5 2 3.5-4.5" />
   if (name === 'pin') return <path d="M9.5 2.5 13.5 6.5 11 7l-2 3-.5 3-5-5 3-.5 3-2ZM5.5 10.5 2.5 13.5" />
   if (name === 'archive') return <path d="M2 3.5h12v3H2ZM3 6.5V13h10V6.5M6.5 9h3" />
   if (name === 'broom') return <path d="M9.5 2.5 13 6M8 5l3 3-4.5 5.5H2.5V9.5ZM5 8l3 3" />
@@ -154,7 +154,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'image') return <path d="M2.5 3h11v10h-11ZM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.2v.01" />
   if (name === 'machine') return <path d="M3 3.5h10v7H3ZM1.5 12.5h13" />
   if (name === 'model') return <path d="M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8 6.7 6.7Z" />
-  if (name === 'digest') return <path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11ZM2.5 5 8 7.5 13.5 5M8 7.5v6" />
+  if (name === 'digest') return <path d="M3.5 13.5h9a1.5 1.5 0 0 0 1.5-1.5V3.5a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1V12a1.5 1.5 0 0 1-1.5 1.5Zm0 0A1.5 1.5 0 0 1 2 12V7a1 1 0 0 1 1-1h2M7.5 5.5h4M7.5 8h4M7.5 10.5h2.5" />
   if (name === 'back') return <path d="M9.5 3.5 5 8l4.5 4.5M5 8h8" />
   if (name === 'forward') return <path d="M6.5 3.5 11 8l-4.5 4.5M11 8H3" />
   if (name === 'camera') return <path d="M2 5h3l1-1.5h4L11 5h3v8H2ZM8 11.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z" />
