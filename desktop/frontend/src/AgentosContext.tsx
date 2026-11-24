@@ -59,6 +59,7 @@ type AgentosState = {
   shellIds: string[]
   shellId: string
   version: string
+  machine: string
   update: string
   updating: boolean
   patchNotes: Release[]
@@ -252,6 +253,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [pickedShell, setPickedShell] = useState('')
   const shellId = shellIds.includes(pickedShell) ? pickedShell : (shellIds[0] ?? '')
   const [version, setVersion] = useState('')
+  const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState('')
   const [updating, setUpdating] = useState(false)
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
@@ -390,6 +392,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setNotes(snap.notes)
       setShellIds(snap.shells)
       setVersion(snap.version)
+      setMachine(snap.machine)
       setUpdate(snap.update)
       setRawIssues([])
       setIssuesDisabled(false)
@@ -954,13 +957,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       shellIds,
       shellId,
       version,
+      machine,
       update,
       updating,
       patchNotes,
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

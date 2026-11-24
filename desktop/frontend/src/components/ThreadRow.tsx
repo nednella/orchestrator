@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { modelName } from '../model'
@@ -12,8 +12,10 @@ import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { PRMark } from './PRMark'
 import { StateDot } from './StateDot'
+import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
 import { TimelinePopover } from './TimelinePopover'
+import { useHoverCard } from './useHoverCard'
 
 // menuRequest changes when the list asks this row, from the keyboard, to open its menu.
 type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; menuRequest: number }
@@ -28,6 +30,9 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const [renaming, setRenaming] = useState(false)
   const kill = useArmedConfirm()
   const cleanup = useArmedConfirm()
+  const card = useHoverCard(400)
+  const cardId = useId()
+  const { show: showCard, close: closeCard } = card
   const ended = session.state === 'ended'
   const model = modelName(session.model)
   const facts = session.branch !== '' || session.pr !== null || model !== '' || session.cleanup === 'blocked' || session.cleanup === 'ask'
@@ -46,6 +51,19 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     openMenuBelow()
   }, [menuRequest, openMenuBelow])
 
+  // The list's cursor is the keyboard's place in it: the card follows it while the list holds the focus.
+  useEffect(() => {
+    const el = row.current
+    const list = el?.closest<HTMLElement>('[data-panel]')
+    if (!cursor || !el || !list || document.activeElement !== list) return
+    showCard(el)
+    list.addEventListener('blur', closeCard)
+    return () => {
+      list.removeEventListener('blur', closeCard)
+      closeCard()
+    }
+  }, [cursor, showCard, closeCard])
+
   return (
     <div
       ref={row}
@@ -55,8 +73,11 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
       data-cursor={cursor}
       data-menu-open={menuAt !== null}
       style={{ opacity: ended ? 0.6 : 1 }}
+      {...card.hover}
+      onMouseDown={closeCard}
       onContextMenu={(e) => {
         e.preventDefault()
+        closeCard()
         setMenuAt({ x: e.clientX, y: e.clientY })
       }}
       onKeyDown={(e) => {
@@ -85,7 +106,10 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pr-2 pl-3 text-left"
             aria-current={selected}
             aria-disabled={ended}
+            aria-describedby={card.anchor ? cardId : undefined}
             style={ended ? { cursor: 'default' } : undefined}
+            onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
+            onBlur={closeCard}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (selected) return a.showHome(session.project)
@@ -156,6 +180,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           onKill={() => kill.arm()}
         />
       )}
+      {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}
       {timelineAt && <TimelinePopover session={session} at={timelineAt} onClose={() => setTimelineAt(null)} />}
     </div>
   )
