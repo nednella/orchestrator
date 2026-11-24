@@ -21,11 +21,8 @@ export function ModelPicker({ model, effort, defaults, onModel, onEffort, onDone
   const shownModel = model || defaults.model
   const shownEffort = effort || defaults.effort
   const [query, setQuery] = useState('')
-  const [more, setMore] = useState(() => CLAUDE_MODELS[shownModel]?.more === true)
   const needle = query.trim().toLowerCase()
-  const ids = Object.keys(CLAUDE_MODELS).filter((id) =>
-    needle ? id.includes(needle) || CLAUDE_MODELS[id].name.toLowerCase().includes(needle) : more || !CLAUDE_MODELS[id].more,
-  )
+  const ids = Object.keys(CLAUDE_MODELS).filter((id) => id.includes(needle) || CLAUDE_MODELS[id].name.toLowerCase().includes(needle))
   const [highlight, setHighlight] = useState(() => Math.max(ids.indexOf(shownModel), 0))
   const at = Math.min(highlight, ids.length - 1)
   const levels = useRef<HTMLDivElement>(null)
@@ -106,11 +103,6 @@ export function ModelPicker({ model, effort, defaults, onModel, onEffort, onDone
             </button>
           ))}
           {ids.length === 0 && <p className="px-2 py-1.5 text-small text-dim">No models found</p>}
-          {!needle && (
-            <button tabIndex={-1} className="composer-option h-8 text-soft hover:text-ink" onClick={() => setMore(!more)}>
-              {more ? 'Show less' : 'Show more'}
-            </button>
-          )}
         </div>
       </div>
       <div className="flex w-44 flex-none flex-col border-l border-line max-sm:w-full max-sm:border-t max-sm:border-l-0">
