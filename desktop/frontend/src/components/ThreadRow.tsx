@@ -24,7 +24,7 @@ type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; me
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'killSession', 'dismissSession', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'killSession', 'resumeSession', 'dismissSession', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [timelineAt, setTimelineAt] = useState<Point | null>(null)
@@ -63,7 +63,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     }
   }, [cursor, showCard, closeCard])
 
-  const line2 = session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
+  const line2 = ended || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   return (
     <div
@@ -155,8 +155,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           </>
         )}
         {line2 && (
-          <>
-            <span className="thread-dim col-start-2 flex min-w-0 items-center gap-1.5 text-label text-soft">
+          <div className="col-span-2 col-start-2 flex min-w-0 items-center gap-2 text-label">
+            <span className="thread-dim flex min-w-0 flex-1 items-center gap-1.5 text-soft">
               {session.branch && (
                 <>
                   <span className="flex flex-none text-dim">
@@ -166,11 +166,24 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                 </>
               )}
             </span>
-            <span className="thread-dim flex items-center gap-1.5 justify-self-end text-label">
-              <CleanupMark session={session} />
-              <ThreadTask session={session} />
-            </span>
-          </>
+            {ended ? (
+              <span className="relative z-[1] flex flex-none gap-1.5">
+                {session.resumable && (
+                  <button className="btn h-[1.375rem] px-2 text-label" title="Start a session that continues this conversation" onClick={() => a.report(() => a.resumeSession(session.id))}>
+                    Resume
+                  </button>
+                )}
+                <button className="btn h-[1.375rem] px-2 text-label" onClick={() => a.report(() => a.dismissSession(session.id))}>
+                  Dismiss
+                </button>
+              </span>
+            ) : (
+              <span className="flex flex-none items-center gap-1.5">
+                <CleanupMark session={session} />
+                <ThreadTask session={session} />
+              </span>
+            )}
+          </div>
         )}
         {session.state === 'waiting' && session.detail && <p className="thread-question col-span-2 col-start-2 truncate">{session.detail}</p>}
       </div>
