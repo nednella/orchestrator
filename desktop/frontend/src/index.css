@@ -263,11 +263,148 @@
     outline: none;
   }
 
-  .composer-bar {
+  .composer-box {
+    position: relative;
+    z-index: 1;
+    border-radius: 1rem;
+    background: var(--bg-composer);
+    box-shadow: 0 0 0 1px var(--border), var(--shadow-composer);
+  }
+
+  .composer-box[data-dragging='true'] {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent);
+    background: color-mix(in srgb, var(--bg-hover) 45%, var(--bg-composer));
+  }
+
+  .composer-editor {
+    min-height: calc(2lh + 0.5rem);
+    max-height: 13rem;
+    line-height: 1.625;
+    color: var(--text);
+  }
+
+  .composer-editor::placeholder {
+    color: var(--text-soft);
+  }
+
+  /* Tucks 1rem under the box's top edge, so the box reads as one with what sits on it. */
+  .composer-attached {
+    width: calc(100% - 2.75rem);
+    margin: 0 auto -1rem;
+    padding: 0.25rem 0.25rem 1.25rem;
+    border-radius: 1rem 1rem 0 0;
+    background: var(--bg-composer);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  .composer-chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.75rem;
+    padding: 0 0.5rem;
+    border-radius: 0.5rem;
+    font-size: var(--fs-small);
+    font-weight: 500;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--text) 80%, transparent);
+  }
+
+  .composer-chip > svg {
+    color: var(--text-soft);
+  }
+
+  .composer-chip:hover,
+  .composer-chip[aria-expanded='true'] {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .composer-chip:active:not([aria-haspopup]) {
+    transform: scale(0.97);
+  }
+
+  .composer-menu {
+    position: absolute;
+    bottom: calc(100% + 0.375rem);
+    z-index: var(--z-popup);
+    min-width: 12rem;
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+    background: var(--bg-composer);
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+
+  .composer-option {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.25rem 0.375rem 0.375rem 0.75rem;
+    width: 100%;
+    height: 1.75rem;
+    padding: 0 0.5rem;
+    border-radius: 0.5rem;
+    font-size: var(--fs-small);
+    text-align: left;
+  }
+
+  .composer-option:hover,
+  .composer-option[data-selected='true'] {
+    background: var(--bg-hover);
+  }
+
+  .segments-track {
+    display: flex;
+    flex: none;
+    padding: 0.125rem;
+    border-radius: 0.5rem;
+    background: var(--bg-segment);
+  }
+
+  .segments-track > button {
+    flex: 1;
+    height: 1.5rem;
+    padding: 0 0.625rem;
+    border-radius: 0.375rem;
+    font-size: var(--fs-small);
+    font-weight: 500;
+    color: var(--text-soft);
+  }
+
+  .segments-track > button[aria-pressed='true'] {
+    background: var(--bg-segment-on);
+    color: var(--text);
+  }
+
+  .composer-send {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--text-on-accent);
+    font-size: var(--fs-small);
+    font-weight: 500;
+    transition: transform 0.12s, background 0.12s;
+  }
+
+  .composer-send[data-text='true'] {
+    padding: 0 0.875rem;
+  }
+
+  .composer-send:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 90%, var(--text));
+    transform: scale(1.05);
+  }
+
+  .composer-send:disabled {
+    opacity: 1;
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+    color: var(--text-soft);
   }
 
   .panel {
@@ -863,16 +1000,11 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
-  [data-section='notes'] .composer,
   [data-section='notes'] .note-jot,
   [data-section='notes'] .note-search {
     background: var(--bg-note-card);
     border-color: var(--border-note);
     color: var(--text-note);
-  }
-
-  [data-section='notes'] .composer:focus-within {
-    border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
   .reveal {

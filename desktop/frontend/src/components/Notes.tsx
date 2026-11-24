@@ -6,7 +6,6 @@ import { Collapse } from './Collapse'
 import { Icon } from './Icon'
 import { ImageViewer } from './ImageViewer'
 import { NoteCard } from './NoteCard'
-import { NoteInput } from './NoteInput'
 import { Notice } from './Notice'
 import type { NavRef } from './Home'
 
@@ -74,7 +73,6 @@ export function Notes({ nav }: NotesProps) {
 
   return (
     <>
-      <NoteInput />
       {a.notes.length > 0 && (
         <div className="relative px-3 pb-2">
           <span className="pointer-events-none absolute top-1.5 left-5 text-dim">
@@ -98,7 +96,7 @@ export function Notes({ nav }: NotesProps) {
       )}
       <div ref={list} className="flex flex-col gap-2.5 px-3 pb-3">
         {a.notes.length === 0 && (
-          <Notice title="Nothing jotted yet" hint="Ramble here: half ideas, things to ask, bugs you noticed. Start a task or file an issue from any note later." centered />
+          <Notice title="Nothing jotted yet" hint="Switch the composer below to Note and ramble: half ideas, things to ask, bugs you noticed. Start a task or file an issue from any note later." centered />
         )}
         {a.notes.length > 0 && visible.length === 0 && <Notice title="No notes match" hint="Clear the search to see them all." centered />}
         {active.map(card)}

@@ -5,15 +5,10 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'note',
     label: 'New note',
     group: 'Notes',
-    palette: { prompt: 'Note text' },
-    async run(args) {
-      if (args.length === 0) {
-        layout.showHome('notes')
-        a.focus('note-input')
-        return
-      }
-      await a.addNote(args.join(' '))
-      return 'Note added'
+    run() {
+      layout.showHome('composer')
+      a.setComposerMode('note')
+      a.focus('composer')
     },
   },
   {
@@ -23,7 +18,8 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     uiCommand: 'notes',
     run() {
       layout.showHome('notes')
-      a.focus('note-input')
+      a.setComposerMode('note')
+      a.focus('composer')
     },
   },
 ]

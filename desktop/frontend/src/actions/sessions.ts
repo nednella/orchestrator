@@ -34,6 +34,7 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     shortcut: { key: 'm' },
     run() {
       layout.showHome('composer')
+      a.setComposerMode('thread')
       a.setComposerKind('session')
       a.focus('composer')
     },
@@ -45,6 +46,7 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     shortcut: { key: 'n' },
     run() {
       layout.showHome('composer')
+      a.setComposerMode('thread')
       a.setComposerKind('chat')
       a.focus('composer')
     },

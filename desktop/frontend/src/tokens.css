@@ -10,6 +10,10 @@
   --bg-overlay: rgba(5, 6, 9, 0.6);
   --bg-overlay-strong: rgba(5, 6, 9, 0.92);
   --bg-code: rgba(255, 255, 255, 0.05);
+  --bg-composer: #111111;
+  --bg-segment: rgba(255, 255, 255, 0.045);
+  --bg-segment-on: rgba(255, 255, 255, 0.08);
+  --shadow-composer: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.11);
@@ -24,6 +28,7 @@
   --idle: #f2a33a;
   --ended: #5f677b;
   --accent: oklch(0.571 0.21 264);
+  --text-on-accent: #fff;
   --danger: #f5586a;
 
   --pr-open: #238636;
@@ -89,6 +94,7 @@
   --bg-hover: #1e232c;
   --bg-term: #0a0c10;
   --bg-code: rgba(0, 0, 0, 0.3);
+  --bg-composer: #191d25;
 
   --border: #252a34;
   --border-strong: #353c4a;
@@ -98,6 +104,7 @@
   --text-dim: #7c8597;
 
   --accent: #a78bfa;
+  --text-on-accent: #0d0f13;
 
   --term-selection: rgba(167, 139, 250, 0.35);
 }
@@ -113,6 +120,10 @@
   --bg-overlay: rgba(30, 34, 44, 0.35);
   --bg-overlay-strong: rgba(244, 245, 248, 0.94);
   --bg-code: rgba(0, 0, 0, 0.05);
+  --bg-composer: #ffffff;
+  --bg-segment: rgba(212, 212, 216, 0.4);
+  --bg-segment-on: rgba(212, 212, 216, 0.72);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   --border: #dcdfe7;
   --border-strong: #c4c9d6;

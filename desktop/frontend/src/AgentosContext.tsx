@@ -21,8 +21,9 @@ export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
 export type Overlay = 'palette' | 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | { issue: number } | null
 export type HomePart = 'queue' | 'notes' | 'composer'
-export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'note-input' | 'composer'
+export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'home' | 'thread-search' | 'queue-filter' | 'composer'
 export type ComposerKind = 'session' | 'chat'
+export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
 
 type AgentosState = {
@@ -51,7 +52,8 @@ type AgentosState = {
   settings: Settings
   toasts: Toast[]
   overlay: Overlay
-  noteDraft: string
+  composerDraft: string
+  composerMode: ComposerMode
   composerKind: ComposerKind
   focusRequest: { target: FocusTarget; n: number }
   shellIds: string[]
@@ -114,7 +116,7 @@ type AgentosActions = {
   noteToIssue(id: string): Promise<void>
   noteToSession(id: string): Promise<void>
   nextAttention(): void
-  setNoteDraft(text: string): void
+  setComposerDraft(text: string): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
   setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
@@ -125,6 +127,7 @@ type AgentosActions = {
   setPromptSend(mode: PromptSend): Promise<void>
   setBrowserEnabled(on: boolean): Promise<void>
   setDigestSchedule(schedule: DigestSchedule): Promise<void>
+  setComposerMode(mode: ComposerMode): void
   setComposerKind(kind: ComposerKind): void
   setIssueFilter(query: string): void
   focus(target: FocusTarget): void
@@ -252,7 +255,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
-  const [noteDraft, setNoteDraft] = useState('')
+  const [composerDraft, setComposerDraft] = useState('')
+  const [composerMode, setComposerMode] = useState<ComposerMode>('thread')
   const [composerKind, setComposerKind] = useState<ComposerKind>('session')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
 
@@ -863,7 +867,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = urgent.findIndex((s) => s.id === selectedRef.current)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
-      setNoteDraft,
+      setComposerDraft,
       setOverlay,
       async setTheme(theme) {
         setSettings(await api.setTheme(theme))
@@ -892,6 +896,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async setDigestSchedule(schedule) {
         setSettings(await api.setDigestSchedule(schedule))
       },
+      setComposerMode,
       setComposerKind,
       setIssueFilter(query) {
         setIssueFilterState(query)
@@ -932,7 +937,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       settings,
       toasts,
       overlay,
-      noteDraft,
+      composerDraft,
+      composerMode,
       composerKind,
       focusRequest,
       shellIds,
@@ -944,7 +950,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, noteDraft, composerKind, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))
