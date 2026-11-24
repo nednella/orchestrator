@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
@@ -34,14 +34,19 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const ended = session.state === 'ended'
   const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'details' : rightOpen)
 
-  const openMenuBelow = () => {
+  // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
+  const answered = useRef(menuRequest)
+
+  const openMenuBelow = useCallback(() => {
     const box = row.current?.getBoundingClientRect()
     if (box) setMenuAt({ x: box.left + 12, y: box.bottom })
-  }
+  }, [])
 
   useEffect(() => {
-    if (menuRequest > 0) openMenuBelow()
-  }, [menuRequest])
+    if (menuRequest === 0 || menuRequest === answered.current) return
+    answered.current = menuRequest
+    openMenuBelow()
+  }, [menuRequest, openMenuBelow])
 
   const toggleOwnPanel = () => {
     if (selected) return a.report(toggleRight)
