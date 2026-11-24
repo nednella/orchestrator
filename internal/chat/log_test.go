@@ -173,3 +173,59 @@ func TestConcurrentAppendsKeepTheSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestLogIsPrivate(t *testing.T) {
+	p := logPath(t)
+	l := openLog(t, p)
+	l.Close()
+	for path, want := range map[string]os.FileMode{p: 0o600, filepath.Dir(p): 0o700} {
+		st, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != want {
+			t.Fatalf("%s mode = %o, want %o", path, st.Mode().Perm(), want)
+		}
+	}
+}
+
+func TestOpenLogTightensAnOpenFile(t *testing.T) {
+	p := logPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	openLog(t, p).Close()
+	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o, want 600", st.Mode().Perm())
+	}
+}
+
+func TestLastLineWithoutNewlineIsDropped(t *testing.T) {
+	p := logPath(t)
+	l := openLog(t, p)
+	mustAppend(t, l, Event{Kind: KindUser})
+	l.Close()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`{"seq":2,"at":1,"kind":"message"}`)
+	f.Close()
+
+	got, err := ReadLog(p, 0)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ReadLog = %d events, %v; want 1", len(got), err)
+	}
+	l = openLog(t, p)
+	defer l.Close()
+	if e := mustAppend(t, l, Event{Kind: KindMessage}); e.Seq != 2 {
+		t.Fatalf("seq = %d, want 2", e.Seq)
+	}
+	raw, _ := os.ReadFile(p)
+	if n := strings.Count(string(raw), "\n"); n != 2 {
+		t.Fatalf("%d lines, want 2", n)
+	}
+}

@@ -16,15 +16,20 @@ type Log struct {
 	mu   sync.Mutex
 	f    *os.File
 	last int64
+	size int64
 }
 
 // OpenLog opens the log at path, creating it and its folders. A partial last line, left by a crash, is cut off.
 func OpenLog(path string) (*Log, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
+		return nil, err
+	}
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
 		return nil, err
 	}
 	events, end, err := readEvents(f)
@@ -36,7 +41,7 @@ func OpenLog(path string) (*Log, error) {
 		f.Close()
 		return nil, err
 	}
-	l := &Log{f: f}
+	l := &Log{f: f, size: end}
 	if n := len(events); n > 0 {
 		l.last = events[n-1].Seq
 	}
@@ -58,10 +63,13 @@ func (l *Log) Append(e Event) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
-	if _, err := l.f.Write(append(line, '\n')); err != nil {
+	line = append(line, '\n')
+	if _, err := l.f.Write(line); err != nil {
+		_ = l.f.Truncate(l.size)
 		return Event{}, err
 	}
 	l.last = e.Seq
+	l.size += int64(len(line))
 	return e, nil
 }
 
