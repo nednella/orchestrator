@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { readStored, writeStored } from './storage'
+import { sidebarThreads } from './threads'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, News, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
@@ -611,7 +612,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, focus],
   )
 
-  const inSidebarOrder = useCallback(() => projectsRef.current.flatMap((p) => sessionsRef.current.filter((s) => s.project === p.key)), [])
+  const inSidebarOrder = useCallback(() => {
+    const { groups, settled } = sidebarThreads(projectsRef.current, sessionsRef.current)
+    return [...groups.flatMap((g) => g.sessions), ...settled]
+  }, [])
 
   const selectSession = useCallback(
     (id: string) => {

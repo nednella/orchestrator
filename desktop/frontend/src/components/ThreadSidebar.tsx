@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
 import { readStored, writeStored } from '../storage'
-import { matchesThread, splitThreads } from '../threads'
+import { matchesThread, sidebarThreads } from '../threads'
 import { useFocusRequest } from '../useFocusRequest'
 import { useListNav } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
@@ -34,13 +34,11 @@ export function ThreadSidebar() {
   useFocusRequest('thread-search', search)
 
   const { groups, settled } = useMemo(() => {
-    const found = sessions.filter((s) => matchesThread(s, query))
-    return {
-      groups: projects
-        .map((project) => ({ project, sessions: splitThreads(found.filter((s) => s.project === project.key)).live, folded: !searching && folded.includes(project.key) }))
-        .filter((g) => g.sessions.length > 0),
-      settled: splitThreads(found).settled.sort((a, b) => b.lastEventAt - a.lastEventAt),
-    }
+    const found = sidebarThreads(
+      projects,
+      sessions.filter((s) => matchesThread(s, query)),
+    )
+    return { groups: found.groups.map((g) => ({ ...g, folded: !searching && folded.includes(g.project.key) })), settled: found.settled }
   }, [projects, sessions, query, searching, folded])
   const settledShown = searching || settledOpen
 
@@ -170,7 +168,7 @@ export function ThreadSidebar() {
             toggleSettled()
           }}
         />
-        {searching && groups.length === 0 && settled.length === 0 && <p className="px-4 py-4 text-small text-dim">No thread matches.</p>}
+        {groups.length === 0 && settled.length === 0 && <p className="px-4 py-4 text-small text-dim">{searching ? 'No thread matches.' : 'No threads'}</p>}
       </div>
       <SidebarFooter />
     </aside>
