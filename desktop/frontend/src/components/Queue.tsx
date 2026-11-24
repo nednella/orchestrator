@@ -18,7 +18,7 @@ import { QueueSearch } from './QueueSearch'
 import { QueueUnsortedHeader } from './QueueUnsortedHeader'
 import { SectionHeader } from './SectionHeader'
 import { SetupOffer } from './SetupOffer'
-import type { NavRef } from './Sidebar'
+import type { NavRef } from './QueueNotes'
 
 type Item = { kind: 'section'; name: string; count: number } | { kind: 'issue'; issue: Issue }
 

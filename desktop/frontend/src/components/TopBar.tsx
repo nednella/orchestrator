@@ -5,7 +5,6 @@ import { useLayout } from '../LayoutContext'
 import type { State } from '../types'
 import { useFullscreen } from '../useFullscreen'
 import { Icon } from './Icon'
-import { MemoryTotal } from './MemoryTotal'
 import { StateDot } from './StateDot'
 
 const drag = { '--wails-draggable': 'drag' } as CSSProperties
@@ -13,7 +12,6 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 const DOTS_MIN = 640
 const HELP_MIN = 560
-const MORE_MIN = 480
 
 type CountProps = { state: State; count: number; label: string }
 
@@ -29,20 +27,18 @@ function Count({ state, count, label }: CountProps) {
 }
 
 export function TopBar() {
-  const { project, projects, projectSessions: sessions, setOverlay, digestUnseenCount, newsUnseen, report, update, updating, applyUpdate } = useAgentos('project', 'projects', 'projectSessions', 'setOverlay', 'digestUnseenCount', 'newsUnseen', 'report', 'update', 'updating', 'applyUpdate')
+  const { sessions, setOverlay, report, update, updating, applyUpdate } = useAgentos('sessions', 'setOverlay', 'report', 'update', 'updating', 'applyUpdate')
   const layout = useLayout()
-  const { width, statsOpen, newsOpen } = layout
+  const { width, sidebarOpen } = layout
   const latestAgentos = useLatestAgentos()
   const fullscreen = useFullscreen()
   const count = (state: State) => sessions.filter((s) => s.state === state).length
   const waiting = count('waiting')
   const idle = count('idle')
-  const othersNeedYou = projects.some((p) => p.name !== project?.name && p.needsYou > 0)
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
   const keys = (id: string) => formatShortcut(find(id).shortcut!)
   const iconButton = 'btn btn-ghost h-[32px] w-[32px] justify-center px-0'
   const badge = width < DOTS_MIN
-  const unseen = digestUnseenCount + newsUnseen
 
   return (
     <header
@@ -50,6 +46,15 @@ export function TopBar() {
       style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)', paddingRight: 'var(--corner-pad)' }}
     >
       <div className="flex min-w-0 items-center gap-3" style={noDrag}>
+        <button
+          className={iconButton}
+          title={`${sidebarOpen ? 'Hide' : 'Show'} thread list (${keys('toggle-sidebar')})`}
+          aria-label={sidebarOpen ? 'Hide thread list' : 'Show thread list'}
+          aria-pressed={sidebarOpen}
+          onClick={() => find('toggle-sidebar').run([])}
+        >
+          <Icon name="panel-left" />
+        </button>
         {badge ? (
           <span
             className="mono grid h-6 min-w-6 place-items-center rounded-sm border px-1.5 text-small font-semibold"
@@ -67,21 +72,7 @@ export function TopBar() {
           </>
         )}
       </div>
-      <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1" style={noDrag}>
-        <button
-          className="btn btn-ghost h-[32px] min-w-0 gap-2 px-2 text-body font-semibold text-ink"
-          aria-haspopup="dialog"
-          title={`Switch project (${keys('switch-project')})`}
-          onClick={() => setOverlay('projects')}
-        >
-          {width >= 520 && <Icon name="folder" />}
-          <span className={`truncate ${width < 520 ? 'max-w-[5.5rem]' : 'max-w-[10rem]'}`}>{project?.name ?? '…'}</span>
-          {othersNeedYou && <span className="dot" data-state="waiting" title="Another project needs you" />}
-          <Icon name="chevron" size={12} />
-        </button>
-      </div>
       <div className="ml-auto flex items-center justify-end gap-1" style={noDrag}>
-        {!badge && <MemoryTotal />}
         {update && (
           <button
             className={`${iconButton} relative`}
@@ -103,38 +94,6 @@ export function TopBar() {
         )}
         <button className={iconButton} title={`Next that needs you (${keys('next-attention')})`} aria-label="Next that needs you" onClick={() => find('next-attention').run([])}>
           <Icon name="next" />
-        </button>
-        {width >= MORE_MIN && (
-          <>
-            <button
-              className={iconButton}
-              style={{ color: statsOpen ? 'var(--accent)' : undefined }}
-              title={`Stats (${keys('stats')})`}
-              aria-label="Stats"
-              aria-pressed={statsOpen}
-              onClick={() => find('stats').run([])}
-            >
-              <Icon name="chart" />
-            </button>
-            <button
-              className={`${iconButton} relative`}
-              style={{ color: newsOpen ? 'var(--accent)' : undefined }}
-              title={`News (${keys('news')})${unseen ? `, ${unseen} new` : ''}`}
-              aria-label={unseen ? `News, ${unseen} new` : 'News'}
-              aria-pressed={newsOpen}
-              onClick={() => find('news').run([])}
-            >
-              <Icon name="news" />
-              {unseen > 0 && (
-                <span className="mono absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-label font-semibold text-app">
-                  {unseen > 9 ? '9+' : unseen}
-                </span>
-              )}
-            </button>
-          </>
-        )}
-        <button className={iconButton} onClick={() => setOverlay('settings')} title={`Settings (${keys('settings')})`} aria-label="Settings">
-          <Icon name="settings" />
         </button>
         <button className={iconButton} onClick={() => setOverlay('palette')} title={`Command palette (${keys('palette')})`} aria-label="Command palette">
           <Icon name="search" />

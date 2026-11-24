@@ -3,11 +3,14 @@ import type { Action, ActionContext } from './types'
 
 export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   {
-    id: 'switch-project',
-    label: 'Switch project…',
-    group: 'Projects',
+    id: 'search-threads',
+    label: 'Search threads',
+    group: 'Navigate',
     shortcut: { key: 'p' },
-    run: () => a.setOverlay('projects'),
+    run() {
+      layout.focusPanel('sidebar')
+      a.focus('thread-search')
+    },
   },
   {
     id: 'open-repo',
@@ -36,17 +39,10 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   },
   {
     id: 'toggle-sidebar',
-    label: 'Toggle queue and notes panel',
+    label: 'Toggle thread list',
     group: 'Navigate',
     shortcut: { key: 'a', unlessTyping: true },
     run: layout.toggleSidebar,
-  },
-  {
-    id: 'toggle-sessions',
-    label: 'Toggle sessions panel',
-    group: 'Navigate',
-    shortcut: { key: 'd' },
-    run: layout.toggleSessions,
   },
   {
     id: 'toggle-panels',
@@ -57,29 +53,29 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   },
   {
     id: 'panel-sidebar',
-    label: 'Left panel: queue and notes',
+    label: 'Project home: queue and notes',
     group: 'Navigate',
     shortcut: { key: 'a', shift: true },
     run() {
       layout.showSidebarTab(a.sidebarTab)
-      a.focus(a.sidebarTab === 'queue' ? 'queue-filter' : 'sidebar')
+      a.focus(a.sidebarTab === 'queue' ? 'queue-filter' : 'home')
     },
   },
   {
     id: 'panel-terminal',
-    label: 'Middle panel: the active session',
+    label: 'Centre panel: the active session',
     group: 'Navigate',
     run() {
       layout.closeCentre()
-      layout.focusPanel('terminal')
+      layout.focusPanel('centre')
     },
   },
   {
-    id: 'panel-sessions',
-    label: 'Right panel: sessions',
+    id: 'panel-threads',
+    label: 'Left panel: threads',
     group: 'Navigate',
     shortcut: { key: 'd', shift: true },
-    run: () => layout.focusPanel('sessions'),
+    run: () => layout.focusPanel('sidebar'),
   },
   {
     id: 'previous-session',

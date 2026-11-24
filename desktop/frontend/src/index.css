@@ -846,7 +846,7 @@
     }
   }
 
-  [data-panel='sidebar'][data-tab='notes'] {
+  [data-panel='home'][data-tab='notes'] {
     background: var(--bg-note);
     border-color: var(--border-note);
   }
@@ -862,20 +862,20 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
-  [data-panel='sidebar'][data-tab='notes'] .composer,
-  [data-panel='sidebar'][data-tab='notes'] .note-jot,
-  [data-panel='sidebar'][data-tab='notes'] .note-search {
+  [data-panel='home'][data-tab='notes'] .composer,
+  [data-panel='home'][data-tab='notes'] .note-jot,
+  [data-panel='home'][data-tab='notes'] .note-search {
     background: var(--bg-note-card);
     border-color: var(--border-note);
     color: var(--text-note);
   }
 
-  [data-panel='sidebar'][data-tab='notes'] .composer:focus-within {
+  [data-panel='home'][data-tab='notes'] .composer:focus-within {
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
   }
 
-  [data-panel='sidebar'][data-tab='notes'] .panel-head,
-  [data-panel='sidebar'][data-tab='notes'] .border-line {
+  [data-panel='home'][data-tab='notes'] .panel-head,
+  [data-panel='home'][data-tab='notes'] .border-line {
     border-color: var(--border-note);
   }
 
@@ -919,42 +919,6 @@
   .fold > div {
     min-height: 0;
     overflow: hidden;
-  }
-
-  .side-shell {
-    position: relative;
-    flex: none;
-    min-height: 0;
-    overflow: hidden;
-    border-radius: var(--radius-md);
-  }
-
-  .side-shell[data-animating='true'] {
-    transition: width 0.18s var(--ease);
-  }
-
-  .side-shell > [data-panel] {
-    height: 100%;
-    max-width: none;
-  }
-
-  .side-shell[data-open='false'] > [data-panel] {
-    visibility: hidden;
-    transition: visibility 0s 0.18s;
-  }
-
-  .side-shell > .edge-strip {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.12s;
-  }
-
-  .side-shell[data-open='false'] > .edge-strip {
-    opacity: 1;
-    pointer-events: auto;
-    transition: opacity 0.14s 0.08s;
   }
 
   .spinner {

@@ -10,9 +10,9 @@ type Appearance = 'dark' | 'light'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
-export type Panel = 'sidebar' | 'terminal' | 'sessions' | 'shell'
-export type MobilePanel = 'queue' | 'notes' | 'session' | 'sessions' | 'shell'
-export type SidePanel = 'sidebar' | 'sessions'
+export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
+export type MobilePanel = 'queue' | 'notes' | 'session' | 'threads' | 'shell'
+export type SidePanel = 'sidebar' | 'right'
 
 export const SCALES = [0.85, 0.92, 1, 1.1, 1.2, 1.35, 1.5]
 const DEFAULT_SCALE = 1
@@ -22,22 +22,21 @@ const MEDIUM_BELOW = 1250
 const TERMINAL_MIN_PX = 280
 const MAIN_PAD_PX = 24
 const GAPS_PX = 24
-const STRIP_REM = 2.75
-const SHARE: Record<SidePanel, number> = { sidebar: 0.34, sessions: 0.24 }
-const DEFAULT_RANGE: Record<SidePanel, [number, number]> = { sidebar: [11, 26], sessions: [9.5, 22] }
-const MIN_REM: Record<SidePanel, number> = { sidebar: 11, sessions: 9.5 }
+const SHARE: Record<SidePanel, number> = { sidebar: 0.2, right: 0.24 }
+const DEFAULT_RANGE: Record<SidePanel, [number, number]> = { sidebar: [15, 22], right: [9.5, 22] }
+const MIN_REM: Record<SidePanel, number> = { sidebar: 13, right: 9.5 }
 const MAX_REM = 32
-const LAYOUT_KEY = 'agentos.layout.v2'
+const LAYOUT_KEY = 'agentos.layout.v3'
 const SHELL_ROW_REM = 1.0325
 const SHELL_PAD_REM = 0.5
 export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PAD_REM
 const SHELL_DEFAULT_REM = shellRemForRows(6)
 const SHELL_MIN_REM = shellRemForRows(3)
 
-type BandPrefs = { sidebarOpen: boolean; sessionsOpen: boolean; shellOpen: boolean; sidebar: number | null; sessions: number | null; shell: number | null }
+type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; shellOpen: boolean; sidebar: number | null; right: number | null; shell: number | null }
 type AllPrefs = Record<Band, BandPrefs>
 
-const fresh = (band: Band): BandPrefs => ({ sidebarOpen: true, sessionsOpen: band !== 'compact', shellOpen: true, sidebar: null, sessions: null, shell: null })
+const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, shellOpen: true, sidebar: null, right: null, shell: null })
 
 export type NewsPage = 'index' | 'tldr' | 'digest'
 
@@ -47,14 +46,11 @@ export type Layout = {
   scale: number
   theme: ThemeName
   sidebarOpen: boolean
-  sessionsOpen: boolean
+  rightOpen: boolean
   shellOpen: boolean
   shellRem: number
-  sidebarPeek: boolean
-  sessionsPeek: boolean
   mobilePanel: MobilePanel
   widths: Record<SidePanel, number>
-  peekWidths: Record<SidePanel, number>
   statsOpen: boolean
   newsOpen: boolean
   newsPage: NewsPage
@@ -66,10 +62,8 @@ export type Layout = {
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
   toggleSidebar(): void
-  toggleSessions(): void
   togglePanels(): void
   setSidebarOpen(open: boolean): void
-  setSessionsOpen(open: boolean): void
   showSidebarTab(tab: SidebarTab): void
   toggleStats(): void
   toggleDigest(): void
@@ -77,7 +71,6 @@ export type Layout = {
   openNews(page: NewsPage): void
   closeNewsPage(): void
   closeCentre(): void
-  closePeek(): void
   returnToTerminal(): void
   focusPanel(panel: Panel): void
 }
@@ -108,20 +101,18 @@ function useWindowSize(): { w: number; h: number } {
 
 const clamp = (value: number, [min, max]: [number, number]) => Math.min(Math.max(value, min), max)
 
-type Fitted = { widths: Record<SidePanel, number>; full: Record<SidePanel, number>; sessionsForcedClosed: boolean }
+type Fitted = { widths: Record<SidePanel, number>; rightForcedClosed: boolean }
 
 function fit(width: number, prefs: BandPrefs, root: number): Fitted {
   const preferred = (panel: SidePanel) => prefs[panel] ?? clamp((SHARE[panel] * width) / root, DEFAULT_RANGE[panel])
-  const strip = STRIP_REM * root
-  let sidebar = prefs.sidebarOpen ? preferred('sidebar') * root : strip
-  let sessions = prefs.sessionsOpen ? preferred('sessions') * root : strip
-  const over = () => MAIN_PAD_PX + GAPS_PX + sidebar + sessions + TERMINAL_MIN_PX - width
-  if (over() > 0 && prefs.sessionsOpen) sessions = Math.max(MIN_REM.sessions * root, sessions - over())
+  let sidebar = prefs.sidebarOpen ? preferred('sidebar') * root : 0
+  let right = prefs.rightOpen ? preferred('right') * root : 0
+  const over = () => MAIN_PAD_PX + GAPS_PX + sidebar + right + TERMINAL_MIN_PX - width
+  if (over() > 0 && prefs.rightOpen) right = Math.max(MIN_REM.right * root, right - over())
   if (over() > 0 && prefs.sidebarOpen) sidebar = Math.max(MIN_REM.sidebar * root, sidebar - over())
-  const forced = over() > 0 && prefs.sessionsOpen
-  if (forced) sessions = strip
-  const full = { sidebar: preferred('sidebar'), sessions: preferred('sessions') }
-  return { widths: { sidebar: sidebar / root, sessions: sessions / root }, full, sessionsForcedClosed: forced }
+  const forced = over() > 0 && prefs.rightOpen
+  if (forced) right = 0
+  return { widths: { sidebar: sidebar / root, right: right / root }, rightForcedClosed: forced }
 }
 
 type LayoutProviderProps = { children: ReactNode }
@@ -138,7 +129,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, settings, setTextScale, sidebarTab, setSidebarTab, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'settings', 'setTextScale', 'sidebarTab', 'setSidebarTab', 'focus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, setSidebarTab, showHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'setSidebarTab', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
@@ -147,7 +138,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
-  const [peek, setPeek] = useState<SidePanel | null>(null)
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [newsOpen, setNewsOpen] = useState(devFlags.view === 'news' || devFlags.view === 'digest')
@@ -162,17 +152,16 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  const prefs: BandPrefs = { ...fresh(band), ...stored[band] }
-  const { widths: fittedWidths, full: fullWidths, sessionsForcedClosed } = fit(width, prefs, 16 * scale)
+  const prefs: BandPrefs = { ...fresh(), ...stored[band] }
+  const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
   const narrow = mode === 'narrow'
-  const sidebarMobile = mobilePanel === 'queue' || mobilePanel === 'notes'
-  const sidebarOpen = narrow ? sidebarMobile : prefs.sidebarOpen
-  const sessionsOpen = narrow ? mobilePanel === 'sessions' : prefs.sessionsOpen && !sessionsForcedClosed
+  const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
+  const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
 
   const updatePrefs = useCallback(
     (patch: Partial<BandPrefs>) =>
       setStored((all) => {
-        const next = { ...all, [band]: { ...fresh(band), ...all[band], ...patch } }
+        const next = { ...all, [band]: { ...fresh(), ...all[band], ...patch } }
         writeStored(LAYOUT_KEY, next)
         return next
       }),
@@ -187,24 +176,13 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (first) return
     setStatsOpen(false)
     setNewsOpen(false)
-    setPeek(null)
     if (narrow) setMobilePanel('session')
   }, [selectedId, narrow])
 
   const setSidebarOpen = useCallback(
     (open: boolean) => {
-      setPeek(null)
-      if (narrow) setMobilePanel(open ? sidebarTab : 'session')
+      if (narrow) setMobilePanel(open ? 'threads' : 'session')
       else updatePrefs({ sidebarOpen: open })
-    },
-    [narrow, sidebarTab, updatePrefs],
-  )
-
-  const setSessionsOpen = useCallback(
-    (open: boolean) => {
-      setPeek(null)
-      if (narrow) setMobilePanel(open ? 'sessions' : 'session')
-      else updatePrefs({ sessionsOpen: open })
     },
     [narrow, updatePrefs],
   )
@@ -213,27 +191,23 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     (tab: SidebarTab) => {
       setSidebarTab(tab)
       if (narrow) setMobilePanel(tab)
-      else if (!prefs.sidebarOpen) setPeek('sidebar')
+      else if (project) showHome(project.key)
     },
-    [narrow, prefs.sidebarOpen, setSidebarTab],
+    [narrow, project, setSidebarTab, showHome],
   )
 
   const focusPanel = useCallback(
     (panel: Panel) => {
+      if (panel === 'right') return
       if (narrow) {
-        if (panel === 'sidebar') setMobilePanel(sidebarTab)
-        if (panel === 'sessions') setMobilePanel('sessions')
-        if (panel === 'terminal') setMobilePanel('session')
+        if (panel === 'sidebar') setMobilePanel('threads')
+        if (panel === 'centre') setMobilePanel('session')
         if (panel === 'shell') setMobilePanel('shell')
-      } else if (panel === 'sidebar') setPeek(prefs.sidebarOpen ? null : 'sidebar')
-      else if (panel === 'sessions') setPeek(sessionsOpen ? null : 'sessions')
-      else {
-        setPeek(null)
-        if (panel === 'shell') updatePrefs({ shellOpen: true })
-      }
-      focus(panel)
+      } else if (panel === 'sidebar') updatePrefs({ sidebarOpen: true })
+      else if (panel === 'shell') updatePrefs({ shellOpen: true })
+      focus(panel === 'centre' ? 'terminal' : panel)
     },
-    [focus, narrow, prefs.sidebarOpen, sessionsOpen, sidebarTab, updatePrefs],
+    [focus, narrow, updatePrefs],
   )
 
   const value = useMemo<Layout>(
@@ -243,17 +217,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       scale,
       theme,
       sidebarOpen,
-      sessionsOpen,
+      rightOpen,
       shellOpen: narrow ? mobilePanel === 'shell' : prefs.shellOpen,
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
-      sidebarPeek: !narrow && !prefs.sidebarOpen && peek === 'sidebar',
-      sessionsPeek: !narrow && !sessionsOpen && peek === 'sessions',
       mobilePanel,
-      widths: { sidebar: fittedWidths.sidebar, sessions: fittedWidths.sessions },
-      peekWidths: {
-        sidebar: Math.min(Math.max(fullWidths.sidebar, 20), (0.8 * width) / (16 * scale)),
-        sessions: Math.min(Math.max(fullWidths.sessions, 18), (0.8 * width) / (16 * scale)),
-      },
+      widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
       statsOpen,
       newsOpen,
       newsPage,
@@ -268,7 +236,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setWidth(panel, rem, commit) {
         const next = Math.min(Math.max(rem, MIN_REM[panel]), MAX_REM)
         if (commit) updatePrefs({ [panel]: next })
-        else setStored((all) => ({ ...all, [band]: { ...fresh(band), ...all[band], [panel]: next } }))
+        else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], [panel]: next } }))
       },
       resetWidth: (panel) => updatePrefs({ [panel]: null }),
       setShellOpen(open) {
@@ -278,28 +246,24 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setShellHeight(rem, commit) {
         const next = Math.max(rem, SHELL_MIN_REM)
         if (commit) updatePrefs({ shell: next })
-        else setStored((all) => ({ ...all, [band]: { ...fresh(band), ...all[band], shell: next } }))
+        else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], shell: next } }))
       },
       resetShellHeight: () => updatePrefs({ shell: null }),
       toggleSidebar: () => setSidebarOpen(!sidebarOpen),
-      toggleSessions: () => setSessionsOpen(!sessionsOpen),
       togglePanels() {
-        setPeek(null)
         if (narrow) {
           setMobilePanel('session')
           return
         }
-        const open = !sidebarOpen && !sessionsOpen && !prefs.shellOpen
-        updatePrefs({ sidebarOpen: open, sessionsOpen: open, shellOpen: open })
+        const open = !sidebarOpen && !prefs.shellOpen
+        updatePrefs({ sidebarOpen: open, shellOpen: open })
         if (!open) focus('terminal')
       },
       setSidebarOpen,
-      setSessionsOpen,
       showSidebarTab,
       toggleStats() {
         setStatsOpen(!statsOpen)
         setNewsOpen(false)
-        setPeek(null)
         if (!statsOpen && narrow) setMobilePanel('session')
       },
       toggleNews() {
@@ -307,7 +271,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         setNewsPage('index')
         setNewsOpen(!close)
         setStatsOpen(false)
-        setPeek(null)
         if (!close && narrow) setMobilePanel('session')
       },
       toggleDigest() {
@@ -315,14 +278,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         setNewsPage('digest')
         setNewsOpen(!close)
         setStatsOpen(false)
-        setPeek(null)
         if (!close && narrow) setMobilePanel('session')
       },
       openNews(page) {
         setNewsPage(page)
         setNewsOpen(true)
         setStatsOpen(false)
-        setPeek(null)
         if (narrow) setMobilePanel('session')
       },
       closeNewsPage: () => setNewsPage('index'),
@@ -330,14 +291,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         setStatsOpen(false)
         setNewsOpen(false)
       },
-      closePeek: () => setPeek(null),
       returnToTerminal() {
-        setPeek(null)
         focus('terminal')
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, sessionsOpen, narrow, prefs.sidebarOpen, prefs.shellOpen, prefs.shell, peek, mobilePanel, fittedWidths.sidebar, fittedWidths.sessions, fullWidths.sidebar, fullWidths.sessions, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, setSessionsOpen, showSidebarTab, focusPanel, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, narrow, prefs.shellOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, height, statsOpen, newsOpen, newsPage, band, setSidebarOpen, showSidebarTab, focusPanel, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

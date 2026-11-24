@@ -31,7 +31,7 @@ The script puts `agentos.app` and Chrome for Testing, the agent browser, in `~/A
 ## Start
 
 1. Open `agentos`.
-2. Add a project: `⌘P` → _Add project_, or `agentos project add` in its folder.
+2. Add a project: `⌘K` → _Add project…_, or `agentos project add` in its folder.
 3. Start a task: `⌘M`, or `Enter` on an issue in the queue to open it, then start one from it.
 4. Ask about the project without starting work: `⌘N` starts a chat. A chat reads the project and changes nothing; it files an issue or hands off to a task when the talk turns into work. Chats stay out of the stats.
 

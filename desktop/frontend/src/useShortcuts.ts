@@ -37,10 +37,6 @@ export function useShortcuts(enabled: boolean) {
         agentos.focus('terminal')
         return
       }
-      if (lay.sidebarPeek || lay.sessionsPeek) {
-        lay.returnToTerminal()
-        return
-      }
       const el = document.activeElement
       if (el instanceof HTMLElement && el.matches('input, textarea') && !el.closest('.xterm')) {
         el.blur()

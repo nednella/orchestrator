@@ -1,16 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { useAgentos, useAgentosSelector } from './AgentosContext'
-import { useLayout } from './LayoutContext'
 
 const MIN_GAP_MS = 5000
 
 // Issues change on GitHub with no event the app hears, so a queue on screen is read again when it is
-// shown, when the project changes and when the window comes back into focus.
+// shown, when the project changes and when the window comes back into focus. The caller is mounted only
+// while the queue and notes are on screen.
 export function useRefreshQueueOnShow() {
   const { sidebarTab, refreshIssues, report } = useAgentos('sidebarTab', 'refreshIssues', 'report')
   const projectKey = useAgentosSelector((a) => a.project?.key)
-  const { sidebarOpen, sidebarPeek } = useLayout()
-  const shown = (sidebarOpen || sidebarPeek) && sidebarTab === 'queue'
+  const shown = sidebarTab === 'queue'
   const refresh = useRef<(force?: boolean) => void>(() => {})
   const last = useRef(Date.now())
   refresh.current = (force = false) => {

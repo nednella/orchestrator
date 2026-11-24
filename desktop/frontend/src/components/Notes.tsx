@@ -8,7 +8,7 @@ import { ImageViewer } from './ImageViewer'
 import { NoteCard } from './NoteCard'
 import { NoteInput } from './NoteInput'
 import { Notice } from './Notice'
-import type { NavRef } from './Sidebar'
+import type { NavRef } from './QueueNotes'
 
 type NotesProps = { nav: NavRef }
 
@@ -66,7 +66,7 @@ export function Notes({ nav }: NotesProps) {
       }}
       onStopEditing={(refocus) => {
         setEditingId(null)
-        if (refocus) a.focus('sidebar')
+        if (refocus) a.focus('home')
       }}
       onOpenImage={setViewing}
     />

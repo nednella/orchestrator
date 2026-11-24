@@ -32,6 +32,7 @@ export type IconName =
   | 'external'
   | 'search'
   | 'folder'
+  | 'home'
   | 'check'
   | 'trash'
   | 'help'
@@ -131,6 +132,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'chevron-left') return <path d="M9.5 4 5.5 8l4 4" />
   if (name === 'chevron') return <path d="m5 6.5 3 3 3-3" />
   if (name === 'refresh') return <path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v3h-3" />
+  if (name === 'home') return <path d="M2 7.5 8 2.5l6 5M3.5 6.5V13.5h9V6.5M6.5 13.5V9.5h3v4" />
   if (name === 'plus') return <path d="M8 3v10M3 8h10" />
   if (name === 'close') return <path d="m4 4 8 8M12 4l-8 8" />
   if (name === 'external') return <path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5" />

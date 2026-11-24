@@ -7,7 +7,7 @@ export function CleanupsMenu() {
   const { cleanups } = useAgentos('cleanups')
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
-  const [anchor, setAnchor] = useState({ top: 0, right: 0 })
+  const [anchor, setAnchor] = useState({ bottom: 0, left: 0 })
 
   useEffect(() => {
     if (!open) return
@@ -36,7 +36,7 @@ export function CleanupsMenu() {
         aria-label={`Cleaned up tasks, ${cleanups.length}`}
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect()
-          setAnchor({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+          setAnchor({ bottom: window.innerHeight - rect.top + 4, left: rect.left })
           setOpen(!open)
         }}
       >
@@ -46,7 +46,7 @@ export function CleanupsMenu() {
       {open && (
         <div
           className="fade-in fixed max-h-96 w-[min(24rem,92vw)] overflow-y-auto rounded-md border border-line-strong bg-raised shadow-2xl"
-          style={{ zIndex: 'var(--z-popup)', top: anchor.top, right: Math.max(anchor.right, 8) }}
+          style={{ zIndex: 'var(--z-popup)', bottom: anchor.bottom, left: Math.max(anchor.left, 8) }}
           role="dialog"
           aria-label="Cleaned up tasks"
         >
