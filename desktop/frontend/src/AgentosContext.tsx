@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
+import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
+import type { ComposerDraft } from './composerMarkdown'
 import { readStored, writeStored } from './storage'
 import { liveThreads, sidebarThreads } from './threads'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
@@ -48,7 +50,7 @@ type AgentosState = {
   settings: Settings
   toasts: Toast[]
   overlay: Overlay
-  composerDraft: string
+  composerDraft: ComposerDraft
   composerMode: ComposerMode
   composerKind: ComposerKind
   focusRequest: { target: FocusTarget; n: number }
@@ -110,7 +112,7 @@ type AgentosActions = {
   noteToIssue(id: string): Promise<void>
   noteToSession(id: string): Promise<void>
   nextAttention(): void
-  setComposerDraft(text: string): void
+  setComposerDraft(draft: ComposerDraft): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
   setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
@@ -247,7 +249,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
-  const [composerDraft, setComposerDraftState] = useState('')
+  const [composerDraft, setComposerDraftState] = useState(EMPTY_DRAFT)
   const [composerMode, setComposerModeState] = useState<ComposerMode>('thread')
   const [composerKind, setComposerKind] = useState<ComposerKind>('session')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
@@ -385,7 +387,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setRawIssues([])
       setIssuesDisabled(false)
       setIssueFilterState(readStored(filterKey(snap.project.name), ''))
-      setComposerDraftState(readStored(draftKey(snap.project.name), ''))
+      setComposerDraftState(readDraft(readStored<unknown>(draftKey(snap.project.name), '')))
       setComposerModeState(readStored<ComposerMode>(composerModeKey(snap.project.name), 'thread'))
       report(async () => {
         const list = await api.cleanups()
@@ -841,9 +843,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = urgent.findIndex((s) => s.id === selectedRef.current)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
-      setComposerDraft(text) {
-        setComposerDraftState(text)
-        if (projectRef.current) writeStored(draftKey(projectRef.current.name), text)
+      setComposerDraft(draft) {
+        setComposerDraftState(draft)
+        if (projectRef.current) writeStored(draftKey(projectRef.current.name), saveDraft(draft))
       },
       setOverlay,
       async setTheme(theme) {

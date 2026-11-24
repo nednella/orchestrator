@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fromMarkdown, fromPlainText, toMarkdown } from './composerMarkdown.ts'
+import { EMPTY_DRAFT, draftOf, fromMarkdown, fromPlainText, readDraft, saveDraft, toMarkdown } from './composerMarkdown.ts'
 
 const roundTrip = (text: string) => toMarkdown(fromMarkdown(text))
 
@@ -160,4 +160,22 @@ test('send value drops the spaces that start a paragraph or end a line', () => {
   const sent = toMarkdown(fromPlainText('def f():  \n    return 1\n\n    x = 2'))
   assert.equal(sent, 'def f():\n    return 1\n\nx = 2')
   assert.equal(toMarkdown(fromMarkdown(sent)), sent)
+})
+
+test('a draft saved as a markdown string loads through the markdown reader', () => {
+  const draft = readDraft('**hi** there\n\n- a')
+  assert.deepEqual(draft.doc, fromMarkdown('**hi** there\n\n- a'))
+  assert.equal(draft.text, '**hi** there\n\n- a')
+})
+
+test('a saved draft reloads as the same document', () => {
+  const draft = draftOf(doc(p(text('run '), text('go test', 'code')), p(text('a*b'))))
+  const reloaded = readDraft(JSON.parse(JSON.stringify(saveDraft(draft))))
+  assert.deepEqual(reloaded, draft)
+})
+
+test('a saved draft that is not a document loads empty', () => {
+  assert.equal(readDraft({ version: 1, doc: { type: 'doc', content: [{ type: 'nope' }] } }), EMPTY_DRAFT)
+  assert.equal(readDraft({ version: 2, doc: doc(p(text('x'))) }), EMPTY_DRAFT)
+  assert.equal(readDraft(null), EMPTY_DRAFT)
 })

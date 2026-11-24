@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import type { DragEvent, ReactNode, RefObject } from 'react'
+import type { ComposerDraft } from '../composerMarkdown'
 import { ComposerEditor } from './ComposerEditor'
 import type { ComposerInput } from './ComposerEditor'
 import { Icon } from './Icon'
 
 type ComposerProps = {
   inputRef: RefObject<ComposerInput | null>
-  value: string
+  value: ComposerDraft
   label: string
   placeholder: string
   canSend: boolean
@@ -17,7 +18,7 @@ type ComposerProps = {
   attachments?: ReactNode
   left?: ReactNode
   right?: ReactNode
-  onChange(text: string): void
+  onChange(draft: ComposerDraft): void
   onCaret?(before: string, after: string): void
   onKeyDown?(e: KeyboardEvent): void
   onAttach?(data: DataTransfer): boolean

@@ -3,7 +3,8 @@ import type { RefObject } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { UseEditorOptions } from '@tiptap/react'
 import { Node as DocNode, Slice } from '@tiptap/pm/model'
-import { composerSchema, fromMarkdown, fromPlainText, toMarkdown } from '../composerMarkdown'
+import { composerSchema, draftOf, fromPlainText } from '../composerMarkdown'
+import type { ComposerDraft } from '../composerMarkdown'
 import { ComposerTyping } from '../composerTyping'
 import { MarkEdges } from '../markEdges'
 
@@ -16,22 +17,21 @@ export type ComposerInput = {
 
 type ComposerEditorProps = {
   inputRef: RefObject<ComposerInput | null>
-  value: string
+  value: ComposerDraft
   label: string
   placeholder: string
-  onChange(text: string): void
+  onChange(draft: ComposerDraft): void
   onCaret?(before: string, after: string): void
   onKeyDown?(e: KeyboardEvent): void
   onAttach?(data: DataTransfer): boolean
   onSend(): void
 }
 
-// Edits markdown as rendered text. The value stays a markdown string: it is read in when it changes from outside
-// and written out on every edit.
+// Edits markdown as rendered text. The value is read in when it changes from outside and written out on every edit.
 export function ComposerEditor({ inputRef, value, label, placeholder, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerEditorProps) {
   const handlers = useRef({ onChange, onCaret, onKeyDown, onAttach, onSend })
   const written = useRef(value)
-  const [empty, setEmpty] = useState(() => value.trim() === '')
+  const [empty, setEmpty] = useState(() => value.text.trim() === '')
 
   useLayoutEffect(() => {
     handlers.current = { onChange, onCaret, onKeyDown, onAttach, onSend }
@@ -39,7 +39,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
 
   const [options] = useState<UseEditorOptions>(() => ({
     extensions: [composerSchema, ComposerTyping.configure({ send: () => handlers.current.onSend() }), MarkEdges],
-    content: fromMarkdown(value),
+    content: value.doc,
     // Pasted text stays as it is: no `**bold**` turned bold.
     enablePasteRules: false,
     immediatelyRender: true,
@@ -60,7 +60,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
     },
     onTransaction: ({ editor, transaction }) => {
       if (transaction.docChanged && !transaction.getMeta('preventUpdate')) {
-        written.current = toMarkdown(editor.getJSON())
+        written.current = draftOf(editor.getJSON())
         handlers.current.onChange(written.current)
       }
       const { $from, $to } = editor.state.selection
@@ -74,7 +74,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
     if (!editor || value === written.current) return
     written.current = value
     // Undo must not bring back a message already sent.
-    editor.chain().setMeta('addToHistory', false).setContent(fromMarkdown(value), { emitUpdate: false }).run()
+    editor.chain().setMeta('addToHistory', false).setContent(value.doc, { emitUpdate: false }).run()
   }, [editor, value])
 
   useEffect(() => {

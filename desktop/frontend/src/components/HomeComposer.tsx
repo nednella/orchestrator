@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { EMPTY_DRAFT } from '../composerMarkdown'
+import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
 import type { Issue } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
@@ -28,7 +30,7 @@ const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(i
 
 export function HomeComposer() {
   const a = useAgentos('issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerKind', 'setComposerKind', 'newSession', 'newChat', 'startIssue', 'addNote', 'report')
-  const text = a.composerDraft
+  const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })
   const [picked, setPicked] = useState<number | null>(null)
@@ -59,8 +61,8 @@ export function HomeComposer() {
     if (picked !== null && !a.issues.some((i) => i.number === picked)) setPicked(null)
   }, [picked, a.issues])
 
-  const edit = (value: string) => {
-    a.setComposerDraft(value)
+  const edit = (draft: ComposerDraft) => {
+    a.setComposerDraft(draft)
     setCursor(-1)
     setDismissed(false)
   }
@@ -99,7 +101,7 @@ export function HomeComposer() {
           else await a.newSession(start)
           setPicked(null)
         }
-        a.setComposerDraft('')
+        a.setComposerDraft(EMPTY_DRAFT)
       } finally {
         sending.current = false
       }
@@ -142,7 +144,7 @@ export function HomeComposer() {
     <div className="flex flex-col">
       <Composer
         inputRef={input}
-        value={text}
+        value={a.composerDraft}
         label={note ? 'New note' : 'New thread'}
         placeholder={placeholder}
         canSend={canSend}

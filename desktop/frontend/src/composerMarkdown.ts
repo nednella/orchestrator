@@ -215,3 +215,18 @@ export function fromMarkdown(text: string): JSONContent {
 export function fromPlainText(text: string): JSONContent {
   return splitLines({ type: 'doc', content: paragraphs(text.replace(/\r\n?/g, '\n')) })[0]
 }
+
+// A draft is saved as the editor's document, so it reloads as it was; its markdown is what is sent. A draft saved
+// before is a markdown string.
+export type ComposerDraft = { doc: JSONContent; text: string }
+type SavedDraft = { version: 1; doc: JSONContent }
+
+export const draftOf = (doc: JSONContent): ComposerDraft => ({ doc, text: toMarkdown(doc) })
+export const EMPTY_DRAFT = draftOf(fromMarkdown(''))
+export const saveDraft = (draft: ComposerDraft): SavedDraft => ({ version: 1, doc: draft.doc })
+
+export function readDraft(saved: unknown): ComposerDraft {
+  if (typeof saved === 'string') return draftOf(fromMarkdown(saved))
+  const { version, doc } = (saved ?? {}) as Partial<SavedDraft>
+  return version === 1 && doc && isValid(doc) ? draftOf(doc) : EMPTY_DRAFT
+}
