@@ -75,7 +75,8 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
   useEffect(() => {
     if (!editor || value === written.current) return
     written.current = value
-    editor.commands.setContent(fromMarkdown(value), { emitUpdate: false })
+    // Undo must not bring back a message already sent.
+    editor.chain().setMeta('addToHistory', false).setContent(fromMarkdown(value), { emitUpdate: false }).run()
   }, [editor, value])
 
   useEffect(() => {
