@@ -31,7 +31,11 @@ export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
         drag.start(issue)
       }}
       onDragEnd={drag.end}
-      onClick={(e) => !(e.target as Element).closest('button') && onRead()}
+      onClick={(e) => {
+        // A click in the ⋯ menu reaches the row through React although the menu sits outside it in the page.
+        const target = e.target as Element
+        if (e.currentTarget.contains(target) && !target.closest('button')) onRead()
+      }}
     >
       <button data-nav className="flex min-w-0 items-baseline gap-2 text-left" title="Read the issue" onClick={onRead}>
         <span className="mono w-9 flex-none text-small text-dim">{issue.number}</span>
