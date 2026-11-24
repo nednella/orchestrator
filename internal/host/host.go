@@ -216,16 +216,25 @@ func (h *host) handleLine(line []byte) {
 	}
 }
 
-// publish logs e and hands it to every subscriber. Both happen under h.mu, so a subscriber added in between sees e in the log or on its channel, never both and never neither. Once Claude's stdout has ended, only the exit event is taken.
+// publish logs e and hands it to every subscriber.
 func (h *host) publish(e chat.Event) (chat.Event, error) {
 	h.mu.Lock()
+	e, err := h.appendLocked(e)
+	h.mu.Unlock()
+	if err != nil {
+		return chat.Event{}, err
+	}
+	h.echoEvent(e)
+	return e, nil
+}
+
+// appendLocked must be called with h.mu held. Logging and fan-out both happen under h.mu, so a subscriber added in between sees e in the log or on its channel, never both and never neither. Once Claude's stdout has ended, only the exit event is taken.
+func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	if h.exited && e.Kind != chat.KindExit {
-		h.mu.Unlock()
 		return chat.Event{}, errExited
 	}
 	e, err := h.log.Append(e)
 	if err != nil {
-		h.mu.Unlock()
 		return chat.Event{}, err
 	}
 	switch e.Kind {
@@ -246,11 +255,13 @@ func (h *host) publish(e chat.Event) (chat.Event, error) {
 			s.conn.Close()
 		}
 	}
-	h.mu.Unlock()
+	return e, nil
+}
+
+func (h *host) echoEvent(e chat.Event) {
 	if e.Persisted() {
 		fmt.Fprintln(h.echo, echoLine(e))
 	}
-	return e, nil
 }
 
 func (h *host) write(line []byte) error {
@@ -373,7 +384,10 @@ func (h *host) send(text string) error {
 	return h.writeLocked(chat.UserMessage(text))
 }
 
+// answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open.
 func (h *host) answer(id string, allow bool, message string) error {
+	h.stdinMu.Lock()
+	defer h.stdinMu.Unlock()
 	h.mu.Lock()
 	if h.exited {
 		h.mu.Unlock()
@@ -389,17 +403,19 @@ func (h *host) answer(id string, allow bool, message string) error {
 		h.mu.Unlock()
 		return fmt.Errorf("approval %q has input that is not JSON", id)
 	}
-	delete(h.approvals, id)
-	h.mu.Unlock()
-
 	line, text := chat.Deny(id, message), "deny"
 	if allow {
 		line, text = chat.Allow(id, input), "allow"
 	}
-	if _, err := h.publish(chat.Event{Kind: chat.KindAnswer, ID: id, Text: text}); err != nil {
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindAnswer, ID: id, Text: text})
+	if err != nil {
+		h.mu.Unlock()
 		return err
 	}
-	return h.write(line)
+	delete(h.approvals, id)
+	h.mu.Unlock()
+	h.echoEvent(e)
+	return h.writeLocked(line)
 }
 
 // subscribe sends the logged events after `after`, then live events, until the client hangs up, falls too far behind or the host stops.

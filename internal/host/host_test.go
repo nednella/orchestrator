@@ -390,6 +390,55 @@ func TestInterruptStopsTheTurn(t *testing.T) {
 	}
 }
 
+func TestConcurrentAnswersSendOne(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := Send(ctxT(t), h.socket, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindApproval)
+	const n = 10
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for range n {
+		wg.Go(func() { errs <- Answer(ctxT(t), h.socket, "r1", true, "") })
+	}
+	wg.Wait()
+	close(errs)
+	accepted := 0
+	for err := range errs {
+		if err == nil {
+			accepted++
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("%d answers accepted, want 1", accepted)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers := 0
+	for _, e := range logged {
+		if e.Kind == chat.KindAnswer {
+			answers++
+		}
+	}
+	responses := 0
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"control_response"`) {
+			responses++
+		}
+	}
+	if answers != 1 || responses != 1 {
+		t.Fatalf("%d answers logged and %d sent, want 1 each", answers, responses)
+	}
+}
+
 func TestAnswerAfterTheTurnEndedIsRefused(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)
