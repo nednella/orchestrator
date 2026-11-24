@@ -14,7 +14,7 @@ export function SidebarToggle() {
   const action = actionsFor(latestAgentos(), layout).find((a) => a.id === 'toggle-sidebar')!
   const label = `${layout.sidebarOpen ? 'Hide' : 'Show'} left sidebar (${formatShortcut(action.shortcut!)})`
   return (
-    <div className="absolute top-0 flex items-center" style={{ ...drag, left: 'var(--sidebar-toggle-left)', height: 'var(--topbar-h)' }}>
+    <div className="absolute top-0 z-10 flex items-center" style={{ ...drag, left: 'var(--sidebar-toggle-left)', height: 'var(--topbar-h)' }}>
       <span className="flex" style={noDrag}>
         <TitleBarButton label={label} icon="panel-left" pressed={layout.sidebarOpen} onClick={() => action.run([])} />
       </span>

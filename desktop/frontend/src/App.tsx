@@ -61,6 +61,7 @@ export function App() {
         {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
+          <SidebarToggle />
           {sidebarOpen && <LeftSidebar />}
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
           <div className={`flex min-w-0 flex-1 flex-col ${narrow && sidebarOpen ? 'hidden' : ''}`}>
@@ -87,7 +88,6 @@ export function App() {
               {narrow && mobilePanel === 'shell' && <ShellPanel />}
             </main>
           </div>
-          <SidebarToggle />
         </div>
         {narrow && <MobileTabs />}
         <ShortcutsSheet />
