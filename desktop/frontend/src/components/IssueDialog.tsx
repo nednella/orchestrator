@@ -22,7 +22,7 @@ export function IssueDialog() {
 type IssueDialogContentProps = { number: number }
 
 function IssueDialogContent({ number }: IssueDialogContentProps) {
-  const { issues, sessions, startIssue, select, setOverlay, report } = useAgentos('issues', 'sessions', 'startIssue', 'select', 'setOverlay', 'report')
+  const { issues, projectSessions: sessions, startIssue, select, setOverlay, report } = useAgentos('issues', 'projectSessions', 'startIssue', 'select', 'setOverlay', 'report')
   const body = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<IssueDetail | null>(null)
   const [error, setError] = useState('')

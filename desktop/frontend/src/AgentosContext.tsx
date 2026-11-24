@@ -28,6 +28,7 @@ type AgentosState = {
   project: Project | null
   projects: Project[]
   sessions: Session[]
+  projectSessions: Session[]
   selectedId: string | null
   issues: Issue[]
   issuesLoading: boolean
@@ -70,6 +71,7 @@ type AgentosActions = {
   selectShell(id: string): void
   applyUpdate(): Promise<void>
   select(id: string): void
+  showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
   newSession(title?: string): Promise<Session>
@@ -257,6 +259,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
 
   const sessionsRef = useRef(sessions)
+  const projectsRef = useRef(projects)
   const selectedRef = useRef(selectedId)
   const projectRef = useRef(project)
   const lastSelected = useRef(new Map<string, string>())
@@ -273,6 +276,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const viewsRef = useRef(views)
   const issuesRef = useRef<Issue[]>([])
   sessionsRef.current = sessions
+  projectsRef.current = projects
   projectRef.current = project
   shellIdsRef.current = shellIds
   notesRef.current = notes
@@ -329,9 +333,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [pushToast],
   )
 
-  const applySessions = useCallback(
+  const selectAmong = useCallback(
     (list: Session[]) => {
-      setSessions((prev) => keepUnchanged(prev, list, (s) => s.id))
       const current = selectedRef.current
       if (detached.current || (current && list.some((s) => s.id === current))) return
       const remembered = list.find((s) => s.id === lastSelected.current.get(projectRef.current?.name ?? ''))
@@ -339,6 +342,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       selectId(next ? next.id : null)
     },
     [selectId],
+  )
+
+  const applySessions = useCallback(
+    (projectKey: string, items: Session[]) => {
+      setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
+      if (projectKey === projectRef.current?.key) selectAmong(items)
+    },
+    [selectAmong],
   )
 
   const loadIssues = useCallback(async (refresh: boolean) => {
@@ -386,10 +397,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (epoch === projectEpoch.current) setDigest(next)
       })
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
-      applySessions(snap.sessions.filter((s) => s.project === snap.project.key))
+      setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
+      selectAmong(snap.sessions.filter((s) => s.project === snap.project.key))
       report(() => loadIssues(false))
     },
-    [applySessions, loadIssues, report, selectId],
+    [selectAmong, loadIssues, report, selectId],
   )
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
@@ -458,7 +470,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       if (payload.project === projectRef.current?.key) handler(payload.items)
     }
 
-  useEffect(() => on('sessions', ifCurrent(applySessions)), [applySessions])
+  useEffect(() => on('sessions', ({ project: key, items }) => applySessions(key, items)), [applySessions])
   useEffect(() => on('term:exit', ({ id }) => setShellIds((ids) => ids.filter((x) => x !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
   useEffect(() => on('awake', setAwake), [])
@@ -582,11 +594,13 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   useEffect(() => writeStored(NEWS_UNREAD_KEY, newsUnread), [newsUnread])
 
+  const projectSessions = useMemo(() => sessions.filter((s) => s.project === project?.key), [sessions, project?.key])
+
   const issues = useMemo(() => {
-    const next = rawIssues.map((issue) => ({ ...issue, sessionId: sessions.find((s) => !s.chat && s.issue === issue.number)?.id ?? '' }))
+    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.chat && s.issue === issue.number)?.id ?? '' }))
     issuesRef.current = keepUnchanged(issuesRef.current, next, (issue) => issue.number)
     return issuesRef.current
-  }, [rawIssues, sessions])
+  }, [rawIssues, projectSessions])
 
   const addSession = useCallback(
     (created: Session, background = false) => {
@@ -598,6 +612,27 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       return created
     },
     [selectId, focus],
+  )
+
+  const inSidebarOrder = useCallback(() => projectsRef.current.flatMap((p) => sessionsRef.current.filter((s) => s.project === p.key)), [])
+
+  const selectSession = useCallback(
+    (id: string) => {
+      const target = sessionsRef.current.find((s) => s.id === id)
+      const owner = target && target.project !== projectRef.current?.key ? projectsRef.current.find((p) => p.key === target.project) : undefined
+      if (!owner) {
+        selectId(id)
+        focus('terminal')
+        return
+      }
+      report(async () => {
+        await enterFrom(api.switchProject(owner.name))
+        if (projectRef.current?.key !== owner.key || !sessionsRef.current.some((s) => s.id === id)) return
+        selectId(id)
+        focus('terminal')
+      })
+    },
+    [selectId, focus, report, enterFrom],
   )
 
   const viewOf = useCallback((id: string | null) => (id && views[id]) || 'terminal', [views])
@@ -628,17 +663,26 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         setShellIds((ids) => ids.filter((x) => x !== id))
       },
       selectShell: setPickedShell,
-      select(id) {
-        selectId(id)
-        focus('terminal')
+      select: selectSession,
+      showHome(projectKey) {
+        const owner = projectsRef.current.find((p) => p.key === projectKey)
+        if (!owner) return
+        const show = () => {
+          detached.current = true
+          selectId(null)
+        }
+        if (owner.key === projectRef.current?.key) return show()
+        report(async () => {
+          await enterFrom(api.switchProject(owner.name))
+          if (projectRef.current?.key === owner.key) show()
+        })
       },
       detach,
       stepSession(delta) {
-        const list = sessionsRef.current
+        const list = inSidebarOrder()
         if (list.length === 0) return
         const at = list.findIndex((s) => s.id === selectedRef.current)
-        selectId(list[(at + delta + list.length) % list.length].id)
-        focus('terminal')
+        selectSession(list[(at + delta + list.length) % list.length].id)
       },
       async newSession(title = '') {
         return addSession(await api.newSession(title, ''))
@@ -649,13 +693,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async killSession(id) {
         await api.killSession(id)
         if (selectedRef.current !== id) return
-        const next = sessionsRef.current.find((s) => s.id !== id && s.state !== 'ended')
+        const next = sessionsRef.current.find((s) => s.project === projectRef.current?.key && s.id !== id && s.state !== 'ended')
         if (next) selectId(next.id)
         else detach()
       },
       async dismissSession(id) {
         await api.dismissSession(id)
-        applySessions(sessionsRef.current.filter((s) => s.id !== id))
+        const owner = sessionsRef.current.find((s) => s.id === id)?.project
+        if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
       },
       async resumeSession(id) {
         return addSession(await api.resumeSession(id))
@@ -807,12 +852,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         addSession(await api.noteToSession(id))
       },
       nextAttention() {
-        const list = sessionsRef.current
+        const list = inSidebarOrder()
         const urgent = [...list.filter((s) => s.state === 'waiting'), ...list.filter((s) => s.state === 'idle')]
         if (urgent.length === 0) throw 'Nothing needs you right now'
         const at = urgent.findIndex((s) => s.id === selectedRef.current)
-        selectId(urgent[(at + 1) % urgent.length].id)
-        focus('terminal')
+        selectSession(urgent[(at + 1) % urgent.length].id)
       },
       setSidebarTab,
       setNoteDraft,
@@ -854,7 +898,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, markNewsSeen, markNewsRead, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, markNewsSeen, markNewsRead, focus, report, pushToast, dismissToast],
   )
 
   const value = useMemo<Agentos>(
@@ -862,6 +906,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       project,
       projects,
       sessions,
+      projectSessions,
       selectedId,
       issues,
       issuesLoading,
@@ -896,7 +941,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, sidebarTab, noteDraft, composing, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, news, newsSeen, newsUnseen, newsUnread, awake, memory, settings, toasts, overlay, sidebarTab, noteDraft, composing, focusRequest, shellIds, shellId, version, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

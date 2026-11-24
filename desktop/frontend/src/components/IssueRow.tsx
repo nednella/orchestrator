@@ -15,8 +15,8 @@ type IssueRowProps = { issue: Issue; cursor: boolean; drag: IssueDrag; onOpen():
 export function IssueRow({ issue, cursor, drag, onOpen }: IssueRowProps) {
   const { settings, overlay, select, startIssue, setOverlay, report } = useAgentos('settings', 'overlay', 'select', 'startIssue', 'setOverlay', 'report')
   const { mode } = useLayout()
-  const session = useAgentosSelector((a) => a.sessions.find((s) => s.id === issue.sessionId))
-  const chat = useAgentosSelector((a) => a.sessions.find((s) => s.chat && s.issue === issue.number))
+  const session = useAgentosSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
+  const chat = useAgentosSelector((a) => a.projectSessions.find((s) => s.chat && s.issue === issue.number))
   const dense = mode === 'compact'
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
   const agent = labelled('agent')

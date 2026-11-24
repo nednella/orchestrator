@@ -52,7 +52,7 @@ export const sessionActions = ({ a, current }: ActionContext): Action[] => [
     palette: false,
     uiCommand: 'open',
     run(args) {
-      const session = findSession(a.sessions, args.join(' '))
+      const session = findSession(a.projectSessions, args.join(' '))
       a.select(session.id)
       return `Opened ${describe(session)}`
     },
@@ -84,7 +84,7 @@ export const sessionActions = ({ a, current }: ActionContext): Action[] => [
     group: 'Sessions',
     confirm: true,
     async run(args) {
-      const target = args.length ? findSession(a.sessions, args.join(' ')) : current
+      const target = args.length ? findSession(a.projectSessions, args.join(' ')) : current
       if (!target) throw 'No session to kill'
       await a.killSession(target.id)
       return `Killed ${describe(target)}`
@@ -94,10 +94,10 @@ export const sessionActions = ({ a, current }: ActionContext): Action[] => [
     id: 'resume-session',
     label: 'Resume ended session',
     group: 'Sessions',
-    palette: resumePrompt(a.sessions),
+    palette: resumePrompt(a.projectSessions),
     uiCommand: 'resume',
     async run(args) {
-      const target = findSession(resumable(a.sessions), args.join(' '))
+      const target = findSession(resumable(a.projectSessions), args.join(' '))
       const resumed = await a.resumeSession(target.id)
       return `Resumed ${describe(target)} as ${describe(resumed)}`
     },
@@ -131,7 +131,7 @@ export const sessionActions = ({ a, current }: ActionContext): Action[] => [
     group: 'Sessions',
     confirm: true,
     async run(args) {
-      const target = args.length ? findSession(a.sessions, args.join(' ')) : current
+      const target = args.length ? findSession(a.projectSessions, args.join(' ')) : current
       if (!target) throw 'No task to clean up'
       await a.cleanupSession(target.id, false)
       return `Cleaned up ${describe(target)}`

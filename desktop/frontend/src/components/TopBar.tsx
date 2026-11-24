@@ -29,7 +29,7 @@ function Count({ state, count, label }: CountProps) {
 }
 
 export function TopBar() {
-  const { project, projects, sessions, setOverlay, digestUnseenCount, newsUnseen, report, update, updating, applyUpdate } = useAgentos('project', 'projects', 'sessions', 'setOverlay', 'digestUnseenCount', 'newsUnseen', 'report', 'update', 'updating', 'applyUpdate')
+  const { project, projects, projectSessions: sessions, setOverlay, digestUnseenCount, newsUnseen, report, update, updating, applyUpdate } = useAgentos('project', 'projects', 'projectSessions', 'setOverlay', 'digestUnseenCount', 'newsUnseen', 'report', 'update', 'updating', 'applyUpdate')
   const layout = useLayout()
   const { width, statsOpen, newsOpen } = layout
   const latestAgentos = useLatestAgentos()
