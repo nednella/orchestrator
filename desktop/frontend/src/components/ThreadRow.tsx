@@ -1,30 +1,26 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { useLayout } from '../LayoutContext'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
 import { Ago } from './Ago'
 import { CleanupControls } from './CleanupControls'
 import { ConfirmRow } from './ConfirmRow'
-import { ContextMenu } from './ContextMenu'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { PRMark } from './PRMark'
 import { StateDot } from './StateDot'
+import { ThreadMenu } from './ThreadMenu'
 import { TimelinePopover } from './TimelinePopover'
 
 // menuRequest changes when the list asks this row, from the keyboard, to open its menu.
 type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; menuRequest: number }
 
-const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
-
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'killSession', 'dismissSession', 'resumeSession', 'openPR', 'pushToast', 'report')
-  const { mode, mobilePanel, rightOpen, setRightOpen, toggleRight } = useLayout()
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'killSession', 'dismissSession', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [timelineAt, setTimelineAt] = useState<Point | null>(null)
@@ -32,7 +28,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const kill = useArmedConfirm()
   const cleanup = useArmedConfirm()
   const ended = session.state === 'ended'
-  const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'details' : rightOpen)
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -47,17 +42,6 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     answered.current = menuRequest
     openMenuBelow()
   }, [menuRequest, openMenuBelow])
-
-  const toggleOwnPanel = () => {
-    if (selected) return a.report(toggleRight)
-    a.select(session.id)
-    setRightOpen(true)
-  }
-
-  const copyBranch = async () => {
-    await navigator.clipboard.writeText(session.branch)
-    a.pushToast({ tone: 'info', text: `Copied ${session.branch}` })
-  }
 
   return (
     <div
@@ -159,21 +143,15 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
         </div>
       )}
       {menuAt && (
-        <ContextMenu
-          label={`Actions for ${session.title}`}
+        <ThreadMenu
+          session={session}
+          selected={selected}
           at={menuAt}
           onClose={() => setMenuAt(null)}
-          items={[
-            { label: 'Rename', run: () => setRenaming(true) },
-            !session.chat && { label: 'Show timeline', run: () => setTimelineAt(menuAt) },
-            session.pr !== null && { label: `Open PR #${session.pr.number}`, run: () => a.report(() => a.openPR(session)) },
-            session.branch !== '' && { label: 'Copy branch', run: () => a.report(copyBranch) },
-            CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: () => cleanup.arm() },
-            { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
-            ended && session.resumable && { label: 'Resume', separated: true, run: () => a.report(() => a.resumeSession(session.id)) },
-            ended && { label: 'Dismiss', separated: !session.resumable, run: () => a.report(() => a.dismissSession(session.id)) },
-            !ended && { label: 'Kill thread', danger: true, separated: true, run: () => kill.arm() },
-          ]}
+          onRename={() => setRenaming(true)}
+          onTimeline={() => setTimelineAt(menuAt)}
+          onCleanup={() => cleanup.arm()}
+          onKill={() => kill.arm()}
         />
       )}
       {timelineAt && <TimelinePopover session={session} at={timelineAt} onClose={() => setTimelineAt(null)} />}
