@@ -305,7 +305,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         const active = document.activeElement
         if (!shown) {
           if (panel === 'right' && !narrow) checkRightFits(width, prefs, 16 * scale)
-          focusBefore.current[panel] = active ?? undefined
+          focusBefore.current[panel] = active && active !== document.body ? active : undefined
           setOpen(true)
           focus(PANEL_FOCUS[panel])
           return
