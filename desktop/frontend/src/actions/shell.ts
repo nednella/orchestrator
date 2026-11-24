@@ -12,7 +12,7 @@ export const shellActions = ({ layout }: ActionContext): Action[] => [
     id: 'toggle-shell',
     label: 'Toggle shell',
     group: 'Navigate',
-    shortcut: { key: 's' },
+    shortcut: { key: 'j' },
     run: () => layout.setShellOpen(!layout.shellOpen),
   },
 ]

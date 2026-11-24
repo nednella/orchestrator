@@ -41,14 +41,13 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'toggle-sidebar',
     label: 'Toggle thread list',
     group: 'Navigate',
-    shortcut: { key: 'a', unlessTyping: true },
+    shortcut: { key: 'b' },
     run: layout.toggleSidebar,
   },
   {
     id: 'toggle-panels',
     label: 'Toggle all panels',
     group: 'Navigate',
-    shortcut: { key: 'b' },
     run: layout.togglePanels,
   },
   {
