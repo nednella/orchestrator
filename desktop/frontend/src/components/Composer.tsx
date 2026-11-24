@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import type { ChangeEvent, DragEvent, KeyboardEvent, ReactNode, RefObject, SyntheticEvent } from 'react'
+import type { DragEvent, ReactNode, RefObject } from 'react'
 import { ComposerEditor } from './ComposerEditor'
+import type { ComposerInput } from './ComposerEditor'
 import { Icon } from './Icon'
 
 type ComposerProps = {
-  taRef: RefObject<HTMLTextAreaElement>
+  inputRef: RefObject<ComposerInput | null>
   value: string
   label: string
   placeholder: string
@@ -16,22 +17,15 @@ type ComposerProps = {
   attachments?: ReactNode
   left?: ReactNode
   right?: ReactNode
-  onChange(e: ChangeEvent<HTMLTextAreaElement>): void
-  onSelect?(e: SyntheticEvent<HTMLTextAreaElement>): void
-  onKeyDown?(e: KeyboardEvent<HTMLTextAreaElement>): void
+  onChange(text: string): void
+  onCaret?(before: string, after: string): void
+  onKeyDown?(e: KeyboardEvent): void
   onAttach?(data: DataTransfer): boolean
   onSend(): void
 }
 
-export function Composer({ taRef, value, label, placeholder, canSend, sendLabel, sendText, banner, drawer, attachments, left, right, onChange, onSelect, onKeyDown, onAttach, onSend }: ComposerProps) {
+export function Composer({ inputRef, value, label, placeholder, canSend, sendLabel, sendText, banner, drawer, attachments, left, right, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerProps) {
   const [dragging, setDragging] = useState(false)
-
-  const keyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    onKeyDown?.(e)
-    if (e.defaultPrevented || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
-    e.preventDefault()
-    onSend()
-  }
 
   const dragOver = (e: DragEvent) => {
     if (!onAttach || !e.dataTransfer.types.includes('Files')) return
@@ -62,14 +56,15 @@ export function Composer({ taRef, value, label, placeholder, canSend, sendLabel,
         <div className="px-4 pt-3.5 pb-2 sm:pt-4">
           {attachments && <div className="mb-3 flex gap-2">{attachments}</div>}
           <ComposerEditor
-            taRef={taRef}
+            inputRef={inputRef}
             value={value}
             label={label}
             placeholder={placeholder}
             onChange={onChange}
-            onSelect={onSelect}
-            onKeyDown={keyDown}
-            onPaste={(e) => onAttach?.(e.clipboardData) && e.preventDefault()}
+            onCaret={onCaret}
+            onKeyDown={onKeyDown}
+            onAttach={onAttach}
+            onSend={onSend}
           />
         </div>
         <div className="flex items-center gap-2 px-2 pb-2">

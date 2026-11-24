@@ -292,59 +292,41 @@
     line-height: 1.625;
   }
 
-  .composer-editor,
-  .composer-mirror {
-    scrollbar-gutter: stable;
-  }
-
-  .composer-editor {
-    position: relative;
+  .composer-input .composer-editor {
     min-height: calc(2lh + 0.5rem);
     max-height: 13rem;
-    color: transparent;
-    caret-color: var(--text);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    outline: none;
+    line-height: inherit;
   }
 
-  .composer-editor::selection {
+  .composer-editor ::selection {
     background: var(--composer-selection);
   }
 
-  .composer-mirror {
+  .composer-editor ul {
+    list-style: disc;
+  }
+
+  .composer-editor ul ul {
+    list-style: circle;
+  }
+
+  .composer-editor ol {
+    list-style: decimal;
+  }
+
+  .composer-editor li > p {
+    margin: 0;
+  }
+
+  .composer-placeholder {
     position: absolute;
-    inset: 0;
-    overflow: hidden;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    pointer-events: none;
-    color: var(--text);
-  }
-
-  .composer-input[data-composing='true'] .composer-editor {
-    color: var(--text);
-  }
-
-  .composer-input[data-composing='true'] .composer-mirror {
-    visibility: hidden;
-  }
-
-  .md-marker { color: var(--md-marker); }
-  .md-heading { color: var(--md-heading); }
-  .md-strong { color: var(--md-strong); }
-  .md-em { color: var(--md-em); }
-  .md-link { color: var(--md-link); }
-  .md-quote { color: var(--md-quote); }
-  .md-block { color: var(--md-code); }
-
-  .md-code {
-    border-radius: var(--radius-sm);
-    background: var(--md-code-bg);
-    color: var(--md-code);
-    -webkit-box-decoration-break: clone;
-    box-decoration-break: clone;
-  }
-
-  .composer-editor::placeholder {
+    top: 0;
+    left: 0;
     color: var(--text-soft);
+    pointer-events: none;
   }
 
   /* Tucks 1rem under the box's top edge, so the box reads as one with what sits on it. */

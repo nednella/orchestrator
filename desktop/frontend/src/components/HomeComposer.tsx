@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ComposerMode } from '../AgentosContext'
 import type { Issue } from '../types'
@@ -7,6 +6,7 @@ import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
+import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
 import { Icon } from './Icon'
 import { IssueChips } from './IssueChips'
@@ -29,8 +29,8 @@ const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(i
 export function HomeComposer() {
   const a = useAgentos('issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerKind', 'setComposerKind', 'newSession', 'newChat', 'startIssue', 'addNote', 'report')
   const text = a.composerDraft
-  const input = useRef<HTMLTextAreaElement>(null)
-  const [caret, setCaret] = useState(0)
+  const input = useRef<ComposerInput>(null)
+  const [caret, setCaret] = useState({ before: '', after: '' })
   const [picked, setPicked] = useState<number | null>(null)
   const [cursor, setCursor] = useState(-1)
   const [dismissed, setDismissed] = useState(false)
@@ -39,11 +39,12 @@ export function HomeComposer() {
   const pending = usePendingImages()
   const sending = useRef(false)
 
-  useFocusRequest('composer', input)
-  useFocusRequest('terminal', input)
+  const focusInput = useCallback(() => input.current?.focus(), [])
+  useFocusRequest('composer', focusInput)
+  useFocusRequest('terminal', focusInput)
 
   const note = a.composerMode === 'note'
-  const token = note || dismissed ? null : TOKEN.exec(text.slice(0, caret))
+  const token = note || dismissed ? null : TOKEN.exec(caret.before)
   const query = token?.[2].toLowerCase()
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
   const highlighted = Math.min(cursor, candidates.length - 1)
@@ -58,21 +59,18 @@ export function HomeComposer() {
     if (picked !== null && !a.issues.some((i) => i.number === picked)) setPicked(null)
   }, [picked, a.issues])
 
-  const edit = (el: HTMLTextAreaElement) => {
-    a.setComposerDraft(el.value)
-    setCaret(el.selectionStart)
+  const edit = (value: string) => {
+    a.setComposerDraft(value)
     setCursor(-1)
     setDismissed(false)
   }
 
   const pick = (number: number) => {
     if (!token) return
-    const start = caret - token[2].length - 1
-    a.setComposerDraft((text.slice(0, start) + text.slice(caret)).replace(/ {2,}/g, ' '))
-    setCaret(start)
+    const doubledSpace = token[1] === ' ' && caret.after.startsWith(' ')
+    input.current?.deleteBefore(token[2].length + 1 + (doubledSpace ? 1 : 0))
     setPicked(number)
     setCursor(-1)
-    requestAnimationFrame(() => input.current?.setSelectionRange(start, start))
   }
 
   const pickChip = (number: number) => {
@@ -82,16 +80,8 @@ export function HomeComposer() {
   }
 
   const openPicker = () => {
-    const el = input.current
-    if (!el) return
-    const at = el.selectionStart
-    const lead = at > 0 && !/\s/.test(text[at - 1]) ? ' #' : '#'
-    a.setComposerDraft(text.slice(0, at) + lead + text.slice(at))
-    setCaret(at + lead.length)
-    setCursor(-1)
-    setDismissed(false)
-    el.focus()
-    requestAnimationFrame(() => el.setSelectionRange(at + lead.length, at + lead.length))
+    input.current?.insert(caret.before !== '' && !/\s$/.test(caret.before) ? ' #' : '#')
+    input.current?.focus()
   }
 
   const send = () => {
@@ -116,7 +106,7 @@ export function HomeComposer() {
     })
   }
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (e: KeyboardEvent) => {
     if (token && candidates.length > 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
@@ -135,7 +125,7 @@ export function HomeComposer() {
       setDismissed(true)
       return
     }
-    if (e.key === 'Escape') e.currentTarget.blur()
+    if (e.key === 'Escape') input.current?.blur()
   }
 
   const placeholder = note
@@ -151,7 +141,7 @@ export function HomeComposer() {
   return (
     <div className="flex flex-col">
       <Composer
-        taRef={input}
+        inputRef={input}
         value={text}
         label={note ? 'New note' : 'New thread'}
         placeholder={placeholder}
@@ -196,8 +186,8 @@ export function HomeComposer() {
             </>
           )
         }
-        onChange={(e) => edit(e.currentTarget)}
-        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+        onChange={edit}
+        onCaret={(before, after) => setCaret({ before, after })}
         onKeyDown={onKeyDown}
         onAttach={note ? pending.attach : undefined}
         onSend={send}
