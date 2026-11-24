@@ -34,15 +34,6 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     run: () => layout.togglePanel('right'),
   },
   {
-    id: 'panel-sidebar',
-    label: 'Project home',
-    group: 'Navigate',
-    run() {
-      layout.showHome()
-      a.focus('composer')
-    },
-  },
-  {
     id: 'previous-session',
     label: 'Previous session',
     group: 'Navigate',
