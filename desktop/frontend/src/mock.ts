@@ -194,6 +194,7 @@ export function createMock(params: URLSearchParams) {
     update: params.has('update'),
     patchNotes: params.has('patchnotes'),
     fullDataDir: params.has('fulldata'),
+    noModel: params.has('nomodel'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: MockSession[] = []
@@ -1193,6 +1194,12 @@ export function createMock(params: URLSearchParams) {
     },
     Cleanups: async () => [...current.cleanups],
     Memory: async () => memory(),
+    // As if Claude's settings held model opus, effortLevel high, and modelSettings.haiku.effortLevel low.
+    DefaultModel: async (model: string) => {
+      if (flags.noModel) return { model, effort: '' }
+      const picked = model || 'opus'
+      return { model: picked, effort: picked === 'haiku' ? 'low' : 'high' }
+    },
     BrowserOpen: async (id: string, url: string) => {
       const s = find(id)
       openPage(s, url ? normalizeUrl(url) : 'https://docs.acme.test/')

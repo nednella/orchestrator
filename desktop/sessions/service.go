@@ -26,6 +26,19 @@ func (v *Service) NewChat(title, prompt, model, effort string) (Session, error) 
 	return v.s.CreateWith(title, true, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
 }
 
+// ModelChoice is a model and an effort; "" where nothing sets one.
+type ModelChoice struct {
+	Model  string `json:"model"`
+	Effort string `json:"effort"`
+}
+
+// DefaultModel is what the agent's own settings give a new session in the current project when no label, action or
+// pick sets the model and effort. With model set, it is the effort the settings give that model.
+func (v *Service) DefaultModel(model string) ModelChoice {
+	m := v.s.DefaultModel(model)
+	return ModelChoice{Model: m.Model, Effort: m.Effort}
+}
+
 // ShellInfo names a shell session.
 type ShellInfo struct {
 	ID string `json:"id"`

@@ -906,6 +906,10 @@ func (h *Harness) NewChatWith(title, prompt, model, effort string) (sessions.Ses
 	return h.sessions.NewChat(title, prompt, model, effort)
 }
 
+func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
+	return h.sessions.DefaultModel(model)
+}
+
 func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
 	return h.sessions.NewSession(title, prompt, "", "")
 }

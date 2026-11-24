@@ -1,5 +1,5 @@
 import { createMock } from './mock'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, News, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, News, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -47,6 +47,7 @@ type Backend = {
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
   Memory(): Promise<Memory>
+  DefaultModel(model: string): Promise<ModelChoice>
   BrowserOpen(id: string, url: string): Promise<BrowserState>
   BrowserGoto(id: string, url: string): Promise<void>
   BrowserShow(id: string): Promise<void>
@@ -97,7 +98,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory'],
+  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -180,6 +181,7 @@ export const api = {
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),
+  defaultModel: (model = '') => backend.DefaultModel(model),
   browserOpen: (id: string, url: string) => backend.BrowserOpen(id, url),
   browserGoto: (id: string, url: string) => backend.BrowserGoto(id, url),
   browserShow: (id: string) => backend.BrowserShow(id),

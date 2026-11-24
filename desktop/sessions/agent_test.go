@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -134,5 +135,42 @@ func TestSessionWithAnAgentNotOnPathDoesNotStart(t *testing.T) {
 	}
 	if list := h.Sessions().List(); len(list) != 0 {
 		t.Errorf("the failed start left rows: %+v", list)
+	}
+}
+
+func TestDefaultModelIsWhatClaudesSettingsGive(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	if got := h.DefaultModel(""); got != (sessions.ModelChoice{}) {
+		t.Errorf("with no settings: %+v, want none", got)
+	}
+
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "settings.json"), `{"model": "sonnet", "effortLevel": "low", "modelSettings": {"opus": {"effortLevel": "max"}}}`)
+	tests := []struct {
+		name, pick string
+		want       sessions.ModelChoice
+	}{
+		{"the user's settings", "", sessions.ModelChoice{Model: "sonnet", Effort: "low"}},
+		{"a picked model's own effort", "opus", sessions.ModelChoice{Model: "opus", Effort: "max"}},
+		{"a picked model without its own effort", "haiku", sessions.ModelChoice{Model: "haiku", Effort: "low"}},
+	}
+	for _, tt := range tests {
+		if got := h.DefaultModel(tt.pick); got != tt.want {
+			t.Errorf("%s: %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+
+	write(filepath.Join(h.Dir, ".claude", "settings.local.json"), `{"model": "fable"}`)
+	if got, want := h.DefaultModel(""), (sessions.ModelChoice{Model: "fable", Effort: "low"}); got != want {
+		t.Errorf("the project's local settings: %+v, want %+v", got, want)
 	}
 }

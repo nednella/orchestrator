@@ -1397,6 +1397,16 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	return view, nil
 }
 
+// DefaultModel is the model and effort a new session in the current project gets from the agent's own settings
+// when nothing else picks them; with model set, the effort is the one for that model.
+func (s *Sessions) DefaultModel(model string) project.Model {
+	proj := s.Current()
+	if proj.Dir == "" {
+		return project.Model{}
+	}
+	return fill(s.Provider(""), proj.Dir, project.Model{Model: model})
+}
+
 // fill sets what model leaves unset from the agent's own settings, skipping a value the agent would not accept.
 func fill(p agent.Provider, dir string, model project.Model) project.Model {
 	l := p.Fill(dir, agent.Launch{Model: model.Model, Effort: model.Effort})
