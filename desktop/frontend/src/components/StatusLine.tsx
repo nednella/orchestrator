@@ -23,14 +23,19 @@ const PR_TONE: Record<PR['state'], ChipTone> = {
   closed: 'bad',
 }
 
+export function isReady({ pr, git }: Session): boolean {
+  const live = pr?.state === 'draft' || pr?.state === 'open'
+  const passing = pr?.checks === 'passing' || pr?.checks === 'none'
+  return live && passing && !pr.conflicting && pr.newComments === 0 && git?.unpushed === 0 && git.uncommitted === 0
+}
+
 export function StatusLine({ session, children }: StatusLineProps) {
   const { openPR, report } = useAgentos('openPR', 'report')
   const { anchor, hover } = useHoverCard()
   const { pr, git } = session
   if (!pr && !git) return null
   const live = pr?.state === 'draft' || pr?.state === 'open'
-  const passing = pr?.checks === 'passing' || pr?.checks === 'none'
-  const ready = live && passing && !pr.conflicting && pr.newComments === 0 && git?.unpushed === 0 && git.uncommitted === 0
+  const ready = isReady(session)
 
   return (
     <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1" {...hover}>

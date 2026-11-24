@@ -5,6 +5,7 @@ import { Chip } from './Chip'
 import { Icon } from './Icon'
 import { PILL, Ref } from './PRCard'
 import { PRTiles } from './PRTiles'
+import { isReady } from './StatusLine'
 import { WorkChips } from './WorkChips'
 
 type PRTabProps = { session: Session }
@@ -75,13 +76,18 @@ export function PRTab({ session }: PRTabProps) {
               Conflicts
             </Chip>
           )}
+          {isReady(session) && (
+            <Chip tone="ok" icon="check-circle-fill" title="Ready to merge. This is not an approval.">
+              ready
+            </Chip>
+          )}
           <WorkChips session={session} alwaysWords />
         </div>
       </div>
       {pr && <PRTiles pr={pr} />}
       {pr && (
         <p className="border-t border-line px-4 py-3 text-small text-soft">
-          {pr.comments === 0 ? 'No review comments.' : `${pr.comments} review comments, ${pr.newComments} new.`}
+          {pr.comments === 0 ? 'No review comments.' : `${pr.comments} review ${pr.comments === 1 ? 'comment' : 'comments'}, ${pr.newComments} new.`}
         </p>
       )}
       {pr && action && (

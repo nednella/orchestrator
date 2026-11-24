@@ -13,7 +13,7 @@ import { CleanupControls } from './CleanupControls'
 import { Icon } from './Icon'
 import { ModelTag } from './ModelTag'
 import { StateBadge } from './StateBadge'
-import { Timeline } from './Timeline'
+import { TimelineButton } from './TimelineButton'
 
 type ViewportHeaderProps = { session: Session }
 
@@ -102,13 +102,13 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
             title={`${rightOpen ? 'Hide' : 'Show'} the right panel`}
             aria-label={`${rightOpen ? 'Hide' : 'Show'} the right panel`}
             aria-pressed={rightOpen}
-            onClick={toggleRight}
+            onClick={() => report(toggleRight)}
           >
             <Icon name="panel-right" />
           </button>
         )}
       </div>
-      <div className={`short:hidden flex items-center gap-3 px-4 pt-2.5 ${session.chat ? 'pb-2' : 'pb-0.5'}`}>
+      <div className="short:hidden relative flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
         <StateBadge state={session.state} chat={session.chat} />
         <ActionTag action={session.action} />
         {session.chat && <ChatTag />}
@@ -118,13 +118,13 @@ export function ViewportHeader({ session }: ViewportHeaderProps) {
           effort={session.effort}
           spend={session.tokens > 0 ? `${tokenCount(session.tokens)} tokens · ~${dollars(session.cost)}` : ''}
         />
+        {!session.chat && <TimelineButton session={session} />}
         {session.memory > 0 && (
           <span className="mono text-small whitespace-nowrap text-dim" title="Memory this session's processes use">
             {gigabytes(session.memory)}
           </span>
         )}
       </div>
-      {!session.chat && <Timeline session={session} size="full" />}
       {kill.armed && (
         <p className="px-4 pb-2 text-center text-small" style={{ color: 'var(--danger)' }}>
           Kill this session? The agent stops now. Its conversation stays on disk and can be resumed from a terminal with{' '}

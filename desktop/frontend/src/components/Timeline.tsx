@@ -24,6 +24,10 @@ function segmentsOf(session: Session, now: number): Segment[] {
   return segments
 }
 
+export function timelineSummary(session: Session, now: number): string {
+  return summaryOf(segmentsOf(session, now))
+}
+
 function summaryOf(segments: Segment[]): string {
   const total = (state: State) => segments.filter((s) => s.state === state).reduce((sum, s) => sum + (s.to - s.from), 0)
   return SUMMARY.map(({ state, word }) => ({ word, ms: total(state) }))
@@ -35,7 +39,7 @@ function summaryOf(segments: Segment[]): string {
 export function Timeline({ session, size }: TimelineProps) {
   const openSince = session.history.at(-1)?.at ?? session.createdAt
   const now = useClock((current) => shownNow(current, openSince))
-  const summary = useClock((current) => (size === 'full' ? summaryOf(segmentsOf(session, current)) : ''))
+  const summary = useClock((current) => (size === 'full' ? timelineSummary(session, current) : ''))
   const segments = segmentsOf(session, now)
   const bar = (
     <div className="timeline h-[2px]">
@@ -52,9 +56,9 @@ export function Timeline({ session, size }: TimelineProps) {
   if (size === 'mini') return bar
 
   return (
-    <div className="short:hidden flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2">
-      <div className="min-w-[8rem] flex-1">{bar}</div>
-      <span className="mono flex-none text-label whitespace-nowrap text-dim">{summary || 'just started'}</span>
+    <div className="flex w-80 max-w-full flex-col gap-1.5">
+      {bar}
+      <span className="mono text-label whitespace-nowrap text-dim">{summary || 'just started'}</span>
     </div>
   )
 }
