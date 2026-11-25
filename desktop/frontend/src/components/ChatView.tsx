@@ -49,6 +49,10 @@ export function ChatView({ session }: ChatViewProps) {
   const input = useRef<ComposerInput>(null)
   // The message the next send answers.
   const [reply, setReply] = useState<string | null>(null)
+  const replyTo = useCallback((text: string) => {
+    setReply(text)
+    input.current?.focus()
+  }, [])
   const quote = useCallback((selection: string) => {
     const quoted = fromMarkdown(quoteMarkdown(selection))
     // The empty paragraph after the quote puts the caret outside it.
@@ -56,7 +60,18 @@ export function ChatView({ session }: ChatViewProps) {
     input.current?.focus()
   }, [])
 
-  const fork = useCallback((at: string, draft: string) => report(() => forkSession(session.id, at, draft)), [session.id, report, forkSession])
+  // The promise settles once the fork is made or has failed, which the toast reports.
+  const fork = useCallback(
+    (at: string, draft: string) => {
+      const forked = forkSession(session.id, at, draft)
+      report(() => forked)
+      return forked.then(
+        () => undefined,
+        () => undefined,
+      )
+    },
+    [session.id, report, forkSession],
+  )
 
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
@@ -79,7 +94,7 @@ export function ChatView({ session }: ChatViewProps) {
       {empty && !loading && error && !session.hosted && <p className="flex flex-1 items-center justify-center px-4 text-center text-small text-dim">{error}</p>}
       {empty && !loading && error && session.hosted && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
-      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onQuote={quote} onFork={fork} />}
+      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onReply={replyTo} onQuote={quote} onFork={fork} />}
       <div className="mx-auto w-full max-w-[46rem] px-4 pb-4">
         {!empty && error && (
           <div className="pb-2">

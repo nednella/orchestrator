@@ -5,6 +5,7 @@ import { jumpOffset } from '../chatMinimap'
 import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
 import { ChatApprovalCard } from './ChatApprovalCard'
+import { ChatMessageActions } from './ChatMessageActions'
 import { ChatMinimap } from './ChatMinimap'
 import { ChatNotice } from './ChatNotice'
 import { ChatPlanCard } from './ChatPlanCard'
@@ -16,17 +17,17 @@ import { ChatWorkRow } from './ChatWorkRow'
 import { Icon } from './Icon'
 import { ImageViewer } from './ImageViewer'
 
-type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onQuote(text: string): void; onFork(at: string, draft: string): void }
+type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onReply(text: string): void; onQuote(text: string): void; onFork(at: string, draft: string): Promise<void> }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onQuote: (text: string) => void, onFork: (at: string, draft: string) => void, onOpenImage: (url: string) => void) {
+function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void) {
   const item = items[index]
   switch (item.kind) {
     case 'user':
       return <ChatUserRow thread={thread} id={item.id} text={item.text} files={item.files} at={item.at} afterUser={items[index - 1]?.kind === 'user'} beforeUser={items[index + 1]?.kind === 'user'} onOpenImage={onOpenImage} />
     case 'reply':
-      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} onQuote={onQuote} onFork={onFork} />
+      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={items[index + 1]?.kind === 'work'} onReply={onReply} onFork={onFork} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
     case 'restart': {
@@ -34,8 +35,18 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       const label: string | undefined = ACCESS_LABEL[item.access]
       return <ChatNotice text={label ? `Restarted with ${label}` : 'Restarted'} error={false} />
     }
-    case 'work':
-      return <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
+    case 'work': {
+      const work = <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
+      // The reply these tool rows follow shows its actions under them.
+      const reply = items[index - 1]
+      if (reply?.kind !== 'reply') return work
+      return (
+        <>
+          {work}
+          <ChatMessageActions text={reply.text} at={reply.at} streaming={reply.streaming} ended={reply.ended} shown onReply={onReply} onFork={reply.uuid ? () => onFork(reply.uuid, '') : undefined} />
+        </>
+      )
+    }
     case 'approval':
       return <ChatApprovalCard thread={thread} request={item.request} tool={item.tool} input={item.input} expired={item.expired} folder={folder} />
     case 'question':
@@ -45,7 +56,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
   }
 }
 
-export function ChatTimeline({ id, items, folder, onQuote, onFork }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
@@ -124,7 +135,7 @@ export function ChatTimeline({ id, items, folder, onQuote, onFork }: ChatTimelin
         <div ref={lane} className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items, row.index, id, folder, onQuote, onFork, setViewing)}
+              {rowOf(items, row.index, id, folder, onReply, onFork, setViewing)}
             </div>
           ))}
         </div>

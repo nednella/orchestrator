@@ -5,18 +5,19 @@ import type { ReactNode } from 'react'
 export const revealOnHover = 'opacity-0 transition-opacity duration-200 group-hover/message:opacity-100 group-focus-within/message:opacity-100 [@media(hover:none)]:opacity-100'
 
 // label names a button that shows only an icon. A muted button's icon and text turn from soft to ink on hover; any
-// other changes only its background.
-type ChatActionButtonProps = { label?: string; muted?: boolean; disabled?: boolean; onClick(): void; children: ReactNode }
+// other changes only its background. A busy button pulses until what it started is done.
+type ChatActionButtonProps = { label?: string; muted?: boolean; disabled?: boolean; busy?: boolean; onClick(): void; children: ReactNode }
 
-export function ChatActionButton({ label, muted = false, disabled = false, onClick, children }: ChatActionButtonProps) {
+export function ChatActionButton({ label, muted = false, disabled = false, busy = false, onClick, children }: ChatActionButtonProps) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       disabled={disabled}
+      aria-busy={busy || undefined}
       onClick={onClick}
-      className={`inline-flex h-7 flex-none items-center justify-center gap-1 rounded-lg border border-transparent px-[7px] text-small text-soft transition-[background-color,color,scale] duration-150 ease-in-out enabled:hover:bg-[var(--bg-ghost-hover)] enabled:active:scale-[0.97] disabled:opacity-64 sm:h-6 ${muted ? 'enabled:hover:text-ink' : ''}`}
+      className={`inline-flex h-7 flex-none items-center justify-center gap-1 rounded-lg border border-transparent px-[7px] text-small text-soft transition-[background-color,color,scale] duration-150 ease-in-out enabled:hover:bg-[var(--bg-ghost-hover)] enabled:active:scale-[0.97] disabled:opacity-64 sm:h-6 ${muted ? 'enabled:hover:text-ink' : ''} ${busy ? 'motion-safe:animate-pulse' : ''}`}
     >
       {children}
     </button>

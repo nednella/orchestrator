@@ -17,8 +17,9 @@ export type TimelineItem =
   // when the reply is from before the last compaction.
   | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[]; forkAt: string }
   // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none or when the reply
-  // is from before the last compaction.
-  | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean }
+  // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
+  // failed on: the turn's last part.
+  | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean; ended?: TurnEnd }
   | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
@@ -26,6 +27,9 @@ export type TimelineItem =
   | { kind: 'notice'; key: string; at: number; text: string; error: boolean }
   // restart is the thread starting again with a new access, which the owner asked for.
   | { kind: 'restart'; key: string; at: number; access: Access }
+
+// TurnEnd is how a turn ended that did not finish: stopped by the owner or Claude's exit, or failed.
+export type TurnEnd = 'stopped' | 'failed'
 
 export type QueuedMessage = { id: string; text: string; files: string[] }
 
@@ -87,23 +91,23 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   // close folds the turn into the items, then its notice and its not-sent notices, and gives back the approvals it
   // left unanswered.
-  const close = (endedAt: number, notice: Notice | Restart | null = null): Approval[] => {
+  const close = (endedAt: number, notice: Notice | Restart | null = null, ended?: TurnEnd): Approval[] => {
     const t = turn as Turn | null
     turn = null
-    if (t) items.push(...folded(t, endedAt))
+    if (t) items.push(...folded(t, endedAt, ended))
     if (notice) items.push(notice)
     if (t) items.push(...t.unsent)
     return t?.approvals.filter((a) => !a.answered) ?? []
   }
 
   // end closes the turn for good: what it left unanswered can no longer be answered.
-  const end = (e: ChatEvent, notice: Notice | Restart | null) => {
+  const end = (e: ChatEvent, notice: Notice | Restart | null, ended?: TurnEnd) => {
     for (const a of turn?.approvals ?? []) {
       if (a.answered) continue
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
-    close(e.at, notice)
+    close(e.at, notice, ended)
   }
 
   events.forEach((e, i) => {
@@ -135,6 +139,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (reply) {
           reply.blocks.push(e.text ?? '')
           reply.uuid = uuid || reply.uuid
+          reply.at = e.at
         } else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, uuid, blocks: [e.text ?? ''] })
         return
       }
@@ -191,19 +196,19 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
-        end(e, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null)
+        end(e, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null, e.error ? (interrupted ? 'stopped' : 'failed') : undefined)
         interrupted = false
         return
       case 'exit':
         interrupted = false
-        end(e, exitItem(e))
+        end(e, exitItem(e), e.error ? 'failed' : 'stopped')
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
       // A run whose host was killed logged no exit: its turn and what it waits on end where the next run starts.
       case 'start':
         interrupted = false
-        end(e, null)
+        end(e, null, 'stopped')
         return
       case 'commands':
         commands = Array.isArray(e.input) ? e.input.filter((c): c is Command => typeof c?.name === 'string') : []
@@ -234,10 +239,13 @@ function exitItem(e: ChatEvent): Notice | Restart {
   return noticeOf(e, e.stop === 'settle' ? 'Settled' : 'Claude stopped', e.error ?? false)
 }
 
-// folded is a finished turn. When it made tool calls, they and every reply but the last go into one work item.
-function folded(turn: Turn, endedAt: number): TimelineItem[] {
+// folded is a finished turn. When it made tool calls, they and every reply but the last go into one work item. A turn
+// that ended unfinished marks its last part, when that is a reply.
+function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const calls = turn.parts.flatMap((p) => (p.kind === 'call' ? [p.call] : []))
-  if (calls.length === 0) return turn.parts.map((p) => (p.kind === 'reply' ? replyItem(p, '') : (p as AskItem | ApprovalItem)))
+  const endedOn = turn.parts.at(-1)
+  const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
+  if (calls.length === 0) return turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
   const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply')
   const last = replies.at(-1)
@@ -246,7 +254,7 @@ function folded(turn: Turn, endedAt: number): TimelineItem[] {
     if (p.kind === 'reply' && p !== last) return [{ kind: 'note', key: p.key, text: p.blocks.join('\n\n') }]
     return []
   })
-  return [{ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [replyItem(last, '')] : [])]
+  return [{ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [reply(last)] : [])]
 }
 
 // unfolded is the turn that runs: its parts in order, each run of calls as one work item, then the messages that have
@@ -272,8 +280,8 @@ function unfolded(turn: Turn, live: Record<string, string>, now: number): Timeli
   return [...out, ...turn.unsent]
 }
 
-function replyItem(r: Reply, streamed: string): TimelineItem {
-  return { kind: 'reply', key: r.key, at: r.at, id: r.id, uuid: r.uuid, text: [...r.blocks, ...(streamed ? [streamed] : [])].join('\n\n'), streaming: streamed !== '' }
+function replyItem(r: Reply, streamed: string, ended?: TurnEnd): TimelineItem {
+  return { kind: 'reply', key: r.key, at: r.at, id: r.id, uuid: r.uuid, text: [...r.blocks, ...(streamed ? [streamed] : [])].join('\n\n'), streaming: streamed !== '', ...(ended ? { ended } : {}) }
 }
 
 // pendingOf describes the approval a thread waits on, as the chat service does.

@@ -369,3 +369,20 @@ test('latest commands win', () => {
   assert.deepEqual(t.commands.map((c) => c.name), ['greet', 'review'])
   assert.equal(buildTimeline([], {}).commands.length, 0)
 })
+
+test('a reply shows the time of its last block', () => {
+  const t = buildTimeline(log(user('u1', 'Hi'), message('msg_1', 'One.'), message('msg_1', 'Two.'), turnEnd()), {})
+  assert.equal(only(t.items, 'reply')[0].at, 3000)
+})
+
+test('the reply a turn stopped or failed on is marked, and no other', () => {
+  const endedOf = (...drafts: Draft[]) => only(buildTimeline(log(...drafts), {}).items, 'reply').map((r) => r.ended)
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), turnEnd()), [undefined])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), { kind: 'interrupt' }, turnEnd(true)), ['stopped'])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), turnEnd(true)), ['failed'])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), { kind: 'exit' }), ['stopped'])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), { kind: 'exit', error: true }), ['failed'])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), { kind: 'start' }), ['stopped'])
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), toolUse('t1', 'Bash'), { kind: 'interrupt' }, turnEnd(true)), [undefined], 'the turn stopped on the call, after the reply')
+  assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), user('u2', 'And this'), message('msg_2', 'Sure.'), { kind: 'interrupt' }, turnEnd(true)), [undefined, 'stopped'])
+})
