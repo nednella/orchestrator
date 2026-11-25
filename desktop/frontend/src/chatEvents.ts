@@ -146,10 +146,12 @@ export function chatFeed(start: ChatState, deps: ChatFeedDeps) {
   }
 }
 
-// chatMediaURL is where the app serves an image saved for a message in a thread of the project: one at
-// <key>/chat-media/<token>/<file> in the app's local folder. A path anywhere else has none.
-export function chatMediaURL(project: string, path: string): string | null {
+// chatMediaURL is where the app serves an image saved for a message of the thread, a file in a chat-media/<token>
+// folder. The thread's own token names the folder: a resumed thread's log keeps the paths of the thread it continues,
+// whose images moved to its own folder. A path anywhere else has none.
+export function chatMediaURL(thread: string, path: string): string | null {
   const [folder, token, file] = path.split('/').slice(-3)
-  if (folder !== 'chat-media' || !token || !file) return null
-  return `/media/${[project, folder, token, file].map(encodeURIComponent).join('/')}`
+  const [key, own] = thread.split('/')
+  if (folder !== 'chat-media' || !token || !file || !key || !own) return null
+  return `/media/${[key, folder, own, file].map(encodeURIComponent).join('/')}`
 }

@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	chatsvc "github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/chat"
 )
 
 // ended is a session that had the conversation abc and has ended.
@@ -91,6 +94,51 @@ func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 	}
 	if exists(oldLog) {
 		t.Error("the ended session's chat log stayed")
+	}
+}
+
+func TestResumedSessionKeepsItsImages(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dot := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+	if _, err := h.ChatSend(old.ID, "see", chatsvc.Image{Base64: dot, Mime: "image/png"}); err != nil {
+		t.Fatal(err)
+	}
+	oldLog, _ := hostFiles(h, old.ID)
+	var saved string
+	eventually(t, "the image's message in the chat log", func() bool {
+		events, _ := chat.ReadLog(oldLog, 0)
+		for _, e := range events {
+			if e.Kind == chat.KindUser && len(e.Files) == 1 {
+				saved = e.Files[0]
+			}
+		}
+		return saved != ""
+	})
+	ended(t, h, old)
+	fresh, err := h.ResumeSession(old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, err := h.Sessions().ChatOf(fresh.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved := filepath.Join(ch.Media, filepath.Base(saved)); !exists(moved) {
+		t.Errorf("the image is not at %s after the resume", moved)
+	}
+	time.Sleep(100 * time.Millisecond) // past the dismissed row's clean-up
+	if exists(filepath.Dir(saved)) {
+		t.Errorf("the ended session's image folder %s stayed", filepath.Dir(saved))
+	}
+	rec := httptest.NewRecorder()
+	h.App.Media().ServeHTTP(rec, httptest.NewRequest("GET", "/media/"+fresh.ID[:strings.IndexByte(fresh.ID, '/')]+"/chat-media/"+filepath.Base(ch.Media)+"/"+filepath.Base(saved), nil))
+	if rec.Code != 200 {
+		t.Errorf("serving the carried image: status %d", rec.Code)
 	}
 }
 

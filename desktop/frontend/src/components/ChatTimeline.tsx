@@ -21,7 +21,7 @@ type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; on
 function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (text: string) => void, onOpenImage: (url: string) => void) {
   switch (item.kind) {
     case 'user':
-      return <ChatUserRow project={thread.slice(0, thread.indexOf('/'))} text={item.text} files={item.files} onReply={onReply} onOpenImage={onOpenImage} />
+      return <ChatUserRow thread={thread} text={item.text} files={item.files} onReply={onReply} onOpenImage={onOpenImage} />
     case 'reply':
       return <ChatReplyRow text={item.text} streaming={item.streaming} onReply={onReply} />
     case 'notice':

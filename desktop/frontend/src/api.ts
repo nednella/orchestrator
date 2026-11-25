@@ -193,7 +193,7 @@ export const api = {
   chatUnwatch: (id: string) => backend.ChatUnwatch(id),
   chatSend: (id: string, text: string, images: ChatImage[] = []) => backend.ChatSend(id, text, images),
   // The mock keeps the images it was sent in memory and has its own address for each.
-  chatMediaURL: (project: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(project, path),
+  chatMediaURL: (thread: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(thread, path),
   chatDraft: (id: string, text: string) => backend.ChatDraft(id, text),
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),
   chatSendNow: (id: string, message: string) => backend.ChatSendNow(id, message),

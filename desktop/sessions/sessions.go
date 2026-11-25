@@ -1407,7 +1407,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	restore := func() {}
 	if conversation != "" && p.Can(agent.Hosted) {
 		var err error
-		if restore, err = s.carryChatLog(from, name); err != nil {
+		if restore, err = s.carryChat(from, name); err != nil {
 			return Session{}, err
 		}
 	}
@@ -1455,22 +1455,32 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 	return fill(s.Provider(""), proj.Dir, project.Model{Model: model})
 }
 
-// carryChatLog moves the chat log of the ended session from to the session that continues its conversation, before
-// that session's host opens it, so the thread keeps what was said; dismissing the ended row would delete it. restore
-// moves it back, for a session that did not start.
-func (s *Sessions) carryChatLog(from string, to session.Name) (restore func(), err error) {
+// carryChat moves the chat log and the images of the ended session from to the session that continues its
+// conversation, before that session's host opens the log, so the thread keeps what was said; dismissing the ended row
+// would delete them. restore moves them back, for a session that did not start.
+func (s *Sessions) carryChat(from string, to session.Name) (restore func(), err error) {
 	old, err := session.ParseName(from)
 	if err != nil {
 		return func() {}, nil
 	}
-	src, dst := s.chatLogPath(old), s.chatLogPath(to)
-	if err := os.Rename(src, dst); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return func() {}, nil
+	var undo []func()
+	restore = func() {
+		for _, u := range undo {
+			u()
 		}
-		return nil, fmt.Errorf("carrying the chat log over: %w", err)
 	}
-	return func() { _ = os.Rename(dst, src) }, nil
+	for _, move := range [][2]string{{s.chatLogPath(old), s.chatLogPath(to)}, {s.chatMediaDir(old), s.chatMediaDir(to)}} {
+		src, dst := move[0], move[1]
+		if err := os.Rename(src, dst); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			restore()
+			return nil, fmt.Errorf("carrying the chat over: %w", err)
+		}
+		undo = append(undo, func() { _ = os.Rename(dst, src) })
+	}
+	return restore, nil
 }
 
 // fill sets what model leaves unset from the agent's own settings, skipping a value the agent would not accept.

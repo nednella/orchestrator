@@ -3,10 +3,10 @@ import { api } from '../api'
 import { ChatMessageActions } from './ChatMessageActions'
 import { NoteImages } from './NoteImages'
 
-type ChatUserRowProps = { project: string; text: string; files: string[]; onReply(text: string): void; onOpenImage(url: string): void }
+type ChatUserRowProps = { thread: string; text: string; files: string[]; onReply(text: string): void; onOpenImage(url: string): void }
 
-export const ChatUserRow = memo(function ChatUserRow({ project, text, files, onReply, onOpenImage }: ChatUserRowProps) {
-  const urls = files.flatMap((file) => api.chatMediaURL(project, file) ?? [])
+export const ChatUserRow = memo(function ChatUserRow({ thread, text, files, onReply, onOpenImage }: ChatUserRowProps) {
+  const urls = files.flatMap((file) => api.chatMediaURL(thread, file) ?? [])
   return (
     <div data-message className="group/message relative -mb-3 flex flex-col items-end gap-2 pb-6">
       {urls.length > 0 && (
