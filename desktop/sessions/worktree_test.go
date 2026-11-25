@@ -542,9 +542,7 @@ func TestWakeRestoresFromOriginWhenTheLocalBranchIsGone(t *testing.T) {
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	cleanedUpAfterAMerge(t, h, s)
-	if branches(t, h.Dir) != "" {
-		t.Fatal("the clean-up left the local branch")
-	}
+	gitIn(t, h.Dir, "branch", "-D", "issue-7")
 	head := gitIn(t, h.Dir, "rev-parse", "origin/issue-7")
 
 	if _, err := h.WakeThread(s.ID); err != nil {
@@ -570,6 +568,7 @@ func TestWakeFailsWhenTheBranchIsGone(t *testing.T) {
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	cleanedUpAfterAMerge(t, h, s)
+	gitIn(t, h.Dir, "branch", "-D", "issue-7")
 	gitIn(t, h.Dir, "push", "--quiet", "origin", "--delete", "issue-7")
 
 	before := madeRecords(t, h)
@@ -589,7 +588,7 @@ func TestWakeFailsWhenTheBranchIsCheckedOutElsewhere(t *testing.T) {
 	s := issueThread(h, t, 7)
 	cleanedUpAfterAMerge(t, h, s)
 	elsewhere := filepath.Join(t.TempDir(), "mine")
-	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "issue-7", elsewhere, "origin/issue-7")
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", elsewhere, "issue-7")
 
 	before := madeRecords(t, h)
 	_, err := h.WakeThread(s.ID)
@@ -749,7 +748,7 @@ func TestWakeFailsWhenAStaleEntryHoldsTheBranch(t *testing.T) {
 	s := issueThread(h, t, 7)
 	cleanedUpAfterAMerge(t, h, s)
 	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
-	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "issue-7", elsewhere, "origin/issue-7")
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", elsewhere, "issue-7")
 	listed := realDir(t, elsewhere)
 	if err := os.RemoveAll(elsewhere); err != nil {
 		t.Fatal(err)

@@ -1431,36 +1431,43 @@ func slowOrigin(t *testing.T, h *apptest.Harness, origin string, wait time.Durat
 	gitIn(t, h.Dir, "remote", "set-url", "origin", "ssh://localhost"+origin)
 }
 
-func TestWakeDuringTheCleanupKeepsTheWorktree(t *testing.T) {
+func TestWakeDuringTheCleanupIsRefused(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
+	head := gitIn(t, wt, "rev-parse", "HEAD")
 	withConversation(t, h, s.ID)
 	slowOrigin(t, h, origin, 3*time.Second) // the clean-up fetches before the settle and again after it
 
 	done := make(chan error, 1)
 	go func() { done <- h.Cleanup(s.ID, false) }()
 	eventually(t, "the clean-up to settle the thread", func() bool { return stateOf(h, s.ID) == "settled" })
-	if _, err := h.WakeThread(s.ID); err != nil {
-		t.Fatal(err)
+	_, err := h.WakeThread(s.ID)
+	if want := fmt.Sprintf("Thread %d is being cleaned up; wake it when that ends", s.N); err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	if !exists(filepath.Join(wt, "work.txt")) {
+		t.Error("the refused wake touched the worktree")
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
 
-	want := fmt.Sprintf("Thread %d woke during the clean-up", s.N)
-	if got, _ := h.Session(s.ID); got.State == "settled" || got.Cleanup != "blocked" || got.CleanupReason != want || got.Worktree != wt {
-		t.Errorf("row = %+v, want it live and kept with %q", got, want)
+	if got, _ := h.Session(s.ID); got.State != "settled" || !cleanedUp(h, s.ID)() {
+		t.Errorf("row = %+v, want it settled and cleaned up", got)
 	}
-	if !exists(filepath.Join(wt, "work.txt")) || branches(t, h.Dir) == "" {
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" {
+		t.Errorf("log = %+v", log)
+	}
+	if exists(wt) || gitIn(t, h.Dir, "rev-parse", "issue-7") != head {
 		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
-	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed != 0 {
-		t.Errorf("records = %+v", records)
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
 	}
-	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "blocked" || log[0].Reason != want || len(log[0].Removed) != 0 {
-		t.Errorf("log = %+v", log)
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != head {
+		t.Errorf("the wake after the clean-up restored %s, want %s", got, head)
 	}
 }
