@@ -4,30 +4,47 @@ import { fit, modeFor, nextOverlay, OVERLAY_BELOW } from './panelLayout.ts'
 
 const ROOT = 16
 
+const prefs = (sidebar: number, right: number | null = null, sidebarOpen = true) => ({ sidebarOpen, sidebar, right })
+
 test('the sidebar keeps the width it was set to at every window width', () => {
-  for (const window of [640, 700, 899, 900, 1100, 1249, 1250, 1512, 2560]) {
-    assert.equal(fit(window, { sidebarOpen: true, rightOpen: false, sidebar: 21, right: null }, ROOT).widths.sidebar, 21, `${window}px`)
-    assert.equal(fit(window, { sidebarOpen: true, rightOpen: true, sidebar: 21, right: 20 }, ROOT).widths.sidebar, 21, `${window}px with the right panel`)
+  for (const windowPx of [600, 640, 700, 899, 900, 1100, 1249, 1250, 1512, 2560]) {
+    assert.equal(fit(windowPx, prefs(21), ROOT).widths.sidebar, 21, `${windowPx}px`)
+    assert.equal(fit(windowPx, prefs(21, 20), ROOT).widths.sidebar, 21, `${windowPx}px with the right panel`)
   }
 })
 
-test('the right panel shrinks for the thread, then closes, and the sidebar does not give way', () => {
-  const prefs = { sidebarOpen: true, rightOpen: true, sidebar: 18, right: 20 }
-  assert.deepEqual(fit(1512, prefs, ROOT), { widths: { sidebar: 18, right: 20 }, rightForcedClosed: false })
-  const shrunk = fit(900, prefs, ROOT)
-  assert.equal(shrunk.rightForcedClosed, false)
-  assert.equal(Math.round(shrunk.widths.right * ROOT), 900 - 21 * ROOT - 3 - 280)
-  assert.deepEqual(fit(700, prefs, ROOT), { widths: { sidebar: 18, right: 0 }, rightForcedClosed: true })
+test('the sidebar docks only where the thread keeps its room beside it', () => {
+  assert.equal(fit(1512, prefs(18), ROOT).docked.sidebar, true)
+  assert.equal(fit(819, prefs(18), ROOT).docked.sidebar, true)
+  assert.equal(fit(818, prefs(18), ROOT).docked.sidebar, false)
+  assert.equal(fit(700, prefs(18), ROOT).docked.sidebar, false)
+  assert.equal(fit(640, prefs(32), ROOT).docked.sidebar, false)
+  assert.equal(fit(1043, prefs(32), ROOT).docked.sidebar, true)
+  assert.equal(fit(1042, prefs(32), ROOT).docked.sidebar, false)
 })
 
-test('a closed right panel reports the width it opens at', () => {
-  assert.equal(fit(600, { sidebarOpen: false, rightOpen: false, sidebar: 18, right: 15 }, ROOT).widths.right, 15)
-  assert.equal(fit(600, { sidebarOpen: false, rightOpen: false, sidebar: 18, right: null }, ROOT).widths.right, 9.5)
-  assert.equal(fit(1512, { sidebarOpen: false, rightOpen: false, sidebar: 18, right: null }, ROOT).widths.right, 22)
-  assert.equal(fit(1200, { sidebarOpen: false, rightOpen: false, sidebar: 18, right: null }, ROOT).widths.right, (0.24 * 1200) / ROOT)
+test('below the breakpoint nothing docks, whatever the room', () => {
+  assert.deepEqual(fit(OVERLAY_BELOW - 1, prefs(13, 9.5, false), ROOT).docked, { sidebar: false, right: false })
 })
 
-test('below the breakpoint the side panels open over the thread', () => {
+test('the right panel docks only where it fits at its width beside the thread', () => {
+  assert.deepEqual(fit(1512, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
+  assert.deepEqual(fit(900, prefs(18), ROOT).docked, { sidebar: true, right: false })
+  assert.deepEqual(fit(900, prefs(18, null, false), ROOT), { widths: { sidebar: 18, right: 13.5 }, docked: { sidebar: true, right: true } })
+  assert.equal(fit(1512, prefs(18, 32), ROOT).docked.right, true)
+  assert.equal(fit(1200, prefs(18, 32), ROOT).docked.right, false)
+})
+
+test('a panel over the thread opens at its full width, capped by the room under the top bar', () => {
+  assert.equal(fit(900, prefs(18), ROOT).widths.right, 22)
+  assert.equal(fit(600, prefs(18), ROOT).widths.right, 22)
+  assert.equal(fit(600, prefs(18, 25), ROOT).widths.right, 25)
+  assert.equal(fit(300, prefs(18), ROOT).widths.right, 300 / ROOT)
+  assert.equal(fit(700, prefs(18), ROOT).widths.sidebar, 18)
+  assert.equal(fit(300, prefs(18), ROOT).widths.sidebar, 300 / ROOT - 3)
+})
+
+test('the window width picks the layout band', () => {
   assert.equal(modeFor(OVERLAY_BELOW - 1), 'narrow')
   assert.equal(modeFor(600), 'narrow')
   assert.equal(modeFor(OVERLAY_BELOW), 'compact')

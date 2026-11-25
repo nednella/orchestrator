@@ -39,8 +39,7 @@ export function App() {
   useFocusedPanel()
   const fullscreen = useFullscreen()
   const { selectedId } = useAgentos('selectedId')
-  const { mode, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen } = useLayout()
-  const narrow = mode === 'narrow'
+  const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen } = useLayout()
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
   )
@@ -54,8 +53,8 @@ export function App() {
         {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
-          {!narrow && sidebarOpen && <LeftSidebar />}
-          {!narrow && sidebarOpen && <Divider panel="sidebar" />}
+          {docked.sidebar && sidebarOpen && <LeftSidebar />}
+          {docked.sidebar && sidebarOpen && <Divider panel="sidebar" />}
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
             <main className="relative flex min-h-0 min-w-0 flex-1">
@@ -68,8 +67,8 @@ export function App() {
                 </div>
                 <ShellStrip />
               </div>
-              {!narrow && rightOpen && <Divider panel="right" />}
-              {!narrow && rightOpen && <RightPanel />}
+              {docked.right && rightOpen && <Divider panel="right" />}
+              {docked.right && rightOpen && <RightPanel />}
             </main>
           </div>
         </div>

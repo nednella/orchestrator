@@ -12,7 +12,7 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 export function TopBar() {
   const { selectedId, report, update, updating, applyUpdate, digestUnseenCount } = useAgentos('selectedId', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount')
   const layout = useLayout()
-  const { mode, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
+  const { docked, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => {
@@ -21,7 +21,7 @@ export function TopBar() {
   }
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
   // With no sidebar beside it the bar starts after the window buttons.
-  const left = sidebarOpen && mode !== 'narrow' ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
+  const left = sidebarOpen && docked.sidebar ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
 
   return (
     <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: 'var(--corner-pad)' }}>

@@ -14,7 +14,7 @@ export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
   const { projectSessions, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setComposerMode')
-  const { widths, returnToTerminal, showHome } = useLayout()
+  const { widths, returnToTerminal, showHome, focusPanel } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
@@ -31,7 +31,7 @@ export function ThreadSidebar() {
     {
       onEnter(index) {
         select(threads[index].id)
-        focus('thread')
+        focusPanel('centre')
       },
     },
   )
@@ -71,7 +71,7 @@ export function ThreadSidebar() {
     const first = threads.find((s) => s.state !== 'settled')
     if (!first) return
     select(first.id)
-    focus('thread')
+    focusPanel('centre')
   }
 
   return (

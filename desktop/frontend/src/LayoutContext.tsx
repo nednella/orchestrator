@@ -42,7 +42,9 @@ export type Layout = {
   rightOpen: boolean
   shellOpen: boolean
   shellRem: number
-  // The side panel open over the thread on a narrow window.
+  // Which side panels sit beside the thread; the others open over it.
+  docked: Record<SidePanel, boolean>
+  // The side panel open over the thread.
   overlay: SidePanel | null
   widths: Record<SidePanel, number>
   panelView: string
@@ -89,10 +91,6 @@ function useWindowSize(): { w: number; h: number } {
   return size
 }
 
-function checkRightFits(width: number, prefs: FitPrefs, root: number) {
-  if (fit(width, { ...prefs, rightOpen: true }, root).rightForcedClosed) throw 'The window is too narrow for the right panel'
-}
-
 type LayoutProviderProps = { children: ReactNode }
 
 function useSystemAppearance(): Appearance {
@@ -116,7 +114,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
-  const [sidebarRem, setSidebarRem] = useState(() => readStored<number | null>(SIDEBAR_WIDTH_KEY, null))
+  // Sidebar widths were saved per band before: until a width is saved on its own, the band the window opens in gives
+  // the width the owner set. A saved null is a reset to the default.
+  const [sidebarRem, setSidebarRem] = useState(() => {
+    const saved = readStored<number | null | undefined>(SIDEBAR_WIDTH_KEY, undefined)
+    return saved !== undefined ? saved : (readStored<Partial<Record<Band, { sidebar?: number | null }>>>(LAYOUT_KEY, {})[band]?.sidebar ?? null)
+  })
   const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
@@ -133,12 +136,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   }, [theme])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
-  const narrow = mode === 'narrow'
-  const fitPrefs: FitPrefs = { ...prefs, rightOpen: !narrow && prefs.rightOpen, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM }
-  const { widths: fittedWidths, rightForcedClosed } = fit(width, fitPrefs, 16 * scale)
-  const overlay = narrow ? openOverlay : null
-  const sidebarOpen = narrow ? overlay === 'sidebar' : prefs.sidebarOpen
-  const rightOpen = narrow ? overlay === 'right' : prefs.rightOpen && !rightForcedClosed
+  const fitPrefs: FitPrefs = { sidebarOpen: prefs.sidebarOpen, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM, right: prefs.right }
+  const { widths: fittedWidths, docked } = fit(width, fitPrefs, 16 * scale)
+  const overlay = openOverlay && !docked[openOverlay] ? openOverlay : null
+  const sidebarOpen = docked.sidebar ? prefs.sidebarOpen : overlay === 'sidebar'
+  const rightOpen = docked.right ? prefs.rightOpen : overlay === 'right'
   const shellOpen = prefs.shellOpen
   const projectName = project?.name ?? ''
   const panelView = panelViews[projectName] ?? ''
@@ -156,8 +158,8 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const moveOverlay = useCallback((event: OverlayEvent) => setOpenOverlay((open) => nextOverlay(open, event)), [])
 
   useEffect(() => {
-    if (!narrow) setOpenOverlay(null)
-  }, [narrow])
+    if (openOverlay && docked[openOverlay]) setOpenOverlay(null)
+  }, [openOverlay, docked.sidebar, docked.right])
 
   const previousSelected = useRef(selectedId)
   useEffect(() => {
@@ -172,10 +174,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setSidebarOpen = useCallback(
     (open: boolean) => {
-      if (narrow) moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
-      else updatePrefs({ sidebarOpen: open })
+      if (docked.sidebar) updatePrefs({ sidebarOpen: open })
+      else moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
     },
-    [narrow, moveOverlay, updatePrefs],
+    [docked.sidebar, moveOverlay, updatePrefs],
   )
 
   // A panel closed another way (its close button, the other overlay) forgets where the focus was.
@@ -200,10 +202,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setRightOpen = useCallback(
     (open: boolean) => {
-      if (narrow) moveOverlay(open ? { open: 'right' } : { close: 'right' })
-      else updatePrefs({ rightOpen: open })
+      if (docked.right) updatePrefs({ rightOpen: open })
+      else moveOverlay(open ? { open: 'right' } : { close: 'right' })
     },
-    [narrow, moveOverlay, updatePrefs],
+    [docked.right, moveOverlay, updatePrefs],
   )
 
   const showHome = useCallback(() => {
@@ -225,11 +227,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const showPanel = useCallback(
     (view: string) => {
-      if (narrow) moveOverlay({ open: 'right' })
-      else updatePrefs({ rightOpen: true })
+      setRightOpen(true)
       setPanelView(view)
     },
-    [narrow, moveOverlay, updatePrefs, setPanelView],
+    [setRightOpen, setPanelView],
   )
 
   const focusPanel = useCallback(
@@ -253,6 +254,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       rightOpen,
       shellOpen,
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
+      docked,
       overlay,
       widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
       panelView,
@@ -285,16 +287,13 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setShellOpen,
       setRightOpen,
       toggleRight() {
-        const open = !rightOpen
-        if (open && !narrow) checkRightFits(width, fitPrefs, 16 * scale)
-        setRightOpen(open)
+        setRightOpen(!rightOpen)
       },
       togglePanel(panel) {
         const setOpen = { sidebar: setSidebarOpen, shell: setShellOpen, right: setRightOpen }[panel]
         const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightOpen }[panel]
         if (!shown) {
           const active = document.activeElement
-          if (panel === 'right' && !narrow) checkRightFits(width, fitPrefs, 16 * scale)
           focusBefore.current[panel] = active && active !== document.body ? active : undefined
           setOpen(true)
           focus(PANEL_FOCUS[panel])
@@ -341,7 +340,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, narrow, prefs, fitPrefs, prefs.rightOpen, prefs.shell, overlay, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

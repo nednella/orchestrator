@@ -5,8 +5,8 @@ import { RightPanel } from './RightPanel'
 
 type PanelOverlayProps = { panel: SidePanel }
 
-// A side panel opened over the thread on a narrow window. It covers the thread only: the top bar above it and the
-// shell below it stay as they are, and a click on the thread beside it closes it.
+// A side panel opened over the thread, when it has no room beside it. It covers the thread only: the top bar above
+// it and the shell below it stay as they are, and a click on the thread beside it closes it.
 export function PanelOverlay({ panel }: PanelOverlayProps) {
   const { closeOverlay } = useLayout()
   const left = panel === 'sidebar'
