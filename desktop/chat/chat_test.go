@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -217,10 +218,10 @@ func TestPendingApprovalIsReported(t *testing.T) {
 		t.Fatalf("ChatPending = %+v, want one", pending)
 	}
 	p := pending[0]
-	if want := (chat.Pending{ID: id, Request: "ask-1", Tool: "Bash", Summary: "touch made.txt", Kind: "tool"}); p != want {
+	if want := (chat.Pending{ID: id, Request: "ask-1", Tool: "Bash", Summary: "touch made.txt", Kind: "tool", Input: json.RawMessage(`{"command":"touch made.txt"}`)}); !samePending(p, want) {
 		t.Errorf("pending = %+v, want %+v", p, want)
 	}
-	if u, ok := h.Rec.Last("chat:pending").(chat.PendingUpdate); !ok || u.ID != id || u.Pending == nil || *u.Pending != p {
+	if u, ok := h.Rec.Last("chat:pending").(chat.PendingUpdate); !ok || u.ID != id || u.Pending == nil || !samePending(*u.Pending, p) {
 		t.Errorf("chat:pending = %+v, want %+v", h.Rec.Last("chat:pending"), p)
 	}
 
@@ -499,4 +500,13 @@ func gitIn(t *testing.T, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
 	}
+}
+
+// samePending compares two approvals field by field, their inputs as JSON values.
+func samePending(a, b chat.Pending) bool {
+	var ai, bi any
+	_ = json.Unmarshal(a.Input, &ai)
+	_ = json.Unmarshal(b.Input, &bi)
+	a.Input, b.Input = nil, nil
+	return reflect.DeepEqual(a, b) && reflect.DeepEqual(ai, bi)
 }

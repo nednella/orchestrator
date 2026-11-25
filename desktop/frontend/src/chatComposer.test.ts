@@ -10,7 +10,7 @@ const log = (...drafts: Draft[]): ChatEvent[] => drafts.map((d, i) => ({ at: (i 
 const draft = (text: string): Draft => ({ kind: 'draft', text })
 const user = (id: string, text: string): Draft => ({ kind: 'user', id, text })
 
-const waiting: Pending = { id: 'p/abc', request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool' }
+const waiting: Pending = { id: 'p/abc', request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install' } }
 const idle = { turnOpen: false, pending: null }
 const running = { turnOpen: true, pending: null }
 const approving = { turnOpen: true, pending: waiting }

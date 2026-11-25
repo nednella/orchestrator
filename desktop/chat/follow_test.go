@@ -273,8 +273,8 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 	chatLog.Close()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
-	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool"}}
-	if got := svc.ChatPending(); !slices.Equal(got, want) {
+	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool", Input: json.RawMessage(`{"command":"make test"}`)}}
+	if got := svc.ChatPending(); !slices.EqualFunc(got, want, samePending) {
 		t.Errorf("ChatPending before any follower = %+v, want %+v", got, want)
 	}
 }

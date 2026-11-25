@@ -464,13 +464,14 @@ function replyItem(r: Reply, streamed: string, ended?: TurnEnd): TimelineItem {
 
 // pendingOf describes the approval a thread waits on, as the chat service does.
 function pendingOf(thread: string, a: Approval): Pending {
-  const input = (a.ask?.input ?? a.item?.input ?? {}) as { command?: string; file_path?: string; path?: string; pattern?: string; url?: string; plan?: string; questions?: { question?: string }[] }
+  const raw = a.ask?.input ?? a.item?.input ?? null
+  const input = (raw ?? {}) as { command?: string; file_path?: string; path?: string; pattern?: string; url?: string; plan?: string; questions?: { question?: string }[] }
   const kind = approvalKind(a.tool)
   let summary = ''
   if (kind === 'question') summary = input.questions?.[0]?.question ?? ''
   else if (kind === 'plan') summary = firstLine(input.plan ?? '')
   else summary = firstLine([input.command, input.file_path, input.path, input.pattern, input.url].find((s) => typeof s === 'string' && s !== '') ?? '')
-  return { id: thread, request: a.request, tool: a.tool, summary, kind }
+  return { id: thread, request: a.request, tool: a.tool, summary, kind, input: raw }
 }
 
 // sameSteps is whether two builds of the timeline hold the same steps: it is built anew on every streamed delta, so its

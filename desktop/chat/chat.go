@@ -42,11 +42,12 @@ type Threads interface {
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.
 type Pending struct {
-	ID      string `json:"id"`      // the thread's
-	Request string `json:"request"` // the approval's, to answer it by
-	Tool    string `json:"tool"`
-	Summary string `json:"summary"` // what the tool would do, in one line
-	Kind    string `json:"kind"`    // "tool", "question" or "plan"
+	ID      string          `json:"id"`      // the thread's
+	Request string          `json:"request"` // the approval's, to answer it by
+	Tool    string          `json:"tool"`
+	Summary string          `json:"summary"` // what the tool would do, in one line
+	Kind    string          `json:"kind"`    // "tool", "question" or "plan"
+	Input   json.RawMessage `json:"input"`   // the tool's input, for a card that answers the approval away from its chat
 }
 
 // Update is the payload of a chat:<id> event: the thread's events since the last one, deltas among them.
@@ -391,7 +392,7 @@ func (f *follower) waiting() *Pending {
 // announce sends chat:pending when what the thread waits on is no longer before.
 func (f *follower) announce(before *Pending) {
 	now := f.waiting()
-	if now == before || (now != nil && before != nil && *now == *before) {
+	if now == before || (now != nil && before != nil && now.ID == before.ID && now.Request == before.Request) {
 		return
 	}
 	f.chats.emit("chat:pending", PendingUpdate{ID: f.chat.ID, Pending: now})
@@ -432,7 +433,7 @@ func (f *follower) flush() {
 
 // pendingOf describes the approval e of the thread id.
 func pendingOf(id string, e chatlog.Event) Pending {
-	p := Pending{ID: id, Request: e.ID, Tool: e.Tool, Kind: "tool", Summary: ToolSummary(e.Tool, e.Input)}
+	p := Pending{ID: id, Request: e.ID, Tool: e.Tool, Kind: "tool", Summary: ToolSummary(e.Tool, e.Input), Input: e.Input}
 	switch e.Tool {
 	case "AskUserQuestion":
 		p.Kind = "question"

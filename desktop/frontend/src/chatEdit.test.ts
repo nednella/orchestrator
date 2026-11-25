@@ -7,7 +7,7 @@ const idle = { turnOpen: false, pending: null, queued: [] }
 test('Edit from here waits for the turn and the queue, and is off when Claude cannot rewind', () => {
   assert.equal(editBlocked('u1', '', idle), '')
   assert.equal(editBlocked('u1', '', { ...idle, turnOpen: true }), 'Edit from here when the turn ends')
-  assert.equal(editBlocked('u1', '', { ...idle, pending: { id: 't', request: 'a1', tool: 'Bash', summary: '', kind: 'tool' } }), 'Edit from here when the turn ends')
+  assert.equal(editBlocked('u1', '', { ...idle, pending: { id: 't', request: 'a1', tool: 'Bash', summary: '', kind: 'tool', input: null } }), 'Edit from here when the turn ends')
   assert.equal(editBlocked('u1', '', { ...idle, queued: [{ id: 'q1', text: 'Next', files: [] }] }), 'Edit from here once the queued messages are sent')
   assert.equal(editBlocked('', '', idle), "Claude's conversation does not hold this message as sent")
   const off = 'This version of Claude Code cannot rewind a thread'

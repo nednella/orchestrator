@@ -26,8 +26,12 @@ func TestToolSummaryMatchesPending(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("ToolSummary = %q, want %q", got, tt.want)
 			}
-			if p := pendingOf("main/aaaaaaaa", chatlog.Event{Kind: chatlog.KindApproval, ID: "r1", Tool: tt.tool, Input: input}); p.Summary != got {
+			p := pendingOf("main/aaaaaaaa", chatlog.Event{Kind: chatlog.KindApproval, ID: "r1", Tool: tt.tool, Input: input})
+			if p.Summary != got {
 				t.Errorf("pendingOf's summary = %q, ToolSummary's %q", p.Summary, got)
+			}
+			if string(p.Input) != tt.input {
+				t.Errorf("pendingOf's input = %s, want the approval's %s", p.Input, tt.input)
 			}
 		})
 	}

@@ -384,7 +384,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       { kind: 'approval', id: 'req-1', parent: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
     ]
     turns.forEach((e) => append(id, e))
-    setPending(id, { id, request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool' })
+    setPending(id, { id, request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install', description: 'Install the missing packages' } })
   }
 
   // answer logs the answer and the tool's result, with input when it allows with the user's own, then replies.
@@ -423,7 +423,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     ]
     turn.forEach((e) => append(id, e))
     const summary = kind === 'question' ? askedQuestions[0].question : 'Split checkout into three steps'
-    setPending(id, { id, request: 'req-ask', tool, summary, kind })
+    setPending(id, { id, request: 'req-ask', tool, summary, kind, input })
   }
 
   // delegations fills a chat's log with a turn that delegates a task to each child, and one call that fails, then, for

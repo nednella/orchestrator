@@ -38,7 +38,7 @@ test('a refused answer to an approval that ended', () => {
 })
 
 test('a tool approval reads as its tool and summary', () => {
-  const p = { id: 'p/a', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' as const }
+  const p = { id: 'p/a', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' as const, input: { command: 'npm install' } }
   assert.equal(approvalLine(p), 'Bash: npm install')
   assert.equal(approvalLine({ ...p, tool: 'mcp__browser__click', summary: '' }), 'mcp__browser__click')
 })
