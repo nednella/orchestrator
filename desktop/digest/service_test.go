@@ -91,6 +91,9 @@ func TestDigestRun(t *testing.T) {
 	if len(d.Items) != 2 || d.Items[0].Title != "Wails 2.15 released" || d.Items[1].Source != "Claude Code" || d.Error != "" || d.NextRunAt <= d.LastRunAt {
 		t.Fatalf("digest = %+v", d)
 	}
+	if d.StartedAt == 0 || d.StartedAt > d.LastRunAt || d.StoppedAt != 0 {
+		t.Errorf("run times: started %d, finished %d, stopped %d", d.StartedAt, d.LastRunAt, d.StoppedAt)
+	}
 	note, err := h.DigestToNote(d.Items[0].ID)
 	if err != nil || !strings.HasPrefix(note.Text, "Wails 2.15 released\n\nyou build on Wails\nhttps://example.com/wails") {
 		t.Fatalf("DigestToNote = %+v, %v", note, err)
@@ -155,7 +158,7 @@ func TestDigestFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			eventually(t, "the failure", func() bool { d := lastDigest(h); return !d.Running && d.Error != "" })
-			if d := lastDigest(h); !strings.Contains(d.Error, tt.want) || d.LastRunAt != 0 {
+			if d := lastDigest(h); !strings.Contains(d.Error, tt.want) || d.LastRunAt != 0 || d.StartedAt == 0 || d.StoppedAt < d.StartedAt {
 				t.Errorf("digest = %+v", d)
 			}
 			if got := len(h.Claude.Calls()) > 0; got != tt.wantRunCalled {

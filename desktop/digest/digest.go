@@ -42,9 +42,11 @@ type DigestItem struct {
 type Digest struct {
 	Project   string       `json:"project"` // the key of the project it belongs to
 	Running   bool         `json:"running"`
+	StartedAt int64        `json:"startedAt"` // when the latest run started
 	LastRunAt int64        `json:"lastRunAt"`
 	NextRunAt int64        `json:"nextRunAt"`
 	Error     string       `json:"error"`
+	StoppedAt int64        `json:"stoppedAt"` // when the run that failed with Error stopped
 	Items     []DigestItem `json:"items"`
 }
 
@@ -59,14 +61,19 @@ type Digests struct {
 	dir     string
 	started time.Time
 
-	mu      sync.Mutex
-	running map[string]int // project key -> items added by the run so far
-	errors  map[string]string
+	mu       sync.Mutex
+	running  map[string]int // project key -> items added by the run so far
+	failures map[string]failure
+}
+
+type failure struct {
+	reason string
+	at     int64
 }
 
 // New keeps the digests under dataDir.
 func New(dataDir string) *Digests {
-	return &Digests{dir: dataDir, started: time.Now(), running: map[string]int{}, errors: map[string]string{}}
+	return &Digests{dir: dataDir, started: time.Now(), running: map[string]int{}, failures: map[string]failure{}}
 }
 
 func (d *Digests) path(key string) string { return filepath.Join(d.dir, key, "digest.json") }
@@ -95,7 +102,8 @@ func (d *Digests) View(key string, auto bool) Digest {
 	defer d.mu.Unlock()
 	f := d.read(key)
 	_, running := d.running[key]
-	v := Digest{Project: key, Running: running, LastRunAt: f.LastRunAt, Error: d.errors[key], Items: f.Items}
+	failed := d.failures[key]
+	v := Digest{Project: key, Running: running, StartedAt: f.LastAttemptAt, LastRunAt: f.LastRunAt, Error: failed.reason, StoppedAt: failed.at, Items: f.Items}
 	if v.Items == nil {
 		v.Items = []DigestItem{}
 	}
@@ -129,25 +137,25 @@ func (d *Digests) Begin(key string, now time.Time) error {
 		return errors.New("a digest run is already going")
 	}
 	d.running[key] = 0
-	delete(d.errors, key)
+	delete(d.failures, key)
 	f := d.read(key)
 	f.LastAttemptAt = now.UnixMilli()
 	return d.write(key, f)
 }
 
 // Finish ends a run. A failed run keeps the old digest and records why.
-func (d *Digests) Finish(key string, now time.Time, failure string) {
+func (d *Digests) Finish(key string, now time.Time, reason string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.running, key)
-	if failure != "" {
-		d.errors[key] = failure
+	if reason != "" {
+		d.failures[key] = failure{reason: reason, at: now.UnixMilli()}
 		return
 	}
 	f := d.read(key)
 	f.LastRunAt = now.UnixMilli()
 	if err := d.write(key, f); err != nil {
-		d.errors[key] = err.Error()
+		d.failures[key] = failure{reason: err.Error(), at: now.UnixMilli()}
 	}
 }
 

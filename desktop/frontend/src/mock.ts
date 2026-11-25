@@ -851,7 +851,8 @@ export function createMock(params: URLSearchParams) {
       item(7, now - 9 * 86_400_000, 'bullmq', 'Flow producers get a retry option', 'The image pipeline retries by hand today.'),
     ]
   }
-  let digest: Digest = { running: false, lastRunAt: Date.now() - 2 * 86_400_000, nextRunAt: Date.now() + 5 * 86_400_000, error: '', project: data[0].name, items: seedDigest() }
+  const lastDigestRun = Date.now() - 2 * 86_400_000
+  let digest: Digest = { running: false, startedAt: lastDigestRun - 124_000, lastRunAt: lastDigestRun, nextRunAt: lastDigestRun + 7 * 86_400_000, error: '', stoppedAt: 0, project: data[0].name, items: seedDigest() }
   const pushDigest = () => emit('digest', { ...digest, items: digest.items.map((i) => ({ ...i })) })
 
   const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
@@ -1228,20 +1229,32 @@ export function createMock(params: URLSearchParams) {
     Digest: async () => ({ ...digest, items: digest.items.map((i) => ({ ...i })) }),
     RunDigest: async () => {
       if (digest.running) throw 'A digest run is already in progress'
-      digest = { ...digest, running: true, error: '' }
+      const startedAt = Date.now()
+      digest = { ...digest, running: true, startedAt, error: '', stoppedAt: 0 }
       pushDigest()
+      // As the real run, each item arrives as the agent hands it in, after the run's earlier items.
+      const fresh = [
+        ['Claude Code', 'Skills can declare allowed tools', 'Lets /work run without a permission prompt for tsc.', 'https://code.claude.com/docs/changelog'],
+        ['wails', 'Native file drop events', 'Notes could take dropped screenshots from Finder.', 'https://wails.io/changelog'],
+        ['xterm.js', 'Synchronized output mode', 'Would stop flicker while the agent redraws.', 'https://github.com/xtermjs/xterm.js/releases'],
+        ['vite', 'v8 build is faster', 'No change needed, nice to have for the shop.', 'https://vite.dev/blog'],
+        ['gh', 'pr checks --watch exits on first failure', 'The PR poller could use it.', 'https://github.com/cli/cli/releases'],
+      ]
+      let added = 0
+      fresh.forEach(([source, title, why, url], i) =>
+        setTimeout(() => {
+          if (digest.items.some((item) => item.url === url)) return
+          const item: DigestItem = { id: `dg-new-${startedAt}-${i}`, title, why, url, source, at: Date.now(), noteId: '' }
+          digest = { ...digest, items: [...digest.items.slice(0, added), item, ...digest.items.slice(added)].slice(0, 30) }
+          added++
+          pushDigest()
+        }, 700 * (i + 1)),
+      )
       setTimeout(() => {
         const now = Date.now()
-        const fresh: DigestItem[] = [
-          ['Claude Code', 'Skills can declare allowed tools', 'Lets /work run without a permission prompt for tsc.'],
-          ['wails', 'Native file drop events', 'Notes could take dropped screenshots from Finder.'],
-          ['xterm.js', 'Synchronized output mode', 'Would stop flicker while the agent redraws.'],
-          ['vite', 'v8 build is faster', 'No change needed, nice to have for the shop.'],
-          ['gh', 'pr checks --watch exits on first failure', 'The PR poller could use it.'],
-        ].map(([source, title, why], i) => ({ id: `dg-new-${now}-${i}`, title, why, url: 'https://example.com/changelog/new', source, at: now, noteId: '' }))
-        digest = { running: false, lastRunAt: now, nextRunAt: now + 7 * 86_400_000, error: '', project: digest.project, items: [...fresh, ...digest.items].slice(0, 30) }
+        digest = { ...digest, running: false, lastRunAt: now, nextRunAt: now + 7 * 86_400_000 }
         pushDigest()
-      }, 4000)
+      }, 700 * (fresh.length + 1))
     },
     DigestToNote: async (itemId: string) => {
       const item = digest.items.find((i) => i.id === itemId)

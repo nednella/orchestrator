@@ -310,9 +310,11 @@ export type DigestItem = {
 
 export type Digest = {
   running: boolean
+  startedAt: number
   lastRunAt: number
   nextRunAt: number
   error: string
+  stoppedAt: number
   project: string
   items: DigestItem[]
 }
