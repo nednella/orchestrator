@@ -569,3 +569,10 @@ func TestAThreadWhoseSubagentsEndWasMissedStopsWorkingWhenClaudeListsNoTask(t *t
 	h.Hook(t, id, "Stop", `{}`)
 	eventually(t, "idle with no subagent", func() bool { s, n := state(); return s == "idle" && n == 0 })
 }
+
+func TestASubagentsApprovalStopsWaitingWhenClaudeListsNoTask(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "subagent lost")
+	eventually(t, "the subagent's approval after the turn's end", func() bool { return turnEnds(t, h, id) == 1 && len(h.ChatPending()) == 1 })
+	eventually(t, "nothing waiting once Claude lists no task", func() bool { return len(h.ChatPending()) == 0 })
+}

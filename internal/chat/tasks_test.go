@@ -97,14 +97,6 @@ func TestATaskIsReportedAloneWhenItIsClaudesOwnAndNotStopped(t *testing.T) {
 }
 
 func TestClaudesListOfItsTasksCorrectsTheOpenTasks(t *testing.T) {
-	list := func(tasks ...ListedTask) Event {
-		t.Helper()
-		input, err := json.Marshal(tasks)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return Event{Kind: KindTasks, Input: input}
-	}
 	agent := Event{Kind: KindTaskStart, ID: "a1", Parent: "toolu_a", Tool: "local_agent"}
 	listedAgent := ListedTask{ID: "a1", Kind: "local_agent"}
 	for _, tt := range []struct {
@@ -113,11 +105,11 @@ func TestClaudesListOfItsTasksCorrectsTheOpenTasks(t *testing.T) {
 		open    []Task
 		working int
 	}{
-		{"listed just before its start", []Event{list(listedAgent), agent}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}}, 1},
-		{"an end that was missed", []Event{agent, list()}, nil, 0},
-		{"a task only the list names", []Event{list(ListedTask{ID: "b1", Kind: TaskShell}, ListedTask{ID: "a2", Kind: "local_agent"})}, []Task{{ID: "b1", Kind: TaskShell}, {ID: "a2", Kind: "local_agent"}}, 1},
-		{"a subagent's shell", []Event{agent, list(listedAgent, ListedTask{ID: "b2", Kind: TaskShell, Agent: "a1"})}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}, {ID: "b2", Kind: TaskShell, Agent: "toolu_a"}}, 1},
-		{"the end of a task only the list named", []Event{list(ListedTask{ID: "a2", Kind: "local_agent"}), {Kind: KindTaskEnd, ID: "a2", Parent: "toolu_x"}}, nil, 0},
+		{"listed just before its start", []Event{list(t, listedAgent), agent}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}}, 1},
+		{"an end that was missed", []Event{agent, list(t)}, nil, 0},
+		{"a task only the list names", []Event{list(t, ListedTask{ID: "b1", Kind: TaskShell}, ListedTask{ID: "a2", Kind: "local_agent"})}, []Task{{ID: "b1", Kind: TaskShell}, {ID: "a2", Kind: "local_agent"}}, 1},
+		{"a subagent's shell", []Event{agent, list(t, listedAgent, ListedTask{ID: "b2", Kind: TaskShell, Agent: "a1"})}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}, {ID: "b2", Kind: TaskShell, Agent: "toolu_a"}}, 1},
+		{"the end of a task only the list named", []Event{list(t, ListedTask{ID: "a2", Kind: "local_agent"}), {Kind: KindTaskEnd, ID: "a2", Parent: "toolu_x"}}, nil, 0},
 		{"a list that cannot be read", []Event{agent, {Kind: KindTasks, Input: json.RawMessage(`{}`)}}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}}, 1},
 	} {
 		var tasks Tasks
@@ -128,4 +120,35 @@ func TestClaudesListOfItsTasksCorrectsTheOpenTasks(t *testing.T) {
 			t.Errorf("%s: open %+v, working %d; want %+v, %d", tt.name, got, tasks.Working(), tt.open, tt.working)
 		}
 	}
+}
+
+func TestUnlistedIsTheCallsOfOpenTasksClaudesListLeavesOut(t *testing.T) {
+	var tasks Tasks
+	tasks.See(Event{Kind: KindTaskStart, ID: "a1", Parent: "toolu_a", Tool: "local_agent"})
+	tasks.See(Event{Kind: KindTaskStart, ID: "a2", Parent: "toolu_b", Tool: "local_agent"})
+	tasks.See(list(t, ListedTask{ID: "a1", Kind: "local_agent"}, ListedTask{ID: "a2", Kind: "local_agent"}, ListedTask{ID: "c1", Kind: "local_agent"}))
+	for _, tt := range []struct {
+		name string
+		e    Event
+		want []string
+	}{
+		{"a list without one", list(t, ListedTask{ID: "a2", Kind: "local_agent"}, ListedTask{ID: "c1", Kind: "local_agent"}), []string{"toolu_a"}},
+		{"a list with every one", list(t, ListedTask{ID: "a1", Kind: "local_agent"}, ListedTask{ID: "a2", Kind: "local_agent"}), nil},
+		{"an empty list, with a task that has no call", list(t), []string{"toolu_a", "toolu_b"}},
+		{"a list that cannot be read", Event{Kind: KindTasks, Input: json.RawMessage(`{}`)}, nil},
+		{"another event", Event{Kind: KindTaskEnd, Parent: "toolu_a"}, nil},
+	} {
+		if got := tasks.Unlisted(tt.e); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func list(t *testing.T, tasks ...ListedTask) Event {
+	t.Helper()
+	input, err := json.Marshal(tasks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Event{Kind: KindTasks, Input: input}
 }

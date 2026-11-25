@@ -567,8 +567,10 @@ func TestParseASubagentsApprovalNamesItsCallAndItsTask(t *testing.T) {
 func TestParseAnInterruptWithdrawsTheApprovalThatWaits(t *testing.T) {
 	events := parseFile(t, "interrupt-approval.jsonl")
 	var waiting []Event
+	var tasks Tasks
 	for _, e := range events {
-		waiting = Waiting(waiting, e)
+		waiting = Waiting(waiting, e, &tasks)
+		tasks.See(e)
 		if e.Kind == KindTurnEnd {
 			break
 		}

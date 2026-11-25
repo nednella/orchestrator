@@ -956,8 +956,8 @@ done
 // stand-in's process and session, as a server a Bash call starts with & does, writes its pid to the file given and
 // lives five minutes. "background" starts a subagent in the background, which ends at the next "finish", or is gone
 // with no end when "list none" lists no task; "subagent asks" starts one that asks for an approval, which waits past
-// the turn's end,
-// and ends once it is answered.
+// the turn's end, and ends once it is answered; "subagent lost" starts one that asks and is gone with no end a moment
+// after the turn's end.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
 serve='import os, socket, sys, time
 if os.fork():
@@ -1009,6 +1009,14 @@ while IFS= read -r line; do
 			'{"type":"assistant","parent_tool_use_id":"toolu_asker","message":{"id":"msg_sub","content":[{"type":"tool_use","id":"toolu_write","name":"Write","input":{"file_path":"sub.txt"}}]}}' \
 			'{"type":"control_request","request_id":"sub-1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{"file_path":"sub.txt"},"tool_use_id":"toolu_write","agent_id":"a2"}}' \
 			'{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}' ;;
+	*'"type":"user"'*'"text":"subagent lost"'*)
+		printf '%s\n' "$init" '{"type":"assistant","message":{"id":"msg_call","content":[{"type":"tool_use","id":"toolu_lost","name":"Agent","input":{"description":"Lost"}}]}}' \
+			'{"type":"system","subtype":"task_started","task_id":"a3","tool_use_id":"toolu_lost","description":"Lost","is_backgrounded":true,"task_type":"local_agent"}' \
+			'{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_lost","content":"Async agent launched"}]}}' \
+			'{"type":"control_request","request_id":"lost-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"},"tool_use_id":"toolu_ls","agent_id":"a3"}}' \
+			'{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
+		sleep 1
+		printf '%s\n' '{"type":"system","subtype":"background_tasks_changed","tasks":[]}' ;;
 	*'"type":"control_response"'*'"request_id":"sub-1"'*)
 		printf '%s\n' '{"type":"user","parent_tool_use_id":"toolu_asker","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_write","content":"written"}]}}' \
 			'{"type":"system","subtype":"task_notification","task_id":"a2","tool_use_id":"toolu_asker","status":"completed","summary":"written"}'

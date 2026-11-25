@@ -631,12 +631,15 @@ test("a subagent's approval can no longer be answered once its call has a result
   for (const [name, d] of [
     ['its call has a result', from('a1', toolResult('s1', 'denied', true))],
     ['the subagent ends', taskEnd('a1', '', 'stopped')],
+    ["Claude's list of its tasks leaves the subagent out", { kind: 'tasks', input: [] }],
     ['its Claude exits', { kind: 'exit' }],
     ['a new run starts', { kind: 'start' }],
   ] as [string, Draft][]) {
     const t = after(d)
     assert.deepEqual([only(t.items, 'approval')[0]?.expired, t.pending], [true, null], name)
   }
+  const listed = after({ kind: 'tasks', input: [{ id: 'task-a1', kind: 'local_agent' }] })
+  assert.deepEqual([only(listed.items, 'approval')[0]?.expired, listed.pending?.request], [false, 'r1'], "a list that names the subagent leaves it")
 })
 
 test("a message that denies a subagent's approval is its answer, not a turn of the thread's", () => {

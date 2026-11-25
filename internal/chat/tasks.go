@@ -39,13 +39,11 @@ func (t *Tasks) See(e Event) (closed Task, ok bool) {
 			t.open[i] = e.asTask()
 		}
 	case KindTasks:
-		var listed []ListedTask
-		if json.Unmarshal(e.Input, &listed) != nil {
+		listed, ok := listedIn(e)
+		if !ok {
 			break
 		}
-		t.open = slices.DeleteFunc(t.open, func(o Task) bool {
-			return o.ID != "" && !slices.ContainsFunc(listed, func(l ListedTask) bool { return l.ID == o.ID })
-		})
+		t.open = slices.DeleteFunc(t.open, func(o Task) bool { return unlisted(o, listed) })
 		for _, l := range listed {
 			if !slices.ContainsFunc(t.open, func(o Task) bool { return o.ID == l.ID }) {
 				t.open = append(t.open, t.Named(Event{Kind: KindTaskStart, ID: l.ID, Tool: l.Kind, Agent: l.Agent}).asTask())
@@ -63,6 +61,34 @@ func (t *Tasks) See(e Event) (closed Task, ok bool) {
 		t.open = nil
 	}
 	return Task{}, false
+}
+
+// Unlisted is the calls of the open tasks that e, Claude's list of its tasks, leaves out, none for any other event.
+func (t *Tasks) Unlisted(e Event) []string {
+	listed, ok := listedIn(e)
+	if !ok {
+		return nil
+	}
+	var calls []string
+	for _, o := range t.open {
+		if o.Call != "" && unlisted(o, listed) {
+			calls = append(calls, o.Call)
+		}
+	}
+	return calls
+}
+
+// listedIn is the tasks e lists, and whether e is a list that can be read.
+func listedIn(e Event) ([]ListedTask, bool) {
+	var listed []ListedTask
+	if e.Kind != KindTasks || json.Unmarshal(e.Input, &listed) != nil {
+		return nil, false
+	}
+	return listed, true
+}
+
+func unlisted(o Task, listed []ListedTask) bool {
+	return o.ID != "" && !slices.ContainsFunc(listed, func(l ListedTask) bool { return l.ID == o.ID })
 }
 
 // Named gives e, a task's start or end or an approval, the Agent call of the subagent that started the task or asks:

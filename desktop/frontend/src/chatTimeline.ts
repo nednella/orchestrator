@@ -411,6 +411,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const listed = Array.isArray(e.input) ? (e.input as { id?: unknown; kind?: unknown }[]) : []
         const ids = new Set(listed.map((l) => l.id))
         const wasWorking = working()
+        const gone = new Set(tasks.filter((t) => t.id !== '' && t.call !== '' && !ids.has(t.id)).map((t) => t.call))
+        expire((w) => w.agent !== undefined && gone.has(w.agent))
         tasks.splice(0, tasks.length, ...tasks.filter((t) => t.id === '' || ids.has(t.id)))
         for (const l of listed) if (typeof l.id === 'string' && !tasks.some((t) => t.id === l.id)) tasks.push({ id: l.id, call: '', works: l.kind !== 'local_bash' })
         if (wasWorking && held !== null && !working()) close(held)

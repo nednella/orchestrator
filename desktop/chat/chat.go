@@ -216,8 +216,10 @@ func waitingIn(ch sessions.Chat) *Pending {
 		return nil
 	}
 	var approvals []chatlog.Event
+	var tasks chatlog.Tasks
 	for _, e := range logged {
-		approvals = chatlog.Waiting(approvals, e)
+		approvals = chatlog.Waiting(approvals, e, &tasks)
+		tasks.See(e)
 	}
 	if len(approvals) == 0 {
 		return nil
@@ -361,7 +363,7 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	if e.Kind == chatlog.KindAnswer && e.Text == "allow" && slices.ContainsFunc(f.approvals, func(a chatlog.Event) bool { return a.ID == e.ID && a.Tool == "ExitPlanMode" }) {
 		f.planApproved = true
 	}
-	f.approvals = chatlog.Waiting(f.approvals, e)
+	f.approvals = chatlog.Waiting(f.approvals, e, &f.tasks)
 	if task, ok := f.tasks.See(e); ok && task.ReportedAlone(e) {
 		f.reporting = true
 	}

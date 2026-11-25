@@ -5,8 +5,9 @@ import "slices"
 // Waiting is the approvals that wait, oldest first, once e has happened. An approval waits until it is answered, Claude
 // withdraws it, its call has its result, the subagent that asks for it ends, or Claude exits or a new run starts. A
 // turn's end takes none: a subagent in the background asks past the turn that started it, and Claude withdraws the
-// thread's own at an interrupt and rejects its call.
-func Waiting(approvals []Event, e Event) []Event {
+// thread's own at an interrupt and rejects its call. tasks are the open tasks before e: a list from Claude that leaves
+// out a subagent ends what it asked, also when the subagent's end was missed.
+func Waiting(approvals []Event, e Event, tasks *Tasks) []Event {
 	switch e.Kind {
 	case KindApproval:
 		return append(approvals, e)
@@ -17,6 +18,9 @@ func Waiting(approvals []Event, e Event) []Event {
 		return slices.DeleteFunc(approvals, func(a Event) bool { return e.Parent != "" && (a.Parent == e.Parent || a.Agent == e.Parent) })
 	case KindTaskEnd:
 		return slices.DeleteFunc(approvals, func(a Event) bool { return a.Agent != "" && a.Agent == e.Parent })
+	case KindTasks:
+		gone := tasks.Unlisted(e)
+		return slices.DeleteFunc(approvals, func(a Event) bool { return a.Agent != "" && slices.Contains(gone, a.Agent) })
 	case KindExit, KindStart:
 		return nil
 	}

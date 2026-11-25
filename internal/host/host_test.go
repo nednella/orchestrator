@@ -388,13 +388,16 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				}})
 				result(false)
 			case "missed end":
-				// A subagent whose end never comes: only Claude's list of its tasks says that it is gone.
+				// A subagent that asks and whose end never comes: only Claude's list of its tasks says that it is gone.
 				print(map[string]any{"type": "assistant", "uuid": "ucall", "message": map[string]any{"id": "msg_call", "role": "assistant", "content": []any{
 					map[string]any{"type": "tool_use", "id": "toolu_lost", "name": "Agent", "input": map[string]any{"description": "Lost", "prompt": "ls"}},
 				}}})
 				print(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": []any{map[string]any{"task_id": "a3", "task_type": "local_agent"}}})
 				print(map[string]any{"type": "system", "subtype": "task_started", "task_id": "a3", "tool_use_id": "toolu_lost", "description": "Lost", "is_backgrounded": true, "task_type": "local_agent"})
 				print(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_lost", "content": "Async agent launched"}}}})
+				print(map[string]any{"type": "control_request", "request_id": "r3", "request": map[string]any{
+					"subtype": "can_use_tool", "tool_name": "Bash", "input": map[string]any{"command": "ls"}, "tool_use_id": "toolu_ls", "agent_id": "a3",
+				}})
 				result(false)
 				during(time.After(300 * time.Millisecond))
 				print(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": []any{}})
@@ -874,6 +877,9 @@ func TestClaudesListOfItsTasksEndsATaskWhoseEndWasMissed(t *testing.T) {
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	sendMessage(t, h.socket, "missed end")
+	if asked := waitKind(t, events, chat.KindApproval); asked.Agent != "toolu_lost" {
+		t.Fatalf("approval = %+v, want one from the subagent of toolu_lost", asked)
+	}
 	waitKind(t, events, chat.KindTurnEnd)
 	if idle, err := Hold(ctxT(t), h.socket); err != nil || idle {
 		t.Fatalf("hold while the subagent runs: %v, %v", idle, err)
@@ -884,7 +890,7 @@ func TestClaudesListOfItsTasksEndsATaskWhoseEndWasMissed(t *testing.T) {
 		}
 	}
 	if idle, err := Hold(ctxT(t), h.socket); err != nil || !idle {
-		t.Errorf("hold once Claude lists no task: %v, %v", idle, err)
+		t.Errorf("hold once Claude lists no task, with the subagent's approval unanswered: %v, %v", idle, err)
 	}
 	if got := len(logged(t, h.log, chat.KindTasks)); got != 2 {
 		t.Errorf("%d lists logged, want 2", got)

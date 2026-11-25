@@ -280,6 +280,29 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 	}
 }
 
+func TestASubagentClaudesListLeavesOutDoesNotWaitBeforeTheFollowerReadsTheLog(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []chatlog.Event{
+		{Kind: chatlog.KindTaskStart, ID: "a3", Parent: "toolu_lost", Tool: "local_agent"},
+		{Kind: chatlog.KindApproval, ID: "lost-1", Tool: "Bash", Parent: "toolu_ls", Agent: "toolu_lost", Input: json.RawMessage(`{"command":"ls"}`)},
+		{Kind: chatlog.KindTasks, Input: json.RawMessage(`[]`)},
+	} {
+		if _, err := chatLog.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	chatLog.Close()
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
+	if got := svc.ChatPending(); len(got) != 0 {
+		t.Errorf("ChatPending = %+v, want nothing: Claude's list left the subagent that asked out", got)
+	}
+}
+
 func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 	dir, err := os.MkdirTemp("", "aos")
 	if err != nil {

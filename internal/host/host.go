@@ -493,7 +493,7 @@ func (h *host) logLocked(e chat.Event) (chat.Event, error) {
 		return chat.Event{}, err
 	}
 	h.prompts = chat.Prompts(h.prompts, e)
-	h.approvals = chat.Waiting(h.approvals, e)
+	h.approvals = chat.Waiting(h.approvals, e, &h.tasks)
 	if task, ok := h.tasks.See(e); ok && task.ReportedAlone(e) {
 		h.turnOpen = true
 	}
