@@ -2995,7 +2995,7 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 		return "", fmt.Errorf("Thread %s did not take the message", name)
 	}
 	if m.Steer {
-		if err := host.SendNow(s.context(), socket, msg); err != nil && !errors.As(err, new(*host.Refused)) {
+		if err := host.SendNowFrom(s.context(), socket, msg, m.From); err != nil && !errors.As(err, new(*host.Refused)) {
 			log.Printf("agentos: steering thread %s: %v", name, err)
 		}
 	}

@@ -638,7 +638,7 @@ func (h *host) do(req request) (string, error) {
 		if req.ID == "" {
 			return "", errors.New("send_now needs the id of a queued message")
 		}
-		return "", h.interrupt(req.ID, "")
+		return "", h.interrupt(req.ID, req.From)
 	case opDraft:
 		_, err := h.publish(chat.Event{Kind: chat.KindDraft, Text: req.Text})
 		return "", err

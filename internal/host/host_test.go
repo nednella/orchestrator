@@ -1574,6 +1574,15 @@ func TestSendKeepsWhoItIsFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the queued message taken in", func() bool { return index(logged(t, h.log), chat.KindUser, busy) >= 0 })
+	waitKind(t, events, chat.KindTurnEnd) // the interrupted turn
+	waitKind(t, events, chat.KindTurnEnd) // the queued message's own turn
+	from("slow", "")
+	waitKind(t, events, chat.KindMessage)
+	steered := from("now", "main/dddddddd")
+	if err := SendNowFrom(ctxT(t), h.socket, steered, "main/dddddddd"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the steered message taken in", func() bool { return index(logged(t, h.log), chat.KindUser, steered) >= 0 })
 
 	tests := []struct {
 		name string
@@ -1586,6 +1595,7 @@ func TestSendKeepsWhoItIsFrom(t *testing.T) {
 		{"a message queued during a turn", chat.KindQueued, busy, "main/bbbbbbbb"},
 		{"the queued message once taken in", chat.KindUser, busy, "main/bbbbbbbb"},
 		{"an interrupt a thread asked for", chat.KindInterrupt, "", "main/cccccccc"},
+		{"a send now a thread asked for", chat.KindInterrupt, steered, "main/dddddddd"},
 	}
 	log := logged(t, h.log)
 	for _, tt := range tests {

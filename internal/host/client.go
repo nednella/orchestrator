@@ -63,8 +63,11 @@ func Send(ctx context.Context, socket, text string) error {
 }
 
 // SendNow interrupts the turn so Claude takes in the queued message id now, with any queued alongside it.
-func SendNow(ctx context.Context, socket, id string) error {
-	_, err := call(ctx, socket, request{Op: opSendNow, ID: id})
+func SendNow(ctx context.Context, socket, id string) error { return SendNowFrom(ctx, socket, id, "") }
+
+// SendNowFrom is SendNow at the ask of the thread from, which the host logs on the interrupt.
+func SendNowFrom(ctx context.Context, socket, id, from string) error {
+	_, err := call(ctx, socket, request{Op: opSendNow, ID: id, From: from})
 	return err
 }
 

@@ -420,8 +420,8 @@ func TestSteerStopsTheTurnAndSends(t *testing.T) {
 	if msg < 0 || stop < msg {
 		t.Errorf("stdin = %q, want the message and then an interrupt", lines)
 	}
-	if e, ok := logged(t, h, target, chat.KindInterrupt, a.ID); !ok || e.From != "" {
-		t.Errorf("the interrupt = %+v (%v), want one that sends the message now", e, ok)
+	if e, ok := logged(t, h, target, chat.KindInterrupt, a.ID); !ok || e.From != caller {
+		t.Errorf("the interrupt = %+v (%v), want one that sends the message now, from %s", e, ok, caller)
 	}
 	if e, _ := logged(t, h, target, chat.KindUser, a.ID); e.From != caller {
 		t.Errorf("the user event is from %q, want %s", e.From, caller)
