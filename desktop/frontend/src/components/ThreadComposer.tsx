@@ -46,6 +46,8 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
+  const latestReply = useRef(reply)
+  latestReply.current = reply
   const [sending, setSending] = useState(false)
 
   const update = useCallback(
@@ -100,7 +102,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
       } catch (err) {
         const now = latest.current.draft
         update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, typed) })
-        if (reply !== null) onReply(reply)
+        if (reply !== null && latestReply.current === null) onReply(reply)
         throw err
       } finally {
         clearTimeout(release)
