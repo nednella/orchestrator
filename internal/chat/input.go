@@ -1,6 +1,11 @@
 package chat
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/nednella/agentos/internal/prompts"
+)
 
 type textBlock struct {
 	Type string `json:"type"`
@@ -104,7 +109,12 @@ func Allow(id string, input json.RawMessage) []byte {
 	return permissionAnswer(id, allowBody{Behavior: "allow", UpdatedInput: input})
 }
 
+// Deny answers a can_use_tool request with a no. Claude turns message into an error tool result, and the API refuses one
+// that is empty, so a deny with no reason gets a default one.
 func Deny(id, message string) []byte {
+	if strings.TrimSpace(message) == "" {
+		message = prompts.DeniedWithoutReason()
+	}
 	return permissionAnswer(id, denyBody{Behavior: "deny", Message: message})
 }
 

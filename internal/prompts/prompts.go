@@ -38,6 +38,8 @@ var (
 	handover string
 	//go:embed denied.md
 	denied string
+	//go:embed denied-no-reason.md
+	deniedNoReason string
 )
 
 // Digest is what the weekly digest run asks Claude to do, given the names the project depends on.
@@ -62,6 +64,9 @@ func Handover(context string) string { return strings.Replace(body(handover), "{
 
 // Denied is the reason a tool call is denied with when the user sends a message while it waits for their approval.
 func Denied(text string) string { return strings.Replace(body(denied), "{text}", text, 1) }
+
+// DeniedWithoutReason is the reason a tool call is denied with when the user gives none.
+func DeniedWithoutReason() string { return body(deniedNoReason) }
 
 // BrowserHelp is what agentos browser help prints.
 func BrowserHelp() string { return body(browserHelp) }

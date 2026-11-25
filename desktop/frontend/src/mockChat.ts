@@ -262,8 +262,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const asked = logOf(id).find((e) => e.kind === 'approval' && e.id === request)
     const answered = Object.entries(input?.answers ?? {}).map(([q, a]) => `"${q}"="${a}"`)
     const allowed = { tool: 'added 12 packages in 3s', question: `The user answered: ${answered.join(', ')}.`, plan: 'User has approved your plan. You can now start coding.' }
-    const denied = { tool: 'The user denied this tool.', question: 'The user did not answer.', plan: 'The user wants to keep planning.' }
-    append(id, { kind: 'tool_result', parent: asked?.parent, text: allow ? allowed[p.kind] : message || denied[p.kind], error: !allow })
+    append(id, { kind: 'tool_result', parent: asked?.parent, text: allow ? allowed[p.kind] : message.trim() || 'The user denied this tool call.', error: !allow })
     t.setState('working')
     reply(id)
   }

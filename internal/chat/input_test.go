@@ -64,6 +64,12 @@ func TestPermissionAnswerShapes(t *testing.T) {
 		`{"type":"control_response","response":{"subtype":"success","request_id":"ffd4","response":{"behavior":"deny","message":"not now"}}}`)
 }
 
+func TestDenyWithoutReasonSendsTheDefault(t *testing.T) {
+	want := `{"type":"control_response","response":{"subtype":"success","request_id":"ffd4","response":{"behavior":"deny","message":"The user denied this tool call."}}}`
+	assertLine(t, Deny("ffd4", ""), want)
+	assertLine(t, Deny("ffd4", " \n\t "), want)
+}
+
 func TestAllowWithoutInputSendsEmptyObject(t *testing.T) {
 	want := `{"type":"control_response","response":{"subtype":"success","request_id":"ffd4","response":{"behavior":"allow","updatedInput":{}}}}`
 	assertLine(t, Allow("ffd4", nil), want)

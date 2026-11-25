@@ -3,6 +3,7 @@ package chat_test
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -229,6 +230,36 @@ func TestPendingApprovalIsReported(t *testing.T) {
 		t.Errorf("chat:pending after the answer = %+v, want none waiting", h.Rec.Last("chat:pending"))
 	}
 	eventually(t, "the reply after the answer", func() bool { return turnEnds(t, h, id) == 1 })
+}
+
+func TestADenyWithoutReasonReachesClaudeWithOne(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "ask")
+	eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
+	if err := h.ChatAnswer(id, "ask-1", false, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the reply after the deny", func() bool { return turnEnds(t, h, id) == 1 })
+
+	var answers []string
+	for _, line := range h.Stdin(t, id) {
+		var sent struct {
+			Type     string `json:"type"`
+			Response struct {
+				Response struct {
+					Behavior string `json:"behavior"`
+					Message  string `json:"message"`
+				} `json:"response"`
+			} `json:"response"`
+		}
+		if json.Unmarshal([]byte(line), &sent) != nil || sent.Type != "control_response" {
+			continue
+		}
+		answers = append(answers, sent.Response.Response.Behavior+": "+sent.Response.Response.Message)
+	}
+	if len(answers) != 1 || answers[0] != "deny: The user denied this tool call." {
+		t.Errorf("answers claude read = %q, want one deny with the default reason", answers)
+	}
 }
 
 func TestDeltasAreBatched(t *testing.T) {
