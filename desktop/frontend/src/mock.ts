@@ -528,7 +528,7 @@ export function createMock(params: URLSearchParams) {
           task: 'Check whether the notes sync has the race the checkout tests hit.',
           access: 'read',
           project: notesCheck.project,
-          result: 'No race in the notes sync. It writes each note to a temp file and renames it into place, so a reader never sees half a note.\n\n- `sync.ts` holds one lock per note\n- the tests run 200 syncs side by side and all pass\n- the only shared state is the queue, which is read under the same lock',
+          result: 'No race in the notes sync ([its test](https://example.com/notes-sync-test)). It writes each note to a temp file and renames it into place, so a reader never sees half a note.\n\n- `sync.ts` holds one lock per note\n- the tests run 200 syncs side by side and all pass\n- the only shared state is the queue, which is read under the same lock\n\n```sh\nnpm test -- notes-sync --repeat 200\n```',
         },
       ],
       { id: sender.id, title: sender.title },

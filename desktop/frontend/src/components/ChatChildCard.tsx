@@ -21,7 +21,9 @@ type ChatChildCardProps = { id: string; title: string; result?: string }
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 // ChatChildCard is a child thread in its parent's chat, live from the sessions list, so a change of the child renders
-// this card and nothing else of the chat. A click opens the child; its actions are in its right-click menu.
+// this card and nothing else of the chat. A click on the card, but not in its result, opens the child; the card's line
+// is the button that does it from the keyboard, so nothing interactive nests in another. Its actions are in its
+// right-click menu.
 export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: ChatChildCardProps) {
   const a = useAgentos('select', 'settleThread', 'report')
   const child = useAgentosSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
@@ -35,12 +37,6 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
 
   const open = () => child && a.select(child.id)
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.target !== e.currentTarget) return
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      open()
-      return
-    }
     if (!isMenuKey(e) || !child) return
     e.preventDefault()
     const box = card.current?.getBoundingClientRect()
@@ -51,9 +47,6 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
     <div className="flex flex-col gap-2">
       <div
         ref={card}
-        role={child ? 'button' : undefined}
-        tabIndex={child ? 0 : undefined}
-        aria-label={child ? `Open ${facts.title}` : undefined}
         className={`chat-card gap-1.5 ${child ? 'cursor-pointer hover:bg-hover' : ''}`}
         data-state={facts.state}
         // A click that ends a selection of the result's text does not open the child.
@@ -65,11 +58,15 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
           setMenuAt({ x: e.clientX, y: e.clientY })
         }}
       >
-        <div className="flex min-w-0 items-center gap-2 text-small">
-          <ChildDot state={id ? facts.state : 'starting'} />
-          <span className="min-w-0 truncate font-medium text-ink">{facts.title}</span>
-          <span className="ml-auto flex-none text-dim">{stateText(id, facts.state)}</span>
-        </div>
+        {child ? (
+          <button className="flex min-w-0 items-center gap-2 text-left text-small outline-none focus-visible:underline" aria-label={`Open ${facts.title}`}>
+            <CardLine id={id} facts={facts} />
+          </button>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2 text-small">
+            <CardLine id={id} facts={facts} />
+          </div>
+        )}
         {child && (
           <div className="flex min-w-0 items-center gap-x-3 pl-4 text-small text-dim">
             {facts.project !== parentProject && <span className="flex-none">{projectName}</span>}
@@ -100,6 +97,18 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
   )
 })
 
+type CardLineProps = { id: string; facts: ChildFacts }
+
+function CardLine({ id, facts }: CardLineProps) {
+  return (
+    <>
+      <ChildDot state={id ? facts.state : 'starting'} />
+      <span className="min-w-0 truncate font-medium text-ink">{facts.title}</span>
+      <span className="ml-auto flex-none text-dim">{stateText(id, facts.state)}</span>
+    </>
+  )
+}
+
 function stateText(id: string, state: ChildFacts['state']): string {
   if (!id) return 'Starting'
   if (state === 'gone') return 'Gone'
@@ -116,7 +125,8 @@ function ChildDot({ state }: ChildDotProps) {
 
 type ChildResultProps = { text: string }
 
-// ChildResult is the child's result, cut to three lines until the owner shows the rest.
+// ChildResult is the child's result, cut to three lines until the owner shows the rest. A click in it, on a link, a
+// copy button or text, never opens the child.
 function ChildResult({ text }: ChildResultProps) {
   const body = useRef<HTMLDivElement>(null)
   const [full, setFull] = useState(false)
@@ -133,18 +143,12 @@ function ChildResult({ text }: ChildResultProps) {
   }, [text, full])
 
   return (
-    <div className="flex flex-col items-start gap-1 border-t border-line pt-2">
-      <div ref={body} className={`w-full text-ink select-text ${full ? '' : 'line-clamp-3'}`} onClick={(e) => full && e.stopPropagation()}>
+    <div className="flex cursor-auto flex-col items-start gap-1 border-t border-line pt-2" onClick={(e) => e.stopPropagation()}>
+      <div ref={body} className={`w-full text-ink select-text ${full ? '' : 'line-clamp-3'}`}>
         <ChatMarkdown text={text} />
       </div>
       {(cut || full) && (
-        <button
-          className="text-small text-dim hover:text-ink"
-          onClick={(e) => {
-            e.stopPropagation()
-            setFull(!full)
-          }}
-        >
+        <button className="text-small text-dim hover:text-ink" onClick={() => setFull(!full)}>
           {full ? 'Show less' : 'Show more'}
         </button>
       )}
