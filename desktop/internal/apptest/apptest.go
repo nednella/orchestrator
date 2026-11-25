@@ -1010,6 +1010,9 @@ func (h *Harness) ChatDraft(id, text string) error      { return h.chat.ChatDraf
 func (h *Harness) ChatInterrupt(id string) error        { return h.chat.ChatInterrupt(id) }
 func (h *Harness) ChatSendNow(id, message string) error { return h.chat.ChatSendNow(id, message) }
 func (h *Harness) ChatPending() []chat.Pending          { return h.chat.ChatPending() }
+func (h *Harness) ChatFiles(id, query string) ([]string, error) {
+	return h.chat.ChatFiles(id, query)
+}
 func (h *Harness) ChatAnswerInput(id, request, input string) error {
 	return h.chat.ChatAnswerInput(id, request, input)
 }

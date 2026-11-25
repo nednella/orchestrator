@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -441,5 +442,42 @@ func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
 	}
 	if ch.Dir != h.Dir {
 		t.Errorf("Dir = %q, want %q", ch.Dir, h.Dir)
+	}
+}
+
+func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	gitIn(t, h.Dir, "init", "-q")
+	if err := os.WriteFile(filepath.Join(h.Dir, "README"), []byte("hi\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, h.Dir, "add", "README")
+	gitIn(t, h.Dir, "commit", "-q", "-m", "first")
+	wt := filepath.Join(h.Dir, "trees", "issue-7")
+	gitIn(t, h.Dir, "worktree", "add", "-q", "-b", "issue-7", wt)
+	if err := os.WriteFile(filepath.Join(wt, "only-here.go"), []byte("package here\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.Sessions().Create("#7 work", "", false, 7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.RefreshPRs()
+	eventually(t, "the thread's worktree", func() bool { got, _ := h.Session(s.ID); return got.Worktree != "" })
+
+	got, err := h.ChatFiles(s.ID, "")
+	if want := []string{"README", "only-here.go"}; err != nil || !slices.Equal(got, want) {
+		t.Errorf("ChatFiles = %q, %v; want %q", got, err, want)
+	}
+}
+
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
 	}
 }
