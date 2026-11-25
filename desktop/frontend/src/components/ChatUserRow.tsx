@@ -4,6 +4,7 @@ import { api } from '../api'
 import { ChatActionButton, revealOnHover } from './ChatActionButton'
 import { ChatCopyButton } from './ChatCopyButton'
 import { ChatMessageTime } from './ChatMessageTime'
+import { ChatUserText } from './ChatUserText'
 import { NoteImages } from './NoteImages'
 
 // afterUser and beforeUser say the owner's message comes right after or right before another of the owner's, which
@@ -34,7 +35,11 @@ export const ChatUserRow = memo(function ChatUserRow({ thread, id, text, files, 
         </div>
       )}
       <div className={`flex w-full flex-col items-end gap-1 ${side}`}>
-        {text && <p className={`max-w-[80%] rounded-2xl bg-[var(--bg-user-message)] p-3 text-body leading-[1.55] break-words whitespace-pre-wrap select-text ${corners}`}>{text}</p>}
+        {text && (
+          <div className={`max-w-[80%] rounded-2xl bg-[var(--bg-user-message)] p-3 ${corners}`}>
+            <ChatUserText id={id} text={text} />
+          </div>
+        )}
         <div className={`flex max-w-[80%] flex-none items-center justify-end gap-2 pr-1 select-none ${revealOnHover}`}>
           <ChatMessageTime at={at} />
           <div className="flex items-center gap-0.5">
