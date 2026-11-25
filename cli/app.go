@@ -28,7 +28,7 @@ func newAppCmds() []*cobra.Command {
 	return []*cobra.Command{
 		newIssueCmd(),
 		newNewCmd(),
-		appCmd("open <n|title>", "Show a session in the terminal", groupWork, cobra.MinimumNArgs(1)),
+		appCmd("open <n|title>", "Show a session", groupWork, cobra.MinimumNArgs(1)),
 		appCmd("next", "Show the session that needs you most", groupWork, cobra.NoArgs),
 		appCmd("refresh", "Reload the issues and the pull requests", groupWork, cobra.NoArgs),
 		appCmd("pr [n]", "Show the pull requests of the sessions", groupWork, cobra.MaximumNArgs(1)),
