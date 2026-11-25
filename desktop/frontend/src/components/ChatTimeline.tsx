@@ -95,9 +95,14 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
     scrollPaddingStart: jumpOffset,
     initialOffset: kept?.top,
     initialMeasurementsCache: kept?.measured,
+    // Within END_SLACK of the end, a row that grows moves the view with it before the frame is painted, and a row
+    // added scrolls the view to the end.
+    anchorTo: 'end',
+    scrollEndThreshold: END_SLACK,
+    followOnAppend: true,
   })
   const total = virtualizer.getTotalSize()
-  const lastTotal = useRef(total)
+  const lastInset = useRef(inset)
   // The virtualizer's measurements cover every row, rendered or not; a row not yet measured counts at its estimate.
   const rows = useCallback(() => virtualizer.measurementsCache, [virtualizer])
   const scrollToItem = useCallback((index: number) => virtualizer.scrollToIndex(index, { align: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }), [virtualizer])
@@ -110,11 +115,12 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
     return () => keepScroll(id, following.current ? null : { top: virtualizer.scrollOffset ?? 0, measured: virtualizer.takeSnapshot() })
   }, [id, kept, virtualizer])
 
+  // The virtualizer keeps the end in view only as rows change size; the composer's inset is not a row.
   useLayoutEffect(() => {
-    const grew = total > lastTotal.current
-    lastTotal.current = total
+    const grew = inset > lastInset.current
+    lastInset.current = inset
     if (followScroll({ atBottom: following.current, grew }) === 'end') virtualizer.scrollToEnd()
-  }, [total, virtualizer])
+  }, [inset, virtualizer])
 
   useEffect(() => onFollowing(following.current), [onFollowing])
 
