@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { cleanupConfirmText, cleanupForced } from '../cleanupConfirm'
+import { cleanupConfirmText, cleanupForced, passingReason } from '../cleanupConfirm'
 import { readStored, writeStored } from '../storage'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { ArmedConfirm } from '../useArmedConfirm'
@@ -43,6 +43,11 @@ export function CleanupControls({ session, remove: given }: CleanupControlsProps
     return (
       <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
         <span className="min-w-0 text-small text-danger">Not cleaned up: {cleanupReason}</span>
+        {passingReason(cleanupReason) && (
+          <button className="btn h-6" title="Run every check again" onClick={() => report(() => cleanupSession(session.id, false))}>
+            Clean up
+          </button>
+        )}
         <button className="btn h-6" onClick={() => remove.arm()}>
           Clean up anyway
         </button>

@@ -8,6 +8,14 @@ export function cleanupForced(cleanup: Session['cleanup']): boolean {
   return cleanup === 'blocked'
 }
 
+const PASSING = ['a turn is running', 'messages wait for this thread', 'a shell is open in this worktree', 'a shell whose folder is unknown is open']
+
+// passingReason says whether the clean-up was kept for a use of the worktree that ends by itself, a turn, held
+// messages, another thread or a shell, so a clean-up that runs every check again may go through later.
+export function passingReason(reason: string): boolean {
+  return PASSING.includes(reason) || /^Thread .+ also works in this worktree$/.test(reason)
+}
+
 function tail(path: string): string {
   return path.split('/').slice(-2).join('/')
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cleanupConfirmText, cleanupForced } from './cleanupConfirm.ts'
+import { cleanupConfirmText, cleanupForced, passingReason } from './cleanupConfirm.ts'
 
 test('only a kept clean-up is forced', () => {
   assert.equal(cleanupForced('blocked'), true)
@@ -22,4 +22,16 @@ test('forcing names why the worktree was kept', () => {
 test('a thread with no worktree loses only its temp files', () => {
   assert.equal(cleanupConfirmText({ cleanup: 'ask', cleanupReason: '', worktree: '', branch: '' }), "Remove the thread's temp files?")
   assert.equal(cleanupConfirmText({ cleanup: 'blocked', cleanupReason: 'settling the thread failed: x', worktree: '', branch: 'b' }), 'Clean up anyway? It was kept: settling the thread failed: x. What only it holds is lost. The branch b stays.')
+})
+
+test('a use of the worktree that ends by itself is a passing reason', () => {
+  for (const reason of ['a turn is running', 'messages wait for this thread', 'a shell is open in this worktree', 'a shell whose folder is unknown is open', 'Thread #7 work (fork) also works in this worktree']) {
+    assert.equal(passingReason(reason), true, reason)
+  }
+})
+
+test('work only the worktree holds is no passing reason', () => {
+  for (const reason of ['the worktree of issue-7 has uncommitted changes', 'issue-7 has a commit that is not on origin', 'the worktree of issue-7 is in the middle of a rebase', 'Thread 3 woke during the clean-up', '']) {
+    assert.equal(passingReason(reason), false, reason)
+  }
 })
