@@ -152,7 +152,7 @@ export function shortAgo(at: number, now: number): string {
 
 // What the thread's clean-up waits on, in words; '' when nothing does.
 export function cleanupNote({ cleanup, cleanupReason, pr }: Session): string {
-  if (cleanup === 'blocked') return `Not cleaned up: ${cleanupReason}`
+  if (cleanup === 'blocked') return `Kept: ${cleanupReason}` // cleanupText's keptLine, which a tested module cannot import
   if (cleanup === 'pending') return 'Cleaning up…'
   if (cleanup === 'ask') return pr?.state === 'merged' ? 'PR was already merged' : 'PR closed without merging'
   return ''

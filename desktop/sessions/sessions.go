@@ -931,7 +931,7 @@ func (s *Sessions) removeOwnWorktree(id string, n int) error {
 		return nil
 	}
 	wasLive := s.isLive(id)
-	reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
+	_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
 	switch {
 	case err != nil:
 		return err

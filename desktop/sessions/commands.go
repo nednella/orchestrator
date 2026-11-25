@@ -169,7 +169,7 @@ func (c *Commands) Cleanup(ctx context.Context, req ctl.Request) (string, error)
 			case "ask":
 				lines = append(lines, fmt.Sprintf("%d: waiting for you: its pull request is closed or was merged before the session", s.N))
 			case "blocked":
-				lines = append(lines, fmt.Sprintf("%d: blocked: %s", s.N, s.CleanupReason))
+				lines = append(lines, fmt.Sprintf("%d: Kept: %s", s.N, s.CleanupReason))
 			case "pending":
 				lines = append(lines, fmt.Sprintf("%d: running", s.N))
 			}
@@ -183,13 +183,12 @@ func (c *Commands) Cleanup(ctx context.Context, req ctl.Request) (string, error)
 	if err != nil {
 		return "", err
 	}
-	if err := c.s.life.Cleanup(ctx, s.ID, false); err != nil {
+	removed, reason, err := c.s.life.cleanupNow(ctx, s.ID, false, byOwner)
+	switch {
+	case err != nil:
 		return "", err
+	case reason != "":
+		return "", fmt.Errorf("Kept: %s", reason)
 	}
-	for _, now := range c.s.List() {
-		if now.ID == s.ID && now.Cleanup == "blocked" {
-			return "", fmt.Errorf("blocked: %s", now.CleanupReason)
-		}
-	}
-	return fmt.Sprintf("cleaned up session %d", s.N), nil
+	return "Removed " + strings.Join(removed, ", "), nil
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -189,4 +189,9 @@ test('the thread opened after a sleep is the next live top-level thread in sideb
   const sessions = [thread('child', 'working', 0, 'lead'), thread('asleep', 'settled'), thread('lead', 'idle'), thread('busy', 'working'), thread('leaving', 'working')]
   assert.equal(nextThread(sessions, 'shop', 'leaving')?.id, 'busy')
   assert.equal(nextThread([thread('leaving', 'idle'), thread('child', 'idle', 0, 'leaving')], 'shop', 'leaving'), undefined)
+})
+
+test('a kept clean-up says kept and why', () => {
+  const s = { ...thread('a', 'settled'), cleanup: 'blocked' as const, cleanupReason: 'a shell is open in this worktree' }
+  assert.equal(cleanupNote(s), 'Kept: a shell is open in this worktree')
 })

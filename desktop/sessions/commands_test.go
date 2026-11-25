@@ -1,6 +1,8 @@
 package sessions_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -134,6 +136,36 @@ func TestPRAndCleanupCommands(t *testing.T) {
 		if resp := h.Ask(t, ctl.Request{Cmd: "cleanup", Args: bad}); resp.OK {
 			t.Errorf("cleanup %v succeeded", bad)
 		}
+	}
+}
+
+func TestCleanupCommandSaysKeptOrRemoved(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	file := filepath.Join(s.Worktree, "late.txt")
+	if err := os.WriteFile(file, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	openThenClose(h)
+
+	kept := "Kept: the worktree of issue-7 has uncommitted changes"
+	if resp := h.Ask(t, ctl.Request{Cmd: "cleanup", Args: []string{"1"}}); resp.OK || resp.Error != kept {
+		t.Errorf("cleanup 1 with the file = %+v, want the error %q", resp, kept)
+	}
+	if resp := h.Ask(t, ctl.Request{Cmd: "cleanup"}); !resp.OK || resp.Out != "1: "+kept {
+		t.Errorf("cleanup list = %+v, want %q", resp, "1: "+kept)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	want := "Removed worktree " + s.Worktree + ", thread put to sleep, temp folder"
+	if resp := h.Ask(t, ctl.Request{Cmd: "cleanup", Args: []string{"1"}}); !resp.OK || resp.Out != want {
+		t.Errorf("cleanup 1 = %+v, want %q", resp, want)
+	}
+	if exists(s.Worktree) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(s.Worktree), branches(t, h.Dir))
 	}
 }
 
