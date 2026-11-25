@@ -1,6 +1,6 @@
 import { useAgentos } from '../AgentosContext'
 import type { SessionView } from '../AgentosContext'
-import { agentsTabShown, useThreadAgents } from '../chatAgents'
+import { agentsTabShown, useAgentsRunning } from '../chatAgents'
 import type { PanelContext } from '../panelViews'
 import { AgentsTab } from './AgentsTab'
 import { BrowserTab } from './BrowserTab'
@@ -12,13 +12,13 @@ type ThreadDetailsViewProps = { ctx: PanelContext }
 
 export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) {
   const { viewOf, setSessionView, browserStates, sessions } = useAgentos('viewOf', 'setSessionView', 'browserStates', 'sessions')
-  const agents = useThreadAgents(session?.id ?? '')
+  const agentsRunning = useAgentsRunning(session?.id ?? '')
   if (!session) return null
   const withAgents = agentsTabShown(session.id, sessions)
   const chosen = viewOf(session.id)
   const view = chosen === 'agents' && !withAgents ? 'pr' : chosen
   const browserOpen = browserStates[session.id]?.open ?? session.browser
-  const running = agents.filter((a) => a.state === 'running').length + sessions.filter((s) => s.parent === session.id && s.state === 'working').length
+  const running = (agentsRunning ?? 0) + sessions.filter((s) => s.parent === session.id && s.state === 'working').length
   const tabs: { id: SessionView; label: string; count?: number; live?: boolean }[] = [
     { id: 'pr', label: 'PR' },
     { id: 'evidence', label: 'Evidence', count: session.evidence },
@@ -52,7 +52,7 @@ export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) 
         {view === 'pr' && <PRTab key={session.id} session={session} />}
         {view === 'evidence' && <EvidenceTab key={session.id} session={session} />}
         {view === 'browser' && <BrowserTab key={session.id} session={session} />}
-        {view === 'agents' && <AgentsTab key={session.id} sessionId={session.id} agents={agents} />}
+        {view === 'agents' && <AgentsTab key={session.id} sessionId={session.id} />}
       </div>
     </div>
   )

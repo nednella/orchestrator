@@ -1,18 +1,18 @@
 import { Bot } from 'lucide-react'
-import { openAgent } from '../chatAgents'
-import type { AgentItem, AgentState } from '../chatTimeline'
+import { openAgent, useThreadAgents } from '../chatAgents'
+import type { AgentState } from '../chatTimeline'
 import { useLayout } from '../LayoutContext'
 import { Ago } from './Ago'
 
-// sessionId is the thread's; agents its subagents, the newest turn's first.
-type AgentsTabProps = { sessionId: string; agents: AgentItem[] }
+type AgentsTabProps = { sessionId: string }
 
 const stateLabel: Record<AgentState, string> = { running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped' }
 
 // AgentsTab lists what works for the thread beside it: the subagents Claude started in its chat. A click opens one
 // in the chat.
-export function AgentsTab({ sessionId, agents }: AgentsTabProps) {
+export function AgentsTab({ sessionId }: AgentsTabProps) {
   const { closeOverlay } = useLayout()
+  const agents = useThreadAgents(sessionId)
   if (agents.length === 0) {
     return (
       <div className="grid h-full place-items-center p-6 text-center">
