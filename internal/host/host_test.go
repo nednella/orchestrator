@@ -221,6 +221,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
 					"subtype": "can_use_tool", "tool_name": "mcp__agentos__delegate", "input": map[string]any{"task": "fix it"},
 				}})
+			case "not agentos":
+				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
+					"subtype": "can_use_tool", "tool_name": "mcp__agentos__delete_files", "input": map[string]any{},
+				}})
 			case "slow":
 				reply("slow")
 				held, interrupted := during(time.After(2 * time.Second))
@@ -486,6 +490,25 @@ func TestAgentosToolRunsWithoutAnApproval(t *testing.T) {
 	}
 	if !strings.Contains(allow, `"request_id":"r1"`) || !strings.Contains(allow, `"behavior":"allow"`) || !strings.Contains(allow, `"updatedInput":{"task":"fix it"}`) {
 		t.Fatalf("control_response = %s, want allow with the tool's input", allow)
+	}
+}
+
+func TestOtherToolOfAServerNamedAgentosAsks(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_MODE=plan")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := Send(ctxT(t), h.socket, "not agentos"); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindApproval); e.Tool != "mcp__agentos__delete_files" {
+		t.Fatalf("approval for %q, want the owner asked for mcp__agentos__delete_files", e.Tool)
+	}
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"control_response"`) {
+			t.Fatalf("the host answered for the owner: %s", l)
+		}
 	}
 }
 

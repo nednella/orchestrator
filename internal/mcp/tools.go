@@ -65,3 +65,13 @@ func Tools() []Tool {
 	}
 	return out
 }
+
+// ClaudeNames are the orchestration tools as Claude names them: ToolPrefix, then the tool's name.
+func ClaudeNames() []string {
+	tools := Tools()
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = ToolPrefix + t.Name
+	}
+	return names
+}

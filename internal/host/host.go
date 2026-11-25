@@ -292,7 +292,7 @@ func (h *host) handleLine(line []byte) {
 			h.modeIs(e.Text)
 			continue
 		case chat.KindApproval:
-			if strings.HasPrefix(e.Tool, mcp.ToolPrefix) {
+			if slices.Contains(mcp.ClaudeNames(), e.Tool) {
 				h.allowAgentosTool(e)
 				continue
 			}
@@ -304,7 +304,8 @@ func (h *host) handleLine(line []byte) {
 }
 
 // allowAgentosTool answers Claude's ask to run an agentos tool with yes, and logs nothing: every thread may run them,
-// and in plan mode Claude asks for a tool that changes things even when it is allowed.
+// and in plan mode Claude asks for a tool that changes things even when it is allowed. Only the six tools agentos
+// serves are answered so, never another tool of a server that is also named agentos.
 func (h *host) allowAgentosTool(e chat.Event) {
 	if err := h.write(chat.Allow(e.ID, e.Input)); err != nil {
 		fmt.Fprintf(h.echo, "host: allowing %s: %v\n", e.Tool, err)

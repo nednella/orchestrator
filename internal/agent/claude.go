@@ -29,16 +29,6 @@ const browserTool = "Bash(agent-browser:*)"
 // may take.
 const toolTimeout = "3700000"
 
-// agentosTools are the agentos server's tools as Claude names them. Every thread may run them without asking.
-func agentosTools() []string {
-	tools := mcp.Tools()
-	names := make([]string, len(tools))
-	for i, t := range tools {
-		names[i] = mcp.ToolPrefix + t.Name
-	}
-	return names
-}
-
 var claudeEvents = []string{
 	"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
 	"Notification", "Stop", "SessionEnd",
@@ -101,7 +91,7 @@ func (c Claude) Command(l Launch) []string {
 	}
 	if l.MCPConfig != "" {
 		argv = append(argv, "--mcp-config", l.MCPConfig)
-		allowed = append(slices.Clip(allowed), agentosTools()...)
+		allowed = append(slices.Clip(allowed), mcp.ClaudeNames()...)
 	}
 	argv = append(argv, "--permission-mode", PermissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {
