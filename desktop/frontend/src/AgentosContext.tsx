@@ -120,7 +120,8 @@ type AgentosActions = {
   nextAttention(): void
   setComposerDraft(draft: ComposerDraft): void
   threadDraft(id: string): ThreadDraft
-  setThreadDraft(id: string, draft: ThreadDraft): void
+  setThreadDraft(id: string, draft: ComposerDraft): void
+  setDraftsSeen(id: string, seq: number): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
   setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
@@ -901,10 +902,12 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       threadDraft(id) {
         return { draft: readDraft(readStored<unknown>(threadDraftKey(id), '')), seen: readStored(draftSeenKey(id), 0) }
       },
-      setThreadDraft(id, { draft, seen }) {
+      setThreadDraft(id, draft) {
         if (draft.text.trim() === '') removeStored(threadDraftKey(id))
         else writeStored(threadDraftKey(id), saveDraft(draft))
-        writeStored(draftSeenKey(id), seen)
+      },
+      setDraftsSeen(id, seq) {
+        writeStored(draftSeenKey(id), seq)
       },
       setOverlay,
       async setTheme(theme) {

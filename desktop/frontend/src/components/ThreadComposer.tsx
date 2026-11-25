@@ -30,7 +30,7 @@ type ThreadComposerProps = {
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
 export function ThreadComposer({ session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
-  const { threadDraft, setThreadDraft, resumeSession, report } = useAgentos('threadDraft', 'setThreadDraft', 'resumeSession', 'report')
+  const { threadDraft, setThreadDraft, setDraftsSeen, resumeSession, report } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'resumeSession', 'report')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
@@ -39,11 +39,12 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
 
   const update = useCallback(
     (next: ThreadDraft) => {
+      if (next.seen !== latest.current.seen) setDraftsSeen(id, next.seen)
       latest.current = next
       setCurrent(next)
-      setThreadDraft(id, next)
+      setThreadDraft(id, next.draft)
     },
-    [id, setThreadDraft],
+    [id, setThreadDraft, setDraftsSeen],
   )
 
   useEffect(() => {
