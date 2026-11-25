@@ -17,16 +17,14 @@
   --shadow-popup: 0 10px 30px rgba(0, 0, 0, 0.5);
   --composer-selection: rgba(255, 255, 255, 0.2);
 
-  --text-muted: var(--text-soft);
-  --bg-popover: color-mix(in srgb, #0a0a0a 97%, #fff);
   --bg-ghost-hover: rgba(255, 255, 255, 0.04);
   --border-glass: color-mix(in srgb, var(--text) 10%, transparent);
   --glass-filter: blur(16px) saturate(1.08);
   --shadow-card: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
   --icon-strong: color-mix(in srgb, var(--text) 90%, transparent);
   --ring-soft: color-mix(in srgb, var(--accent) 70%, transparent);
-  --minimap-strip: color-mix(in srgb, var(--text-muted) 25%, transparent);
-  --minimap-strip-active: color-mix(in srgb, var(--text-muted) 60%, transparent);
+  --minimap-strip: color-mix(in srgb, var(--text-soft) 25%, transparent);
+  --minimap-strip-active: color-mix(in srgb, var(--text-soft) 60%, transparent);
   --minimap-strip-lit: color-mix(in srgb, var(--text) 55%, transparent);
   --minimap-error: color-mix(in srgb, var(--danger) 55%, transparent);
   --minimap-error-active: var(--danger);
@@ -138,6 +136,11 @@
 
   --term-selection: rgba(167, 139, 250, 0.35);
   --composer-selection: rgba(167, 139, 250, 0.35);
+
+  --bg-ghost-hover: rgba(255, 255, 255, 0.04);
+  --glass-filter: blur(16px) saturate(1.08);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.36);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
 }
 
 :root[data-theme='light'] {
@@ -158,8 +161,6 @@
   --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.12);
   --composer-selection: rgba(124, 92, 224, 0.25);
 
-  --text-muted: var(--text-dim);
-  --bg-popover: #fff;
   --bg-ghost-hover: #f4f4f5;
   --glass-filter: blur(12px) saturate(1.14);
   --scrollbar-thumb: rgb(217, 217, 217);

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, RefObject, WheelEvent } from 'react'
 import { isAtBottom } from '../chatScroll'
 import { activeStrip, currentStrip, easeOutCubic, glideMs, hitStrip, inView, isNotched, minimapStrips, persistentGutter, preview, railHeight, stripScale, stripTop, wheelPixels } from '../chatMinimap'
@@ -27,6 +27,7 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, lane, items, ro
   const frame = useRef(0)
   const pressed = useRef(false)
   const glide = useRef<Glide | null>(null)
+  const cardId = useId()
 
   // What is in view is written onto the strips straight, at most once a frame, so a scroll renders nothing.
   const refresh = useCallback(() => {
@@ -52,7 +53,9 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, lane, items, ro
     const column = lane.current
     if (!el || !column) return
     const size = new ResizeObserver(() => {
-      setPane({ height: el.clientHeight, gutter: column.getBoundingClientRect().left - el.getBoundingClientRect().left })
+      const height = el.clientHeight
+      const gutter = column.getBoundingClientRect().left - el.getBoundingClientRect().left
+      setPane((was) => (was.height === height && was.gutter === gutter ? was : { height, gutter }))
       refresh()
     })
     size.observe(el)
@@ -201,20 +204,28 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, lane, items, ro
 
   if (count < 2) return null
 
-  const shown = active === null ? null : strips[active]
-  const card = shown && preview(shown)
-  const reachable = strip.width >= 14 ? '' : undefined
+  const at = Math.min(active ?? 0, count - 1)
+  const spoken = preview(strips[at])
+  const card = active === null ? null : spoken
+  const reachable = strip.width >= 14
 
   return (
     <div className="chat-minimap" data-persistent={persistentGutter(pane.gutter) ? '' : undefined}>
       <div className="chat-minimap-rail" style={{ left: strip.left, width: strip.width, height }} onWheel={onWheel}>
-        <button type="button" aria-label="Previous message" data-reachable={reachable} className="chat-minimap-step" style={{ bottom: 'calc(100% + 6px)' }} onClick={() => step(-1)}>
+        <button type="button" aria-label="Previous prompt or error" data-reachable={reachable ? '' : undefined} tabIndex={reachable ? undefined : -1} className="chat-minimap-step" style={{ bottom: 'calc(100% + 6px)' }} onClick={() => step(-1)}>
           <ChevronUp size={16} />
         </button>
         <button
           ref={hit}
           type="button"
-          aria-label="Messages in this thread"
+          role="slider"
+          aria-label="Prompts and errors in this thread"
+          aria-orientation="vertical"
+          aria-valuemin={1}
+          aria-valuemax={count}
+          aria-valuenow={at + 1}
+          aria-valuetext={strips[at].kind === 'error' ? `Error: ${spoken.title}` : spoken.title}
+          aria-describedby={card ? cardId : undefined}
           className="chat-minimap-hit"
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={onPointerDown}
@@ -228,11 +239,11 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, lane, items, ro
         >
           {marks}
         </button>
-        <button ref={next} type="button" aria-label="Next message" data-reachable={reachable} className="chat-minimap-step" style={{ top: 'calc(100% + 6px)' }} onClick={() => step(1)}>
+        <button ref={next} type="button" aria-label="Next prompt or error" data-reachable={reachable ? '' : undefined} tabIndex={reachable ? undefined : -1} className="chat-minimap-step" style={{ top: 'calc(100% + 6px)' }} onClick={() => step(1)}>
           <ChevronDown size={16} />
         </button>
-        {card && active !== null && (
-          <div className="chat-minimap-card" style={{ top: stripTop(active, count, height) }}>
+        {card && (
+          <div id={cardId} className="chat-minimap-card" style={{ top: stripTop(at, count, height) }}>
             <p className="chat-minimap-card-title">{card.title}</p>
             {card.detail && <p className="chat-minimap-card-detail">{card.detail}</p>}
           </div>

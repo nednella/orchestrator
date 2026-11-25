@@ -1153,8 +1153,8 @@
     padding: 0.75rem;
     border: 1px solid var(--border-glass);
     border-radius: 0.75rem;
-    background-color: color-mix(in srgb, var(--bg-popover) 80%, transparent);
-    background-image: linear-gradient(color-mix(in srgb, var(--bg-popover) 18%, transparent), color-mix(in srgb, var(--bg-popover) 18%, transparent));
+    background-color: color-mix(in srgb, var(--bg-composer) 80%, transparent);
+    background-image: linear-gradient(color-mix(in srgb, var(--bg-composer) 18%, transparent), color-mix(in srgb, var(--bg-composer) 18%, transparent));
     box-shadow: var(--shadow-card);
     transform: translateY(-50%);
     pointer-events: none;
@@ -1164,7 +1164,7 @@
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .chat-minimap-card {
-      background: var(--bg-popover);
+      background: var(--bg-composer);
     }
   }
 
@@ -1183,7 +1183,7 @@
     max-height: 3.75rem;
     margin-top: 0.25rem;
     overflow: hidden;
-    color: var(--text-muted);
+    color: var(--text-soft);
     font-size: 0.875rem;
     line-height: 1.25rem;
     -webkit-box-orient: vertical;
