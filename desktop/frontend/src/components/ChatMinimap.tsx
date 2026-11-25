@@ -1,85 +1,243 @@
-import { memo, useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from 'react'
-import { minimapMarks, thumb, trackToScroll, type MinimapMark } from '../chatScroll'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent, PointerEvent, RefObject, WheelEvent } from 'react'
+import { isAtBottom } from '../chatScroll'
+import { activeStrip, currentStrip, easeOutCubic, glideMs, hitStrip, inView, isNotched, minimapStrips, persistentGutter, preview, railHeight, stripScale, stripTop, wheelPixels } from '../chatMinimap'
+import type { MinimapRow } from '../chatMinimap'
 import type { TimelineItem } from '../chatTimeline'
 
-type ChatMinimapProps = { scroller: RefObject<HTMLDivElement>; items: TimelineItem[]; starts: number[]; total: number }
+// rows gives where each item sits in the scrolled content, rendered or not; onJump scrolls an item into view.
+type ChatMinimapProps = { scroller: RefObject<HTMLDivElement>; lane: RefObject<HTMLDivElement>; items: TimelineItem[]; rows(): MinimapRow[]; total: number; onJump(index: number): void }
 
-const markColor: Record<MinimapMark['kind'], string> = { user: 'var(--text-dim)', approval: 'var(--waiting)', error: 'var(--danger)' }
+type Glide = { to: number; frame: number }
 
-const firstLine = (s: string) => s.split('\n').find((l) => l.trim() !== '')?.trim() ?? ''
+export const ChatMinimap = memo(function ChatMinimap({ scroller, lane, items, rows, total, onJump }: ChatMinimapProps) {
+  const strips = useMemo(() => minimapStrips(items), [items])
+  const latest = useRef(strips)
+  latest.current = strips
+  // The timeline is built anew on every streamed delta, so the strips are drawn again only when the list changes.
+  const order = strips.map((strip) => strip.key).join(' ')
+  const drawn = useMemo(() => strips, [order])
+  const [pane, setPane] = useState({ height: 0, gutter: 0 })
+  const [active, setActive] = useState<number | null>(null)
+  const hit = useRef<HTMLButtonElement>(null)
+  const next = useRef<HTMLButtonElement>(null)
+  const nodes = useRef<(HTMLSpanElement | null)[]>([])
+  const lit = useRef<boolean[]>([])
+  const frame = useRef(0)
+  const pressed = useRef(false)
+  const glide = useRef<Glide | null>(null)
 
-function markTitle(item: TimelineItem | undefined): string {
-  if (item?.kind === 'user' || item?.kind === 'notice') return firstLine(item.text)
-  if (item?.kind === 'approval') return `Approval: ${item.tool}`
-  return ''
-}
-
-export const ChatMinimap = memo(function ChatMinimap({ scroller, items, starts, total }: ChatMinimapProps) {
-  const track = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState(0)
-  const [view, setView] = useState({ top: 0, client: 0 })
-  const drag = useRef<{ y: number; top: number } | null>(null)
+  // What is in view is written onto the strips straight, at most once a frame, so a scroll renders nothing.
+  const refresh = useCallback(() => {
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      const el = scroller.current
+      if (!el) return
+      const shown = inView(latest.current, rows(), el.scrollTop, el.scrollTop + el.clientHeight)
+      shown.forEach((on, i) => {
+        const node = nodes.current[i]
+        if (!node || lit.current[i] === on) return
+        node.toggleAttribute('data-in-view', on)
+        lit.current[i] = on
+      })
+      const end = isAtBottom(el.scrollTop, el.clientHeight, el.scrollHeight, 1)
+      if (next.current && next.current.disabled !== end) next.current.disabled = end
+    })
+  }, [scroller, rows])
 
   useEffect(() => {
     const el = scroller.current
-    const bar = track.current
-    if (!el || !bar) return
-    const read = () => setView({ top: el.scrollTop, client: el.clientHeight })
+    const column = lane.current
+    if (!el || !column) return
     const size = new ResizeObserver(() => {
-      setHeight(bar.clientHeight)
-      read()
+      setPane({ height: el.clientHeight, gutter: column.getBoundingClientRect().left - el.getBoundingClientRect().left })
+      refresh()
     })
-    size.observe(bar)
-    el.addEventListener('scroll', read, { passive: true })
-    read()
+    size.observe(el)
+    size.observe(column)
+    el.addEventListener('scroll', refresh, { passive: true })
     return () => {
       size.disconnect()
-      el.removeEventListener('scroll', read)
+      el.removeEventListener('scroll', refresh)
+      cancelAnimationFrame(frame.current)
+      frame.current = 0
     }
-  }, [scroller])
+  }, [scroller, lane, refresh])
 
-  const marks = useMemo(() => {
-    const byKey = new Map(items.map((item) => [item.key, item]))
-    return minimapMarks(items, starts, total, height).map((mark) => ({ ...mark, title: markTitle(byKey.get(mark.key)) }))
-  }, [items, starts, total, height])
+  useLayoutEffect(() => {
+    nodes.current.length = drawn.length
+    lit.current = []
+    refresh()
+  }, [drawn, refresh])
 
-  const handle = thumb(view.top, view.client, total, height)
-  const hidden = total <= view.client
+  useEffect(refresh, [total, items, refresh])
 
-  const jump = (e: PointerEvent<HTMLDivElement>) => {
+  const stopGlide = useCallback(() => {
+    if (glide.current) cancelAnimationFrame(glide.current.frame)
+    glide.current = null
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('pointerdown', stopGlide, { capture: true, passive: true })
+    window.addEventListener('keydown', stopGlide, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('pointerdown', stopGlide, { capture: true })
+      window.removeEventListener('keydown', stopGlide, { capture: true })
+      stopGlide()
+    }
+  }, [stopGlide])
+
+  const count = drawn.length
+  const height = railHeight(count, pane.height)
+  const strip = hitStrip(pane.gutter)
+
+  const jump = (i: number) => {
+    const target = latest.current[i]
+    if (!target) return
+    stopGlide()
+    onJump(target.index)
+  }
+
+  const current = () => {
+    const el = scroller.current
+    return el ? currentStrip(latest.current, rows(), el.scrollTop, el.scrollTop + el.clientHeight) : -1
+  }
+
+  const indexAt = (clientY: number) => {
+    const rail = hit.current?.getBoundingClientRect()
+    return rail ? activeStrip(clientY - rail.top, rail.height, count) : 0
+  }
+
+  const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return
+    pressed.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setActive(indexAt(e.clientY))
+  }
+
+  // A press that began outside, as a text selection that runs into the gutter, is not the minimap's.
+  const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
+    if (!pressed.current && e.buttons !== 0) return
+    setActive(indexAt(e.clientY))
+  }
+
+  const onPointerUp = (e: PointerEvent<HTMLButtonElement>) => {
+    if (!pressed.current) return
+    pressed.current = false
+    jump(indexAt(e.clientY))
+    setActive(null)
+    e.currentTarget.blur()
+  }
+
+  const onPointerCancel = () => {
+    pressed.current = false
+    setActive(null)
+  }
+
+  const onPointerLeave = () => {
+    if (!pressed.current) setActive(null)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const at = active ?? 0
+    const moves: Record<string, number> = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: count - 1 }
+    if (e.key in moves) setActive(Math.min(Math.max(moves[e.key], 0), count - 1))
+    else if (e.key === 'Enter' || e.key === ' ') jump(at)
+    else return
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const step = (by: -1 | 1) => {
+    const to = current() + by
+    if (to >= 0 && to < count) jump(to)
+  }
+
+  // A trackpad scrolls the chat by its delta at once; a wheel that turns in notches glides, and a notch during a glide
+  // adds to what is left of it.
+  const onWheel = (e: WheelEvent<HTMLDivElement>) => {
     const el = scroller.current
     if (!el) return
-    const y = e.clientY - e.currentTarget.getBoundingClientRect().top
-    el.scrollTop = trackToScroll(y, height, total, el.clientHeight)
+    const delta = wheelPixels(e.deltaY, e.deltaMode, el.clientHeight)
+    const legacy = (e.nativeEvent as globalThis.WheelEvent & { wheelDeltaY?: number }).wheelDeltaY ?? 0
+    if (!isNotched(e.deltaMode, legacy)) {
+      stopGlide()
+      el.scrollTop += delta
+      return
+    }
+    const max = el.scrollHeight - el.clientHeight
+    const to = Math.min(Math.max((glide.current?.to ?? el.scrollTop) + delta, 0), max)
+    stopGlide()
+    const from = el.scrollTop
+    const started = performance.now()
+    const move = (now: number) => {
+      // A frame's time can be from just before the glide began.
+      const t = Math.min(Math.max((now - started) / glideMs, 0), 1)
+      el.scrollTop = from + (to - from) * easeOutCubic(t)
+      if (t < 1 && glide.current) glide.current.frame = requestAnimationFrame(move)
+      else glide.current = null
+    }
+    glide.current = { to, frame: requestAnimationFrame(move) }
   }
 
-  const startDrag = (e: PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { y: e.clientY, top: scroller.current?.scrollTop ?? 0 }
-  }
+  const marks = useMemo(
+    () =>
+      drawn.map((s, i) => (
+        <span
+          key={s.key}
+          ref={(node) => {
+            nodes.current[i] = node
+          }}
+          data-kind={s.kind}
+          data-active={active === i ? '' : undefined}
+          className="chat-minimap-strip"
+          style={{ top: stripTop(i, count, height), transform: `scaleX(${stripScale(active === null ? null : Math.abs(i - active))})` }}
+        />
+      )),
+    [drawn, active, count, height],
+  )
 
-  const moveDrag = (e: PointerEvent<HTMLDivElement>) => {
-    const el = scroller.current
-    if (!drag.current || !el) return
-    const room = height - handle.size
-    if (room <= 0) return
-    el.scrollTop = drag.current.top + ((e.clientY - drag.current.y) * (total - el.clientHeight)) / room
-  }
+  if (count < 2) return null
+
+  const shown = active === null ? null : strips[active]
+  const card = shown && preview(shown)
+  const reachable = strip.width >= 14 ? '' : undefined
 
   return (
-    <div ref={track} onPointerDown={jump} onWheel={(e) => scroller.current?.scrollBy({ top: e.deltaY })} aria-hidden className={`absolute top-0 right-0 bottom-0 w-[10px] select-none ${hidden ? 'hidden' : ''}`}>
-      {marks.map((mark) => (
-        <div key={mark.key} title={mark.title} className="absolute right-0 h-[3px] w-1.5 rounded-sm" style={{ top: mark.top, background: markColor[mark.kind] }} />
-      ))}
-      <div
-        className="absolute inset-x-0 rounded-sm bg-[var(--bg-hover)] ring-1 ring-[var(--border-strong)]"
-        style={{ top: handle.top, height: handle.size }}
-        onPointerDown={startDrag}
-        onPointerMove={moveDrag}
-        onPointerUp={() => (drag.current = null)}
-        onPointerCancel={() => (drag.current = null)}
-      />
+    <div className="chat-minimap" data-persistent={persistentGutter(pane.gutter) ? '' : undefined}>
+      <div className="chat-minimap-rail" style={{ left: strip.left, width: strip.width, height }} onWheel={onWheel}>
+        <button type="button" aria-label="Previous message" data-reachable={reachable} className="chat-minimap-step" style={{ bottom: 'calc(100% + 6px)' }} onClick={() => step(-1)}>
+          <ChevronUp size={16} />
+        </button>
+        <button
+          ref={hit}
+          type="button"
+          aria-label="Messages in this thread"
+          className="chat-minimap-hit"
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          onPointerLeave={onPointerLeave}
+          onFocus={() => setActive(Math.max(current(), 0))}
+          onBlur={() => setActive(null)}
+          onKeyDown={onKeyDown}
+        >
+          {marks}
+        </button>
+        <button ref={next} type="button" aria-label="Next message" data-reachable={reachable} className="chat-minimap-step" style={{ top: 'calc(100% + 6px)' }} onClick={() => step(1)}>
+          <ChevronDown size={16} />
+        </button>
+        {card && active !== null && (
+          <div className="chat-minimap-card" style={{ top: stripTop(active, count, height) }}>
+            <p className="chat-minimap-card-title">{card.title}</p>
+            {card.detail && <p className="chat-minimap-card-detail">{card.detail}</p>}
+          </div>
+        )}
+      </div>
     </div>
   )
 })

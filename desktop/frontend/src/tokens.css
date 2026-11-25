@@ -17,6 +17,23 @@
   --shadow-popup: 0 10px 30px rgba(0, 0, 0, 0.5);
   --composer-selection: rgba(255, 255, 255, 0.2);
 
+  --text-muted: var(--text-soft);
+  --bg-popover: color-mix(in srgb, #0a0a0a 97%, #fff);
+  --bg-ghost-hover: rgba(255, 255, 255, 0.04);
+  --border-glass: color-mix(in srgb, var(--text) 10%, transparent);
+  --glass-filter: blur(16px) saturate(1.08);
+  --shadow-card: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  --icon-strong: color-mix(in srgb, var(--text) 90%, transparent);
+  --ring-soft: color-mix(in srgb, var(--accent) 70%, transparent);
+  --minimap-strip: color-mix(in srgb, var(--text-muted) 25%, transparent);
+  --minimap-strip-active: color-mix(in srgb, var(--text-muted) 60%, transparent);
+  --minimap-strip-lit: color-mix(in srgb, var(--text) 55%, transparent);
+  --minimap-error: color-mix(in srgb, var(--danger) 55%, transparent);
+  --minimap-error-active: var(--danger);
+  --minimap-error-lit: var(--danger);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.36);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
+
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.11);
 
@@ -140,6 +157,13 @@
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.12);
   --composer-selection: rgba(124, 92, 224, 0.25);
+
+  --text-muted: var(--text-dim);
+  --bg-popover: #fff;
+  --bg-ghost-hover: #f4f4f5;
+  --glass-filter: blur(12px) saturate(1.14);
+  --scrollbar-thumb: rgb(217, 217, 217);
+  --scrollbar-thumb-hover: rgb(191, 191, 191);
 
   --border: #dcdfe7;
   --border-strong: #c4c9d6;

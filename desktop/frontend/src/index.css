@@ -974,12 +974,220 @@
     background: color-mix(in srgb, var(--danger) 16%, transparent);
   }
 
+  /* auto, not the thin bar every other scroller has: a scrollbar-width or scrollbar-color other than auto turns off
+     the ::-webkit-scrollbar rules. The mask fades the rows out at the top but leaves the scrollbar's lane whole. */
   .chat-scroll {
-    scrollbar-width: none;
+    --chat-fade: calc(1.5rem + 1px);
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+    scrollbar-gutter: stable both-edges;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    overflow-anchor: none;
+    mask-image:
+      linear-gradient(
+        to bottom,
+        transparent 0,
+        rgba(0, 0, 0, 0.1) calc(var(--chat-fade) * 0.1),
+        rgba(0, 0, 0, 0.3) calc(var(--chat-fade) * 0.24),
+        rgba(0, 0, 0, 0.58) calc(var(--chat-fade) * 0.42),
+        rgba(0, 0, 0, 0.82) calc(var(--chat-fade) * 0.62),
+        rgba(0, 0, 0, 0.96) calc(var(--chat-fade) * 0.82),
+        #000 var(--chat-fade)
+      ),
+      linear-gradient(#000, #000);
+    mask-size:
+      calc(100% - 6px) 100%,
+      6px 100%;
+    mask-position:
+      left top,
+      right top;
+    mask-repeat: no-repeat;
   }
 
   .chat-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chat-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-scroll::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    background: var(--scrollbar-thumb);
+  }
+
+  .chat-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  .chat-minimap {
+    --ease-minimap: cubic-bezier(0.4, 0, 0.2, 1);
     display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: 72px;
+    pointer-events: none;
+  }
+
+  .chat-minimap[data-persistent] {
+    display: block;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chat-minimap {
+      display: block;
+      opacity: 0;
+      transition: opacity 150ms var(--ease-minimap);
+    }
+
+    .chat-minimap:is(:hover, :focus-within, [data-persistent]) {
+      opacity: 1;
+    }
+  }
+
+  .chat-minimap-rail {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .chat-minimap-hit {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    touch-action: none;
+    outline: none;
+  }
+
+  .chat-minimap-hit::before {
+    content: '';
+    position: absolute;
+    inset: -4px 0;
+  }
+
+  .chat-minimap-hit:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--ring-soft);
+  }
+
+  .chat-minimap-strip {
+    position: absolute;
+    left: 0;
+    width: 24px;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 9999px;
+    background: var(--minimap-strip);
+    transform-origin: left;
+    transition: transform 150ms var(--ease-minimap);
+  }
+
+  .chat-minimap-strip::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--minimap-strip-lit);
+    opacity: 0;
+    transition: opacity 150ms var(--ease-minimap);
+  }
+
+  .chat-minimap-strip[data-in-view]::after {
+    opacity: 1;
+  }
+
+  .chat-minimap-strip[data-active] {
+    background: var(--minimap-strip-active);
+  }
+
+  .chat-minimap-strip[data-kind='error'] {
+    background: var(--minimap-error);
+  }
+
+  .chat-minimap-strip[data-kind='error']::after {
+    background: var(--minimap-error-lit);
+  }
+
+  .chat-minimap-strip[data-kind='error'][data-active] {
+    background: var(--minimap-error-active);
+  }
+
+  .chat-minimap-step {
+    position: absolute;
+    left: -6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--icon-strong);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms var(--ease-minimap);
+  }
+
+  .chat-minimap-step[data-reachable] {
+    pointer-events: auto;
+  }
+
+  .chat-minimap-step:is(:hover, :focus-visible) {
+    opacity: 1;
+    background: var(--bg-ghost-hover);
+  }
+
+  .chat-minimap-step:disabled {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chat-minimap-card {
+    position: absolute;
+    left: 32px;
+    width: 20rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-glass);
+    border-radius: 0.75rem;
+    background-color: color-mix(in srgb, var(--bg-popover) 80%, transparent);
+    background-image: linear-gradient(color-mix(in srgb, var(--bg-popover) 18%, transparent), color-mix(in srgb, var(--bg-popover) 18%, transparent));
+    box-shadow: var(--shadow-card);
+    transform: translateY(-50%);
+    pointer-events: none;
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .chat-minimap-card {
+      background: var(--bg-popover);
+    }
+  }
+
+  .chat-minimap-card-title {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .chat-minimap-card-detail {
+    display: -webkit-box;
+    max-height: 3.75rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
   }
 
   .chat-jump {

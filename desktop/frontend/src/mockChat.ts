@@ -102,8 +102,8 @@ const askedQuestions = [
 
 const askedPlan = '## Split checkout into three steps\n\n1. Add `/checkout/address`, `/checkout/payment` and `/checkout/review` routes.\n2. Move the form state into a `useCheckout` store so each step reads it.\n3. Keep the cart page as it is.\n\nThe tests for `Checkout.tsx` move with the steps.'
 
-// olderTurns is finished turns that give a chat at least that many items: each a message and its reply, and every
-// fifth one a tool call that folds into a work item.
+// olderTurns is finished turns that give a chat at least that many items: each a message and its reply, every fifth
+// one a tool call that folds into a work item, and every ninth one an error that ends it.
 function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
   const turns: Draft[] = []
   for (let n = 1, count = 0; count < items; n++) {
@@ -115,7 +115,10 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
       count++
     }
     turns.push({ kind: 'message', id: `old-m-${n}`, uuid: `old-r-${n}`, text: olderReplies[n % olderReplies.length], at })
-    turns.push({ kind: 'turn_end', cost: 0.01, at })
+    if (n % 9 === 0) {
+      turns.push({ kind: 'turn_end', error: true, text: 'API Error: 529 {"type":"overloaded_error","message":"Overloaded"}', cost: 0.01, at })
+      count++
+    } else turns.push({ kind: 'turn_end', cost: 0.01, at })
     count += 2
   }
   return turns
