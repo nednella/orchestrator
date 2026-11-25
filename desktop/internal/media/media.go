@@ -1,4 +1,4 @@
-// Package media serves the pictures of notes and evidence under /media/<project key>/<folder>/...
+// Package media serves the pictures of notes, evidence and chats under /media/<project key>/<folder>/...
 package media
 
 import (
@@ -12,9 +12,11 @@ import (
 const (
 	// Prefix is where the pictures are served.
 	Prefix = "/media/"
-	// NotesFolder holds a project's note pictures; EvidenceFolder holds the pictures of its sessions' evidence.
+	// NotesFolder holds a project's note pictures, EvidenceFolder the pictures of its sessions' evidence and
+	// ChatFolder the images sent in its threads.
 	NotesFolder    = "notes-media"
 	EvidenceFolder = "evidence"
+	ChatFolder     = "chat-media"
 	// MaxImageSize is the largest picture agentos stores.
 	MaxImageSize = 10 << 20
 )
@@ -51,12 +53,16 @@ func File(dir, folder, url string) string {
 	return ""
 }
 
-// Handler serves the pictures of notes and evidence kept under dir, and nothing else in it.
-func Handler(dir string) http.Handler {
+// Handler serves the pictures of notes and evidence kept under dataDir and the images of chats kept under localDir,
+// and nothing else in either.
+func Handler(dataDir, localDir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		file := File(dir, NotesFolder, r.URL.Path)
+		file := File(dataDir, NotesFolder, r.URL.Path)
 		if file == "" {
-			file = File(dir, EvidenceFolder, r.URL.Path)
+			file = File(dataDir, EvidenceFolder, r.URL.Path)
+		}
+		if file == "" {
+			file = File(localDir, ChatFolder, r.URL.Path)
 		}
 		if file == "" {
 			http.NotFound(w, r)

@@ -43,9 +43,10 @@ const (
 	echoWidth      = 200
 	// subscriberBuffer is how many events a subscriber may fall behind before it is dropped.
 	subscriberBuffer = 1024
-	// maxImage keeps an image's base64, which the API limits to 5 MB, under that limit.
-	maxImage = 3932160
 )
+
+// MaxImage is the largest image file the host sends: its base64 is exactly 5 MB, the API's limit.
+const MaxImage = 3932160
 
 var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
 
@@ -665,7 +666,7 @@ func isObject(raw json.RawMessage) bool {
 func readImages(files []string) ([]chat.Image, error) {
 	images := make([]chat.Image, 0, len(files))
 	for _, path := range files {
-		data, err := readLimited(path, maxImage)
+		data, err := readLimited(path, MaxImage)
 		if err != nil {
 			return nil, err
 		}

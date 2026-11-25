@@ -54,12 +54,23 @@ func (v *Service) ChatWatch(id string) error {
 // ChatUnwatch stops the thread's chat:<id> events.
 func (v *Service) ChatUnwatch(id string) { v.c.unwatch(id) }
 
-// ChatSend gives the message to Claude and returns the id it is logged under: as the user's at once when the thread
-// is idle, as queued while a turn runs, and as the reason to deny each approval that waits.
-func (v *Service) ChatSend(id, text string) (string, error) {
+// Sent is a message ChatSend gave to Claude: the id it is logged under, and what the user should know when only its
+// text went out.
+type Sent struct {
+	ID     string `json:"id"`
+	Notice string `json:"notice,omitempty"`
+}
+
+// ChatSend gives the message, its images saved in the thread's media folder, to Claude: as the user's at once when the
+// thread is idle, as queued while a turn runs, and as the reason to deny each approval that waits.
+func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
 	ch, err := v.live(id)
 	if err != nil {
-		return "", err
+		return Sent{}, err
+	}
+	files, err := saveImages(ch.Media, images)
+	if err != nil {
+		return Sent{}, err
 	}
 	ctx := v.ctx()
 	ready, cancel := context.WithTimeout(ctx, hostStarting)
@@ -67,9 +78,12 @@ func (v *Service) ChatSend(id, text string) (string, error) {
 	cancel()
 	var msg string
 	if err == nil {
-		msg, err = host.SendMessage(ctx, ch.Socket, host.Message{Text: text})
+		msg, err = host.SendMessage(ctx, ch.Socket, host.Message{Text: text, Files: files})
 	}
-	return msg, v.failed(id, "the message", err)
+	if errors.Is(err, host.ErrTooOldForImages) {
+		return Sent{Notice: "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."}, nil
+	}
+	return Sent{ID: msg}, v.failed(id, "the message", err)
 }
 
 // ChatDraft leaves text in the thread's composer, unsent.

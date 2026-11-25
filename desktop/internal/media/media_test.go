@@ -25,7 +25,7 @@ func TestHandlerServesBothKinds(t *testing.T) {
 	write(filepath.Join(dir, "main", "notes-media", "page.html"), "<script>")
 	write(filepath.Join(dir, "main", "evidence", "3", "index.json"), "secret")
 
-	h := Handler(dir)
+	h := Handler(dir, t.TempDir())
 	tests := []struct {
 		url  string
 		want int
@@ -63,5 +63,42 @@ func TestExt(t *testing.T) {
 		if got, ok := Ext(mime); got != want || ok != (want != "") {
 			t.Errorf("Ext(%q) = %q, %v", mime, got, ok)
 		}
+	}
+}
+
+func TestMediaServesChatImages(t *testing.T) {
+	data, local := t.TempDir(), t.TempDir()
+	thread := filepath.Join(local, "main", ChatFolder, "k3x9q0ab")
+	if err := os.MkdirAll(thread, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"0123456789abcdef.png": "chat image", "notes.jsonl": "secret"} {
+		if err := os.WriteFile(filepath.Join(thread, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(local, "main", "secret.png"), []byte("not a chat image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := Handler(data, local)
+	tests := []struct {
+		url  string
+		want int
+	}{
+		{"/media/main/chat-media/k3x9q0ab/0123456789abcdef.png", 200},
+		{"/media/main/chat-media/k3x9q0ab/notes.jsonl", 404},
+		{"/media/main/chat-media/../secret.png", 404},
+		{"/media/main/chat-media/k3x9q0ab/..%2f..%2fsecret.png", 404},
+		{"/media/main/notes-media/k3x9q0ab/0123456789abcdef.png", 404},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest("GET", tt.url, nil))
+			if rec.Code != tt.want || (tt.want == 200 && rec.Body.String() != "chat image") {
+				t.Errorf("status %d body %q, want %d", rec.Code, rec.Body.String(), tt.want)
+			}
+		})
 	}
 }

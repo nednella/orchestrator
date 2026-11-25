@@ -2,11 +2,12 @@ import { Icon } from './Icon'
 
 type NoteImagesProps = {
   urls: string[]
+  attachedTo?: 'note' | 'message'
   onOpen?(url: string): void
   onRemove?(url: string): void
 }
 
-export function NoteImages({ urls, onOpen, onRemove }: NoteImagesProps) {
+export function NoteImages({ urls, attachedTo = 'note', onOpen, onRemove }: NoteImagesProps) {
   if (urls.length === 0) return null
   return (
     <div className="flex flex-wrap gap-2">
@@ -15,14 +16,14 @@ export function NoteImages({ urls, onOpen, onRemove }: NoteImagesProps) {
           <button
             type="button"
             className="block overflow-hidden rounded-sm border"
-            style={{ borderColor: 'var(--border-note)' }}
+            style={{ borderColor: attachedTo === 'note' ? 'var(--border-note)' : 'var(--border-strong)' }}
             title="Open larger"
             onClick={(e) => {
               e.stopPropagation()
               onOpen?.(url)
             }}
           >
-            <img src={url} alt="Attached to the note" className="block h-16 w-auto max-w-40 object-cover" />
+            <img src={url} alt={`Attached to the ${attachedTo}`} className="block h-16 w-auto max-w-40 object-cover" />
           </button>
           {onRemove && (
             <button

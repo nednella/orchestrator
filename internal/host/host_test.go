@@ -1422,11 +1422,11 @@ func TestImageOverTheLimitIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	dot := readFile(t, writePNG(t))
 	big := filepath.Join(dir, "big.png")
-	if err := os.WriteFile(big, append(dot, make([]byte, maxImage+1-len(dot))...), 0o600); err != nil {
+	if err := os.WriteFile(big, append(dot, make([]byte, MaxImage+1-len(dot))...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	most := filepath.Join(dir, "most.png")
-	if err := os.WriteFile(most, append(dot, make([]byte, maxImage-len(dot))...), 0o600); err != nil {
+	if err := os.WriteFile(most, append(dot, make([]byte, MaxImage-len(dot))...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	text := filepath.Join(dir, "notes.txt")
@@ -1452,7 +1452,7 @@ func TestImageOverTheLimitIsRefused(t *testing.T) {
 	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "see", Files: []string{most}}); err != nil {
 		t.Fatalf("send of a file at the limit = %v, want it sent", err)
 	}
-	if encoded := base64.StdEncoding.EncodedLen(maxImage); encoded > 5<<20 {
+	if encoded := base64.StdEncoding.EncodedLen(MaxImage); encoded > 5<<20 {
 		t.Fatalf("an image at the limit is %d bytes in base64, over the API's 5 MB", encoded)
 	}
 }

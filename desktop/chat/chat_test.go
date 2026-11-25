@@ -2,7 +2,9 @@ package chat_test
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,13 +25,20 @@ var eventually = apptest.Eventually
 // newThread starts a hosted session on the stand-in claude.
 func newThread(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
-	apptest.ClaudeOnPath(t)
+	h, id, _ := newThreadWithClaude(t)
+	return h, id
+}
+
+// newThreadWithClaude is newThread that also gives the stand-in claude's folder, where it writes what it reads.
+func newThreadWithClaude(t *testing.T) (*apptest.Harness, string, string) {
+	t.Helper()
+	dir := apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return h, s.ID
+	return h, s.ID, dir
 }
 
 func history(t *testing.T, h *apptest.Harness, id string, after int64) []chatlog.Event {
@@ -84,11 +93,11 @@ func emittedTurnEnds(rec *apptest.Recorder, id string) int { return countTurnEnd
 
 func send(t *testing.T, h *apptest.Harness, id, text string) string {
 	t.Helper()
-	msg, err := h.ChatSend(id, text)
+	sent, err := h.ChatSend(id, text)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return msg
+	return sent.ID
 }
 
 func TestHistoryReadsTheChatLog(t *testing.T) {
@@ -311,5 +320,103 @@ func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
 	}
 	if err, want := h.ChatAnswer(id, "nope", true, ""), `No approval "nope" is waiting`; err == nil || err.Error() != want {
 		t.Errorf("ChatAnswer = %v, want %q", err, want)
+	}
+}
+
+// dot is a png of one pixel.
+const dot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
+func TestImagesAreSavedAndSent(t *testing.T) {
+	h, id, claude := newThreadWithClaude(t)
+	sent, err := h.ChatSend(id, "", chat.Image{Base64: dot, Mime: "image/png"})
+	if err != nil || sent.ID == "" || sent.Notice != "" {
+		t.Fatalf("ChatSend = %+v, %v; want an id and no notice", sent, err)
+	}
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+
+	stdin, err := os.ReadFile(filepath.Join(claude, strings.ReplaceAll(id, "/", "_")+".stdin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stdin), `"type":"user"`) || !strings.Contains(string(stdin), `"media_type":"image/png"`) {
+		t.Errorf("claude's stdin = %s, want a user message with a png", stdin)
+	}
+	user := history(t, h, id, 0)[0]
+	if user.Kind != chatlog.KindUser || user.ID != sent.ID || len(user.Files) != 1 {
+		t.Fatalf("user event = %+v, want the image's file", user)
+	}
+	file := user.Files[0]
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token := strings.Split(id, "/")[1]; filepath.Dir(file) != ch.Media || !strings.HasSuffix(ch.Media, filepath.Join("chat-media", token)) {
+		t.Errorf("image saved at %s, want it in %s, under chat-media", file, ch.Media)
+	}
+	info, err := os.Stat(file)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("saved image: %v, %v; want mode 0600", info, err)
+	}
+	want, _ := base64.StdEncoding.DecodeString(dot)
+	if got, _ := os.ReadFile(file); string(got) != string(want) {
+		t.Errorf("saved image holds %d bytes, want the png's %d", len(got), len(want))
+	}
+}
+
+func TestTooManyImagesAreRefused(t *testing.T) {
+	h, id := newThread(t)
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	images := slices.Repeat([]chat.Image{{Base64: dot, Mime: "image/png"}}, 11)
+	big := base64.StdEncoding.EncodeToString(make([]byte, host.MaxImage+1))
+	for _, tt := range []struct {
+		images []chat.Image
+		want   string
+	}{
+		{images, "A message takes at most 10 images"},
+		{[]chat.Image{images[0], {Base64: big, Mime: "image/png"}}, "Image 2 is too large (the limit is 3.75 MB)"},
+		{[]chat.Image{{Base64: base64.StdEncoding.EncodeToString([]byte("<svg></svg>")), Mime: "image/svg+xml"}}, "Image 1 is not png, jpeg, gif or webp"},
+		{[]chat.Image{{Base64: dot, Mime: "image/jpeg"}}, "Image 1 is not png, jpeg, gif or webp"},
+	} {
+		if _, err := h.ChatSend(id, "see", tt.images...); err == nil || err.Error() != tt.want {
+			t.Errorf("ChatSend = %v, want %q", err, tt.want)
+		}
+	}
+	if apptest.Exists(ch.Media) {
+		t.Errorf("%s was made for refused messages", ch.Media)
+	}
+	if events := history(t, h, id, 0); slices.Contains(kinds(events), chatlog.KindUser) {
+		t.Errorf("history after refused messages = %v, want no message", kinds(events))
+	}
+}
+
+func TestDismissRemovesChatImages(t *testing.T) {
+	h, id := newThread(t)
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(id, "see", chat.Image{Base64: dot, Mime: "image/png"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	if !apptest.Exists(ch.Media) {
+		t.Fatalf("%s was not made", ch.Media)
+	}
+	if err := h.KillSession(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+	if !apptest.Exists(ch.Media) {
+		t.Fatalf("%s went when the thread ended, want it kept until the row is dismissed", ch.Media)
+	}
+	if err := h.DismissSession(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread's images to go", func() bool { return !apptest.Exists(ch.Media) })
+	if !apptest.Exists(filepath.Dir(ch.Media)) {
+		t.Errorf("the project's %s went with the thread's", filepath.Dir(ch.Media))
 	}
 }

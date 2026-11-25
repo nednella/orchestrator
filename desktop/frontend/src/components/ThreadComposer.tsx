@@ -10,10 +10,12 @@ import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
+import { usePendingImages } from '../usePendingImages'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
 import { Icon } from './Icon'
+import { NoteImages } from './NoteImages'
 
 // A send that gets no answer in this long lets the composer send again.
 const sendWait = 15_000
@@ -42,13 +44,15 @@ const WAITING_PLACEHOLDER: Record<Pending['kind'], string> = {
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
 export function ThreadComposer({ inputRef: input, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
-  const { threadDraft, setThreadDraft, setDraftsSeen, resumeSession, report } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'resumeSession', 'report')
+  const { threadDraft, setThreadDraft, setDraftsSeen, resumeSession, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'resumeSession', 'report', 'pushToast')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
   const latestReply = useRef(reply)
   latestReply.current = reply
   const [sending, setSending] = useState(false)
+  const pending = usePendingImages()
+  const picker = useRef<HTMLInputElement>(null)
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -82,26 +86,30 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     )
   }
 
-  const empty = current.draft.text.trim() === ''
+  const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
   const model = modelName(session.model)
   const effort = EFFORTS[session.effort] ?? session.effort
 
   const send = () => {
     const typed = sendText(latest.current.draft.text)
-    if (sending || typed.trim() === '') return
+    const images = pending.images
+    if (sending || (typed.trim() === '' && images.length === 0)) return
     const text = (reply === null ? '' : replyPrefix(reply)) + typed
     setSending(true)
     const release = setTimeout(() => setSending(false), sendWait)
     const sent = latest.current.draft
     update({ ...latest.current, draft: EMPTY_DRAFT })
+    pending.clear()
     onReply(null)
     report(async () => {
       try {
-        await api.chatSend(id, text)
+        const { notice } = await api.chatSend(id, text, images.map(({ base64, mime }) => ({ base64, mime })))
+        if (notice) pushToast({ tone: 'info', text: notice })
       } catch (err) {
         const now = latest.current.draft
-        update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, typed) })
+        if (typed.trim() !== '') update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, typed) })
+        pending.restore(images)
         if (reply !== null && latestReply.current === null) onReply(reply)
         throw err
       } finally {
@@ -137,6 +145,25 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
           </>
         )
       }
+      attachments={pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} attachedTo="message" onRemove={pending.remove} />}
+      left={
+        <>
+          <button className="composer-chip" title="Attach images" aria-label="Attach images" onMouseDown={(e) => e.preventDefault()} onClick={() => picker.current?.click()}>
+            <Icon name="paperclip" size={14} />
+          </button>
+          <input
+            ref={picker}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            hidden
+            onChange={(e) => {
+              pending.attach(e.currentTarget)
+              e.currentTarget.value = ''
+            }}
+          />
+        </>
+      }
       right={
         (model || effort) && (
           <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-soft" title="The thread's model and reasoning effort">
@@ -151,6 +178,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
       onKeyDown={(e) => {
         if (e.key === 'Escape' && onEscape(false) === 'blur') input.current?.blur()
       }}
+      onAttach={pending.attach}
       onSend={send}
     />
   )

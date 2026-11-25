@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { EMPTY_CHAT, chatFeed, mergeEvents } from './chatEvents.ts'
+import { EMPTY_CHAT, chatFeed, chatMediaURL, mergeEvents } from './chatEvents.ts'
 import type { ChatState } from './chatEvents.ts'
 import type { ChatEvent } from './types.ts'
 
@@ -119,4 +119,11 @@ test('a failed first read stops the feed', async () => {
   f.push([logged(1)])
   assert.equal(runs.length, 0)
   assert.equal(seen.state, EMPTY_CHAT)
+})
+
+test('chatMediaURL maps a saved path', () => {
+  assert.equal(chatMediaURL('main', '/Users/me/.local/share/agentos/main/chat-media/k3x9q0ab/0123456789abcdef.png'), '/media/main/chat-media/k3x9q0ab/0123456789abcdef.png')
+  assert.equal(chatMediaURL('my project', '/data/my project/chat-media/k3x9q0ab/a.png'), '/media/my%20project/chat-media/k3x9q0ab/a.png')
+  assert.equal(chatMediaURL('main', '/Users/me/Desktop/shot.png'), null, 'a file outside the chat images has no address')
+  assert.equal(chatMediaURL('main', 'chat-media/a.png'), null)
 })

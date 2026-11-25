@@ -1,4 +1,4 @@
-import type { ChatEvent, EventMap, Pending, State } from './types'
+import type { ChatEvent, ChatImage, EventMap, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
@@ -9,6 +9,10 @@ type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
 const minute = 60_000
 const batchEvery = 33 // the service sends a thread's events at most this often, in ms
+// As the service does: at most this many images to a message, each at most host.MaxImage bytes.
+const maxImages = 10
+const maxImage = 3932160
+const imageExts: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' }
 const commands = [
   { name: 'review', description: 'Review a pull request', argumentHint: '<pr>', builtin: true },
   { name: 'compact', description: 'Clear the conversation but keep a summary of it', argumentHint: '<instructions>', builtin: true },
@@ -73,13 +77,15 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
-// another. Claude exits on a message that is just "exit". thread throws for an id that has no chat.
+// another. Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
+// would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const logs = new Map<string, ChatEvent[]>()
   const unreadable = new Set<string>()
   const watched = new Set<string>()
   const pending = new Map<string, Pending>()
-  const queued = new Map<string, { id: string; text: string }[]>()
+  const queued = new Map<string, { id: string; text: string; files: string[] }[]>()
+  const media = new Map<string, string>() // a saved image's data URL, by its path
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
   const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
   let nextReply = 0
@@ -147,7 +153,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const held = queued.get(id) ?? []
     if (held.length === 0) return false
     queued.delete(id)
-    held.forEach((m) => append(id, { kind: 'user', id: m.id, text: m.text }))
+    held.forEach((m) => append(id, { kind: 'user', id: m.id, text: m.text, files: m.files }))
     reply(id)
     return true
   }
@@ -257,10 +263,12 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     ChatUnwatch: async (id: string) => {
       watched.delete(id)
     },
-    ChatSend: async (id: string, text: string) => {
+    ChatSend: async (id: string, text: string, images: ChatImage[]) => {
       const t = live(id)
+      const files = save(id, images)
       const message = crypto.randomUUID()
       const waiting = pending.get(id)
+      if (waiting && files.length > 0) throw 'Answer the approval before sending images'
       if (waiting) {
         append(id, { kind: 'answer', id: waiting.request, text: 'deny' })
         append(id, { kind: 'user', id: message, text, parent: waiting.request })
@@ -269,23 +277,23 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
         setPending(id, null)
         t.setState('working')
         reply(id)
-        return message
+        return { id: message }
       }
       if (replying.has(id)) {
-        append(id, { kind: 'queued', id: message, text })
-        queued.set(id, [...(queued.get(id) ?? []), { id: message, text }])
-        return message
+        append(id, { kind: 'queued', id: message, text, files })
+        queued.set(id, [...(queued.get(id) ?? []), { id: message, text, files }])
+        return { id: message }
       }
-      append(id, { kind: 'user', id: message, text })
+      append(id, { kind: 'user', id: message, text, files })
       if (text === 'exit') {
         end(id)
         t.setState('ended')
-        return message
+        return { id: message }
       }
       append(id, { kind: 'init', id: 'mock-session' })
       t.setState('working')
       reply(id, /\bslow\b/i.test(text))
-      return message
+      return { id: message }
     },
     ChatDraft: async (id: string, text: string) => {
       live(id)
@@ -315,6 +323,24 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     ChatPending: async () => [...pending.values()].map((p) => ({ ...p })),
   }
 
+  // save checks the images as the service does and keeps each at the path it would have, under the thread's
+  // chat-media folder.
+  function save(id: string, images: ChatImage[]): string[] {
+    if (images.length > maxImages) throw `A message takes at most ${maxImages} images`
+    images.forEach((image, i) => {
+      if (Math.floor((image.base64.length * 3) / 4) > maxImage + 3) throw `Image ${i + 1} is too large (the limit is ${maxImage / 2 ** 20} MB)`
+      if (!(image.mime in imageExts)) throw `Image ${i + 1} is not png, jpeg, gif or webp`
+    })
+    const [key, token] = id.split('/')
+    return images.map((image) => {
+      const path = `/Users/mock/.local/share/agentos/${key}/chat-media/${token}/${Math.random().toString(16).slice(2, 18).padEnd(16, '0')}${imageExts[image.mime]}`
+      media.set(path, `data:${image.mime};base64,${image.base64}`)
+      return path
+    })
+  }
+
+  const mediaURL = (path: string) => media.get(path)
+
   // end is the thread's process going: its reply stops, its queue goes and nothing waits any more.
   function end(id: string) {
     replying.get(id)?.()
@@ -327,5 +353,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  return { backend, seed, ask, forget, end, breakLog }
+  return { backend, seed, ask, forget, end, breakLog, mediaURL }
 }

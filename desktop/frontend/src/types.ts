@@ -353,6 +353,13 @@ export type ChatEvent = {
   files?: string[]
 }
 
+// ChatImage is an image attached to a message: its bytes in base64 and its type.
+export type ChatImage = { base64: string; mime: string }
+
+// ChatSent is a message the thread took: the id it is logged under, and what the user should know when only its text
+// went out.
+export type ChatSent = { id: string; notice?: string }
+
 // Pending is the approval a thread waits on; id is the thread's and request the approval's.
 export type Pending = {
   id: string

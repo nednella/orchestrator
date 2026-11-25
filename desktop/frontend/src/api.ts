@@ -1,5 +1,6 @@
+import { chatMediaURL } from './chatEvents'
 import { createMock } from './mock'
-import type { BrowserState, ChatEvent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -47,7 +48,7 @@ type Backend = {
   ChatHistory(id: string, after: number): Promise<ChatEvent[]>
   ChatWatch(id: string): Promise<void>
   ChatUnwatch(id: string): Promise<void>
-  ChatSend(id: string, text: string): Promise<string>
+  ChatSend(id: string, text: string, images: ChatImage[]): Promise<ChatSent>
   ChatDraft(id: string, text: string): Promise<void>
   ChatInterrupt(id: string): Promise<void>
   ChatSendNow(id: string, message: string): Promise<void>
@@ -190,7 +191,9 @@ export const api = {
   chatHistory: (id: string, after = 0) => backend.ChatHistory(id, after),
   chatWatch: (id: string) => backend.ChatWatch(id),
   chatUnwatch: (id: string) => backend.ChatUnwatch(id),
-  chatSend: (id: string, text: string) => backend.ChatSend(id, text),
+  chatSend: (id: string, text: string, images: ChatImage[] = []) => backend.ChatSend(id, text, images),
+  // The mock keeps the images it was sent in memory and has its own address for each.
+  chatMediaURL: (project: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(project, path),
   chatDraft: (id: string, text: string) => backend.ChatDraft(id, text),
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),
   chatSendNow: (id: string, message: string) => backend.ChatSendNow(id, message),

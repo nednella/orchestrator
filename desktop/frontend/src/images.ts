@@ -2,7 +2,7 @@ import type { PendingImage } from './AgentosContext'
 
 export type PreviewImage = PendingImage & { preview: string }
 
-export function imageFiles(data: DataTransfer | null): File[] {
+export function imageFiles(data: { files: FileList | null } | null): File[] {
   return [...(data?.files ?? [])].filter((file) => file.type.startsWith('image/'))
 }
 

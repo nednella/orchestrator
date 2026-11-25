@@ -1001,13 +1001,15 @@ func (h *Harness) ResumeSession(id string) (sessions.Session, error) {
 func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 	return h.chat.ChatHistory(id, after)
 }
-func (h *Harness) ChatWatch(id string) error                { return h.chat.ChatWatch(id) }
-func (h *Harness) ChatUnwatch(id string)                    { h.chat.ChatUnwatch(id) }
-func (h *Harness) ChatSend(id, text string) (string, error) { return h.chat.ChatSend(id, text) }
-func (h *Harness) ChatDraft(id, text string) error          { return h.chat.ChatDraft(id, text) }
-func (h *Harness) ChatInterrupt(id string) error            { return h.chat.ChatInterrupt(id) }
-func (h *Harness) ChatSendNow(id, message string) error     { return h.chat.ChatSendNow(id, message) }
-func (h *Harness) ChatPending() []chat.Pending              { return h.chat.ChatPending() }
+func (h *Harness) ChatWatch(id string) error { return h.chat.ChatWatch(id) }
+func (h *Harness) ChatUnwatch(id string)     { h.chat.ChatUnwatch(id) }
+func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
+	return h.chat.ChatSend(id, text, images)
+}
+func (h *Harness) ChatDraft(id, text string) error      { return h.chat.ChatDraft(id, text) }
+func (h *Harness) ChatInterrupt(id string) error        { return h.chat.ChatInterrupt(id) }
+func (h *Harness) ChatSendNow(id, message string) error { return h.chat.ChatSendNow(id, message) }
+func (h *Harness) ChatPending() []chat.Pending          { return h.chat.ChatPending() }
 func (h *Harness) ChatAnswerInput(id, request, input string) error {
 	return h.chat.ChatAnswerInput(id, request, input)
 }

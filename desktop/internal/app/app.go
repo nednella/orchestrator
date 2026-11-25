@@ -93,7 +93,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	store := notes.New(c.DataDir)
 	a.sessions, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
 	a.browsers, a.awake = browsers, stayAwake
-	a.media = media.Handler(c.DataDir)
+	a.media = media.Handler(c.DataDir, c.LocalDir)
 	browsers.Hook(func(id string) string {
 		name, err := session.ParseName(id)
 		if err != nil {
@@ -248,7 +248,7 @@ func (a *App) Stop() {
 	a.router.Close()
 }
 
-// Media serves the pictures of notes and evidence under /media/<project key>/<folder>/.
+// Media serves the pictures of notes, evidence and chats under /media/<project key>/<folder>/.
 func (a *App) Media() http.Handler { return a.media }
 
 // Sessions is the session list, for tests and wiring.

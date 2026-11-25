@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nednella/agentos/desktop/internal/media"
 	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/internal/scoped"
 	"github.com/nednella/agentos/desktop/internal/warn"
@@ -566,6 +567,7 @@ func (s *Sessions) drop(id string) {
 		_ = os.Remove(s.handoverPath(name))
 		_ = os.Remove(s.usageMarkPath(name))
 		_ = os.Remove(s.chatLogPath(name))
+		go os.RemoveAll(s.chatMediaDir(name))
 		_ = os.Remove(s.hostSocket(name))
 	}
 }
@@ -579,6 +581,11 @@ func (s *Sessions) tmpDir(name session.Name) string {
 // chatLogPath is the chat log the session's host keeps.
 func (s *Sessions) chatLogPath(name session.Name) string {
 	return filepath.Join(s.localDir, name.Project, "chats", name.Token+".jsonl")
+}
+
+// chatMediaDir holds the images sent in the session's chat.
+func (s *Sessions) chatMediaDir(name session.Name) string {
+	return filepath.Join(s.localDir, name.Project, media.ChatFolder, name.Token)
 }
 
 // hostSocket is where the session's host listens. A unix socket's path is short, so it sits in the state folder, in a
@@ -1993,10 +2000,11 @@ func (s *Sessions) TurnEnded(id string, e chat.Event) {
 	}
 }
 
-// Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps and the socket it listens on.
+// Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on and
+// the folder that holds the images sent in it.
 type Chat struct {
-	ID, Project, Log, Socket string
-	Live                     bool // the session runs; an ended one has only its log
+	ID, Project, Log, Socket, Media string
+	Live                            bool // the session runs; an ended one has only its log
 }
 
 // ChatOf is the chat of the session id, live or ended. A session whose agent runs in its terminal has none. It takes
@@ -2036,7 +2044,7 @@ func (s *Sessions) Chats() []Chat {
 }
 
 func (s *Sessions) chatOf(name session.Name, live bool) Chat {
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Live: live}
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Live: live}
 }
 
 // hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before

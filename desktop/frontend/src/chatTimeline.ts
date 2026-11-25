@@ -37,6 +37,9 @@ type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall;
 // notice shows after the turn's own.
 type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval[]; unsent: Notice[] }
 
+// One empty list for every message without images keeps a memoised row from rendering again.
+const noFiles: string[] = []
+
 const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'question', ExitPlanMode: 'plan' }
 
 // approvalKind is what an approval for the tool asks of the user: to let a tool run, to answer a question or to
@@ -95,7 +98,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // A message Claude takes in while it works splits the turn there.
         const left = close(e.at)
         if (e.id) queued.delete(e.id)
-        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', text: e.text ?? '', files: e.files ?? [] })
+        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', text: e.text ?? '', files: e.files ?? noFiles })
         open(e).approvals.push(...left)
         return
       }

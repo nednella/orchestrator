@@ -1337,5 +1337,5 @@ export function createMock(params: URLSearchParams) {
     },
   }
 
-  return { backend, on, flags }
+  return { backend, on, flags, mediaURL: chats.mediaURL }
 }

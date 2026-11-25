@@ -5,12 +5,14 @@ import type { PreviewImage } from './images'
 
 export type PendingImages = {
   images: PreviewImage[]
-  attach(data: DataTransfer | null): boolean
+  attach(data: { files: FileList | null } | null): boolean
   remove(preview: string): void
   clear(): void
+  // restore puts back images taken for a send that failed, before any attached since.
+  restore(images: PreviewImage[]): void
 }
 
-// The images pasted or dropped into a new note, held until the note is filed.
+// The images pasted, dropped or picked for a note or a message, held until it is sent.
 export function usePendingImages(): PendingImages {
   const { report } = useAgentos('report')
   const [images, setImages] = useState<PreviewImage[]>([])
@@ -27,5 +29,6 @@ export function usePendingImages(): PendingImages {
     },
     remove: (preview) => setImages((list) => list.filter((i) => i.preview !== preview)),
     clear: () => setImages([]),
+    restore: (taken) => setImages((list) => [...taken, ...list]),
   }
 }

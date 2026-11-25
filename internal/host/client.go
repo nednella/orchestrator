@@ -28,12 +28,16 @@ type Message struct {
 	Files []string
 }
 
+// ErrTooOldForImages is what SendMessage returns when a host from before message ids sent the text of a message and
+// dropped its images.
+var ErrTooOldForImages = &Refused{"this session's host is too old for images"}
+
 // SendMessage gives m to Claude and returns the id the host logged it under. A host from before message ids sends the
-// text and drops the images, so a reply with no id is an error when m has images.
+// text and drops the images, so a reply with no id is ErrTooOldForImages when m has images.
 func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
 	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files})
 	if err == nil && rep.ID == "" && len(m.Files) > 0 {
-		return "", &Refused{"this session's host is too old for images"}
+		return "", ErrTooOldForImages
 	}
 	return rep.ID, err
 }

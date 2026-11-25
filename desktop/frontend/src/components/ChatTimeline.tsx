@@ -12,15 +12,16 @@ import { ChatReplyRow } from './ChatReplyRow'
 import { ChatUserRow } from './ChatUserRow'
 import { ChatWorkRow } from './ChatWorkRow'
 import { Icon } from './Icon'
+import { ImageViewer } from './ImageViewer'
 
 type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onReply(text: string): void; onQuote(text: string): void }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (text: string) => void) {
+function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (text: string) => void, onOpenImage: (url: string) => void) {
   switch (item.kind) {
     case 'user':
-      return <ChatUserRow text={item.text} onReply={onReply} />
+      return <ChatUserRow project={thread.slice(0, thread.indexOf('/'))} text={item.text} files={item.files} onReply={onReply} onOpenImage={onOpenImage} />
     case 'reply':
       return <ChatReplyRow text={item.text} streaming={item.streaming} onReply={onReply} />
     case 'notice':
@@ -43,6 +44,8 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimeli
   const following = useRef(kept === null)
   const lastTop = useRef(0)
   const seen = useRef(kept?.count ?? items.length)
+  // A row is moved into place with a transform, which would hold a fixed overlay inside it.
+  const [viewing, setViewing] = useState<string | null>(null)
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -110,13 +113,14 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimeli
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items[row.index], id, folder, onReply)}
+              {rowOf(items[row.index], id, folder, onReply, setViewing)}
             </div>
           ))}
         </div>
       </div>
       <ChatMinimap scroller={scroller} items={items} starts={starts} total={total} />
       <ChatQuoteButton onQuote={onQuote} />
+      {viewing && <ImageViewer url={viewing} alt="Attached to the message" onClose={() => setViewing(null)} />}
       {unseen && (
         <button className="btn chat-jump absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full" onClick={jump}>
           <Icon name="arrow-down" size={12} />

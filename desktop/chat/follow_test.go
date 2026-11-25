@@ -235,3 +235,37 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 		t.Errorf("ChatPending before any follower = %+v, want %+v", got, want)
 	}
 }
+
+func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
+	dir, err := os.MkdirTemp("", "aos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "host.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	// A host from before message ids answers a send with no id.
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			if _, err := bufio.NewReader(conn).ReadBytes('\n'); err == nil {
+				conn.Write([]byte(`{"ok":true}` + "\n"))
+			}
+			conn.Close()
+		}
+	}()
+
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), context.Background)
+	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}})
+	if want := "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."; err != nil || sent.Notice != want {
+		t.Errorf("ChatSend = %+v, %v; want the notice %q", sent, err, want)
+	}
+}

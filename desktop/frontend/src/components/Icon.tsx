@@ -45,6 +45,7 @@ export type IconName =
   | 'queue'
   | 'x'
   | 'image'
+  | 'paperclip'
   | 'digest'
   | 'machine'
   | 'model'
@@ -167,6 +168,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'queue') return <path d="M2.5 4h11M2.5 8h11M2.5 12h7" />
   if (name === 'x') return <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
   if (name === 'image') return <path d="M2.5 3h11v10h-11ZM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.2v.01" />
+  if (name === 'paperclip') return <path d="m13.5 7.5-5.3 5.3a3.3 3.3 0 0 1-4.7-4.7L8.8 2.8a2.2 2.2 0 0 1 3.1 3.1L6.6 11.2a1.1 1.1 0 0 1-1.6-1.6l4.8-4.8" />
   if (name === 'machine') return <path d="M13.3 10.7V4.7A1.3 1.3 0 0 0 12 3.3H4a1.3 1.3 0 0 0-1.3 1.4v6M13.3 10.7H2.7M13.3 10.7l.9 1.7a.7.7 0 0 1-.6 1H2.4a.7.7 0 0 1-.6-1l.9-1.7" />
   if (name === 'model') return <path d="M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8 6.7 6.7Z" />
   if (name === 'digest') return <path d="M3.5 13.5h9a1.5 1.5 0 0 0 1.5-1.5V3.5a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1V12a1.5 1.5 0 0 1-1.5 1.5Zm0 0A1.5 1.5 0 0 1 2 12V7a1 1 0 0 1 1-1h2M7.5 5.5h4M7.5 8h4M7.5 10.5h2.5" />
