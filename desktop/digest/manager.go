@@ -70,14 +70,15 @@ func (m *Manager) runCurrent() error { return m.start(m.project.Current()) }
 
 func (m *Manager) start(proj project.Project) error {
 	key := proj.Key()
-	if err := m.digests.Begin(key, time.Now()); err != nil {
+	deps := dependencies(proj.Dir)
+	if err := m.digests.Begin(key, time.Now(), len(deps)); err != nil {
 		return err
 	}
 	m.emitDigest(key)
 	go func() {
 		ctx, cancel := context.WithTimeout(m.ctx(), digestTimeout)
 		defer cancel()
-		err := m.runAgent(ctx, proj, key)
+		err := m.runAgent(ctx, key, deps)
 		failure := ""
 		switch {
 		case ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -107,7 +108,7 @@ func (m *Manager) available(ctx context.Context) (agent.Headless, error) {
 
 // runAgent runs the digest prompt in an empty folder, with the few tools the digest needs and
 // only the environment the agent needs: the run reads the web, so it must not see the project or its secrets.
-func (m *Manager) runAgent(ctx context.Context, proj project.Project, key string) error {
+func (m *Manager) runAgent(ctx context.Context, key string, deps []string) error {
 	a, err := m.available(ctx)
 	if err != nil {
 		return err
@@ -117,7 +118,7 @@ func (m *Manager) runAgent(ctx context.Context, proj project.Project, key string
 		return fmt.Errorf("making the digest folder: %w", err)
 	}
 	defer os.RemoveAll(dir)
-	argv := a.Argv(prompts.Digest(dependencies(proj.Dir)))
+	argv := a.Argv(prompts.Digest(deps))
 	env := append(a.Env(os.Environ()), digestProjects+"="+key, "AGENTOS_SOCKET="+bus.SocketPath(m.stateDir))
 	_, err = m.run(ctx, dir, env, argv[0], argv[1:]...)
 	return err

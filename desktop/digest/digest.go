@@ -43,6 +43,7 @@ type Digest struct {
 	Project   string       `json:"project"` // the key of the project it belongs to
 	Running   bool         `json:"running"`
 	StartedAt int64        `json:"startedAt"` // when the latest run started
+	Tools     int          `json:"tools"`     // how many dependencies the latest run was given
 	LastRunAt int64        `json:"lastRunAt"`
 	NextRunAt int64        `json:"nextRunAt"`
 	Error     string       `json:"error"`
@@ -53,6 +54,7 @@ type Digest struct {
 type digestFile struct {
 	LastRunAt     int64        `json:"lastRunAt"`
 	LastAttemptAt int64        `json:"lastAttemptAt"`
+	Tools         int          `json:"tools"`
 	Items         []DigestItem `json:"items"`
 }
 
@@ -103,7 +105,7 @@ func (d *Digests) View(key string, auto bool) Digest {
 	f := d.read(key)
 	_, running := d.running[key]
 	failed := d.failures[key]
-	v := Digest{Project: key, Running: running, StartedAt: f.LastAttemptAt, LastRunAt: f.LastRunAt, Error: failed.reason, StoppedAt: failed.at, Items: f.Items}
+	v := Digest{Project: key, Running: running, StartedAt: f.LastAttemptAt, Tools: f.Tools, LastRunAt: f.LastRunAt, Error: failed.reason, StoppedAt: failed.at, Items: f.Items}
 	if v.Items == nil {
 		v.Items = []DigestItem{}
 	}
@@ -129,8 +131,8 @@ func (d *Digests) Due(key string, now time.Time) bool {
 		now.Sub(time.UnixMilli(f.LastAttemptAt)) > digestRetry
 }
 
-// Begin marks a run as started.
-func (d *Digests) Begin(key string, now time.Time) error {
+// Begin marks a run as started on the given number of tools.
+func (d *Digests) Begin(key string, now time.Time, tools int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, running := d.running[key]; running {
@@ -139,7 +141,7 @@ func (d *Digests) Begin(key string, now time.Time) error {
 	d.running[key] = 0
 	delete(d.failures, key)
 	f := d.read(key)
-	f.LastAttemptAt = now.UnixMilli()
+	f.LastAttemptAt, f.Tools = now.UnixMilli(), tools
 	return d.write(key, f)
 }
 

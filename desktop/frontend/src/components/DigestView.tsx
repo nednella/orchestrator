@@ -47,7 +47,7 @@ export function DigestView() {
   return (
     <section ref={panel} data-panel="thread" tabIndex={-1} aria-label="News" className="panel @container h-full min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-[46rem] px-4 pt-6 pb-16 @max-[40rem]:pt-4">
-        <DigestHeader project={project?.name ?? 'this project'} automatic={(digest?.nextRunAt ?? 0) > 0} button={button} onRun={run} />
+        <DigestHeader project={project?.name ?? 'this project'} tools={digest?.tools ?? 0} automatic={(digest?.nextRunAt ?? 0) > 0} button={button} onRun={run} />
         {loading && <Loading />}
         {!loading && digest && (
           <>

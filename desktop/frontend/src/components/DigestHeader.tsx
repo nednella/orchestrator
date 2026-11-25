@@ -5,12 +5,14 @@ import { DigestTile } from './DigestTile'
 // since the empty and failed states carry their own.
 type DigestHeaderProps = {
   project: string
+  tools: number
   automatic: boolean
   button: 'run' | 'checking' | null
   onRun(): void
 }
 
-export function DigestHeader({ project, automatic, button, onRun }: DigestHeaderProps) {
+export function DigestHeader({ project, tools, automatic, button, onRun }: DigestHeaderProps) {
+  const checked = tools === 0 ? 'the tools' : `the ${tools} ${tools === 1 ? 'tool' : 'tools'}`
   return (
     <header className="flex flex-wrap items-center gap-3">
       <DigestTile size="md">
@@ -19,7 +21,7 @@ export function DigestHeader({ project, automatic, button, onRun }: DigestHeader
       <div className="flex min-w-48 flex-1 flex-col">
         <h1 className="text-title leading-[1.375] font-semibold">News</h1>
         <p className="text-small text-soft">
-          What changed in the tools {project} depends on, picked by an agent {automatic ? 'each week' : 'when you run it'}
+          What changed in {checked} {project} depends on, picked by an agent {automatic ? 'each week' : 'when you run it'}
         </p>
       </div>
       {button === 'checking' && (

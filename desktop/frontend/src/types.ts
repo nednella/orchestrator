@@ -311,6 +311,7 @@ export type DigestItem = {
 export type Digest = {
   running: boolean
   startedAt: number
+  tools: number
   lastRunAt: number
   nextRunAt: number
   error: string

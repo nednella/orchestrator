@@ -94,6 +94,9 @@ func TestDigestRun(t *testing.T) {
 	if d.StartedAt == 0 || d.StartedAt > d.LastRunAt || d.StoppedAt != 0 {
 		t.Errorf("run times: started %d, finished %d, stopped %d", d.StartedAt, d.LastRunAt, d.StoppedAt)
 	}
+	if d.Tools != 1 {
+		t.Errorf("tools = %d, want the 1 dependency in package.json", d.Tools)
+	}
 	note, err := h.DigestToNote(d.Items[0].ID)
 	if err != nil || !strings.HasPrefix(note.Text, "Wails 2.15 released\n\nyou build on Wails\nhttps://example.com/wails") {
 		t.Fatalf("DigestToNote = %+v, %v", note, err)

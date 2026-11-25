@@ -852,7 +852,7 @@ export function createMock(params: URLSearchParams) {
     ]
   }
   const lastDigestRun = Date.now() - 2 * 86_400_000
-  let digest: Digest = { running: false, startedAt: lastDigestRun - 124_000, lastRunAt: lastDigestRun, nextRunAt: lastDigestRun + 7 * 86_400_000, error: '', stoppedAt: 0, project: data[0].name, items: seedDigest() }
+  let digest: Digest = { running: false, startedAt: lastDigestRun - 124_000, tools: 23, lastRunAt: lastDigestRun, nextRunAt: lastDigestRun + 7 * 86_400_000, error: '', stoppedAt: 0, project: data[0].name, items: seedDigest() }
   const pushDigest = () => emit('digest', { ...digest, items: digest.items.map((i) => ({ ...i })) })
 
   const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
@@ -1230,7 +1230,7 @@ export function createMock(params: URLSearchParams) {
     RunDigest: async () => {
       if (digest.running) throw 'A digest run is already in progress'
       const startedAt = Date.now()
-      digest = { ...digest, running: true, startedAt, error: '', stoppedAt: 0 }
+      digest = { ...digest, running: true, startedAt, tools: 23, error: '', stoppedAt: 0 }
       pushDigest()
       // As the real run, each item arrives as the agent hands it in, after the run's earlier items.
       const fresh = [
