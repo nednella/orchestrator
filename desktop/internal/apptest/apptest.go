@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -688,7 +689,9 @@ func (h *Harness) build(t *testing.T) *app.App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Binary = CLIPath(t) // the test binary runs the app but has no host command
+	if claudeOnPath.Load() {
+		cfg.Binary = CLIPath(t) // the test binary runs the app but has no host command
+	}
 	a := app.New(cfg, app.Host{Emit: h.Rec.Emit, Clipboard: h.Rec.Clip, PickDir: h.Rec.Picker, Quit: h.Rec.Quit, Awake: h.Rec.Awake}, h.GH.Run, h.GH.Stream, h.Claude.RunEnv)
 	for _, svc := range a.Services() {
 		switch s := svc.(type) {
@@ -825,7 +828,15 @@ func CLIPath(t *testing.T) string {
 // "_">.args, prints an init line, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin, answers
 // each user message with a reply and a result and an interrupt with a result that has an error, until its stdin ends.
 // Call it before New. It returns dir.
-func ClaudeOnPath(t *testing.T) string { return agentOnPath(t, "claude", "", fakeClaudeTurns) }
+func ClaudeOnPath(t *testing.T) string {
+	claudeOnPath.Store(true)
+	t.Cleanup(func() { claudeOnPath.Store(false) })
+	return agentOnPath(t, "claude", "", fakeClaudeTurns)
+}
+
+// claudeOnPath says that the test put the stand-in claude on PATH, so its Claude sessions run under the built command's
+// host. A test that sets the environment never runs in parallel.
+var claudeOnPath atomic.Bool
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
 const fakeClaudeTurns = `printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
