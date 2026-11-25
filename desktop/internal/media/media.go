@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -68,7 +69,8 @@ func Handler(dataDir, localDir string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		f, err := os.Open(file)
+		// A link could lead anywhere outside the folder.
+		f, err := os.OpenFile(file, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 		if err != nil {
 			http.NotFound(w, r)
 			return

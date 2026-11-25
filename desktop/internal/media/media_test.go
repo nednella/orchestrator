@@ -81,6 +81,16 @@ func TestMediaServesChatImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := os.Symlink(filepath.Join(local, "main", "secret.png"), filepath.Join(thread, "link.png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(data, "main", NotesFolder), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(local, "main", "secret.png"), filepath.Join(data, "main", NotesFolder, "link.png")); err != nil {
+		t.Fatal(err)
+	}
+
 	h := Handler(data, local)
 	tests := []struct {
 		url  string
@@ -91,6 +101,8 @@ func TestMediaServesChatImages(t *testing.T) {
 		{"/media/main/chat-media/../secret.png", 404},
 		{"/media/main/chat-media/k3x9q0ab/..%2f..%2fsecret.png", 404},
 		{"/media/main/notes-media/k3x9q0ab/0123456789abcdef.png", 404},
+		{"/media/main/chat-media/k3x9q0ab/link.png", 404},
+		{"/media/main/notes-media/link.png", 404},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
