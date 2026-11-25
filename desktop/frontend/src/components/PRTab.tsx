@@ -1,5 +1,4 @@
 import { useAgentos } from '../AgentosContext'
-import { api } from '../api'
 import { useLayout } from '../LayoutContext'
 import type { PR, Session } from '../types'
 import { BranchBar } from './BranchBar'
@@ -116,15 +115,17 @@ export function PRTab({ session }: PRTabProps) {
           <button
             className="btn btn-accent"
             onClick={() => {
-              const text = action.sentence(pr.number)
               report(async () => {
-                await (session.hosted ? api.chatDraft(session.id, text) : typeInto(session.id, text))
+                await typeInto(session.id, action.sentence(pr.number))
                 await ackPR(session.id)
               })
-              if (!session.hosted) return focus('terminal')
-              select(session.id)
-              if (mode === 'narrow') setMobilePanel('session')
-              focus('composer')
+              if (session.hosted) {
+                select(session.id)
+                if (mode === 'narrow') setMobilePanel('session')
+                focus('composer')
+              } else {
+                focus('terminal')
+              }
             }}
           >
             {action.label}
