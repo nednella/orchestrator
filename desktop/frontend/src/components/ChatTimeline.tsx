@@ -1,8 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
 import { jumpOffset } from '../chatMinimap'
-import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
+import { followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
 import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatMessageActions } from './ChatMessageActions'
@@ -14,10 +15,26 @@ import { ChatQuoteButton } from './ChatQuoteButton'
 import { ChatReplyRow } from './ChatReplyRow'
 import { ChatUserRow } from './ChatUserRow'
 import { ChatWorkRow } from './ChatWorkRow'
-import { Icon } from './Icon'
 import { ImageViewer } from './ImageViewer'
 
-type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onReply(text: string): void; onQuote(text: string): void; onFork(at: string, draft: string): Promise<void> }
+export type ChatTimelineEnd = { scrollToEnd(): void }
+
+// The chat is at its end within this many px of it.
+const END_SLACK = 40
+
+// inset is the height at the bottom that the composer covers, which the last row scrolls clear of. onFollowing says
+// whether the chat follows its end, as the reader scrolls away from it and back.
+type ChatTimelineProps = {
+  id: string
+  items: TimelineItem[]
+  folder: string
+  inset: number
+  endRef: Ref<ChatTimelineEnd>
+  onFollowing(following: boolean): void
+  onReply(text: string): void
+  onQuote(text: string): void
+  onFork(at: string, draft: string): Promise<void>
+}
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
@@ -56,14 +73,12 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
   }
 }
 
-export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
-  const [unseen, setUnseen] = useState(() => hasUnseen(kept, items.length))
   const following = useRef(kept === null)
   const lastTop = useRef(0)
-  const seen = useRef(kept?.count ?? items.length)
   // A row is moved into place with a transform, which would hold a fixed overlay inside it.
   const [viewing, setViewing] = useState<string | null>(null)
 
@@ -74,7 +89,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
     overscan: 6,
     getItemKey: (index) => items[index].key,
     paddingStart: 24,
-    paddingEnd: 8,
+    paddingEnd: inset,
     scrollPaddingStart: jumpOffset,
     initialOffset: kept?.top,
     initialMeasurementsCache: kept?.measured,
@@ -90,7 +105,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
   useLayoutEffect(() => {
     if (kept) virtualizer.scrollToOffset(kept.top)
     else virtualizer.scrollToEnd()
-    return () => keepScroll(id, following.current ? null : { top: virtualizer.scrollOffset ?? 0, measured: virtualizer.takeSnapshot(), count: seen.current })
+    return () => keepScroll(id, following.current ? null : { top: virtualizer.scrollOffset ?? 0, measured: virtualizer.takeSnapshot() })
   }, [id, kept, virtualizer])
 
   useLayoutEffect(() => {
@@ -99,10 +114,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
     if (followScroll({ atBottom: following.current, grew }) === 'end') virtualizer.scrollToEnd()
   }, [total, virtualizer])
 
-  useEffect(() => {
-    if (following.current) seen.current = items.length
-    else if (items.length > seen.current) setUnseen(true)
-  }, [items.length])
+  useEffect(() => onFollowing(following.current), [onFollowing])
 
   useEffect(() => {
     const el = scroller.current
@@ -115,19 +127,24 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
     if (!el) return
     // A row that grew before it was measured moves the end down with no scroll up, so only scrolling up stops the
     // follow.
-    following.current = isAtBottom(el.scrollTop, el.clientHeight, el.scrollHeight) || (following.current && el.scrollTop >= lastTop.current)
+    const next = isAtBottom(el.scrollTop, el.clientHeight, el.scrollHeight, END_SLACK) || (following.current && el.scrollTop >= lastTop.current)
     lastTop.current = el.scrollTop
-    if (!following.current) return
-    seen.current = items.length
-    setUnseen(false)
+    if (next === following.current) return
+    following.current = next
+    onFollowing(next)
   }
 
-  const jump = () => {
-    following.current = true
-    seen.current = items.length
-    setUnseen(false)
-    virtualizer.scrollToEnd()
-  }
+  useImperativeHandle(
+    endRef,
+    () => ({
+      scrollToEnd: () => {
+        following.current = true
+        onFollowing(true)
+        virtualizer.scrollToEnd({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      },
+    }),
+    [virtualizer, onFollowing],
+  )
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -143,12 +160,6 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
       <ChatMinimap scroller={scroller} lane={lane} items={items} rows={rows} total={total} onJump={scrollToItem} />
       <ChatQuoteButton onQuote={onQuote} />
       {viewing && <ImageViewer url={viewing} alt="Attached to the message" onClose={() => setViewing(null)} />}
-      {unseen && (
-        <button className="btn chat-jump absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full" onClick={jump}>
-          <Icon name="arrow-down" size={12} />
-          Jump to latest
-        </button>
-      )}
     </div>
   )
 }

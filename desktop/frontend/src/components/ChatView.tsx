@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
 import { api } from '../api'
@@ -8,8 +8,10 @@ import { fromMarkdown } from '../composerMarkdown'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
+import { ChatEndPill } from './ChatEndPill'
 import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
+import type { ChatTimelineEnd } from './ChatTimeline'
 import type { ComposerInput } from './ComposerEditor'
 import { Loading } from './Loading'
 import { Notice } from './Notice'
@@ -17,6 +19,8 @@ import { ThreadComposer } from './ThreadComposer'
 
 // A stop that gets no turn end in this long can be asked for again.
 const stopWait = 10_000
+// The gap between the chat's last row, scrolled to the end, and the composer over it.
+const insetGap = 12
 
 type ChatViewProps = { session: Session }
 
@@ -47,6 +51,21 @@ export function ChatView({ session }: ChatViewProps) {
     )
   }
   const input = useRef<ComposerInput>(null)
+  const end = useRef<ChatTimelineEnd>(null)
+  const composer = useRef<HTMLDivElement>(null)
+  const [inset, setInset] = useState(0)
+  const [following, setFollowing] = useState(true)
+
+  useLayoutEffect(() => {
+    const el = composer.current
+    if (!el) return
+    const measure = () => setInset(el.offsetHeight + insetGap)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   // The message the next send answers.
   const [reply, setReply] = useState<string | null>(null)
   const replyTo = useCallback((text: string) => {
@@ -93,19 +112,37 @@ export function ChatView({ session }: ChatViewProps) {
   }
 
   return (
-    <div data-chat className="flex h-full min-h-0 flex-col bg-app" onKeyDown={onKeyDown}>
+    <div data-chat className="relative flex h-full min-h-0 flex-col bg-app" onKeyDown={onKeyDown}>
       {empty && loading && <Loading />}
       {empty && !loading && error && !session.hosted && <p className="flex flex-1 items-center justify-center px-4 text-center text-small text-dim">{error}</p>}
       {empty && !loading && error && session.hosted && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
-      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onReply={replyTo} onQuote={quote} onFork={fork} />}
-      <div className="mx-auto w-full max-w-[46rem] px-4 pb-4">
-        {!empty && error && (
-          <div className="pb-2">
-            <ChatNotice text={error} error />
+      {!empty && (
+        <ChatTimeline
+          id={session.id}
+          items={timeline.items}
+          folder={session.worktree || project?.dir || ''}
+          inset={inset}
+          endRef={end}
+          onFollowing={setFollowing}
+          onReply={replyTo}
+          onQuote={quote}
+          onFork={fork}
+        />
+      )}
+      {/* The chat runs on under the composer; only the composer itself takes the pointer. */}
+      <div ref={composer} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-4 sm:pt-2 sm:pb-5">
+        <div className="mx-auto w-full max-w-[46rem] px-4">
+          <div className="pointer-events-auto relative">
+            {!empty && <ChatEndPill shown={!following} queued={timeline.queued.length} onClick={() => end.current?.scrollToEnd()} />}
+            {!empty && error && (
+              <div className="glass mx-auto mb-2 w-fit max-w-full rounded-lg px-2 py-0.5">
+                <ChatNotice text={error} error />
+              </div>
+            )}
+            <ThreadComposer inputRef={input} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
-        )}
-        <ThreadComposer inputRef={input} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+        </div>
       </div>
     </div>
   )
