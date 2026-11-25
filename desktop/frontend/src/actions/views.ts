@@ -97,7 +97,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   },
   {
     id: 'digest',
-    label: 'Weekly digest',
+    label: 'News',
     group: 'App',
     uiCommand: 'digest',
     run: layout.toggleDigest,

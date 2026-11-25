@@ -19,7 +19,7 @@ export function useDigestToasts() {
     const { pushToast, dismissToast, openDigest } = latest.current
     const key = pushToast({
       tone: 'info',
-      text: `Weekly digest: ${fresh} new ${fresh === 1 ? 'item' : 'items'}`,
+      text: `News: ${fresh} new ${fresh === 1 ? 'item' : 'items'}`,
       action: {
         label: 'Open',
         run() {

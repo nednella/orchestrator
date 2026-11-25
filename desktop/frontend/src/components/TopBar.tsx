@@ -30,7 +30,7 @@ export function TopBar() {
       </div>
       <div className="flex flex-none items-center gap-0.5" style={noDrag}>
         <TitleBarButton label={named('Stats', 'stats')} icon="chart" pressed={statsOpen} onClick={() => find('stats').run([])} />
-        <TitleBarButton label={named('Digest', 'digest')} icon="digest" pressed={digestOpen} unseen={digestUnseenCount} onClick={() => find('digest').run([])} />
+        <TitleBarButton label={named('News', 'digest')} icon="digest" pressed={digestOpen} unseen={digestUnseenCount} onClick={() => find('digest').run([])} />
         {update && (
           <button
             className={`${titleBarButton} relative`}
