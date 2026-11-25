@@ -570,7 +570,7 @@ func (h *host) interrupt(queued string) error {
 }
 
 // stillQueued drops each message that was queued when the interrupt request was written and that Claude no longer
-// holds: an interrupted turn can end without taking one in, and then no echo comes to end its wait.
+// holds, and logs it unsent: an interrupted turn can end without taking one in, and then no echo comes to end its wait.
 func (h *host) stillQueued(request string, held json.RawMessage) {
 	var ids []string
 	if err := json.Unmarshal(held, &ids); err != nil {
@@ -578,16 +578,29 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 		return
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if h.interrupted.id != request {
+		h.mu.Unlock()
 		return
 	}
+	var unsent []chat.Event
 	for _, id := range h.interrupted.queued {
-		if !slices.Contains(ids, id) {
-			delete(h.queued, id)
+		m, ok := h.queued[id]
+		if !ok || slices.Contains(ids, id) {
+			continue
 		}
+		delete(h.queued, id)
+		e, err := h.appendLocked(chat.Event{Kind: chat.KindUnsent, ID: id, Text: m.text})
+		if err != nil {
+			fmt.Fprintf(h.echo, "host: %v\n", err)
+			continue
+		}
+		unsent = append(unsent, e)
 	}
 	h.interrupted = interruptRequest{}
+	h.mu.Unlock()
+	for _, e := range unsent {
+		h.echoEvent(e)
+	}
 }
 
 // answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own.
@@ -858,6 +871,8 @@ func echoLine(e chat.Event) string {
 		s = "draft: " + e.Text
 	case chat.KindQueued:
 		s = "queued: " + e.Text
+	case chat.KindUnsent:
+		s = "not sent: " + e.Text
 	case chat.KindInterrupt:
 		s = "interrupted"
 	case chat.KindExit:

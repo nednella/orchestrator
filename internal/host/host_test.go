@@ -1486,6 +1486,9 @@ func TestInterruptDropsWhatClaudeNoLongerHolds(t *testing.T) {
 	if err := Interrupt(ctxT(t), h.socket); err != nil {
 		t.Fatal(err)
 	}
+	if e := waitKind(t, events, chat.KindUnsent); e.ID != lost || e.Text != "lost" {
+		t.Fatalf("event = %+v, want the dropped message logged unsent", e)
+	}
 	waitKind(t, events, chat.KindTurnEnd)
 	if err := SendNow(ctxT(t), h.socket, lost); err == nil {
 		t.Fatal("the message the interrupt dropped is still queued")
