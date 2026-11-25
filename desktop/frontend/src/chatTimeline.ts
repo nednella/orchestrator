@@ -213,14 +213,16 @@ function folded(turn: Turn, endedAt: number): TimelineItem[] {
 }
 
 // unfolded is the turn that runs: its parts in order, each run of calls as one work item, then the messages that have
-// only streamed so far.
+// only streamed so far. A call that waits on its approval shows only as the approval's card.
 function unfolded(turn: Turn, live: Record<string, string>, now: number): TimelineItem[] {
   const out: TimelineItem[] = []
+  const asked = new Set(turn.approvals.filter((a) => !a.answered && a.item).map((a) => a.call))
   for (const p of turn.parts) {
     if (p.kind !== 'call') {
       out.push(p.kind === 'reply' ? replyItem(p, live[p.id] ?? '') : p)
       continue
     }
+    if (asked.has(p.call)) continue
     const work = out.at(-1)
     if (work?.kind === 'work') {
       work.calls.push(p.call)

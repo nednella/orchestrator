@@ -139,7 +139,7 @@ test('unanswered approval expires at turn end', () => {
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')
   assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' })
-  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'approval'])
   assert.equal(only(waiting.items, 'approval')[0].expired, false)
 
   const ended = buildTimeline(log(...events, turnEnd(true)), {})
@@ -148,6 +148,16 @@ test('unanswered approval expires at turn end', () => {
   const [expired] = only(ended.items, 'approval')
   assert.deepEqual([expired.request, expired.tool, expired.expired], ['r1', 'Bash', true])
   assert.equal(only(ended.items, 'work')[0].calls[0].answer, undefined)
+})
+
+test('a call that waits on its approval shows only as the card', () => {
+  const asking = log(user('u1', 'Install it'), toolUse('t1', 'Read', { file_path: 'package.json' }), toolResult('t1', '{}'), toolUse('t2', 'Bash', { command: 'npm install' }), approval('r1', 'Bash', { command: 'npm install' }, 't2'))
+  const waiting = buildTimeline(asking, {})
+  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
+  assert.deepEqual(only(waiting.items, 'work')[0].calls.map((c) => c.id), ['t1'])
+  const allowed = buildTimeline(log(...asking, answer('r1', 'allow')), {})
+  assert.deepEqual(kinds(allowed.items), ['user', 'work'])
+  assert.deepEqual(only(allowed.items, 'work')[0].calls.map((c) => c.id), ['t1', 't2'])
 })
 
 test('question and plan items', () => {
