@@ -62,6 +62,7 @@ type fakeLine struct {
 	RequestID string `json:"request_id"`
 	Request   struct {
 		Subtype string `json:"subtype"`
+		Mode    string `json:"mode"`
 	} `json:"request"`
 	Response struct {
 		RequestID string `json:"request_id"`
@@ -127,6 +128,17 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		reply(strings.Join(texts, " "))
 		result(false)
 	}
+	// setMode answers a mode change as Claude does: a status line after the reply, and bypassPermissions refused, as
+	// for a Claude not started with it allowed.
+	setMode := func(l fakeLine) {
+		if l.Request.Mode == "bypassPermissions" {
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID,
+				"error": "Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions", "error_code": "bypass_not_launched"}})
+			return
+		}
+		print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"mode": l.Request.Mode}}})
+		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": l.Request.Mode})
+	}
 	fmt.Fprintln(out, fakeInit)
 
 	lines := make(chan fakeLine)
@@ -179,6 +191,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	for l := range lines {
 		switch l.Type {
 		case "control_request":
+			if l.Request.Subtype == "set_permission_mode" {
+				setMode(l)
+				continue
+			}
 			if l.Request.Subtype != "interrupt" {
 				print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID}})
 				continue
@@ -1515,5 +1531,94 @@ func TestInterruptDropsWhatClaudeNoLongerHolds(t *testing.T) {
 	after := sendMessage(t, h.socket, "after")
 	if e := waitKind(t, events, chat.KindUser); e.ID != after {
 		t.Fatalf("event = %+v, want the next message logged as the user's at once", e)
+	}
+}
+
+// modes are the permission modes the host's log holds, in order.
+func modes(t *testing.T, log string) []string {
+	t.Helper()
+	events, err := chat.ReadLog(log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, e := range events {
+		if e.Kind == chat.KindMode {
+			out = append(out, e.Text)
+		}
+	}
+	return out
+}
+
+func modeRequests(t *testing.T, stdin string) []string {
+	t.Helper()
+	var out []string
+	for _, l := range stdinLines(t, stdin) {
+		if strings.Contains(l, `"subtype":"set_permission_mode"`) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func TestModeSetsPermissionMode(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := SetMode(ctxT(t), h.socket, "plan"); err != nil {
+		t.Fatal(err)
+	}
+	if got := modeRequests(t, h.stdin); len(got) != 1 || !strings.Contains(got[0], `"mode":"plan"`) {
+		t.Fatalf("stdin = %q, want one request for plan", got)
+	}
+	if e := waitKind(t, events, chat.KindMode); e.Text != "plan" {
+		t.Fatalf("mode = %+v, want plan", e)
+	}
+	// After a turn, Claude's own report of the change has been read too.
+	sendMessage(t, h.socket, "hi")
+	waitKind(t, events, chat.KindTurnEnd)
+	if got := modes(t, h.log); !slices.Equal(got, []string{"plan"}) {
+		t.Errorf("logged modes = %q, want plan once", got)
+	}
+	eventually(t, "the mode in the pane", func() bool { return strings.Contains(h.echo.String(), "permission mode: plan") })
+}
+
+func TestModeIsRefusedDuringATurn(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	err := SetMode(ctxT(t), h.socket, "default")
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "Change access when the turn ends" {
+		t.Fatalf("err = %v, want the host's refusal", err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	if got := modeRequests(t, h.stdin); len(got) != 0 {
+		t.Errorf("stdin = %q, want no mode request", got)
+	}
+	if got := modes(t, h.log); len(got) != 0 {
+		t.Errorf("logged modes = %q, want none", got)
+	}
+}
+
+func TestModeReportsClaudesError(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	err := SetMode(ctxT(t), h.socket, "bypassPermissions")
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || !strings.Contains(refused.Reason, "was not launched with --dangerously-skip-permissions") {
+		t.Fatalf("err = %v, want Claude's reason", err)
+	}
+	sendMessage(t, h.socket, "hi")
+	waitKind(t, events, chat.KindTurnEnd)
+	if got := modes(t, h.log); len(got) != 0 {
+		t.Errorf("logged modes = %q, want none", got)
 	}
 }

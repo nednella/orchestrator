@@ -2,9 +2,9 @@ import type { ChatEvent, ChatImage, EventMap, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
-// What the mock knows of a thread: whether it has settled, a way to move its row's state as hooks would, and a way to
-// wake it when it has settled.
-export type MockThread = { settled: boolean; setState(state: State): void; wake(): void }
+// What the mock knows of a thread: whether it has settled, a way to move its row's state as hooks would, a way to
+// wake it when it has settled, and a way to follow the permission mode its Claude reports, as the sessions do.
+export type MockThread = { settled: boolean; setState(state: State): void; wake(): void; followMode(mode: string): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -271,6 +271,11 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const answered = Object.entries(input?.answers ?? {}).map(([q, a]) => `"${q}"="${a}"`)
     const allowed = { tool: 'added 12 packages in 3s', question: `The user answered: ${answered.join(', ')}.`, plan: 'User has approved your plan. You can now start coding.' }
     append(id, { kind: 'tool_result', parent: asked?.parent, text: allow ? allowed[p.kind] : message.trim() || 'The user denied this tool call.', error: !allow })
+    // Claude leaves plan mode once its plan is approved, and reports it.
+    if (allow && p.kind === 'plan') {
+      mode(id, 'default')
+      t.followMode('default')
+    }
     t.setState('working')
     reply(id)
   }
@@ -433,5 +438,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  return { backend, seed, ask, fork, forget, end, start, breakLog, mediaURL }
+  // mode logs Claude's new permission mode, as the host does once Claude changes it.
+  const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
+
+  return { backend, seed, ask, fork, forget, end, start, mode, breakLog, mediaURL }
 }

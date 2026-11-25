@@ -8,6 +8,7 @@ type Backend = {
   SettleThread(id: string): Promise<void>
   ArchiveThread(id: string): Promise<void>
   WakeThread(id: string): Promise<Session>
+  SetAccess(id: string, access: Access): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
@@ -107,7 +108,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewThread', 'SettleThread', 'ArchiveThread', 'WakeThread', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'ArchiveThread', 'WakeThread', 'SetAccess', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -148,6 +149,7 @@ export const api = {
   settleThread: (id: string) => backend.SettleThread(id),
   archiveThread: (id: string) => backend.ArchiveThread(id),
   wakeThread: (id: string) => backend.WakeThread(id),
+  setAccess: (id: string, access: Access) => backend.SetAccess(id, access),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),

@@ -851,9 +851,10 @@ func CLIPath(t *testing.T) string {
 // AGENTOS_ISSUE, AGENTOS_SESSION and TMPDIR it was started with to <dir>/<session id, "/" as "_">.env and its arguments
 // to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
-// turn, an interrupt with a result that has an error, and any other control request with a success. The message
-// "ask" asks to run a Bash command instead and replies once answered, "slow" replies a second later, and "stream"
-// streams 200 deltas, "0 " to "199 ", before its reply.
+// turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
+// mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
+// once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, and
+// "leave plan" reports the mode default before its reply, as Claude does when it leaves plan mode itself.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
 // standIn is the path of the stand-in claude's file of the session with that extension.
@@ -911,11 +912,19 @@ while IFS= read -r line; do
 			i=$((i + 1))
 		done
 		reply ;;
+	*'"type":"user"'*'"text":"leave plan"'*)
+		printf '%s\n' "$init" '{"type":"system","subtype":"status","status":null,"permissionMode":"default"}'
+		reply ;;
 	*'"type":"user"'*)
 		printf '%s\n' "$init"
 		reply ;;
 	*'"type":"control_response"'*)
 		reply ;;
+	*'"subtype":"set_permission_mode"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+		mode=$(printf '%s' "$line" | sed -n 's/.*"mode":"\([^"]*\)".*/\1/p')
+		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"mode":"%s"}}}\n' "$id" "$mode"
+		printf '{"type":"system","subtype":"status","status":null,"permissionMode":"%s"}\n' "$mode" ;;
 	*'"subtype":"interrupt"'*)
 		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}' ;;
 	*'"type":"control_request"'*)
@@ -1007,6 +1016,7 @@ func (h *Harness) ShellClose(id string) error                      { return h.se
 func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
 func (h *Harness) ArchiveThread(id string) error                   { return h.sessions.ArchiveThread(id) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
+func (h *Harness) SetAccess(id, access string) error               { return h.sessions.SetAccess(id, access) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
 func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }
 func (h *Harness) AckPR(id string) error                           { return h.sessions.AckPR(id) }

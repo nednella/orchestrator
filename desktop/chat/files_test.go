@@ -136,6 +136,7 @@ func (f folderThread) ChatOf(id string) (sessions.Chat, error) {
 }
 func (folderThread) Chats() []sessions.Chat               { return nil }
 func (folderThread) TurnEnded(id string, e chatlog.Event) {}
+func (folderThread) AccessChanged(id, mode string)        {}
 func (folderThread) Wake(string) (sessions.Chat, error)   { return sessions.Chat{}, nil }
 
 func git(t *testing.T, dir string, args ...string) {

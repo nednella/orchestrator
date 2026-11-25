@@ -57,6 +57,11 @@ func TestControlRequestShapes(t *testing.T) {
 		`{"type":"control_request","request_id":"req_2","request":{"subtype":"interrupt"}}`)
 }
 
+func TestSetPermissionModeShape(t *testing.T) {
+	assertLine(t, SetPermissionMode("aos-3", "plan"),
+		`{"type":"control_request","request_id":"aos-3","request":{"subtype":"set_permission_mode","mode":"plan"}}`)
+}
+
 func TestPermissionAnswerShapes(t *testing.T) {
 	assertLine(t, Allow("ffd4", json.RawMessage(`{"command":"ls"}`)),
 		`{"type":"control_response","response":{"subtype":"success","request_id":"ffd4","response":{"behavior":"allow","updatedInput":{"command":"ls"}}}}`)

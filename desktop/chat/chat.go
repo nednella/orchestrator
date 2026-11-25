@@ -25,11 +25,13 @@ const (
 	startWait      = 3 * time.Second // for a watch that comes before Start
 )
 
-// Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id.
+// Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
+// AccessChanged follows the permission mode its Claude reports.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
 	TurnEnded(id string, e chatlog.Event)
+	AccessChanged(id, mode string)
 	Wake(id string) (sessions.Chat, error)
 }
 
@@ -267,13 +269,17 @@ func (f *follower) run(ctx context.Context) {
 	}
 }
 
-// take handles one event from the host's stream.
+// take handles one event from the host's stream. A mode in the log from before the follower started is not followed:
+// the thread may have started again since with another access.
 func (f *follower) take(e chatlog.Event) {
 	before := f.waiting()
 	f.track(e)
 	f.announce(before)
-	if e.Kind == chatlog.KindTurnEnd {
+	switch e.Kind {
+	case chatlog.KindTurnEnd:
 		f.chats.threads.TurnEnded(f.chat.ID, e)
+	case chatlog.KindMode:
+		f.chats.threads.AccessChanged(f.chat.ID, e.Text)
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)

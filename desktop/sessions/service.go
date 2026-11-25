@@ -72,6 +72,16 @@ func (v *Service) WakeThread(id string) (Session, error) {
 	return v.s.row(id)
 }
 
+// SetAccess gives the thread the access, read, supervised or full, between turns: a settled thread wakes with it, and a
+// change to or from full starts a live thread again under its id.
+func (v *Service) SetAccess(id, access string) error {
+	a, err := session.ParseAccess(access)
+	if err != nil {
+		return err
+	}
+	return v.s.SetAccess(id, a)
+}
+
 // ForkSession starts a thread that continues the conversation of the thread id up to its reply at, the uuid of the
 // reply's last block, as a new conversation.
 func (v *Service) ForkSession(id, at string) (Session, error) { return v.s.Fork(id, at) }

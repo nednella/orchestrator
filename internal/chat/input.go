@@ -44,6 +44,7 @@ type controlRequest struct {
 
 type requestBody struct {
 	Subtype string `json:"subtype"`
+	Mode    string `json:"mode,omitempty"`
 }
 
 type controlResponse struct {
@@ -99,6 +100,11 @@ func Initialize(id string) []byte {
 
 func Interrupt(id string) []byte {
 	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "interrupt"}})
+}
+
+// SetPermissionMode asks claude to change its permission mode, such as plan or default, as it runs.
+func SetPermissionMode(id, mode string) []byte {
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "set_permission_mode", Mode: mode}})
 }
 
 // Allow answers a can_use_tool request. Claude needs an object for updatedInput, so an absent input becomes {}.

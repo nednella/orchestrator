@@ -84,15 +84,15 @@ func (c Claude) Command(l Launch) []string {
 	if l.Browser {
 		allowed = append(slices.Clip(allowed), browserTool)
 	}
-	argv = append(argv, "--permission-mode", permissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
+	argv = append(argv, "--permission-mode", PermissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {
 		argv = append(argv, "--append-system-prompt", l.Prompt)
 	}
 	return argv
 }
 
-// permissionMode is claude's mode for the access. A level it does not know is Supervised, never more.
-func permissionMode(a session.Access) string {
+// PermissionMode is claude's mode for the access. A level it does not know is Supervised, never more.
+func PermissionMode(a session.Access) string {
 	switch a {
 	case session.Read:
 		return "plan"
@@ -100,6 +100,19 @@ func permissionMode(a session.Access) string {
 		return "bypassPermissions"
 	}
 	return "default"
+}
+
+// AccessOfMode is the access claude's permission mode gives, false for a mode agentos does not know.
+func AccessOfMode(mode string) (session.Access, bool) {
+	switch mode {
+	case "plan":
+		return session.Read, true
+	case "default", "acceptEdits":
+		return session.Supervised, true
+	case "bypassPermissions":
+		return session.Full, true
+	}
+	return "", false
 }
 
 // Env sets claude's temp folder to the session's own.

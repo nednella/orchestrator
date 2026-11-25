@@ -2010,6 +2010,157 @@ func (s *Sessions) Settle(id string) error {
 	return nil
 }
 
+var errAccessDuringTurn = errors.New("Change access when the turn ends")
+
+// accessChange is what is left to do once the thread's new access is checked.
+type accessChange int
+
+const (
+	accessDone    accessChange = iota // the access is recorded, or was the thread's already
+	accessLive                        // Claude changes its permission mode as it runs
+	accessRestart                     // the thread settled with the new access and wakes with it
+)
+
+// SetAccess gives the thread id the access between turns. A settled thread starts with it at its next wake. A live one
+// changes as it runs between Read and Supervised; a change to or from Full starts it again under the same id, resuming
+// its conversation, since Claude takes bypassPermissions only at its start.
+func (s *Sessions) SetAccess(id string, access session.Access) error {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return err
+	}
+	if name.IsShell() {
+		return errNotSession
+	}
+	change, err := s.checkAccess(name, access)
+	switch {
+	case err != nil:
+		return err
+	case change == accessRestart:
+		_, err := s.wakeOrJoin(id, "")
+		return err
+	case change == accessLive:
+		return s.changeMode(name, access)
+	}
+	return nil
+}
+
+// checkAccess records the access of a settled thread, settles a live one that must start again for it, and refuses a
+// thread that is in a turn. It holds createMu, so neither a refresh nor a wake comes between the check and the settle.
+func (s *Sessions) checkAccess(name session.Name, access session.Access) (accessChange, error) {
+	id := name.String()
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	s.mu.Lock()
+	in, live := term.Info{}, false
+	if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
+		in, live = s.info[i], true
+	}
+	e, settled := s.ended[id]
+	old, archived, state := s.isOld(id), s.archived[id], s.records[id].State
+	s.mu.Unlock()
+	switch {
+	case archived:
+		return accessDone, fmt.Errorf("Thread %s is archived", id)
+	case old || settled && !e.info.Hosted:
+		return accessDone, fmt.Errorf("Thread %s ran in a terminal; its access cannot change", id)
+	case settled:
+		return accessDone, s.settledAccess(id, access)
+	case !live:
+		return accessDone, fmt.Errorf("No thread %s", id)
+	case holdsPrompts(state):
+		return accessDone, errAccessDuringTurn
+	case in.Access == access:
+		return accessDone, nil
+	case in.Access != session.Full && access != session.Full:
+		return accessLive, nil
+	}
+	if err := s.Settle(id); err != nil {
+		return accessDone, err
+	}
+	return accessRestart, s.settledAccess(id, access)
+}
+
+// settledAccess records the settled thread's access in its state file, where its next wake reads it. It takes mu.
+func (s *Sessions) settledAccess(id string, access session.Access) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.ended[id]
+	if !ok {
+		return fmt.Errorf("Thread %s did not settle", id)
+	}
+	if e.info.Access == access {
+		return nil
+	}
+	before := e.info.Access
+	e.info.Access = access
+	if err := s.writeState(e.record()); err != nil {
+		e.info.Access = before
+		return fmt.Errorf("saving the thread's access: %w", err)
+	}
+	s.sync()
+	return nil
+}
+
+// changeMode changes the live thread's access as Claude runs, through its host, which refuses it during a turn.
+func (s *Sessions) changeMode(name session.Name, access session.Access) error {
+	ctx, socket := s.context(), s.hostSocket(name)
+	ready, cancel := context.WithTimeout(ctx, hostStarting)
+	err := host.Ready(ready, socket)
+	cancel()
+	if err == nil {
+		err = host.SetMode(ctx, socket, agent.PermissionMode(access))
+	}
+	if err != nil {
+		log.Printf("agentos: thread %s did not change its access to %s: %v", name, access, err)
+		if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+			return errors.New(refused.Reason)
+		}
+		return fmt.Errorf("Thread %s did not change its access", name)
+	}
+	return s.liveAccess(name, access)
+}
+
+// AccessChanged follows a permission mode the live thread's Claude reports: the owner's change, or Claude's own, as when
+// the owner approves its plan and it leaves plan mode to write.
+func (s *Sessions) AccessChanged(id, mode string) {
+	access, ok := agent.AccessOfMode(mode)
+	name, err := session.ParseName(id)
+	if !ok || err != nil {
+		log.Printf("agentos: thread %s reports a permission mode agentos does not know: %q", id, mode)
+		return
+	}
+	if err := s.liveAccess(name, access); err != nil {
+		log.Printf("agentos: recording the access of thread %s: %v", id, err)
+	}
+}
+
+// liveAccess keeps the live thread's access where its start choice is kept, its tmux session and its state file.
+func (s *Sessions) liveAccess(name session.Name, access session.Access) error {
+	s.mu.Lock()
+	i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name })
+	same := i >= 0 && s.info[i].Access == access
+	s.mu.Unlock()
+	if i < 0 || same {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
+	defer cancel()
+	if err := s.tmux.SetAccess(ctx, name, access); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.info {
+		if s.info[i].Name == name {
+			s.info[i].Access = access
+			s.saveIdentity(s.info[i])
+			s.sync()
+		}
+	}
+	return nil
+}
+
 func (s *Sessions) Rename(id, title string) error {
 	name, err := session.ParseName(id)
 	if err != nil {

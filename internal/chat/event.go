@@ -27,7 +27,13 @@ const (
 	KindStillQueued Kind = "still_queued"
 	// KindUnsent is a queued message the host dropped because Claude no longer holds it: it will not be sent.
 	KindUnsent Kind = "unsent"
-	KindExit   Kind = "exit"
+	// KindMode is Claude's permission mode, in Text, once it changes: at the owner's ask, or by Claude itself, as when
+	// the owner approves its plan.
+	KindMode Kind = "mode"
+	// KindReply is Claude's reply to a control request of the host's, by its request ID; Error and Text say that it
+	// failed and why. The host consumes it and never logs it.
+	KindReply Kind = "reply"
+	KindExit  Kind = "exit"
 )
 
 // Event is one entry of a chat's log. At is unix milliseconds.

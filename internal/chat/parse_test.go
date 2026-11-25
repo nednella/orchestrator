@@ -239,7 +239,52 @@ func TestParseInterruptReplyListsWhatIsStillQueued(t *testing.T) {
 	if err != nil || len(events) != 1 || events[0].Kind != KindStillQueued || string(events[0].Input) != `["2222"]` {
 		t.Fatalf("got %+v, %v", events, err)
 	}
-	if events, _ := Parse([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"i3","response":{}}}`)); len(events) != 0 {
-		t.Fatalf("an older claude's empty reply gave %+v, want none", events)
+	if events, _ := Parse([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"i3","response":{}}}`)); len(events) != 1 || events[0].Kind != KindReply {
+		t.Fatalf("an older claude's empty reply gave %+v, want a plain reply", events)
+	}
+}
+
+func TestParseModeChange(t *testing.T) {
+	events := parseFile(t, "mode.jsonl")
+	var replies, modes []Event
+	for _, e := range events {
+		switch e.Kind {
+		case KindReply:
+			if strings.HasPrefix(e.ID, "mode-") {
+				replies = append(replies, e)
+			}
+		case KindMode:
+			modes = append(modes, e)
+		}
+	}
+	if len(replies) != 3 || replies[0].ID != "mode-1" || replies[0].Error || replies[1].ID != "mode-2" || replies[1].Error {
+		t.Fatalf("want a plain reply to mode-1 and mode-2, got %+v", replies)
+	}
+	if r := replies[2]; r.ID != "mode-3" || !r.Error || !strings.Contains(r.Text, "bypassPermissions") {
+		t.Errorf("want mode-3 refused with Claude's reason, got %+v", r)
+	}
+	if len(modes) != 2 || modes[0].Text != "default" || modes[1].Text != "plan" {
+		t.Errorf("want the modes default then plan, got %+v", modes)
+	}
+}
+
+func TestParsePlanExit(t *testing.T) {
+	events := parseFile(t, "planexit.jsonl")
+	exit := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindApproval && e.Tool == "ExitPlanMode" })
+	if exit < 0 {
+		t.Fatal("no ExitPlanMode approval")
+	}
+	if e, ok := first(events[:exit], KindMode); ok {
+		t.Errorf("a mode before the plan was approved: %+v", e)
+	}
+	if e, ok := first(events[exit:], KindMode); !ok || e.Text != "default" {
+		t.Errorf("want the mode default after the plan, got %+v (%v)", e, ok)
+	}
+}
+
+func TestParseStatusWithoutAModeGivesNone(t *testing.T) {
+	events, err := Parse([]byte(`{"type":"system","subtype":"status","status":"requesting","session_id":"s"}`))
+	if err != nil || len(events) != 0 {
+		t.Errorf("got %+v, %v", events, err)
 	}
 }

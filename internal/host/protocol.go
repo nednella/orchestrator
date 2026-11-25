@@ -10,6 +10,7 @@ const (
 	opDraft     = "draft"
 	opInterrupt = "interrupt"
 	opAnswer    = "answer"
+	opMode      = "mode"
 	opSubscribe = "subscribe"
 )
 
@@ -22,6 +23,7 @@ type request struct {
 	Message string          `json:"message,omitempty"`
 	Input   json.RawMessage `json:"input,omitempty"`
 	After   int64           `json:"after,omitempty"`
+	Mode    string          `json:"mode,omitempty"`
 }
 
 type reply struct {

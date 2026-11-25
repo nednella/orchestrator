@@ -119,6 +119,20 @@ func TestAccessFlags(t *testing.T) {
 	}
 }
 
+func TestAccessOfModeUndoesPermissionMode(t *testing.T) {
+	for _, a := range []session.Access{session.Read, session.Supervised, session.Full} {
+		if got, ok := AccessOfMode(PermissionMode(a)); !ok || got != a {
+			t.Errorf("%s: AccessOfMode(%q) = %q, %v", a, PermissionMode(a), got, ok)
+		}
+	}
+	if got, ok := AccessOfMode("acceptEdits"); !ok || got != session.Supervised {
+		t.Errorf("acceptEdits = %q, %v, want Supervised", got, ok)
+	}
+	if got, ok := AccessOfMode("auto"); ok {
+		t.Errorf("a mode agentos does not know gave %q", got)
+	}
+}
+
 func TestClaudeForkFlags(t *testing.T) {
 	argv := Claude{Exe: "/x"}.Command(Launch{Resume: "abc", ForkAt: "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", Prompt: "p"})
 	want := append(append([]string{"--resume", "abc", "--fork-session", "--resume-session-at", "1203a261-38c2-4e41-b43b-07f6c4fdb1bd"}, supervised...), "--append-system-prompt", "p")

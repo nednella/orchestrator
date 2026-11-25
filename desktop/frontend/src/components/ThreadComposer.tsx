@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
+import { accessDisabled } from '../access'
 import { api, errorMessage } from '../api'
 import { commandMatches, commandToken, composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
@@ -14,6 +15,7 @@ import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
+import { ComposerAccessChip } from './ComposerAccessChip'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerPickList } from './ComposerPickList'
 import type { PickRow } from './ComposerPickList'
@@ -60,7 +62,7 @@ const fileRow = (path: string): PickRow => {
 }
 
 export function ThreadComposer({ inputRef: input, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
-  const { threadDraft, setThreadDraft, setDraftsSeen, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'report', 'pushToast')
+  const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
@@ -237,12 +239,15 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
         </>
       }
       right={
-        (model || effort) && (
-          <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-soft" title="The thread's model and reasoning effort">
-            {model && <span className="max-w-24 truncate">{model}</span>}
-            {effort && <span className="max-w-24 truncate text-dim">{effort}</span>}
-          </span>
-        )
+        <>
+          <ComposerAccessChip access={session.access} disabled={accessDisabled(timeline.turnOpen, timeline.pending !== null)} onAccess={(next) => report(() => setAccess(id, next))} />
+          {(model || effort) && (
+            <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-soft" title="The thread's model and reasoning effort">
+              {model && <span className="max-w-24 truncate">{model}</span>}
+              {effort && <span className="max-w-24 truncate text-dim">{effort}</span>}
+            </span>
+          )}
+        </>
       }
       sending={sending}
       stop={action === 'stop' && !sending ? { stopping, onStop } : undefined}

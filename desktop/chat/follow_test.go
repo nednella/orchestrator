@@ -24,6 +24,7 @@ type oneThread struct{ chat sessions.Chat }
 func (o oneThread) ChatOf(string) (sessions.Chat, error) { return o.chat, nil }
 func (o oneThread) Chats() []sessions.Chat               { return []sessions.Chat{o.chat} }
 func (o oneThread) TurnEnded(string, chatlog.Event)      {}
+func (o oneThread) AccessChanged(string, string)         {}
 func (o oneThread) Wake(string) (sessions.Chat, error)   { return o.chat, nil }
 
 // fakeHost answers subscribes on a unix socket: each one gets the next list of seqs, and the stream is closed after

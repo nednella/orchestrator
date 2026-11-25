@@ -74,6 +74,13 @@ func AnswerWith(ctx context.Context, socket, id string, input json.RawMessage) e
 	return err
 }
 
+// SetMode changes Claude's permission mode, such as plan or default, between turns. A refusal is Claude's own reason, or
+// the host's while a turn runs.
+func SetMode(ctx context.Context, socket, mode string) error {
+	_, err := call(ctx, socket, request{Op: opMode, Mode: mode})
+	return err
+}
+
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.
 func Subscribe(ctx context.Context, socket string, after int64, fn func(chat.Event)) error {
 	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after})

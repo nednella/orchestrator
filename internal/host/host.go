@@ -4,6 +4,7 @@ package host
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -102,6 +103,10 @@ type host struct {
 	queued map[string]queuedMessage
 	// interrupted is the latest interrupt that Claude has not answered yet.
 	interrupted interruptRequest
+	// replies are the mode requests written to Claude that wait on its reply, by request ID.
+	replies map[string]chan chat.Event
+	// mode is the permission mode the log holds last, "" until Claude reports one.
+	mode string
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -129,6 +134,7 @@ func Run(ctx context.Context, c Config) error {
 		subs:    map[*subscriber]struct{}{},
 		conns:   map[net.Conn]struct{}{},
 		queued:  map[string]queuedMessage{},
+		replies: map[string]chan chat.Event{},
 	}
 	defer h.shutdown(ln)
 
@@ -258,6 +264,12 @@ func (h *host) handleLine(line []byte) {
 		case chat.KindStillQueued:
 			h.stillQueued(e.ID, e.Input)
 			continue
+		case chat.KindReply:
+			h.replied(e)
+			continue
+		case chat.KindMode:
+			h.modeIs(e.Text)
+			continue
 		}
 		if _, err := h.publish(e); err != nil {
 			fmt.Fprintf(h.echo, "host: %v\n", err)
@@ -295,6 +307,10 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	case chat.KindExit:
 		h.exited = true
 		h.approvals = nil
+		for id, ch := range h.replies {
+			ch <- chat.Event{Kind: chat.KindReply, ID: id, Error: true, Text: errExited.Error()}
+			delete(h.replies, id)
+		}
 	}
 	for s := range h.subs {
 		select {
@@ -448,6 +464,8 @@ func (h *host) do(req request) (string, error) {
 		return "", h.interrupt("")
 	case opAnswer:
 		return "", h.answer(req.ID, req.Allow, req.Message, req.Input)
+	case opMode:
+		return "", h.setMode(req.Mode)
 	}
 	return "", fmt.Errorf("unknown op %q", req.Op)
 }
@@ -602,6 +620,87 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 	for _, e := range unsent {
 		h.echoEvent(e)
 	}
+}
+
+var errModeDuringTurn = errors.New("Change access when the turn ends")
+
+// setMode asks Claude to change its permission mode and logs the mode once Claude takes it. It is refused while a turn
+// runs, an approval waits or a queued message is still to run: a turn keeps the mode it started with. The request is
+// written under stdinMu, as a send is, so no message gets in between the check and the write.
+func (h *host) setMode(mode string) error {
+	if mode == "" {
+		return errors.New("mode needs a permission mode")
+	}
+	id := h.nextID()
+	got := make(chan chat.Event, 1)
+	h.stdinMu.Lock()
+	h.mu.Lock()
+	if h.exited {
+		h.mu.Unlock()
+		h.stdinMu.Unlock()
+		return errExited
+	}
+	if h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0 {
+		h.mu.Unlock()
+		h.stdinMu.Unlock()
+		return errModeDuringTurn
+	}
+	h.replies[id] = got
+	h.mu.Unlock()
+	err := h.writeLocked(chat.SetPermissionMode(id, mode))
+	h.stdinMu.Unlock()
+	if err != nil {
+		h.dropReply(id)
+		return err
+	}
+	select {
+	case r := <-got:
+		if r.Error {
+			return errors.New(cmp.Or(r.Text, "Claude did not change its mode"))
+		}
+	case <-time.After(requestTimeout):
+		h.dropReply(id)
+		return errors.New("Claude did not answer the mode change")
+	}
+	h.modeIs(mode)
+	return nil
+}
+
+// replied hands Claude's reply to the mode request that waits on it; a reply nothing waits on is dropped.
+func (h *host) replied(e chat.Event) {
+	h.mu.Lock()
+	ch, ok := h.replies[e.ID]
+	delete(h.replies, e.ID)
+	h.mu.Unlock()
+	if ok {
+		ch <- e
+	}
+}
+
+func (h *host) dropReply(id string) {
+	h.mu.Lock()
+	delete(h.replies, id)
+	h.mu.Unlock()
+}
+
+// modeIs logs Claude's permission mode when it is not the one the log holds last. Claude reports the change the host
+// asked for as well as its own, so the one the host logs on Claude's reply is not logged twice.
+func (h *host) modeIs(mode string) {
+	h.mu.Lock()
+	if mode == h.mode {
+		h.mu.Unlock()
+		return
+	}
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindMode, Text: mode})
+	if err == nil {
+		h.mode = mode
+	}
+	h.mu.Unlock()
+	if err != nil {
+		fmt.Fprintf(h.echo, "host: %v\n", err)
+		return
+	}
+	h.echoEvent(e)
 }
 
 // answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own and logs it, so the chat can show a question's answers.
@@ -880,6 +979,8 @@ func echoLine(e chat.Event) string {
 		s = "interrupted"
 	case chat.KindCompact:
 		s = "compacted"
+	case chat.KindMode:
+		s = "permission mode: " + e.Text
 	case chat.KindExit:
 		s = "claude exited"
 		if e.Text != "" {

@@ -19,6 +19,11 @@ export function accessOf(choice: AccessChoice): Access {
   return choice.level === 'read' ? 'read' : choice.write
 }
 
+// accessDisabled is why a thread's access cannot change now, "" when it can: a turn keeps the access it started with.
+export function accessDisabled(turnOpen: boolean, pending: boolean): string {
+  return turnOpen || pending ? 'Change access when the turn ends' : ''
+}
+
 // choiceOf is the chip's choice for an access. Read keeps Supervised under Write, so turning to Write never gives Full
 // access by itself.
 export function choiceOf(access: Access): AccessChoice {

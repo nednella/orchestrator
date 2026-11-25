@@ -83,6 +83,8 @@ type AgentosActions = {
   // archiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
   archiveThread(id: string): Promise<void>
   wakeThread(id: string): Promise<Session>
+  // setAccess gives the thread the access between turns; the row shows it once the sessions say so.
+  setAccess(id: string, access: Access): Promise<void>
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
   forkSession(id: string, at: string, draft?: string): Promise<Session>
@@ -741,6 +743,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async wakeThread(id) {
         return addSession(await api.wakeThread(id))
+      },
+      async setAccess(id, access) {
+        await api.setAccess(id, access)
       },
       async forkSession(id, at, draft = '') {
         const fork = await api.forkSession(id, at)

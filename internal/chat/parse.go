@@ -7,20 +7,21 @@ import (
 )
 
 type line struct {
-	Type         string          `json:"type"`
-	Subtype      string          `json:"subtype"`
-	SessionID    string          `json:"session_id"`
-	UUID         string          `json:"uuid"`
-	APIMessageID string          `json:"api_message_id"`
-	Event        json.RawMessage `json:"event"`
-	Message      json.RawMessage `json:"message"`
-	RequestID    string          `json:"request_id"`
-	Request      json.RawMessage `json:"request"`
-	IsError      bool            `json:"is_error"`
-	TotalCost    float64         `json:"total_cost_usd"`
-	IsReplay     bool            `json:"isReplay"`
-	Response     json.RawMessage `json:"response"`
-	Errors       []string        `json:"errors"`
+	Type           string          `json:"type"`
+	Subtype        string          `json:"subtype"`
+	SessionID      string          `json:"session_id"`
+	UUID           string          `json:"uuid"`
+	APIMessageID   string          `json:"api_message_id"`
+	Event          json.RawMessage `json:"event"`
+	Message        json.RawMessage `json:"message"`
+	RequestID      string          `json:"request_id"`
+	Request        json.RawMessage `json:"request"`
+	IsError        bool            `json:"is_error"`
+	TotalCost      float64         `json:"total_cost_usd"`
+	IsReplay       bool            `json:"isReplay"`
+	Response       json.RawMessage `json:"response"`
+	Errors         []string        `json:"errors"`
+	PermissionMode string          `json:"permissionMode"`
 }
 
 type block struct {
@@ -47,6 +48,10 @@ func Parse(data []byte) ([]Event, error) {
 			return []Event{{Kind: KindInit, ID: l.SessionID}}, nil
 		case "compact_boundary":
 			return []Event{{Kind: KindCompact}}, nil
+		case "status":
+			if l.PermissionMode != "" {
+				return []Event{{Kind: KindMode, Text: l.PermissionMode}}, nil
+			}
 		}
 	case "stream_event":
 		return parseStreamEvent(l)
@@ -178,14 +183,16 @@ func parseControlRequest(l line) ([]Event, error) {
 	return []Event{{Kind: KindApproval, ID: l.RequestID, Parent: req.ToolUseID, Tool: req.ToolName, Input: req.Input}}, nil
 }
 
-// parseControlResponse reads the reply to initialize, which lists the slash commands, and the reply to an interrupt,
-// which lists the messages claude still holds; other replies give none.
+// parseControlResponse reads the reply to initialize, which lists the slash commands, the reply to an interrupt, which
+// lists the messages claude still holds, and any other reply as a KindReply.
 func parseControlResponse(l line) ([]Event, error) {
 	if len(l.Response) == 0 {
 		return nil, nil
 	}
 	var r struct {
+		Subtype   string `json:"subtype"`
 		RequestID string `json:"request_id"`
+		Error     string `json:"error"`
 		Response  struct {
 			Commands    json.RawMessage `json:"commands"`
 			StillQueued json.RawMessage `json:"still_queued"`
@@ -200,5 +207,5 @@ func parseControlResponse(l line) ([]Event, error) {
 	case isArray(r.Response.StillQueued):
 		return []Event{{Kind: KindStillQueued, ID: r.RequestID, Input: r.Response.StillQueued}}, nil
 	}
-	return nil, nil
+	return []Event{{Kind: KindReply, ID: r.RequestID, Error: r.Subtype == "error", Text: r.Error}}, nil
 }

@@ -120,6 +120,10 @@ const details: Record<State, string[]> = {
 
 const order: Record<State, number> = { waiting: 0, idle: 1, working: 2, settled: 3 }
 
+// Claude's permission mode for each access, and the access each mode it reports gives, as the agent package has them.
+const modeOfAccess: Record<Access, string> = { read: 'plan', supervised: 'default', full: 'bypassPermissions' }
+const accessOfMode: Record<string, Access> = { plan: 'read', default: 'supervised', acceptEdits: 'supervised', bypassPermissions: 'full' }
+
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)]
 
 function toBase64(text: string): string {
@@ -419,8 +423,16 @@ export function createMock(params: URLSearchParams) {
     if (archived.has(id)) throw `Thread ${id} is archived`
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
-    return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s) }
+    return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
   })
+
+  // followMode records the access Claude's permission mode gives, as the sessions do.
+  function followMode(s: Session, mode: string) {
+    const access = accessOfMode[mode]
+    if (!access || access === s.access) return
+    s.access = access
+    publish()
+  }
 
   // wake starts a settled thread again under its id, as the sessions do.
   function wake(s: Session) {
@@ -904,6 +916,21 @@ export function createMock(params: URLSearchParams) {
       chats.end(id)
       setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
+    },
+    // SetAccess acts as the sessions do: a settled thread wakes with it, Read and Supervised change as Claude runs, and
+    // a change to or from Full starts the thread again.
+    SetAccess: async (id: string, access: Access) => {
+      if (!['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
+      const s = find(id)
+      if (!s.hosted) throw `Thread ${id} ran in a terminal; its access cannot change`
+      if (s.state === 'working' || s.state === 'waiting') throw 'Change access when the turn ends'
+      if (s.access === access) return
+      if (s.state !== 'settled' && (s.access === 'full' || access === 'full')) {
+        chats.end(id)
+        chats.start(id)
+      } else if (s.state !== 'settled') chats.mode(id, modeOfAccess[access])
+      s.access = access
+      publish()
     },
     RenameSession: async (id: string, title: string) => {
       find(id).title = title

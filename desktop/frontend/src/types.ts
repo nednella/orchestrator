@@ -336,6 +336,7 @@ export type ChatKind =
   | 'interrupt'
   | 'commands'
   | 'compact'
+  | 'mode'
   | 'exit'
 
 // ChatEvent is one event of a thread's chat; a field the event does not use is left out.
