@@ -1651,7 +1651,8 @@ type ChildOptions struct {
 // CreateChild starts a thread for the task the live thread o.Parent delegates, and gives it the task as its first
 // message before it returns, so the child's chat holds the task once the parent has its id. A child never gets more
 // access than its parent has. A parent too many delegations deep, or with too many children running, starts none, and
-// so does a parent that asks for an issue that has a thread.
+// so does a parent that asks for an issue that has a thread, or for its own folder while a clean-up of it runs, which
+// may be removing that folder.
 func (s *Sessions) CreateChild(ctx context.Context, o ChildOptions) (Session, error) {
 	task := strings.TrimSpace(o.Task)
 	if task == "" {
@@ -1723,6 +1724,9 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	case WhereFolder:
 		start.Place = InProject
 		if own {
+			if s.life.CleaningUp(o.Parent) {
+				return Session{}, "", fmt.Errorf("Thread %d is being cleaned up; start a child in its folder when that ends", s.Number(o.Parent))
+			}
 			start.dir = parent.Path
 		}
 	case WhereWorktree:

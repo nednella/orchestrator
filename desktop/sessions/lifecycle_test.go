@@ -1373,6 +1373,31 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 	}
 }
 
+func TestFolderChildIsRefusedDuringACleanup(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	pushWork(t, parent.Worktree)
+	h.Hook(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
+	eventually(t, "idle", func() bool { return stateOf(h, parent.ID) == "idle" })
+	release, done := heldCleanup(t, h, parent.ID)
+
+	_, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "Read the code", Access: parent.Access, Where: sessions.WhereFolder})
+	if want := fmt.Sprintf("Thread %d is being cleaned up; start a child in its folder when that ends", parent.N); err == nil || err.Error() != want {
+		t.Errorf("child = %v, want %q", err, want)
+	}
+	release()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, parent.ID)() || exists(parent.Worktree) {
+		t.Errorf("the clean-up did not finish: worktree there %v", exists(parent.Worktree))
+	}
+	if list := h.Sessions().List(); len(list) != 1 {
+		t.Errorf("a child started: %+v", list)
+	}
+}
+
 func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
