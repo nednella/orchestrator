@@ -1,23 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useCopied } from '../useCopied'
 
 type ChatCodeBlockProps = { language: string; code: string }
 
 export function ChatCodeBlock({ language, code }: ChatCodeBlockProps) {
-  const { report } = useAgentos('report')
-  const [copied, setCopied] = useState(false)
-
-  const timer = useRef<ReturnType<typeof setTimeout>>()
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  const copy = () => {
-    report(async () => {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), 1500)
-    })
-  }
+  const [copied, copy] = useCopied(code)
 
   return (
     <div className="chat-code">

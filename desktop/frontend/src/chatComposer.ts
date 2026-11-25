@@ -33,3 +33,25 @@ export const sendText = (markdown: string) => markdown.replace(/\s+$/, '')
 
 // lastTurnEnd is the seq of the latest event that ended a turn: a stop asked for after it waits for the next one.
 export const lastTurnEnd = (events: ChatEvent[]) => events.findLast((e) => e.kind === 'turn_end' || e.kind === 'exit')?.seq ?? 0
+
+const quoted = (text: string) => text.split('\n').map((line) => `> ${line}`).join('\n')
+
+// quoteMarkdown is a selection as a markdown quote for the composer: nothing for an empty one.
+export const quoteMarkdown = (text: string) => (text.trim() === '' ? '' : `${quoted(text.replace(/\s+$/, ''))}\n\n`)
+
+const REPLY_LINES = 3
+const REPLY_CHARS = 300
+
+// replyPrefix is the start of a message that answers another: the first lines of that message, quoted.
+export function replyPrefix(text: string): string {
+  const head = text.trim().split('\n').slice(0, REPLY_LINES).join('\n')
+  return quoteMarkdown(head.length > REPLY_CHARS ? `${head.slice(0, REPLY_CHARS - 1)}…` : head)
+}
+
+const LABEL_CHARS = 80
+
+// replyLabel is what the reply chip shows of the message: its first line.
+export function replyLabel(text: string): string {
+  const line = text.trim().split('\n')[0]
+  return line.length > LABEL_CHARS ? `${line.slice(0, LABEL_CHARS - 1)}…` : line
+}

@@ -6,21 +6,22 @@ import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatNotice } from './ChatNotice'
 import { ChatPlanCard } from './ChatPlanCard'
 import { ChatQuestionCard } from './ChatQuestionCard'
+import { ChatQuoteButton } from './ChatQuoteButton'
 import { ChatReplyRow } from './ChatReplyRow'
 import { ChatUserRow } from './ChatUserRow'
 import { ChatWorkRow } from './ChatWorkRow'
 import { Icon } from './Icon'
 
-type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string }
+type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onReply(text: string): void; onQuote(text: string): void }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(item: TimelineItem, thread: string, folder: string) {
+function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (text: string) => void) {
   switch (item.kind) {
     case 'user':
-      return <ChatUserRow text={item.text} />
+      return <ChatUserRow text={item.text} onReply={onReply} />
     case 'reply':
-      return <ChatReplyRow text={item.text} streaming={item.streaming} />
+      return <ChatReplyRow text={item.text} streaming={item.streaming} onReply={onReply} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
     case 'work':
@@ -34,7 +35,7 @@ function rowOf(item: TimelineItem, thread: string, folder: string) {
   }
 }
 
-export function ChatTimeline({ id, items, folder }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
   const [unseen, setUnseen] = useState(() => hasUnseen(kept, items.length))
@@ -106,11 +107,12 @@ export function ChatTimeline({ id, items, folder }: ChatTimelineProps) {
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items[row.index], id, folder)}
+              {rowOf(items[row.index], id, folder, onReply)}
             </div>
           ))}
         </div>
       </div>
+      <ChatQuoteButton onQuote={onQuote} />
       {unseen && (
         <button className="btn chat-jump absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full" onClick={jump}>
           <Icon name="arrow-down" size={12} />

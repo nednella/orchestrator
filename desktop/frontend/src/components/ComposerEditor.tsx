@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
-import type { UseEditorOptions } from '@tiptap/react'
+import type { JSONContent, UseEditorOptions } from '@tiptap/react'
 import { Node as DocNode, Slice } from '@tiptap/pm/model'
 import { composerSchema, draftOf, fromPlainText } from '../composerMarkdown'
 import type { ComposerDraft } from '../composerMarkdown'
@@ -12,6 +12,7 @@ export type ComposerInput = {
   focus(): void
   blur(): void
   insert(text: string): void
+  insertDoc(doc: JSONContent): void
   deleteBefore(length: number): void
 }
 
@@ -88,6 +89,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
       focus: () => editor?.commands.focus(),
       blur: () => editor?.commands.blur(),
       insert: (text) => editor?.commands.insertContent({ type: 'text', text }),
+      insertDoc: (doc) => editor?.commands.insertContent(doc.content ?? []),
       deleteBefore: (length) => {
         const at = editor?.state.selection.from ?? 0
         editor?.commands.deleteRange({ from: at - length, to: at })

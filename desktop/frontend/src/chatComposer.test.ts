@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { composerAction, escapeAction, lastTurnEnd, sendText, unseenDrafts } from './chatComposer.ts'
+import { composerAction, escapeAction, lastTurnEnd, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
 import type { ChatEvent, Pending } from './types.ts'
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'>
@@ -83,4 +83,25 @@ test('lastTurnEnd is the seq of the latest turn end or exit', () => {
   assert.equal(lastTurnEnd(log(user('u1', 'Hi'))), 0)
   assert.equal(lastTurnEnd(log(user('u1', 'Hi'), { kind: 'turn_end' }, user('u2', 'Again'))), 2)
   assert.equal(lastTurnEnd(log(user('u1', 'Hi'), { kind: 'turn_end' }, { kind: 'exit' })), 3)
+})
+
+test('quote marks every line', () => {
+  assert.equal(quoteMarkdown('one\ntwo\n\nthree\n'), '> one\n> two\n> \n> three\n\n')
+})
+
+test('reply prefix clips to three lines and 300 chars', () => {
+  assert.equal(replyPrefix('a\nb\nc\nd'), '> a\n> b\n> c\n\n')
+  const long = replyPrefix('x'.repeat(500))
+  assert.equal(long, `> ${'x'.repeat(299)}…\n\n`)
+})
+
+test('empty selection quotes nothing', () => {
+  assert.equal(quoteMarkdown(''), '')
+  assert.equal(quoteMarkdown(' \n '), '')
+  assert.equal(replyPrefix(''), '')
+})
+
+test('reply label is the first line, clipped to 80 chars', () => {
+  assert.equal(replyLabel('\nfirst\nsecond'), 'first')
+  assert.equal(replyLabel('y'.repeat(100)), `${'y'.repeat(79)}…`)
 })

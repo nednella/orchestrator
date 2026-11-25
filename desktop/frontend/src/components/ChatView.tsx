@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { escapeAction, lastTurnEnd } from '../chatComposer'
+import { quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
+import { fromMarkdown } from '../composerMarkdown'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
 import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
 import { Loading } from './Loading'
+import type { ComposerInput } from './ComposerEditor'
 import { Notice } from './Notice'
 import { ThreadComposer } from './ThreadComposer'
 
@@ -44,6 +47,24 @@ export function ChatView({ session }: ChatViewProps) {
       }),
     )
   }
+  const input = useRef<ComposerInput>(null)
+  // The message the next send answers, kept with the thread it was chosen in.
+  const [replying, setReplying] = useState<{ thread: string; text: string } | null>(null)
+  const reply = replying?.thread === session.id ? replying.text : null
+  const replyTo = useCallback(
+    (text: string | null) => {
+      setReplying(text === null ? null : { thread: session.id, text })
+      if (text !== null) input.current?.focus()
+    },
+    [session.id],
+  )
+  const quote = useCallback((selection: string) => {
+    const quoted = fromMarkdown(quoteMarkdown(selection))
+    // The empty paragraph after the quote puts the caret outside it.
+    input.current?.insertDoc({ ...quoted, content: [...(quoted.content ?? []), { type: 'paragraph' }] })
+    input.current?.focus()
+  }, [])
+
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
 
@@ -64,14 +85,14 @@ export function ChatView({ session }: ChatViewProps) {
       {empty && loading && <Loading />}
       {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
-      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} />}
+      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onReply={replyTo} onQuote={quote} />}
       <div className="mx-auto w-full max-w-[46rem] px-4 pb-4">
         {!empty && error && (
           <div className="pb-2">
             <ChatNotice text={error} error />
           </div>
         )}
-        <ThreadComposer session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+        <ThreadComposer inputRef={input} reply={reply} onReply={replyTo} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
       </div>
     </div>
   )
