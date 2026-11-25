@@ -415,7 +415,7 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 		reload = reload || o.queue
 	}
 	for i, f := range ends {
-		l.sessions.whenTurnEnds(f.id, func() { l.end(ctx, f.id, outcomes[i]) })
+		l.sessions.whenTurnEnds(f.id, func() { l.end(f.id, outcomes[i]) })
 	}
 	for _, w := range wakes {
 		go l.sessions.wake(ctx, w.target, fromApp(w.prompt))
@@ -427,15 +427,16 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 	return treeErr, prErr
 }
 
-// end settles a thread whose PR merged or closed, unless it went meanwhile, and cleans up after it when o says so.
-func (l *Lifecycle) end(ctx context.Context, id string, o outcome) {
+// end settles a thread whose PR merged or closed, unless it went meanwhile, and cleans up after it when o says so. It
+// runs under the app's context, not the refresh's: a watcher that stops after the refresh must not stop the clean-up.
+func (l *Lifecycle) end(id string, o outcome) {
 	if o.settle && l.sessions.Has(id) {
 		if err := l.sessions.Settle(id); err != nil {
 			fmt.Fprintf(os.Stderr, "agentos: settling thread %s after its PR: %v\n", id, err)
 		}
 	}
 	if o.auto {
-		l.autoCleanup(ctx, id)
+		l.autoCleanup(l.sessions.context(), id)
 	}
 }
 
