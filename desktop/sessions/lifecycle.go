@@ -902,11 +902,10 @@ func (l *Lifecycle) worktrees(ctx context.Context, dir string) (worktrees, error
 // rebasingBranch is the branch a rebase in the worktree is on, or "" when no rebase runs there or
 // git cannot read the worktree, as when its folder is gone.
 func (l *Lifecycle) rebasingBranch(ctx context.Context, worktree string) string {
-	out, err := l.git(ctx, worktree, "rev-parse", "--path-format=absolute", "--git-dir")
+	gitDir, _, err := l.gitDirs(ctx, worktree)
 	if err != nil {
 		return ""
 	}
-	gitDir := strings.TrimSpace(string(out))
 	for _, state := range []string{"rebase-merge", "rebase-apply"} {
 		if head, err := os.ReadFile(filepath.Join(gitDir, state, "head-name")); err == nil {
 			return strings.TrimPrefix(strings.TrimSpace(string(head)), "refs/heads/")
@@ -1703,17 +1702,20 @@ func (l *Lifecycle) workBranch(ctx context.Context, proj project.Project, cwd st
 	if err != nil || branch == "" || branch == l.mainBranch(ctx, proj.Dir) {
 		return "", false, false
 	}
-	gitDirs := func(dir string) (gitDir, common string) {
-		out, err := l.git(ctx, dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
-		if err != nil {
-			return "", ""
-		}
-		gitDir, common, _ = strings.Cut(strings.TrimSpace(string(out)), "\n")
-		return gitDir, common
-	}
-	gitDir, here := gitDirs(cwd)
-	_, project := gitDirs(proj.Dir)
+	gitDir, here, _ := l.gitDirs(ctx, cwd)
+	_, project, _ := l.gitDirs(ctx, proj.Dir)
 	return branch, samePath(gitDir, here), here != "" && samePath(here, project)
+}
+
+// gitDirs are the git folder of the checkout at dir, `<repo>/.git/worktrees/<name>` for a linked
+// worktree, and the repo's common one, `<repo>/.git`.
+func (l *Lifecycle) gitDirs(ctx context.Context, dir string) (gitDir, common string, err error) {
+	out, err := l.git(ctx, dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+	if err != nil {
+		return "", "", fmt.Errorf("finding the git folders of %s: %w", dir, err)
+	}
+	gitDir, common, _ = strings.Cut(strings.TrimSpace(string(out)), "\n")
+	return gitDir, common, nil
 }
 
 // mainBranch is the branch origin calls its default, or main when origin does not say.

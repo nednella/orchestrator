@@ -151,11 +151,10 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 // linkedGitDir is the worktree's own git folder, `<repo>/.git/worktrees/<name>`. The project
 // folder's own checkout is never a worktree agentos made, so it is an error.
 func (l *Lifecycle) linkedGitDir(ctx context.Context, worktree string) (string, error) {
-	out, err := l.git(ctx, worktree, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir")
+	gitDir, common, err := l.gitDirs(ctx, worktree)
 	if err != nil {
-		return "", fmt.Errorf("finding the git folder of %s: %w", worktree, err)
+		return "", err
 	}
-	gitDir, common, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
 	if gitDir == "" || samePath(gitDir, common) {
 		return "", fmt.Errorf("%s is not a linked worktree", worktree)
 	}
