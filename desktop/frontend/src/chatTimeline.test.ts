@@ -645,6 +645,15 @@ test("a message that denies a subagent's approval is its answer, not a turn of t
   assert.deepEqual([t.turnOpen, t.pending], [false, null])
 })
 
+test("a subagent's approval with no row of its own still shows, and waits", () => {
+  const unknown = buildTimeline([...asking.slice(0, -1), { ...from('gone', approval('r1', 'Write', { file_path: 'sub.txt' }, 's9')), seq: asking.length, at: 9_000 }], {}, 'main/t1')
+  assert.deepEqual(kinds(unknown.items), ['user', 'work', 'agent', 'approval'])
+  assert.equal(unknown.pending?.request, 'r1')
+  const nested = buildTimeline([...asking.slice(0, -1), ...log(from('a1', agentCall('n1', 'Look deeper')), from('n1', approval('r2', 'Bash', { command: 'ls' }, 's2')), message('msg_9', 'Still here.')).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
+  assert.deepEqual(kinds(nested.items), ['user', 'work', 'agent', 'approval', 'reply'], "a subagent's subagent asks under the row it shows in")
+  assert.equal(nested.pending?.request, 'r2')
+})
+
 test('an approval in a log from before the host named the subagent finds it by its call', () => {
   const unnamed = asking.map((e) => (e.kind === 'approval' ? { ...e, agent: undefined } : e))
   assert.deepEqual(kinds(buildTimeline(unnamed, {}).items), ['user', 'work', 'agent', 'approval'])

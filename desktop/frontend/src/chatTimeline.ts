@@ -240,8 +240,11 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     else d.item.error = true
   }
 
-  // agentApproval keeps a subagent's approval for its call, apart from the turns.
-  const agentApproval = (e: ChatEvent, agent: string) => {
+  // agentApproval keeps a subagent's approval for its call, apart from the turns. A subagent of a subagent asks under
+  // its parent's row, as its other events show.
+  const agentApproval = (e: ChatEvent, asker: string) => {
+    let agent = asker
+    while (!agents.has(agent) && agentOfCall.has(agent)) agent = agentOfCall.get(agent) ?? ''
     const a: Approval = { request: e.id ?? '', tool: e.tool ?? '', call: calls.get(e.parent ?? ''), answered: false, agent }
     a.item = { kind: 'approval', key: `approval-${a.request}`, at: e.at, request: a.request, tool: a.tool, input: e.input, expired: false }
     approvals.set(a.request, a)
@@ -252,7 +255,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     // A log from before the host named the subagent that asks names only the call.
     const asker = e.kind === 'approval' ? e.agent || agentOfCall.get(e.parent ?? '') : undefined
     if (asker) {
-      if (agents.has(asker)) agentApproval(e, asker)
+      agentApproval(e, asker)
       return
     }
     // A subagent's tool result finds its call as any other does, and its tasks are the thread's.
@@ -462,11 +465,15 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   const running = turn as Turn | null
   if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
-  // A subagent's approval shows after its row until it is answered.
-  for (const a of asked.filter((w) => w.agent).toReversed()) {
+  // A subagent's approval shows after its row until it is answered, or at the end when the chat has no row for it.
+  const unplaced: ApprovalItem[] = []
+  for (const a of asked.filter((w) => w.agent && !w.answered).toReversed()) {
     const at = items.findIndex((item) => item.kind === 'agent' && item.id === a.agent)
-    if (!a.answered && a.item && at >= 0) items.splice(at + 1, 0, a.item)
+    if (!a.item) continue
+    if (at >= 0) items.splice(at + 1, 0, a.item)
+    else unplaced.unshift(a.item)
   }
+  items.push(...unplaced)
   const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
   const waiting = asked.find(unanswered)
   return {
