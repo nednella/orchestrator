@@ -332,6 +332,7 @@ export type ChatKind =
   | 'turn_end'
   | 'draft'
   | 'queued'
+  | 'unsent'
   | 'interrupt'
   | 'commands'
   | 'exit'

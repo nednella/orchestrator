@@ -30,7 +30,9 @@ type Reply = { kind: 'reply'; key: string; at: number; id: string; blocks: strin
 type Part = Reply | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem
 // An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
 type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean }
-type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval[] }
+// unsent holds the not-sent notices logged during the turn: the host drops a message before the turn ends, and the
+// notice shows after the turn's own.
+type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval[]; unsent: Notice[] }
 
 const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'question', ExitPlanMode: 'plan' }
 
@@ -43,44 +45,39 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const approvals = new Map<string, Approval>()
   const requested = new Set<ToolCall>()
   const queued = new Map<string, QueuedMessage>()
-  const deliveredAt = new Map<string, number>()
-  events.forEach((e, i) => {
-    if (e.kind === 'user' && e.id) deliveredAt.set(e.id, i)
-  })
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
 
-  const open = (e: ChatEvent): Turn => (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [] })
+  const open = (e: ChatEvent): Turn => (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [], unsent: [] })
 
-  // close folds the turn into the items and gives back the approvals it left unanswered.
-  const close = (endedAt: number): Approval[] => {
-    if (!turn) return []
-    const left = turn.approvals.filter((a) => !a.answered)
-    items.push(...folded(turn, endedAt))
-    turn = null
-    return left
+  const unsent = (id: string, text: string, at: number): Notice => {
+    queued.delete(id)
+    return { kind: 'notice', key: `unsent-${id}`, at, text: `Not sent: ${firstLine(text)}`, error: false }
   }
 
-  // end closes the turn for good: what it left unanswered can no longer be answered, and a queued message Claude will
-  // not take in later is shown as not sent.
-  const end = (e: ChatEvent, index: number, notice: Omit<Notice, 'kind' | 'key' | 'at'> | null, dropQueued: boolean) => {
+  // close folds the turn into the items, then its notice and its not-sent notices, and gives back the approvals it
+  // left unanswered.
+  const close = (endedAt: number, notice: Notice | null = null): Approval[] => {
+    const t = turn as Turn | null
+    turn = null
+    if (t) items.push(...folded(t, endedAt))
+    if (notice) items.push(notice)
+    if (t) items.push(...t.unsent)
+    return t?.approvals.filter((a) => !a.answered) ?? []
+  }
+
+  // end closes the turn for good: what it left unanswered can no longer be answered.
+  const end = (e: ChatEvent, notice: Omit<Notice, 'kind' | 'key' | 'at'> | null) => {
     for (const a of turn?.approvals ?? []) {
       if (a.answered) continue
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
-    close(e.at)
-    if (notice) items.push({ kind: 'notice', key: `notice-${e.seq}`, at: e.at, ...notice })
-    if (!dropQueued) return
-    for (const q of queued.values()) {
-      if ((deliveredAt.get(q.id) ?? -1) > index) continue
-      queued.delete(q.id)
-      items.push({ kind: 'notice', key: `unsent-${q.id}`, at: e.at, text: `Not sent: ${firstLine(q.text)}`, error: false })
-    }
+    close(e.at, notice && { kind: 'notice', key: `notice-${e.seq}`, at: e.at, ...notice })
   }
 
-  events.forEach((e, i) => {
+  events.forEach((e) => {
     switch (e.kind) {
       case 'user': {
         // A message Claude takes in while it works splits the turn there.
@@ -93,6 +90,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'queued':
         if (e.id) queued.set(e.id, { id: e.id, text: e.text ?? '', files: e.files ?? [] })
         return
+      case 'unsent': {
+        if (!e.id || !queued.has(e.id)) return
+        const notice = unsent(e.id, queued.get(e.id)?.text ?? '', e.at)
+        if (turn) turn.unsent.push(notice)
+        else items.push(notice)
+        return
+      }
       case 'message': {
         const t = open(e)
         const id = e.id || `seq-${e.seq}`
@@ -153,15 +157,15 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'interrupt':
         if (turn) interrupted = true
         return
-      case 'turn_end': {
-        const stopped = interrupted
+      case 'turn_end':
+        end(e, e.error ? { text: interrupted ? 'Stopped' : 'The turn ended with an error', error: !interrupted } : null)
         interrupted = false
-        end(e, i, e.error ? { text: stopped ? 'Stopped' : 'The turn ended with an error', error: !stopped } : null, stopped)
         return
-      }
       case 'exit':
         interrupted = false
-        end(e, i, { text: 'Claude stopped', error: e.error ?? false }, true)
+        end(e, { text: 'Claude stopped', error: e.error ?? false })
+        // Claude is gone, so a queued message it did not take in will not be sent.
+        for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
       case 'commands':
         commands = Array.isArray(e.input) ? e.input.filter((c): c is Command => typeof c?.name === 'string') : []
@@ -208,7 +212,7 @@ function unfolded(turn: Turn, live: Record<string, string>, now: number): Timeli
   for (const [id, text] of Object.entries(live)) {
     if (!turn.parts.some((p) => p.kind === 'reply' && p.id === id)) out.push({ kind: 'reply', key: `reply-${id}`, at: now, id, text, streaming: true })
   }
-  return out
+  return [...out, ...turn.unsent]
 }
 
 function replyItem(r: Reply, streamed: string): TimelineItem {

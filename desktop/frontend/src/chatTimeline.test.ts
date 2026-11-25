@@ -209,18 +209,19 @@ test('queued until delivered', () => {
   assert.equal(delivered.turnOpen, true)
 })
 
-test('queued is not sent after an interrupt or an exit', () => {
-  const sent = log(user('u1', 'Slow job'), { kind: 'queued', id: 'q1', text: '\nRun the tests\nand lint' }, { kind: 'interrupt' })
-  const held = buildTimeline(sent, {})
-  assert.deepEqual(held.queued.map((q) => q.id), ['q1'], 'the turn has not ended yet')
+test('queued is not sent once the host drops it or Claude exits', () => {
+  const sent = log(user('u1', 'Slow job'), { kind: 'queued', id: 'q1', text: '\nRun the tests\nand lint' }, { kind: 'queued', id: 'q2', text: 'Then lint' }, { kind: 'interrupt' })
+  const held = buildTimeline(log(...sent, turnEnd(true)), {})
+  assert.deepEqual(held.queued.map((q) => q.id), ['q1', 'q2'], 'Claude runs what it still holds after the interrupt')
+  assert.deepEqual(only(held.items, 'notice').map((n) => n.text), ['Stopped'])
 
-  const dropped = buildTimeline(log(...sent, turnEnd(true)), {})
+  const dropping = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }), {})
+  assert.deepEqual(dropping.queued.map((q) => q.id), ['q2'])
+  assert.equal(dropping.items.at(-1)?.key, 'unsent-q1', 'the notice shows while the turn still runs')
+
+  const dropped = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }, turnEnd(true), user('q2', 'Then lint')), {})
   assert.deepEqual(dropped.queued, [])
   assert.deepEqual(only(dropped.items, 'notice').map((n) => n.text), ['Stopped', 'Not sent: Run the tests'])
-
-  const ranNext = buildTimeline(log(...sent, turnEnd(true), user('q1', 'Run the tests')), {})
-  assert.deepEqual(ranNext.queued, [])
-  assert.deepEqual(only(ranNext.items, 'notice').map((n) => n.text), ['Stopped'], 'a message Claude still held runs next')
 
   const exited = buildTimeline(log(user('u1', 'Slow job'), { kind: 'queued', id: 'q1', text: 'Run the tests' }, { kind: 'exit' }), {})
   assert.deepEqual(exited.queued, [])

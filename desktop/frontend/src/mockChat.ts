@@ -99,13 +99,17 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     return true
   }
 
-  // stop ends the turn that runs, as an interrupt does. Claude then runs the messages it still holds, in order.
+  // stop ends the turn that runs, as an interrupt does. Claude then runs the messages it still holds, in order; like the
+  // fake claude of the Go tests, it no longer holds one whose text is "lost", and the host logs that one unsent.
   function stop(id: string) {
     const running = replying.get(id)
     if (!running && !pending.has(id)) return
     running?.()
     replying.delete(id)
     setPending(id, null)
+    const held = queued.get(id) ?? []
+    held.filter((m) => m.text === 'lost').forEach((m) => append(id, { kind: 'unsent', id: m.id, text: m.text }))
+    queued.set(id, held.filter((m) => m.text !== 'lost'))
     append(id, { kind: 'turn_end', error: true, cost: 0.04 })
     if (runQueued(id)) return
     thread(id).setState('idle')
