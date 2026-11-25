@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const OPEN_DELAY = 300
 const CLOSE_DELAY = 150
 
-export type HoverHandlers = {
+type HoverHandlers = {
   onMouseEnter(e: React.MouseEvent<HTMLElement>): void
   onMouseLeave(): void
 }
 
-export function useHoverCard(openDelay = OPEN_DELAY) {
+export function useHoverCard(openDelay: number) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null)
   const timer = useRef<number>(0)
   const open = anchor !== null

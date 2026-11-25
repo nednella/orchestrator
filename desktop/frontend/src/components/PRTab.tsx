@@ -1,14 +1,32 @@
 import { useAgentos } from '../AgentosContext'
-import type { Session } from '../types'
+import type { PR, Session } from '../types'
 import { BranchBar } from './BranchBar'
 import { Chip } from './Chip'
 import { Icon } from './Icon'
-import { PILL, Ref } from './PRCard'
 import { PRTiles } from './PRTiles'
-import { isReady } from './StatusLine'
+import { Ref } from './Ref'
 import { WorkChips } from './WorkChips'
 
 type PRTabProps = { session: Session }
+
+const PILL: Record<
+  PR['state'],
+  {
+    icon: 'git-pull-request' | 'git-pull-request-draft' | 'git-merge' | 'git-pull-request-closed'
+    label: string
+  }
+> = {
+  open: { icon: 'git-pull-request', label: 'Open' },
+  draft: { icon: 'git-pull-request-draft', label: 'Draft' },
+  merged: { icon: 'git-merge', label: 'Merged' },
+  closed: { icon: 'git-pull-request-closed', label: 'Closed' },
+}
+
+function isReady({ pr, git }: Session): boolean {
+  const live = pr?.state === 'draft' || pr?.state === 'open'
+  const passing = pr?.checks === 'passing' || pr?.checks === 'none'
+  return live && passing && !pr.conflicting && pr.newComments === 0 && git?.unpushed === 0 && git.uncommitted === 0
+}
 
 const PR_ACTION = {
   comments: { label: 'Address review comments', sentence: (n: number) => `Address the review comments on PR #${n}.` },
@@ -81,7 +99,7 @@ export function PRTab({ session }: PRTabProps) {
               ready
             </Chip>
           )}
-          <WorkChips session={session} alwaysWords />
+          <WorkChips session={session} />
         </div>
       </div>
       {pr && <PRTiles pr={pr} />}

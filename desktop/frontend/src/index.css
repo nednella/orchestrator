@@ -676,34 +676,6 @@
     background: var(--waiting);
   }
 
-  .row-card {
-    border: 1px solid transparent;
-  }
-
-  .row-card::before {
-    inset: 6px auto 6px -1px;
-    border-radius: 2px;
-  }
-
-  .row-card[data-selected='true']:not([data-state='waiting'])::before {
-    background: transparent;
-  }
-
-  .row-card[data-selected='true'] {
-    background: var(--bg-raised);
-    border-color: var(--accent);
-  }
-
-  [data-panel][data-focused] .row-card[data-cursor='true'] {
-    box-shadow: none;
-    border: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
-  }
-
-  [data-panel][data-focused] .row-card[data-cursor='true'][data-selected='true'] {
-    border: 1px solid var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
-  }
-
   .section-head {
     position: sticky;
     top: 0;
@@ -997,25 +969,6 @@
   .divider[data-dragging='true']::after {
     background: var(--accent);
   }
-
-  .timeline {
-    display: flex;
-    width: 100%;
-    overflow: hidden;
-    border-radius: 1px;
-    background: var(--bg-raised);
-  }
-
-  .timeline > span {
-    min-width: 2px;
-    background: var(--c);
-    border-right: 1px solid var(--bg-surface);
-  }
-
-  .timeline > span[data-state='working'] { opacity: 0.7; }
-  .timeline > span[data-state='waiting'] { opacity: 0.85; }
-  .timeline > span[data-state='idle'] { opacity: 0.4; }
-  .timeline > span[data-state='ended'] { opacity: 0.3; }
 
   .fade-in {
     animation: fade-in 0.12s ease-out;

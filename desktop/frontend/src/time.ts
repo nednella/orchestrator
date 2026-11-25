@@ -1,10 +1,5 @@
 import { useSyncExternalStore } from 'react'
 
-const SECOND = 1000
-const MINUTE = 60 * SECOND
-const DAY = 24 * 60 * MINUTE
-const TWO_DAYS = 2 * DAY
-
 const listeners = new Set<() => void>()
 let now = Date.now()
 
@@ -42,11 +37,4 @@ export function ago(at: number, current: number): string {
 
 export function until(at: number, current: number): string {
   return at <= current ? 'now' : `in ${duration(at - current)}`
-}
-
-// The clock time `duration` shows for a stretch that started at `from`, so a row renders only when that text moves.
-export function shownNow(current: number, from: number): number {
-  const elapsed = Math.max(0, current - from)
-  const step = elapsed < MINUTE ? SECOND : elapsed < TWO_DAYS ? MINUTE : DAY
-  return from + elapsed - (elapsed % step)
 }
