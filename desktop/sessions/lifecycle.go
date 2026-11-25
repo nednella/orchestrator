@@ -1264,6 +1264,7 @@ func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string,
 	}
 	p := cleanupPlan{force: force}
 	base := l.mainBranch(ctx, dir)
+	fetched := false
 	for _, branch := range t.branches {
 		l.mu.Lock()
 		saw := l.sawOpen(t, branch)
@@ -1290,6 +1291,13 @@ func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string,
 		}
 		if b.worktree == "" && !b.branchExists {
 			continue
+		}
+		if !fetched {
+			if err := l.fetchOrigin(ctx, dir); err != nil {
+				fmt.Fprintf(os.Stderr, "agentos: fetching origin before a clean-up: %v\n", err)
+				return p, "Could not fetch origin, so agentos cannot tell whether every commit is pushed"
+			}
+			fetched = true
 		}
 		if reason := l.unsafe(ctx, dir, b.worktree, branch, branchPR, base); reason != "" {
 			return p, reason
@@ -1416,8 +1424,8 @@ func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, pr
 }
 
 // merged says whether pr merged the work at head. A squash or rebase merge copies the commits onto the
-// base with new ids, so the work is in only while head is the PR's last commit; a merge commit keeps
-// them, so head is in the base on origin. A failed fetch leaves only the first rule.
+// base with new ids, so the work is in only while head is the PR's last commit or one before it; a
+// merge commit keeps them, so head is in the base as origin was last fetched.
 func (l *Lifecycle) merged(ctx context.Context, dir, head, base string, pr *PR) bool {
 	if pr == nil || pr.State != "merged" {
 		return false
@@ -1425,20 +1433,28 @@ func (l *Lifecycle) merged(ctx context.Context, dir, head, base string, pr *PR) 
 	if head == pr.HeadOid {
 		return true
 	}
-	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", base); err != nil {
-		return false
+	if pr.HeadOid != "" && l.ancestor(ctx, dir, head, pr.HeadOid) {
+		return true
 	}
-	_, err := l.git(ctx, dir, "merge-base", "--is-ancestor", head, "origin/"+base)
+	return l.ancestor(ctx, dir, head, "origin/"+base)
+}
+
+// fetchOrigin brings every branch on origin up to date and drops the ones origin deleted, so a
+// commit that only a deleted or force-pushed branch held no longer counts as pushed.
+func (l *Lifecycle) fetchOrigin(ctx context.Context, dir string) error {
+	_, err := l.git(ctx, dir, "fetch", "--quiet", "--prune", "origin")
+	return err
+}
+
+// ancestor says whether commit is rev or one of its ancestors.
+func (l *Lifecycle) ancestor(ctx context.Context, dir, commit, rev string) bool {
+	_, err := l.git(ctx, dir, "merge-base", "--is-ancestor", commit, rev)
 	return err == nil
 }
 
 // past says whether head holds commits after prHead, the commit a merged pull request ended on.
 func (l *Lifecycle) past(ctx context.Context, dir, prHead, head string) bool {
-	if prHead == "" || prHead == head {
-		return false
-	}
-	_, err := l.git(ctx, dir, "merge-base", "--is-ancestor", prHead, head)
-	return err == nil
+	return prHead != "" && prHead != head && l.ancestor(ctx, dir, prHead, head)
 }
 
 // head is the commit the worktree stands at, or the branch's when no worktree has it checked out.
@@ -1482,6 +1498,12 @@ func (l *Lifecycle) statuses(ctx context.Context, dir string, trees worktrees, f
 		return out
 	}
 	base := l.mainBranch(ctx, dir)
+	// merged reads origin's branches as last fetched here, so restatus, run at each tool call, never fetches.
+	if slices.ContainsFunc(fetched, func(f done) bool { return f.pr != nil && f.pr.State == "merged" }) {
+		if err := l.fetchOrigin(ctx, dir); err != nil {
+			fmt.Fprintf(os.Stderr, "agentos: fetching origin for the git status: %v\n", err)
+		}
+	}
 	for _, f := range fetched {
 		if _, ok := out[f.branch]; !ok {
 			out[f.branch] = l.branchStatus(ctx, dir, base, f.branch, trees.byBranch[f.branch], f.pr)
