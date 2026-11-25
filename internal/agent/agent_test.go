@@ -353,6 +353,12 @@ func TestClaudeFill(t *testing.T) {
 		{"local over shared", "", `{"model": "sonnet"}`, `{"model": "haiku"}`, Launch{}, Launch{Model: "haiku"}},
 		{"a set value stays", `{"model": "opus", "effortLevel": "medium"}`, "", "", Launch{Effort: "max", Resume: "abc"}, Launch{Model: "opus", Effort: "max", Resume: "abc"}},
 		{"the model's own effort", `{"model": "claude-opus-5-5", "effortLevel": "medium", "modelSettings": {"claude-opus-5-5": {"effortLevel": "high"}}}`, "", "", Launch{}, Launch{Model: "claude-opus-5-5", Effort: "high"}},
+		{"an alias takes its family's effort", `{"effortLevel": "high", "modelSettings": {"claude-opus-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "opus"}, Launch{Model: "opus", Effort: "medium"}},
+		{"a full id takes its own effort", `{"effortLevel": "high", "modelSettings": {"claude-opus-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "claude-opus-5-5"}, Launch{Model: "claude-opus-5-5", Effort: "medium"}},
+		{"the long context keeps the effort", `{"effortLevel": "high", "modelSettings": {"claude-opus-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "opus[1m]"}, Launch{Model: "opus[1m]", Effort: "medium"}},
+		{"an alias with no entry gets the global effort", `{"effortLevel": "high", "modelSettings": {"claude-opus-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "sonnet"}, Launch{Model: "sonnet", Effort: "high"}},
+		{"an alias takes the newest id", `{"modelSettings": {"claude-haiku-4-5": {"effortLevel": "low"}, "claude-haiku-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "haiku"}, Launch{Model: "haiku", Effort: "medium"}},
+		{"an action's effort wins", `{"modelSettings": {"claude-opus-5-5": {"effortLevel": "medium"}}}`, "", "", Launch{Model: "opus", Effort: "max"}, Launch{Model: "opus", Effort: "max"}},
 		{"another model's effort is not used", `{"model": "opus", "effortLevel": "medium", "modelSettings": {"claude-sonnet-5-5": {"effortLevel": "high"}}}`, "", "", Launch{}, Launch{Model: "opus", Effort: "medium"}},
 		{"a broken file is skipped", `{"model": "opus"}`, `{not json`, "", Launch{}, Launch{Model: "opus"}},
 	}

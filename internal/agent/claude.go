@@ -211,6 +211,25 @@ type claudeSettings struct {
 	} `json:"modelSettings"`
 }
 
+// modelEffort is the effort set for a model in modelSettings, which names models by full id. An alias
+// stands for the newest id of its family, so it takes the highest id that starts with claude-<alias>-.
+func (s claudeSettings) modelEffort(model string) string {
+	model = strings.TrimSuffix(model, "[1m]")
+	if m, ok := s.ModelSettings[model]; ok {
+		return m.EffortLevel
+	}
+	if !slices.Contains(claudeAliases, model) {
+		return ""
+	}
+	var newest string
+	for id := range s.ModelSettings {
+		if strings.HasPrefix(id, "claude-"+model+"-") && id > newest {
+			newest = id
+		}
+	}
+	return s.ModelSettings[newest].EffortLevel
+}
+
 // Fill reads claude's settings files, the project's local and shared ones before the user's, so the first
 // that sets a value wins. A model's own effort in modelSettings wins over effortLevel. A file that is
 // missing or not JSON is skipped.
@@ -237,7 +256,7 @@ func (c Claude) Fill(dir string, l Launch) Launch {
 	}
 	for _, s := range files {
 		if l.Effort == "" {
-			l.Effort = s.ModelSettings[l.Model].EffortLevel
+			l.Effort = s.modelEffort(l.Model)
 		}
 	}
 	for _, s := range files {
