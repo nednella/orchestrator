@@ -25,7 +25,7 @@ func (f fakeBrowsers) PIDs() []int                               { return nil }
 
 // commandFor is the argv claude starts with.
 func (s *Sessions) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, chat bool) []string {
-	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, chat, s.hasBrowser(proj, brief), forkStart{}))
+	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, chat, s.hasBrowser(proj, brief), forkStart{}, workTree{}))
 }
 
 // allowedTools is the --allowedTools value in argv, "" when there is none.

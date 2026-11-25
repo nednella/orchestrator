@@ -20,7 +20,7 @@ Welcome to agentos!
 Here is a quick breakdown of how it works:
 
 - The queue shows the project's open GitHub issues, in sections. Each section can be fully customised to collect issues with specific labels, and allow specific actions to be executed on the issues it holds, such as "Plan" or "Work".
-- "Work" spawns an agent session that builds the issue on its own branch and opens a draft pull request. You review and merge - agentos then cleans up the branch and the session.
+- "Work" spawns an agent session that builds the issue on its own branch and opens a draft pull request. You review and merge. agentos then removes the worktree and the session; the branch stays.
 - When a pull request gets a review, failing checks or a conflict, its agent session is asked to fix it.
 - Agent sessions are spawned using your agent's default model and effort. A model:<name> or effort:<level> label on an issue, or a custom action in the queue will take priority over your default.
 
@@ -83,7 +83,7 @@ Work issue #<n> start to finish, without waiting for the owner unless a decision
 
 ## 2. Branch
 
-Make a worktree on branch `issue-<n>` from the default branch on origin, where and with the set-up `AGENTS.md` names. Work only inside it.
+In an agentos thread (`AGENTOS_SESSION` is set) agentos already made your worktree on branch `issue-<n>` and started you in it: work there. Otherwise make it yourself: make a worktree on branch `issue-<n>` from the default branch on origin, where and with the set-up `AGENTS.md` names. Work only inside it.
 
 ## 3. Build
 

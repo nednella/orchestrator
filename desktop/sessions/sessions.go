@@ -1727,7 +1727,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		}
 		env = append(env, agentEnv...)
 	}
-	l := launchFor(model, conversation, brief, handover, chat, browser, fork)
+	l := launchFor(model, conversation, brief, handover, chat, browser, fork, workTree{})
 	l.TmpDir, l.ForkAt = tmp, fork.at
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -2391,16 +2391,23 @@ func (s *Sessions) hasBrowser(proj project.Project, brief string) bool {
 	return brief == "" && proj.BrowserOn() && s.browsers.AgentReady()
 }
 
+// workTree is the worktree agentos made for a thread, and the branch it holds. The zero value is a thread in the
+// project folder.
+type workTree struct{ branch, dir string }
+
 // launchFor is what the session's agent starts with. The agent learns where it runs and the commands that reach the
 // app, and about the browser when it has one; a session with a brief learns only the brief. A task started by another
 // session gets that session's handover last.
-func launchFor(model project.Model, conversation, brief, handover string, chat, browser bool, fork forkStart) agent.Launch {
+func launchFor(model project.Model, conversation, brief, handover string, chat, browser bool, fork forkStart, tree workTree) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Resume: conversation, Chat: chat}
 	if brief != "" {
 		l.Prompt = brief
 		return l
 	}
 	l.Prompt = prompts.Session() + "\n\n" + prompts.Thread()
+	if tree.branch != "" {
+		l.Prompt += "\n\n" + prompts.Worktree(tree.branch, tree.dir)
+	}
 	if fork.of != "" {
 		l.Prompt += "\n\n" + prompts.Fork(fork.title)
 	}

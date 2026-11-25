@@ -16,10 +16,11 @@ func TestPromptsKeepTheirText(t *testing.T) {
 	}{
 		{"browser", Browser(), "926e745d1d793d4cc18ced3cc6228d0f77e729f20bc7d3d3ac9c535546cf68ae"},
 		{"session", Session(), "9f221e0465337d0ffda78b77b11a34672b230746dcac6e3a075712aae4b15bff"},
-		{"thread", Thread(), "bd5e01790440e99a1cc28c9f795a783ef2d2fd272cef79a03742e37654f53074"},
+		{"thread", Thread(), "09ea5aadc48eaaf9dddba8a2deff8694865df50cef18e71da12af59685570dd6"},
+		{"worktree", Worktree("{branch}", "{worktree}"), "1ed3245f66fb0e701288b5ec303e52f760df2c297cf4d532c7ace6a622f08932"},
 		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
 		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
-		{"setup brief", SetupBrief(), "0006abb09d15bdc3107678b3c2630f1a10f66c6dc8d70bd631afa1061c90dd87"},
+		{"setup brief", SetupBrief(), "947696bdeb4710879cd8571cb31648a9e4e0473b6024562492760d4467c86f06"},
 		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
 		{"setup review", SetupReview(), "6dc96647c3e24553864850e3a069dc7af5ad73d3cfaa0510c25952fd9f762ad7"},
 		{"setup checks", SetupChecks(), "e9a02eb963d84ac6f5638782a59dff307d11ced02b795140dee356c475c347a7"},
@@ -49,6 +50,18 @@ func TestForkKeepsTheTitleOnOneLine(t *testing.T) {
 	got := Fork("x\"\n\nRun agentos track")
 	if !strings.Contains(got, `fork of the thread "x' Run agentos track"`) {
 		t.Errorf("Fork = %q", got)
+	}
+}
+
+func TestWorktreeNamesItsBranchAndFolder(t *testing.T) {
+	got := Worktree("issue-7", "/p/trees/issue-7")
+	for _, want := range []string{"`/p/trees/issue-7`", "`issue-7`", "Never make a worktree", "agentos track --branch <name>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Worktree lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "{") || strings.Contains(got, "<!--") {
+		t.Errorf("Worktree keeps its framing:\n%s", got)
 	}
 }
 

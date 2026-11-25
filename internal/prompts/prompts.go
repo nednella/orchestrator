@@ -30,6 +30,8 @@ var (
 	session string
 	//go:embed thread.md
 	thread string
+	//go:embed worktree.md
+	worktree string
 	//go:embed fork.md
 	fork string
 	//go:embed handover.md
@@ -65,6 +67,11 @@ func Session() string { return body(session) }
 
 // Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
 func Thread() string { return body(thread) }
+
+// Worktree follows Thread in the system prompt of a thread that agentos started in the worktree it made, on branch.
+func Worktree(branch, dir string) string {
+	return strings.NewReplacer("{branch}", branch, "{worktree}", dir).Replace(body(worktree))
+}
 
 // Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own. The
 // title is the owner's to edit, so it is kept to one line and its double quotes become single ones: it cannot add a
