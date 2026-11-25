@@ -1,11 +1,11 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import { isOpened, setOpened } from '../chatOpen'
 import { formatWorked } from '../chatTools'
 import { sameSteps } from '../chatTimeline'
 import type { WorkStep } from '../chatTimeline'
-import { onTick } from '../time'
 import { ChatSteps } from './ChatSteps'
+import { WorkingTime } from './WorkingTime'
 
 type ChatWorkRowProps = { thread: string; turn: string; header: boolean; steps: WorkStep[]; startedAt: number; endedAt: number | null; folder: string }
 
@@ -60,21 +60,13 @@ function FinishedWork({ thread, turn, steps, startedAt, worked, folder }: Finish
 
 type WorkingForProps = { startedAt: number }
 
-// WorkingFor writes its time straight into the page at each tick of the clock, so the timeline never renders for it.
+// WorkingFor heads the turn that runs with how long it has worked.
 function WorkingFor({ startedAt }: WorkingForProps) {
-  const time = useRef<HTMLSpanElement>(null)
-  useLayoutEffect(() => {
-    const show = (now: number) => {
-      if (time.current) time.current.textContent = formatWorked(now - startedAt)
-    }
-    show(Date.now())
-    return onTick(show)
-  }, [startedAt])
   return (
     <div className="chat-work-rule">
       <p className="flex h-6 items-center px-1 text-body leading-relaxed text-soft tabular-nums">
         <span>
-          Working for <span ref={time} />
+          Working for <WorkingTime since={startedAt} />
         </span>
       </p>
     </div>

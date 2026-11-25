@@ -1,14 +1,14 @@
 import { Bot, ChevronDown, ChevronRight } from 'lucide-react'
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { onAgentOpen } from '../chatAgents'
 import { isOpened, setOpened } from '../chatOpen'
 import { sameSteps } from '../chatTimeline'
 import type { AgentState, WorkStep } from '../chatTimeline'
 import { formatWorked } from '../chatTools'
-import { onTick } from '../time'
 import { ChatMarkdown } from './ChatMarkdown'
 import { ChatShimmer } from './ChatShimmer'
 import { ChatSteps } from './ChatSteps'
+import { WorkingTime } from './WorkingTime'
 
 type ChatAgentRowProps = { thread: string; id: string; description: string; type: string; state: AgentState; startedAt: number; endedAt: number | null; tools: number; steps: WorkStep[]; result: string | null; folder: string }
 
@@ -65,18 +65,8 @@ export const ChatAgentRow = memo(function ChatAgentRow({ thread, id, description
 
 type WorkedProps = { startedAt: number; endedAt: number | null }
 
-// Worked is how long the subagent worked; while it works, the time is written straight into the page at each tick of
-// the clock, so the row never renders for it.
+// Worked is how long the subagent worked, or has worked so far.
 function Worked({ startedAt, endedAt }: WorkedProps) {
-  const time = useRef<HTMLSpanElement>(null)
-  useLayoutEffect(() => {
-    if (endedAt !== null) return
-    const show = (now: number) => {
-      if (time.current) time.current.textContent = formatWorked(now - startedAt)
-    }
-    show(Date.now())
-    return onTick(show)
-  }, [startedAt, endedAt])
-  if (endedAt !== null) return <span>{formatWorked(endedAt - startedAt, true)}</span>
-  return <span ref={time} />
+  if (endedAt === null) return <WorkingTime since={startedAt} />
+  return <span>{formatWorked(endedAt - startedAt, true)}</span>
 }
