@@ -1,4 +1,4 @@
-import type { ChatEvent, Pending } from './types'
+import type { Access, ChatEvent, Pending } from './types'
 
 // Command is one slash command, as Claude lists them in a commands event.
 export type Command = { name: string; description: string; argumentHint: string; builtin?: boolean; aliases?: string[] }
@@ -24,12 +24,15 @@ export type TimelineItem =
   | ({ kind: 'question' } & Ask)
   | ({ kind: 'plan' } & Ask)
   | { kind: 'notice'; key: string; at: number; text: string; error: boolean }
+  // restart is the thread starting again with a new access, which the owner asked for.
+  | { kind: 'restart'; key: string; at: number; access: Access }
 
 export type QueuedMessage = { id: string; text: string; files: string[] }
 
 export type Timeline = { items: TimelineItem[]; queued: QueuedMessage[]; turnOpen: boolean; pending: Pending | null; commands: Command[] }
 
 type Notice = Extract<TimelineItem, { kind: 'notice' }>
+type Restart = Extract<TimelineItem, { kind: 'restart' }>
 type ApprovalItem = Extract<TimelineItem, { kind: 'approval' }>
 type AskItem = Extract<TimelineItem, { kind: 'question' | 'plan' }>
 type Reply = { kind: 'reply'; key: string; at: number; id: string; uuid: string; blocks: string[] }
@@ -84,7 +87,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   // close folds the turn into the items, then its notice and its not-sent notices, and gives back the approvals it
   // left unanswered.
-  const close = (endedAt: number, notice: Notice | null = null): Approval[] => {
+  const close = (endedAt: number, notice: Notice | Restart | null = null): Approval[] => {
     const t = turn as Turn | null
     turn = null
     if (t) items.push(...folded(t, endedAt))
@@ -94,13 +97,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   }
 
   // end closes the turn for good: what it left unanswered can no longer be answered.
-  const end = (e: ChatEvent, notice: Omit<Notice, 'kind' | 'key' | 'at'> | null) => {
+  const end = (e: ChatEvent, notice: Notice | Restart | null) => {
     for (const a of turn?.approvals ?? []) {
       if (a.answered) continue
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
-    close(e.at, notice && { kind: 'notice', key: `notice-${e.seq}`, at: e.at, ...notice })
+    close(e.at, notice)
   }
 
   events.forEach((e, i) => {
@@ -188,12 +191,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
-        end(e, e.error ? { text: interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', error: !interrupted } : null)
+        end(e, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null)
         interrupted = false
         return
       case 'exit':
         interrupted = false
-        end(e, { text: 'Claude stopped', error: e.error ?? false })
+        end(e, exitItem(e))
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
@@ -218,6 +221,17 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     pending: waiting ? pendingOf(thread, waiting) : null,
     commands,
   }
+}
+
+function noticeOf(e: ChatEvent, text: string, error: boolean): Notice {
+  return { kind: 'notice', key: `notice-${e.seq}`, at: e.at, text, error }
+}
+
+// exitItem is what the chat shows where a run of Claude ended: a quiet line for a settle or a restart the host made
+// itself, and Claude's own failure in red.
+function exitItem(e: ChatEvent): Notice | Restart {
+  if (e.stop === 'restart') return { kind: 'restart', key: `notice-${e.seq}`, at: e.at, access: e.text as Access }
+  return noticeOf(e, e.stop === 'settle' ? 'Settled' : 'Claude stopped', e.error ?? false)
 }
 
 // folded is a finished turn. When it made tool calls, they and every reply but the last go into one work item.

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -238,6 +239,8 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				os.Stdout.Close()
 				time.Sleep(time.Second)
 				os.Exit(0)
+			case "crash":
+				os.Exit(3)
 			default:
 				reply(text)
 				result(false)
@@ -1646,7 +1649,7 @@ func TestHoldIsRefusedWhileATurnRunsOrAMessageWaits(t *testing.T) {
 	waitKind(t, events, chat.KindInit)
 	idle := func() bool {
 		t.Helper()
-		ok, err := Hold(ctxT(t), h.socket)
+		ok, err := Hold(ctxT(t), h.socket, "full")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1678,7 +1681,7 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
-	idle, err := Hold(ctxT(t), h.socket)
+	idle, err := Hold(ctxT(t), h.socket, "full")
 	if err != nil || !idle {
 		t.Fatalf("Hold = %v, %v, want idle", idle, err)
 	}
@@ -1703,6 +1706,52 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 	for _, e := range logged {
 		if e.Kind == chat.KindUser || e.Kind == chat.KindQueued || e.Kind == chat.KindMode {
 			t.Errorf("log has %+v, want nothing logged once held", e)
+		}
+	}
+}
+
+func TestAStopTheHostMakesIsNoError(t *testing.T) {
+	t.Parallel()
+	settled := startHost(t)
+	waitKind(t, subscribe(t, settled.socket, 0), chat.KindInit)
+	restarted := startHost(t)
+	waitKind(t, subscribe(t, restarted.socket, 0), chat.KindInit)
+	if idle, err := Hold(ctxT(t), restarted.socket, "full"); err != nil || !idle {
+		t.Fatalf("Hold = %v, %v, want idle", idle, err)
+	}
+	crashed := startHost(t)
+	events := subscribe(t, crashed.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	if err := Send(ctxT(t), crashed.socket, "crash"); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		h    *testHost
+		stop func()
+		want chat.Event
+	}{
+		{"a settle", settled, settled.cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
+		{"a restart", restarted, restarted.cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopRestart, Text: "full"}},
+		{"a crash", crashed, func() {}, chat.Event{Kind: chat.KindExit, Text: "exit status 3", Error: true}},
+	}
+	for _, c := range cases {
+		c.stop()
+		select {
+		case <-c.h.done:
+			c.h.done <- nil
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: Run did not return", c.name)
+		}
+		logged, err := chat.ReadLog(c.h.log, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last := logged[len(logged)-1]
+		last.Seq, last.At = 0, 0
+		if !reflect.DeepEqual(last, c.want) {
+			t.Errorf("%s: the exit = %+v, want %+v", c.name, last, c.want)
 		}
 	}
 }

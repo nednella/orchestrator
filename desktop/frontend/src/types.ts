@@ -354,6 +354,9 @@ export type ChatEvent = {
   error?: boolean
   cost?: number
   files?: string[]
+  // stop is set on an exit the host made itself, which is no error: a settle, or a restart whose text is the access
+  // the thread starts again with.
+  stop?: 'settle' | 'restart'
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

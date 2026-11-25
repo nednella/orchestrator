@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -133,6 +134,40 @@ func TestSetAccessToFullRestarts(t *testing.T) {
 		return strings.Contains(strings.Join(h.Args(t, s.ID), " "), "--permission-mode default")
 	})
 	eventually(t, "the access back to supervised", accessIs(h, s.ID, session.Supervised))
+}
+
+func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewThread("stops", "", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeArgs(t, h, s.ID)
+	if err := h.SetAccess(s.ID, "full"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "claude started again as full", func() bool {
+		return strings.Contains(strings.Join(h.Args(t, s.ID), " "), "--permission-mode bypassPermissions")
+	})
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := []chatlog.Event{{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}}
+	var got []chatlog.Event
+	eventually(t, "both exits in the log", func() bool {
+		path, _ := hostFiles(h, s.ID)
+		logged, _ := chatlog.ReadLog(path, 0)
+		got = nil
+		for _, e := range logged {
+			if e.Kind == chatlog.KindExit {
+				got = append(got, chatlog.Event{Kind: e.Kind, Stop: e.Stop, Text: e.Text, Error: e.Error})
+			}
+		}
+		return len(got) == len(want)
+	})
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("exits = %+v, want %+v", got, want)
+	}
 }
 
 func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
@@ -452,7 +487,7 @@ func TestASendWhileTheThreadRestartsIsRefused(t *testing.T) {
 	if err := host.Ready(ctx, socket); err != nil {
 		t.Fatal(err)
 	}
-	if idle, err := host.Hold(ctx, socket); err != nil || !idle {
+	if idle, err := host.Hold(ctx, socket, "full"); err != nil || !idle {
 		t.Fatalf("Hold = %v, %v; want idle", idle, err)
 	}
 	if _, err := h.ChatSend(s.ID, "keep this"); err == nil || err.Error() != "This thread is restarting" {

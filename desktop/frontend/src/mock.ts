@@ -882,7 +882,7 @@ export function createMock(params: URLSearchParams) {
       const s = find(id)
       if (s.state !== 'settled') {
         emit('term:exit', { id })
-        chats.end(id)
+        chats.end(id, 'settle')
       }
       archived.add(id)
       sessions.splice(sessions.indexOf(s), 1)
@@ -913,7 +913,7 @@ export function createMock(params: URLSearchParams) {
       const s = find(id)
       if (s.state === 'settled') throw `Thread ${id} has settled`
       emit('term:exit', { id })
-      chats.end(id)
+      chats.end(id, 'settle')
       setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
     },
@@ -928,7 +928,7 @@ export function createMock(params: URLSearchParams) {
       if (s.state !== 'settled' && chats.busy(id)) throw 'Change access when the turn ends'
       if (s.access === access) return
       if (s.state !== 'settled' && (s.access === 'full' || access === 'full')) {
-        chats.end(id)
+        chats.end(id, { restart: access })
         chats.start(id)
       } else if (s.state !== 'settled') chats.mode(id, modeOfAccess[access])
       s.access = access

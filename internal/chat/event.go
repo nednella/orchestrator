@@ -39,6 +39,12 @@ const (
 	KindExit  Kind = "exit"
 )
 
+// The ways the host stops Claude itself, which an exit's Stop names.
+const (
+	StopSettle  = "settle"  // the thread settled
+	StopRestart = "restart" // the thread starts again with a new access, which the exit's Text names
+)
+
 // Event is one entry of a chat's log. At is unix milliseconds.
 type Event struct {
 	Seq    int64           `json:"seq"`
@@ -53,6 +59,8 @@ type Event struct {
 	Error  bool            `json:"error,omitempty"`
 	Cost   float64         `json:"cost,omitempty"`
 	Files  []string        `json:"files,omitempty"`
+	// Stop is set on an exit the host made itself, which is no error: StopSettle, or StopRestart.
+	Stop string `json:"stop,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log; a delta only feeds the live view.

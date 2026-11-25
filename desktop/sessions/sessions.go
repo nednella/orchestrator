@@ -2149,7 +2149,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	socket, err := s.readyHost(name)
 	idle := false
 	if err == nil {
-		idle, err = host.Hold(s.context(), socket)
+		idle, err = host.Hold(s.context(), socket, string(access))
 	}
 	switch {
 	case err != nil:

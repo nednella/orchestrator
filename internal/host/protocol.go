@@ -25,6 +25,7 @@ type request struct {
 	Input   json.RawMessage `json:"input,omitempty"`
 	After   int64           `json:"after,omitempty"`
 	Mode    string          `json:"mode,omitempty"`
+	Access  string          `json:"access,omitempty"` // the hold op's: the access the thread starts again with
 }
 
 type reply struct {

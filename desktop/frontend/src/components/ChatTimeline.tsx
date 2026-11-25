@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ACCESS_LABEL } from '../access'
 import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
 import { ChatApprovalCard } from './ChatApprovalCard'
@@ -26,6 +27,8 @@ function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (tex
       return <ChatReplyRow uuid={item.uuid} text={item.text} streaming={item.streaming} onReply={onReply} onFork={onFork} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
+    case 'restart':
+      return <ChatNotice text={`Restarted with ${ACCESS_LABEL[item.access]}`} error={false} />
     case 'work':
       return <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
     case 'approval':

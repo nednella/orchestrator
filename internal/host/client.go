@@ -83,9 +83,9 @@ func SetMode(ctx context.Context, socket, mode string) error {
 
 // Hold says whether the host is idle, with no turn running, no approval waiting and no message it was given still to
 // run, and when it is, holds it: the host then refuses every send, answer and mode change until it exits. A restart
-// holds the host before it stops it.
-func Hold(ctx context.Context, socket string) (idle bool, err error) {
-	rep, err := call(ctx, socket, request{Op: opHold})
+// holds the host before it stops it; access is the access the thread starts again with, which the host logs at its exit.
+func Hold(ctx context.Context, socket, access string) (idle bool, err error) {
+	rep, err := call(ctx, socket, request{Op: opHold, Access: access})
 	return err == nil && !rep.Busy, err
 }
 

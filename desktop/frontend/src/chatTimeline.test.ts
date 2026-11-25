@@ -228,6 +228,13 @@ test('interrupt gives Stopped', () => {
   assert.equal(only(exited.items, 'notice')[0].error, true)
 })
 
+test('a settle or a restart the host made is a quiet line; a crash is red', () => {
+  const ended = (exit: Draft) => buildTimeline(log(user('u1', 'Go'), message('msg_1', 'On it.'), turnEnd(), exit), {}).items.at(-1)
+  assert.deepEqual(ended({ kind: 'exit', stop: 'settle' }), { kind: 'notice', key: 'notice-4', at: 4000, text: 'Settled', error: false })
+  assert.deepEqual(ended({ kind: 'exit', stop: 'restart', text: 'full' }), { kind: 'restart', key: 'notice-4', at: 4000, access: 'full' })
+  assert.deepEqual(ended({ kind: 'exit', text: 'exit status 143', error: true }), { kind: 'notice', key: 'notice-4', at: 4000, text: 'Claude stopped', error: true })
+})
+
 test('a failed turn says why when Claude does', () => {
   const notices = only(buildTimeline(log(user('u1', 'Go'), { kind: 'turn_end', error: true, text: 'No message found with message.uuid of: r9' }), {}).items, 'notice')
   assert.deepEqual(notices.map((n) => [n.text, n.error]), [['No message found with message.uuid of: r9', true]])

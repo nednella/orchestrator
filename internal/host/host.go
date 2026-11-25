@@ -109,6 +109,8 @@ type host struct {
 	mode string
 	// holding is set once the host answered a hold as idle, before a restart: it takes no more input.
 	holding bool
+	// restartAccess is the access the held thread starts again with.
+	restartAccess string
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -160,7 +162,7 @@ func Run(ctx context.Context, c Config) error {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		h.publishExit(err)
+		h.publishExit(err, false)
 		return err
 	}
 	h.stdin = stdin
@@ -179,7 +181,7 @@ func Run(ctx context.Context, c Config) error {
 	h.mu.Unlock()
 	err = cmd.Wait()
 	close(waited)
-	h.publishExit(err)
+	h.publishExit(err, ctx.Err() != nil)
 	return err
 }
 
@@ -200,9 +202,18 @@ func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
 
 var errExited = errors.New("claude has exited")
 
-func (h *host) publishExit(err error) {
+// publishExit logs Claude's exit. One the host made, stopped, is no error, though Claude exits on the signal it got.
+func (h *host) publishExit(err error, stopped bool) {
 	e := chat.Event{Kind: chat.KindExit}
-	if err != nil {
+	h.mu.Lock()
+	holding, access := h.holding, h.restartAccess
+	h.mu.Unlock()
+	switch {
+	case stopped && holding:
+		e.Stop, e.Text = chat.StopRestart, access
+	case stopped:
+		e.Stop = chat.StopSettle
+	case err != nil:
 		e.Text = err.Error()
 		e.Error = true
 	}
@@ -451,7 +462,7 @@ func (h *host) handle(conn net.Conn) {
 		h.subscribe(conn, req.After)
 		return
 	case opHold:
-		writeJSON(conn, reply{OK: true, Busy: !h.hold()})
+		writeJSON(conn, reply{OK: true, Busy: !h.hold(req.Access)})
 		return
 	}
 	id, err := h.do(req)
@@ -645,7 +656,7 @@ var (
 // hold says whether the host is idle and, when it is, holds it: every later send, answer and mode change is refused
 // until it exits. A restart holds the host before it stops it, so no message gets in between the check and the stop.
 // It takes stdinMu, as a send does, so a send that is being written is seen as the turn it opens.
-func (h *host) hold() (idle bool) {
+func (h *host) hold(access string) (idle bool) {
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
 	h.mu.Lock()
@@ -653,7 +664,7 @@ func (h *host) hold() (idle bool) {
 	if h.busyLocked() {
 		return false
 	}
-	h.holding = true
+	h.holding, h.restartAccess = true, access
 	return true
 }
 
@@ -1035,7 +1046,12 @@ func echoLine(e chat.Event) string {
 		s = "permission mode: " + e.Text
 	case chat.KindExit:
 		s = "claude exited"
-		if e.Text != "" {
+		switch {
+		case e.Stop == chat.StopRestart:
+			s = "claude stopped for a restart with access " + e.Text
+		case e.Stop == chat.StopSettle:
+			s = "claude stopped: the thread settled"
+		case e.Text != "":
 			s += ": " + e.Text
 		}
 	default:

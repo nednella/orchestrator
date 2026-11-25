@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatImage, EventMap, Pending, State } from './types'
+import type { Access, ChatEvent, ChatImage, EventMap, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
@@ -425,13 +425,17 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
 
   const mediaURL = (path: string) => media.get(path)
 
-  // end is the thread's process going: its reply stops, its queue goes and nothing waits any more.
-  function end(id: string) {
+  // end is the thread's process going: its reply stops, its queue goes and nothing waits any more. A settle or a
+  // restart is the host stopping Claude itself, as its exit says; restart is the access the thread starts again with.
+  function end(id: string, stop?: 'settle' | { restart: Access }) {
     replying.get(id)?.()
     replying.delete(id)
     queued.delete(id)
     setPending(id, null)
-    if (logs.has(id)) append(id, { kind: 'exit' })
+    if (!logs.has(id)) return
+    if (stop === 'settle') append(id, { kind: 'exit', stop })
+    else if (stop) append(id, { kind: 'exit', stop: 'restart', text: stop.restart })
+    else append(id, { kind: 'exit' })
   }
 
   // start logs the run's start, as the host does before Claude runs, then the commands Claude lists a moment later.
