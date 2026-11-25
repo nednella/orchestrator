@@ -216,8 +216,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
-      // A run whose host was killed logged no exit: its turn and what it waits on end where the next run starts.
+      // A run whose host was killed logged no exit: its turn and what it waits on end where the next run starts. A start
+      // with text is the same run's Claude started again without a flag it did not know, before it read anything.
       case 'start':
+        if (e.text) return
         interrupted = false
         end(e, null, 'stopped')
         return

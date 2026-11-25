@@ -28,6 +28,7 @@ func (o oneThread) ChatOf(string) (sessions.Chat, error) { return o.chat, nil }
 func (o oneThread) Chats() []sessions.Chat               { return []sessions.Chat{o.chat} }
 func (o oneThread) TurnEnded(string, chatlog.Event)      {}
 func (o oneThread) AccessChanged(string, string, bool)   {}
+func (o oneThread) FlagRefused(string)                   {}
 func (o oneThread) Wake(string) (sessions.Chat, error)   { return o.chat, nil }
 
 // noProject knows no project.

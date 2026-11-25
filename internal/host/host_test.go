@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/prompts"
 )
@@ -46,6 +47,11 @@ func TestHelperFakeClaude(t *testing.T) {
 			os.Exit(2)
 		}
 		os.WriteFile(pidFile, []byte(fmt.Sprint(holder.Process.Pid)), 0o600)
+	}
+	// Claude fails at its start on a flag it does not know; the flags it is given come after "--".
+	if flag := os.Getenv("AOS_FAKE_REJECT"); flag != "" && slices.Contains(os.Args, flag) {
+		fmt.Fprintf(os.Stderr, "error: unknown option '%s'\n", os.Getenv("AOS_FAKE_REJECT_NAMES"))
+		os.Exit(1)
 	}
 	fakeClaude(os.Stdin, os.Stdout, os.Getenv("AOS_FAKE_STDIN"))
 	os.Exit(0)
@@ -297,6 +303,12 @@ func socketDir(t *testing.T) string {
 
 func startHost(t *testing.T, env ...string) *testHost {
 	t.Helper()
+	return startHostWith(t, nil, env...)
+}
+
+// startHostWith starts the host on the fake Claude with flags after its own.
+func startHostWith(t *testing.T, flags []string, env ...string) *testHost {
+	t.Helper()
 	dir := t.TempDir()
 	h := &testHost{
 		socket: filepath.Join(socketDir(t), "h.sock"),
@@ -311,7 +323,7 @@ func startHost(t *testing.T, env ...string) *testHost {
 		Log:    h.log,
 		Socket: h.socket,
 		Dir:    dir,
-		Argv:   []string{os.Args[0], "-test.run=^TestHelperFakeClaude$"},
+		Argv:   append([]string{os.Args[0], "-test.run=^TestHelperFakeClaude$", "--"}, flags...),
 		Env:    append(os.Environ(), append([]string{"AOS_FAKE_CLAUDE=1", "AOS_FAKE_STDIN=" + h.stdin}, env...)...),
 		Echo:   h.echo,
 	}
@@ -426,6 +438,64 @@ func TestSendReachesClaudeAndStreamsBack(t *testing.T) {
 		echo := h.echo.String()
 		return strings.Contains(echo, "you: hi") && strings.Contains(echo, "claude: hi")
 	})
+}
+
+func TestClaudeThatDoesNotKnowTheThinkingFlagStartsWithoutIt(t *testing.T) {
+	t.Parallel()
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES="+agent.ThinkingDisplay)
+	events := subscribe(t, h.socket, 0)
+	if err := Send(ctxT(t), h.socket, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindMessage); e.Text != "hi" {
+		t.Fatalf("message = %q, want hi", e.Text)
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var starts []string
+	for _, e := range logged {
+		switch e.Kind {
+		case chat.KindStart:
+			starts = append(starts, e.Text)
+		case chat.KindExit:
+			t.Errorf("logged the first start's exit: %+v", e)
+		}
+	}
+	if !slices.Equal(starts, []string{"", agent.ThinkingDisplay}) {
+		t.Errorf("starts = %q, want the run's, then one that names the flag left out", starts)
+	}
+	data, _ := os.ReadFile(h.stdin)
+	if n := strings.Count(string(data), `"subtype":"initialize"`); n != 1 || strings.Count(string(data), `"type":"user"`) != 1 {
+		t.Errorf("claude read %d initialize requests and the message %d times:\n%s", n, strings.Count(string(data), `"type":"user"`), data)
+	}
+	if !strings.Contains(h.echo.String(), "claude does not know "+agent.ThinkingDisplay) {
+		t.Errorf("echo = %q", h.echo.String())
+	}
+}
+
+func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	c := Config{
+		Log:    filepath.Join(dir, "chat.jsonl"),
+		Socket: filepath.Join(socketDir(t), "h.sock"),
+		Dir:    dir,
+		Argv:   []string{os.Args[0], "-test.run=^TestHelperFakeClaude$", "--", agent.ThinkingDisplay, "summarized"},
+		Env:    append(os.Environ(), "AOS_FAKE_CLAUDE=1", "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model"),
+		Echo:   &syncBuffer{},
+	}
+	if err := Run(ctxT(t), c); err == nil {
+		t.Error("Run returned no error for a claude that failed")
+	}
+	logged, err := chat.ReadLog(c.Log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logged) != 2 || logged[0].Kind != chat.KindStart || logged[1].Kind != chat.KindExit || !logged[1].Error {
+		t.Errorf("log = %+v, want the start and claude's failed exit", logged)
+	}
 }
 
 func TestApprovalRoundTrip(t *testing.T) {

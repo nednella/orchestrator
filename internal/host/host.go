@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/prompts"
@@ -87,7 +88,12 @@ type host struct {
 	stdinMu  sync.Mutex
 	stdin    io.Writer
 	stdinErr error
-	reqID    atomic.Int64
+	// unanswered is what the host wrote before Claude wrote its first line, for a Claude started again.
+	unanswered [][]byte
+	// spoke is set once Claude has written its first line. The stdout reader sets it without stdinMu: a send holds
+	// stdinMu while Claude's stdin is full, which Claude empties only as the host reads its stdout.
+	spoke atomic.Bool
+	reqID atomic.Int64
 
 	handlers sync.WaitGroup
 
@@ -149,43 +155,124 @@ func Run(ctx context.Context, c Config) error {
 	}
 	defer h.shutdown(ln)
 
-	cmd := exec.Command(c.Argv[0], c.Argv[1:]...)
-	cmd.Dir = c.Dir
-	cmd.Env = c.Env
-	cmd.Stderr = h.echo
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.WaitDelay = stopGrace
-	stdin, err := cmd.StdinPipe()
+	run, err := h.start(ctx, c, c.Argv)
 	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
 		h.publishExit(err)
 		return err
 	}
-	h.stdin = stdin
-	waited := make(chan struct{})
-	go stopOnCancel(ctx, cmd.Process.Pid, waited)
+	h.stdinMu.Lock()
+	h.stdin = run.stdin
+	h.stdinMu.Unlock()
 	if err := h.write(chat.Initialize(h.nextID())); err != nil {
 		fmt.Fprintf(h.echo, "host: initialize: %v\n", err)
 	}
 	h.handlers.Add(1)
 	go h.serve(ln)
-	go h.interruptOn(c.Interrupts, waited)
-
-	h.read(stdout)
+	err = run.wait(h)
+	if ctx.Err() == nil && h.refused(run, agent.ThinkingDisplay) {
+		run, err = h.startAgain(ctx, c, agent.WithoutFlag(c.Argv, agent.ThinkingDisplay), agent.ThinkingDisplay)
+		if err == nil {
+			err = run.wait(h)
+		}
+	}
 	h.mu.Lock()
 	h.exited = true
 	h.mu.Unlock()
-	err = cmd.Wait()
-	close(waited)
 	h.publishExit(err)
 	return err
 }
+
+// claudeRun is one start of Claude. stderr keeps the start of what Claude wrote there, which names a flag it does not
+// know.
+type claudeRun struct {
+	cmd    *exec.Cmd
+	stdin  io.Writer
+	stdout io.Reader
+	waited chan struct{}
+	stderr *headBuffer
+	argv   []string
+}
+
+// start starts Claude with argv.
+func (h *host) start(ctx context.Context, c Config, argv []string) (*claudeRun, error) {
+	run := &claudeRun{cmd: exec.Command(argv[0], argv[1:]...), waited: make(chan struct{}), stderr: &headBuffer{max: 4096}, argv: argv}
+	run.cmd.Dir = c.Dir
+	run.cmd.Env = c.Env
+	run.cmd.Stderr = io.MultiWriter(h.echo, run.stderr)
+	run.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	run.cmd.WaitDelay = stopGrace
+	var err error
+	if run.stdin, err = run.cmd.StdinPipe(); err != nil {
+		return nil, err
+	}
+	if run.stdout, err = run.cmd.StdoutPipe(); err != nil {
+		return nil, err
+	}
+	if err := run.cmd.Start(); err != nil {
+		return nil, err
+	}
+	go stopOnCancel(ctx, run.cmd.Process.Pid, run.waited)
+	go h.interruptOn(c.Interrupts, run.waited)
+	return run, nil
+}
+
+// startAgain starts Claude again with argv, without the flag the first start had and Claude did not know, and gives it
+// what the host wrote to the first start: Claude read none of it.
+func (h *host) startAgain(ctx context.Context, c Config, argv []string, flag string) (*claudeRun, error) {
+	fmt.Fprintf(h.echo, "host: claude does not know %s; starting it without\n", flag)
+	if _, err := h.publish(chat.Event{Kind: chat.KindStart, Text: flag}); err != nil {
+		fmt.Fprintf(h.echo, "host: %v\n", err)
+	}
+	run, err := h.start(ctx, c, argv)
+	if err != nil {
+		return nil, err
+	}
+	h.stdinMu.Lock()
+	defer h.stdinMu.Unlock()
+	h.stdin = run.stdin
+	for _, line := range h.unanswered {
+		if _, err := h.stdin.Write(line); err != nil {
+			h.stdinErr = fmt.Errorf("claude's stdin is closed: %w", err)
+			break
+		}
+	}
+	return run, nil
+}
+
+// wait reads Claude's stdout until it ends, then waits for Claude to exit. A Claude that wrote a line is not started
+// again, so from the end of its stdout the host takes nothing more but its exit.
+func (r *claudeRun) wait(h *host) error {
+	h.read(r.stdout)
+	if h.spoke.Load() {
+		h.mu.Lock()
+		h.exited = true
+		h.mu.Unlock()
+	}
+	err := r.cmd.Wait()
+	close(r.waited)
+	return err
+}
+
+// refused reports whether the run's Claude, started with flag, failed before it wrote a line and named flag on stderr,
+// as Claude does with a flag it does not know.
+func (h *host) refused(r *claudeRun, flag string) bool {
+	return !h.spoke.Load() && slices.Contains(r.argv, flag) && !r.cmd.ProcessState.Success() && strings.Contains(r.stderr.String(), flag)
+}
+
+// headBuffer keeps the first max bytes written to it.
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (b *headBuffer) Write(p []byte) (int, error) {
+	if room := b.max - b.buf.Len(); room > 0 {
+		b.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
+
+func (b *headBuffer) String() string { return b.buf.String() }
 
 // stopOnCancel stops Claude's whole process group when ctx ends: SIGTERM, then SIGKILL after stopGrace. The group takes in a process Claude started that still holds its stdout, which would keep Run reading.
 func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
@@ -259,6 +346,7 @@ func (h *host) read(stdout io.Reader) {
 	for {
 		line, err := r.ReadBytes('\n')
 		if len(bytes.TrimSpace(line)) > 0 {
+			h.spoke.Store(true)
 			h.handleLine(line)
 		}
 		if err == io.EOF {
@@ -392,11 +480,18 @@ func (h *host) write(line []byte) error {
 }
 
 // writeLocked must be called with stdinMu held. After one failed write every later one fails without trying, so a send can refuse before it logs anything.
+// Before Claude has written a line, a write that fails is no error: Claude may be started again, and given the line then.
 func (h *host) writeLocked(line []byte) error {
 	if h.stdinErr != nil {
 		return h.stdinErr
 	}
-	if _, err := h.stdin.Write(line); err != nil {
+	spoke := h.spoke.Load()
+	if spoke {
+		h.unanswered = nil
+	} else {
+		h.unanswered = append(h.unanswered, line)
+	}
+	if _, err := h.stdin.Write(line); err != nil && spoke {
 		h.stdinErr = fmt.Errorf("claude's stdin is closed: %w", err)
 		return h.stdinErr
 	}

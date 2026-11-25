@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
@@ -278,6 +280,48 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 	info, err := os.Stat(filepath.Dir(socket))
 	if err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("socket folder = %v, %v; want mode 700", info.Mode(), err)
+	}
+}
+
+func TestClaudeThatDoesNotKnowTheThinkingFlagStillWorks(t *testing.T) {
+	logged := &lockedBuffer{}
+	before := log.Writer()
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(before) })
+	h := apptest.NewWith(t, apptest.Options{ClaudeRejects: agent.ThinkingDisplay})
+	replied := func(id, prompt string) func() bool {
+		chatLog, _ := hostFiles(h, id)
+		return func() bool {
+			data, _ := os.ReadFile(chatLog)
+			return loggedUser(chatLog, prompt) && strings.Contains(string(data), `"kind":"turn_end"`)
+		}
+	}
+
+	first, err := h.NewThread("first", "hello", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first thread's reply", replied(first.ID, "hello"))
+	if n := h.Refused(t, first.ID); n != 1 {
+		t.Errorf("claude failed on the flag %d times, want once", n)
+	}
+	if args := claudeArgs(t, h, first.ID); slices.Contains(args, agent.ThinkingDisplay) {
+		t.Errorf("claude runs with %q", args)
+	}
+	eventually(t, "the app to learn claude does not know the flag", func() bool {
+		return strings.Contains(logged.String(), "claude does not know "+agent.ThinkingDisplay)
+	})
+
+	second, err := h.NewThread("second", "hello again", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the second thread's reply", replied(second.ID, "hello again"))
+	if n := h.Refused(t, second.ID); n != 0 {
+		t.Errorf("the second thread's claude failed on the flag %d times, want none: the app leaves it out", n)
+	}
+	if n := strings.Count(logged.String(), "claude does not know"); n != 1 {
+		t.Errorf("the app logged it %d times, want once", n)
 	}
 }
 

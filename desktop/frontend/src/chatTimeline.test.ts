@@ -183,6 +183,12 @@ test('a killed run leaves nothing waiting once the next run starts', () => {
   assert.equal(only(t.items, 'approval')[0].expired, true)
 })
 
+test('claude started again without a flag it did not know goes on with the same turn', () => {
+  const t = buildTimeline(log(user('u1', 'Hi'), { kind: 'start', text: '--thinking-display' }, message('msg_1', 'Hello.')), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
+  assert.equal(t.turnOpen, true)
+})
+
 test('unanswered approval expires at turn end', () => {
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')

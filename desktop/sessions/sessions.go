@@ -168,6 +168,7 @@ type Sessions struct {
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
 	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
+	refused    map[string]bool         // the flags Claude did not know in this run of the app, which it now starts without
 	memory     Memory
 	serverPID  int // the tmux server's, as tmux gave it; asked again once ps no longer lists it
 }
@@ -270,6 +271,7 @@ func newSessions(o Options) *Sessions {
 		spent:     map[string]usage.Tokens{},
 		held:      map[string]int64{},
 		tokens:    map[string]string{},
+		refused:   map[string]bool{},
 		stateRead: map[string]fileStamp{},
 		made:      newMadeTrees(o.LocalDir),
 		ctx:       context.Background(),
@@ -2186,7 +2188,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		return err
 	}
 	env = append(env, p.Env(l)...)
-	argv, err := s.hosted(name, p.Command(l))
+	argv, err := s.hosted(name, s.withoutRefused(p.Command(l)))
 	if err != nil {
 		return err
 	}
@@ -2761,6 +2763,27 @@ func (s *Sessions) changeMode(name session.Name, access session.Access) error {
 		return accessFailed(name, access, err)
 	}
 	return nil
+}
+
+// FlagRefused leaves flag out of every Claude this run of the app starts from now on: a thread's Claude did not know it.
+func (s *Sessions) FlagRefused(flag string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refused[flag] {
+		return
+	}
+	s.refused[flag] = true
+	log.Printf("agentos: claude does not know %s, so threads start without it", flag)
+}
+
+// withoutRefused is argv without the flags Claude did not know.
+func (s *Sessions) withoutRefused(argv []string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for flag := range s.refused {
+		argv = agent.WithoutFlag(argv, flag)
+	}
+	return argv
 }
 
 // AccessChanged follows a permission mode the live thread's Claude reports. A mode that gives less access is recorded.

@@ -28,11 +28,13 @@ const (
 
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
 // AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
+// FlagRefused says that a thread's Claude did not know flag, so its host started it without.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
 	TurnEnded(id string, e chatlog.Event)
 	AccessChanged(id, mode string, planApproved bool)
+	FlagRefused(flag string)
 	Wake(id string) (sessions.Chat, error)
 }
 
@@ -258,6 +260,9 @@ func (f *follower) run(ctx context.Context) {
 			commands = &e
 		case chatlog.KindStart:
 			mode.started, mode.text = true, ""
+			if e.Text != "" {
+				f.chats.threads.FlagRefused(e.Text)
+			}
 		case chatlog.KindMode:
 			if mode.started {
 				mode.text, mode.planApproved = text, approved
@@ -316,6 +321,10 @@ func (f *follower) take(e chatlog.Event) {
 		f.chats.threads.AccessChanged(f.chat.ID, mode, approved)
 	case chatlog.KindCommands:
 		f.chats.commands.keep(f.chat.Project, e)
+	case chatlog.KindStart:
+		if e.Text != "" {
+			f.chats.threads.FlagRefused(e.Text)
+		}
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)

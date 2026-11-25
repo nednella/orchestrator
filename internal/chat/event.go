@@ -6,7 +6,8 @@ type Kind string
 
 const (
 	// KindStart is a host starting a run of Claude, the first event it logs for that run: the events before it are an
-	// earlier run's, also when that run's host died before it logged its exit.
+	// earlier run's, also when that run's host died before it logged its exit. A start with Text is the same run's Claude
+	// started again without the flag Text names, which it did not know.
 	KindStart      Kind = "start"
 	KindInit       Kind = "init"
 	KindUser       Kind = "user"

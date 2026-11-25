@@ -38,6 +38,17 @@ func TestClaudeCommand(t *testing.T) {
 	}
 }
 
+func TestWithoutFlagDropsItsValue(t *testing.T) {
+	argv := Claude{}.Command(Launch{})
+	got := WithoutFlag(argv, ThinkingDisplay)
+	if slices.Contains(got, ThinkingDisplay) || slices.Contains(got, "summarized") || len(got) != len(argv)-2 {
+		t.Errorf("WithoutFlag = %q", got)
+	}
+	if got := WithoutFlag([]string{"claude", "-p"}, ThinkingDisplay); !slices.Equal(got, []string{"claude", "-p"}) {
+		t.Errorf("without the flag, argv = %q", got)
+	}
+}
+
 func TestClaudeGrantsDirs(t *testing.T) {
 	argv := Claude{Exe: "/x", Dirs: []string{"/data", "/local"}}.Command(Launch{})
 	var settings struct {

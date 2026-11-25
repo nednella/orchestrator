@@ -587,6 +587,7 @@ type Options struct {
 	DataDirConfig   bool          // put the data folder in the config's data_dir, not AGENTOS_DEV_DATA_DIR, and home in the state dir
 	NoProject       bool          // leave the project out of the config, so the app starts in a folder it does not know
 	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
+	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
 }
 
 // Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
@@ -674,7 +675,11 @@ func NewWith(t *testing.T, o Options) *Harness {
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(state, "claude")) // never the user's own settings
 
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
-	h.claudeDir = agentOnPath(t, "claude", standInEnv, fakeClaudeTurns)
+	start := standInEnv
+	if o.ClaudeRejects != "" {
+		start += rejecting(o.ClaudeRejects)
+	}
+	h.claudeDir = agentOnPath(t, "claude", start, fakeClaudeTurns)
 	if o.NoAgentos {
 		t.Setenv("PATH", PathWithout("agentos"))
 	}
@@ -873,6 +878,12 @@ func (h *Harness) Stdin(t *testing.T, id string) []string {
 	return readLines(t, h.standIn(id, ".stdin"))
 }
 
+// Refused is how many times the session's stand-in claude failed at its start on the flag it does not know.
+func (h *Harness) Refused(t *testing.T, id string) int {
+	t.Helper()
+	return len(readLines(t, h.standIn(id, ".refused")))
+}
+
 // Args are the arguments the session's stand-in claude was started with, none before it starts.
 func (h *Harness) Args(t *testing.T, id string) []string {
 	t.Helper()
@@ -894,6 +905,19 @@ func readLines(t *testing.T, path string) []string {
 // standInEnv writes the environment the stand-in claude was started with, before its arguments.
 const standInEnv = `env > "$f.env"
 `
+
+// rejecting makes the stand-in claude fail as Claude does when it is started with flag and does not know it. Each
+// start that fails adds a line to <dir>/<session id, "/" as "_">.refused.
+func rejecting(flag string) string {
+	return `for a in "$@"; do
+	if [ "$a" = '` + flag + `' ]; then
+		echo refused >> "$f.refused"
+		echo "error: unknown option '` + flag + `'" >&2
+		exit 1
+	fi
+done
+`
+}
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'

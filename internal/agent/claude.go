@@ -57,8 +57,20 @@ func (c Claude) Name() string { return "claude" }
 
 // headless makes claude read user messages as stream-json on stdin and write its turns as stream-json on stdout,
 // partial messages too, echo each user message back when claude takes it in, and ask for each permission with a control request on stdout.
-// Without --thinking-display, claude -p streams its thinking blocks with no text.
-var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--thinking-display", "summarized", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
+var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", ThinkingDisplay, "summarized", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
+
+// ThinkingDisplay makes claude -p stream the text of its thinking blocks, which it streams empty without it. claude does
+// not list it in its help, so a claude that does not know it is started again without it.
+const ThinkingDisplay = "--thinking-display"
+
+// WithoutFlag is argv without flag and the value that follows it.
+func WithoutFlag(argv []string, flag string) []string {
+	i := slices.Index(argv, flag)
+	if i < 0 {
+		return argv
+	}
+	return slices.Concat(argv[:i], argv[min(i+2, len(argv)):])
+}
 
 // Command is claude's command line, run headless for agentos host.
 func (c Claude) Command(l Launch) []string {
