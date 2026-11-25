@@ -72,6 +72,13 @@ func (v *Service) DeleteThread(id string, worktree bool) error { return v.s.Dele
 // remove with it; "" when there is none.
 func (v *Service) OwnWorktree(id string) string { return v.s.OwnWorktree(id) }
 
+// Servers are the ports the servers thread id started listen on, one row per port: the processes that carry the
+// thread's marker, without its host and Claude. [] when it has none.
+func (v *Service) Servers(id string) ([]Server, error) { return v.s.Servers(id) }
+
+// OpenServer opens http://localhost:<port> in the default browser.
+func (v *Service) OpenServer(port int) error { return v.s.OpenServer(port) }
+
 // WakeThread starts a settled thread again under its own id, with nothing sent to it.
 func (v *Service) WakeThread(id string) (Session, error) {
 	if _, err := v.s.Wake(id); err != nil {

@@ -335,6 +335,12 @@ func (f *FakeGH) Run(ctx context.Context, dir, name string, args ...string) ([]b
 	if name == "curl" {
 		return f.curl(args)
 	}
+	if name == "open" {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.calls = append(f.calls, "open "+strings.Join(args, " "))
+		return nil, nil
+	}
 	if name != "gh" {
 		return run.Exec(ctx, dir, name, args...)
 	}
@@ -435,7 +441,7 @@ func (f *FakeGH) curl(args []string) ([]byte, error) {
 
 func (f *FakeGH) IssueCalls() int { return f.Calls("issue list") }
 
-// Calls counts the gh calls that start with prefix.
+// Calls counts the gh calls that start with prefix, and the open calls, as "open <args>".
 func (f *FakeGH) Calls(prefix string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -863,10 +869,12 @@ func CLIPath(t *testing.T) string {
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
 // once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
-// asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, and "leave plan"
-// reports the mode default before its reply with no plan approved. It answers a rewind of the files with the files
-// RewindAs names, into each of which a rewind that is not a dry run writes "before", and a rewind of the conversation
-// with the text of the message rewound to, as Claude does; RewindAs can make it answer as another Claude would.
+// asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, "leave plan"
+// reports the mode default before its reply with no plan approved, and "serve <port>" starts a listener on
+// 127.0.0.1:<port> in a session of its own, which writes its pid to <dir>/<session id, "/" as "_">.serve<port>. It
+// answers a rewind of the files with the files RewindAs names, into each of which a rewind that is not a dry run writes
+// "before", and a rewind of the conversation with the text of the message rewound to, as Claude does; RewindAs can make
+// it answer as another Claude would.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
 // RewindAs makes the session's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
@@ -938,8 +946,21 @@ done
 `
 }
 
-// fakeClaudeTurns is the stand-in claude's stream-json side.
+// fakeClaudeTurns is the stand-in claude's stream-json side. serve is a listener on the port given that leaves the
+// stand-in's process and session, as a server a Bash call starts with & does, writes its pid to the file given and
+// lives five minutes.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
+serve='import os, socket, sys, time
+if os.fork():
+    sys.exit(0)
+os.setsid()
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", int(sys.argv[1])))
+s.listen(5)
+open(sys.argv[2] + ".tmp", "w").write(str(os.getpid()))
+os.rename(sys.argv[2] + ".tmp", sys.argv[2])
+time.sleep(300)'
 reply() {
 	printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
 }
@@ -959,6 +980,11 @@ while IFS= read -r line; do
 			printf '{"type":"stream_event","api_message_id":"msg_fake","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"%d "}}}\n' $i
 			i=$((i + 1))
 		done
+		reply ;;
+	*'"type":"user"'*'"text":"serve '[0-9]*)
+		port=$(printf '%s' "$line" | sed -n 's/.*"text":"serve \([0-9]*\)".*/\1/p')
+		python3 -c "$serve" "$port" "$f.serve$port" </dev/null >/dev/null 2>&1
+		printf '%s\n' "$init"
 		reply ;;
 	*'"type":"user"'*'"text":"plan"'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"plan-1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Add made.txt"}}}' ;;
@@ -1111,6 +1137,8 @@ func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.se
 func (h *Harness) ShellClose(id string) error                      { return h.sessions.ShellClose(id) }
 func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
 func (h *Harness) OwnWorktree(id string) string                    { return h.sessions.OwnWorktree(id) }
+func (h *Harness) Servers(id string) ([]sessions.Server, error)    { return h.sessions.Servers(id) }
+func (h *Harness) OpenServer(port int) error                       { return h.sessions.OpenServer(port) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) SetAccess(id, access string) error               { return h.sessions.SetAccess(id, access) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }

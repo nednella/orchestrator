@@ -35,6 +35,7 @@ import (
 	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/mcp"
+	"github.com/nednella/agentos/internal/procs"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
@@ -163,6 +164,7 @@ type Sessions struct {
 	lastIssues string
 	life       *Lifecycle
 	made       *madeTrees
+	procs      *procs.Table
 	repoOf     func(dir string) string
 	onIssues   func()
 	wakes      map[string][]string     // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
@@ -279,6 +281,7 @@ func newSessions(o Options) *Sessions {
 		refused:   map[string]bool{},
 		stateRead: map[string]fileStamp{},
 		made:      newMadeTrees(o.LocalDir),
+		procs:     procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
 		ctx:       context.Background(),
 	}
 }
