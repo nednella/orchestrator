@@ -529,25 +529,47 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 	}
 }
 
-func TestARestartLeavesARunningTurnRunning(t *testing.T) {
+func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
-	s, err := h.Sessions().Create("work", "first", true, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
 	chatLog, _ := hostFiles(h, s.ID)
-	eventually(t, "the first turn's end in the chat log", func() bool {
-		data, _ := os.ReadFile(chatLog)
-		return strings.Contains(string(data), `"kind":"turn_end"`)
-	})
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"second"}`)
+	const turns = 10
+	for i := range turns {
+		h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"turn %d","transcript_path":%q}`, i, transcript))
+		appendLines(t, transcript, assistantLine(fmt.Sprintf("msg_%d", i), time.Now().Add(100*time.Millisecond), 100, 10))
+		h.Hook(t, s.ID, "Stop", "{}")
+		if err := h.TypeInto(s.ID, "next"); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, "the turn's end in the chat log", func() bool {
+			data, _ := os.ReadFile(chatLog)
+			return strings.Count(string(data), `"kind":"turn_end"`) == i+1
+		})
+	}
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"last"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+	time.Sleep(1500 * time.Millisecond) // past the wait for the last Stop's usage
+	usage := len(h.Events(t, "usage"))
+	running, err := bus.ReadState(h.State, s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	second := h.Restart(t)
 	time.Sleep(time.Second) // the new app has read the chat log again by now
 	if got, _ := second.Session(s.ID); got.State != "working" {
 		t.Errorf("state after a restart = %s, want working: an earlier turn's end ended this one", got.State)
+	}
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || !rec.At.Equal(running.At) {
+		t.Errorf("state file after a restart = %+v, %v; want the running turn's, at %v", rec, err, running.At)
+	}
+	if got := len(second.Events(t, "usage")); got != usage {
+		t.Errorf("%d usage events after a restart, want %d", got, usage)
 	}
 }
 

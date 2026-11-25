@@ -2010,8 +2010,15 @@ func (s *Sessions) followHost(ctx context.Context, id, socket string) {
 // endTurn folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
 // Claude Code runs none after an interrupt. A turn_end older than the latest hook is an earlier turn's. The Stop hook
 // of a normal turn runs just before the host reports its end, so the state file is read under its lock, as the hook
-// writes it.
+// writes it. A follower reads the log again from its start, so a turn_end older than the record the app holds is
+// passed over before the lock is taken.
 func (s *Sessions) endTurn(id string, e chat.Event) {
+	s.mu.Lock()
+	rec, known := s.records[id]
+	s.mu.Unlock()
+	if known && e.At < rec.At.UnixMilli() {
+		return
+	}
 	unlock, err := bus.LockState(s.stateDir, id)
 	if err != nil {
 		return
