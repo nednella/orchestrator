@@ -219,17 +219,19 @@ func clip(s string, width int) string {
 	return s
 }
 
-// Stop stops each server: SIGTERM to its process group when every process in the group carries its thread's marker
-// and none is the thread's host or agent, else to the server alone, then SIGKILL to each of them still there after 5 s.
-// Each process is checked just before its signal: one that is gone, no longer carries the marker or has another start
-// time, as when its pid was taken by a new process, is left alone. It logs one line per server it stops.
+// Stop stops each server. SIGTERM goes to its process group when every process in the group carries its thread's
+// marker; else, when the group holds neither the thread's host nor its agent, to each process of the group that carries
+// the marker, one by one, so a supervisor that would start the server again stops too; else to the server alone. Each
+// server is checked just before: one that is gone, no longer carries the marker or has another start time, as when its
+// pid was taken by a new process, is left alone. It logs one line per server it stops, then sends SIGKILL to each process
+// signalled still there after 5 s.
 func (t *Table) Stop(ctx context.Context, servers []Server) {
-	if len(servers) == 0 {
-		return
-	}
 	threads := map[string]bool{}
 	for _, s := range servers {
 		threads[s.Thread] = true
+	}
+	if len(threads) == 0 {
+		return
 	}
 	snap, err := t.scan(func(id string) bool { return threads[id] })
 	if err != nil {
@@ -245,28 +247,47 @@ func (t *Table) Stop(ctx context.Context, servers []Server) {
 		if _, done := sent[s.PID]; done {
 			continue
 		}
-		if group := snap.group(p.pgid); snap.whole(group, s) {
-			if err := t.sys.signal(-p.pgid, syscall.SIGTERM); err != nil {
-				t.logf("agentos: stopping process group %d of thread %s: %v", p.pgid, s.Thread, err)
-				continue
+		targets, watched := snap.targets(p, s)
+		for _, pid := range targets {
+			if err := t.sys.signal(pid, syscall.SIGTERM); err != nil {
+				t.logf("agentos: stopping process %d of thread %s: %v", pid, s.Thread, err)
 			}
-			for _, q := range group {
-				sent[q.pid] = q
-			}
-			t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s, with its process group %d", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, p.pgid)
-			continue
 		}
-		if err := t.sys.signal(s.PID, syscall.SIGTERM); err != nil {
-			t.logf("agentos: stopping process %d of thread %s: %v", s.PID, s.Thread, err)
-			continue
+		for _, q := range watched {
+			sent[q.pid] = q
 		}
-		sent[s.PID] = p
-		t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread)
+		how := ""
+		switch {
+		case len(targets) == 1 && targets[0] < 0:
+			how = fmt.Sprintf(", with its process group %d", p.pgid)
+		case len(targets) > 1:
+			how = fmt.Sprintf(", with %d more processes of its group", len(targets)-1)
+		}
+		t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s%s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, how)
 	}
 	t.killLeft(ctx, sent, snap.threads)
 }
 
-// group are the processes of the process group pgid.
+// targets are what a stop of the server p sends SIGTERM to, a pid or a process group as -pgid, and the processes
+// that reaches. A group that holds the thread's host or agent, or this process, gets the server alone.
+func (snap snapshot) targets(p process, s Server) (targets []int, watched []process) {
+	group := snap.group(p.pgid)
+	if p.pgid <= 1 || p.pgid == syscall.Getpgrp() || slices.ContainsFunc(group, func(q process) bool { return snap.isAgent(q.pid, s.agent) }) {
+		return []int{p.pid}, []process{p}
+	}
+	marked := slices.DeleteFunc(slices.Clone(group), func(q process) bool {
+		return snap.threads[q.pid] != s.Thread || q.pid <= 1 || q.pid == os.Getpid()
+	})
+	if len(marked) == len(group) {
+		return []int{-p.pgid}, group
+	}
+	for _, q := range marked {
+		targets = append(targets, q.pid)
+	}
+	return targets, marked
+}
+
+// group are the processes of the process group pgid, by pid.
 func (snap snapshot) group(pgid int) []process {
 	var group []process
 	for _, p := range snap.procs {
@@ -274,21 +295,8 @@ func (snap snapshot) group(pgid int) []process {
 			group = append(group, p)
 		}
 	}
+	slices.SortFunc(group, func(a, b process) int { return a.pid - b.pid })
 	return group
-}
-
-// whole says whether the server's whole process group may be signalled: a group of its own, every member of it the
-// thread's, none the thread's host or agent and none this process.
-func (snap snapshot) whole(group []process, s Server) bool {
-	if len(group) == 0 || group[0].pgid <= 1 || group[0].pgid == syscall.Getpgrp() {
-		return false
-	}
-	for _, q := range group {
-		if snap.threads[q.pid] != s.Thread || snap.isAgent(q.pid, s.agent) || q.pid == os.Getpid() {
-			return false
-		}
-	}
-	return true
 }
 
 // killLeft waits for the signalled processes to exit, and after the grace sends SIGKILL to each that is still there,
