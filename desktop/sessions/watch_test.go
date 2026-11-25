@@ -549,3 +549,60 @@ func TestNoWakeWithoutACommand(t *testing.T) {
 		t.Errorf("a project with no wake settings typed into the session:\n%s", pane)
 	}
 }
+
+// hostedIssueSession is a Claude session of issue 12 under its host, in a project with the yaml lines extra. dir is
+// where the stand-in claude writes what it read.
+func hostedIssueSession(t *testing.T, extra string) (h *apptest.Harness, s sessions.Session, dir string) {
+	t.Helper()
+	dir = apptest.ClaudeOnPath(t)
+	h = apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: extra})
+	s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	return h, s, dir
+}
+
+func TestWakeSendsThroughTheHost(t *testing.T) {
+	h, s, dir := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n")
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Hook(t, s.ID, "Stop", `{}`)
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
+	h.RefreshPRs()
+	eventually(t, "the review prompt on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) > 0 })
+	time.Sleep(300 * time.Millisecond)
+	if users := userLines(t, dir, s.ID); len(users) != 1 || !strings.Contains(users[0], `"text":"/address-review 12"`) {
+		t.Errorf("user lines = %q, want one with the review prompt", users)
+	}
+}
+
+func TestHeldWakesGoInOrder(t *testing.T) {
+	h, s, dir := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"Fix the checks of {n}\"\n")
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	eventually(t, "waiting", func() bool { return stateOf(h, s.ID) == "waiting" })
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
+	h.RefreshPRs()
+	h.GH.SetPR(prJSON("OPEN", false, `[{"status":"COMPLETED","conclusion":"FAILURE"}]`, 1, 0))
+	h.RefreshPRs()
+	time.Sleep(500 * time.Millisecond)
+	if users := userLines(t, dir, s.ID); len(users) != 0 {
+		t.Fatalf("a session waiting on the user got %q", users)
+	}
+
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
+	h.Hook(t, s.ID, "Stop", `{}`)
+	eventually(t, "both held prompts on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) >= 2 })
+	time.Sleep(300 * time.Millisecond)
+	users := userLines(t, dir, s.ID)
+	if len(users) != 2 || !strings.Contains(users[0], `"text":"/address-review 12"`) || !strings.Contains(users[1], `"text":"APPLICATION_PROMPT: Fix the checks of 12"`) {
+		t.Errorf("user lines = %q, want the review prompt, then the marked checks prompt", users)
+	}
+}

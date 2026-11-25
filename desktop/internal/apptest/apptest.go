@@ -935,6 +935,7 @@ func (h *Harness) KillSession(id string) error                     { return h.se
 func (h *Harness) DismissSession(id string) error                  { return h.sessions.DismissSession(id) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
+func (h *Harness) Interrupt(id string) error                       { return h.sessions.Interrupt(id) }
 func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }
 func (h *Harness) AckPR(id string) error                           { return h.sessions.AckPR(id) }
 func (h *Harness) Cleanup(id string, force bool) error             { return h.sessions.Cleanup(id, force) }

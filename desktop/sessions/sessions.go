@@ -1645,21 +1645,32 @@ func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string,
 	ctx, cancel := context.WithTimeout(ctx, hostWait)
 	defer cancel()
 	socket := s.hostSocket(name)
-	give := host.Draft
-	if send {
-		give = host.Send
-	}
 	err := host.Ready(ctx, socket)
 	if err == nil {
-		err = give(ctx, socket, text)
+		err = toHost(ctx, socket, text, send)
 	}
 	if err != nil {
 		log.Printf("agentos: session %s did not get its first prompt: %v", name, err)
 	}
 }
 
-// send types text into the session's prompt and, when submit is set, presses Enter.
+// toHost gives text to the host at socket: sent to the agent when send is set, else left as a draft.
+func toHost(ctx context.Context, socket, text string, send bool) error {
+	if send {
+		return host.Send(ctx, socket, text)
+	}
+	return host.Draft(ctx, socket, text)
+}
+
+// send gives text to the session. A session under a host gets it through the host, sent to the agent when submit is
+// set, else left as a draft; another has it typed into its prompt, and Enter pressed when submit is set.
 func (s *Sessions) send(ctx context.Context, name session.Name, text string, submit bool) {
+	if socket := s.hostOf(name); socket != "" {
+		if err := toHost(ctx, socket, text, submit); err != nil {
+			log.Printf("agentos: session %s did not get a prompt: %v", name, err)
+		}
+		return
+	}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Type(tctx, name, text); err != nil || !submit {
@@ -1895,15 +1906,49 @@ func projectIn(projs []project.Project, in term.Info) (project.Project, bool) {
 	return project.Project{}, false
 }
 
-// TypeInto puts text into the session's prompt without pressing Enter.
+// TypeInto puts text into the session's prompt without pressing Enter: a draft in the chat log of a session under a
+// host.
 func (s *Sessions) TypeInto(id, text string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return err
 	}
+	if socket := s.hostOf(name); socket != "" {
+		if err := host.Draft(s.context(), socket, text); err != nil {
+			return fmt.Errorf("session %s did not take the text: %w", id, err)
+		}
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	return s.tmux.Type(ctx, name, text)
+}
+
+// Interrupt stops the turn of a session under a host.
+func (s *Sessions) Interrupt(id string) error {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return err
+	}
+	socket := s.hostOf(name)
+	if socket == "" {
+		return fmt.Errorf("session %s cannot be interrupted: its agent does not run under a host", id)
+	}
+	if err := host.Interrupt(s.context(), socket); err != nil {
+		return fmt.Errorf("session %s did not take the interrupt: %w", id, err)
+	}
+	return nil
+}
+
+// hostOf is the socket of the session's host, "" when its agent runs in its pane. It takes mu.
+func (s *Sessions) hostOf(name session.Name) string {
+	s.mu.Lock()
+	in, ok := s.known[name.String()]
+	s.mu.Unlock()
+	if !ok || !s.Provider(in.Agent).Can(agent.Hosted) {
+		return ""
+	}
+	return s.hostSocket(name)
 }
 
 // Run follows tmux, the hook bus and the pull requests until ctx ends.

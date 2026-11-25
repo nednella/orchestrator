@@ -1176,6 +1176,11 @@ export function createMock(params: URLSearchParams) {
     TypeInto: async (id: string, text: string) => {
       write(find(id), text)
     },
+    Interrupt: async (id: string) => {
+      const s = find(id)
+      if (s.agent !== 'claude') throw `session ${id} cannot be interrupted: its agent does not run under a host`
+      if (s.state === 'ended') throw `session ${id} did not take the interrupt: it has ended`
+    },
     Cleanup: async (id: string, force: boolean) => {
       const s = find(id)
       if (s.cleanup === 'blocked' && !force) throw `Not cleaned up: ${s.cleanupReason}`

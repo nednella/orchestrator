@@ -44,6 +44,7 @@ type Backend = {
   RefreshPRs(): Promise<void>
   AckPR(id: string): Promise<void>
   TypeInto(id: string, text: string): Promise<void>
+  Interrupt(id: string): Promise<void>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
   Memory(): Promise<Memory>
@@ -96,7 +97,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'Interrupt', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -175,6 +176,7 @@ export const api = {
   refreshPRs: () => backend.RefreshPRs(),
   ackPR: (id: string) => backend.AckPR(id),
   typeInto: (id: string, text: string) => backend.TypeInto(id, text),
+  interrupt: (id: string) => backend.Interrupt(id),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),

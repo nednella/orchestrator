@@ -398,6 +398,61 @@ func TestDismissRemovesTheChatLog(t *testing.T) {
 	}
 }
 
+func TestInterruptReachesTheHost(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	if err := h.Interrupt(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the interrupt on claude's stdin", func() bool {
+		data, _ := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(s.ID, "/", "_")+".stdin"))
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, `"type":"control_request"`) && strings.Contains(line, `"subtype":"interrupt"`) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Interrupt(s.ID); err == nil {
+		t.Error("a plain session took an interrupt")
+	}
+}
+
+func TestTypeIntoAClaudeSessionLeavesADraft(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatLog, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	if err := h.TypeInto(s.ID, "Address the review of PR 12"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the draft in the chat log", func() bool {
+		data, _ := os.ReadFile(chatLog)
+		return strings.Contains(string(data), `"kind":"draft","text":"Address the review of PR 12"`)
+	})
+	if users := userLines(t, dir, s.ID); len(users) != 0 {
+		t.Errorf("claude got %q, want no message", users)
+	}
+}
+
 func TestSessionsSurviveWithoutALocale(t *testing.T) {
 	for _, name := range []string{"LANG", "LC_ALL", "LC_CTYPE"} {
 		t.Setenv(name, "")
