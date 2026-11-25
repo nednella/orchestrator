@@ -360,6 +360,7 @@ export type ChatKind =
   | 'mode'
   | 'start'
   | 'task_end'
+  | 'rewind'
   | 'exit'
 
 // ChatEvent is one event of a thread's chat; a field the event does not use is left out.
@@ -385,6 +386,11 @@ export type ChatEvent = {
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.
 export type ChatImage = { base64: string; mime: string }
+
+// FilesRewind is what Edit from here offers for a thread's files. offered is false for a thread in the project folder,
+// whose files a rewind never touches. reason says why they cannot be rewound, '' when they can; files, by absolute
+// path, insertions and deletions are what a rewind of them would change.
+export type FilesRewind = { offered: boolean; reason: string; files: string[]; insertions: number; deletions: number }
 
 // ChatSent is a message the thread took: the id it is logged under, and what the user should know when only its text
 // went out.

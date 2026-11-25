@@ -1,10 +1,11 @@
-import type { Access, ChatEvent, ChatImage, EventMap, Pending, State } from './types'
+import type { Access, ChatEvent, ChatImage, EventMap, FilesRewind, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
-// What the mock knows of a thread: whether it has settled, a way to move its row's state as hooks would, a way to
-// wake it when it has settled, and a way to follow the permission mode its Claude reports, as the sessions do.
-export type MockThread = { settled: boolean; setState(state: State): void; wake(): void; followMode(mode: string): void }
+// What the mock knows of a thread: whether it has settled, its worktree, '' for a thread in the project folder, a way
+// to move its row's state as hooks would, a way to wake it when it has settled, and a way to follow the permission
+// mode its Claude reports, as the sessions do.
+export type MockThread = { settled: boolean; worktree: string; setState(state: State): void; wake(): void; followMode(mode: string): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -530,6 +531,19 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       thread(id)
       return rankFiles(files, query)
     },
+    RewindPreview: async (id: string, message: string): Promise<FilesRewind> => {
+      if (!thread(id).worktree) return { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
+      rewindable(id, message)
+      return { offered: true, reason: '', ...editedSince(id, message) }
+    },
+    RewindTo: async (id: string, message: string, files: boolean) => {
+      if (files && !thread(id).worktree) throw 'The files of the project folder are never rewound'
+      awake(id)
+      rewindable(id, message)
+      append(id, { kind: 'rewind', id: message })
+      return logOf(id).find((e) => e.kind === 'user' && e.id === message)?.text ?? ''
+    },
+    RewindOff: async () => '',
     ProjectFiles: async (project: string, query: string) => {
       known(project)
       return rankFiles(files, query)
@@ -538,6 +552,35 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       known(project)
       return (projectCommands.get(project)?.list ?? []).map((c) => ({ ...c }))
     },
+  }
+
+  // rewindable throws why the thread cannot rewind to before message now, as the host refuses it.
+  function rewindable(id: string, message: string) {
+    awake(id)
+    if (busy(id)) throw 'Edit when the turn ends'
+    const prompts = logOf(id).reduce<string[]>((ids, e) => {
+      if (e.kind === 'user' && !e.parent && e.id) return [...ids, e.id]
+      if (e.kind === 'rewind' && ids.includes(e.id ?? '')) return ids.slice(0, ids.indexOf(e.id ?? ''))
+      return ids
+    }, [])
+    if (!prompts.includes(message)) throw "Claude's conversation no longer holds this message"
+  }
+
+  // editedSince is what Claude's edits since before message changed, as a dry run of a rewind of the files says.
+  function editedSince(id: string, message: string): Pick<FilesRewind, 'files' | 'insertions' | 'deletions'> {
+    const log = logOf(id)
+    const lines = (s: unknown) => (typeof s === 'string' && s !== '' ? s.split('\n').length : 0)
+    const changed = new Set<string>()
+    let insertions = 0
+    let deletions = 0
+    for (const e of log.slice(log.findIndex((e) => e.kind === 'user' && e.id === message))) {
+      const input = (e.input ?? {}) as { file_path?: string; old_string?: string; new_string?: string; content?: string }
+      if (e.kind !== 'tool_use' || !['Edit', 'Write'].includes(e.tool ?? '') || !input.file_path) continue
+      changed.add(input.file_path)
+      insertions += lines(input.old_string)
+      deletions += lines(input.new_string ?? input.content)
+    }
+    return { files: [...changed], insertions, deletions }
   }
 
   // save checks the images as the service does and keeps each at the path it would have, under the thread's

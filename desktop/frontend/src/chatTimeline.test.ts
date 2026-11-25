@@ -531,3 +531,68 @@ test('the agent list puts the newest turn first', () => {
     ['a3', 'a1', 'a2'],
   )
 })
+
+test('a rewind drops its message and everything after it, up to the rewind', () => {
+  const events = log(
+    user('u1', 'First'),
+    { kind: 'message', id: 'msg_1', uuid: 'r1', text: 'One.' },
+    turnEnd(),
+    user('u2', 'Second'),
+    toolUse('t1', 'Edit', { file_path: 'a.ts' }),
+    toolResult('t1', 'done'),
+    { kind: 'message', id: 'msg_2', uuid: 'r2', text: 'Two.' },
+    turnEnd(),
+    { kind: 'exit', stop: 'settle' },
+    { kind: 'start' },
+    user('u3', 'Third'),
+    { kind: 'message', id: 'msg_3', uuid: 'r3', text: 'Three.' },
+    turnEnd(),
+    { kind: 'rewind', id: 'u2' },
+    user('u4', 'Second again'),
+    { kind: 'message', id: 'msg_4', uuid: 'r4', text: 'Four.' },
+    turnEnd(),
+  )
+  const t = buildTimeline(events, {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply', 'user', 'work', 'reply'])
+  assert.deepEqual(
+    only(t.items, 'user').map((u) => [u.text, u.forkAt]),
+    [
+      ['First', ''],
+      ['Second again', 'r1'],
+    ],
+    'the message after the rewind forks at the reply before the rewound one',
+  )
+  assert.equal(t.turnOpen, false)
+  assert.deepEqual(kinds(buildTimeline(log(user('u1', 'First'), turnEnd(), { kind: 'rewind', id: 'u1' }), {}).items), [], 'a rewind to the first message leaves nothing')
+  assert.deepEqual(kinds(buildTimeline(log(user('u1', 'First'), turnEnd(), { kind: 'rewind', id: 'u9' }), {}).items), ['user', 'work'], 'a rewind to a message the chat does not show drops nothing')
+})
+
+test('only a message Claude holds as sent can be rewound to', () => {
+  const events = log(
+    user('u1', 'First'),
+    turnEnd(),
+    user('u2', 'Fix it'),
+    toolUse('t1', 'Bash', { command: 'rm -r build' }),
+    approval('a1', 'Bash', { command: 'rm -r build' }, 't1'),
+    answer('a1', 'deny'),
+    { kind: 'user', id: 'u3', text: 'Keep the build', parent: 'a1' },
+    turnEnd(),
+    user('u4', '/compact'),
+    { kind: 'compact' },
+    turnEnd(),
+    user('u5', 'Then this'),
+  )
+  assert.deepEqual(
+    only(buildTimeline(events, {}).items, 'user').map((u) => [u.text, u.uuid]),
+    [
+      ['First', ''],
+      ['Fix it', ''],
+      ['Keep the build', ''],
+      ['/compact', ''],
+      ['Then this', 'u5'],
+    ],
+  )
+  assert.deepEqual(only(buildTimeline(events.slice(0, 8), {}).items, 'user').map((u) => u.uuid), ['u1', 'u2', ''], 'a denial is no message of the conversation')
+  const denied = events.slice(0, 8)
+  assert.deepEqual(kinds(buildTimeline([...denied, { kind: 'rewind', id: 'u3', seq: 99, at: 99_000 }], {}).items), kinds(buildTimeline(denied, {}).items), 'a rewind never cuts at a denial')
+})

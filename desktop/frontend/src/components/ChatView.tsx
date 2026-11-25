@@ -5,20 +5,23 @@ import { api } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
+import { editBlocked } from '../chatEdit'
 import { fromMarkdown } from '../composerMarkdown'
 import { readStored, writeStored } from '../storage'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
 import { ChatColumnHandle } from './ChatColumnHandle'
+import { ChatEditConfirm } from './ChatEditConfirm'
 import { ChatEndPill } from './ChatEndPill'
 import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
-import type { ChatTimelineEnd } from './ChatTimeline'
+import type { ChatEdit, ChatTimelineEnd } from './ChatTimeline'
 import type { ComposerInput } from './ComposerEditor'
 import { Loading } from './Loading'
 import { Notice } from './Notice'
 import { ThreadComposer } from './ThreadComposer'
+import type { ThreadComposerDraft } from './ThreadComposer'
 
 // A stop that gets no turn end in this long can be asked for again.
 const stopWait = 10_000
@@ -54,6 +57,7 @@ export function ChatView({ session }: ChatViewProps) {
     )
   }
   const input = useRef<ComposerInput>(null)
+  const draft = useRef<ThreadComposerDraft>(null)
   const end = useRef<ChatTimelineEnd>(null)
   const pane = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLDivElement>(null)
@@ -110,6 +114,39 @@ export function ChatView({ session }: ChatViewProps) {
     [session.id, report, forkSession],
   )
 
+  // The message whose Edit from here confirm is open, by its uuid, and why Edit is off for the app's run.
+  const [editing, setEditing] = useState<string | null>(null)
+  const [rewindOff, setRewindOff] = useState('')
+  const readRewindOff = useCallback(() => {
+    api.rewindOff().then(setRewindOff, () => undefined)
+  }, [])
+  useEffect(readRewindOff, [readRewindOff])
+  const closeEdit = useCallback(() => {
+    setEditing(null)
+    readRewindOff()
+  }, [readRewindOff])
+  const folder = session.worktree || project?.dir || ''
+  const edit: ChatEdit | undefined = session.hosted
+    ? {
+        blocked: (uuid) => editBlocked(uuid, rewindOff, timeline),
+        open: editing,
+        onOpen: setEditing,
+        confirm: (uuid) => (
+          <ChatEditConfirm
+            thread={session.id}
+            message={uuid}
+            folder={folder}
+            draftEmpty={() => draft.current?.empty() ?? true}
+            onRewound={(text, replace) => {
+              setEditing(null)
+              if (replace) draft.current?.replace(text)
+            }}
+            onClose={closeEdit}
+          />
+        ),
+      }
+    : undefined
+
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
 
@@ -139,13 +176,14 @@ export function ChatView({ session }: ChatViewProps) {
         <ChatTimeline
           id={session.id}
           items={timeline.items}
-          folder={session.worktree || project?.dir || ''}
+          folder={folder}
           inset={inset}
           endRef={end}
           onFollowing={setFollowing}
           onReply={replyTo}
           onQuote={quote}
           onFork={fork}
+          edit={edit}
         />
       )}
       {/* The chat runs on under the composer; only the composer itself takes the pointer. */}
@@ -158,7 +196,7 @@ export function ChatView({ session }: ChatViewProps) {
                 <ChatNotice text={error} error />
               </div>
             )}
-            <ThreadComposer inputRef={input} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
       </div>

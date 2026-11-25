@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { activeStrip, currentStrip, hitStrip, inView, isNotched, minimapStrips, persistentGutter, plainText, preview, railHeight, stripScale, stripTop, wheelPixels } from './chatMinimap.ts'
 import type { TimelineItem } from './chatTimeline.ts'
 
-const user = (key: string, text = key, files: string[] = []): TimelineItem => ({ kind: 'user', key, at: 0, id: key, text, files, forkAt: '' })
+const user = (key: string, text = key, files: string[] = []): TimelineItem => ({ kind: 'user', key, at: 0, id: key, uuid: key, text, files, forkAt: '' })
 const reply = (key: string, text: string): TimelineItem => ({ kind: 'reply', key, at: 0, id: key, uuid: '', text, streaming: false })
 const failure = (key: string, text: string): TimelineItem => ({ kind: 'notice', key, at: 0, text, error: true })
 const note = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: false })

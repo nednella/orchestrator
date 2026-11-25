@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
@@ -21,6 +21,11 @@ import { ImageViewer } from './ImageViewer'
 
 export type ChatTimelineEnd = { scrollToEnd(): void }
 
+// ChatEdit is Edit from here on the owner's messages: why it is off for the message with a uuid, '' when it is on, the
+// uuid of the message whose confirm is open, a way to open it, which stays the same from render to render so that the
+// rows stay memoised, and the confirm itself.
+export type ChatEdit = { blocked(uuid: string): string; open: string | null; onOpen(uuid: string): void; confirm(uuid: string): ReactNode }
+
 // inset is the height at the bottom that the composer covers, which the last row scrolls clear of. onFollowing says
 // whether the chat follows its end, as the reader scrolls away from it and back.
 type ChatTimelineProps = {
@@ -33,15 +38,38 @@ type ChatTimelineProps = {
   onReply(text: string): void
   onQuote(text: string): void
   onFork(at: string, draft: string): Promise<void>
+  edit?: ChatEdit
 }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void) {
+function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void, edit?: ChatEdit) {
   const item = items[index]
   switch (item.kind) {
-    case 'user':
-      return <ChatUserRow thread={thread} id={item.id} text={item.text} files={item.files} at={item.at} afterUser={items[index - 1]?.kind === 'user'} beforeUser={items[index + 1]?.kind === 'user'} onOpenImage={onOpenImage} />
+    case 'user': {
+      const row = (
+        <ChatUserRow
+          thread={thread}
+          id={item.id}
+          uuid={item.uuid}
+          text={item.text}
+          files={item.files}
+          at={item.at}
+          afterUser={items[index - 1]?.kind === 'user'}
+          beforeUser={items[index + 1]?.kind === 'user'}
+          editBlocked={edit?.blocked(item.uuid)}
+          onEditFrom={edit?.onOpen}
+          onOpenImage={onOpenImage}
+        />
+      )
+      if (!edit || edit.open === null || edit.open !== item.uuid) return row
+      return (
+        <>
+          {row}
+          {edit.confirm(item.uuid)}
+        </>
+      )
+    }
     case 'reply': {
       const next = items[index + 1]
       return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && !next.header} onReply={onReply} onFork={onFork} />
@@ -76,7 +104,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
   }
 }
 
-export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork, edit }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
@@ -165,7 +193,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
         <div ref={lane} className="chat-column relative" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items, row.index, id, folder, onReply, onFork, setViewing)}
+              {rowOf(items, row.index, id, folder, onReply, onFork, setViewing, edit)}
             </div>
           ))}
         </div>

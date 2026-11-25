@@ -427,7 +427,7 @@ export function createMock(params: URLSearchParams) {
     if (deleted.has(id)) throw `Thread ${id} was deleted`
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
-    return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
+    return { settled: s.state === 'settled', worktree: s.worktree, setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
   }, (key) => data.some((p) => p.name === key))
 
   // followMode records the access Claude's permission mode gives, as the sessions do.

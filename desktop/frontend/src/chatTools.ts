@@ -13,7 +13,8 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const lines = (s: string): string[] => (s === '' ? [] : s.split('\n'))
 const firstLine = (s: string): string => s.split('\n').find((l) => l.trim() !== '')?.trim() ?? ''
 
-function relative(path: string, folder: string): string {
+// relative is path inside folder, or path itself when it is not inside.
+export function relative(path: string, folder: string): string {
   const base = folder.replace(/\/+$/, '')
   if (base === '' || !path.startsWith(`${base}/`)) return path
   return path.slice(base.length + 1)

@@ -1,7 +1,7 @@
 import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -60,6 +60,9 @@ type Backend = {
   ChatAnswerInput(id: string, request: string, input: string): Promise<void>
   ChatPending(): Promise<Pending[]>
   ChatFiles(id: string, query: string): Promise<string[]>
+  RewindPreview(id: string, message: string): Promise<FilesRewind>
+  RewindTo(id: string, message: string, files: boolean): Promise<string>
+  RewindOff(): Promise<string>
   ProjectFiles(project: string, query: string): Promise<string[]>
   ProjectCommands(project: string): Promise<Command[]>
   Cleanup(id: string, force: boolean): Promise<void>
@@ -114,7 +117,7 @@ declare global {
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
   sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'OwnWorktree', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'ProjectFiles', 'ProjectCommands'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -210,6 +213,9 @@ export const api = {
   chatAnswerInput: (id: string, request: string, input: string) => backend.ChatAnswerInput(id, request, input),
   chatPending: () => backend.ChatPending(),
   chatFiles: (id: string, query: string) => backend.ChatFiles(id, query),
+  rewindPreview: (id: string, message: string) => backend.RewindPreview(id, message),
+  rewindTo: (id: string, message: string, files: boolean) => backend.RewindTo(id, message, files),
+  rewindOff: () => backend.RewindOff(),
   projectFiles: (project: string, query: string) => backend.ProjectFiles(project, query),
   projectCommands: (project: string) => backend.ProjectCommands(project),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),

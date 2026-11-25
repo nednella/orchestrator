@@ -23,8 +23,10 @@ export type Ask = { key: string; at: number; id: string; input: unknown; request
 
 export type TimelineItem =
   // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none or
-  // when the reply is from before the last compaction.
-  | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[]; forkAt: string }
+  // when the reply is from before the last compaction. uuid is the message's own in Claude's conversation, which an
+  // edit from the message rewinds to; '' for the text of a denial, which Claude holds as no message, and for a message
+  // from before the last compaction.
+  | { kind: 'user'; key: string; at: number; id: string; uuid: string; text: string; files: string[]; forkAt: string }
   // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none or when the reply
   // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
   // failed on: the turn's last part.
@@ -174,7 +176,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const left = close(e.at)
         if (e.id) queued.delete(e.id)
         const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
-        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', text: e.text ?? '', files: e.files ?? noFiles, forkAt })
+        const uuid = e.parent || i <= compacted ? '' : (e.id ?? '')
+        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', uuid, text: e.text ?? '', files: e.files ?? noFiles, forkAt })
         open(e).approvals.push(...left)
         return
       }
@@ -297,6 +300,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'commands':
         commands = Array.isArray(e.input) ? e.input.filter((c): c is Command => typeof c?.name === 'string') : []
         return
+      // Claude's conversation went back to before the message: it and everything after it are gone from the chat. A
+      // rewind waits for the turn's end, so no turn is open.
+      case 'rewind': {
+        const at = items.findIndex((item) => item.kind === 'user' && item.uuid !== '' && item.id === e.id)
+        if (at >= 0) items.length = at
+        return
+      }
     }
   })
 

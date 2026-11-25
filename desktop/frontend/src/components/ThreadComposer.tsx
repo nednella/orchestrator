@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { Ref, RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
 import { accessDisabled } from '../access'
@@ -7,7 +7,7 @@ import { api } from '../api'
 import { composerAction, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
-import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
+import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkdown'
 import { pickCursor, pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Session } from '../types'
@@ -26,9 +26,13 @@ import { NoteImages } from './NoteImages'
 // A send that gets no answer in this long lets the composer send again.
 const sendWait = 15_000
 
+// ThreadComposerDraft is the composer's draft for the chat: whether it holds no text, and a way to put text in its place.
+export type ThreadComposerDraft = { empty(): boolean; replace(text: string): void }
+
 // onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
 type ThreadComposerProps = {
   inputRef: RefObject<ComposerInput | null>
+  draftRef: Ref<ThreadComposerDraft>
   reply: string | null
   onReply(text: string | null): void
   session: Session
@@ -42,7 +46,7 @@ type ThreadComposerProps = {
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
-export function ThreadComposer({ inputRef: input, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
+export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
@@ -84,6 +88,18 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
+
+  useImperativeHandle(
+    draftRef,
+    () => ({
+      empty: () => latest.current.draft.text.trim() === '',
+      replace: (text: string) => {
+        update({ ...latest.current, draft: draftOf(fromMarkdown(text)) })
+        input.current?.focus()
+      },
+    }),
+    [update],
+  )
 
   // A settled thread with a chat keeps its composer, and a message wakes it; one that ran in a terminal cannot wake.
   if (session.state === 'settled' && !session.hosted) {

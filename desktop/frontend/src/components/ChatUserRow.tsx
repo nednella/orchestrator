@@ -8,21 +8,23 @@ import { ChatUserText } from './ChatUserText'
 import { NoteImages } from './NoteImages'
 
 // afterUser and beforeUser say the owner's message comes right after or right before another of the owner's, which
-// it then stacks with. Edit shows only with onEditFrom, and waits while the agent is working.
+// it then stacks with. uuid is the message's in Claude's conversation. Edit shows only with onEditFrom, and is off
+// while editBlocked says why.
 type ChatUserRowProps = {
   thread: string
   id: string
+  uuid: string
   text: string
   files: string[]
   at: number
   afterUser: boolean
   beforeUser: boolean
-  working?: boolean
-  onEditFrom?(eventId: string): void
+  editBlocked?: string
+  onEditFrom?(uuid: string): void
   onOpenImage(url: string): void
 }
 
-export const ChatUserRow = memo(function ChatUserRow({ thread, id, text, files, at, afterUser, beforeUser, working = false, onEditFrom, onOpenImage }: ChatUserRowProps) {
+export const ChatUserRow = memo(function ChatUserRow({ thread, id, uuid, text, files, at, afterUser, beforeUser, editBlocked = '', onEditFrom, onOpenImage }: ChatUserRowProps) {
   const urls = files.flatMap((file) => api.chatMediaURL(thread, file) ?? [])
   // Stacked messages keep their actions to the side of the message, where the column is wide enough.
   const side = beforeUser ? '@min-[37rem]:flex-row-reverse @min-[37rem]:items-center @min-[37rem]:gap-2' : ''
@@ -44,7 +46,7 @@ export const ChatUserRow = memo(function ChatUserRow({ thread, id, text, files, 
           <ChatMessageTime at={at} />
           <div className="flex items-center gap-0.5">
             {onEditFrom && (
-              <ChatActionButton label="Edit from here" disabled={working} onClick={() => onEditFrom(id)}>
+              <ChatActionButton label={editBlocked || 'Edit from here'} disabled={editBlocked !== ''} onClick={() => onEditFrom(uuid)}>
                 <Pencil className="size-3" />
               </ChatActionButton>
             )}
