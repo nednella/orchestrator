@@ -11,6 +11,15 @@ const (
 	noExtra     = `"additionalProperties":false`
 )
 
+const (
+	// Server is the name a thread's MCP config gives the agentos server.
+	Server = "agentos"
+	// ToolPrefix starts the name Claude gives each of the server's tools.
+	ToolPrefix = "mcp__" + Server + "__"
+	// TokenEnv holds the thread's token, in the server's environment only.
+	TokenEnv = "AGENTOS_MCP_TOKEN"
+)
+
 // Tools are the orchestration tools: what a thread uses to start, watch and stop other threads.
 func Tools() []Tool {
 	tools := []struct {

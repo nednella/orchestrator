@@ -37,7 +37,7 @@ func newMCPCmd() *cobra.Command {
 				return err
 			}
 			// The token comes from the environment of this process only; Claude's own environment never holds it.
-			token := os.Getenv("AGENTOS_MCP_TOKEN")
+			token := os.Getenv(mcp.TokenEnv)
 			call := func(ctx context.Context, tool string, input json.RawMessage) (string, error) {
 				if token == "" {
 					return "", errors.New(notInAThread)

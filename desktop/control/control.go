@@ -19,6 +19,7 @@ type Handler func(ctx context.Context, req ctl.Request) (string, error)
 type Sessions interface {
 	Has(id string) bool
 	Current() project.Project
+	ThreadOfToken(token string) (string, bool)
 }
 
 // UICommand is what the front end is told to run, as the payload of the ui:command event.
@@ -83,6 +84,19 @@ func (r *Router) AskerSession(req ctl.Request) (string, error) {
 		return "", fmt.Errorf("session %s is not running", req.Session)
 	}
 	return req.Session, nil
+}
+
+// Caller is the thread whose host the request's token was made for. It reads nothing else of the request: an agentos
+// tool acts as its own thread, whatever the call says.
+func (r *Router) Caller(req ctl.Request) (string, error) {
+	if req.Token == "" {
+		return "", errors.New("This call carries no agentos thread token")
+	}
+	id, ok := r.sessions.ThreadOfToken(req.Token)
+	if !ok {
+		return "", errors.New("This thread token is not valid: the thread settled or was woken again")
+	}
+	return id, nil
 }
 
 // AskerProject is the project key of the asking session, else the current project.

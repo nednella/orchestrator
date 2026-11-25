@@ -20,6 +20,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
 	"github.com/nednella/agentos/desktop/notes"
+	"github.com/nednella/agentos/desktop/orchestration"
 	"github.com/nednella/agentos/desktop/projects"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/desktop/settings"
@@ -142,6 +143,8 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"stats":      stats.NewCommands(waits, a.router, a.router).Stats,
 		"project":    projects.NewCommands(proj).Project,
 		"relaunch":   update.NewCommands(a.updates).Relaunch,
+		// Unscoped: a tool call never moves the screen to another project.
+		"orchestrate": orchestration.NewCommands(sess, chats, a.router).Orchestrate,
 	})
 	a.handleScoped(map[string]control.Handler{
 		"issue":   ic.Issue,

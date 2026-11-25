@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/usage"
 	"github.com/nednella/agentos/internal/util"
@@ -23,6 +24,20 @@ var threadTools = []string{
 
 // browserTool drives the session's browser tab. A session with a browser may run it without asking.
 const browserTool = "Bash(agent-browser:*)"
+
+// toolTimeout is how long, in milliseconds, Claude lets an MCP tool call run: a little over the hour an agentos wait
+// may take.
+const toolTimeout = "3700000"
+
+// agentosTools are the agentos server's tools as Claude names them. Every thread may run them without asking.
+func agentosTools() []string {
+	tools := mcp.Tools()
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = mcp.ToolPrefix + t.Name
+	}
+	return names
+}
 
 var claudeEvents = []string{
 	"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
@@ -84,6 +99,10 @@ func (c Claude) Command(l Launch) []string {
 	if l.Browser {
 		allowed = append(slices.Clip(allowed), browserTool)
 	}
+	if l.MCPConfig != "" {
+		argv = append(argv, "--mcp-config", l.MCPConfig)
+		allowed = append(slices.Clip(allowed), agentosTools()...)
+	}
 	argv = append(argv, "--permission-mode", PermissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {
 		argv = append(argv, "--append-system-prompt", l.Prompt)
@@ -115,8 +134,10 @@ func AccessOfMode(mode string) (session.Access, bool) {
 	return "", false
 }
 
-// Env sets claude's temp folder to the session's own.
-func (c Claude) Env(l Launch) []string { return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir} }
+// Env sets claude's temp folder to the session's own, and lets an agentos tool call run as long as a wait may.
+func (c Claude) Env(l Launch) []string {
+	return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir, "MCP_TOOL_TIMEOUT=" + toolTimeout}
+}
 
 // claudeAliases are the names claude takes for its latest models besides their full ids.
 var claudeAliases = []string{"default", "best", "fable", "opus", "sonnet", "haiku", "opusplan"}

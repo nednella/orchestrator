@@ -4,8 +4,11 @@ package sessions
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -30,6 +33,7 @@ import (
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
@@ -160,6 +164,7 @@ type Sessions struct {
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
+	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
 	memory     Memory
 	serverPID  int // the tmux server's, as tmux gave it; asked again once ps no longer lists it
 }
@@ -260,6 +265,7 @@ func newSessions(o Options) *Sessions {
 		readers:   map[string]*reader{},
 		spent:     map[string]usage.Tokens{},
 		held:      map[string]int64{},
+		tokens:    map[string]string{},
 		stateRead: map[string]fileStamp{},
 		made:      newMadeTrees(o.LocalDir),
 		ctx:       context.Background(),
@@ -357,6 +363,7 @@ func (s *Sessions) Refresh() {
 		}
 	}
 	s.markRead(records, stamps, s.info)
+	s.readTokens()
 	s.number()
 	s.loaded = true
 	s.sync()
@@ -783,6 +790,9 @@ func (s *Sessions) Archive(id string) error {
 	if err := os.Remove(s.hostSocket(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		log.Printf("agentos: removing the host socket of archived thread %s: %v", id, err)
 	}
+	s.mu.Lock()
+	s.forgetToken(name)
+	s.mu.Unlock()
 	return nil
 }
 
@@ -1851,8 +1861,9 @@ func (s *Sessions) reserve(proj project.Project) (session.Name, context.Context)
 	return session.Name{Project: proj.Key(), Token: session.NewToken()}, s.ctx
 }
 
-// launch starts the agent of the session under its host in tmux, in dir, a worktree on branch when branch is set.
-func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart) error {
+// launch starts the agent of the session under its host in tmux, in dir, a worktree on branch when branch is set. The
+// host gets a new token, which the token it had before no longer matches.
+func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart) (err error) {
 	env := []string{
 		"AGENTOS_SESSION=" + name.String(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
@@ -1884,7 +1895,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		tree = workTree{branch: branch, dir: dir}
 	}
 	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree)
-	l.TmpDir, l.ForkAt = tmp, fork.at
+	l.TmpDir, l.ForkAt, l.MCPConfig = tmp, fork.at, s.mcpConfigPath(name)
 	if err := p.Prepare(l); err != nil {
 		return err
 	}
@@ -1893,6 +1904,16 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if err != nil {
 		return err
 	}
+	if err := s.mintToken(name); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			s.mu.Lock()
+			s.forgetToken(name)
+			s.mu.Unlock()
+		}
+	}()
 	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork.of)
 }
 
@@ -1911,6 +1932,95 @@ func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 		return nil, fmt.Errorf("making the session's socket folder private: %w", err)
 	}
 	return append([]string{s.binary, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
+}
+
+// mcpConfig is the MCP config a thread's Claude starts the agentos server with.
+type mcpConfig struct {
+	Servers map[string]mcpServer `json:"mcpServers"`
+}
+
+type mcpServer struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+}
+
+// mcpConfigPath is the MCP config of the session's host, beside its socket in the private folder.
+func (s *Sessions) mcpConfigPath(name session.Name) string {
+	return filepath.Join(filepath.Dir(s.hostSocket(name)), name.Token+".mcp.json")
+}
+
+// mintToken makes a new token for the session's host and writes the MCP config that hands it to the agentos server,
+// in the host's private folder, so it is in no command line and in no environment but the server's. It takes mu.
+func (s *Sessions) mintToken(name session.Name) error {
+	raw := make([]byte, 32)
+	rand.Read(raw)
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	data, err := json.Marshal(mcpConfig{Servers: map[string]mcpServer{
+		mcp.Server: {Command: s.binary, Args: []string{"mcp"}, Env: map[string]string{mcp.TokenEnv: token}},
+	}})
+	if err != nil {
+		return err
+	}
+	if err := atomicfile.Write(s.mcpConfigPath(name), data, 0o600); err != nil {
+		return fmt.Errorf("saving the thread's MCP config: %w", err)
+	}
+	s.mu.Lock()
+	s.tokens[name.String()] = tokenSum(token)
+	s.mu.Unlock()
+	return nil
+}
+
+// forgetToken makes the token of the session's host match no thread, and removes the config that holds it. It needs mu.
+func (s *Sessions) forgetToken(name session.Name) {
+	delete(s.tokens, name.String())
+	if err := os.Remove(s.mcpConfigPath(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Printf("agentos: removing the MCP config of thread %s: %v", name, err)
+	}
+}
+
+// readTokens takes the token of each live thread whose token it does not hold from the thread's MCP config: a thread
+// the app started before it restarted keeps its token. It needs mu.
+func (s *Sessions) readTokens() {
+	for _, in := range s.info {
+		if _, ok := s.tokens[in.Name.String()]; ok {
+			continue
+		}
+		data, err := os.ReadFile(s.mcpConfigPath(in.Name))
+		if err != nil {
+			continue
+		}
+		var c mcpConfig
+		if json.Unmarshal(data, &c) != nil {
+			continue
+		}
+		if token := c.Servers[mcp.Server].Env[mcp.TokenEnv]; token != "" {
+			s.tokens[in.Name.String()] = tokenSum(token)
+		}
+	}
+}
+
+// tokenSum is what the app keeps of a token: the token itself is only in the host's MCP config.
+func tokenSum(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// ThreadOfToken is the live thread, under a host and not archived, whose host the token was made for. A token from
+// before the thread's latest start, or of a thread that settled, names none.
+func (s *Sessions) ThreadOfToken(token string) (string, bool) {
+	if token == "" {
+		return "", false
+	}
+	sum := tokenSum(token)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, held := range s.tokens {
+		if held == sum && !s.archived[id] && slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 // register adds the new session, which runs in work, to the list and returns its row. forkOf is the thread it was
@@ -2135,6 +2245,7 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	defer s.mu.Unlock()
 	// The session is gone: sync turns it into a settled row.
 	s.info = slices.DeleteFunc(s.info, func(i term.Info) bool { return i.Name == name })
+	s.forgetToken(name)
 	s.sync()
 	return nil
 }

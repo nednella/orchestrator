@@ -14,8 +14,9 @@ import (
 
 type fakeSessions struct{ running map[string]bool }
 
-func (f fakeSessions) Has(id string) bool       { return f.running[id] }
-func (f fakeSessions) Current() project.Project { return project.Project{Name: "Current One"} }
+func (f fakeSessions) Has(id string) bool                  { return f.running[id] }
+func (f fakeSessions) Current() project.Project            { return project.Project{Name: "Current One"} }
+func (f fakeSessions) ThreadOfToken(string) (string, bool) { return "", false }
 
 func TestRouterAnswers(t *testing.T) {
 	dir, err := os.MkdirTemp("", "aosrt")

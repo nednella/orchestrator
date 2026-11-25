@@ -307,6 +307,68 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	}
 }
 
+func TestEachHostGetsItsOwnToken(t *testing.T) {
+	h := apptest.New(t)
+	tokens := map[string]bool{}
+	for _, title := range []string{"one", "two"} {
+		s, err := h.Sessions().Create(title, "", false, 0, session.Supervised)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name, _ := session.ParseName(s.ID)
+		path := filepath.Join(hostFolder(h, name.Project), name.Token+".mcp.json")
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s: MCP config = %v, %v; want mode 600", title, info, err)
+		}
+		if folder, err := os.Stat(filepath.Dir(path)); err != nil || folder.Mode().Perm() != 0o700 {
+			t.Errorf("%s: its folder = %v, %v; want mode 700", title, folder, err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config struct {
+			MCPServers map[string]struct {
+				Command string
+				Args    []string
+				Env     map[string]string
+			}
+		}
+		if err := json.Unmarshal(data, &config); err != nil {
+			t.Fatal(err)
+		}
+		server := config.MCPServers["agentos"]
+		token := server.Env["AGENTOS_MCP_TOKEN"]
+		if len(config.MCPServers) != 1 || server.Command != apptest.CLIPath(t) || !slices.Equal(server.Args, []string{"mcp"}) || len(token) != 43 {
+			t.Errorf("%s: MCP config = %s, want the agentos mcp command with a token of 32 bytes in base64url", title, data)
+		}
+		tokens[token] = true
+
+		args := claudeArgs(t, h, s.ID)
+		if i := slices.Index(args, "--mcp-config"); i < 0 || args[i+1] != path {
+			t.Errorf("%s: args = %q, want --mcp-config %s", title, args, path)
+		}
+		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", s.ID, "#{pane_start_command}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.Join(args, " "), token) || strings.Contains(string(out), token) {
+			t.Errorf("%s: the token is on a command line", title)
+		}
+		env := claudeEnv(t, h, s.ID)
+		if _, ok := env["AGENTOS_MCP_TOKEN"]; ok {
+			t.Errorf("%s: claude's environment holds AGENTOS_MCP_TOKEN", title)
+		}
+		if env["MCP_TOOL_TIMEOUT"] != "3700000" {
+			t.Errorf("%s: MCP_TOOL_TIMEOUT = %q, want 3700000", title, env["MCP_TOOL_TIMEOUT"])
+		}
+	}
+	if len(tokens) != 2 {
+		t.Errorf("tokens = %v, want two different ones", tokens)
+	}
+}
+
 func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	h := apptest.New(t)
 	folder := hostFolder(h, "main")

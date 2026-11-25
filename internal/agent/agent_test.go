@@ -110,7 +110,7 @@ func TestAccessFlags(t *testing.T) {
 		} else if got := without(argv); !slices.Equal(got, rest) {
 			t.Errorf("%s: argv besides the mode = %q, want %q", access, got, rest)
 		}
-		if env := (Claude{}).Env(l); !slices.Equal(env, []string{"CLAUDE_CODE_TMPDIR=/tmp/s"}) {
+		if env := (Claude{}).Env(l); !slices.Equal(env, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000"}) {
 			t.Errorf("%s: env = %q", access, env)
 		}
 	}
@@ -145,8 +145,25 @@ func TestClaudeForkFlags(t *testing.T) {
 }
 
 func TestClaudeEnv(t *testing.T) {
-	if got := (Claude{}).Env(Launch{TmpDir: "/tmp/s"}); !slices.Equal(got, []string{"CLAUDE_CODE_TMPDIR=/tmp/s"}) {
+	if got := (Claude{}).Env(Launch{TmpDir: "/tmp/s"}); !slices.Equal(got, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000"}) {
 		t.Errorf("env = %q", got)
+	}
+}
+
+func TestMCPConfigFlag(t *testing.T) {
+	agentos := "mcp__agentos__delegate,mcp__agentos__threads,mcp__agentos__read,mcp__agentos__send,mcp__agentos__wait,mcp__agentos__stop"
+	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
+		argv := Claude{Exe: "/x"}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
+		if n := slices.Index(argv, "--mcp-config"); n < 0 || argv[n+1] != "/state/hosts/ab/tok.mcp.json" || slices.Index(argv[n+1:], "--mcp-config") >= 0 {
+			t.Errorf("%s: argv = %q, want --mcp-config and its path once", access, argv)
+		}
+		if i := slices.Index(argv, "--allowedTools"); i < 0 || argv[i+1] != tools+","+agentos {
+			t.Errorf("%s: --allowedTools = %q, want the thread tools and the six agentos tools", access, argv[i+1])
+		}
+	}
+	argv := Claude{Exe: "/x"}.Command(Launch{})
+	if slices.Contains(argv, "--mcp-config") || strings.Contains(strings.Join(argv, " "), "mcp__agentos__") {
+		t.Errorf("without a config: argv = %q", argv)
 	}
 }
 
