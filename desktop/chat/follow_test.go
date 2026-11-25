@@ -14,7 +14,6 @@ import (
 
 	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
 )
@@ -92,7 +91,7 @@ func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	chats.Start(ctx)
-	svc := chat.NewService(chats, run.Exec, context.Background)
+	svc := chat.NewService(chats, nil, context.Background)
 	if err := svc.ChatWatch(thread.chat.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +172,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 	rec := &apptest.Recorder{}
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
 	chats := chat.New(thread, rec.Emit)
-	svc := chat.NewService(chats, run.Exec, context.Background)
+	svc := chat.NewService(chats, nil, context.Background)
 	read := make(chan []chatlog.Event)
 	go func() {
 		if err := svc.ChatWatch(thread.chat.ID); err != nil {
@@ -207,7 +206,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 	dir := t.TempDir()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), run.Exec, context.Background)
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, context.Background)
 	if err, want := svc.ChatInterrupt(thread.chat.ID), "Thread main/abcdefgh did not take the interrupt"; err == nil || err.Error() != want {
 		t.Errorf("ChatInterrupt = %v, want %q", err, want)
 	}
@@ -230,7 +229,7 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 	}
 	chatLog.Close()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), run.Exec, context.Background)
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, context.Background)
 	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool"}}
 	if got := svc.ChatPending(); !slices.Equal(got, want) {
 		t.Errorf("ChatPending before any follower = %+v, want %+v", got, want)
@@ -264,7 +263,7 @@ func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 	}()
 
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), run.Exec, context.Background)
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, context.Background)
 	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}})
 	if want := "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."; err != nil || sent.Notice != want {
 		t.Errorf("ChatSend = %+v, %v; want the notice %q", sent, err, want)
