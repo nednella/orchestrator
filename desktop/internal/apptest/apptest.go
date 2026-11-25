@@ -954,7 +954,7 @@ done
 
 // fakeClaudeTurns is the stand-in claude's stream-json side. serve is a listener on the port given that leaves the
 // stand-in's process and session, as a server a Bash call starts with & does, writes its pid to the file given and
-// lives five minutes.
+// lives five minutes. "background" starts a subagent in the background, which ends at the next "finish".
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
 serve='import os, socket, sys, time
 if os.fork():
@@ -994,6 +994,14 @@ while IFS= read -r line; do
 		reply ;;
 	*'"type":"user"'*'"text":"exit"'*)
 		exit 0 ;;
+	*'"type":"user"'*'"text":"background"'*)
+		printf '%s\n' "$init" '{"type":"assistant","message":{"id":"msg_call","content":[{"type":"tool_use","id":"toolu_bg","name":"Agent","input":{"description":"List files"}}]}}' \
+			'{"type":"system","subtype":"task_started","task_id":"a1","tool_use_id":"toolu_bg","description":"List files","is_backgrounded":true,"task_type":"local_agent"}' \
+			'{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_bg","content":"Async agent launched"}]}}' \
+			'{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}' ;;
+	*'"type":"user"'*'"text":"finish"'*)
+		printf '%s\n' "$init" '{"type":"system","subtype":"task_notification","task_id":"a1","tool_use_id":"toolu_bg","status":"completed","summary":"a.go"}'
+		reply ;;
 	*'"type":"user"'*'"text":"plan"'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"plan-1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Add made.txt"}}}' ;;
 	*'"type":"user"'*'"text":"leave plan"'*)

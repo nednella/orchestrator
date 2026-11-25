@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom'
 import { useFloatingAt } from '../useFloatingAt'
 import type { Point } from '../useFloatingAt'
 
-export type MenuItem = { label: string; run(e: MouseEvent): void; danger?: boolean; separated?: boolean }
+// detail is a line under the label that says what the item does to the thread now.
+export type MenuItem = { label: string; run(e: MouseEvent): void; danger?: boolean; separated?: boolean; detail?: string }
 
 type ContextMenuProps = { label: string; at: Point; items: (MenuItem | false)[]; onClose(): void }
 
@@ -53,7 +54,7 @@ export function ContextMenu({ label, at, items, onClose }: ContextMenuProps) {
           <button
             role="menuitem"
             tabIndex={-1}
-            className="composer-option"
+            className={item.detail ? 'composer-option h-auto items-start py-1.5' : 'composer-option'}
             data-danger={item.danger}
             onMouseEnter={(e) => e.currentTarget.focus()}
             onClick={(e) => {
@@ -61,7 +62,14 @@ export function ContextMenu({ label, at, items, onClose }: ContextMenuProps) {
               item.run(e)
             }}
           >
-            {item.label}
+            {item.detail ? (
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span>{item.label}</span>
+                <span className="text-label text-soft">{item.detail}</span>
+              </span>
+            ) : (
+              item.label
+            )}
           </button>
         </Fragment>
       ))}

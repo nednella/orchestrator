@@ -29,11 +29,13 @@ const (
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
 // AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
 // FlagRefused says that a thread's Claude did not know flag, so its host started it without. FilesRewind says where a
-// rewind may put a thread's files back, as Sessions.FilesRewind does.
+// rewind may put a thread's files back, as Sessions.FilesRewind does. BackgroundChanged says what a thread's Claude
+// does beside its turns.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
 	TurnEnded(id string, e chatlog.Event)
+	BackgroundChanged(id string, b sessions.Background)
 	AccessChanged(id, mode string, planApproved bool)
 	FlagRefused(flag string)
 	Wake(id string) (sessions.Chat, error)
@@ -235,9 +237,12 @@ type follower struct {
 	approvals []chatlog.Event // waiting, oldest first
 	// planApproved is set from the owner allowing an ExitPlanMode until the mode Claude then reports, or the turn's end.
 	planApproved bool
-	batch        []chatlog.Event // for the next chat:<id> event
-	flushing     bool            // a flush of batch is due
-	sent         time.Time       // when the last chat:<id> event went out
+	tasks        chatlog.Tasks
+	// reporting is set from the end of a task of Claude's own until the end of the turn in which Claude tells of it.
+	reporting bool
+	batch     []chatlog.Event // for the next chat:<id> event
+	flushing  bool            // a flush of batch is due
+	sent      time.Time       // when the last chat:<id> event went out
 }
 
 // run reads the log once, for the approvals that wait and where it ends, then follows the host's stream from there,
@@ -282,6 +287,7 @@ func (f *follower) run(ctx context.Context) {
 		}
 	}
 	close(f.read)
+	f.chats.threads.BackgroundChanged(f.chat.ID, f.backgroundNow())
 	if commands != nil {
 		f.chats.commands.keep(f.chat.Project, *commands)
 	}
@@ -323,9 +329,13 @@ func (f *follower) run(ctx context.Context) {
 
 // take handles one event from the host's stream.
 func (f *follower) take(e chatlog.Event) {
-	before := f.waiting()
+	before, background := f.waiting(), f.backgroundNow()
 	mode, approved := f.see(e)
 	f.announce(before)
+	if now := f.backgroundNow(); now != background {
+		now.At = time.UnixMilli(e.At)
+		f.chats.threads.BackgroundChanged(f.chat.ID, now)
+	}
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
 		f.chats.threads.TurnEnded(f.chat.ID, e)
@@ -343,9 +353,8 @@ func (f *follower) take(e chatlog.Event) {
 	}
 }
 
-// see keeps the approvals that wait: an answer takes one, and a turn's end, Claude's exit or a new run's start takes them
-// all. For a mode event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in
-// the same turn.
+// see keeps the approvals that wait, as waitingAfter says, and the tasks Claude runs in the background. For a mode
+// event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in the same turn.
 func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -353,14 +362,24 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 		f.planApproved = true
 	}
 	f.approvals = waitingAfter(f.approvals, e)
+	if task, ok := f.tasks.See(e); ok && task.ReportedAlone(e) {
+		f.reporting = true
+	}
 	switch e.Kind {
 	case chatlog.KindMode:
 		mode, planApproved = e.Text, f.planApproved
 		f.planApproved = false
 	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindStart:
-		f.planApproved = false
+		f.planApproved, f.reporting = false, false
 	}
 	return mode, planApproved
+}
+
+// backgroundNow is what the thread's Claude does beside its turns, with no time.
+func (f *follower) backgroundNow() sessions.Background {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return sessions.Background{Subagents: f.tasks.Working(), Reporting: f.reporting}
 }
 
 // waitingAfter is the approvals that wait, oldest first, once e has happened.

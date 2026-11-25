@@ -61,6 +61,7 @@ export type Session = {
   tokens: number
   cost: number
   memory: number
+  subagents: number // the subagents its Claude runs in the background, which a settle stops
 }
 
 // One port a server the thread started listens on.
@@ -345,7 +346,9 @@ export type Release = {
 
 // ChatKind is what a chat event is. A delta, a thinking event (a thinking block's start, with no text, or a piece of its
 // text) and a thought with no text are never logged and have seq 0; a thought ends a thinking block, with its text. A
-// task_end is a task Claude ran beside its turn ending, a subagent among them: parent is the call that started it.
+// task_start and task_end are a task Claude runs in the background, beside its turns, starting and ending, a subagent
+// or a shell among them: parent is the call that started it, and a task_start's tool is its kind, local_bash for a
+// shell.
 export type ChatKind =
   | 'init'
   | 'user'
@@ -366,6 +369,7 @@ export type ChatKind =
   | 'compact'
   | 'mode'
   | 'start'
+  | 'task_start'
   | 'task_end'
   | 'rewind'
   | 'exit'

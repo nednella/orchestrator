@@ -524,6 +524,64 @@ test("an event of a subagent with no call shows nowhere, and a shell's end chang
   assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
 })
 
+const taskStart = (parent: string, kind = 'local_agent'): Draft => ({ kind: 'task_start', parent, id: `task-${parent}`, tool: kind })
+
+// A subagent in the background as the host logs it: its task starts with the call, the turn ends at its launch, it
+// works and ends, and Claude tells of its end in a turn of its own.
+const background = log(
+  user('u1', 'List the files', 10_000),
+  agentCall('a1', 'List files', 'Explore'),
+  taskStart('a1'),
+  toolResult('a1', 'Async agent launched successfully.'),
+  message('msg_1', 'It is running.'),
+  turnEnd(false, 15_000),
+  from('a1', toolUse('s1', 'Bash', { command: 'ls' })),
+  from('a1', toolResult('s1', 'a.go')),
+  { ...taskEnd('a1', 'a.go'), at: 21_000 },
+  { ...message('msg_2', 'The subagent found a.go.'), at: 22_000 },
+  turnEnd(false, 23_000),
+)
+
+test('the turns are one piece of work until Claude has told of the end of its subagents', () => {
+  const at = (n: number) => buildTimeline(background.slice(0, n), {})
+  const rests = at(6)
+  assert.equal(rests.turnOpen, false, 'a message sent now starts a turn')
+  assert.deepEqual(kinds(rests.items), ['user', 'work', 'agent', 'reply'])
+  assert.equal(only(rests.items, 'work')[0].endedAt, null, 'the work goes on while the subagent runs')
+  assert.equal(only(at(9).items, 'work')[0].endedAt, null, 'and until Claude tells of its end')
+  assert.equal(at(10).turnOpen, true, "Claude's own turn runs")
+  const t = at(11)
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'reply', 'reply'], "Claude's own turn shows no message of the owner's")
+  const [work] = only(t.items, 'work')
+  assert.deepEqual([work.startedAt, work.endedAt, t.turnOpen], [10_000, 23_000, false])
+  assert.deepEqual(only(t.items, 'reply').map((r) => r.text), ['It is running.', 'The subagent found a.go.'])
+})
+
+test('a piece of work that waits on its subagents ends where the owner, an error or an exit ends it', () => {
+  const rest = background.slice(0, 6)
+  const after = (...drafts: Draft[]) => buildTimeline([...rest, ...log(...drafts).map((e) => ({ ...e, seq: e.seq + rest.length, at: e.at + 30_000 }))], {})
+  const sent = after(user('u2', 'Also count them'))
+  assert.deepEqual(kinds(sent.items), ['user', 'work', 'agent', 'reply', 'user', 'work'])
+  assert.deepEqual(only(sent.items, 'work').map((w) => w.endedAt), [15_000, null], 'the owner\'s message ends the piece where its turn ended')
+  const stopped = after(taskEnd('a1', '', 'stopped'))
+  assert.deepEqual([only(stopped.items, 'work')[0].endedAt, stopped.turnOpen], [15_000, false], 'Claude tells of no stopped task')
+  const exited = after({ kind: 'exit' })
+  assert.deepEqual([only(exited.items, 'work')[0].endedAt, only(exited.items, 'agent')[0].state], [31_000, 'stopped'])
+  const failed = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), taskStart('a1'), turnEnd(true, 9_000)), {})
+  assert.equal(only(failed.items, 'work')[0].endedAt, 9_000)
+})
+
+test('a shell in the background does not hold the work open', () => {
+  const t = buildTimeline(log(user('u1', 'Serve it', 1_000), toolUse('b1', 'Bash', { command: 'npm start', run_in_background: true }), taskStart('b1', 'local_bash'), toolResult('b1', 'Running'), turnEnd(false, 4_000)), {})
+  assert.equal(only(t.items, 'work')[0].endedAt, 4_000)
+})
+
+test("a subagent's own task holds the work open, and a subagent woken again runs", () => {
+  const t = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), taskStart('a1'), turnEnd(), from('a1', taskStart('b2')), taskEnd('a1', 'done'), taskStart('a1')), {})
+  assert.equal(only(t.items, 'work')[0].endedAt, null)
+  assert.equal(only(t.items, 'agent')[0].state, 'running')
+})
+
 test('the agent list puts the newest turn first', () => {
   const events = log(user('u1', 'One'), agentCall('a1', 'First'), agentCall('a2', 'Second'), turnEnd(), user('u2', 'Two'), agentCall('a3', 'Third'), turnEnd())
   assert.deepEqual(

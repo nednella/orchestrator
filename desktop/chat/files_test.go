@@ -168,12 +168,13 @@ type folderThread string
 func (f folderThread) ChatOf(id string) (sessions.Chat, error) {
 	return sessions.Chat{ID: id, Project: "main", Dir: string(f)}, nil
 }
-func (folderThread) Chats() []sessions.Chat                    { return nil }
-func (folderThread) TurnEnded(id string, e chatlog.Event)      {}
-func (folderThread) AccessChanged(string, string, bool)        {}
-func (folderThread) FlagRefused(string)                        {}
-func (folderThread) Wake(string) (sessions.Chat, error)        { return sessions.Chat{}, nil }
-func (folderThread) FilesRewind(string) (string, bool, string) { return "", true, "" }
+func (folderThread) Chats() []sessions.Chat                        { return nil }
+func (folderThread) TurnEnded(id string, e chatlog.Event)          {}
+func (folderThread) BackgroundChanged(string, sessions.Background) {}
+func (folderThread) AccessChanged(string, string, bool)            {}
+func (folderThread) FlagRefused(string)                            {}
+func (folderThread) Wake(string) (sessions.Chat, error)            { return sessions.Chat{}, nil }
+func (folderThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()

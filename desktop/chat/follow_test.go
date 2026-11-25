@@ -24,13 +24,14 @@ import (
 // oneThread is a single live thread under a host at socket, with an empty chat log.
 type oneThread struct{ chat sessions.Chat }
 
-func (o oneThread) ChatOf(string) (sessions.Chat, error)      { return o.chat, nil }
-func (o oneThread) Chats() []sessions.Chat                    { return []sessions.Chat{o.chat} }
-func (o oneThread) TurnEnded(string, chatlog.Event)           {}
-func (o oneThread) AccessChanged(string, string, bool)        {}
-func (o oneThread) FlagRefused(string)                        {}
-func (o oneThread) Wake(string) (sessions.Chat, error)        { return o.chat, nil }
-func (o oneThread) FilesRewind(string) (string, bool, string) { return "", true, "" }
+func (o oneThread) ChatOf(string) (sessions.Chat, error)          { return o.chat, nil }
+func (o oneThread) Chats() []sessions.Chat                        { return []sessions.Chat{o.chat} }
+func (o oneThread) TurnEnded(string, chatlog.Event)               {}
+func (o oneThread) BackgroundChanged(string, sessions.Background) {}
+func (o oneThread) AccessChanged(string, string, bool)            {}
+func (o oneThread) FlagRefused(string)                            {}
+func (o oneThread) Wake(string) (sessions.Chat, error)            { return o.chat, nil }
+func (o oneThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
 
 // noProject knows no project.
 func noProject(string) string { return "" }

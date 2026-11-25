@@ -869,17 +869,18 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 }
 
 var (
-	errModeDuringTurn    = errors.New("Change access when the turn ends")
-	errRestarting        = errors.New("This thread is restarting")
-	errRewinding         = errors.New("This thread is rewinding")
-	errEditDuringTurn    = errors.New("Edit when the turn ends")
-	errNotInConversation = errors.New("Claude's conversation no longer holds this message")
-	errNoCheckpoints     = errors.New("This thread started before file checkpoints")
-	errStaleRewind       = errors.New("A message arrived since; look at the chat and edit again")
-	errNoAnswer          = errors.New("Claude did not answer")
-	errAnswerLate        = errors.New("Claude has not answered yet; the chat updates when it does")
-	errFilesUnknown      = errors.New("The files may have been put back; check them before you edit again")
-	errApprovalWaits     = errors.New("This thread waits on an approval")
+	errModeDuringTurn     = errors.New("Change access when the turn ends")
+	errRestarting         = errors.New("This thread is restarting")
+	errModeWhileSubagents = errors.New("Change access when the subagents end")
+	errRewinding          = errors.New("This thread is rewinding")
+	errEditDuringTurn     = errors.New("Edit when the turn ends")
+	errNotInConversation  = errors.New("Claude's conversation no longer holds this message")
+	errNoCheckpoints      = errors.New("This thread started before file checkpoints")
+	errStaleRewind        = errors.New("A message arrived since; look at the chat and edit again")
+	errNoAnswer           = errors.New("Claude did not answer")
+	errAnswerLate         = errors.New("Claude has not answered yet; the chat updates when it does")
+	errFilesUnknown       = errors.New("The files may have been put back; check them before you edit again")
+	errApprovalWaits      = errors.New("This thread waits on an approval")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
 	// or after the one agentos was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
@@ -949,9 +950,13 @@ func (h *host) setMode(mode string) error {
 		return errRestarting
 	}
 	if h.busyLocked() {
+		err := errModeDuringTurn
+		if !h.turnOpen && len(h.approvals) == 0 && len(h.queued) == 0 {
+			err = errModeWhileSubagents
+		}
 		h.mu.Unlock()
 		h.stdinMu.Unlock()
-		return errModeDuringTurn
+		return err
 	}
 	h.replies[id] = got
 	h.mu.Unlock()

@@ -3,9 +3,9 @@ import type { Access, ChatEvent, ChatImage, EventMap, FilesRewind, Pending, Stat
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
 // What the mock knows of a thread: whether it has settled, its worktree, '' for a thread in the project folder, a way
-// to move its row's state as hooks would, a way to wake it when it has settled, and a way to follow the permission
-// mode its Claude reports, as the sessions do.
-export type MockThread = { settled: boolean; worktree: string; setState(state: State): void; wake(): void; followMode(mode: string): void }
+// to move its row's state as hooks would, a way to wake it when it has settled, and ways to follow the permission mode
+// its Claude reports and the subagents it runs in the background, as the sessions do.
+export type MockThread = { settled: boolean; worktree: string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -194,7 +194,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   const queued = new Map<string, { id: string; text: string; files: string[] }[]>()
   const media = new Map<string, string>() // a saved image's data URL, by its path
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
-  const background = new Map<string, () => void>() // stops the subagents each thread runs in the background
+  const background = new Map<string, { stop(): void; calls: string[] }>() // the subagents each thread runs in the background, by call, and how to stop them
   const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
   // The command list a thread of each project reported last, as the service keeps it for Home.
   const projectCommands = new Map<string, { at: number; list: typeof commands }>()
@@ -289,21 +289,25 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
 
   // subagents runs a turn that starts two subagents in the background, as Claude does by default: the turn ends once
   // both are launched, each then works and ends on its own, and Claude reports both in a turn of its own, with no
-  // message of the owner's.
+  // message of the owner's. The row works until that turn ends, as the sessions show it.
   function subagents(id: string) {
     const t = thread(id)
     const runs = backgroundAgents.map((a) => ({ ...a, call: `toolu_${Math.random().toString(36).slice(2, 10)}`, done: 0 }))
-    for (const r of runs) append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.description } })
+    t.setState('working')
+    for (const r of runs) {
+      append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.description } })
+      append(id, { kind: 'task_start', id: `task-${r.call}`, parent: r.call, tool: 'local_agent', text: r.description })
+    }
     for (const r of runs) append(id, { kind: 'tool_result', parent: r.call, text: 'Async agent launched successfully.' })
     append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, uuid: crypto.randomUUID(), text: 'Both subagents are running. I will report what they find.' })
     append(id, { kind: 'turn_end', cost: 0.02 })
-    t.setState('idle')
+    const open = runs.map((r) => r.call)
+    t.setSubagents(open.length)
     const timer = setInterval(() => {
       const r = runs.find((r) => r.done <= r.steps.length)
       if (!r) {
         clearInterval(timer)
         background.delete(id)
-        t.setState('working')
         append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, uuid: crypto.randomUUID(), text: runs.map((r) => r.report).join(' ') })
         append(id, { kind: 'turn_end', cost: 0.01 })
         t.setState('idle')
@@ -317,12 +321,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       } else {
         append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, text: r.report, agent: r.call })
         append(id, { kind: 'task_end', parent: r.call, text: r.report })
+        open.splice(open.indexOf(r.call), 1)
+        t.setSubagents(open.length)
       }
       r.done++
       // The subagents work side by side, so the next step is the other one's.
       runs.push(...runs.splice(runs.indexOf(r), 1))
     }, agentStepEvery)
-    background.set(id, () => clearInterval(timer))
+    background.set(id, { stop: () => clearInterval(timer), calls: open })
   }
 
   // runQueued takes in every queued message and replies to them, as Claude does once it can.
@@ -651,11 +657,15 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   function end(id: string, stop?: 'settle' | { restart: Access }) {
     replying.get(id)?.()
     replying.delete(id)
-    background.get(id)?.()
+    const stopped = background.get(id)
+    stopped?.stop()
     background.delete(id)
     queued.delete(id)
     setPending(id, null)
     if (!logs.has(id)) return
+    // The host closes, as stopped, each task Claude still ran when it went.
+    for (const call of stopped?.calls ?? []) append(id, { kind: 'task_end', parent: call, error: true, stop: 'stopped' })
+    if (stopped) thread(id).setSubagents(0)
     if (stop === 'settle') append(id, { kind: 'exit', stop })
     else if (stop) append(id, { kind: 'exit', stop: 'restart', text: stop.restart })
     else append(id, { kind: 'exit' })
@@ -670,11 +680,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  // busy says whether a turn runs, an approval waits or a message is queued, as the host's hold op does.
-  const busy = (id: string) => replying.has(id) || pending.has(id) || (queued.get(id)?.length ?? 0) > 0
+  // busy says whether a turn runs, an approval waits, a message is queued or a subagent runs in the background, as the
+  // host's hold op does; turnRuns leaves the subagents out.
+  const turnRuns = (id: string) => replying.has(id) || pending.has(id) || (queued.get(id)?.length ?? 0) > 0
+  const busy = (id: string) => turnRuns(id) || (background.get(id)?.calls.length ?? 0) > 0
 
   // mode logs Claude's new permission mode, as the host does once Claude changes it.
   const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
 
-  return { backend, seed, ask, delegations, fork, forget, end, start, busy, mode, breakLog, mediaURL }
+  return { backend, seed, ask, delegations, fork, forget, end, start, busy, turnRuns, mode, breakLog, mediaURL }
 }

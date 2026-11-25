@@ -19,6 +19,9 @@ type ThreadMenuProps = {
 
 const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
 
+// A sleep stops the subagents with Claude.
+const subagentsWorking = (n: number) => (n === 0 ? undefined : `${n} ${n === 1 ? 'subagent is' : 'subagents are'} still working`)
+
 export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup, onDelete }: ThreadMenuProps) {
   const a = useAgentos()
   const layout = useLayout()
@@ -52,7 +55,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run([])) },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },
-        !settled && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
+        !settled && { label: 'Sleep', danger: true, separated: true, detail: subagentsWorking(session.subagents), run: () => a.report(() => a.settleThread(session.id)) },
         { label: 'Delete', danger: true, separated: settled && !session.hosted, run: onDelete },
       ]}
     />

@@ -755,6 +755,48 @@ func TestMacStaysAwakeWhileASessionWorks(t *testing.T) {
 	eventually(t, "the assertion released", func() bool { return awake() == false })
 }
 
+func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.NewSession("beside", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The thread's chat follower has read its log, and says from now on only what the log says.
+	if err := h.ChatWatch(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	view := func() sessions.Session { got, _ := h.Session(s.ID); return got }
+	replied := func() int { return h.Rec.CountAttentionFor(s.ID, "replied") }
+
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	eventually(t, "working", func() bool { return view().State == session.Working })
+	for _, step := range []struct {
+		name       string
+		background sessions.Background
+		hook       string
+		state      session.State
+		subagents  int
+		replied    int
+	}{
+		{"a subagent outlives the turn that started it", sessions.Background{Subagents: 1}, "Stop", session.Working, 1, 0},
+		{"Claude tells of its end in a turn of its own", sessions.Background{Reporting: true}, "", session.Working, 0, 0},
+		{"that turn's Stop comes before its end", sessions.Background{Reporting: true}, "Stop", session.Working, 0, 0},
+		{"the turn has ended", sessions.Background{}, "", session.Idle, 0, 1},
+	} {
+		h.Sessions().BackgroundChanged(s.ID, step.background)
+		if step.hook != "" {
+			h.Hook(t, s.ID, step.hook, `{}`)
+		}
+		eventually(t, step.name, func() bool { v := view(); return v.State == step.state && v.Subagents == step.subagents })
+		if got := replied(); got != step.replied {
+			t.Errorf("%s: %d replied alerts, want %d", step.name, got, step.replied)
+		}
+		if awake := h.Rec.Last("awake"); awake != (step.state == session.Working) {
+			t.Errorf("%s: awake %v", step.name, awake)
+		}
+	}
+}
+
 func TestIdleReminders(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("r", "")

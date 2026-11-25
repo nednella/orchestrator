@@ -99,6 +99,8 @@ type Session struct {
 	Cost   float64 `json:"cost"`   // what those tokens cost at list prices, in US dollars
 
 	Memory int64 `json:"memory"` // bytes held by the processes under the session's pane, rounded up; 0 when not known
+
+	Subagents int `json:"subagents"` // the tasks other than shells that its Claude runs in the background, which a settle stops
 }
 
 // Project is a project as the front end sees it, with how its sessions stand.
@@ -177,6 +179,7 @@ type Sessions struct {
 	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
 	refused    map[string]bool         // the flags Claude did not know in this run of the app, which it now starts without
 	restarting map[string]bool         // the threads settled for a change of access until they wake again: they keep their servers
+	background map[string]Background   // what each live thread's Claude does beside its turns, as its host's chat log says
 	memory     Memory
 	serverPID  int // the tmux server's, as tmux gave it; asked again once ps no longer lists it
 }
@@ -283,6 +286,7 @@ func newSessions(o Options) *Sessions {
 		held:       map[string]int64{},
 		tokens:     map[string]string{},
 		refused:    map[string]bool{},
+		background: map[string]Background{},
 		stateRead:  map[string]fileStamp{},
 		made:       newMadeTrees(o.LocalDir),
 		procs:      procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
@@ -1060,9 +1064,12 @@ func (s *Sessions) sync() {
 		id := in.Name.String()
 		live[id] = true
 		s.known[id] = in
-		state, at := session.Idle, time.Now()
+		state, at := s.stateOf(id), time.Now()
 		if rec, ok := s.records[id]; ok {
-			state, at = rec.State, rec.At
+			at = rec.At
+		}
+		if b, ok := s.background[id]; ok && b.At.After(at) {
+			at = b.At
 		}
 		prev, known := s.seen[id]
 		if !known {
@@ -1123,6 +1130,7 @@ func (s *Sessions) sync() {
 			if rec := s.records[id]; rec.Transcript != "" {
 				go s.countUsage(id, rec.Transcript, rec.AgentModel, true)
 			}
+			delete(s.background, id)
 			go s.closeBrowser(id)
 			if !s.restarting[id] {
 				go s.stopServers(true, id)
@@ -1232,7 +1240,7 @@ func (s *Sessions) holdAwake() {
 		return
 	}
 	working := slices.ContainsFunc(s.info, func(in term.Info) bool {
-		return s.records[in.Name.String()].State == session.Working && s.keepAwake(in.Name.Project)
+		return s.stateOf(in.Name.String()) == session.Working && s.keepAwake(in.Name.Project)
 	})
 	s.awake.Hold(working)
 }
@@ -1275,11 +1283,7 @@ func (s *Sessions) projectViews() []Project {
 			if in.Name.Project != p.Key() {
 				continue
 			}
-			state := session.Idle
-			if rec, ok := s.records[in.Name.String()]; ok {
-				state = rec.State
-			}
-			switch state {
+			switch s.stateOf(in.Name.String()) {
 			case session.Settled:
 				continue
 			case session.Waiting:
@@ -1300,9 +1304,9 @@ func (s *Sessions) list() []Session {
 	byName := map[session.Name]term.Info{}
 	for _, in := range s.info {
 		byName[in.Name] = in
-		ss := session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Idle}
+		ss := session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: s.stateOf(in.Name.String())}
 		if rec, ok := s.records[in.Name.String()]; ok {
-			ss.State, ss.At, ss.Detail = rec.State, rec.At, rec.Detail
+			ss.At, ss.Detail = rec.At, rec.Detail
 		}
 		rail = append(rail, ss)
 	}
@@ -1347,6 +1351,7 @@ func (s *Sessions) list() []Session {
 			view.Tokens, view.Cost = spent.Total(), spent.Dollars()
 		}
 		view.Memory = s.held[id]
+		view.Subagents = s.background[id].Subagents
 		if view.History == nil {
 			view.History = []session.Change{}
 		}
@@ -2672,7 +2677,7 @@ func (s *Sessions) wake(ctx context.Context, t target, prompt string) {
 		return
 	}
 	s.mu.Lock()
-	if holdsPrompts(s.records[t.id].State) {
+	if holdsPrompts(s.stateOf(t.id)) {
 		if h := (heldPrompt{Told: Told{Text: prompt}, command: true}); !slices.Contains(s.wakes[t.id], h) {
 			s.wakes[t.id] = append(s.wakes[t.id], h)
 		}
@@ -2739,7 +2744,7 @@ func (s *Sessions) turnRuns(id string) bool {
 		return false
 	}
 	rec := s.records[id]
-	return rec.State == session.Working || awaitsOwner(rec)
+	return s.stateOf(id) == session.Working || awaitsOwner(rec)
 }
 
 // awaitsOwner says whether the thread waits on the owner in the middle of its turn, for a permission or a question tool.
@@ -2781,7 +2786,7 @@ func (s *Sessions) deliverWakes() {
 		rec := s.records[id]
 		var now, later []heldPrompt
 		for _, h := range all {
-			if !live || !holdsPrompts(rec.State) || !h.command && !awaitsOwner(rec) {
+			if !live || !holdsPrompts(s.stateOf(id)) || !h.command && !awaitsOwner(rec) {
 				now = append(now, h)
 			} else {
 				later = append(later, h)
@@ -3107,7 +3112,10 @@ func (s *Sessions) release(name session.Name) {
 	}
 }
 
-var errAccessDuringTurn = errors.New("Change access when the turn ends")
+var (
+	errAccessDuringTurn     = errors.New("Change access when the turn ends")
+	errAccessWhileSubagents = errors.New("Change access when the subagents end")
+)
 
 // accessChange is what is left to do once the thread's new access is checked.
 type accessChange int
@@ -3162,6 +3170,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	}
 	e, settled := s.ended[id]
 	old, deleted := s.isOld(id), s.deleted[id]
+	onlySubagents := s.background[id].Subagents > 0 && s.records[id].State == session.Idle
 	s.mu.Unlock()
 	switch {
 	case deleted:
@@ -3186,6 +3195,8 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	switch {
 	case err != nil:
 		return accessDone, accessFailed(name, access, err)
+	case !idle && onlySubagents:
+		return accessDone, errAccessWhileSubagents
 	case !idle:
 		return accessDone, errAccessDuringTurn
 	}
@@ -3564,6 +3575,45 @@ func (s *Sessions) TurnEnded(id string, e chat.Event) {
 	if err == nil {
 		s.observe(next)
 	}
+}
+
+// Background is what a thread's Claude does beside its turns: subagents in the background, which go on after the turn
+// that started them, and the turn Claude then starts itself to tell of one's end.
+type Background struct {
+	Subagents int  // the tasks other than shells it runs in the background
+	Reporting bool // a task of its own ended, and Claude tells of it in a turn of its own that has not ended yet
+	At        time.Time
+}
+
+func (b Background) working() bool { return b.Subagents > 0 || b.Reporting }
+
+// BackgroundChanged records what the thread's Claude does beside its turns, as the chat service reads it from the
+// host. The hooks say only that a turn stopped, so the thread shows idle at the turn that started a subagent. It takes
+// mu.
+func (s *Sessions) BackgroundChanged(id string, b Background) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
+		return
+	}
+	if b.At.IsZero() {
+		b.At = time.Now()
+	}
+	s.background[id] = b
+	s.sync()
+}
+
+// stateOf is the live session's state: its hooks', but working while it is idle and its Claude works beside its turns.
+// It needs mu.
+func (s *Sessions) stateOf(id string) session.State {
+	state := session.Idle
+	if rec, ok := s.records[id]; ok {
+		state = rec.State
+	}
+	if state == session.Idle && s.background[id].working() {
+		return session.Working
+	}
+	return state
 }
 
 // Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on, the

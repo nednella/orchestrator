@@ -37,6 +37,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session
     tokens: 0,
     cost: 0,
     memory: 0,
+    subagents: 0,
   }
 }
 

@@ -763,7 +763,7 @@ func TestABackgroundSubagentKeepsTheHostBusyUntilClaudeHasToldOfItsEnd(t *testin
 		t.Error("held while a subagent works in the background")
 	}
 	err := SetMode(ctxT(t), h.socket, "plan")
-	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "Change access when the turn ends" {
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "Change access when the subagents end" {
 		t.Errorf("mode change while a subagent works: %v", err)
 	}
 	waitTask(t, events, chat.KindTaskEnd, "toolu_bg")

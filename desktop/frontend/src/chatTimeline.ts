@@ -141,11 +141,19 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
+  // The tasks other than shells that Claude runs in the background, by the call that started each. While one runs, or
+  // until Claude has told of the end of the last one in a turn of its own, the turns are one piece of work: the turn
+  // rests at its end, from held, and Claude's next turn goes on with it. A shell may be a server that never ends.
+  const tasks = new Set<string>()
+  let held: number | null = null
   // Claude resumes a compacted conversation from its last compaction and cannot find a message before it, so no fork
   // ends at one.
   const compacted = events.findLastIndex((e) => e.kind === 'compact')
 
-  const open = (e: ChatEvent): Turn => (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [], unsent: [] })
+  const open = (e: ChatEvent): Turn => {
+    held = null
+    return (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [], unsent: [] })
+  }
 
   const unsent = (id: string, text: string, at: number, error = false): Notice => {
     queued.delete(id)
@@ -157,20 +165,26 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const close = (endedAt: number, notice: Notice | Restart | null = null, ended?: TurnEnd): Approval[] => {
     const t = turn as Turn | null
     turn = null
+    held = null
     if (t) items.push(...folded(t, endedAt, ended))
     if (notice) items.push(notice)
     if (t) items.push(...t.unsent)
     return t?.approvals.filter((a) => !a.answered) ?? []
   }
 
-  // end closes the turn for good: what it left unanswered can no longer be answered.
-  const end = (e: ChatEvent, notice: Notice | Restart | null, ended?: TurnEnd) => {
+  // expire marks what the turn left unanswered, and each delegate call that has no result: it can no longer be answered.
+  const expire = () => {
     for (const a of turn?.approvals ?? []) {
       if (a.answered) continue
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
     for (const d of delegations.values()) if (d.call.result === null) d.item.expired = true
+  }
+
+  // end closes the turn for good.
+  const end = (e: ChatEvent, notice: Notice | Restart | null, ended?: TurnEnd) => {
+    expire()
     close(e.at, notice, ended)
   }
 
@@ -216,8 +230,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   }
 
   events.forEach((e, i) => {
-    // A subagent's tool result finds its call as any other does.
-    if (e.agent && e.kind !== 'tool_result') {
+    // A subagent's tool result finds its call as any other does, and its tasks are the thread's.
+    if (e.agent && e.kind !== 'tool_result' && e.kind !== 'task_start' && e.kind !== 'task_end') {
       const a = agents.get(e.agent)
       if (a) subagent(e, a)
       return
@@ -225,7 +239,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     switch (e.kind) {
       case 'user': {
         // A message Claude takes in while it works splits the turn there.
-        const left = close(e.at)
+        const left = close(held ?? e.at)
         if (e.id) queued.delete(e.id)
         const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
         const uuid = e.parent || i <= compacted ? '' : (e.id ?? '')
@@ -335,7 +349,16 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn && a.item) turn.parts = turn.parts.filter((p) => p !== a.item)
         return
       }
+      case 'task_start': {
+        if (e.tool !== 'local_bash') tasks.add(e.parent ?? '')
+        // Claude wakes a subagent that ended again under its call.
+        const a = agents.get(e.parent ?? '')
+        if (a && a.state !== 'running') Object.assign(a, { state: 'running', endedAt: null, result: null })
+        return
+      }
       case 'task_end': {
+        // Claude tells of the end of a task of its own that was not stopped in a turn it starts itself.
+        if (tasks.delete(e.parent ?? '') && held !== null && tasks.size === 0 && (e.agent || e.stop === 'stopped')) close(held)
         const a = agents.get(e.parent ?? '')
         if (a?.state !== 'running') return
         Object.assign(a, { state: e.stop === 'stopped' ? 'stopped' : e.error ? 'failed' : 'done', endedAt: e.at, result: e.text ?? '' })
@@ -345,11 +368,17 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
+        if (!e.error && turn && tasks.size > 0) {
+          expire()
+          held = e.at
+          return
+        }
         end(e, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null, e.error ? (interrupted ? 'stopped' : 'failed') : undefined)
         interrupted = false
         return
       case 'exit':
         interrupted = false
+        tasks.clear()
         stopAgents(e.at)
         end(e, exitItem(e), e.error ? 'failed' : 'stopped')
         // Claude is gone, so a queued message it did not take in will not be sent.
@@ -360,6 +389,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'start':
         if (e.text) return
         interrupted = false
+        tasks.clear()
         stopAgents(e.at)
         end(e, null, 'stopped')
         return
@@ -384,11 +414,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   const running = turn as Turn | null
   if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
-  const waiting = running?.approvals.find((a) => !a.answered)
+  const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
+  const waiting = running?.approvals.find(unanswered)
   return {
     items,
     queued: [...queued.values()],
-    turnOpen: running !== null,
+    turnOpen: running !== null && held === null,
     agentsRunning: [...agents.values()].some((a) => a.state === 'running'),
     pending: waiting ? pendingOf(thread, waiting) : null,
     commands,

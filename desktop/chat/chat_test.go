@@ -510,3 +510,29 @@ func samePending(a, b chat.Pending) bool {
 	a.Input, b.Input = nil, nil
 	return reflect.DeepEqual(a, b) && reflect.DeepEqual(ai, bi)
 }
+
+func TestAThreadWorksWhileItsSubagentRuns(t *testing.T) {
+	h, id := newThread(t)
+	subagents := func(h *apptest.Harness) (string, int) {
+		s, _ := h.Session(id)
+		return string(s.State), s.Subagents
+	}
+	h.Hook(t, id, "UserPromptSubmit", `{"prompt":"background"}`)
+	send(t, h, id, "background")
+	eventually(t, "the turn that started the subagent to end", func() bool { return turnEnds(t, h, id) == 1 })
+	h.Hook(t, id, "Stop", `{}`)
+	eventually(t, "working with one subagent", func() bool { state, n := subagents(h); return state == "working" && n == 1 })
+
+	if err := h.SetAccess(id, "full"); err == nil || err.Error() != "Change access when the subagents end" {
+		t.Errorf("restart for Full while the subagent works: %v", err)
+	}
+
+	second := h.Restart(t)
+	eventually(t, "working with one subagent after a restart of the app", func() bool { state, n := subagents(second); return state == "working" && n == 1 })
+
+	second.Hook(t, id, "UserPromptSubmit", `{"prompt":"finish"}`)
+	send(t, second, id, "finish")
+	eventually(t, "the turn that ended the subagent to end", func() bool { return turnEnds(t, second, id) == 2 })
+	second.Hook(t, id, "Stop", `{}`)
+	eventually(t, "idle once the subagent ended", func() bool { state, n := subagents(second); return state == "idle" && n == 0 })
+}

@@ -254,6 +254,7 @@ export function createMock(params: URLSearchParams) {
       tokens: s.tokens,
       cost: s.cost,
       memory: s.state === 'settled' ? 0 : s.memory,
+      subagents: s.state === 'settled' ? 0 : s.subagents,
     }
   }
 
@@ -415,6 +416,7 @@ export function createMock(params: URLSearchParams) {
       parent: '',
       ...usageFor(createdAt),
       memory: (4 + (nextN % 5) * 3) * tenthGB,
+      subagents: 0,
       project: owner.name,
     }
     sessions.push(s)
@@ -429,7 +431,17 @@ export function createMock(params: URLSearchParams) {
     if (deleted.has(id)) throw `Thread ${id} was deleted`
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
-    return { settled: s.state === 'settled', worktree: s.worktree, setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
+    return {
+      settled: s.state === 'settled',
+      worktree: s.worktree,
+      setState: (state) => setState(s, state),
+      wake: () => wake(s),
+      followMode: (mode) => followMode(s, mode),
+      setSubagents: (n) => {
+        s.subagents = n
+        publish()
+      },
+    }
   }, (key) => data.some((p) => p.name === key))
 
   // followMode records the access Claude's permission mode gives, as the sessions do.
@@ -1041,7 +1053,7 @@ export function createMock(params: URLSearchParams) {
       if (!['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       const s = find(id)
       if (!s.hosted) throw `Thread ${id} ran in a terminal; its access cannot change`
-      if (s.state !== 'settled' && chats.busy(id)) throw 'Change access when the turn ends'
+      if (s.state !== 'settled' && chats.busy(id)) throw s.state === 'working' && s.subagents > 0 && !chats.turnRuns(id) ? 'Change access when the subagents end' : 'Change access when the turn ends'
       if (s.access === access) return
       if (s.state !== 'settled' && (s.access === 'full' || access === 'full')) {
         chats.end(id, { restart: access })
