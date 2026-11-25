@@ -910,6 +910,27 @@
     border-top: 1px solid var(--border);
   }
 
+  .chat-code {
+    margin: 0 0 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-code);
+  }
+
+  .chat-code-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0.5rem 0 0.75rem;
+    color: var(--text-soft);
+    font-size: var(--fs-small);
+  }
+
+  .markdown .chat-code pre {
+    margin: 0;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+
   .note-card {
     background: var(--bg-note-card);
     border: 1px solid var(--border-note);
