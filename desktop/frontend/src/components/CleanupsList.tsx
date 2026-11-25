@@ -1,4 +1,5 @@
 import { useAgentos } from '../AgentosContext'
+import { cleanupLine } from '../cleanupText'
 import { Ago } from './Ago'
 
 export function CleanupsList() {
@@ -15,7 +16,7 @@ export function CleanupsList() {
               <Ago at={c.at} />
             </span>
           </div>
-          {c.status === 'blocked' ? <p className="text-small text-danger">Blocked: {c.reason}</p> : <p className="text-small text-dim">Removed {c.removed.join(', ')}</p>}
+          <p className={`text-small ${c.status === 'blocked' ? 'text-danger' : 'text-dim'}`}>{cleanupLine(c)}</p>
         </div>
       ))}
     </div>
