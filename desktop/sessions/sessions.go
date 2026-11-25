@@ -155,6 +155,7 @@ type Sessions struct {
 	lastProjs  []Project
 	lastIssues string
 	life       *Lifecycle
+	made       *madeTrees
 	repoOf     func(dir string) string
 	onIssues   func()
 	wakes      map[string][]string     // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
@@ -264,6 +265,7 @@ func newSessions(o Options) *Sessions {
 		spent:     map[string]usage.Tokens{},
 		held:      map[string]int64{},
 		stateRead: map[string]fileStamp{},
+		made:      newMadeTrees(o.LocalDir),
 		ctx:       context.Background(),
 	}
 }
