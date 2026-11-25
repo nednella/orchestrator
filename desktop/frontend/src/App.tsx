@@ -4,7 +4,6 @@ import { DigestView } from './components/DigestView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
 import { LeftSidebar } from './components/LeftSidebar'
-import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
 import { PanelOverlay } from './components/PanelOverlay'
 import { RightPanel } from './components/RightPanel'
@@ -74,7 +73,6 @@ export function App() {
             </main>
           </div>
         </div>
-        {narrow && <MobileTabs />}
         <ShortcutsSheet />
         <SettingsPanel />
         <PatchNotes />
