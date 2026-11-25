@@ -1551,6 +1551,84 @@ func TestSendNowInterruptsAndDeliversFirst(t *testing.T) {
 	}
 }
 
+func TestSendKeepsWhoItIsFrom(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	from := func(text, thread string) string {
+		t.Helper()
+		id, err := SendMessage(ctxT(t), h.socket, Message{Text: text, From: thread})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	idle := from("hi", "main/aaaaaaaa")
+	waitKind(t, events, chat.KindTurnEnd)
+	owner := from("slow", "")
+	waitKind(t, events, chat.KindMessage)
+	busy := from("next", "main/bbbbbbbb")
+	if err := InterruptFrom(ctxT(t), h.socket, "main/cccccccc"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the queued message taken in", func() bool { return index(logged(t, h.log), chat.KindUser, busy) >= 0 })
+
+	tests := []struct {
+		name string
+		kind chat.Kind
+		id   string
+		want string
+	}{
+		{"a message to an idle Claude", chat.KindUser, idle, "main/aaaaaaaa"},
+		{"the owner's message", chat.KindUser, owner, ""},
+		{"a message queued during a turn", chat.KindQueued, busy, "main/bbbbbbbb"},
+		{"the queued message once taken in", chat.KindUser, busy, "main/bbbbbbbb"},
+		{"an interrupt a thread asked for", chat.KindInterrupt, "", "main/cccccccc"},
+	}
+	log := logged(t, h.log)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			i := index(log, tt.kind, tt.id)
+			if i < 0 {
+				t.Fatalf("no %s event %s in %+v", tt.kind, tt.id, log)
+			}
+			if log[i].From != tt.want {
+				t.Errorf("%s event from %q, want %q", tt.kind, log[i].From, tt.want)
+			}
+		})
+	}
+}
+
+func TestAThreadsMessageNeverAnswersAnApproval(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "ask")
+	waitKind(t, events, chat.KindApproval)
+	before := len(stdinLines(t, h.stdin))
+	_, err := SendMessage(ctxT(t), h.socket, Message{Text: "yes, go on", From: "main/aaaaaaaa"})
+	if !errors.Is(err, ErrApprovalWaits) {
+		t.Fatalf("a thread's send during an approval = %v, want ErrApprovalWaits", err)
+	}
+	if got := logged(t, h.log, chat.KindAnswer, chat.KindUser, chat.KindQueued); len(got) != 1 {
+		t.Fatalf("logged %+v, want only the first message: no answer and no message", got)
+	}
+	if got := len(stdinLines(t, h.stdin)); got != before {
+		t.Fatalf("stdin has %d lines, want %d: nothing written", got, before)
+	}
+	if err := Answer(ctxT(t), h.socket, "r1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "now", From: "main/aaaaaaaa"}); err != nil {
+		t.Fatalf("a thread's send once the approval is answered = %v", err)
+	}
+}
+
 func TestSendDuringApprovalDeniesWithTheText(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)

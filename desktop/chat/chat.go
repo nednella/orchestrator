@@ -432,8 +432,20 @@ func (f *follower) flush() {
 
 // pendingOf describes the approval e of the thread id.
 func pendingOf(id string, e chatlog.Event) Pending {
-	p := Pending{ID: id, Request: e.ID, Tool: e.Tool, Kind: "tool"}
-	var input struct {
+	p := Pending{ID: id, Request: e.ID, Tool: e.Tool, Kind: "tool", Summary: ToolSummary(e.Tool, e.Input)}
+	switch e.Tool {
+	case "AskUserQuestion":
+		p.Kind = "question"
+	case "ExitPlanMode":
+		p.Kind = "plan"
+	}
+	return p
+}
+
+// ToolSummary is what a call of tool with input would do, in one line: a question's first question, a plan's first
+// line, else the command, path, pattern or URL it acts on; "" when the input has none of them.
+func ToolSummary(tool string, input json.RawMessage) string {
+	var in struct {
 		Command   string `json:"command"`
 		FilePath  string `json:"file_path"`
 		Path      string `json:"path"`
@@ -444,25 +456,22 @@ func pendingOf(id string, e chatlog.Event) Pending {
 			Question string `json:"question"`
 		} `json:"questions"`
 	}
-	_ = json.Unmarshal(e.Input, &input)
-	switch e.Tool {
+	_ = json.Unmarshal(input, &in)
+	switch tool {
 	case "AskUserQuestion":
-		p.Kind = "question"
-		if len(input.Questions) > 0 {
-			p.Summary = input.Questions[0].Question
+		if len(in.Questions) > 0 {
+			return in.Questions[0].Question
 		}
+		return ""
 	case "ExitPlanMode":
-		p.Kind = "plan"
-		p.Summary = firstLine(input.Plan)
-	default:
-		for _, s := range []string{input.Command, input.FilePath, input.Path, input.Pattern, input.URL} {
-			if s != "" {
-				p.Summary = firstLine(s)
-				break
-			}
+		return firstLine(in.Plan)
+	}
+	for _, s := range []string{in.Command, in.FilePath, in.Path, in.Pattern, in.URL} {
+		if s != "" {
+			return firstLine(s)
 		}
 	}
-	return p
+	return ""
 }
 
 func firstLine(s string) string {

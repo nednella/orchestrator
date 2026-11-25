@@ -30,20 +30,27 @@ type Refused struct {
 
 func (r *Refused) Error() string { return r.Reason }
 
-// Message is what the user sends: text and the paths of images to go before it.
+// Message is what the user sends: text and the paths of images to go before it. From is the thread that sends it, ""
+// for the owner or the app.
 type Message struct {
 	Text  string
 	Files []string
+	From  string
 }
 
 // ErrTooOldForImages is what SendMessage returns when a host from before message ids sent the text of a message and
 // dropped its images.
 var ErrTooOldForImages = &Refused{Reason: "this session's host is too old for images"}
 
+// ErrApprovalWaits is what SendMessage returns for a message from a thread while an approval waits: the host sends
+// none, since a message then would deny the approval with its text.
+var ErrApprovalWaits = &Refused{Reason: "this thread waits on an approval"}
+
 // SendMessage gives m to Claude and returns the id the host logged it under. A host from before message ids sends the
-// text and drops the images, so a reply with no id is ErrTooOldForImages when m has images.
+// text and drops the images, so a reply with no id is ErrTooOldForImages when m has images. A host from before From
+// sends the message as the owner's, also while an approval waits.
 func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
-	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files})
+	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files, From: m.From})
 	if err == nil && rep.ID == "" && len(m.Files) > 0 {
 		return "", ErrTooOldForImages
 	}
@@ -66,8 +73,11 @@ func Draft(ctx context.Context, socket, text string) error {
 	return err
 }
 
-func Interrupt(ctx context.Context, socket string) error {
-	_, err := call(ctx, socket, request{Op: opInterrupt})
+func Interrupt(ctx context.Context, socket string) error { return InterruptFrom(ctx, socket, "") }
+
+// InterruptFrom stops the turn at the ask of the thread from, which the host logs on the interrupt.
+func InterruptFrom(ctx context.Context, socket, from string) error {
+	_, err := call(ctx, socket, request{Op: opInterrupt, From: from})
 	return err
 }
 
@@ -239,6 +249,9 @@ func dial(ctx context.Context, socket string, req request, timeout time.Duration
 	var rep reply
 	if err := json.Unmarshal(line, &rep); err != nil {
 		return fail(err)
+	}
+	if rep.Approval {
+		return fail(ErrApprovalWaits)
 	}
 	if !rep.OK {
 		return fail(&Refused{Reason: rep.Error, Unsupported: rep.Unsupported})

@@ -38,6 +38,8 @@ var (
 	child string
 	//go:embed delegated.md
 	delegated string
+	//go:embed from-thread.md
+	fromThread string
 	//go:embed handover.md
 	handover string
 	//go:embed denied.md
@@ -89,6 +91,11 @@ func Child(parent string) string {
 // Delegated is the first message of a child thread: the task that the thread called parent gave it.
 func Delegated(parent, task string) string {
 	return strings.NewReplacer("{parent}", quotable(parent), "{task}", task).Replace(body(delegated))
+}
+
+// FromThread is a message that the thread called title, of that id, sends to another thread with the send tool.
+func FromThread(title, id, text string) string {
+	return strings.NewReplacer("{title}", quotable(title), "{id}", id, "{text}", text).Replace(body(fromThread))
 }
 
 // quotable is a thread's title as a text may quote it. A title is the owner's to edit, and a thread may set its child's,

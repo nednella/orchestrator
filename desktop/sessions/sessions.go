@@ -167,7 +167,7 @@ type Sessions struct {
 	procs      *procs.Table
 	repoOf     func(dir string) string
 	onIssues   func()
-	wakes      map[string][]string     // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
+	wakes      map[string][]heldPrompt // what waits for each thread to take it, oldest first: its PR's commands, each once, and the messages threads told it
 	afterTurn  map[string][]func()     // what waits for a session's turn to end or the session to go, oldest first: the settle after its PR merged or closed
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
@@ -273,7 +273,7 @@ func newSessions(o Options) *Sessions {
 		cwds:      map[string]string{},
 		seen:      map[string]session.State{},
 		history:   map[string][]session.Change{},
-		wakes:     map[string][]string{},
+		wakes:     map[string][]heldPrompt{},
 		afterTurn: map[string][]func(){},
 		readers:   map[string]*reader{},
 		spent:     map[string]usage.Tokens{},
@@ -1618,7 +1618,7 @@ func (s *Sessions) CreateThread(title string, o StartOptions) (Session, error) {
 // agent's system prompt, and the project says whether text is sent.
 func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 	proj := s.Current()
-	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, brief, "", "", forkStart{}, StartOptions{Access: session.Supervised, Place: InProject})
+	return s.createIn(proj, title, FromApp(text), proj.SendsPrompt(), 0, brief, "", "", forkStart{}, StartOptions{Access: session.Supervised, Place: InProject})
 }
 
 // IssueStart is what a start of an issue did.
@@ -1648,7 +1648,7 @@ func (s *Sessions) CreateIssue(title, text string, issue int, action project.Act
 	}
 	model, _ := project.Pick(action, labels, p.ValidModel)
 	model = project.Model{Model: cmp.Or(o.Model.Model, model.Model), Effort: cmp.Or(o.Model.Effort, model.Effort)}
-	text = fromApp(text)
+	text = FromApp(text)
 	if extra := strings.TrimSpace(o.Prompt); extra != "" {
 		text = strings.TrimSpace(text + " " + extra)
 	}
@@ -1832,7 +1832,7 @@ func (s *Sessions) CreateChild(ctx context.Context, o ChildOptions) (Session, er
 		return Session{}, err
 	}
 	name, _ := session.ParseName(view.ID)
-	if err := toHost(s.context(), s.hostSocket(name), fromApp(prompts.Delegated(parentTitle, task)), true, hostWait); err != nil {
+	if err := toHost(s.context(), s.hostSocket(name), FromApp(prompts.Delegated(parentTitle, task)), true, hostWait); err != nil {
 		log.Printf("agentos: child %s did not take its task: %v", view.ID, err)
 		return Session{}, fmt.Errorf("Thread %s started but did not take its task: send it again", view.ID)
 	}
@@ -2140,13 +2140,16 @@ func (s *Sessions) settledIssueThread(key string, issue int) (string, session.Ac
 	return id, access
 }
 
-// fromApp marks text the app writes to the agent, so the agent does not take it for the owner's. A slash command
+// AppPrompt starts each text the app writes to an agent but a slash command.
+const AppPrompt = "APPLICATION_PROMPT: "
+
+// FromApp marks text the app writes to the agent, so the agent does not take it for the owner's. A slash command
 // stays as it is: Claude Code runs one only when it starts the prompt.
-func fromApp(text string) string {
+func FromApp(text string) string {
 	if text == "" || strings.HasPrefix(text, "/") {
 		return text
 	}
-	return "APPLICATION_PROMPT: " + text
+	return AppPrompt + text
 }
 
 // createIn is Create in the project given, which need not be the current one, with the model, access, place and parent
@@ -2639,8 +2642,8 @@ func (s *Sessions) wake(ctx context.Context, t target, prompt string) {
 	}
 	s.mu.Lock()
 	if holdsPrompts(s.records[t.id].State) {
-		if !slices.Contains(s.wakes[t.id], prompt) {
-			s.wakes[t.id] = append(s.wakes[t.id], prompt)
+		if h := (heldPrompt{Told: Told{Text: prompt}, command: true}); !slices.Contains(s.wakes[t.id], h) {
+			s.wakes[t.id] = append(s.wakes[t.id], h)
 		}
 		s.mu.Unlock()
 		return
@@ -2680,7 +2683,7 @@ func (s *Sessions) whenTurnEnds(id string, then func()) {
 	then()
 }
 
-// endTurns runs what waited for a turn that ended or a session that went. The prompts held for such a session are
+// endTurns runs what waited for a turn that ended or a session that went. The commands held for such a session are
 // dropped: they came for the PR that has merged or closed since, and sent now they would start a turn the settle cuts
 // off, or wake a thread that went. It needs mu.
 func (s *Sessions) endTurns() {
@@ -2689,7 +2692,7 @@ func (s *Sessions) endTurns() {
 			continue
 		}
 		delete(s.afterTurn, id)
-		delete(s.wakes, id)
+		s.dropCommands(id)
 		go func() {
 			for _, f := range then {
 				f()
@@ -2705,42 +2708,179 @@ func (s *Sessions) turnRuns(id string) bool {
 		return false
 	}
 	rec := s.records[id]
-	return rec.State == session.Working || rec.State == session.Waiting && !endsTurn(rec.Event)
+	return rec.State == session.Working || awaitsOwner(rec)
+}
+
+// awaitsOwner says whether the thread waits on the owner in the middle of its turn, for a permission or a question tool.
+func awaitsOwner(rec session.Record) bool {
+	return rec.State == session.Waiting && !endsTurn(rec.Event)
 }
 
 func holdsPrompts(state session.State) bool {
 	return state == session.Working || state == session.Waiting
 }
 
-// deliverWakes sends the prompts held back while their sessions worked or waited on the user, in order. A thread that
-// stopped by itself meanwhile is woken for them; Settle drops those of a thread the owner or a clean-up settled. It
-// needs mu.
+// heldPrompt waits for its thread to take it. A command, for the thread's PR, waits until the thread neither works nor
+// waits on the owner; a message a thread told it waits only while the thread waits on the owner's answer to an
+// approval, which the message would deny.
+type heldPrompt struct {
+	Told
+	command bool
+}
+
+// dropCommands drops the commands held for the thread and keeps the messages threads told it. It needs mu.
+func (s *Sessions) dropCommands(id string) {
+	if kept := slices.DeleteFunc(s.wakes[id], func(h heldPrompt) bool { return h.command }); len(kept) > 0 {
+		s.wakes[id] = kept
+	} else {
+		delete(s.wakes, id)
+	}
+}
+
+// deliverWakes sends what was held for each thread once it may take it, in order. A thread that settled meanwhile, by
+// itself or at the owner's ask, is woken for the messages threads told it, and one that stopped by itself is woken for
+// its commands too; Settle drops the commands of a thread the owner or a clean-up settled. It needs mu.
 func (s *Sessions) deliverWakes() {
-	for id, prompts := range s.wakes {
+	for id, all := range s.wakes {
 		_, live := s.seen[id]
-		switch {
-		case !live:
+		rec := s.records[id]
+		var now, later []heldPrompt
+		for _, h := range all {
+			if !live || !holdsPrompts(rec.State) || !h.command && !awaitsOwner(rec) {
+				now = append(now, h)
+			} else {
+				later = append(later, h)
+			}
+		}
+		if len(now) == 0 {
+			continue
+		}
+		if len(later) == 0 {
 			delete(s.wakes, id)
-			ctx := s.ctx
+		} else {
+			s.wakes[id] = later
+		}
+		ctx := s.ctx
+		if !live {
 			go func() {
 				t, err := s.target(id)
-				if err != nil {
+				for _, h := range now {
+					switch {
+					case !h.command:
+						if _, err := s.Tell(id, h.Told); err != nil {
+							log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
+						}
+					case err == nil:
+						s.wake(ctx, t, h.Text)
+					}
+				}
+			}()
+			continue
+		}
+		name := s.known[id].Name
+		go func() {
+			for i, h := range now {
+				if h.command {
+					s.send(ctx, name, h.Text, true)
+					continue
+				}
+				if _, err := s.deliver(name, h.Told); errors.Is(err, host.ErrApprovalWaits) {
+					s.hold(id, now[i:]...)
 					return
+				} else if err != nil {
+					log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
 				}
-				for _, prompt := range prompts {
-					s.wake(ctx, t, prompt)
-				}
-			}()
-		case !holdsPrompts(s.records[id].State):
-			delete(s.wakes, id)
-			ctx, name := s.ctx, s.known[id].Name
-			go func() {
-				for _, prompt := range prompts {
-					s.send(ctx, name, prompt, true)
-				}
-			}()
+			}
+		}()
+	}
+}
+
+// Told is a message for a thread: its text and the thread it is from, "" for the app. Steer stops the turn that runs
+// so the thread takes it in now.
+type Told struct {
+	From, Text string
+	Steer      bool
+}
+
+// Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
+// woken for it. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
+// the approval; one whose earlier messages are held holds it after them. A working thread's host queues it, for the
+// turn's next step or, with Steer, at once. A thread that is deleted, or being deleted, or ran in a terminal takes none.
+func (s *Sessions) Tell(id string, m Told) (string, error) {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return "", err
+	}
+	if name.IsShell() {
+		return "", errNotSession
+	}
+	s.mu.Lock()
+	_, settled := s.ended[id]
+	_, live := s.liveInfo(id)
+	deleted, deleting, old := s.deleted[id], s.deleting[id], s.isOld(id)
+	n := s.nums[id]
+	s.mu.Unlock()
+	switch {
+	case deleted:
+		return "", fmt.Errorf("Thread %s was deleted", id)
+	case deleting:
+		return "", fmt.Errorf("Thread %d is being deleted", n)
+	case old:
+		return "", fmt.Errorf("Thread %s ran in a terminal, so it takes no messages", id)
+	case settled:
+		if _, err := s.wakeOrJoin(id, ""); err != nil {
+			return "", err
+		}
+	case !live:
+		return "", fmt.Errorf("No thread %s", id)
+	}
+	s.mu.Lock()
+	if awaitsOwner(s.records[id]) || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m})
+		s.mu.Unlock()
+		return "", nil
+	}
+	s.mu.Unlock()
+	msg, err := s.deliver(name, m)
+	if errors.Is(err, host.ErrApprovalWaits) {
+		s.hold(id, heldPrompt{Told: m})
+		return "", nil
+	}
+	return msg, err
+}
+
+// hold puts what a host refused while an approval waited back before what is held for the thread. It takes mu.
+func (s *Sessions) hold(id string, hs ...heldPrompt) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.wakes[id] = append(slices.Clone(hs), s.wakes[id]...)
+}
+
+// deliver gives m to the live thread's host and returns the id it logged it under. With Steer, the turn that runs
+// takes it in now; a message that started a turn of its own was not queued, and needs no steer. It is
+// host.ErrApprovalWaits when an approval waits that the hook state did not show yet.
+func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
+	socket, err := s.readyHost(name)
+	var msg string
+	if err == nil {
+		msg, err = host.SendMessage(s.context(), socket, host.Message{Text: m.Text, From: m.From})
+	}
+	if errors.Is(err, host.ErrApprovalWaits) {
+		return "", err
+	}
+	if err != nil {
+		log.Printf("agentos: thread %s did not take a message from %s: %v", name, cmp.Or(m.From, "agentos"), err)
+		if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+			return "", errors.New(refused.Reason)
+		}
+		return "", fmt.Errorf("Thread %s did not take the message", name)
+	}
+	if m.Steer {
+		if err := host.SendNow(s.context(), socket, msg); err != nil && !errors.As(err, new(*host.Refused)) {
+			log.Printf("agentos: steering thread %s: %v", name, err)
 		}
 	}
+	return msg, nil
 }
 
 // Settle stops the session's tmux session, whose host stops Claude, and then the servers it started; its row stays,
@@ -2776,9 +2916,10 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
 	s.closeTerm(id)
-	// Dropped before the kill, so a Refresh that sees the session gone first does not wake it for them.
+	// Dropped before the kill, so a Refresh that sees the session gone first does not wake it for them. The messages
+	// threads told it are kept, and wake it once it has settled.
 	s.mu.Lock()
-	delete(s.wakes, id)
+	s.dropCommands(id)
 	s.mu.Unlock()
 	planned := s.planStop(name, reason, access)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)

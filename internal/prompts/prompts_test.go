@@ -21,6 +21,7 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
 		{"child", Child("{parent}"), "c03b84f66728347627298a325f5f0f196a5ff02db99cd845ed02ad2c695553e4"},
 		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
+		{"from thread", FromThread("{title}", "{id}", "{text}"), "92c5efbfeb4efed58314ba6e8fbee1efdf2d9647e82d07e9c4aa456c4918011b"},
 		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
 		{"setup brief", SetupBrief(), "3fd3fdfb3c5df412ad078a78f02d163e5ad0b5be8ee1c0e97c06cd3ae2dd81be"},
 		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
@@ -59,6 +60,13 @@ func TestDelegatedEndsWithTheTask(t *testing.T) {
 	got := Delegated("Plan", "Count the files {parent}\nand list them")
 	if !strings.HasPrefix(got, `Thread "Plan" `) || !strings.HasSuffix(got, ":\n\nCount the files {parent}\nand list them") {
 		t.Errorf("Delegated = %q", got)
+	}
+}
+
+func TestFromThreadNamesTheSenderAndEndsWithTheText(t *testing.T) {
+	got := FromThread("Plan \"the\"\nrelease", "main/abcdefgh", "Stop {id}\nand {title} wait")
+	if !strings.HasPrefix(got, `Thread "Plan 'the' release" (main/abcdefgh) sends you`) || !strings.Contains(got, "`send` to thread main/abcdefgh") || !strings.HasSuffix(got, "\n\nStop {id}\nand {title} wait") {
+		t.Errorf("FromThread = %q", got)
 	}
 }
 

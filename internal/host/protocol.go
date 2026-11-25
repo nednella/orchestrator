@@ -32,6 +32,7 @@ type request struct {
 	Mode    string          `json:"mode,omitempty"`
 	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
 	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
+	From    string          `json:"from,omitempty"`   // the send and interrupt ops': the thread that sends or stops, "" for the owner or the app
 	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are;
 	// the rewind_preview op's: the folder outside which a file is a reason not to rewind the files.
 	Within string `json:"within,omitempty"`
@@ -46,6 +47,8 @@ type reply struct {
 	Unsupported bool         `json:"unsupported,omitempty"`
 	Changes     *FileChanges `json:"changes,omitempty"` // the rewind_preview op's answer
 	Prefill     string       `json:"prefill,omitempty"` // the rewind op's answer: the text of the message rewound to
+	// Approval is the send op's refusal of a message from a thread while an approval waits, which the message would deny.
+	Approval bool `json:"approval,omitempty"`
 }
 
 // FileChanges is what a rewind of the files would change: the files, by absolute path, and the lines it would add and

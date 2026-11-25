@@ -62,6 +62,7 @@ type approval struct {
 type queuedMessage struct {
 	text  string
 	files []string
+	from  string
 }
 
 // interruptRequest is an interrupt written to Claude and the messages that were queued then.
@@ -542,7 +543,7 @@ func (h *host) interruptOn(signals <-chan os.Signal, done <-chan struct{}) {
 	for {
 		select {
 		case <-signals:
-			if err := h.interrupt(""); err != nil {
+			if err := h.interrupt("", ""); err != nil {
 				fmt.Fprintf(h.echo, "host: interrupt: %v\n", err)
 			}
 		case <-done:
@@ -632,17 +633,17 @@ func (h *host) handle(conn net.Conn) {
 func (h *host) do(req request) (string, error) {
 	switch req.Op {
 	case opSend:
-		return h.send(req.Text, req.Files)
+		return h.send(req.Text, req.Files, req.From)
 	case opSendNow:
 		if req.ID == "" {
 			return "", errors.New("send_now needs the id of a queued message")
 		}
-		return "", h.interrupt(req.ID)
+		return "", h.interrupt(req.ID, "")
 	case opDraft:
 		_, err := h.publish(chat.Event{Kind: chat.KindDraft, Text: req.Text})
 		return "", err
 	case opInterrupt:
-		return "", h.interrupt("")
+		return "", h.interrupt("", req.From)
 	case opAnswer:
 		return "", h.answer(req.ID, req.Allow, req.Message, req.Input)
 	case opMode:
@@ -656,12 +657,13 @@ func (h *host) do(req request) (string, error) {
 	return "", fmt.Errorf("unknown op %q", req.Op)
 }
 
-// send gives the user's message to Claude and returns its id. While an approval waits, the message denies each waiting
-// tool with the text as the reason and is not written as a message. While a turn runs, it is logged as queued and
-// written at once: Claude takes it in at the turn's next step, or runs it as its own turn after this one, and its echo
-// then logs it as the user's. Logging and writing happen under stdinMu, so the log and stdin hold messages in the same
-// order. The lock order is stdinMu, then h.mu.
-func (h *host) send(text string, files []string) (string, error) {
+// send gives the message to Claude and returns its id; from is the thread that sends it, "" for the owner or the app.
+// While an approval waits, the owner's message denies each waiting tool with the text as the reason and is not written
+// as a message, and a thread's is refused: only the owner answers an approval. While a turn runs, it is logged as queued
+// and written at once: Claude takes it in at the turn's next step, or runs it as its own turn after this one, and its
+// echo then logs it as the user's. Logging and writing happen under stdinMu, so the log and stdin hold messages in the
+// same order. The lock order is stdinMu, then h.mu.
+func (h *host) send(text string, files []string, from string) (string, error) {
 	images, err := readImages(files)
 	if err != nil {
 		return "", err
@@ -681,7 +683,7 @@ func (h *host) send(text string, files []string) (string, error) {
 		h.mu.Unlock()
 		return "", errRewinding
 	}
-	lines, logged, err := h.sendLocked(id, text, files, images)
+	lines, logged, err := h.sendLocked(id, text, files, from, images)
 	h.mu.Unlock()
 	for _, e := range logged {
 		h.echoEvent(e)
@@ -702,7 +704,7 @@ func (h *host) send(text string, files []string) (string, error) {
 
 // sendLocked must be called with stdinMu and h.mu held. It logs the message and returns the lines to write for what it
 // logged, also when it fails partway.
-func (h *host) sendLocked(id, text string, files []string, images []chat.Image) (lines [][]byte, logged []chat.Event, err error) {
+func (h *host) sendLocked(id, text string, files []string, from string, images []chat.Image) (lines [][]byte, logged []chat.Event, err error) {
 	log := func(e chat.Event) error {
 		e, err := h.appendLocked(e)
 		if err == nil {
@@ -711,6 +713,9 @@ func (h *host) sendLocked(id, text string, files []string, images []chat.Image) 
 		return err
 	}
 	if len(h.approvals) > 0 {
+		if from != "" {
+			return nil, nil, errApprovalWaits
+		}
 		if len(files) > 0 {
 			return nil, nil, errors.New("Answer the approval before sending images")
 		}
@@ -727,13 +732,13 @@ func (h *host) sendLocked(id, text string, files []string, images []chat.Image) 
 	}
 	line := chat.UserMessageWith(id, text, images)
 	if h.turnOpen || len(h.queued) > 0 {
-		if err := log(chat.Event{Kind: chat.KindQueued, ID: id, Text: text, Files: files}); err != nil {
+		if err := log(chat.Event{Kind: chat.KindQueued, ID: id, Text: text, Files: files, From: from}); err != nil {
 			return nil, logged, err
 		}
-		h.queued[id] = queuedMessage{text: text, files: files}
+		h.queued[id] = queuedMessage{text: text, files: files, from: from}
 		return [][]byte{line}, logged, nil
 	}
-	if err := log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Files: files}); err != nil {
+	if err := log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Files: files, From: from}); err != nil {
 		return nil, logged, err
 	}
 	h.turnOpen = true
@@ -751,7 +756,7 @@ func (h *host) echoed(id string) {
 	}
 	delete(h.queued, id)
 	h.turnOpen = true
-	e, err := h.appendLocked(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Files: m.files})
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Files: m.files, From: m.from})
 	h.mu.Unlock()
 	if err != nil {
 		fmt.Fprintf(h.echo, "host: %v\n", err)
@@ -760,9 +765,10 @@ func (h *host) echoed(id string) {
 	h.echoEvent(e)
 }
 
-// interrupt logs an interrupt and writes it. With queued set, it is Send now for that queued message: Claude answers the
-// interrupt with the messages it still holds and runs them next, so the message is not written again.
-func (h *host) interrupt(queued string) error {
+// interrupt logs an interrupt and writes it; from is the thread that asked for it, "" for the owner. With queued set,
+// it is Send now for that queued message: Claude answers the interrupt with the messages it still holds and runs them
+// next, so the message is not written again.
+func (h *host) interrupt(queued, from string) error {
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
 	if h.stdinErr != nil {
@@ -773,7 +779,7 @@ func (h *host) interrupt(queued string) error {
 		h.mu.Unlock()
 		return fmt.Errorf("no queued message %s", queued)
 	}
-	e, err := h.appendLocked(chat.Event{Kind: chat.KindInterrupt, ID: queued})
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindInterrupt, ID: queued, From: from})
 	if err != nil {
 		h.mu.Unlock()
 		return err
@@ -830,6 +836,7 @@ var (
 	errNoAnswer          = errors.New("Claude did not answer")
 	errAnswerLate        = errors.New("Claude has not answered yet; the chat updates when it does")
 	errFilesUnknown      = errors.New("The files may have been put back; check them before you edit again")
+	errApprovalWaits     = errors.New("This thread waits on an approval")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
 	// or after the one agentos was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
@@ -1396,7 +1403,7 @@ func writeReply(conn net.Conn, id string, err error) error {
 // writeAnswer writes rep, or in its place a refusal with err, which says so when Claude did not know a request.
 func writeAnswer(conn net.Conn, rep reply, err error) error {
 	if err != nil {
-		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported)}
+		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported), Approval: errors.Is(err, errApprovalWaits)}
 	}
 	rep.OK = err == nil
 	return writeJSON(conn, rep)

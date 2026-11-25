@@ -429,7 +429,7 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 		l.sessions.whenTurnEnds(f.id, func() { l.end(f.id, outcomes[i]) })
 	}
 	for _, w := range wakes {
-		go l.sessions.wake(ctx, w.target, fromApp(w.prompt))
+		go l.sessions.wake(ctx, w.target, FromApp(w.prompt))
 	}
 	l.sessions.changed()
 	if reload && ctx.Err() == nil {

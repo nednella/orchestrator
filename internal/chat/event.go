@@ -84,6 +84,9 @@ type Event struct {
 	Stop string `json:"stop,omitempty"`
 	// Agent is the id of the Agent tool call whose subagent sent the event, "" for the thread's own Claude.
 	Agent string `json:"agent,omitempty"`
+	// From is the thread that sent a user or queued message, or that asked for an interrupt; "" for the owner or the
+	// app.
+	From string `json:"from,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and

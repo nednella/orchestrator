@@ -870,11 +870,13 @@ func CLIPath(t *testing.T) string {
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
 // once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
 // asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, "leave plan"
-// reports the mode default before its reply with no plan approved, and "serve <port>" starts a listener on
-// 127.0.0.1:<port> in a session of its own, which writes its pid to <dir>/<session id, "/" as "_">.serve<port>, and
-// "exit" ends it, as Claude ending by itself. It answers a rewind of the files with the files RewindAs names, into each
-// of which a rewind that is not a dry run writes "before", and a rewind of the conversation with the text of the message
-// rewound to, as Claude does; RewindAs can make it answer as another Claude would.
+// reports the mode default before its reply with no plan approved, "work" keeps its turn open until an interrupt: it
+// holds each message read meanwhile, and after the interrupt takes them in and replies to them in a turn of their own,
+// as Claude does, and "serve <port>" starts a listener on 127.0.0.1:<port> in a session of its own, which writes its
+// pid to <dir>/<session id, "/" as "_">.serve<port>, and "exit" ends it, as Claude ending by itself. It answers a rewind
+// of the files with the files RewindAs names, into each of which a rewind that is not a dry run writes "before", and a
+// rewind of the conversation with the text of the message rewound to, as Claude does; RewindAs can make it answer as
+// another Claude would.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
 // RewindAs makes the session's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
@@ -993,7 +995,14 @@ while IFS= read -r line; do
 	*'"type":"user"'*'"text":"leave plan"'*)
 		printf '%s\n' "$init" '{"type":"system","subtype":"status","status":null,"permissionMode":"default"}'
 		reply ;;
+	*'"type":"user"'*'"text":"work"'*)
+		printf '%s\n' "$init"
+		working=1 held= ;;
 	*'"type":"user"'*)
+		if [ -n "$working" ]; then
+			held="$held $(printf '%s' "$line" | sed -n 's/.*"uuid":"\([^"]*\)".*/\1/p')"
+			continue
+		fi
 		printf '%s\n' "$init"
 		reply ;;
 	*'"type":"control_response"'*'"request_id":"plan-1"'*'"behavior":"allow"'*)
@@ -1027,7 +1036,15 @@ while IFS= read -r line; do
 		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"mode":"%s"}}}\n' "$id" "$mode"
 		printf '{"type":"system","subtype":"status","status":null,"permissionMode":"%s"}\n' "$mode" ;;
 	*'"subtype":"interrupt"'*)
-		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}' ;;
+		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}'
+		working=
+		if [ -n "$held" ]; then
+			for u in $held; do
+				printf '{"type":"user","uuid":"%s","isReplay":true,"message":{"role":"user","content":[]}}\n' "$u"
+			done
+			held=
+			reply
+		fi ;;
 	*'"type":"control_request"'*)
 		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
 		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$id" ;;

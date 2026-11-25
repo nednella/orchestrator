@@ -389,6 +389,9 @@ export type ChatEvent = {
   stop?: 'settle' | 'restart' | 'stopped'
   // agent is the id of the Agent call whose subagent sent the event, missing for the thread's own Claude.
   agent?: string
+  // from is the thread that sent a user or queued message, or that asked for an interrupt; left out for the owner or
+  // the app.
+  from?: string
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

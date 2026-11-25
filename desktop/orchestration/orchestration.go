@@ -19,6 +19,11 @@ type Threads interface {
 	CreateChild(ctx context.Context, o sessions.ChildOptions) (sessions.Session, error)
 	AccessOf(id string) session.Access
 	ChatOf(id string) (sessions.Chat, error)
+	List() []sessions.Session
+	Projects() []sessions.Project
+	Title(id string) string
+	Tell(id string, m sessions.Told) (string, error)
+	Descendants(id string) []string
 }
 
 // tool runs one agentos tool as the caller, the thread the call's token names.
@@ -34,7 +39,7 @@ type Commands struct {
 
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router) *Commands {
 	c := &Commands{threads: s, chats: chats, router: r}
-	c.tools = map[string]tool{"delegate": c.delegate}
+	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "stop": c.stop}
 	return c
 }
 

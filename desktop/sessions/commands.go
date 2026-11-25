@@ -57,7 +57,7 @@ func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
 	}
 	prompt := req.Opts["prompt"]
 	if _, err := session.ParseName(req.Session); err == nil && prompt != "" {
-		prompt = fromApp(prompts.Handover(prompt))
+		prompt = FromApp(prompts.Handover(prompt))
 	}
 	s, err := c.s.Create(strings.Join(req.Args, " "), prompt, c.s.Current().SendsPrompt(), 0, access)
 	if err != nil {
