@@ -258,15 +258,18 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       agentApproval(e, asker)
       return
     }
-    // A subagent's tool result finds its call as any other does, and its tasks are the thread's.
-    if (e.agent && e.kind !== 'tool_result' && e.kind !== 'task_start' && e.kind !== 'task_end') {
+    // A subagent's tool result finds its call as any other does, its tasks are the thread's, and the owner's message
+    // that answers its approval is the owner's.
+    if (e.agent && e.kind !== 'tool_result' && e.kind !== 'task_start' && e.kind !== 'task_end' && e.kind !== 'user') {
       const a = agents.get(e.agent)
       if (a) subagent(e, a)
       return
     }
     switch (e.kind) {
       case 'user': {
-        // A message Claude takes in while it works splits the turn there.
+        // A message Claude takes in while it works splits the turn there. One that only answers subagents' approvals
+        // goes to them and starts no turn of the thread's own.
+        const running = turn !== null && held === null
         const left = close(held ?? e.at)
         if (e.id) queued.delete(e.id)
         const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
@@ -275,7 +278,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const text = from ? fromApp(e.text ?? '') : (e.text ?? '')
         if (children.has(from)) items.push({ kind: 'childResult', key: `result-${e.id || e.seq}`, at: e.at, child: from, text })
         else items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', uuid, text, files: e.files ?? noFiles, forkAt, ...(from ? { from } : {}) })
-        open(e).approvals.push(...left)
+        if (!e.agent || running) open(e).approvals.push(...left)
         return
       }
       case 'queued':

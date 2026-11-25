@@ -641,8 +641,11 @@ test("a subagent's approval can no longer be answered once its call has a result
 
 test("a message that denies a subagent's approval is its answer, not a turn of the thread's", () => {
   const t = buildTimeline([...asking, ...log(answer('r1', 'deny'), from('a1', { ...user('u2', 'Use b.txt'), parent: 'r1' }), from('a1', toolResult('s1', 'denied', true))).map((e) => ({ ...e, seq: e.seq + asking.length }))], {})
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent'])
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'user'], "the owner's text shows where the owner wrote it")
+  assert.equal(only(t.items, 'user')[1].text, 'Use b.txt')
   assert.deepEqual([t.turnOpen, t.pending], [false, null])
+  const during = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), from('a1', toolUse('s1', 'Write')), from('a1', approval('r1', 'Write', {}, 's1')), answer('r1', 'deny'), from('a1', { ...user('u2', 'Not that file'), parent: 'r1' })), {})
+  assert.deepEqual([kinds(during.items), during.turnOpen], [['user', 'work', 'agent', 'user', 'work'], true], 'the turn that waits on its subagent goes on after it')
 })
 
 test("a subagent's approval with no row of its own still shows, and waits", () => {
