@@ -161,14 +161,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.services = []any{
 		proj,
 		sessSvc,
-		chat.NewService(chats, runner, func(key string) string {
-			for _, p := range c.Registry.List() {
-				if p.Key() == key {
-					return p.Dir
-				}
-			}
-			return ""
-		}, ctx),
+		chat.NewService(chats, runner, c.Registry.Dir, ctx),
 		terminal.NewService(terms),
 		issues.NewService(iss, ctx),
 		notes.NewService(store, sess, sess, iss, events, runner, h.Emit, ctx),

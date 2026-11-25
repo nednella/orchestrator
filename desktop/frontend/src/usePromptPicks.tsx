@@ -9,7 +9,7 @@ import type { PickRow } from './components/ComposerPickList'
 import { Icon } from './components/Icon'
 
 // PickList is the pick list open in a prompt composer: what it lists and what picking a row does.
-export type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: number): void }
+type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: number): void }
 
 // Files are what the folder lists for the mention, or why it did not.
 type Files = { paths: string[]; error: string }

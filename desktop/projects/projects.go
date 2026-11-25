@@ -220,6 +220,9 @@ func (r *Registry) DismissSetup(key string) error {
 	})
 }
 
+// Dir is the folder of the project with key, "" when no project has it.
+func (r *Registry) Dir(key string) string { return r.project(key).Dir }
+
 // project is the configured project of the key, or the zero project.
 func (r *Registry) project(key string) project.Project {
 	r.mu.Lock()

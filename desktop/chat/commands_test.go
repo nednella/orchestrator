@@ -82,3 +82,26 @@ func TestProjectCommandsNeedsAKnownProject(t *testing.T) {
 		t.Error("ProjectCommands of a project that is not configured gave no error")
 	}
 }
+
+func TestTheSameCommandListIsNotWrittenAgain(t *testing.T) {
+	dir := t.TempDir()
+	c := newCommandLists(dir)
+	c.keep("main", commandsAt(1000, "review"))
+	path := filepath.Join(dir, "main", "commands.json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.keep("main", commandsAt(2000, "review"))
+	c.keep("main", commandsAt(1500, "older"))
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("the file = %s, want it untouched: %s", after, before)
+	}
+	if got := names(t, c, "main"); !slices.Equal(got, []string{"review"}) {
+		t.Errorf("main = %q, want the list reported at 2000 to outrank the one at 1500", got)
+	}
+}

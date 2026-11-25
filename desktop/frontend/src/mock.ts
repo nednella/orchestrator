@@ -426,7 +426,7 @@ export function createMock(params: URLSearchParams) {
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
-  })
+  }, (key) => data.some((p) => p.name === key))
 
   // followMode records the access Claude's permission mode gives, as the sessions do.
   function followMode(s: Session, mode: string) {

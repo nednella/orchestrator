@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/nednella/agentos/internal/atomicfile"
@@ -35,18 +36,19 @@ type commandLists struct {
 	dir string
 
 	mu     sync.Mutex
-	latest map[string]int64 // when each project's saved list was reported, once read
+	latest map[string]commandList // each project's latest list, once read; its time can be later than the saved one's
 }
 
 func newCommandLists(dir string) *commandLists {
-	return &commandLists{dir: dir, latest: map[string]int64{}}
+	return &commandLists{dir: dir, latest: map[string]commandList{}}
 }
 
 func (c *commandLists) path(project string) string {
 	return filepath.Join(c.dir, project, "commands.json")
 }
 
-// keep saves the list a commands event of the project holds, unless the saved one was reported later.
+// keep saves the list a commands event of the project holds, unless the latest one was reported later or is the
+// same.
 func (c *commandLists) keep(project string, e chatlog.Event) {
 	var commands []Command
 	if err := json.Unmarshal(e.Input, &commands); err != nil {
@@ -55,27 +57,30 @@ func (c *commandLists) keep(project string, e chatlog.Event) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	at, ok := c.latest[project]
+	latest, ok := c.latest[project]
 	if !ok {
 		saved, err := c.readLocked(project)
 		if err != nil {
 			log.Printf("agentos: %v", err)
 		}
-		at = saved.At
-		c.latest[project] = at
+		latest = saved
 	}
-	if e.At <= at {
+	if e.At <= latest.At {
+		c.latest[project] = latest
 		return
 	}
-	data, err := json.Marshal(commandList{At: e.At, Commands: commands})
-	if err == nil {
-		err = atomicfile.Write(c.path(project), data, 0o600)
+	next := commandList{At: e.At, Commands: commands}
+	if !reflect.DeepEqual(next.Commands, latest.Commands) {
+		data, err := json.Marshal(next)
+		if err == nil {
+			err = atomicfile.Write(c.path(project), data, 0o600)
+		}
+		if err != nil {
+			log.Printf("agentos: saving the commands of %s: %v", project, err)
+			return
+		}
 	}
-	if err != nil {
-		log.Printf("agentos: saving the commands of %s: %v", project, err)
-		return
-	}
-	c.latest[project] = e.At
+	c.latest[project] = next
 }
 
 // list is the project's saved commands, none when no thread of it has reported any.

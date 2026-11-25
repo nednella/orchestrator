@@ -179,6 +179,15 @@ func TestRegistryKeepAwake(t *testing.T) {
 	}
 }
 
+func TestRegistryDir(t *testing.T) {
+	r := projects.NewRegistry("", project.Config{Projects: []project.Project{{Name: "Quiet Work", Dir: "/q"}}})
+	for key, want := range map[string]string{"quiet-work": "/q", "unlisted": ""} {
+		if got := r.Dir(key); got != want {
+			t.Errorf("Dir(%q) = %q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestRegistryListSkipsMissingFolders(t *testing.T) {
 	here := t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.yaml")

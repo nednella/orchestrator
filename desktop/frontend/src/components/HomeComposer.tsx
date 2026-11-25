@@ -47,10 +47,12 @@ export function HomeComposer() {
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
   const [chosenPlace, setChosenPlace] = useState<Place | null>(null)
-  const [commands, setCommands] = useState<Command[]>([])
+  const [commands, setCommands] = useState<{ project: string; list: Command[] } | null>(null)
   const pending = usePendingImages()
   const sending = useRef(false)
   const projectKey = a.project?.key ?? ''
+  // null while this project's list loads, so a switch never shows the last project's commands.
+  const projectCommands = commands?.project === projectKey ? commands.list : null
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
@@ -66,8 +68,8 @@ export function HomeComposer() {
     input,
     caret,
     off: note || dismissed || token !== null,
-    commands,
-    noCommands: 'Commands show once a thread has run in this project.',
+    commands: projectCommands ?? [],
+    noCommands: projectCommands ? 'Commands show once a thread has run in this project.' : 'Listing the commands',
     listFiles,
     onPicked: () => setCursor(-1),
   })
@@ -92,7 +94,7 @@ export function HomeComposer() {
     let current = true
     a.report(async () => {
       const list = await api.projectCommands(projectKey)
-      if (current) setCommands(list)
+      if (current) setCommands({ project: projectKey, list })
     })
     return () => {
       current = false

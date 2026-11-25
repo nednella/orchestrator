@@ -135,8 +135,9 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
 // another. Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
-// would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat.
-export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
+// would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
+// says whether a project key is configured.
+export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
   const logs = new Map<string, ChatEvent[]>()
   const unreadable = new Set<string>()
   const watched = new Set<string>()
@@ -159,6 +160,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     if (e.kind === 'commands') keepCommands(id.slice(0, id.indexOf('/')), e)
     if (watched.has(id)) batch(id, e)
     return e
+  }
+
+  function known(project: string) {
+    if (!isProject(project)) throw `No project ${project}`
   }
 
   function keepCommands(project: string, e: ChatEvent) {
@@ -424,8 +429,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       thread(id)
       return rankFiles(files, query)
     },
-    ProjectFiles: async (_project: string, query: string) => rankFiles(files, query),
-    ProjectCommands: async (project: string) => (projectCommands.get(project)?.list ?? []).map((c) => ({ ...c })),
+    ProjectFiles: async (project: string, query: string) => {
+      known(project)
+      return rankFiles(files, query)
+    },
+    ProjectCommands: async (project: string) => {
+      known(project)
+      return (projectCommands.get(project)?.list ?? []).map((c) => ({ ...c }))
+    },
   }
 
   // save checks the images as the service does and keeps each at the path it would have, under the thread's
