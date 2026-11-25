@@ -192,72 +192,102 @@ func TestCleanupMerged(t *testing.T) {
 	}
 }
 
-func TestCleanupBlocked(t *testing.T) {
-	tests := []struct {
-		name   string
-		spoil  func(t *testing.T, wt string)
-		reason string
-	}{
-		{"uncommitted change", func(t *testing.T, wt string) {
-			if err := os.WriteFile(filepath.Join(wt, "work.txt"), []byte("changed\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}, "the worktree of issue-7 has uncommitted changes"},
-		{"untracked file", func(t *testing.T, wt string) {
-			if err := os.WriteFile(filepath.Join(wt, "new.txt"), []byte("x\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}, "the worktree of issue-7 has uncommitted changes"},
-		{"unpushed commit", func(t *testing.T, wt string) {
-			if err := os.WriteFile(filepath.Join(wt, "more.txt"), []byte("x\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			gitIn(t, wt, "add", "more.txt")
-			gitIn(t, wt, "commit", "-m", "unpushed")
-		}, "issue-7 has a commit that is not on origin"},
+func TestForceRemovesAKeptWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	head := gitIn(t, wt, "rev-parse", "HEAD")
+	if err := os.WriteFile(filepath.Join(wt, "work.txt"), []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newHarness(t)
-			repoFixture(t, h)
-			s := issueThread(h, t, 7)
-			wt := s.Worktree
-			pushWork(t, wt)
-			tt.spoil(t, wt)
+	reason := "the worktree of issue-7 has uncommitted changes"
 
-			openThenMerge(h)
-			eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, reason)
+	if got, _ := h.Session(s.ID); got.State != "settled" {
+		t.Errorf("state %q, want settled", got.State)
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "blocked" || log[0].Reason != reason || len(log[0].Removed) != 0 {
+		t.Errorf("log = %+v", log)
+	}
+	h.RefreshPRs()
+	h.RefreshPRs()
+	if len(h.Cleanups()) != 1 {
+		t.Error("a blocked clean-up was tried again by itself")
+	}
 
-			got, _ := h.Session(s.ID)
-			if got.State != "settled" || got.CleanupReason != tt.reason {
-				t.Errorf("state %q, reason %q, want settled, %q", got.State, got.CleanupReason, tt.reason)
-			}
-			if !exists(wt) || branches(t, h.Dir) == "" {
-				t.Error("something was removed although the clean-up was blocked")
-			}
-			log := h.Cleanups()
-			if len(log) != 1 || log[0].Status != "blocked" || log[0].Reason != tt.reason || len(log[0].Removed) != 0 {
-				t.Errorf("log = %+v", log)
-			}
-			h.RefreshPRs()
-			h.RefreshPRs()
-			if len(h.Cleanups()) != 1 {
-				t.Error("a blocked clean-up was tried again by itself")
-			}
+	if err := h.Cleanup(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) || gitIn(t, h.Dir, "rev-parse", "issue-7") != head {
+		t.Errorf("the forced clean-up: cleaned up %v, worktree there %v, branches %q", cleanedUp(h, s.ID)(), exists(wt), branches(t, h.Dir))
+	}
+	if log := h.Cleanups(); len(log) != 2 || log[0].Status != "done" {
+		t.Errorf("log after force = %+v", log)
+	}
+	if ev := h.Events(t, activity.Cleanup); len(ev) != 2 || ev[0].Label != "blocked" || ev[1].Label != "done" {
+		t.Errorf("cleanup events = %+v", ev)
+	}
+}
 
-			if err := h.Cleanup(s.ID, true); err != nil {
-				t.Fatal(err)
-			}
-			if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
-				t.Errorf("forced clean-up left things: wt %v branches %q", exists(wt), branches(t, h.Dir))
-			}
-			if log := h.Cleanups(); len(log) != 2 || log[0].Status != "done" {
-				t.Errorf("log after force = %+v", log)
-			}
-			if ev := h.Events(t, activity.Cleanup); len(ev) != 2 || ev[0].Label != "blocked" || ev[1].Label != "done" {
-				t.Errorf("cleanup events = %+v", ev)
-			}
-		})
+func TestUntrackedFileKeepsTheWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	if err := os.MkdirAll(filepath.Join(wt, "notes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, "notes", "new.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "the worktree of issue-7 has uncommitted changes")
+	if !exists(filepath.Join(wt, "notes", "new.txt")) {
+		t.Error("the untracked file is gone")
+	}
+}
+
+func TestCommitNotOnOriginKeepsTheWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	commitIn(t, wt, "more.txt")
+	head := gitIn(t, wt, "rev-parse", "HEAD")
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "issue-7 has a commit that is not on origin")
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != head {
+		t.Errorf("the worktree is at %s, want the unpushed commit %s", got, head)
+	}
+}
+
+func TestChecksRunAgainWhenTheOwnerConfirms(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	openThenClose(h)
+	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(wt) {
+		t.Fatalf("closed PR: cleanup %q, worktree %v", got.Cleanup, exists(wt))
+	}
+	if err := os.WriteFile(filepath.Join(wt, "late.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	keptFor(t, h, s.ID, wt, "the worktree of issue-7 has uncommitted changes")
+	if !exists(filepath.Join(wt, "late.txt")) {
+		t.Error("the file added after the ask is gone")
 	}
 }
 
@@ -1230,6 +1260,147 @@ func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 	}
 }
 
+func TestWorkingThreadKeepsItsWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	keptFor(t, h, s.ID, wt, "a turn is running")
+	if got := stateOf(h, s.ID); got != "working" {
+		t.Errorf("the clean-up stopped the turn: state %q", got)
+	}
+
+	h.Hook(t, s.ID, "Stop", `{}`)
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("the clean-up after the turn: cleaned up %v, worktree there %v, branches %q", cleanedUp(h, s.ID)(), exists(wt), branches(t, h.Dir))
+	}
+}
+
+func TestHeldWakeKeepsTheWorktree(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	repoFixture(t, h)
+	s := waitingWithHeldReview(t, h)
+	wt := s.Worktree
+	if wt == "" {
+		t.Fatalf("the thread has no worktree: %+v", s)
+	}
+
+	eventually(t, "the clean-up kept for the held prompt", func() bool {
+		if err := h.Cleanup(s.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := h.Session(s.ID)
+		return got.Cleanup == "blocked" && got.CleanupReason == "messages wait for this thread"
+	})
+	if got := stateOf(h, s.ID); got != "waiting" || !exists(wt) {
+		t.Errorf("state %q, worktree there %v", got, exists(wt))
+	}
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
+		t.Error("the held prompt went out while the thread waits on the owner")
+	}
+}
+
+func TestForkInTheWorktreeKeepsIt(t *testing.T) {
+	h, wt, ran, src, fork := forkHarness(t)
+
+	openThenMerge(h)
+	keptFor(t, h, src.ID, wt, "Thread #7 work (fork) also works in this worktree")
+	if got, ok := h.Session(fork.ID); !ok || got.State == "settled" || got.Cleanup != "" {
+		t.Errorf("the fork = %+v, %v", got, ok)
+	}
+	if runs := cleanupRuns(ran); len(runs) != 0 {
+		t.Errorf("the clean-up command ran for %q", runs)
+	}
+
+	if err := h.SettleThread(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
+	if err := h.Cleanup(src.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, src.ID)() || exists(wt) || !slices.Equal(cleanupRuns(ran), []string{"issue-7"}) {
+		t.Errorf("the clean-up after the fork settled: cleaned up %v, worktree there %v, runs %q", cleanedUp(h, src.ID)(), exists(wt), cleanupRuns(ran))
+	}
+}
+
+func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	other, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.Worktree != "" {
+		t.Fatalf("the Read thread has a worktree: %+v", other)
+	}
+	in := filepath.Join(wt, "sub")
+	if err := os.Mkdir(in, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, in))
+	eventually(t, "the other thread at work", func() bool { return stateOf(h, other.ID) == "working" })
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "Thread Look around also works in this worktree")
+
+	h.Hook(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, h.Dir))
+	eventually(t, "the other thread back in the project folder", func() bool { return stateOf(h, other.ID) == "idle" })
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) {
+		t.Errorf("the clean-up once the other thread left: cleaned up %v, worktree there %v", cleanedUp(h, s.ID)(), exists(wt))
+	}
+}
+
+func TestOpenShellInTheWorktreeKeepsIt(t *testing.T) {
+	h := shellHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+	shell, err := h.ShellOpen(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	realWt, _ := filepath.EvalSymlinks(wt)
+	eventually(t, "the shell in the worktree", func() bool {
+		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+shell.ID+":", "#{pane_current_path}").Output()
+		path, _ := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+		return err == nil && path == realWt
+	})
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "a shell is open in this worktree")
+
+	if err := h.ShellClose(shell.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) {
+		t.Errorf("the clean-up once the shell closed: cleaned up %v, worktree there %v", cleanedUp(h, s.ID)(), exists(wt))
+	}
+}
+
 func TestMergedPRSettlesTheThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
@@ -1399,15 +1570,6 @@ func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
 	}
 	if !cleanedUp(fresh, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("the confirmed clean-up: row cleaned up %v, worktree there %v, branches %q", cleanedUp(fresh, s.ID)(), exists(wt), branches(t, h.Dir))
-	}
-}
-
-func TestForkDoesNotSettleOnTheSourcesPR(t *testing.T) {
-	h, _, _, src, fork := forkHarness(t)
-	openThenMerge(h)
-	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
-	if got := stateOf(h, fork.ID); got == "settled" || got == "missing" {
-		t.Errorf("the fork is %s", got)
 	}
 }
 

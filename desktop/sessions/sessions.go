@@ -2832,14 +2832,33 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 	return proj, nil
 }
 
-// forkIn is the title of a live fork whose working folder is dir or a folder inside it, "" when none. It takes mu.
-func (s *Sessions) forkIn(dir string) string {
+// usersOf is the title of a live thread other than except that works in dir or a folder inside it, "" when none: one
+// that runs there, as a fork of a thread in its worktree does, or whose last hook came from there. It takes mu.
+func (s *Sessions) usersOf(dir, except string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range s.info {
-		if cwd := s.cwds[in.Name.String()]; in.Fork != "" && cwd != "" && inside(cwd, dir) {
+		id := in.Name.String()
+		if id == except {
+			continue
+		}
+		if cwd := s.cwds[id]; in.Path != "" && inside(in.Path, dir) || cwd != "" && inside(cwd, dir) {
 			return cmp.Or(in.Title, defaultTitle)
 		}
+	}
+	return ""
+}
+
+// pending says why the thread is busy, or "" when it is not. Prompts are held only while a turn runs, so they are
+// named first, or their reason would never show. It takes mu.
+func (s *Sessions) pending(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case len(s.wakes[id]) > 0:
+		return "messages wait for this thread"
+	case slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) && holdsPrompts(s.records[id].State):
+		return "a turn is running"
 	}
 	return ""
 }

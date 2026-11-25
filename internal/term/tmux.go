@@ -152,6 +152,30 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	return infos, shells, nil
 }
 
+// ShellPaths are the folders the shell sessions are in now: a shell's folder follows its cd, so it is the pane's
+// current folder, not the one the session started in. No running server means no shells.
+func (t *Tmux) ShellPaths(ctx context.Context) (map[session.Name]string, error) {
+	out, err := t.run(ctx, "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_path}")
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && noServer(err.Error()) {
+			return map[session.Name]string{}, nil
+		}
+		return nil, err
+	}
+	paths := map[session.Name]string{}
+	for line := range strings.SplitSeq(out, "\n") {
+		id, path, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		if name, err := session.ParseName(id); err == nil && name.IsShell() {
+			paths[name] = path
+		}
+	}
+	return paths, nil
+}
+
 // accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag.
 func accessOf(tag, chat string) session.Access {
 	if tag == "" && chat != "" {

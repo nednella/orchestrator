@@ -352,6 +352,40 @@ func TestCleanEnvDropsInheritedSession(t *testing.T) {
 	}
 }
 
+func TestShellPathsNamesEachShellsFolder(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	if paths, err := tmux.ShellPaths(ctx); err != nil || len(paths) != 0 {
+		t.Fatalf("ShellPaths without a server = %v, %v", paths, err)
+	}
+	start, moved, agentDir := t.TempDir(), t.TempDir(), t.TempDir()
+	shell, second := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
+	if err := tmux.NewSession(ctx, shell, "shell", start, nil, []string{"sleep", "60"}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.NewSession(ctx, second, "shell", start, nil, []string{"sh", "-c", fmt.Sprintf("cd %q && exec sleep 60", moved)}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.NewSession(ctx, session.Name{Project: "demo", Token: "a1"}, "agent", agentDir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	resolved := func(p string) string { r, _ := filepath.EvalSymlinks(p); return r }
+	var paths map[session.Name]string
+	for range 50 {
+		var err error
+		if paths, err = tmux.ShellPaths(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if resolved(paths[second]) == resolved(moved) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(paths) != 2 || resolved(paths[shell]) != resolved(start) || resolved(paths[second]) != resolved(moved) {
+		t.Errorf("ShellPaths = %v, want %s in %s and %s in %s, and no agent", paths, shell, start, second, moved)
+	}
+}
+
 func TestNewSessionGivesThePaneItsPath(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()

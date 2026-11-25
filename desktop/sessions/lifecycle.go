@@ -1087,9 +1087,12 @@ type branchPlan struct {
 	made     bool   // agentos made the worktree for the thread and has not removed it, so the clean-up removes it
 }
 
-// planFor finds the worktree agentos made for the thread, and unless forced, says why removing it could lose work. A
-// thread with no such worktree, or one removed already, has nothing on disk to lose: the branch always stays. The
-// worktree goes only while it is on the thread's branch, the one whose PR merged or closed.
+// planFor finds the worktree agentos made for the thread, and unless forced, says why removing it could lose work or
+// pull it from under something that uses it: a rebase, changes or commits only it holds, a running turn or held
+// prompts, another thread or a shell in it. Each check reads git, tmux and the threads afresh, so a second call sees
+// what changed since the first. A thread with no such worktree, or one removed already, has nothing on disk to lose:
+// the branch always stays. The worktree goes only while it is on the thread's branch, the one whose PR merged or
+// closed.
 func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (cleanupPlan, string) {
 	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force}
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
@@ -1119,10 +1122,29 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (
 	if reason := l.unsafe(ctx, dir, w.Path, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
 		return p, reason
 	}
-	if fork := l.sessions.forkIn(w.Path); fork != "" {
-		return p, fmt.Sprintf("Fork %s still works in this worktree", fork)
+	if reason := l.sessions.pending(t.id); reason != "" {
+		return p, reason
 	}
-	return p, ""
+	if user := l.sessions.usersOf(w.Path, t.id); user != "" {
+		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
+	}
+	return p, l.shellIn(ctx, w.Path)
+}
+
+// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say. It is "" when none is.
+func (l *Lifecycle) shellIn(ctx context.Context, worktree string) string {
+	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
+	defer cancel()
+	shells, err := l.sessions.tmux.ShellPaths(ctx)
+	if err != nil {
+		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+	}
+	for _, path := range shells {
+		if inside(path, worktree) {
+			return "a shell is open in this worktree"
+		}
+	}
+	return ""
 }
 
 // removeWorktree removes the worktree agentos made for the thread with the project's session_cleanup_command, and
