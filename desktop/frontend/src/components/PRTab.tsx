@@ -121,10 +121,10 @@ export function PRTab({ session }: PRTabProps) {
               })
               if (session.hosted) {
                 select(session.id)
-                if (mode === 'narrow') setMobilePanel('session')
+                if (mode === 'narrow') setMobilePanel('thread')
                 focus('composer')
               } else {
-                focus('terminal')
+                focus('thread')
               }
             }}
           >

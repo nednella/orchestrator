@@ -18,7 +18,7 @@ export function ThreadAnswer({ session, pending }: ThreadAnswerProps) {
           className="btn btn-primary h-[1.375rem] px-2 text-label"
           onClick={() => {
             a.select(session.id)
-            a.focus('terminal')
+            a.focus('thread')
           }}
         >
           Answer

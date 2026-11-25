@@ -54,14 +54,14 @@ export function DigestView() {
 
   useEffect(() => panel.current?.focus(), []);
   useEffect(() => {
-    if (focusRequest.target === "terminal") panel.current?.focus();
+    if (focusRequest.target === "thread") panel.current?.focus();
   }, [focusRequest]);
   useEffect(() => markDigestSeen(), [digest?.lastRunAt, markDigestSeen]);
 
   return (
     <section
       ref={panel}
-      data-panel="terminal"
+      data-panel="thread"
       tabIndex={-1}
       aria-label="Weekly digest"
       className="panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden"

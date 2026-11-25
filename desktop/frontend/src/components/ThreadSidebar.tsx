@@ -34,7 +34,7 @@ export function ThreadSidebar() {
         const session = threads[index]
         if (session.state === 'ended') return
         select(session.id)
-        focus('terminal')
+        focus('thread')
       },
     },
   )
@@ -74,7 +74,7 @@ export function ThreadSidebar() {
     const first = threads.find((s) => s.state !== 'ended')
     if (!first) return
     select(first.id)
-    focus('terminal')
+    focus('thread')
   }
 
   return (

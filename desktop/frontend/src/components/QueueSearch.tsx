@@ -64,7 +64,7 @@ export function QueueSearch({ shown }: QueueSearchProps) {
                 setCursor((c) => Math.max(c - 1, 0))
               } else if (e.key === 'Escape') {
                 if (completion) setDismissed(true)
-                else focus('terminal')
+                else focus('thread')
                 e.stopPropagation()
               }
             }}

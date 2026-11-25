@@ -30,7 +30,7 @@ export function MobileTabs() {
   const needsYou = sessions.some((s) => s.state === 'waiting')
   return (
     <nav role="tablist" aria-label="Panels" className="flex flex-none border-t border-line bg-app">
-      <Tab label="Session" active={mobilePanel === 'session'} badge={ctx.session ? `#${ctx.session.n}` : '–'} onPick={() => setMobilePanel('session')} />
+      <Tab label="Thread" active={mobilePanel === 'thread'} badge={ctx.session ? `#${ctx.session.n}` : '–'} onPick={() => setMobilePanel('thread')} />
       {shownPanelViews(ctx).map((view) => {
         const count = view.count?.(ctx)
         return <Tab key={view.id} label={view.label} active={mobilePanel === 'panel' && shown.id === view.id} badge={count === undefined ? undefined : String(count)} onPick={() => showPanel(view.id)} />

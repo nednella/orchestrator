@@ -44,7 +44,7 @@ export function HomeComposer() {
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
-  useFocusRequest('terminal', focusInput)
+  useFocusRequest('thread', focusInput)
 
   const note = a.composerMode === 'note'
   const token = note || dismissed ? null : TOKEN.exec(caret.before)

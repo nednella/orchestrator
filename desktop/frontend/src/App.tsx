@@ -42,7 +42,7 @@ export function App() {
   const { selectedId } = useAgentos('selectedId')
   const { mode, sidebarOpen, rightOpen, mobilePanel, statsOpen, digestOpen } = useLayout()
   const narrow = mode === 'narrow'
-  const showCentre = !narrow || mobilePanel === 'session'
+  const showCentre = !narrow || mobilePanel === 'thread'
   const home = !selectedId && showCentre
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',

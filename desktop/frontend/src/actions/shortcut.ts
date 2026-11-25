@@ -21,5 +21,5 @@ export const LIST_KEYS: { keys: string; summary: string }[] = [
   { keys: 'A / D or ← / →', summary: 'Fold or unfold the Settled threads' },
   { keys: 'Space', summary: 'Fold or unfold the section under the cursor' },
   { keys: 'P / E in notes', summary: 'Pin or archive the note under the cursor' },
-  { keys: 'Esc', summary: 'Close a panel or overlay. In a thread’s chat it stops the agent’s turn; inside the terminal it goes to the agent' },
+  { keys: 'Esc', summary: 'Close a panel or overlay. In a thread, Esc stops the agent’s turn' },
 ]

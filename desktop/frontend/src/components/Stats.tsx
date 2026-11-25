@@ -41,7 +41,7 @@ export function Stats() {
   const project = projects.some((p) => p.key === picked) ? picked : ''
 
   useEffect(() => {
-    if (focusRequest.target === 'terminal') panel.current?.focus()
+    if (focusRequest.target === 'thread') panel.current?.focus()
   }, [focusRequest])
 
   useEffect(() => panel.current?.focus(), [])
@@ -67,7 +67,7 @@ export function Stats() {
   return (
     <section
       ref={panel}
-      data-panel="terminal"
+      data-panel="thread"
       tabIndex={-1}
       aria-label={NAMES[tab].label}
       className="panel @container flex h-full min-h-0 min-w-0 flex-col overflow-hidden"

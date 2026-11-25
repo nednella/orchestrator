@@ -12,7 +12,7 @@ const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
-export type MobilePanel = 'session' | 'panel' | 'threads' | 'shell'
+export type MobilePanel = 'thread' | 'panel' | 'threads' | 'shell'
 export type SidePanel = 'sidebar' | 'right'
 export type TogglePanel = 'sidebar' | 'shell' | 'right'
 
@@ -149,7 +149,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('session')
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('thread')
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
@@ -192,12 +192,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (first) return
     setStatsOpen(false)
     setDigestOpen(false)
-    if (narrow) setMobilePanel('session')
+    if (narrow) setMobilePanel('thread')
   }, [selectedId, narrow])
 
   const setSidebarOpen = useCallback(
     (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'threads' : 'session')
+      if (narrow) setMobilePanel(open ? 'threads' : 'thread')
       else updatePrefs({ sidebarOpen: open })
     },
     [narrow, updatePrefs],
@@ -211,7 +211,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setShellOpen = useCallback(
     (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'shell' : 'session')
+      if (narrow) setMobilePanel(open ? 'shell' : 'thread')
       else updatePrefs({ shellOpen: open })
     },
     [narrow, updatePrefs],
@@ -219,7 +219,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setRightOpen = useCallback(
     (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'panel' : 'session')
+      if (narrow) setMobilePanel(open ? 'panel' : 'thread')
       else updatePrefs({ rightOpen: open })
     },
     [narrow, updatePrefs],
@@ -228,7 +228,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const showHome = useCallback(() => {
     setStatsOpen(false)
     setDigestOpen(false)
-    if (narrow) setMobilePanel('session')
+    if (narrow) setMobilePanel('thread')
     if (project) selectHome(project.key)
   }, [narrow, project, selectHome])
 
@@ -256,11 +256,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       if (panel === 'right') return
       if (narrow) {
         if (panel === 'sidebar') setMobilePanel('threads')
-        if (panel === 'centre') setMobilePanel('session')
+        if (panel === 'centre') setMobilePanel('thread')
         if (panel === 'shell') setMobilePanel('shell')
       } else if (panel === 'sidebar') updatePrefs({ sidebarOpen: true })
       else if (panel === 'shell') updatePrefs({ shellOpen: true })
-      focus(panel === 'centre' ? 'terminal' : panel)
+      focus(panel === 'centre' ? 'thread' : panel)
     },
     [focus, narrow, updatePrefs],
   )
@@ -297,7 +297,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setRightOpen,
       toggleRight() {
         if (narrow) {
-          setMobilePanel(mobilePanel === 'panel' ? 'session' : 'panel')
+          setMobilePanel(mobilePanel === 'panel' ? 'thread' : 'panel')
           return
         }
         const open = !rightOpen
@@ -321,7 +321,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (!active?.closest(PANEL_SELECTOR[panel])) return
         requestAnimationFrame(() => {
           if (before instanceof HTMLElement && before.isConnected && !before.closest(PANEL_SELECTOR[panel])) before.focus()
-          if (document.activeElement !== before) focus('terminal')
+          if (document.activeElement !== before) focus('thread')
         })
       },
       setPanelView,
@@ -341,24 +341,24 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       toggleStats() {
         setStatsOpen(!statsOpen)
         setDigestOpen(false)
-        if (!statsOpen && narrow) setMobilePanel('session')
+        if (!statsOpen && narrow) setMobilePanel('thread')
       },
       toggleDigest() {
         setDigestOpen(!digestOpen)
         setStatsOpen(false)
-        if (!digestOpen && narrow) setMobilePanel('session')
+        if (!digestOpen && narrow) setMobilePanel('thread')
       },
       openDigest() {
         setDigestOpen(true)
         setStatsOpen(false)
-        if (narrow) setMobilePanel('session')
+        if (narrow) setMobilePanel('thread')
       },
       closeCentre() {
         setStatsOpen(false)
         setDigestOpen(false)
       },
       returnToTerminal() {
-        focus('terminal')
+        focus('thread')
       },
       focusPanel,
     }),

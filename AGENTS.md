@@ -1,6 +1,6 @@
 # AGENTS.md
 
-agentos: one desktop window for every coding-agent session. It shows which session needs the owner, the project's GitHub issues as a queue, notes, and each agent's real terminal. Agents keep running in a hidden tmux when the window closes.
+agentos: one desktop window for every coding-agent session. It shows which session needs the owner, the project's GitHub issues as a queue, notes, and each agent's chat. Agents keep running in a hidden tmux when the window closes.
 
 ## Hard rules
 

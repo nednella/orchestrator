@@ -29,7 +29,7 @@ export function Overlay({ label, align, size = 'default', onClose, children }: O
       if (dialog.current?.isConnected) return
       const el = previous.current
       if (el instanceof HTMLElement && el.isConnected && el !== document.body) el.focus()
-      else focus('terminal')
+      else focus('thread')
     },
     [focus],
   )

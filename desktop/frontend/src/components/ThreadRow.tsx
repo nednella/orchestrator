@@ -120,7 +120,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                 if (selected) return a.showHome(session.project)
                 if (ended) return
                 a.select(session.id)
-                a.focus('terminal')
+                a.focus('thread')
               }}
             >
               {session.title}

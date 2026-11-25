@@ -23,7 +23,7 @@ export type SessionView = 'pr' | 'evidence' | 'browser'
 export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
-export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
+export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerKind = 'session' | 'chat'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
@@ -272,7 +272,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [composerDraft, setComposerDraftState] = useState(EMPTY_DRAFT)
   const [composerMode, setComposerModeState] = useState<ComposerMode>('thread')
   const [composerKind, setComposerKind] = useState<ComposerKind>('session')
-  const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'terminal', n: 0 })
+  const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'thread', n: 0 })
 
   const sessionsRef = useRef(sessions)
   const projectsRef = useRef(projects)
@@ -634,7 +634,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setSessions((list) => (list.some((s) => s.id === created.id) ? list : [...list, created]))
       if (!background) {
         selectId(created.id)
-        focus('terminal')
+        focus('thread')
       }
       return created
     },
@@ -651,14 +651,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       const owner = target && target.project !== projectRef.current?.key ? projectsRef.current.find((p) => p.key === target.project) : undefined
       if (!owner) {
         selectId(id)
-        focus('terminal')
+        focus('thread')
         return
       }
       report(async () => {
         await enterFrom(api.switchProject(owner.name))
         if (projectRef.current?.key !== owner.key || !sessionsRef.current.some((s) => s.id === id)) return
         selectId(id)
-        focus('terminal')
+        focus('thread')
       })
     },
     [selectId, focus, report, enterFrom],

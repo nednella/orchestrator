@@ -38,10 +38,10 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     run: layout.toggleStats,
   },
   {
-    id: 'show-terminal',
-    label: 'Show terminal',
+    id: 'show-thread',
+    label: 'Show thread',
     group: 'Sessions',
-    uiCommand: 'term',
+    uiCommand: 'chat',
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()

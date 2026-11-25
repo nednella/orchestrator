@@ -30,7 +30,7 @@ let focusedRequest = -1
 const DEVICE_REPORT = /^(\x1b\[[?>]?[\d;]*c|\x1bP[^\x1b]*\x1b\\|\x1b\]\d+;[^\x07\x1b]*(\x07|\x1b\\))+$/
 
 export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProps) {
-  const focusTarget = kind === 'shell' ? 'shell' : 'terminal'
+  const focusTarget = kind === 'shell' ? 'shell' : 'thread'
   const leave = useRef(onLeave)
   leave.current = onLeave
   const lastEsc = useRef(0)
