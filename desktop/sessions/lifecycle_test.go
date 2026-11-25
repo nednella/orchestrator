@@ -1230,6 +1230,114 @@ func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
 	}
 }
 
+// keptByAFile merges the PR of a thread whose worktree holds a new file, which keeps its clean-up, and returns the file.
+func keptByAFile(t *testing.T, h *apptest.Harness, s sessions.Session) string {
+	t.Helper()
+	pushWork(t, s.Worktree)
+	file := filepath.Join(s.Worktree, "late.txt")
+	if err := os.WriteFile(file, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	openThenMerge(h)
+	keptFor(t, h, s.ID, s.Worktree, keptReason)
+	return file
+}
+
+const keptReason = "the worktree of issue-7 has uncommitted changes"
+
+// keptThenDone checks the log, newest first: the clean-up that removed the worktree, after the tries that kept it.
+func keptThenDone(t *testing.T, log []sessions.Cleanup, wt string) {
+	t.Helper()
+	if len(log) < 2 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "worktree "+wt) {
+		t.Fatalf("log = %+v, want the tries that kept it, then one that removed %s", log, wt)
+	}
+	for _, c := range log[1:] {
+		if c.Status != "blocked" || c.Reason != keptReason {
+			t.Errorf("an earlier try = %+v, want kept for %q", c, keptReason)
+		}
+	}
+}
+
+func TestKeptCleanupIsTriedAgainByTheSweep(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 200 * time.Millisecond})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	file := keptByAFile(t, h, s)
+	eventually(t, "a sweep to try again", func() bool { return len(h.Cleanups()) >= 2 })
+	if got, _ := h.Session(s.ID); got.Cleanup != "blocked" || !exists(file) {
+		t.Fatalf("a sweep while the file is there: cleanup %q, file there %v", got.Cleanup, exists(file))
+	}
+
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the sweep's clean-up", cleanedUp(h, s.ID))
+	if exists(s.Worktree) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(s.Worktree), branches(t, h.Dir))
+	}
+	log := h.Cleanups()
+	keptThenDone(t, log, s.Worktree)
+	time.Sleep(600 * time.Millisecond)
+	if n := len(h.Cleanups()); n != len(log) {
+		t.Errorf("the sweep ran on a thread cleaned up already: %d entries, then %d", len(log), n)
+	}
+}
+
+func TestKeptCleanupIsTriedAgainAtStart(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	file := keptByAFile(t, h, s)
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := h.Restart(t)
+	eventually(t, "the clean-up at the next start", func() bool { log := fresh.Cleanups(); return len(log) > 1 && log[0].Status == "done" })
+	if !cleanedUp(fresh, s.ID)() || exists(s.Worktree) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(s.Worktree), branches(t, h.Dir))
+	}
+	keptThenDone(t, fresh.Cleanups(), s.Worktree)
+}
+
+func TestAskedCleanupIsNotSwept(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 100 * time.Millisecond})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	openThenClose(h)
+	if got, _ := h.Session(s.ID); got.Cleanup != "ask" {
+		t.Fatalf("closed PR: cleanup %q, want ask", got.Cleanup)
+	}
+
+	time.Sleep(600 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(s.Worktree) || len(h.Cleanups()) != 0 {
+		t.Errorf("after some sweeps: cleanup %q, worktree there %v, log %+v", got.Cleanup, exists(s.Worktree), h.Cleanups())
+	}
+}
+
+func TestSweepLeavesAWokenThread(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 100 * time.Millisecond})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	file := keptByAFile(t, h, s)
+	eventually(t, "a wake between two sweeps", func() bool { _, err := h.WakeThread(s.ID); return err == nil })
+	eventually(t, "the woken thread", func() bool { got, _ := h.Session(s.ID); return got.State != "settled" })
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(600 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.State == "settled" || !exists(s.Worktree) {
+		t.Errorf("a sweep after the wake: state %q, worktree there %v", got.State, exists(s.Worktree))
+	}
+	for _, c := range h.Cleanups() {
+		if c.Status == "done" {
+			t.Errorf("a sweep cleaned up the woken thread: %+v", c)
+		}
+	}
+}
+
 func numberedPR(n int, state string) string {
 	return strings.Replace(prJSON(state, false, "[]", 0, 0), `"number":12`, fmt.Sprintf(`"number":%d`, n), 1)
 }

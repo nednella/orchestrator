@@ -31,6 +31,7 @@ import (
 
 const (
 	reconcileEvery = time.Minute // a full look at every pull request: for what a watcher missed, and for conflicts, which no watcher sees
+	cleanupSweep   = time.Hour   // how often a clean-up the checks kept is tried again
 	cleanupsKept   = 100
 	gitTimeout     = 30 * time.Second
 
@@ -164,6 +165,8 @@ type Lifecycle struct {
 	watchers map[string]*watcher // by project key
 	logins   map[string]string   // by project folder: the gh user's login
 
+	sweepEvery time.Duration
+
 	cleanMu   sync.Mutex // guards stopping against cleanups starting
 	stopping  bool
 	cleanups  sync.WaitGroup // the clean-ups a poll started on its own
@@ -176,7 +179,7 @@ func newLifecycle(runner run.Runner, stream run.Streamer, dataDir, stateDir stri
 	return &Lifecycle{
 		run: runner, stream: stream, dataDir: dataDir, stateDir: stateDir, sessions: s, activity: activity, emit: emit, warn: warn.New(emit), repos: noRepos{},
 		tracks: map[string]*track{}, gone: map[string]bool{}, files: map[string]*prsFile{}, etags: map[string]string{}, watchers: map[string]*watcher{}, logins: map[string]string{},
-		stopped: stopped, stopClean: stop,
+		sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
 	}
 }
 
@@ -337,18 +340,48 @@ func (l *Lifecycle) workTargets() []target {
 	return slices.DeleteFunc(targets, func(t target) bool { return l.retired(t.id) })
 }
 
-// Run reconciles every pull request now and then, and keeps a watcher per project in between.
+// Run reconciles every pull request now and then, keeps a watcher per project in between, and tries the kept
+// clean-ups again every sweepEvery. The first reconcile is the start's try: what a clean-up tried is not kept over a
+// restart, so it runs the clean-up of each merged or closed PR again as the mode says.
 func (l *Lifecycle) Run(ctx context.Context) {
 	tick := time.NewTicker(reconcileEvery)
 	defer tick.Stop()
+	sweep := time.NewTicker(l.sweepEvery)
+	defer sweep.Stop()
+	l.Poll(ctx)
 	for {
-		l.Poll(ctx)
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+			l.Poll(ctx)
+		case <-sweep.C:
+			l.sweep(ctx)
 		}
 	}
+}
+
+// sweep tries again, with every check, each clean-up the checks kept after the thread's PR merged or closed, since what
+// kept it, as a turn, a shell or work since pushed, may be gone. An ask waits on the owner, a running clean-up is left
+// to end, and a thread that runs again, as after a wake, is left alone.
+func (l *Lifecycle) sweep(ctx context.Context) {
+	for _, t := range l.workTargets() {
+		if l.keptAfterPR(t) {
+			l.autoCleanup(ctx, t.id)
+		}
+	}
+}
+
+// keptAfterPR says whether the checks kept the settled thread's clean-up after the PR of its branch merged or closed
+// since its latest start. It takes mu.
+func (l *Lifecycle) keptAfterPR(t target) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tr := l.tracks[t.id]
+	if !t.ended || tr == nil || tr.cleanup != "blocked" || tr.pr == nil || tr.branch != t.branch {
+		return false
+	}
+	return (tr.pr.State == "merged" || tr.pr.State == "closed") && !t.predates(tr.pr)
 }
 
 // group is the sessions of one project that work on a branch.
@@ -981,13 +1014,13 @@ func verdict(reviews []review) string {
 // Cleanup removes the worktree agentos made for a thread and its temp folder, and settles the thread, which stays with
 // its branch. Without force it first checks that nothing would be lost.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
-	_, err := l.cleanupNow(ctx, id, force)
+	_, err := l.cleanupNow(ctx, id, force, false)
 	return err
 }
 
 // cleanupNow is Cleanup, which it runs to the end before it returns the reason the clean-up stopped, "" when it went
-// through. A clean-up that cannot start is an error.
-func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool) (reason string, err error) {
+// through. A clean-up that cannot start is an error, as one of a thread being deleted, unless the delete runs it.
+func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force, ofDelete bool) (reason string, err error) {
 	t, err := l.sessions.target(id)
 	if err != nil {
 		return "", err
@@ -1010,6 +1043,7 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool) (reas
 		l.mu.Unlock()
 		return "", fmt.Errorf("%s is no longer the branch of this thread", tr.branch)
 	}
+	was, wasReason := tr.cleanup, tr.reason
 	tr.cleanup, tr.reason = "pending", ""
 	var pr *PR
 	if tr.pr != nil {
@@ -1017,6 +1051,14 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool) (reas
 		pr = &c
 	}
 	l.mu.Unlock()
+	// The mark goes on before the look at the delete's, as a delete marks itself before it looks for a running
+	// clean-up: one of the two always sees the other.
+	if !ofDelete && l.sessions.beingDeleted(id) {
+		l.mu.Lock()
+		tr.cleanup, tr.reason = was, wasReason
+		l.mu.Unlock()
+		return "", fmt.Errorf("Thread %d is being deleted", l.sessions.Number(id))
+	}
 	l.sessions.changed()
 
 	removed, reason := l.removeAll(ctx, t, pr, force)

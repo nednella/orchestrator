@@ -842,6 +842,13 @@ func (s *Sessions) startDelete(id string) error {
 	return nil
 }
 
+// beingDeleted says whether a delete of the thread runs or has run. It takes mu.
+func (s *Sessions) beingDeleted(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deleting[id] || s.deleted[id]
+}
+
 // dropThread removes the settled thread's state file and row, and marks it deleted, so nothing brings it back. It
 // holds createMu, so a refresh that read the state file before it went does not apply it after.
 func (s *Sessions) dropThread(name session.Name) error {
@@ -924,7 +931,7 @@ func (s *Sessions) removeOwnWorktree(id string, n int) error {
 		return nil
 	}
 	wasLive := s.isLive(id)
-	reason, err := s.life.cleanupNow(ctx, id, false)
+	reason, err := s.life.cleanupNow(ctx, id, false, true)
 	switch {
 	case err != nil:
 		return err
@@ -3594,6 +3601,9 @@ func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 func (s *Sessions) isOld(id string) bool {
 	return slices.ContainsFunc(s.old, func(in term.Info) bool { return in.Name.String() == id })
 }
+
+// SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default. It comes before Run.
+func (s *Sessions) SetCleanupSweep(every time.Duration) { s.life.sweepEvery = every }
 
 // Run follows tmux, the hook bus and the pull requests until ctx ends.
 func (s *Sessions) Run(ctx context.Context) error {

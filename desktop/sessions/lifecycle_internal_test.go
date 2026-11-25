@@ -282,3 +282,37 @@ func TestThreadThatWakesDuringTheCleanupKeepsWhatIsLeft(t *testing.T) {
 		})
 	}
 }
+
+type noEvidence struct{}
+
+func (noEvidence) Count(string) int { return 0 }
+func (noEvidence) Purge(string) int { return 0 }
+
+func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		deleting bool
+		want     string
+	}{{"being deleted", true, "blocked"}, {"not being deleted", false, ""}} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			proj := project.Project{Name: "p", Dir: dir}
+			s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Projects: fixedProjects{proj}, Current: proj, Activity: noActivity{}, Browsers: fakeBrowsers{}, Evidence: noEvidence{}, Emit: func(string, any) {}})
+			name := session.Name{Project: "p", Token: "abcdefgh"}
+			id := name.String()
+			s.ended[id] = &endedSession{info: term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir}}
+			s.deleting[id] = tt.deleting
+			l := s.life
+			l.tracks[id] = &track{branch: "issue-7", cleanup: "blocked", reason: "a shell is open in this worktree", pr: &PR{Number: 12, State: "merged"}}
+
+			l.sweep(t.Context())
+			l.cleanups.Wait()
+			if got := l.fields(id).cleanup; got != tt.want {
+				t.Errorf("cleanup %q, want %q", got, tt.want)
+			}
+			if n := len(l.Cleanups("p")); tt.deleting && n != 0 {
+				t.Errorf("the sweep logged %d clean-ups of a thread being deleted", n)
+			}
+		})
+	}
+}
