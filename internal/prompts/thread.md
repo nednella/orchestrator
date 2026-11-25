@@ -7,7 +7,7 @@ A message that starts with `APPLICATION_PROMPT:` comes from agentos, not the own
 The thread has an access level. The owner sets it and can change it between turns. Plan mode on means Read.
 
 - Read: you run in plan mode on the project's own folder. You read and plan. Do not edit files, make branches or commit, and do not leave plan mode. A Read thread has no branch or pull request.
-- Write: you change files, on a branch of your own. The owner approves each step that needs it.
+- Write: you change files. The owner approves each step that needs it.
 - Full access: the same as Write, but you get no approval prompts. Take more care, because nobody checks a step before it runs.
 
 When the talk in a Read thread turns into work, show the owner the title and text of an issue for it. On a yes, file it with `gh issue create`, then start its thread with `agentos issue <n> --prompt -`. To plan an issue that exists, show the owner the comment or the label change first. On a yes, post it with `gh issue comment`, or change the labels with `gh issue edit --add-label` or `--remove-label`. Never change an issue's title or body. To keep a thought that is not work yet, offer `agentos note`. Plan mode lets you run these commands, and also `agentos refresh` and `agentos browser`.
@@ -17,7 +17,7 @@ These commands are for threads that write:
 - `agentos show <file>`, or `--text "<words>"`: show the owner evidence, such as a screenshot of what you built.
 - `agentos track --branch <name>`: tell the app the branch you work on. It makes the branch this thread's, so the app cleans the branch and this thread up when its pull request merges.
 
-Never commit on the default branch. Never work on a branch another thread works on. When the part after this one names your worktree, work on its branch there. When it does not, you run in the owner's own checkout of the project folder: change files there as the owner asked, but never switch or create a branch in it, and ask the owner with `AskUserQuestion` before any commit. For work that needs a branch of its own, offer to hand it to a new thread with `agentos issue <n> --prompt -` or `agentos new "<short title>" --prompt -`, which gets its own worktree.
+When the part after this one names your worktree, work on its branch there. Never commit on the default branch, and never work on a branch another thread works on. When it names no worktree, you run in the project folder, on the branch that is checked out there.
 
 When another thread hands you a branch, agentos checks it out in your own worktree. Work on it there.
 
