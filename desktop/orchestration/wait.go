@@ -13,14 +13,13 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
 	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/session"
 )
 
 // sliceMost is the longest one call of wait waits, in milliseconds: the agentos command waits in slices, so no control
 // call outlasts control.MaxTimeout.
 const sliceMost = 60000
 
-// The ways a wait ends, as its answer's outcome says.
+// The ways a wait ends, each with its own answer.
 const (
 	outcomeCompleted = "completed"
 	outcomeFailed    = "failed"
@@ -36,14 +35,10 @@ type waitInput struct {
 }
 
 // waited is what one slice of a wait answers. Text is what the agent is given: the thread's last reply once its turn
-// ended, else a sentence that says how it stands. Outcome is "" while it runs.
+// ended, else a sentence that says how it stands.
 type waited struct {
-	Done           bool          `json:"done"`
-	Text           string        `json:"text"`
-	Outcome        string        `json:"outcome,omitempty"`
-	State          session.State `json:"state"`
-	Result         string        `json:"result"`
-	WaitingOnOwner bool          `json:"waitingOnOwner"`
+	Done bool   `json:"done"`
+	Text string `json:"text"`
 }
 
 // waitOn is a wait in flight: the thread waiter waits on thread.
@@ -147,19 +142,19 @@ func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 		t := c.turnOf(ch)
 		switch {
 		case !ch.Live || t.ran:
-			return c.answer(ch.ID, t, outcomeSettled)
+			return answer(ch.ID, t, outcomeSettled)
 		case t.ended:
-			return c.answer(ch.ID, t, t.outcome)
+			return answer(ch.ID, t, t.outcome)
 		}
 		_, err := c.chats.AwaitTurn(ctx, ch.ID, t.newest)
 		switch {
 		case errors.Is(err, chat.ErrThreadGone):
 			if _, err := c.threads.ChatOf(ch.ID); err != nil {
-				return c.answer(ch.ID, turn{}, outcomeDeleted)
+				return answer(ch.ID, turn{}, outcomeDeleted)
 			}
-			return c.answer(ch.ID, c.turnOf(ch), outcomeSettled)
+			return answer(ch.ID, c.turnOf(ch), outcomeSettled)
 		case err != nil:
-			return c.answer(ch.ID, c.turnOf(ch), "")
+			return answer(ch.ID, c.turnOf(ch), "")
 		}
 	}
 }
@@ -237,8 +232,8 @@ func turnIn(events []chatlog.Event) turn {
 }
 
 // answer is the slice's answer for the thread id with its turn t and the outcome, "" while it runs.
-func (c *Commands) answer(id string, t turn, outcome string) waited {
-	w := waited{Done: outcome != "", Outcome: outcome, State: c.stateOf(id), Result: t.reply, WaitingOnOwner: t.asks}
+func answer(id string, t turn, outcome string) waited {
+	w := waited{Done: outcome != ""}
 	var head string
 	switch outcome {
 	case "":
@@ -273,14 +268,4 @@ func (c *Commands) answer(id string, t turn, outcome string) waited {
 		w.Text += " Its last reply:\n\n" + t.reply
 	}
 	return w
-}
-
-// stateOf is the state of the thread's row, "" when it has none.
-func (c *Commands) stateOf(id string) session.State {
-	for _, s := range c.threads.List() {
-		if s.ID == id {
-			return s.State
-		}
-	}
-	return ""
 }

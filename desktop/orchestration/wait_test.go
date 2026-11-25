@@ -17,11 +17,10 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// waitAnswer is what one slice of wait answers.
+// waitAnswer is what one slice of wait answers, and all it answers.
 type waitAnswer struct {
-	Done                         bool
-	Text, Outcome, State, Result string
-	WaitingOnOwner               bool
+	Done bool   `json:"done"`
+	Text string `json:"text"`
 }
 
 // waitCall runs one slice of wait over the control socket with the caller's token, as the agentos command does. It
@@ -39,7 +38,9 @@ func waitCall(h *apptest.Harness, token, thread string, slice time.Duration) (wa
 		return waitAnswer{}, resp.Error, nil
 	}
 	var a waitAnswer
-	err = json.Unmarshal([]byte(resp.Out), &a)
+	d := json.NewDecoder(strings.NewReader(resp.Out))
+	d.DisallowUnknownFields()
+	err = d.Decode(&a)
 	return a, "", err
 }
 
@@ -104,9 +105,9 @@ func TestWaitReturnsTheResult(t *testing.T) {
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files in src","access":"read"}`)
-	a := waitOn(t, h, parent, c.ID, 10*time.Second)
-	if !a.Done || a.Outcome != "completed" || a.Result != "done" || a.Text != "done" || a.WaitingOnOwner {
-		t.Errorf("wait answered %+v, want done and completed with the reply done", a)
+	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, parent), Args: []string{"wait"}, TimeoutMs: 15000, Opts: map[string]string{"input": `{"thread":"` + c.ID + `"}`, "slice_ms": "10000"}})
+	if want := `{"done":true,"text":"done"}`; !resp.OK || resp.Out != want {
+		t.Errorf("wait answered %+v, want %s", resp, want)
 	}
 }
 
@@ -122,7 +123,7 @@ func TestWaitRightAfterDelegateWaitsForTheTask(t *testing.T) {
 		t.Logf("the child's row is %s before its first turn", r.State)
 	}
 	a := waitOn(t, h, parent, c.ID, 10*time.Second)
-	if !a.Done || a.Outcome != "completed" || a.Result != "done" {
+	if !a.Done || a.Text != "done" {
 		t.Errorf("wait answered %+v, want the task's reply", a)
 	}
 	if !turnEnded(t, h, c.ID) {
@@ -143,7 +144,7 @@ func TestWaitOnAnIdleThreadReturnsAtOnce(t *testing.T) {
 	if took := time.Since(begin); took > 2*time.Second {
 		t.Errorf("the wait took %v, want it at once", took)
 	}
-	if !a.Done || a.Outcome != "completed" || a.Text != "done" {
+	if !a.Done || a.Text != "done" {
 		t.Errorf("wait answered %+v, want done with the reply", a)
 	}
 }
@@ -156,7 +157,7 @@ func TestWaitReturnsAtItsLimit(t *testing.T) {
 	if took := time.Since(begin); took < time.Second || took > 2*time.Second {
 		t.Errorf("the slice of 1 s took %v", took)
 	}
-	if a.Done || a.Outcome != "" || a.Text != "Thread "+c+" still runs." {
+	if a.Done || a.Text != "Thread "+c+" still runs." {
 		t.Errorf("wait answered %+v, want not done and the thread still running", a)
 	}
 }
@@ -165,11 +166,11 @@ func TestWaitReturnsWhenTheChildSettles(t *testing.T) {
 	// A delete settles the thread first, so the wait may see either.
 	for _, tc := range []struct {
 		name  string
-		texts map[string]string // by outcome
+		texts []string
 		end   func(h *apptest.Harness, id string) error
 	}{
-		{"settled", map[string]string{"settled": "Thread %s has settled."}, func(h *apptest.Harness, id string) error { return h.SettleThread(id) }},
-		{"deleted", map[string]string{"settled": "Thread %s has settled.", "deleted": "Thread %s was deleted."}, func(h *apptest.Harness, id string) error { return h.DeleteThread(id, false) }},
+		{"settled", []string{"Thread %s has settled."}, func(h *apptest.Harness, id string) error { return h.SettleThread(id) }},
+		{"deleted", []string{"Thread %s has settled.", "Thread %s was deleted."}, func(h *apptest.Harness, id string) error { return h.DeleteThread(id, false) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := apptest.New(t)
@@ -179,9 +180,9 @@ func TestWaitReturnsWhenTheChildSettles(t *testing.T) {
 				t.Fatal(err)
 			}
 			r := waitResultOf(t, got, 5*time.Second)
-			text, ok := tc.texts[r.a.Outcome]
-			if want := strings.Replace(text, "%s", c, 1); r.err != nil || r.refused != "" || !r.a.Done || !ok || r.a.Text != want {
-				t.Errorf("wait answered %+v, want done with one of %v", r, tc.texts)
+			known := slices.ContainsFunc(tc.texts, func(text string) bool { return r.a.Text == strings.Replace(text, "%s", c, 1) })
+			if r.err != nil || r.refused != "" || !r.a.Done || !known {
+				t.Errorf("wait answered %+v, want done with one of %q", r, tc.texts)
 			}
 		})
 	}
@@ -203,8 +204,8 @@ func TestWaitReturnsWhenTheHostDies(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := waitResultOf(t, got, 15*time.Second)
-	if r.err == nil && r.refused == "" && (!r.a.Done || r.a.Outcome != "settled") {
-		t.Errorf("wait answered %+v, want settled or an error", r)
+	if want := "Thread " + c + " stopped running: its host or its Claude exited."; r.err == nil && r.refused == "" && (!r.a.Done || r.a.Text != want) {
+		t.Errorf("wait answered %+v, want done with %q, or an error", r, want)
 	}
 }
 
@@ -226,7 +227,7 @@ func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 			}
 		})
 	}
-	if a := waitOn(t, h, top, g, 10*time.Second); !a.Done || a.Outcome != "completed" {
+	if a := waitOn(t, h, top, g, 10*time.Second); !a.Done || a.Text != "done" {
 		t.Errorf("a wait on a grandchild answered %+v, want it done", a)
 	}
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, top), Args: []string{"wait"}, Opts: map[string]string{"input": `{"thread":"` + g + `"}`, "slice_ms": "60001"}})
@@ -245,14 +246,14 @@ func TestWaitReportsWaitingOnOwner(t *testing.T) {
 	}
 	apptest.Eventually(t, "the approval", func() bool { _, ok := logged(t, h, c, chat.KindApproval, "ask-1"); return ok })
 	a := waitOn(t, h, parent, c, time.Second)
-	if a.Done || !a.WaitingOnOwner || a.Text != "Thread "+c+" still runs: it waits for the owner to answer an approval." {
+	if a.Done || a.Text != "Thread "+c+" still runs: it waits for the owner to answer an approval." {
 		t.Errorf("wait answered %+v, want not done and waiting on the owner", a)
 	}
 	got := waitInBackground(t, h, parent, c, 30*time.Second)
 	if err := h.ChatAnswer(c, "ask-1", true, ""); err != nil {
 		t.Fatal(err)
 	}
-	if r := waitResultOf(t, got, 5*time.Second); r.err != nil || !r.a.Done || r.a.Outcome != "completed" || r.a.WaitingOnOwner {
+	if r := waitResultOf(t, got, 5*time.Second); r.err != nil || !r.a.Done || r.a.Text != "done" {
 		t.Errorf("wait after the answer = %+v, want done", r)
 	}
 }
@@ -294,7 +295,7 @@ func TestWaitWaitsForAQueuedMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := waitResultOf(t, got, 5*time.Second)
-	if r.err != nil || !r.a.Done || r.a.Outcome != "completed" || r.a.Result != "done" {
+	if r.err != nil || !r.a.Done || r.a.Text != "done" {
 		t.Errorf("wait answered %+v, want the queued message's turn completed", r)
 	}
 	if _, ok := logged(t, h, c, chat.KindUser, sent.ID); !ok {
