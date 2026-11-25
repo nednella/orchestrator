@@ -47,6 +47,13 @@ test('deltas pass through without a seq', () => {
   assert.deepEqual(stopped.state.live, {}, 'a reply cut off at the turn end is never logged')
 })
 
+test("a subagent's streamed pieces are dropped", () => {
+  const { state } = mergeEvents(EMPTY_CHAT, [logged(1, 'user'), { ...delta('msg_9', 'x'), agent: 'toolu_1' }, { seq: 0, at: 0, kind: 'thinking', id: 'msg_9', text: 'y', agent: 'toolu_1' }])
+  assert.deepEqual([state.live, state.thinking], [{}, {}])
+  const kept = mergeEvents(state, [{ seq: 2, at: 2000, kind: 'message', id: 'msg_9', text: 'x', agent: 'toolu_1' }]).state
+  assert.equal(kept.events.at(-1)?.agent, 'toolu_1', 'a logged event keeps its agent')
+})
+
 test('thinking streams until its thought ends it', () => {
   const thinking = (id: string, text?: string): ChatEvent => ({ seq: 0, at: 0, kind: 'thinking', id, ...(text ? { text } : {}) })
   const started = mergeEvents(EMPTY_CHAT, [logged(1, 'user'), thinking('msg_1')]).state

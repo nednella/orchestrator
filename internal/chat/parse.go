@@ -22,6 +22,13 @@ type line struct {
 	Response       json.RawMessage `json:"response"`
 	Errors         []string        `json:"errors"`
 	PermissionMode string          `json:"permissionMode"`
+	// ParentToolUseID is the Agent call whose subagent wrote the line, on an assistant, user or stream event.
+	ParentToolUseID string `json:"parent_tool_use_id"`
+	// ToolUseID, Status and Summary are a task's end: the call that started it, completed, failed or stopped, and its
+	// report.
+	ToolUseID string `json:"tool_use_id"`
+	Status    string `json:"status"`
+	Summary   string `json:"summary"`
 }
 
 type block struct {
@@ -53,13 +60,15 @@ func Parse(data []byte) ([]Event, error) {
 			if l.PermissionMode != "" {
 				return []Event{{Kind: KindMode, Text: l.PermissionMode}}, nil
 			}
+		case "task_notification":
+			return parseTaskEnd(l), nil
 		}
-	case "stream_event":
-		return parseStreamEvent(l)
-	case "assistant":
-		return parseAssistant(l)
-	case "user":
-		return parseUser(l)
+	case "stream_event", "assistant", "user":
+		events, err := parseTurn(l)
+		for i := range events {
+			events[i].Agent = l.ParentToolUseID
+		}
+		return events, err
 	case "control_response":
 		return parseControlResponse(l)
 	case "control_request":
@@ -68,6 +77,30 @@ func Parse(data []byte) ([]Event, error) {
 		return []Event{{Kind: KindTurnEnd, Cost: l.TotalCost, Error: l.IsError, Text: strings.Join(l.Errors, "\n")}}, nil
 	}
 	return nil, nil
+}
+
+// parseTurn reads a line of the conversation: a streamed piece of a message, a whole message, or the user's side.
+func parseTurn(l line) ([]Event, error) {
+	switch l.Type {
+	case "stream_event":
+		return parseStreamEvent(l)
+	case "assistant":
+		return parseAssistant(l)
+	}
+	return parseUser(l)
+}
+
+// parseTaskEnd reads the end of a task Claude runs beside its turn. Only a task a tool call started can be shown at
+// its call.
+func parseTaskEnd(l line) []Event {
+	if l.ToolUseID == "" {
+		return nil
+	}
+	e := Event{Kind: KindTaskEnd, Parent: l.ToolUseID, Text: l.Summary, Error: l.Status != "completed"}
+	if l.Status == TaskStopped {
+		e.Stop = TaskStopped
+	}
+	return []Event{e}
 }
 
 func parseStreamEvent(l line) ([]Event, error) {

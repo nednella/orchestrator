@@ -364,3 +364,115 @@ func TestParseStatusWithoutAModeGivesNone(t *testing.T) {
 		t.Errorf("got %+v, %v", events, err)
 	}
 }
+
+// agentCalls is the Agent tool calls of the thread's own Claude, by id.
+func agentCalls(t *testing.T, events []Event) map[string]Event {
+	t.Helper()
+	calls := map[string]Event{}
+	for _, e := range events {
+		if e.Kind == KindToolUse && e.Tool == "Agent" && e.Agent == "" {
+			calls[e.ID] = e
+		}
+	}
+	if len(calls) != 2 {
+		t.Fatalf("want two Agent calls, got %+v", calls)
+	}
+	return calls
+}
+
+func TestParseSubagentEventsNameTheirAgentCall(t *testing.T) {
+	events := parseFile(t, "subagents.jsonl")
+	calls := agentCalls(t, events)
+	for _, call := range calls {
+		var input struct {
+			Description, Prompt string
+			Type                string `json:"subagent_type"`
+		}
+		if err := json.Unmarshal(call.Input, &input); err != nil || input.Description == "" || input.Prompt == "" || input.Type != "Explore" {
+			t.Errorf("Agent call input %s: %+v, %v", call.Input, input, err)
+		}
+	}
+	kinds := map[string][]Kind{}
+	for _, e := range events {
+		if e.Agent == "" {
+			continue
+		}
+		if _, ok := calls[e.Agent]; !ok {
+			t.Errorf("%+v names no Agent call", e)
+		}
+		kinds[e.Agent] = append(kinds[e.Agent], e.Kind)
+	}
+	for id := range calls {
+		for _, want := range []Kind{KindToolUse, KindToolResult, KindMessage} {
+			if !slices.Contains(kinds[id], want) {
+				t.Errorf("subagent %s sent no %s: %v", id, want, kinds[id])
+			}
+		}
+		// Claude streams no partial message of a subagent's.
+		if slices.Contains(kinds[id], KindDelta) || slices.Contains(kinds[id], KindThinking) {
+			t.Errorf("subagent %s streamed: %v", id, kinds[id])
+		}
+	}
+	for _, e := range events {
+		if e.Kind == KindTurnEnd && e.Agent != "" {
+			t.Errorf("a turn's end names a subagent: %+v", e)
+		}
+	}
+}
+
+func TestParseBackgroundSubagentsEndAfterTheTurn(t *testing.T) {
+	events := parseFile(t, "subagents.jsonl")
+	calls := agentCalls(t, events)
+	turnEnd := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindTurnEnd })
+	ended := map[string]string{}
+	for i, e := range events {
+		if e.Kind != KindTaskEnd {
+			continue
+		}
+		if e.Error || e.Stop != "" || e.Agent != "" {
+			t.Errorf("want a completed end, got %+v", e)
+		}
+		if i < turnEnd {
+			t.Errorf("a background subagent ended before the turn that started it: %+v", e)
+		}
+		ended[e.Parent] = e.Text
+	}
+	for id := range calls {
+		if ended[id] == "" {
+			t.Errorf("subagent %s has no end with its report: %v", id, ended)
+		}
+	}
+}
+
+func TestParseWaitedForSubagentsEndBeforeTheirCallsResult(t *testing.T) {
+	events := parseFile(t, "subagents-wait.jsonl")
+	calls := agentCalls(t, events)
+	for id := range calls {
+		end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindTaskEnd && e.Parent == id })
+		result := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindToolResult && e.Parent == id })
+		if end < 0 || result < 0 || end > result || events[end].Text == "" {
+			t.Errorf("subagent %s: end at %d, result at %d", id, end, result)
+		}
+	}
+}
+
+func TestParseTaskEndSaysHowTheTaskEnded(t *testing.T) {
+	for _, tt := range []struct {
+		status string
+		want   []Event
+	}{
+		{"completed", []Event{{Kind: KindTaskEnd, Parent: "toolu_1", Text: "done"}}},
+		{"failed", []Event{{Kind: KindTaskEnd, Parent: "toolu_1", Text: "done", Error: true}}},
+		{"stopped", []Event{{Kind: KindTaskEnd, Parent: "toolu_1", Text: "done", Error: true, Stop: TaskStopped}}},
+	} {
+		got, err := Parse([]byte(`{"type":"system","subtype":"task_notification","task_id":"a1","tool_use_id":"toolu_1","status":"` + tt.status + `","summary":"done"}`))
+		if err != nil || !slices.EqualFunc(got, tt.want, func(a, b Event) bool {
+			return a.Kind == b.Kind && a.Parent == b.Parent && a.Text == b.Text && a.Error == b.Error && a.Stop == b.Stop
+		}) {
+			t.Errorf("%s: got %+v, %v", tt.status, got, err)
+		}
+	}
+	if got, _ := Parse([]byte(`{"type":"system","subtype":"task_notification","task_id":"a1","status":"completed"}`)); len(got) != 0 {
+		t.Errorf("a task no call started: got %+v", got)
+	}
+}

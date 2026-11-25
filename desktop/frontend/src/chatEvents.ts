@@ -17,6 +17,8 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
   let gapAfter: number | null = null
   let changed = false
   for (const e of incoming) {
+    // A subagent's row shows only what it logged, so a piece of its message streamed would show nowhere.
+    if ((e.kind === 'delta' || e.kind === 'thinking') && e.agent) continue
     if (e.kind === 'delta') {
       if (!e.id || !e.text) continue
       live[e.id] = (live[e.id] ?? '') + e.text

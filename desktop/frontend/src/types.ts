@@ -337,7 +337,8 @@ export type Release = {
 }
 
 // ChatKind is what a chat event is. A delta, a thinking event (a thinking block's start, with no text, or a piece of its
-// text) and a thought with no text are never logged and have seq 0; a thought ends a thinking block, with its text.
+// text) and a thought with no text are never logged and have seq 0; a thought ends a thinking block, with its text. A
+// task_end is a task Claude ran beside its turn ending, a subagent among them: parent is the call that started it.
 export type ChatKind =
   | 'init'
   | 'user'
@@ -358,6 +359,7 @@ export type ChatKind =
   | 'compact'
   | 'mode'
   | 'start'
+  | 'task_end'
   | 'exit'
 
 // ChatEvent is one event of a thread's chat; a field the event does not use is left out.
@@ -375,8 +377,10 @@ export type ChatEvent = {
   cost?: number
   files?: string[]
   // stop is set on an exit the host made itself, which is no error: a settle, or a restart whose text is the access
-  // the thread starts again with.
-  stop?: 'settle' | 'restart'
+  // the thread starts again with; and on a task_end, for a task that was stopped.
+  stop?: 'settle' | 'restart' | 'stopped'
+  // agent is the id of the Agent call whose subagent sent the event, missing for the thread's own Claude.
+  agent?: string
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

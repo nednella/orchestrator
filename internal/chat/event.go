@@ -42,7 +42,12 @@ const (
 	// KindReply is Claude's reply to a control request of the host's, by its request ID; Error and Text say that it
 	// failed and why. The host consumes it and never logs it.
 	KindReply Kind = "reply"
-	KindExit  Kind = "exit"
+	// KindTaskEnd is a task Claude ran beside its turn ending, as a subagent or a shell in the background: Parent is the
+	// tool call that started it, Text its report, Error set when it failed or was stopped, and Stop TaskStopped when it
+	// was stopped. A subagent in the background outlives its call's result and the turn that made it, so only this says
+	// that it is done.
+	KindTaskEnd Kind = "task_end"
+	KindExit    Kind = "exit"
 )
 
 // The ways the host stops Claude itself, which an exit's Stop names.
@@ -50,6 +55,9 @@ const (
 	StopSettle  = "settle"  // the thread settled
 	StopRestart = "restart" // the thread starts again with a new access, which the exit's Text names
 )
+
+// TaskStopped is the Stop of a task_end for a task that was stopped.
+const TaskStopped = "stopped"
 
 // Event is one entry of a chat's log. At is unix milliseconds.
 type Event struct {
@@ -65,8 +73,11 @@ type Event struct {
 	Error  bool            `json:"error,omitempty"`
 	Cost   float64         `json:"cost,omitempty"`
 	Files  []string        `json:"files,omitempty"`
-	// Stop is set on an exit the host made itself, which is no error: StopSettle, or StopRestart.
+	// Stop is set on an exit the host made itself, which is no error: StopSettle, or StopRestart; and on a task_end,
+	// TaskStopped.
 	Stop string `json:"stop,omitempty"`
+	// Agent is the id of the Agent tool call whose subagent sent the event, "" for the thread's own Claude.
+	Agent string `json:"agent,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and

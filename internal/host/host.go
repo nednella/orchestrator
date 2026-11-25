@@ -1208,6 +1208,11 @@ func echoLine(e chat.Event) string {
 		s = "compacted"
 	case chat.KindMode:
 		s = "permission mode: " + e.Text
+	case chat.KindTaskEnd:
+		s = "task ended: " + e.Text
+		if e.Error {
+			s = "task failed: " + e.Text
+		}
 	case chat.KindExit:
 		s = "claude exited"
 		switch {
@@ -1220,6 +1225,9 @@ func echoLine(e chat.Event) string {
 		}
 	default:
 		s = string(e.Kind)
+	}
+	if e.Agent != "" {
+		s = "subagent: " + s
 	}
 	return clip(strings.Join(strings.Fields(s), " "), echoWidth)
 }

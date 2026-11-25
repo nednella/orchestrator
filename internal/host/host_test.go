@@ -252,6 +252,17 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				result(false)
 				more, _ := during(time.After(time.Second))
 				ownTurn(append(held, more...))
+			case "subagent":
+				// A subagent in the background: the turn ends on its call's launch, and its own lines come after.
+				print(map[string]any{"type": "assistant", "uuid": "ucall", "message": map[string]any{"id": "msg_call", "role": "assistant", "content": []any{
+					map[string]any{"type": "tool_use", "id": "toolu_agent", "name": "Agent", "input": map[string]any{"description": "List files", "prompt": "ls"}},
+				}}})
+				print(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_agent", "content": "Async agent launched"}}}})
+				result(false)
+				print(map[string]any{"type": "assistant", "uuid": "usub", "parent_tool_use_id": "toolu_agent", "message": map[string]any{"id": "msg_sub", "role": "assistant", "content": []any{
+					map[string]any{"type": "text", "text": "a.go"},
+				}}})
+				print(map[string]any{"type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": "toolu_agent", "status": "completed", "summary": "a.go"})
 			case "big":
 				reply(strings.Repeat("x", 1<<20))
 				result(false)
@@ -555,6 +566,29 @@ func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {
 	if len(logged) != 2 || logged[0].Kind != chat.KindStart || logged[1].Kind != chat.KindExit || !logged[1].Error {
 		t.Errorf("log = %+v, want the start and claude's failed exit", logged)
 	}
+}
+
+func TestASubagentsEventsKeepTheirAgentCall(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	if err := Send(ctxT(t), h.socket, "subagent"); err != nil {
+		t.Fatal(err)
+	}
+	streamed := waitKind(t, events, chat.KindMessage)
+	end := waitKind(t, events, chat.KindTaskEnd)
+	if streamed.Agent != "toolu_agent" || end.Parent != "toolu_agent" || end.Text != "a.go" || end.Error {
+		t.Fatalf("streamed %+v and %+v", streamed, end)
+	}
+	got := logged(t, h.log, chat.KindToolUse, chat.KindMessage, chat.KindTaskEnd)
+	if len(got) != 3 || got[0].Agent != "" || got[1].Agent != "toolu_agent" || got[2].Agent != "" {
+		t.Fatalf("log = %+v, want the call, the subagent's message with its call, and its end", got)
+	}
+	eventually(t, "the echo of the subagent", func() bool {
+		echo := h.echo.String()
+		return strings.Contains(echo, "subagent: claude: a.go") && strings.Contains(echo, "task ended: a.go")
+	})
 }
 
 func TestEchoShowsAThoughtsFirstLine(t *testing.T) {
