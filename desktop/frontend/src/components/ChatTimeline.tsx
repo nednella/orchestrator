@@ -74,6 +74,12 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
     else if (items.length > seen.current) setUnseen(true)
   }, [items.length])
 
+  useEffect(() => {
+    const el = scroller.current
+    // The thread took the focus while its chat was still loading.
+    if (el && document.activeElement === el.closest('[data-panel]')) el.focus()
+  }, [])
+
   const onScroll = () => {
     const el = scroller.current
     if (!el) return
@@ -95,7 +101,7 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto">
+      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="h-full overflow-y-auto outline-none">
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>

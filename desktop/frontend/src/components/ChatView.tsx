@@ -12,7 +12,7 @@ export function ChatView({ session }: ChatViewProps) {
   const empty = timeline.items.length === 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-app">
+    <div data-chat className="flex h-full min-h-0 flex-col bg-app">
       {empty && loading && <Loading />}
       {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
