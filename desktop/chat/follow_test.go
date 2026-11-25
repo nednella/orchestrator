@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -100,7 +101,7 @@ func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
 
 	rec := &apptest.Recorder{}
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Live: true}}
-	chats := chat.New(thread, rec.Emit)
+	chats := chat.New(thread, t.TempDir(), rec.Emit)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	chats.Start(ctx)
@@ -188,7 +189,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 
 	rec := &apptest.Recorder{}
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
-	chats := chat.New(thread, rec.Emit)
+	chats := chat.New(thread, t.TempDir(), rec.Emit)
 	svc := chat.NewService(chats, nil, noProject, context.Background)
 	read := make(chan []chatlog.Event)
 	go func() {
@@ -223,7 +224,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 	dir := t.TempDir()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
+	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	if err, want := svc.ChatInterrupt(thread.chat.ID), "Thread main/abcdefgh did not take the interrupt"; err == nil || err.Error() != want {
 		t.Errorf("ChatInterrupt = %v, want %q", err, want)
 	}
@@ -246,7 +247,7 @@ func TestAKilledRunsApprovalDoesNotWaitOnceTheNextRunStarts(t *testing.T) {
 	}
 	chatLog.Close()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
+	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	if got := svc.ChatPending(); len(got) != 0 {
 		t.Errorf("ChatPending = %+v, want nothing: the run that asked was killed", got)
 	}
@@ -269,7 +270,7 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 	}
 	chatLog.Close()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
+	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool"}}
 	if got := svc.ChatPending(); !slices.Equal(got, want) {
 		t.Errorf("ChatPending before any follower = %+v, want %+v", got, want)
@@ -303,9 +304,101 @@ func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 	}()
 
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
-	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
+	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}})
 	if want := "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."; err != nil || sent.Notice != want {
 		t.Errorf("ChatSend = %+v, %v; want the notice %q", sent, err, want)
 	}
+}
+
+// serveEvents answers each subscribe as a host whose log holds events: those after the seq asked for, then an open
+// stream.
+func serveEvents(t *testing.T, ln net.Listener, events []chatlog.Event) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		var req struct {
+			After int64 `json:"after"`
+		}
+		line, _ := bufio.NewReader(conn).ReadBytes('\n')
+		if len(line) == 0 {
+			conn.Close()
+			continue
+		}
+		if err := json.Unmarshal(line, &req); err != nil {
+			t.Errorf("request %q: %v", line, err)
+		}
+		conn.Write([]byte(`{"ok":true}` + "\n"))
+		enc := json.NewEncoder(conn)
+		for _, e := range events {
+			if e.Seq > req.After {
+				enc.Encode(e)
+			}
+		}
+		t.Cleanup(func() { conn.Close() })
+	}
+}
+
+// keptCommands follows a thread of the project main whose log holds a commands list reported at 1000 and whose host
+// then streams more, and says what ProjectCommands gives for main.
+func keptCommands(t *testing.T, more ...chatlog.Event) func() []chat.Command {
+	dir, err := os.MkdirTemp("", "aos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket, logPath := filepath.Join(dir, "host.sock"), filepath.Join(dir, "chat.jsonl")
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged, err := chatLog.Append(chatlog.Event{At: 1000, Kind: chatlog.KindCommands, Input: json.RawMessage(`[{"name":"review","description":"Review","argumentHint":"<pr>","builtin":true,"aliases":["pr"]}]`)})
+	chatLog.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	stream := []chatlog.Event{logged}
+	for i, e := range more {
+		e.Seq = logged.Seq + int64(i) + 1
+		stream = append(stream, e)
+	}
+	go serveEvents(t, ln, stream)
+
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
+	svc := chat.NewService(chats, nil, func(key string) string {
+		if key == "main" {
+			return dir
+		}
+		return ""
+	}, context.Background)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	chats.Start(ctx)
+	return func() []chat.Command {
+		got, err := svc.ProjectCommands("main")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+}
+
+func TestALoggedCommandListIsKeptForItsProject(t *testing.T) {
+	commands := keptCommands(t)
+	want := []chat.Command{{Name: "review", Description: "Review", ArgumentHint: "<pr>", Builtin: true, Aliases: []string{"pr"}}}
+	apptest.Eventually(t, "the logged list kept", func() bool { return reflect.DeepEqual(commands(), want) })
+}
+
+func TestALiveCommandListReplacesTheKeptOne(t *testing.T) {
+	commands := keptCommands(t, chatlog.Event{At: 2000, Kind: chatlog.KindCommands, Input: json.RawMessage(`[{"name":"compact","description":"Compact"}]`)})
+	want := []chat.Command{{Name: "compact", Description: "Compact"}}
+	apptest.Eventually(t, "the live list kept", func() bool { return reflect.DeepEqual(commands(), want) })
 }

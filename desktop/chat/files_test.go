@@ -53,7 +53,7 @@ func TestChatFilesListsTrackedAndUntracked(t *testing.T) {
 	}
 	git(t, dir, "add", "a.go")
 
-	svc := NewService(New(folderThread(dir), func(string, any) {}), run.Exec, noProject, context.Background)
+	svc := NewService(New(folderThread(dir), t.TempDir(), func(string, any) {}), run.Exec, noProject, context.Background)
 	got, err := svc.ChatFiles("main/abcdefgh", "")
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestProjectFilesListsTheProjectFolder(t *testing.T) {
 		}
 		return ""
 	}
-	svc := NewService(New(folderThread(t.TempDir()), func(string, any) {}), run.Exec, projectDir, context.Background)
+	svc := NewService(New(folderThread(t.TempDir()), t.TempDir(), func(string, any) {}), run.Exec, projectDir, context.Background)
 	got, err := svc.ProjectFiles("demo", "read")
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestChatFilesOutsideGitIsEmpty(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewService(New(folderThread(dir), func(string, any) {}), run.Exec, noProject, context.Background)
+	svc := NewService(New(folderThread(dir), t.TempDir(), func(string, any) {}), run.Exec, noProject, context.Background)
 	got, err := svc.ChatFiles("main/abcdefgh", "")
 	if err != nil || got == nil || len(got) != 0 {
 		t.Errorf("ChatFiles = %q, %v; want an empty list", got, err)

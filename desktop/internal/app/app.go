@@ -87,7 +87,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Tally: waits, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake,
 	})
-	chats := chat.New(sess, h.Emit)
+	chats := chat.New(sess, c.LocalDir, h.Emit)
 	iss := issues.New(runner, sess, h.Emit)
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)
 	a.registry, a.issues, a.warn = c.Registry, iss, warn.New(h.Emit)

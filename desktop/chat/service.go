@@ -174,6 +174,19 @@ func (v *Service) filesIn(dir, query, of string) ([]string, error) {
 	return rankFiles(paths, query, fileLimit), nil
 }
 
+// ProjectCommands is the slash commands the project's threads reported last, none before any of them has run.
+func (v *Service) ProjectCommands(project string) ([]Command, error) {
+	if v.projectDir(project) == "" {
+		return nil, fmt.Errorf("No project %s", project)
+	}
+	commands, err := v.c.commands.list(project)
+	if err != nil {
+		log.Printf("agentos: %v", err)
+		return []Command{}, nil
+	}
+	return commands, nil
+}
+
 // ChatPending is the approval each live thread waits on.
 func (v *Service) ChatPending() []Pending { return v.c.pending() }
 

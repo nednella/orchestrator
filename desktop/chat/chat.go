@@ -58,10 +58,12 @@ type PendingUpdate struct {
 }
 
 // Chats follows the host of each live thread, one subscription per host: it hands each turn's end to the sessions,
-// tells the front end which approval each thread waits on and sends the events of the threads it watches.
+// tells the front end which approval each thread waits on, sends the events of the threads it watches and keeps each
+// project's latest command list.
 type Chats struct {
-	threads Threads
-	emit    func(string, any)
+	threads  Threads
+	emit     func(string, any)
+	commands *commandLists
 
 	started chan struct{} // closed by Start
 
@@ -71,8 +73,9 @@ type Chats struct {
 	watched   map[string]bool
 }
 
-func New(t Threads, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
+// New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
+func New(t Threads, dir string, emit func(string, any)) *Chats {
+	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
 }
 
 // Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
@@ -237,7 +240,7 @@ func (f *follower) run(ctx context.Context) {
 		log.Printf("agentos: reading the chat log of %s: %v", f.chat.ID, err)
 	}
 	var last int64
-	var turnEnd *chatlog.Event
+	var turnEnd, commands *chatlog.Event
 	// mode is the latest mode Claude reported after the last run start: an earlier run's mode, also one whose host was
 	// killed before it logged its exit, is not this run's, and a log with no start has no run to follow.
 	var mode struct {
@@ -251,6 +254,8 @@ func (f *follower) run(ctx context.Context) {
 		switch e.Kind {
 		case chatlog.KindTurnEnd:
 			turnEnd = &e
+		case chatlog.KindCommands:
+			commands = &e
 		case chatlog.KindStart:
 			mode.started, mode.text = true, ""
 		case chatlog.KindMode:
@@ -260,6 +265,9 @@ func (f *follower) run(ctx context.Context) {
 		}
 	}
 	close(f.read)
+	if commands != nil {
+		f.chats.commands.keep(f.chat.Project, *commands)
+	}
 	// A turn interrupted while the app was closed ends now; the earlier turn_ends would change nothing after it.
 	if turnEnd != nil {
 		f.chats.threads.TurnEnded(f.chat.ID, *turnEnd)
@@ -306,6 +314,8 @@ func (f *follower) take(e chatlog.Event) {
 		f.chats.threads.TurnEnded(f.chat.ID, e)
 	case chatlog.KindMode:
 		f.chats.threads.AccessChanged(f.chat.ID, mode, approved)
+	case chatlog.KindCommands:
+		f.chats.commands.keep(f.chat.Project, e)
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)
