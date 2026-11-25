@@ -606,3 +606,19 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 		t.Errorf("user lines = %q, want the review prompt, then the marked checks prompt", users)
 	}
 }
+
+func TestAClaudeSessionWithoutAHostGetsItsWakeTyped(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	// A Claude session from a release before the host: its agent runs in its pane, and it has no hosted tag.
+	id := "main/aaaaaaaa"
+	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "bash", "--norc", "--noprofile")
+	tmuxRun(t, h, "set-option", "-t", id, "@agentos-agent", "claude", ";", "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
+	h.Sessions().Refresh()
+	eventually(t, "the shell's prompt", func() bool { return strings.HasSuffix(strings.TrimSpace(h.Pane(t, id)), "$") })
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
+	h.RefreshPRs()
+	eventually(t, "the review prompt typed into the pane", func() bool { return strings.Contains(h.Pane(t, id), "/address-review 12") })
+}

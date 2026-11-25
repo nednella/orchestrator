@@ -1529,7 +1529,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 			return err
 		}
 	}
-	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, action, p.Name())
+	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, p.Can(agent.Hosted), action, p.Name())
 }
 
 // hosted is argv run under agentos host, with the session's chat log and socket. It makes the socket's folder
@@ -1557,7 +1557,7 @@ func (s *Sessions) register(p agent.Provider, name session.Name, title string, p
 	if continues != "" {
 		s.resumed[name.String()] = continues
 	}
-	in := term.Info{Name: name, Title: title, Path: proj.Dir, Chat: chat, Action: action, Agent: p.Name(), Created: created}
+	in := term.Info{Name: name, Title: title, Path: proj.Dir, Chat: chat, Hosted: p.Can(agent.Hosted), Action: action, Agent: p.Name(), Created: created}
 	if p.Can(agent.ModelEffort) {
 		in.Model, in.Effort = model.Model, model.Effort
 	}
@@ -1577,7 +1577,7 @@ func (s *Sessions) register(p agent.Provider, name session.Name, title string, p
 	return Session{}
 }
 
-func (s *Sessions) start(ctx context.Context, name session.Name, title, dir string, env, argv []string, issue int, model project.Model, chat bool, action, agentName string) error {
+func (s *Sessions) start(ctx context.Context, name session.Name, title, dir string, env, argv []string, issue int, model project.Model, chat, hosted bool, action, agentName string) error {
 	if err := s.tmux.NewSession(ctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return err
 	}
@@ -1598,6 +1598,11 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir stri
 	}
 	if chat {
 		if err := tag(s.tmux.SetChat(ctx, name)); err != nil {
+			return err
+		}
+	}
+	if hosted {
+		if err := tag(s.tmux.SetHosted(ctx, name)); err != nil {
 			return err
 		}
 	}
@@ -1940,12 +1945,13 @@ func (s *Sessions) Interrupt(id string) error {
 	return nil
 }
 
-// hostOf is the socket of the session's host, "" when its agent runs in its pane. It takes mu.
+// hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before
+// sessions ran under a host has no host. It takes mu.
 func (s *Sessions) hostOf(name session.Name) string {
 	s.mu.Lock()
-	in, ok := s.known[name.String()]
+	hosted := s.known[name.String()].Hosted
 	s.mu.Unlock()
-	if !ok || !s.Provider(in.Agent).Can(agent.Hosted) {
+	if !hosted {
 		return ""
 	}
 	return s.hostSocket(name)

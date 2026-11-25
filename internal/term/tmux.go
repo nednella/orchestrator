@@ -24,6 +24,7 @@ const (
 	chatOption   = "@agentos-chat"
 	actionOption = "@agentos-action"
 	agentOption  = "@agentos-agent"
+	hostedOption = "@agentos-hosted"
 )
 
 const conf = `
@@ -70,6 +71,7 @@ type Info struct {
 	Effort  string // the effort the agent runs, kept like Model, or ""
 	Agent   string // the provider, or the plain command, the session was started with, or ""
 	Chat    bool   // a chat: a read-only session for questions, not work
+	Hosted  bool   // the agent runs under agentos host, which takes its messages over a socket
 	Action  string // the queue action the session was started with, or ""
 	Created time.Time
 	PID     int // the process the session's pane runs: the agent, or the shell that started it
@@ -114,7 +116,7 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+agentOption+"}\t#{session_created}\t#{pane_pid}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+agentOption+"}\t#{"+hostedOption+"}\t#{session_created}\t#{pane_pid}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -126,7 +128,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	var shells []session.Name
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 11 {
+		if len(f) != 12 {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -137,11 +139,11 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 			shells = append(shells, name)
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Chat: f[6] != "", Action: f[7], Agent: f[8]}
-		if secs, err := strconv.ParseInt(f[9], 10, 64); err == nil {
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Chat: f[6] != "", Action: f[7], Agent: f[8], Hosted: f[9] != ""}
+		if secs, err := strconv.ParseInt(f[10], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
-		info.PID, _ = strconv.Atoi(f[10])
+		info.PID, _ = strconv.Atoi(f[11])
 		infos = append(infos, info)
 	}
 	return infos, shells, nil
@@ -243,6 +245,14 @@ func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error
 func (t *Tmux) SetChat(ctx context.Context, name session.Name) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), chatOption, "1"); err != nil {
 		return fmt.Errorf("tagging chat %s: %w", name, err)
+	}
+	return nil
+}
+
+// SetHosted records that a session's agent runs under agentos host.
+func (t *Tmux) SetHosted(ctx context.Context, name session.Name) error {
+	if _, err := t.run(ctx, "set-option", "-t", target(name), hostedOption, "1"); err != nil {
+		return fmt.Errorf("tagging hosted session %s: %w", name, err)
 	}
 	return nil
 }
