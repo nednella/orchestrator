@@ -3439,7 +3439,7 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	if !made || w.Removed != 0 || !folder.Inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
 		return "", false, "Files are rewound only in a worktree agentos made for this thread"
 	}
-	if user := s.usersOf(w.Path, id, false); user != "" {
+	if user := s.usersOf(w.Path, id, true); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	if shell := s.life.shellIn(ctx, proj.Key(), w.Path); shell != "" {

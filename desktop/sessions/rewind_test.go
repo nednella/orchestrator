@@ -44,8 +44,14 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
+	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != fmt.Sprintf("Thread %s also works in this worktree", fork.Title) {
+		t.Errorf("with the fork asleep: reason = %q", reason)
+	}
+	if err := h.DeleteThread(fork.ID, false); err != nil {
+		t.Fatal(err)
+	}
 	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != "" {
-		t.Errorf("with the fork settled: reason = %q", reason)
+		t.Errorf("with the fork deleted: reason = %q", reason)
 	}
 
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
