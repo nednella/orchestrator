@@ -27,7 +27,7 @@ type Sessions interface {
 	Current() project.Project
 	IssueSessions() map[int]string
 	List() []sessions.Session
-	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, created bool, err error)
+	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error)
 }
 
 // Issue is a GitHub issue placed in a section of the queue.
@@ -287,14 +287,14 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 
 // Start opens a session for the issue with the action of its section that has the name given, or the
 // section's default action when action is "". An issue that already has a live session gets that session back
-// instead of a second agent, and created is false. An issue not in the cached list may be new: the list is read
-// again once.
-func (i *Issues) Start(ctx context.Context, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, created bool, err error) {
+// instead of a second agent, and one whose thread settled gets it woken, as did says. An issue not in the cached list
+// may be new: the list is read again once.
+func (i *Issues) Start(ctx context.Context, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error) {
 	proj := i.sessions.Current()
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)
 		if err != nil {
-			return sessions.Session{}, false, err
+			return sessions.Session{}, sessions.Kept, err
 		}
 		at := slices.IndexFunc(list, func(is Issue) bool { return is.Number == number })
 		if at < 0 {
@@ -307,11 +307,11 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover string,
 		_, section := proj.Section(is.Labels)
 		act, ok := pickAction(section, action, proj.Branch != "")
 		if !ok {
-			return sessions.Session{}, false, fmt.Errorf("issue #%d has no action %q", number, action)
+			return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
 		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
 	}
-	return sessions.Session{}, false, fmt.Errorf("issue #%d is not open in this project", number)
+	return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d is not open in this project", number)
 }
 
 // Move relabels the issue on GitHub so that it falls in the section, then reads the queue again.

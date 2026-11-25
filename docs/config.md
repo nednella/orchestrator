@@ -130,7 +130,7 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 
 | Group | Command | Does |
 |---|---|---|
-| Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new session's system prompt as a handover from the session that asked, and a running session does not get it |
+| Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running, and one whose thread settled has that thread woken and is reported as woken. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new or woken thread's system prompt as a handover from the session that asked, in place of the one a woken thread had, and a running session does not get it |
 | Work | `new [title] [--chat] [--prompt <text>\|-]`, `settle <n>`, `open <n\|title>`, `next` | start, settle, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs, clean up or list what waits |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |

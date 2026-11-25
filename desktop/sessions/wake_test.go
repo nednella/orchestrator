@@ -13,6 +13,7 @@ import (
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -446,5 +447,24 @@ func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
 	}
 	if woken.PR == nil || woken.PR.Number != 12 || woken.Branch != "issue-12" {
 		t.Errorf("woken row = %+v, want its PR", woken)
+	}
+}
+
+func TestIssueStartReportsACommandTheWokenThreadRefused(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended(t, h, s)
+
+	tooLong := strings.Repeat("x", 1<<20) // over what the host reads as one request
+	_, did, err := h.Sessions().CreateIssue("#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{Prompt: tooLong})
+	want := "Thread " + s.ID + " woke but did not take the issue's command"
+	if err == nil || err.Error() != want || did != sessions.Woken {
+		t.Errorf("CreateIssue = %v, %v; want %q", did, err, want)
+	}
+	if got, _ := h.Session(s.ID); got.State == "settled" {
+		t.Errorf("the thread did not wake: %+v", got)
 	}
 }

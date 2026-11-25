@@ -22,26 +22,30 @@ type Commands struct {
 
 func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs: prs} }
 
-// Issue starts a session for each issue number given, or finds the one already running. A prompt is the asking
-// session's handover; it reaches only a session that starts.
+// Issue starts a session for each issue number given, wakes its settled one, or finds the one already running. A
+// prompt is the asking session's handover; it reaches a session that starts or wakes, not one already running.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("usage: agentos issue <number...>")
 	}
-	var started, running, failed []string
+	var started, woken, running, failed []string
 	for _, arg := range req.Args {
 		n, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
 		if err != nil {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, created, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{})
+		s, did, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))
-		case !created && req.Opts["prompt"] != "":
+		case did == sessions.Woken && req.Opts["prompt"] != "":
+			woken = append(woken, fmt.Sprintf("#%d (%d, with the prompt)", n, s.N))
+		case did == sessions.Woken:
+			woken = append(woken, fmt.Sprintf("#%d (%d)", n, s.N))
+		case did == sessions.Kept && req.Opts["prompt"] != "":
 			running = append(running, fmt.Sprintf("#%d (%d, the prompt was not given to it)", n, s.N))
-		case !created:
+		case did == sessions.Kept:
 			running = append(running, fmt.Sprintf("#%d (%d)", n, s.N))
 		default:
 			started = append(started, fmt.Sprintf("#%d (%d)", n, s.N))
@@ -55,6 +59,9 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 		}
 		parts = append(parts, fmt.Sprintf("started %d %s: %s", len(started), noun, strings.Join(started, ", ")))
 	}
+	if len(woken) > 0 {
+		parts = append(parts, "woke the settled: "+strings.Join(woken, ", "))
+	}
 	if len(running) > 0 {
 		parts = append(parts, "already running: "+strings.Join(running, ", "))
 	}
@@ -62,7 +69,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 		parts = append(parts, "failed: "+strings.Join(failed, ", "))
 	}
 	out := strings.Join(parts, "; ")
-	if len(started)+len(running) == 0 {
+	if len(started)+len(woken)+len(running) == 0 {
 		return "", errors.New(out)
 	}
 	return out, nil

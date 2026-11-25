@@ -1308,21 +1308,30 @@ func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, brief, "", false, "", forkStart{})
 }
 
+// IssueStart is what a start of an issue did.
+type IssueStart int
+
+const (
+	Kept    IssueStart = iota // gave back the issue's live thread, with nothing given to it
+	Woken                     // woke the issue's settled thread and gave it the command and the handover
+	Created                   // started a new thread
+)
+
 // CreateIssue starts the agent for an issue, in a task or a chat as the action says, and gives it text; the project
 // says whether that is sent. The labels and the action pick the model it takes. A handover from the session that
 // asked for this one is added to the agent's system prompt. An issue that has a live session of that kind gets that
-// session back with nothing given to it, and created is false; one whose thread of that kind has settled gets that
-// thread woken and given text, and created is false too. The owner's prompt follows the action's command in the same
-// first message, and the owner's model and effort win over the labels' and the action's; a thread that is live or
-// woken keeps its own.
-func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o StartOptions) (view Session, created bool, err error) {
+// session back with nothing given to it; one whose thread of that kind has settled gets that thread woken, with the
+// handover in place of the one it had when one is given, and given text. The owner's prompt follows the action's
+// command in the same first message, and the owner's model and effort win over the labels' and the action's; a
+// thread that is live or woken keeps its own.
+func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o StartOptions) (view Session, did IssueStart, err error) {
 	proj := s.Current()
 	p, err := s.Provider()
 	if err != nil {
-		return Session{}, false, err
+		return Session{}, Kept, err
 	}
 	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
-		return Session{}, false, err
+		return Session{}, Kept, err
 	}
 	model, _ := project.Pick(action, labels, p.ValidModel)
 	model = project.Model{Model: cmp.Or(o.Model.Model, model.Model), Effort: cmp.Or(o.Model.Effort, model.Effort)}
@@ -1330,12 +1339,12 @@ func (s *Sessions) CreateIssue(title, text string, issue int, action project.Act
 	if extra := strings.TrimSpace(o.Prompt); extra != "" {
 		text = strings.TrimSpace(text + " " + extra)
 	}
-	view, kept, err := s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.Chat(), action.Name)
-	if kept == "" {
-		return view, err == nil, err
+	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.Chat(), action.Name)
+	if err != nil || did == Created {
+		return view, did, err
 	}
-	view, err = s.row(kept)
-	return view, false, err
+	view, err = s.row(view.ID)
+	return view, did, err
 }
 
 // row is the thread's row.
@@ -1352,12 +1361,15 @@ func (s *Sessions) row(id string) (Session, error) {
 // conversation, under a host that goes on with the same chat log at the same socket, and with Claude resuming the
 // conversation when the thread has one. The thread keeps its row, number, state file, history, handover and usage, and
 // starts with its model, effort, browser and fork tag. It returns the thread's chat once its host listens.
-func (s *Sessions) Wake(id string) (Chat, error) {
+func (s *Sessions) Wake(id string) (Chat, error) { return s.wakeWith(id, "") }
+
+// wakeWith is Wake with a handover that takes the place of the one the thread had, unless it is "".
+func (s *Sessions) wakeWith(id, handover string) (Chat, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return Chat{}, err
 	}
-	if err := s.startAgain(name); err != nil {
+	if err := s.startAgain(name, handover); err != nil {
 		return Chat{}, err
 	}
 	ctx, cancel := context.WithTimeout(s.context(), hostWait)
@@ -1372,7 +1384,7 @@ func (s *Sessions) Wake(id string) (Chat, error) {
 
 // startAgain starts the tmux session of the settled thread again and takes the thread back as live. Its state file says
 // it runs before Claude starts, so the first hook builds on it; a launch that fails writes back the settled one.
-func (s *Sessions) startAgain(name session.Name) error {
+func (s *Sessions) startAgain(name session.Name, handover string) error {
 	id := name.String()
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
@@ -1417,7 +1429,7 @@ func (s *Sessions) startAgain(name session.Name) error {
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
-	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, cmp.Or(in.Path, proj.Dir), issue, model, conversation, "", s.handoverOf(id), in.Chat, in.Action, fork); err != nil {
+	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, cmp.Or(in.Path, proj.Dir), issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Chat, in.Action, fork); err != nil {
 		_ = s.writeState(before)
 		return err
 	}
@@ -1441,29 +1453,28 @@ func (s *Sessions) startAgain(name session.Name) error {
 func (s *Sessions) Provider() (agent.Provider, error) { return s.agents.Provider() }
 
 // createForIssue starts a task or a chat for the issue, unless the project has a live one of that kind for it, which
-// it names, or a settled one, which it wakes, gives text to and names.
-func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, chat bool, action string) (view Session, kept string, err error) {
+// it names, or a settled one, which it wakes with the handover and gives text to, and names.
+func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, chat bool, action string) (Session, IssueStart, error) {
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
 	if live := s.liveIssueSession(proj.Key(), issue, chat); live != "" {
-		return Session{}, live, nil
+		return Session{ID: live}, Kept, nil
 	}
 	if settled := s.settledIssueThread(proj.Key(), issue, chat); settled != "" {
-		ch, err := s.Wake(settled)
+		ch, err := s.wakeWith(settled, handover)
 		if err != nil {
-			return Session{}, "", err
+			return Session{}, Kept, err
 		}
 		if text != "" {
-			go func() {
-				if err := toHost(s.context(), ch.Socket, text, send, hostWait); err != nil {
-					log.Printf("agentos: thread %s did not get the issue's command: %v", settled, err)
-				}
-			}()
+			if err := toHost(s.context(), ch.Socket, text, send, hostWait); err != nil {
+				log.Printf("agentos: thread %s did not get the issue's command: %v", settled, err)
+				return Session{}, Woken, fmt.Errorf("Thread %s woke but did not take the issue's command", settled)
+			}
 		}
-		return Session{}, settled, nil
+		return Session{ID: settled}, Woken, nil
 	}
-	view, err = s.createIn(proj, title, text, send, issue, model, "", handover, chat, action, forkStart{})
-	return view, "", err
+	view, err := s.createIn(proj, title, text, send, issue, model, "", handover, chat, action, forkStart{})
+	return view, Created, err
 }
 
 // settledIssueThread is the id of the settled task, or chat, of the project for the issue that ran under a host, the

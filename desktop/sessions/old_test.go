@@ -105,9 +105,9 @@ func TestAnIssueWithAnOldSessionOpensIt(t *testing.T) {
 	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "7", ";", "set-option", "-t", id, "@agentos-name", "#7 work")
 	h.Sessions().Refresh()
 
-	got, created, err := h.Sessions().CreateIssue("#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{})
-	if err != nil || created || got.ID != id {
-		t.Fatalf("CreateIssue = %+v, %v, %v; want the old session %s, not created", got, created, err, id)
+	got, did, err := h.Sessions().CreateIssue("#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{})
+	if err != nil || did != sessions.Kept || got.ID != id {
+		t.Fatalf("CreateIssue = %+v, %v, %v; want the old session %s kept", got, did, err, id)
 	}
 	if names := tmuxNames(t, h); names != id {
 		t.Errorf("tmux sessions = %q, want only the old one", names)

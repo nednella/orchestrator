@@ -78,6 +78,42 @@ func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 	}
 }
 
+func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
+	h := apptest.New(t)
+	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
+		t.Fatalf("issue 7 = %+v", resp)
+	}
+	old := h.Sessions().List()[0]
+	argsOf(t, h.ClaudeDir(), old.ID)
+	if err := h.SettleThread(old.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(old.ID, "/", "_")+".args")); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "now see /tmp/y"}})
+	if !resp.OK || resp.Out != "woke the settled: #7 (1, with the prompt)" {
+		t.Errorf("issue 7 on a settled thread = %+v", resp)
+	}
+	if list := h.Sessions().List(); len(list) != 1 || list[0].ID != old.ID || list[0].State == "settled" {
+		t.Errorf("sessions = %+v, want %s woken", list, old.ID)
+	}
+	args := argsOf(t, h.ClaudeDir(), old.ID)
+	if !strings.Contains(args, prompts.Handover("now see /tmp/y")) || strings.Contains(args, "/tmp/x") {
+		t.Errorf("the woken thread's system prompt does not hold the new handover alone:\n%s", args)
+	}
+	eventually(t, "the action's command on the woken thread's stdin", func() bool {
+		n := 0
+		for _, line := range h.Stdin(t, old.ID) {
+			if strings.Contains(line, `"text":"/ship 7"`) {
+				n++
+			}
+		}
+		return n == 2
+	})
+}
+
 func TestLongestPromptStartsTheSession(t *testing.T) {
 	h := apptest.New(t)
 	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most agentos issue --prompt takes
