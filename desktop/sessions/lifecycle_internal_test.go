@@ -288,31 +288,72 @@ type noEvidence struct{}
 func (noEvidence) Count(string) int { return 0 }
 func (noEvidence) Purge(string) int { return 0 }
 
-func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		deleting bool
-		want     string
-	}{{"being deleted", true, "blocked"}, {"not being deleted", false, ""}} {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			proj := project.Project{Name: "p", Dir: dir}
-			s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Projects: fixedProjects{proj}, Current: proj, Activity: noActivity{}, Browsers: fakeBrowsers{}, Evidence: noEvidence{}, Emit: func(string, any) {}})
-			name := session.Name{Project: "p", Token: "abcdefgh"}
-			id := name.String()
-			s.ended[id] = &endedSession{info: term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir}}
-			s.deleting[id] = tt.deleting
-			l := s.life
-			l.tracks[id] = &track{branch: "issue-7", cleanup: "blocked", reason: "a shell is open in this worktree", pr: &PR{Number: 12, State: "merged"}}
+// asleepAndKept is an app with one asleep thread whose clean-up the checks kept after its PR merged. The thread has no
+// worktree agentos made, so a clean-up that goes on runs no git.
+func asleepAndKept(t *testing.T) (*Sessions, session.Name) {
+	t.Helper()
+	dir := t.TempDir()
+	proj := project.Project{Name: "p", Dir: dir}
+	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Projects: fixedProjects{proj}, Current: proj, Activity: noActivity{}, Browsers: fakeBrowsers{}, Evidence: noEvidence{}, Emit: func(string, any) {}})
+	name := session.Name{Project: "p", Token: "abcdefgh"}
+	id := name.String()
+	s.nums[id] = 3
+	s.ended[id] = &endedSession{info: term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir}}
+	s.life.tracks[id] = &track{branch: "issue-7", cleanup: "blocked", reason: "a shell is open in this worktree", pr: &PR{Number: 12, State: "merged"}}
+	return s, name
+}
 
-			l.sweep(t.Context())
-			l.cleanups.Wait()
-			if got := l.fields(id).cleanup; got != tt.want {
-				t.Errorf("cleanup %q, want %q", got, tt.want)
+func TestSweptCleanupStopsForADeleteOrAWake(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		mark func(s *Sessions, id string)
+		err  string
+	}{
+		{"nothing else runs", func(*Sessions, string) {}, ""},
+		{"a delete runs", func(s *Sessions, id string) { s.deleting[id] = true }, "Thread 3 is being deleted"},
+		{"a wake runs", func(s *Sessions, id string) { s.waking[id] = true }, "Thread 3 is waking; clean it up once it runs"},
+		{"the thread runs again", func(s *Sessions, id string) {
+			s.info = append(s.info, s.ended[id].info) // a wake that ended after the sweep read the thread as asleep
+		}, "Thread 3 runs again"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, name := asleepAndKept(t)
+			id := name.String()
+			tt.mark(s, id)
+			_, _, err := s.life.cleanupNow(t.Context(), id, false, bySweep)
+			if tt.err == "" {
+				if err != nil || s.life.fields(id).cleanup != "" || len(s.life.Cleanups("p")) != 1 {
+					t.Errorf("err %v, cleanup %q, log %+v; want the clean-up done", err, s.life.fields(id).cleanup, s.life.Cleanups("p"))
+				}
+				return
 			}
-			if n := len(l.Cleanups("p")); tt.deleting && n != 0 {
-				t.Errorf("the sweep logged %d clean-ups of a thread being deleted", n)
+			f := s.life.fields(id)
+			if err == nil || err.Error() != tt.err || f.cleanup != "blocked" || f.reason != "a shell is open in this worktree" || len(s.life.Cleanups("p")) != 0 {
+				t.Errorf("err %v, cleanup %q (%q), log %+v; want %q and the kept clean-up as it was", err, f.cleanup, f.reason, s.life.Cleanups("p"), tt.err)
 			}
 		})
+	}
+}
+
+func TestWakeIsRefusedWhileACleanupRuns(t *testing.T) {
+	s, name := asleepAndKept(t)
+	id := name.String()
+	s.life.tracks[id].cleanup = "pending"
+	if err := s.startAgain(name, ""); err == nil || err.Error() != "Thread 3 is being cleaned up; wake it when that ends" {
+		t.Errorf("wake = %v, want it refused while the clean-up runs", err)
+	}
+	if s.waking[id] {
+		t.Error("the refused wake left its mark, so no clean-up could start")
+	}
+}
+
+func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
+	s, name := asleepAndKept(t)
+	id := name.String()
+	s.deleting[id] = true
+	s.life.sweep(t.Context())
+	s.life.cleanups.Wait()
+	if f := s.life.fields(id); f.cleanup != "blocked" || len(s.life.Cleanups("p")) != 0 {
+		t.Errorf("cleanup %q, log %+v; want the kept clean-up left as it was", f.cleanup, s.life.Cleanups("p"))
 	}
 }

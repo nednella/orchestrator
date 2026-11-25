@@ -1062,13 +1062,13 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cl
 		pr = &c
 	}
 	l.mu.Unlock()
-	// The mark goes on before the look at the delete's, as a delete marks itself before it looks for a running
+	// The mark goes on before the look at a delete's or a wake's, as each marks itself before it looks for a running
 	// clean-up: one of the two always sees the other.
-	if by != byDelete && l.sessions.beingDeleted(id) {
+	if err := l.sessions.cleanupRefused(id, by); err != nil {
 		l.mu.Lock()
 		tr.cleanup, tr.reason = was, wasReason
 		l.mu.Unlock()
-		return nil, "", fmt.Errorf("Thread %d is being deleted", l.sessions.Number(id))
+		return nil, "", err
 	}
 	l.sessions.changed()
 

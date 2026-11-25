@@ -153,6 +153,7 @@ type Sessions struct {
 	lastNum    map[string]int           // the highest number given or recorded in each project
 	deleted    map[string]bool          // the threads the owner deleted in this run, and those whose state files say archived: nothing brings them back
 	deleting   map[string]bool          // the threads a delete runs for: they are not woken, forked or given children
+	waking     map[string]bool          // the threads a wake runs for: no clean-up starts on them
 	records    map[string]session.Record
 	cwds       map[string]string // the working directory each session's last hook reported
 	seen       map[string]session.State
@@ -268,7 +269,7 @@ func newSessions(o Options) *Sessions {
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
-		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{},
+		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{}, waking: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
 		records:    map[string]session.Record{},
 		cwds:       map[string]string{},
@@ -842,11 +843,22 @@ func (s *Sessions) startDelete(id string) error {
 	return nil
 }
 
-// beingDeleted says whether a delete of the thread runs or has run. It takes mu.
-func (s *Sessions) beingDeleted(id string) bool {
+// cleanupRefused says why a clean-up of the thread, marked pending already, must not go on, or nil when it may: a delete
+// of the thread runs or has run, unless by is that delete, a wake of it runs, or, for the sweep, which only acts on an
+// asleep thread, it runs again. It takes mu.
+func (s *Sessions) cleanupRefused(id string, by cleanupBy) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.deleting[id] || s.deleted[id]
+	_, live := s.liveInfo(id)
+	switch {
+	case by != byDelete && (s.deleting[id] || s.deleted[id]):
+		return fmt.Errorf("Thread %d is being deleted", s.nums[id])
+	case s.waking[id]:
+		return fmt.Errorf("Thread %d is waking; clean it up once it runs", s.nums[id])
+	case by == bySweep && live:
+		return fmt.Errorf("Thread %d runs again", s.nums[id])
+	}
+	return nil
 }
 
 // dropThread removes the settled thread's state file and row, and marks it deleted, so nothing brings it back. It
@@ -1728,7 +1740,16 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
+	// The mark goes on before the look for a running clean-up, as a clean-up marks itself before it looks for a wake:
+	// one of the two always sees the other. It stays until the thread runs, so no clean-up starts while the worktree is
+	// restored and Claude starts in it.
 	s.mu.Lock()
+	s.waking[id] = true
+	defer func() {
+		s.mu.Lock()
+		delete(s.waking, id)
+		s.mu.Unlock()
+	}()
 	e, settled := s.ended[id]
 	var in term.Info
 	if settled {
