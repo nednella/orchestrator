@@ -31,9 +31,7 @@ export function ThreadSidebar() {
     threads.map((s) => s.id),
     {
       onEnter(index) {
-        const session = threads[index]
-        if (session.state === 'settled') return
-        select(session.id)
+        select(threads[index].id)
         focus('thread')
       },
     },
