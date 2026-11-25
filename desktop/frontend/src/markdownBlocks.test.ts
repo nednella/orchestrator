@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import { markdownProps } from './chatMarkdown.ts'
-import { markdownBlocks } from './markdownBlocks.ts'
+import { markdownBlocks, steadyBlock } from './markdownBlocks.ts'
 
 const render = (children: string) => renderToStaticMarkup(createElement(Markdown, { ...markdownProps, children }))
 
@@ -80,4 +80,54 @@ test('a block once closed stays the same as the text grows', () => {
     const blocks = markdownBlocks(text.slice(0, n))
     blocks.slice(0, -1).forEach((block, i) => assert.equal(block, whole[i], `at ${n}`))
   }
+})
+
+test('the block being written closes its inline markers', () => {
+  assert.equal(steadyBlock('Some **bo'), 'Some **bo**')
+  assert.equal(steadyBlock('Some *it'), 'Some *it*')
+  assert.equal(steadyBlock('Run `npm t'), 'Run `npm t`')
+  assert.equal(steadyBlock('***both'), '***both***')
+  assert.equal(steadyBlock('**a *b '), '**a *b***')
+  assert.equal(steadyBlock('**done** and *x'), '**done** and *x*')
+  assert.equal(steadyBlock('- the **sub'), '- the **sub**')
+  assert.equal(steadyBlock('**see `foo'), '**see `foo`**')
+})
+
+test('the block being written drops markers with nothing after them yet', () => {
+  assert.equal(steadyBlock('Some **'), 'Some ')
+  assert.equal(steadyBlock('Some *'), 'Some ')
+  assert.equal(steadyBlock('Run `'), 'Run ')
+  assert.equal(steadyBlock('**`'), '')
+})
+
+test('the block being written leaves plain stars alone', () => {
+  assert.equal(steadyBlock('2 * 3 = 6'), '2 * 3 = 6')
+  assert.equal(steadyBlock('a \\*b'), 'a \\*b')
+  assert.equal(steadyBlock('**done**'), '**done**')
+})
+
+test('the block being written holds back a line of block markers', () => {
+  assert.equal(steadyBlock('Text\n##'), 'Text\n')
+  assert.equal(steadyBlock('- a\n- '), '- a\n')
+  assert.equal(steadyBlock('Text\n1.'), 'Text\n')
+  assert.equal(steadyBlock('Text\n--'), 'Text\n')
+  assert.equal(steadyBlock('Text\n```t'), 'Text\n')
+  assert.equal(steadyBlock('Text\n1. R'), 'Text\n1. R')
+})
+
+test('the block being written shows only whole lines of an open code fence', () => {
+  assert.equal(steadyBlock('```ts\nconst a = 1\nconst b'), '```ts\nconst a = 1\n')
+  assert.equal(steadyBlock('```ts\nconst a = 1\n``'), '```ts\nconst a = 1\n')
+  assert.equal(steadyBlock('```ts\nconst a = 1\n```\nAfter **x'), '```ts\nconst a = 1\n```\nAfter **x**')
+})
+
+test('the block being written holds back a table until its delimiter row is whole', () => {
+  assert.equal(steadyBlock('| a | b |'), '')
+  assert.equal(steadyBlock('| a | b |\n'), '')
+  assert.equal(steadyBlock('| a | b |\n| --'), '')
+  assert.equal(steadyBlock('| a | b |\n| --- | -'), '')
+  assert.equal(steadyBlock('| a | b |\n| --- | --- |\n'), '| a | b |\n| --- | --- |\n')
+  assert.equal(steadyBlock('| a | b |\n| --- |\n'), '')
+  assert.equal(steadyBlock('| a | b |\n| --- | --- |\n| 1 | **2'), '| a | b |\n| --- | --- |\n| 1 | **2**')
+  assert.equal(steadyBlock('Intro\n| a | b |\n| -'), 'Intro\n')
 })

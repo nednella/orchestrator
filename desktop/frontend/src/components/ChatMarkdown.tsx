@@ -5,7 +5,7 @@ import type { Components } from 'react-markdown'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { codeLanguage, markdownProps, textCache } from '../chatMarkdown'
-import { markdownBlocks } from '../markdownBlocks'
+import { markdownBlocks, steadyBlock } from '../markdownBlocks'
 import { ChatCodeBlock } from './ChatCodeBlock'
 
 type ChatMarkdownProps = { text: string; streaming?: boolean }
@@ -65,7 +65,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false
   const last = blocks.length - 1
   return (
     <div className="markdown text-body">
-      {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={block} writing /> : <MarkdownBlock key={i} text={block} writing={false} />))}
+      {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} writing /> : <MarkdownBlock key={i} text={block} writing={false} />))}
     </div>
   )
 })
