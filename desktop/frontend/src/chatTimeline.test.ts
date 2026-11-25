@@ -658,3 +658,8 @@ test('a delegate call that gets no answer ends with its turn', () => {
   const split = buildTimeline(log(...asked, user('u2', 'And this')), {})
   assert.equal(only(split.items, 'child')[0].expired, false, 'a message that splits the turn does not end it')
 })
+
+test('a delegate result that comes after its turn ended still names the child', () => {
+  const [item] = only(buildTimeline(log(user('u1', 'Go'), delegate('d1'), turnEnd(true), started('d1', 'shop/abcd2345')), {}).items, 'child')
+  assert.deepEqual([item.child, item.expired], ['shop/abcd2345', false])
+})

@@ -200,9 +200,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   }
 
   // delegated takes a delegate call's result: the child it started, or its error, which turns the card back into the
-  // call's tool row while its turn runs.
+  // call's tool row while its turn runs. A result that comes after its turn ended is the call's answer all the same.
   const delegated = (d: Delegation, e: ChatEvent) => {
     d.call.result = e.text ?? ''
+    d.item.expired = false
     if (!e.error) {
       d.item.child = childOf(e.text)
       if (d.item.child) children.add(d.item.child)
