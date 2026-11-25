@@ -1,7 +1,9 @@
 package sessions_test
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -581,5 +583,47 @@ func TestDeleteOfAnEndedOldSessionRemovesIt(t *testing.T) {
 	}
 	if exists(tmpOf(h, id)) || hasState(t, h, id) {
 		t.Errorf("temp folder there %v, state file there %v; want both gone", exists(tmpOf(h, id)), hasState(t, h, id))
+	}
+}
+
+func TestDeleteWaitingOnAHostThatDoesNotStopHoldsUpNoNewThread(t *testing.T) {
+	h := apptest.New(t)
+	s := talked(t, h)
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread asleep", func() bool { return stateOf(h, s.ID) == "settled" })
+	_, socket := hostFiles(h, s.ID)
+	if err := os.Remove(socket); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	stuck, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stuck.Close() })
+	go func() {
+		for {
+			conn, err := stuck.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	done := make(chan error, 1)
+	go func() { done <- h.DeleteThread(s.ID, false) }()
+	eventually(t, "the row gone", func() bool { _, ok := h.Session(s.ID); return !ok })
+	if _, err := h.NewSession("other", ""); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("the delete ended (%v) before the new thread started, so it did not wait on the host", err)
+	default:
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

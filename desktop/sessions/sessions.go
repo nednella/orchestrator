@@ -770,30 +770,46 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 			return err
 		}
 	}
-
-	s.createMu.Lock() // a refresh with a list read before the settle would take the thread back as live
-	defer s.createMu.Unlock()
-	s.mu.Lock()
-	live := slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name == name })
-	s.mu.Unlock()
-	if live {
-		if err := s.Settle(id); err != nil {
-			return err
-		}
+	if err := s.settleToDelete(name); err != nil {
+		return err
 	}
 	// Counted here: the count sync starts when the session goes, also at the settle of the clean-up, may run after the
 	// delete and find no thread.
 	if rec.Transcript != "" {
 		s.countUsage(id, rec.Transcript, rec.AgentModel, true)
 	}
+	if err := s.dropThread(name); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
+	defer cancel()
+	s.browsers.Forget(ctx, id)
+	s.evidence.Purge(id)
+	if err := s.made.Forget(name.Project, id); err != nil {
+		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
+	}
 	s.awaitHostExit(name)
+	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
+		if err := os.RemoveAll(path); err != nil {
+			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
+		}
+	}
+	return nil
+}
+
+// dropThread removes the settled thread's state file and row, and marks it deleted, so nothing brings it back. It
+// holds createMu, so a refresh that read the state file before it went does not apply it after.
+func (s *Sessions) dropThread(name session.Name) error {
+	id := name.String()
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, ok := s.ended[id]; !ok {
-		s.mu.Unlock()
 		return fmt.Errorf("No thread %s", id)
 	}
 	if err := s.removeState(id); err != nil {
-		s.mu.Unlock()
 		return fmt.Errorf("deleting the thread: %w", err)
 	}
 	s.deleted[id] = true
@@ -810,21 +826,21 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	s.life.forget(id)
 	s.forgetToken(name)
 	s.sync()
-	s.mu.Unlock()
-
-	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
-	defer cancel()
-	s.browsers.Forget(ctx, id)
-	s.evidence.Purge(id)
-	if err := s.made.Forget(name.Project, id); err != nil {
-		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
-	}
-	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
-		if err := os.RemoveAll(path); err != nil {
-			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
-		}
-	}
 	return nil
+}
+
+// settleToDelete settles the thread when it runs. It holds createMu, so a refresh with a list read before the settle
+// does not take the thread back as live.
+func (s *Sessions) settleToDelete(name session.Name) error {
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	s.mu.Lock()
+	live := slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name == name })
+	s.mu.Unlock()
+	if !live {
+		return nil
+	}
+	return s.Settle(name.String())
 }
 
 // awaitHostExit waits, for at most hostWait, until the thread's host is gone: it logs Claude's exit as it stops, and
