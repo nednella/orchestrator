@@ -8,20 +8,22 @@ export type MockThread = { ended: boolean; setState(state: State): void }
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
 const minute = 60_000
+const batchEvery = 33 // the service sends a thread's events at most this often, in ms
 const replies = [
   'Done. The checkout route now loads its own data, and the cart page no longer calls the cart API twice.',
   'I read the router and the checkout page. Nothing else needs to change for this.',
   'Tests pass: 48 passed, 0 failed.',
 ]
 
-// mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads, and a reply
-// streamed as deltas over a second. thread throws for an id that has no chat.
+// mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
+// reply streamed as deltas over a second. thread throws for an id that has no chat.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const logs = new Map<string, ChatEvent[]>()
   const watched = new Set<string>()
   const pending = new Map<string, Pending>()
   const queued = new Map<string, { id: string; text: string }[]>()
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
+  const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
   let nextReply = 0
 
   const logOf = (id: string) => logs.get(id) ?? []
@@ -31,8 +33,21 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const at = draft.at ?? Date.now()
     const e: ChatEvent = { ...draft, at, seq: draft.kind === 'delta' ? 0 : (log.at(-1)?.seq ?? 0) + 1 }
     if (e.seq > 0) logs.set(id, [...log, e])
-    if (watched.has(id)) emit(`chat:${id}` as `chat:${string}/${string}`, { id, events: [{ ...e }] })
+    if (watched.has(id)) batch(id, e)
     return e
+  }
+
+  function batch(id: string, e: ChatEvent) {
+    const b = batches.get(id) ?? { events: [], due: false, sent: 0 }
+    batches.set(id, b)
+    b.events.push({ ...e })
+    if (b.due) return
+    b.due = true
+    setTimeout(() => {
+      const events = b.events
+      Object.assign(b, { events: [], due: false, sent: Date.now() })
+      if (watched.has(id)) emit(`chat:${id}` as `chat:${string}/${string}`, { id, events })
+    }, Math.max(0, batchEvery - (Date.now() - b.sent)))
   }
 
   function setPending(id: string, p: Pending | null) {
@@ -111,7 +126,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   function answer(id: string, request: string, allow: boolean, message: string) {
     const t = live(id)
     const p = pending.get(id)
-    if (p?.request !== request) throw `Thread ${id} did not take the answer`
+    if (p?.request !== request) throw `No approval "${request}" is waiting`
     append(id, { kind: 'answer', id: request, text: allow ? 'allow' : 'deny' })
     setPending(id, null)
     const tool = [...logOf(id)].reverse().find((e) => e.kind === 'tool_use')
@@ -165,14 +180,15 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       stop(id)
     },
     ChatSendNow: async (id: string, message: string) => {
-      live(id)
-      if (!queued.get(id)?.some((m) => m.id === message)) throw `Thread ${id} did not take Send now`
+      const t = live(id)
+      const waiting = queued.get(id) ?? []
+      const at = waiting.findIndex((m) => m.id === message)
+      if (at < 0) throw `No queued message ${message}`
       append(id, { kind: 'interrupt', id: message })
       stop(id)
-      const next = queued.get(id)?.shift()
-      if (!next) return
-      append(id, { kind: 'user', id: next.id, text: next.text })
-      thread(id).setState('working')
+      const [now] = waiting.splice(at, 1)
+      append(id, { kind: 'user', id: now.id, text: now.text })
+      t.setState('working')
       reply(id)
     },
     ChatAnswer: async (id: string, request: string, allow: boolean, message: string) => answer(id, request, allow, message),
@@ -187,5 +203,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     ChatPending: async () => [...pending.values()].map((p) => ({ ...p })),
   }
 
-  return { backend, seed }
+  // end is the thread's process going: its reply stops, its queue goes and nothing waits any more.
+  function end(id: string) {
+    replying.get(id)?.()
+    replying.delete(id)
+    queued.delete(id)
+    setPending(id, null)
+  }
+
+  return { backend, seed, end }
 }

@@ -946,6 +946,7 @@ export function createMock(params: URLSearchParams) {
       const s = find(id)
       if (s.state === 'ended') throw `session ${id} has ended: dismiss it`
       emit('term:exit', { id })
+      chats.end(id)
       setState(s, 'ended')
       emit('issues', { project: current.name, items: currentIssues() })
     },
