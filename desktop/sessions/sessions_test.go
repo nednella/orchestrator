@@ -325,6 +325,33 @@ func TestClaudeThatDoesNotKnowTheThinkingFlagStillWorks(t *testing.T) {
 	}
 }
 
+func TestARefusedFlagIsLeftOutOnlyInTheAppRunThatSawIt(t *testing.T) {
+	first := apptest.NewWith(t, apptest.Options{ClaudeRejects: agent.ThinkingDisplay})
+	old, err := first.NewThread("old", "hello", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "claude started again without the flag", func() bool {
+		args := first.Args(t, old.ID)
+		return first.Refused(t, old.ID) == 1 && len(args) > 0 && !slices.Contains(args, agent.ThinkingDisplay)
+	})
+	first.App.Stop()
+
+	h := first.Restart(t)
+	// The follower of the old thread, which still runs, has read its log, with the refusal in it, once the watch returns.
+	if err := h.ChatWatch(old.ID); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.NewThread("new", "hello again", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeArgs(t, h, s.ID)
+	if n := h.Refused(t, s.ID); n != 1 {
+		t.Errorf("the new thread's claude was started with the flag %d times, want once: an earlier run's refusal is not this one's", n)
+	}
+}
+
 func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	first := apptest.New(t)
 	older := filepath.Join(t.TempDir(), "agentos")

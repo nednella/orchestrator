@@ -66,6 +66,9 @@ type Chats struct {
 	threads  Threads
 	emit     func(string, any)
 	commands *commandLists
+	// since is when this run of the app began, in unix milliseconds: a flag Claude refused before it was an earlier
+	// run's, which may have run another claude.
+	since int64
 
 	started chan struct{} // closed by Start
 
@@ -77,7 +80,7 @@ type Chats struct {
 
 // New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
 func New(t Threads, dir string, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
+	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
 }
 
 // Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
@@ -260,7 +263,7 @@ func (f *follower) run(ctx context.Context) {
 			commands = &e
 		case chatlog.KindStart:
 			mode.started, mode.text = true, ""
-			if e.Text != "" {
+			if e.Text != "" && e.At >= f.chats.since {
 				f.chats.threads.FlagRefused(e.Text)
 			}
 		case chatlog.KindMode:
