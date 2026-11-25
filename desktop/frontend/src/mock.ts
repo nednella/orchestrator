@@ -199,7 +199,7 @@ export function createMock(params: URLSearchParams) {
   const handlers = new Map<string, Set<Handler>>()
   const sessions: Session[] = []
   const data: ProjectData[] = [
-    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree trees/issue-371', 'branch issue-371', 'temp files', 'session'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree trees/issue-366', 'branch issue-366', 'session'], reason: '' }] },
+    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'settled thread', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'settled thread', 'temp folder'], reason: '' }] },
     { name: 'agentos', dir: '~/code/agentos', repo: 'nednella/agentos', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/agentos')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
     { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], waits: [], cleanups: [] },
   ]
@@ -707,23 +707,35 @@ export function createMock(params: URLSearchParams) {
     return { days, since: dayKey(120), totals, projects, previous, perDay, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
-  function finishCleanup(s: Session) {
+  function logCleanup(s: Session, removed: string[], reason: string) {
     const target = owner(s)
-    target.cleanups.unshift({
-      at: Date.now(),
-      sessionTitle: s.title,
-      issue: s.issue,
-      pr: s.pr?.number ?? 0,
-      merged: s.pr?.state === 'merged',
-      status: 'done',
-      removed: [`worktree ${s.worktree.replace(`${target.dir}/`, '')}`, `branch ${s.branch}`, 'temp files', 'session'],
-      reason: '',
-    })
-    sessions.splice(sessions.indexOf(s), 1)
-    emit('term:exit', { id: s.id })
-    publish()
-    emit('issues', { project: current.name, items: currentIssues() })
+    target.cleanups.unshift({ at: Date.now(), sessionTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
     if (target === current) emit('cleanups', { project: target.name, items: [...target.cleanups] })
+  }
+
+  // keptFor is why an unforced clean-up keeps the thread's worktree, for the reasons the mock can see, in the app's order.
+  function keptFor(s: Session): string {
+    if (!s.worktree) return ''
+    const g = s.git
+    if (g && g.uncommitted > 0) return `the worktree of ${s.branch} has uncommitted changes`
+    if (g && s.pr?.state === 'merged' && g.notInMain > 0) return `${s.branch} has commits that are not in the merged pull request`
+    if (g && s.pr?.state !== 'merged' && g.unpushed > 0) return g.unpushed === 1 ? `${s.branch} has a commit that is not on origin` : `${s.branch} has ${g.unpushed} commits that are not on origin`
+    if (s.state !== 'settled' && chats.busy(s.id)) return 'a turn is running'
+    return ''
+  }
+
+  // finishCleanup acts as the app's clean-up: the worktree, browser window and temp folder go, and the thread settles
+  // and keeps its row and branch, with no PR left on it.
+  function finishCleanup(s: Session) {
+    const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'settled thread', ...(s.browser ? ['browser window'] : []), 'temp folder']
+    logCleanup(s, removed, '')
+    if (s.state !== 'settled') {
+      emit('term:exit', { id: s.id })
+      chats.end(s.id, 'settle')
+    }
+    Object.assign(s, { worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '', browser: false })
+    setState(s, 'settled')
+    emit('issues', { project: current.name, items: currentIssues() })
   }
 
   const merging = sessions.find((s) => s.cleanup === 'pending')
@@ -1189,8 +1201,12 @@ export function createMock(params: URLSearchParams) {
     ...chats.backend,
     Cleanup: async (id: string, force: boolean) => {
       const s = find(id)
-      if (s.cleanup === 'blocked' && !force) throw `Not cleaned up: ${s.cleanupReason}`
-      finishCleanup(s)
+      if (s.cleanup === 'pending') throw 'clean-up is already running'
+      const reason = force ? '' : keptFor(s)
+      if (!reason) return finishCleanup(s)
+      Object.assign(s, { cleanup: 'blocked', cleanupReason: reason })
+      logCleanup(s, [], reason)
+      publish()
     },
     Cleanups: async () => [...current.cleanups],
     Memory: async () => memory(),
