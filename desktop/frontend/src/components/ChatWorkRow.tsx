@@ -11,7 +11,7 @@ type ChatWorkRowProps = { thread: string; turn: string; steps: WorkStep[]; start
 
 const sameStep = (a: WorkStep, b: WorkStep) => {
   if (a.kind === 'note') return b.kind === 'note' && a.text === b.text
-  return b.kind === 'call' && a.call.id === b.call.id && a.call.tool === b.call.tool && a.call.input === b.call.input && a.call.result === b.call.result && a.call.error === b.call.error
+  return b.kind === 'call' && a.call.id === b.call.id && a.call.tool === b.call.tool && a.call.input === b.call.input && a.call.result === b.call.result && a.call.error === b.call.error && a.call.answer === b.call.answer
 }
 
 // The timeline is built anew on every streamed delta, so its steps are new objects holding the same values.
@@ -35,7 +35,7 @@ function Steps({ thread, steps, running, folder }: StepsProps) {
             <ChatMarkdown text={s.text} />
           </div>
         ) : (
-          <ChatToolRow key={s.call.id} thread={thread} id={s.call.id} tool={s.call.tool} input={s.call.input} result={s.call.result} error={s.call.error} running={running} folder={folder} />
+          <ChatToolRow key={s.call.id} thread={thread} id={s.call.id} tool={s.call.tool} input={s.call.input} result={s.call.result} error={s.call.error} denied={s.call.answer === 'deny'} running={running} folder={folder} />
         ),
       )}
     </>

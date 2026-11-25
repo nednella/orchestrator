@@ -4,9 +4,9 @@ import { resultLimit, resultLines, toolSummary } from '../chatTools'
 import { ChatToolInput } from './ChatToolInput'
 import { Icon } from './Icon'
 
-type ChatToolRowProps = { thread: string; id: string; tool: string; input: unknown; result: string | null; error: boolean; running: boolean; folder: string }
+type ChatToolRowProps = { thread: string; id: string; tool: string; input: unknown; result: string | null; error: boolean; denied: boolean; running: boolean; folder: string }
 
-export const ChatToolRow = memo(function ChatToolRow({ thread, id, tool, input, result, error, running, folder }: ChatToolRowProps) {
+export const ChatToolRow = memo(function ChatToolRow({ thread, id, tool, input, result, error, denied, running, folder }: ChatToolRowProps) {
   const [open, setOpen] = useState(() => isOpened(thread, id))
   const [all, setAll] = useState(false)
   const { icon, title, detail } = toolSummary(tool, input, folder)
@@ -23,6 +23,7 @@ export const ChatToolRow = memo(function ChatToolRow({ thread, id, tool, input, 
         </span>
         <span className="flex-none">{title}</span>
         {detail && <span className="mono min-w-0 truncate text-dim">{detail}</span>}
+        {denied && <span className="flex-none text-label text-danger">Denied</span>}
         {waiting && (
           <span className="flex flex-none animate-spin text-dim" role="img" aria-label="Running">
             <Icon name="loader" size={12} />
