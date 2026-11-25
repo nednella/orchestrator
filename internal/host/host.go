@@ -828,6 +828,8 @@ var (
 	errNoCheckpoints     = errors.New("This thread started before file checkpoints")
 	errStaleRewind       = errors.New("A message arrived since; look at the chat and edit again")
 	errNoAnswer          = errors.New("Claude did not answer")
+	errAnswerLate        = errors.New("Claude has not answered yet; the chat updates when it does")
+	errFilesUnknown      = errors.New("The files may have been put back; check them before you edit again")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
 	// or after the one agentos was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
@@ -932,8 +934,9 @@ func (h *host) await(id string, got <-chan chat.Event) (chat.Event, bool) {
 }
 
 // ask writes the control request that line makes for a new request id and waits for Claude's reply to it. A reply that
-// says Claude does not know the request is errUnsupported.
-func (h *host) ask(line func(id string) []byte) (chat.Event, error) {
+// says Claude does not know the request is errUnsupported. With late set, a reply that does not come in time is still
+// awaited: late gets it, or the error Claude's exit answers with, and ask returns errAnswerLate.
+func (h *host) ask(line func(id string) []byte, late func(chat.Event)) (chat.Event, error) {
 	id := h.nextID()
 	got := make(chan chat.Event, 1)
 	h.mu.Lock()
@@ -947,10 +950,25 @@ func (h *host) ask(line func(id string) []byte) (chat.Event, error) {
 		h.dropReply(id)
 		return chat.Event{}, err
 	}
+	if late != nil {
+		select {
+		case r := <-got:
+			return known(r)
+		case <-time.After(requestTimeout):
+			go func() { late(<-got) }()
+			return chat.Event{}, errAnswerLate
+		}
+	}
 	r, ok := h.await(id, got)
-	switch {
-	case !ok:
+	if !ok {
 		return chat.Event{}, errNoAnswer
+	}
+	return known(r)
+}
+
+// known is Claude's reply r, or errUnsupported when it says Claude does not know the request.
+func known(r chat.Event) (chat.Event, error) {
+	switch {
 	case r.Error && slices.ContainsFunc(unsupportedWords, func(w string) bool { return strings.Contains(r.Text, w) }):
 		return chat.Event{}, errUnsupported
 	}
@@ -994,6 +1012,9 @@ func (h *host) previewRewind(id string) (FileChanges, error) {
 // text. With within set it first puts back the files Claude's turns edited since, once a dry run shows that every one
 // is inside within. While it runs the host takes no message, so the newest message it names to Claude stays the newest.
 // The rewind is logged only once Claude says the conversation rewound.
+//
+// A conversation rewind Claude does not answer in time keeps the host rewinding until Claude answers or exits, and is
+// logged when Claude says it rewound then.
 func (h *host) rewind(id, within string) (string, error) {
 	h.stdinMu.Lock()
 	h.mu.Lock()
@@ -1007,10 +1028,11 @@ func (h *host) rewind(id, within string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	waiting := false
 	defer func() {
-		h.mu.Lock()
-		h.rewinding = false
-		h.mu.Unlock()
+		if !waiting {
+			h.rewound()
+		}
 	}()
 	if within != "" {
 		changes, err := h.rewindFiles(id, true)
@@ -1018,29 +1040,59 @@ func (h *host) rewind(id, within string) (string, error) {
 			return "", err
 		}
 		if out := outside(changes.Files, within); out != "" {
-			return "", fmt.Errorf("The rewind would change %s, which is outside %s, so no file was changed", out, within)
+			return "", errOutside(out, within)
 		}
-		if _, err := h.rewindFiles(id, false); err != nil {
+		if _, err := h.rewindFiles(id, false); errors.Is(err, errNoAnswer) {
+			return "", errFilesUnknown
+		} else if err != nil {
 			return "", err
 		}
 	}
-	prefill, err := h.rewindConversation(id, latest)
-	if err != nil && within != "" {
+	prefill, err := h.rewindConversation(id, latest, func(prefill string, err error) {
+		if err == nil {
+			h.logRewind(id)
+		}
+		h.rewound()
+	})
+	waiting = errors.Is(err, errAnswerLate)
+	switch {
+	case err != nil && within != "" && waiting:
+		return "", fmt.Errorf("The files were put back. %w", err)
+	case err != nil && within != "":
 		return "", fmt.Errorf("The files were put back, but the conversation was not: %w", err)
-	}
-	if err != nil {
+	case err != nil:
 		return "", err
 	}
-	if _, err := h.publish(chat.Event{Kind: chat.KindRewind, ID: id}); err != nil {
+	if err := h.logRewind(id); err != nil {
 		return "", err
 	}
 	return prefill, nil
 }
 
+// logRewind logs that Claude's conversation went back to before the user message id.
+func (h *host) logRewind(id string) error {
+	_, err := h.publish(chat.Event{Kind: chat.KindRewind, ID: id})
+	if err != nil {
+		fmt.Fprintf(h.echo, "host: logging the rewind to %s: %v\n", id, err)
+	}
+	return err
+}
+
+// rewound ends the rewind: the host takes messages again.
+func (h *host) rewound() {
+	h.mu.Lock()
+	h.rewinding = false
+	h.mu.Unlock()
+}
+
+func errOutside(file, dir string) error {
+	return fmt.Errorf("The rewind would change %s, which is outside %s, so no file was changed", file, dir)
+}
+
 // rewindFiles asks Claude to put back the files its turns edited since before the user message id, or with dryRun only
 // to say what that would change.
 func (h *host) rewindFiles(id string, dryRun bool) (FileChanges, error) {
-	r, err := h.ask(func(req string) []byte { return chat.RewindFiles(req, id, dryRun) })
+	r, err := h.ask(func(req string) []byte { return chat.RewindFiles(req, id, dryRun) }, nil)
 	if err != nil {
 		return FileChanges{}, err
 	}
@@ -1076,12 +1128,20 @@ func filesRefused(reason string) error {
 }
 
 // rewindConversation asks Claude to take its conversation back to before the user message id, naming latest as the
-// newest message the host knows of, and returns the message's text.
-func (h *host) rewindConversation(id, latest string) (string, error) {
-	r, err := h.ask(func(req string) []byte { return chat.RewindConversation(req, id, latest) })
+// newest message the host knows of, and returns the message's text. When Claude does not answer in time it returns
+// errAnswerLate, and late gets what Claude answers later.
+func (h *host) rewindConversation(id, latest string, late func(prefill string, err error)) (string, error) {
+	r, err := h.ask(func(req string) []byte { return chat.RewindConversation(req, id, latest) }, func(r chat.Event) {
+		late(h.conversationRewound(r))
+	})
 	if err != nil {
 		return "", err
 	}
+	return h.conversationRewound(r)
+}
+
+// conversationRewound is the message's text when Claude's reply r says the conversation rewound, else why it did not.
+func (h *host) conversationRewound(r chat.Event) (string, error) {
 	if r.Error {
 		return "", errors.New(cmp.Or(r.Text, "Claude did not rewind the conversation"))
 	}

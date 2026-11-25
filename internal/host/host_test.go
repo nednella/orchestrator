@@ -160,8 +160,8 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	// rewind answers the rewind requests as Claude Code 2.1.332 does. Its files are the comma-separated paths in
 	// AOS_FAKE_REWIND_FILES, into each of which a rewind that is not a dry run writes "before"; without the checkpoint
 	// setting it kept no checkpoints. With AOS_FAKE_UNSUPPORTED set it knows neither request, with AOS_FAKE_HELD_ELSEWHERE
-	// it holds a later message than any the host names, and AOS_FAKE_REWIND_DELAY holds its answer to a conversation
-	// rewind.
+	// it holds a later message than any the host names, AOS_FAKE_REWIND_DELAY holds its answer to a conversation
+	// rewind and AOS_FAKE_FILES_DELAY its answer to a rewind of the files that is not a dry run.
 	rewind := func(l fakeLine) {
 		answer := func(body map[string]any) {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": body}})
@@ -183,6 +183,9 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		case l.Request.Subtype == "rewind_files" && l.Request.DryRun:
 			answer(map[string]any{"canRewind": true, "filesChanged": files, "insertions": 3, "deletions": 1})
 		case l.Request.Subtype == "rewind_files":
+			if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_FILES_DELAY")); err == nil {
+				time.Sleep(wait)
+			}
 			for _, f := range files {
 				os.WriteFile(f, []byte("before"), 0o600)
 			}
@@ -2426,5 +2429,61 @@ func TestRewindAfterTheHostStartsAgain(t *testing.T) {
 	_, _ = Rewind(ctxT(t), again.socket, ids[0], "")
 	if reqs := rewindRequests(t, again.stdin); len(reqs) != 1 || reqs[0].Request.Target != ids[0] || reqs[0].Request.LastSeen != ids[1] {
 		t.Errorf("requests = %+v, want a rewind to one with two the newest message", reqs)
+	}
+}
+
+// lateCtx outlasts the host's wait for Claude's answer.
+func lateCtx(t *testing.T) context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*requestTimeout)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func TestARewindClaudeConfirmsLateIsLogged(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_DELAY="+(requestTimeout+time.Second).String())
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one", "two")
+
+	if _, err := Rewind(lateCtx(t), h.socket, ids[1], ""); refusal(err) != "Claude has not answered yet; the chat updates when it does" {
+		t.Fatalf("Rewind = %v", err)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Fatalf("logged rewinds before Claude answered = %+v", got)
+	}
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "three"}); refusal(err) != "This thread is rewinding" {
+		t.Errorf("send while Claude has not answered: %v", err)
+	}
+	waitKind(t, events, chat.KindRewind)
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 1 || got[0].ID != ids[1] {
+		t.Errorf("logged rewinds = %+v, want the rewind to two", got)
+	}
+	if _, err := Rewind(ctxT(t), h.socket, ids[1], ""); refusal(err) != "Claude's conversation no longer holds this message" {
+		t.Errorf("a second rewind to two: %v", err)
+	}
+	sendMessage(t, h.socket, "three")
+	waitKind(t, events, chat.KindTurnEnd)
+}
+
+func TestAFilesRewindClaudeDoesNotAnswerMayHaveChangedThem(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+file, "AOS_FAKE_FILES_DELAY="+(requestTimeout+time.Second).String())
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	if _, err := Rewind(lateCtx(t), h.socket, ids[0], dir); refusal(err) != "The files may have been put back; check them before you edit again" {
+		t.Fatalf("Rewind = %v", err)
+	}
+	for _, r := range rewindRequests(t, h.stdin) {
+		if r.Request.Subtype == "rewind_conversation" {
+			t.Errorf("the conversation was rewound too")
+		}
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Errorf("logged rewinds = %+v, want none", got)
 	}
 }
