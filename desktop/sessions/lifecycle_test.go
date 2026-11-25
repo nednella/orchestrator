@@ -1297,13 +1297,17 @@ func TestHeldWakeKeepsTheWorktree(t *testing.T) {
 		t.Fatalf("the thread has no worktree: %+v", s)
 	}
 
-	eventually(t, "the clean-up kept for the held prompt", func() bool {
-		if err := h.Cleanup(s.ID, false); err != nil {
-			t.Fatal(err)
-		}
-		got, _ := h.Session(s.ID)
-		return got.Cleanup == "blocked" && got.CleanupReason == "messages wait for this thread"
-	})
+	time.Sleep(500 * time.Millisecond) // the refresh holds the prompt from a goroutine of its own
+
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := h.Session(s.ID); got.Cleanup != "blocked" || got.CleanupReason != "messages wait for this thread" {
+		t.Errorf("cleanup %q, reason %q", got.Cleanup, got.CleanupReason)
+	}
+	if log := h.Cleanups(); len(log) != 1 {
+		t.Errorf("log = %+v", log)
+	}
 	if got := stateOf(h, s.ID); got != "waiting" || !exists(wt) {
 		t.Errorf("state %q, worktree there %v", got, exists(wt))
 	}
