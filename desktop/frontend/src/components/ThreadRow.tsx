@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { GitBranch } from 'lucide-react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { currentTask } from '../threads'
 import type { Session } from '../types'
@@ -36,6 +38,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
   const settled = session.state === 'settled'
+  const branch = splitBranch(session.branch)
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -122,16 +125,18 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             >
               {session.title}
             </button>
-            <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
-              <LastActive at={session.lastEventAt} />
-            </span>
-            {selected && (
-              <span className="thread-actions relative z-[1] items-center justify-self-end">
-                <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(session.project)}>
-                  <Icon name="x" size={14} />
-                </button>
+            <span className="col-start-3 flex items-center justify-self-end gap-2">
+              <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
+                <LastActive at={session.lastEventAt} />
               </span>
-            )}
+              {selected && (
+                <span className="thread-actions relative z-[1] items-center justify-self-end">
+                  <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(session.project)}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </span>
+              )}
+            </span>
           </>
         )}
         {line2 && (
@@ -139,10 +144,9 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             <span className="thread-dim flex min-w-0 flex-1 items-center gap-1.5 text-soft">
               {session.branch && (
                 <>
-                  <span className="flex flex-none text-dim">
-                    <Icon name="branch" size={12} />
-                  </span>
-                  <span className="truncate">{session.branch}</span>
+                  <GitBranch size={12} className="flex-none text-dim" aria-hidden="true" />
+                  <span className="truncate">{branch.head}</span>
+                  {branch.tail && <span className="flex-none">{branch.tail}</span>}
                 </>
               )}
             </span>
