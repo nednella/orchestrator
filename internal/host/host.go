@@ -629,11 +629,13 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 		h.mu.Unlock()
 		return fmt.Errorf("approval %q has input that is not JSON", id)
 	}
-	line, text := chat.Deny(id, message), "deny"
+	answer := chat.Event{Kind: chat.KindAnswer, ID: id, Text: "deny"}
+	line := chat.Deny(id, message)
 	if allow {
-		line, text = chat.Allow(id, input), "allow"
+		answer.Text, answer.Input = "allow", given
+		line = chat.Allow(id, input)
 	}
-	e, err := h.appendLocked(chat.Event{Kind: chat.KindAnswer, ID: id, Text: text, Input: given})
+	e, err := h.appendLocked(answer)
 	if err != nil {
 		h.mu.Unlock()
 		return err

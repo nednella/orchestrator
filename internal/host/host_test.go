@@ -1323,6 +1323,22 @@ func TestAnswerWithInputAllowsWithTheGivenInput(t *testing.T) {
 	t.Fatal("no control_response on stdin")
 }
 
+func TestDenyLogsNoInput(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "ask")
+	waitKind(t, events, chat.KindApproval)
+	if _, err := call(ctxT(t), h.socket, request{Op: opAnswer, ID: "r1", Input: json.RawMessage(`{"answers":{"Which?":"Red"}}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindAnswer); e.Text != "deny" || e.Input != nil {
+		t.Fatalf("logged answer = %+v, want a deny with no input", e)
+	}
+}
+
 func TestInterruptIsLogged(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)
