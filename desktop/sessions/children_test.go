@@ -225,38 +225,78 @@ func TestEmptyChildWorktreeGoesWhenItSleeps(t *testing.T) {
 }
 
 func TestChildWorktreeWithCommitsStays(t *testing.T) {
-	for _, c := range []struct {
-		name, reason string
-		pushed       bool
-	}{
-		{"pushed", "%s has a commit that origin/main lacks", true},
-		{"not pushed", "%s has a commit that is not on origin", false},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t)
-			repoFixture(t, h)
-			parent := issueThread(h, t, 7)
-			child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
-			commitIn(t, child.Worktree, "work.txt")
-			if c.pushed {
-				gitIn(t, child.Worktree, "push", "-u", "origin", "HEAD")
-			}
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	commitIn(t, child.Worktree, "work.txt")
 
-			putToSleep(t, h, child.ID)
-			entry := cleanupOf(t, h, child)
-			if want := fmt.Sprintf(c.reason, child.Branch); entry.Status != "blocked" || entry.Reason != want || len(entry.Removed) != 0 {
-				t.Errorf("the clean-up = %+v, want it kept because %q", entry, want)
-			}
-			if !exists(filepath.Join(child.Worktree, "work.txt")) {
-				t.Error("the worktree went")
-			}
-			if got, _ := h.Session(child.ID); got.Cleanup != "" {
-				t.Errorf("the child's clean-up = %q, want it left to the rules of its pull request", got.Cleanup)
-			}
-		})
+	putToSleep(t, h, child.ID)
+	entry := cleanupOf(t, h, child)
+	if want := child.Branch + " has a commit that is not on origin"; entry.Status != "blocked" || entry.Reason != want || len(entry.Removed) != 0 {
+		t.Errorf("the clean-up = %+v, want it kept because %q", entry, want)
+	}
+	if !exists(filepath.Join(child.Worktree, "work.txt")) {
+		t.Error("the worktree went")
+	}
+	if got, _ := h.Session(child.ID); got.Cleanup != "" {
+		t.Errorf("the child's clean-up = %q, want it left to the rules of its pull request", got.Cleanup)
 	}
 }
 
+func TestChildWorktreeWithPushedCommitsGoes(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	commitIn(t, child.Worktree, "work.txt")
+	gitIn(t, child.Worktree, "push", "-u", "origin", "HEAD")
+
+	putToSleep(t, h, child.ID)
+	if entry := cleanupOf(t, h, child); entry.Status != "done" || exists(child.Worktree) {
+		t.Errorf("the clean-up = %+v, worktree there %v; want it removed", entry, exists(child.Worktree))
+	}
+	if !hasBranch(t, h.Dir, child.Branch) {
+		t.Errorf("%s is gone", child.Branch)
+	}
+}
+
+func TestChildOnItsParentsUnpushedWorkGoesWithoutAFetch(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	commitIn(t, parent.Worktree, "parent.txt")
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	if !exists(filepath.Join(child.Worktree, "parent.txt")) {
+		t.Fatal("the child does not start at its parent's commit")
+	}
+	fetched := filepath.Join(t.TempDir(), "fetched")
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("touch %s; git-upload-pack", fetched))
+
+	putToSleep(t, h, child.ID)
+	if entry := cleanupOf(t, h, child); entry.Status != "done" || exists(child.Worktree) {
+		t.Errorf("the clean-up = %+v, worktree there %v; want it removed", entry, exists(child.Worktree))
+	}
+	if exists(fetched) {
+		t.Error("the clean-up fetched origin for a child with no commit of its own")
+	}
+}
+
+func TestChildWorktreeWithChangesStays(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	notes := filepath.Join(child.Worktree, "notes.txt")
+	if err := os.WriteFile(notes, []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	putToSleep(t, h, child.ID)
+	if want := fmt.Sprintf("the worktree of %s has uncommitted changes", child.Branch); cleanupOf(t, h, child).Reason != want || !exists(notes) {
+		t.Errorf("the clean-up = %+v, notes there %v; want it kept because %q", cleanupOf(t, h, child), exists(notes), want)
+	}
+}
 func TestChildInTheParentsFolderRemovesNothing(t *testing.T) {
 	ran := filepath.Join(t.TempDir(), "ran")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})

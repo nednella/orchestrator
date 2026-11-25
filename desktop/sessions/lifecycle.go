@@ -1116,8 +1116,8 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 }
 
 // childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
-// the worktree holds no commit the default branch on origin lacks, and planFor's checks pass, with a thread asleep in
-// it counting too. Its branch stays, and so does the thread, whose wake puts the worktree back. Anything else keeps the
+// planFor's checks pass, with a thread asleep in it counting too. A worktree with no commit since the one it started at
+// has only its changes to lose, so origin is not asked. Its branch stays, and so does the thread, whose wake puts the worktree back. Anything else keeps the
 // worktree for the clean-up after its pull request, and the log says why. A child in its parent's folder, or in one
 // agentos did not make for it, has nothing to remove. A Delete of the child takes its worktree only when asked.
 func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
@@ -1141,10 +1141,7 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 		l.sessions.changed()
 	}()
 
-	plan, reason := l.planFor(ctx, t, nil, false)
-	if reason == "" {
-		reason = l.aheadOfBase(ctx, t)
-	}
+	plan, reason := l.planFor(ctx, t, nil, false, l.unchanged(ctx, t))
 	if user := l.sessions.usersOf(t.dir, true, id); reason == "" && user != "" {
 		reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
@@ -1185,23 +1182,18 @@ func (l *Lifecycle) startChildCleanup(id string) (tr *track, before string, ok b
 	return tr, before, true
 }
 
-// aheadOfBase says why the worktree of t holds work the default branch on origin lacks, or "" when it holds none.
-func (l *Lifecycle) aheadOfBase(ctx context.Context, t target) string {
-	dir, base := t.proj.Dir, l.mainBranch(ctx, t.proj.Dir)
-	head, err := l.head(ctx, dir, t.dir, t.branch)
+// unchanged says whether the worktree agentos made for t holds no commit since the one it started at.
+func (l *Lifecycle) unchanged(ctx context.Context, t target) bool {
+	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
+	if !ok || w.BaseOid == "" {
+		return false
+	}
+	head, err := l.head(ctx, t.proj.Dir, t.dir, t.branch)
 	if err != nil {
-		return fmt.Sprintf("git could not read where %s stands: %v", t.branch, err)
+		return false
 	}
-	n, err := l.commitsNotIn(ctx, dir, "origin/"+base, head)
-	switch {
-	case err != nil:
-		return fmt.Sprintf("git could not compare %s with origin/%s: %v", t.branch, base, err)
-	case n == 1:
-		return fmt.Sprintf("%s has a commit that origin/%s lacks", t.branch, base)
-	case n > 1:
-		return fmt.Sprintf("%s has %d commits that origin/%s lacks", t.branch, n, base)
-	}
-	return ""
+	n, err := l.commitsNotIn(ctx, t.proj.Dir, w.BaseOid, head)
+	return err == nil && n == 0
 }
 
 // removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
@@ -1210,7 +1202,7 @@ func (l *Lifecycle) aheadOfBase(ctx context.Context, t target) string {
 // the thread woken stops and keeps what is left, as does the end.
 func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool) (removed []string, reason string) {
 	removed = []string{}
-	if _, reason := l.planFor(ctx, t, pr, force); reason != "" {
+	if _, reason := l.planFor(ctx, t, pr, force, false); reason != "" {
 		return removed, reason
 	}
 	if ctx.Err() != nil {
@@ -1222,7 +1214,7 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 		}
 		t.ended = true
 	}
-	plan, reason := l.planFor(ctx, t, pr, force)
+	plan, reason := l.planFor(ctx, t, pr, force, false)
 	if reason != "" {
 		return removed, reason
 	}
@@ -1260,8 +1252,9 @@ type branchPlan struct {
 // prompts, another thread or a shell in it. Each check reads git, tmux and the threads afresh, so a second call sees
 // what changed since the first. A thread with no such worktree, or one removed already, has nothing on disk to lose:
 // the branch always stays. The worktree goes only while it is on the thread's branch, the one whose PR merged or
-// closed.
-func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (cleanupPlan, string) {
+// closed. With unchanged, the worktree holds no commit since the one it started at, so only its changes count and
+// origin is not fetched.
+func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchanged bool) (cleanupPlan, string) {
 	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force}
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
 	if !ok || w.Removed != 0 {
@@ -1283,12 +1276,19 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (
 	case trees.rebasing[t.branch]:
 		return p, fmt.Sprintf("the worktree of %s is in the middle of a rebase", t.branch)
 	}
-	if err := l.fetchOrigin(ctx, dir); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: fetching origin before a clean-up: %v\n", err)
-		return p, "Could not fetch origin, so agentos cannot tell whether every commit is pushed"
-	}
-	if reason := l.unsafe(ctx, dir, w.Path, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
-		return p, reason
+	switch {
+	case unchanged:
+		if reason := l.uncommitted(ctx, dir, w.Path, t.branch); reason != "" {
+			return p, reason
+		}
+	default:
+		if err := l.fetchOrigin(ctx, dir); err != nil {
+			fmt.Fprintf(os.Stderr, "agentos: fetching origin before a clean-up: %v\n", err)
+			return p, "Could not fetch origin, so agentos cannot tell whether every commit is pushed"
+		}
+		if reason := l.unsafe(ctx, dir, w.Path, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
+			return p, reason
+		}
 	}
 	if reason := l.sessions.pending(t.id); reason != "" {
 		return p, reason
@@ -1440,12 +1440,8 @@ func (l *Lifecycle) settleSession(ctx context.Context, t target, _ *cleanupPlan)
 // lose work, or "".
 func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, pr *PR, base string) string {
 	if worktree != "" {
-		out, err := l.worktreeStatus(ctx, dir, worktree)
-		switch {
-		case err != nil:
-			return fmt.Sprintf("git could not read the worktree of %s: %v", branch, err)
-		case strings.TrimSpace(string(out)) != "":
-			return fmt.Sprintf("the worktree of %s has uncommitted changes", branch)
+		if reason := l.uncommitted(ctx, dir, worktree, branch); reason != "" {
+			return reason
 		}
 	}
 	head, err := l.head(ctx, dir, worktree, branch)
@@ -1466,6 +1462,18 @@ func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, pr
 		return branch + " has a commit that is not on origin"
 	case n > 1:
 		return fmt.Sprintf("%s has %d commits that are not on origin", branch, n)
+	}
+	return ""
+}
+
+// uncommitted says why the worktree of branch holds changes no commit has, or "".
+func (l *Lifecycle) uncommitted(ctx context.Context, dir, worktree, branch string) string {
+	out, err := l.worktreeStatus(ctx, dir, worktree)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("git could not read the worktree of %s: %v", branch, err)
+	case strings.TrimSpace(string(out)) != "":
+		return fmt.Sprintf("the worktree of %s has uncommitted changes", branch)
 	}
 	return ""
 }
