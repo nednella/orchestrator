@@ -974,6 +974,14 @@
     background: color-mix(in srgb, var(--danger) 16%, transparent);
   }
 
+  .chat-scroll {
+    scrollbar-width: none;
+  }
+
+  .chat-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
   .chat-jump {
     box-shadow: var(--shadow-popup);
   }

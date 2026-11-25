@@ -1,8 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
 import { ChatApprovalCard } from './ChatApprovalCard'
+import { ChatMinimap } from './ChatMinimap'
 import { ChatNotice } from './ChatNotice'
 import { ChatPlanCard } from './ChatPlanCard'
 import { ChatQuestionCard } from './ChatQuestionCard'
@@ -56,6 +57,8 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimeli
   })
   const total = virtualizer.getTotalSize()
   const lastTotal = useRef(total)
+  // The virtualizer's measurements cover every row, rendered or not; a row not yet measured counts at its estimate.
+  const starts = useMemo(() => virtualizer.measurementsCache.map((m) => m.start), [virtualizer, total, items.length])
 
   // No run-once guard: when the virtualizer lets go of its scroll element and takes it back, as in a strict-mode
   // remount, it writes the offset it last read, so the view must be put back again.
@@ -103,7 +106,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimeli
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="h-full overflow-y-auto outline-none">
+      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="chat-scroll h-full overflow-y-auto outline-none">
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
@@ -112,6 +115,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote }: ChatTimeli
           ))}
         </div>
       </div>
+      <ChatMinimap scroller={scroller} items={items} starts={starts} total={total} />
       <ChatQuoteButton onQuote={onQuote} />
       {unseen && (
         <button className="btn chat-jump absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full" onClick={jump}>

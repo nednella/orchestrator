@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from './chatScroll.ts'
+import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll, minimapMarks, thumb, trackToScroll } from './chatScroll.ts'
+import type { TimelineItem } from './chatTimeline.ts'
 
 test('at bottom within 48 px', () => {
   assert.equal(isAtBottom(1000, 500, 1500), true)
@@ -37,4 +38,37 @@ test('items past the count last seen are unseen', () => {
   assert.equal(hasUnseen(kept, 12), false)
   assert.equal(hasUnseen(kept, 14), true)
   assert.equal(hasUnseen(null, 14), false, 'a thread that opens at the bottom shows its newest items')
+})
+
+const user = (key: string): TimelineItem => ({ kind: 'user', key, at: 0, id: key, text: key, files: [] })
+const approval = (key: string): TimelineItem => ({ kind: 'approval', key, at: 0, request: key, tool: 'Bash', input: {}, expired: false })
+const failure = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: true })
+const note = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: false })
+
+test('marks scale to the bar', () => {
+  const marks = minimapMarks([user('a'), note('n'), approval('b'), failure('c')], [0, 250, 500, 1000], 2000, 400)
+  assert.deepEqual(marks, [
+    { top: 0, kind: 'user', key: 'a' },
+    { top: 100, kind: 'approval', key: 'b' },
+    { top: 200, kind: 'error', key: 'c' },
+  ])
+})
+
+test('close marks merge by priority', () => {
+  const items = [user('a'), failure('b'), approval('c'), user('d')]
+  assert.deepEqual(minimapMarks(items, [0, 10, 20, 50], 1000, 100), [{ top: 2, kind: 'approval', key: 'c' }, { top: 5, kind: 'user', key: 'd' }])
+  assert.deepEqual(minimapMarks([approval('a'), user('b')], [0, 10], 1000, 100), [{ top: 0, kind: 'approval', key: 'a' }])
+})
+
+test('thumb minimum size', () => {
+  assert.deepEqual(thumb(0, 500, 1000, 400), { top: 0, size: 200 })
+  assert.deepEqual(thumb(500, 500, 1000, 400), { top: 200, size: 200 })
+  assert.deepEqual(thumb(99500, 500, 100000, 400), { top: 376, size: 24 })
+  assert.deepEqual(thumb(0, 500, 300, 400), { top: 0, size: 400 })
+})
+
+test('track click centres', () => {
+  assert.equal(trackToScroll(200, 400, 2000, 500), 750)
+  assert.equal(trackToScroll(0, 400, 2000, 500), 0)
+  assert.equal(trackToScroll(400, 400, 2000, 500), 1500)
 })
