@@ -2208,16 +2208,30 @@ func (s *Sessions) settledAccess(id string, access session.Access) error {
 	return nil
 }
 
-// changeMode changes the live thread's access as Claude runs, through its host, which refuses it while busy.
+// changeMode changes the live thread's access as Claude runs, through its host, which refuses it while busy. The access
+// is recorded before the host is asked, so the mode Claude then reports meets the new access and not the old one, which
+// it would give more than; a refusal puts the old access back.
 func (s *Sessions) changeMode(name session.Name, access session.Access) error {
+	s.mu.Lock()
+	var before session.Access
+	if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
+		before = s.info[i].Access
+	}
+	s.mu.Unlock()
+	if err := s.liveAccess(name, access); err != nil {
+		return fmt.Errorf("saving the thread's access: %w", err)
+	}
 	socket, err := s.readyHost(name)
 	if err == nil {
 		err = host.SetMode(s.context(), socket, agent.PermissionMode(access))
 	}
 	if err != nil {
+		if undo := s.liveAccess(name, before); undo != nil {
+			log.Printf("agentos: putting back the access of thread %s: %v", name, undo)
+		}
 		return accessFailed(name, access, err)
 	}
-	return s.liveAccess(name, access)
+	return nil
 }
 
 // AccessChanged follows a permission mode the live thread's Claude reports. A mode that gives less access is recorded.

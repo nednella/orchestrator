@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"reflect"
@@ -84,6 +85,31 @@ func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
 		t.Fatalf("stdin = %q, want a second request, for plan", got)
 	}
 	eventually(t, "the access back to read", accessIs(h, s.ID, session.Read))
+}
+
+func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	h := apptest.New(t)
+	s, err := h.NewThread("ask", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.ChatWatch(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	claudeArgs(t, h, s.ID)
+
+	if err := h.SetAccess(s.ID, "supervised"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the mode in the log", modeLogged(h, s.ID, "default"))
+	time.Sleep(300 * time.Millisecond) // the follower takes the mode in
+	if strings.Contains(logged.String(), "gives more than its access") {
+		t.Errorf("the mode Claude reported met the old access:\n%s", logged.String())
+	}
+	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Supervised))
 }
 
 func TestSetAccessToFullRestarts(t *testing.T) {
@@ -196,6 +222,10 @@ func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
 			}
 			if got := accessTag(t, h, s.ID); got != "read" {
 				t.Errorf("tagged %q, want read", got)
+			}
+			if !accessIs(h, s.ID, session.Read)() {
+				row, _ := h.Session(s.ID)
+				t.Errorf("row = %+v, want the access put back to read", row)
 			}
 		})
 	}
