@@ -18,8 +18,9 @@ projects:
     queue_sections: []         # the groups of the queue, in order; see below
     note_session_command: ""   # typed into a session started from a note; {text} is the note; "" types the note itself
     session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR command (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`) and the action's command to an issue's settled thread that a start wakes. A settled thread is woken under its own id before it gets either. The settings panel writes it
-    session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
-    session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
+    session_branch_fallback: "" # branch agentos makes for an issue thread; {n} is the issue number; "" means issue-{n}
+    session_cleanup_command: "" # shell command that removes the worktree agentos made, the branch stays; {worktree}, {branch}, {dir}, {force} (--force when forced, else empty); "" means git worktree remove {force} {worktree}
+    session_worktree_command: "" # shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir}, {base}; "" means git worktree add -b {branch} {worktree} {base}
     session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles a thread that hears the PR, saw it open and works on its branch as its newest, and a clean-up keeps the thread, settled. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged; auto needs the session to have seen it open
       close: manual            # auto or manual: after the pull request closed unmerged; auto needs the session to have seen it open
@@ -36,9 +37,9 @@ projects:
     setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
 ```
 
-`session_cleanup_command` runs through `sh -c` in the project folder, once per branch of the session that has a worktree or a local branch, after the safety checks. `{branch}`, `{worktree}` (the folder the branch is checked out in, `''` if none) and `{dir}` (the project folder) are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A branch with no worktree has `{worktree}` `''`, which `git worktree remove` rejects; the command that *Set up* writes skips that step then. A command that fails blocks the clean-up with its error, unless the branch is already gone.
+`session_worktree_command` runs through `sh -c` in the project folder when agentos starts a thread for an issue. `{branch}` (the branch from `session_branch_fallback`), `{worktree}` (the folder agentos picks, `<project>/trees/<branch>`), `{dir}` (the project folder) and `{base}` (`origin/<default branch>`) are shell-quoted.
 
-A session that works on more than one branch is cleaned up a branch at a time. When the PR of a branch it moved on from merges or closes, the command runs for that branch only and the session keeps working; `session_cleanup_mode` decides as for any PR. When the PR of its newest branch merges or closes, the thread settles, and the clean-up takes its other branches too and keeps the thread, unless one of those branches still has an open PR.
+`session_cleanup_command` runs through `sh -c` in the project folder after the safety checks and removes the worktree agentos made; the branch stays. `{worktree}`, `{branch}` and `{dir}` are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A command that fails blocks the clean-up with its error.
 
 The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
 
@@ -77,7 +78,7 @@ queue_sections:
 - An issue goes in the first section it matches: it has any of the section's `labels`, or the section's `labels` is empty and the issue has none, or the section's `labels` holds `"*"`, which matches every issue.
 - So a `"*"` section placed last takes every issue the sections above it did not. A section after it would never be reached, so a config with one does not load.
 - An issue no section matches goes under one folded row below the last section, `<n> more issues match no section`, with the `Start` action. A last `"*"` section is only needed to give those issues a name or other actions.
-- In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`. The `Start` action names the branch when the project sets one. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
+- In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`, `issue-{n}` when unset. The `Start` action always names the branch. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
 - `kind` is `task` (the default) or `chat`. A chat action starts a read-only chat for the issue: it gets `AGENTOS_ISSUE`, but no branch, no pull request commands and no clean-up. An issue can have one live task and one live chat; starting an action of a kind that already runs on the issue opens that session. The queue row links to the task.
 - A session started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
 - The first action of a section is its default. A section needs a name, an action needs a name, and each is unique in its list; a config that breaks this does not load.

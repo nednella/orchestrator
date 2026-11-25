@@ -237,28 +237,6 @@ func TestSessionReportsItsBranch(t *testing.T) {
 	}
 }
 
-func TestIssueSessionWithoutBranchPatternFollowsItsFolder(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{NoBranch: true})
-	repoFixture(t, h)
-	ownBranch(t, h.Dir)
-	gitIn(t, h.Dir, "checkout", "main")
-	s, err := h.Sessions().Create("#5 work", "", false, 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.Branch != "" {
-		t.Errorf("fresh session names branch %q", s.Branch)
-	}
-	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-
-	inToolCall(h, t, s, h.Dir, func() { gitIn(t, h.Dir, "checkout", "my-fix") })
-	worksIn(h, t, s, h.Dir)
-	eventually(t, "the PR of the branch the session works on", hasPR(h, s.ID))
-	if got, _ := h.Session(s.ID); got.Branch != "my-fix" {
-		t.Errorf("session = %+v", got)
-	}
-}
-
 func TestIssueSessionKnowsItsIssue(t *testing.T) {
 	h := newHarness(t)
 	s := issueSession(h, t, 9)

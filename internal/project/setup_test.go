@@ -17,7 +17,7 @@ func TestSetUpFillsOnlyEmptyKeys(t *testing.T) {
 	if p.NeedsSetup() || p.Branch != "feat/{n}" || p.OnChecks != "/fix {n}" {
 		t.Errorf("SetUp changed what the project set: %+v", p)
 	}
-	if p.CleanupCommand == "" || !strings.Contains(p.OnReview, "PR #{n}") || !strings.Contains(p.OnConflict, "PR #{n}") {
+	if p.CleanupCommand != "" || !strings.Contains(p.OnReview, "PR #{n}") || !strings.Contains(p.OnConflict, "PR #{n}") {
 		t.Errorf("SetUp left keys empty: %+v", p)
 	}
 	inbox := Section{Name: "Inbox", Labels: []string{"*"}, Actions: []Action{{Name: "Work", Command: "/work {n}"}}}
@@ -125,6 +125,37 @@ func TestSaveSetUpFillsAnEmptyQueueSections(t *testing.T) {
 			}
 			if reloaded, err := Load(path); err != nil || len(reloaded.Projects[0].QueueSections) != 1 {
 				t.Errorf("reload = %+v, %v", reloaded.Projects, err)
+			}
+		})
+	}
+}
+
+func TestSetUpWritesNoCleanupCommand(t *testing.T) {
+	for _, tt := range []struct {
+		name, existing, want string
+	}{
+		{"none written", "", ""},
+		{"an existing one is kept", "    session_cleanup_command: \"git worktree remove {worktree}\" # mine\n", `session_cleanup_command: "git worktree remove {worktree}" # mine`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte("projects:\n  - name: api\n    directory: /srv/api\n"+tt.existing), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.Projects[0].SetUp()
+			if err := Save(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := os.ReadFile(path)
+			if tt.want == "" && strings.Contains(string(got), "session_cleanup_command") {
+				t.Errorf("SetUp wrote a clean-up command:\n%s", got)
+			}
+			if tt.want != "" && !strings.Contains(string(got), tt.want) {
+				t.Errorf("the saved file lacks %q:\n%s", tt.want, got)
 			}
 		})
 	}

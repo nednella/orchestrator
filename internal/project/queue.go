@@ -226,9 +226,9 @@ func (p Project) ConflictCommand(pr int) string {
 	return strings.ReplaceAll(p.OnConflict, "{n}", strconv.Itoa(pr))
 }
 
-// BranchFor is the branch the work on an issue happens on, or "" when the project names none.
+// BranchFor is the branch agentos makes for an issue thread: session_branch_fallback, else issue-<n>.
 func (p Project) BranchFor(number int) string {
-	return strings.ReplaceAll(p.Branch, "{n}", strconv.Itoa(number))
+	return strings.ReplaceAll(cmp.Or(p.Branch, "issue-{n}"), "{n}", strconv.Itoa(number))
 }
 
 // Cleanup says, per event, whether the app cleans up after a session by itself. An empty

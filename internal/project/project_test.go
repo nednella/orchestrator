@@ -382,3 +382,49 @@ func TestThemeKeysValidate(t *testing.T) {
 		t.Errorf("defaults = %q, %q, %v", cfg.DarkTheme(), cfg.LightTheme(), err)
 	}
 }
+
+func TestWorktreeCommandDefault(t *testing.T) {
+	for _, tt := range []struct{ name, set, want string }{
+		{"unset", "", DefaultWorktreeCommand},
+		{"set", "git worktree add {worktree} {branch}", "git worktree add {worktree} {branch}"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (Project{WorktreeCommand: tt.set}).MakeWorktree(); got != tt.want {
+				t.Errorf("MakeWorktree() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCleanupCommandDefault(t *testing.T) {
+	for _, tt := range []struct{ name, set, want string }{
+		{"unset", "", DefaultCleanupCommand},
+		{"set", "git worktree remove {worktree}", "git worktree remove {worktree}"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (Project{CleanupCommand: tt.set}).RemoveWorktree(); got != tt.want {
+				t.Errorf("RemoveWorktree() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWorktreeCommandIsKeptOnSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	original := "projects:\n  - name: api\n    directory: /srv/api\n    session_worktree_command: \"git worktree add {worktree} {branch}\" # mine\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Projects[0].Branch = "feat/{n}"
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	if !strings.Contains(string(got), `session_worktree_command: "git worktree add {worktree} {branch}" # mine`) {
+		t.Errorf("the saved file lost the worktree command:\n%s", got)
+	}
+}

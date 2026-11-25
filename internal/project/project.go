@@ -16,27 +16,40 @@ import (
 	"github.com/nednella/agentos/internal/atomicfile"
 )
 
+// DefaultWorktreeCommand makes a worktree on a new branch cut from the base.
+const DefaultWorktreeCommand = "git worktree add -b {branch} {worktree} {base}"
+
+// DefaultCleanupCommand removes a worktree and leaves its branch.
+const DefaultCleanupCommand = "git worktree remove {force} {worktree}"
+
+// MakeWorktree is the command that makes the worktree of an issue thread.
+func (p Project) MakeWorktree() string { return cmp.Or(p.WorktreeCommand, DefaultWorktreeCommand) }
+
+// RemoveWorktree is the command that removes the worktree agentos made.
+func (p Project) RemoveWorktree() string { return cmp.Or(p.CleanupCommand, DefaultCleanupCommand) }
+
 // Project is the unit agentos is scoped to: a name and the folder agents start in.
 type Project struct {
 	Name               string    `yaml:"name"`
 	Dir                string    `yaml:"directory"`
-	QueueSections      []Section `yaml:"queue_sections,omitempty"`          // the groups of the queue, each with the actions that start a session
-	NoteSessionCommand string    `yaml:"note_session_command,omitempty"`    // typed into a session started from a note; {text} is the note, the note itself when unset
-	SessionPromptSend  string    `yaml:"session_prompt_send,omitempty"`     // auto (the default) sends what a session starts with at once; manual waits for Enter
-	Branch             string    `yaml:"session_branch_fallback,omitempty"` // branch of an issue's work when the session reports none; {n} is the number
-	CleanupCommand     string    `yaml:"session_cleanup_command,omitempty"` // shell command that cleans up the git side of a session; {branch}, {worktree}, {dir} and {force}
-	CleanupMode        Cleanup   `yaml:"session_cleanup_mode,omitempty"`    // whether the app cleans up by itself, per event
-	URL                string    `yaml:"browser_start_url,omitempty"`       // the page a session's browser opens first
-	Browser            *bool     `yaml:"browser_enabled,omitempty"`         // give sessions the browser and evidence commands; on unless false
-	Digest             string    `yaml:"digest_schedule,omitempty"`         // weekly (the default) or off
-	PRWatch            string    `yaml:"pr_watch_method,omitempty"`         // webhook or poll; unset tries the webhook and polls when it does not work
-	PRPoll             string    `yaml:"pr_poll_interval,omitempty"`        // how often to poll pull requests, "10s" by default
-	KeepAwake          *bool     `yaml:"keep_mac_awake,omitempty"`          // overrides the config's keep_mac_awake for this project
-	OnReview           string    `yaml:"pr_review_command,omitempty"`       // typed into a session whose PR got a review or comment; {n} is the PR number
-	ReviewDrafts       bool      `yaml:"pr_review_drafts,omitempty"`        // send pr_review_command while the PR is a draft too
-	OnChecks           string    `yaml:"pr_checks_command,omitempty"`       // typed into a session whose PR has failing checks; {n} is the PR number
-	OnConflict         string    `yaml:"pr_conflict_command,omitempty"`     // typed into a session whose PR conflicts with its base branch; {n} is the PR number
-	SetupDismissed     bool      `yaml:"setup_dismissed,omitempty"`         // the owner turned down the offer to set the project up
+	QueueSections      []Section `yaml:"queue_sections,omitempty"`           // the groups of the queue, each with the actions that start a session
+	NoteSessionCommand string    `yaml:"note_session_command,omitempty"`     // typed into a session started from a note; {text} is the note, the note itself when unset
+	SessionPromptSend  string    `yaml:"session_prompt_send,omitempty"`      // auto (the default) sends what a session starts with at once; manual waits for Enter
+	Branch             string    `yaml:"session_branch_fallback,omitempty"`  // branch of an issue's work when the session reports none; {n} is the number
+	CleanupCommand     string    `yaml:"session_cleanup_command,omitempty"`  // shell command that removes the worktree agentos made; {worktree}, {branch}, {dir} and {force}
+	WorktreeCommand    string    `yaml:"session_worktree_command,omitempty"` // shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir} and {base}
+	CleanupMode        Cleanup   `yaml:"session_cleanup_mode,omitempty"`     // whether the app cleans up by itself, per event
+	URL                string    `yaml:"browser_start_url,omitempty"`        // the page a session's browser opens first
+	Browser            *bool     `yaml:"browser_enabled,omitempty"`          // give sessions the browser and evidence commands; on unless false
+	Digest             string    `yaml:"digest_schedule,omitempty"`          // weekly (the default) or off
+	PRWatch            string    `yaml:"pr_watch_method,omitempty"`          // webhook or poll; unset tries the webhook and polls when it does not work
+	PRPoll             string    `yaml:"pr_poll_interval,omitempty"`         // how often to poll pull requests, "10s" by default
+	KeepAwake          *bool     `yaml:"keep_mac_awake,omitempty"`           // overrides the config's keep_mac_awake for this project
+	OnReview           string    `yaml:"pr_review_command,omitempty"`        // typed into a session whose PR got a review or comment; {n} is the PR number
+	ReviewDrafts       bool      `yaml:"pr_review_drafts,omitempty"`         // send pr_review_command while the PR is a draft too
+	OnChecks           string    `yaml:"pr_checks_command,omitempty"`        // typed into a session whose PR has failing checks; {n} is the PR number
+	OnConflict         string    `yaml:"pr_conflict_command,omitempty"`      // typed into a session whose PR conflicts with its base branch; {n} is the PR number
+	SetupDismissed     bool      `yaml:"setup_dismissed,omitempty"`          // the owner turned down the offer to set the project up
 }
 
 // Present says whether the project's folder exists on this machine.
@@ -369,6 +382,7 @@ func editInPlace(seq *yaml.Node, p Project) int {
 	syncScalar(entry, "digest_schedule", p.Digest, nil)
 	syncScalar(entry, "session_branch_fallback", p.Branch, nil)
 	syncScalar(entry, "session_cleanup_command", p.CleanupCommand, nil)
+	syncScalar(entry, "session_worktree_command", p.WorktreeCommand, nil)
 	syncScalar(entry, "pr_review_command", p.OnReview, nil)
 	syncScalar(entry, "pr_checks_command", p.OnChecks, nil)
 	syncScalar(entry, "pr_conflict_command", p.OnConflict, nil)

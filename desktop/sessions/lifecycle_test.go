@@ -16,7 +16,6 @@ import (
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -494,35 +493,6 @@ func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(h.Dir, "force-issue-8")); string(got) != "[--force]" || exists(dirty) {
 		t.Errorf("forced {force} = %q, worktree exists %v", got, exists(dirty))
-	}
-}
-
-func TestSetupCleanupCommand(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		worktree bool
-	}{
-		{"branch with a worktree", true},
-		{"branch with no worktree", false},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			h := apptest.NewWith(t, apptest.Options{CleanupCommand: project.SetupCleanupCommand})
-			repoFixture(t, h)
-			wt := ""
-			if tt.worktree {
-				wt = issueWorktree(t, h)
-			} else {
-				gitIn(t, h.Dir, "branch", "issue-7")
-				gitIn(t, h.Dir, "push", "-u", "origin", "issue-7")
-			}
-			s := issueSession(h, t, 7)
-
-			openThenMerge(h)
-			eventually(t, "clean-up", cleanedUp(h, s.ID))
-			if branches(t, h.Dir) != "" || (wt != "" && exists(wt)) {
-				t.Errorf("branches %q, worktree exists %v", branches(t, h.Dir), wt != "" && exists(wt))
-			}
-		})
 	}
 }
 
