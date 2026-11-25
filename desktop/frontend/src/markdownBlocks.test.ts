@@ -160,15 +160,24 @@ test('the block being written holds back a table until its delimiter row is whol
 })
 
 test('a long line that matches no rule is read in linear time', () => {
-  const linear = (name: string, run: () => void) => {
-    const start = performance.now()
-    run()
-    const took = performance.now() - start
-    assert.equal(took < 50, true, `${name} took ${Math.round(took)} ms`)
+  // A line ten times as long takes about ten times as long, where a cutter that backtracks takes a hundred times. Each
+  // size counts its fastest of three runs, and the short one at least half a millisecond, so a busy machine or a timer
+  // too coarse for the short line does not fail it.
+  const fastest = (run: () => void) =>
+    Math.min(
+      ...[1, 2, 3].map(() => {
+        const start = performance.now()
+        run()
+        return performance.now() - start
+      }),
+    )
+  const linear = (name: string, run: (n: number) => void) => {
+    const short = fastest(() => run(10_000))
+    const long = fastest(() => run(100_000))
+    assert.equal(long < 30 * Math.max(short, 0.5), true, `${name} took ${Math.round(long)} ms for 100k characters and ${short.toFixed(1)} ms for 10k`)
   }
-  const bad = 100_000
-  linear('footnote-like', () => markdownBlocks('[^'.repeat(bad / 2)))
-  linear('markers then a letter', () => steadyBlock(`${' '.repeat(bad)}x`))
-  linear('rule then a letter', () => markdownBlocks(`---${' '.repeat(bad)}x`))
-  linear('unclosed bold', () => steadyBlock('**a '.repeat(bad / 4)))
+  linear('footnote-like', (n) => markdownBlocks('[^'.repeat(n / 2)))
+  linear('markers then a letter', (n) => steadyBlock(`${' '.repeat(n)}x`))
+  linear('rule then a letter', (n) => markdownBlocks(`---${' '.repeat(n)}x`))
+  linear('unclosed bold', (n) => steadyBlock('**a '.repeat(n / 4)))
 })
