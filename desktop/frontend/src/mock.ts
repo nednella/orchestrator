@@ -1235,6 +1235,9 @@ export function createMock(params: URLSearchParams) {
       if (s.pr) s.pr.newComments = 0
       publish()
     },
+    OpenInEditor: async (id: string) => {
+      find(id)
+    },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
       if (!s.hosted) throw `Thread ${id} runs in an old terminal`

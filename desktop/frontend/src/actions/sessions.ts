@@ -16,6 +16,8 @@ function findSession(sessions: Session[], query: string): Session {
   throw `No session matches "${query}"`
 }
 
+export const OPEN_IN_EDITOR_LABEL = 'Open in VS Code'
+
 const describe = (s: Session) => `${s.n} ${s.title}`
 
 export const sessionActions = ({ a, layout, current }: ActionContext): Action[] => [
@@ -63,6 +65,15 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
       if (!current) return
       a.detach()
       return `Detached ${describe(current)}`
+    },
+  },
+  {
+    id: 'open-in-editor',
+    label: OPEN_IN_EDITOR_LABEL,
+    group: 'Sessions',
+    async run() {
+      if (!current) throw 'Select a thread first'
+      await a.openInEditor(current.id)
     },
   },
   {

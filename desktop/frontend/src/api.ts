@@ -11,6 +11,7 @@ type Backend = {
   OwnWorktree(id: string): Promise<string>
   WakeThread(id: string): Promise<Session>
   SetAccess(id: string, access: Access): Promise<void>
+  OpenInEditor(id: string): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
@@ -112,7 +113,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'OwnWorktree', 'WakeThread', 'SetAccess', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'OwnWorktree', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'ProjectFiles', 'ProjectCommands'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -155,6 +156,7 @@ export const api = {
   ownWorktree: (id: string) => backend.OwnWorktree(id),
   wakeThread: (id: string) => backend.WakeThread(id),
   setAccess: (id: string, access: Access) => backend.SetAccess(id, access),
+  openInEditor: (id: string) => backend.OpenInEditor(id),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),

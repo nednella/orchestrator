@@ -87,6 +87,8 @@ type AgentosActions = {
   wakeThread(id: string): Promise<Session>
   // setAccess gives the thread the access between turns; the row shows it once the sessions say so.
   setAccess(id: string, access: Access): Promise<void>
+  // openInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app.
+  openInEditor(id: string): Promise<void>
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
   forkSession(id: string, at: string, draft?: string): Promise<Session>
@@ -748,6 +750,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async setAccess(id, access) {
         await api.setAccess(id, access)
+      },
+      async openInEditor(id) {
+        await api.openInEditor(id)
       },
       async forkSession(id, at, draft = '') {
         const fork = await api.forkSession(id, at)

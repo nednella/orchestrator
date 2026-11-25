@@ -66,8 +66,15 @@ type Config struct {
 	ThemeDark  string    `yaml:"app_theme_dark,omitempty"`  // the dark theme: black (default) or violet
 	ThemeLight string    `yaml:"app_theme_light,omitempty"` // the light theme: light (default)
 	TextScale  float64   `yaml:"app_text_scale,omitempty"`  // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
+	EditorApp  string    `yaml:"editor_app,omitempty"`      // the macOS app that opens a thread's folder; unset is DefaultEditorApp
 	Projects   []Project `yaml:"projects"`
 }
+
+// DefaultEditorApp is the editor that opens a thread's folder when the config names none.
+const DefaultEditorApp = "Visual Studio Code"
+
+// Editor is the app that opens a thread's folder.
+func (c Config) Editor() string { return cmp.Or(c.EditorApp, DefaultEditorApp) }
 
 // Themes are the values of Config.Theme.
 var Themes = []string{"light", "dark"}
@@ -238,6 +245,7 @@ func encode(path string, c Config) ([]byte, error) {
 	syncScalar(root, "app_theme_dark", c.ThemeDark, nil)
 	syncScalar(root, "app_theme_light", c.ThemeLight, nil)
 	syncScalar(root, "app_text_scale", formatScale(c.TextScale), nil)
+	syncScalar(root, "editor_app", c.EditorApp, nil)
 	syncScalar(root, "keep_mac_awake", formatBool(c.KeepAwake), nil)
 	if err := syncProjects(root, c.Projects); err != nil {
 		return nil, err

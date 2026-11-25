@@ -117,6 +117,13 @@ func (r *Registry) SetThemes(dark, light string) error {
 	})
 }
 
+// EditorApp is the macOS app that opens a thread's folder.
+func (r *Registry) EditorApp() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.Editor()
+}
+
 // TextScale is the configured text size, 0 when the app uses its default.
 func (r *Registry) TextScale() float64 {
 	r.mu.Lock()

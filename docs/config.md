@@ -11,6 +11,7 @@ app_theme: dark                # light or dark; unset follows the macOS appearan
 app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
 app_theme_light: light         # the theme the light appearance shows: light (the default)
 app_text_scale: 1.2            # text size as a multiple of the default, 0.48 to 2.08; unset is 1. The settings panel writes it
+editor_app: Visual Studio Code # the macOS app that "Open in VS Code" opens a thread's folder with, through open -a; unset is Visual Studio Code
 projects:
   - name: storefront
     directory: /Users/me/code/storefront
@@ -36,6 +37,8 @@ projects:
     pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
     setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
 ```
+
+`editor_app` is the app the thread menu's and the palette's *Open in VS Code* opens a thread's folder with: `open -a <editor_app> <folder>`, run without a shell. The folder is the thread's own worktree when it has one, else the project folder; a thread whose worktree is gone opens nothing and says so.
 
 `session_worktree_command` runs through `sh -c` in the project folder when agentos starts a thread in a worktree on a branch that is not there yet (see [Where a thread runs](#where-a-thread-runs)). `{branch}` (the issue's branch from `session_branch_fallback`, or one named from the thread's title), `{worktree}` (the folder agentos picks, `<project>/trees/<branch>`), `{dir}` (the project folder) and `{base}` (`origin/<default branch>`, fetched just before, or the local default branch when origin has none) are shell-quoted. The command may put the worktree in another folder: the thread runs in the one git then lists on the branch. A command that fails, or that leaves no worktree on the branch, starts no thread, and the error gives its first line of output. A woken thread whose worktree is gone gets it back at the same path on its own branch with plain `git worktree add`, never with this command.
 

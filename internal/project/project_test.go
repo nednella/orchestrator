@@ -309,6 +309,36 @@ func TestLoadTextScale(t *testing.T) {
 	}
 }
 
+func TestEditorApp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("projects: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Editor(); got != "Visual Studio Code" {
+		t.Errorf("default editor = %q", got)
+	}
+	if err := os.WriteFile(path, []byte("editor_app: Cursor # mine\nprojects: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Editor(); got != "Cursor" {
+		t.Errorf("editor = %q, want Cursor", got)
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "editor_app: Cursor # mine") {
+		t.Errorf("saved config lost editor_app:\n%s", data)
+	}
+}
+
 func TestLoadDraggable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "c.yaml")
 	yaml := "projects:\n  - name: api\n    directory: /srv/api\n    queue_sections:\n" +

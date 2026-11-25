@@ -141,6 +141,7 @@ type Sessions struct {
 	browsers   Browsers
 	awake      Awake
 	keepAwake  func(projectKey string) bool
+	editorApp  func() string
 	info       []term.Info              // the live sessions under a host
 	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []session.Name           // every project's shell sessions
@@ -232,6 +233,7 @@ type Options struct {
 	Browsers      Browsers
 	Awake         Awake
 	KeepAwake     func(projectKey string) bool
+	EditorApp     func() string // the macOS app that opens a thread's folder
 }
 
 // New tracks the sessions of o.Tmux, and follows their pull requests.
@@ -259,7 +261,7 @@ func (s *Sessions) Touch() { s.changed() }
 func newSessions(o Options) *Sessions {
 	return &Sessions{
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
-		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake,
+		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{},
