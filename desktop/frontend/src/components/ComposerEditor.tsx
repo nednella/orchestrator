@@ -32,6 +32,7 @@ type ComposerEditorProps = {
 export function ComposerEditor({ inputRef, value, label, placeholder, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerEditorProps) {
   const handlers = useRef({ onChange, onCaret, onKeyDown, onAttach, onSend })
   const written = useRef(value)
+  const focused = useRef(false)
   const [empty, setEmpty] = useState(() => value.text.trim() === '')
 
   useLayoutEffect(() => {
@@ -58,6 +59,9 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
       handleDrop: (_view, e) => Boolean(handlers.current.onAttach && e.dataTransfer?.types.includes('Files')),
       // Pasted text is taken as it is and joins the line it lands in. Pasted HTML goes through the schema.
       clipboardTextParser: (text, _context, _plain, view) => new Slice(DocNode.fromJSON(view.state.schema, fromPlainText(text)).content, 1, 1),
+    },
+    onFocus: () => {
+      focused.current = true
     },
     onTransaction: ({ editor, transaction }) => {
       if (transaction.docChanged && !transaction.getMeta('preventUpdate')) {
@@ -89,7 +93,12 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
       focus: () => editor?.commands.focus(),
       blur: () => editor?.commands.blur(),
       insert: (text) => editor?.commands.insertContent({ type: 'text', text }),
-      insertDoc: (doc) => editor?.commands.insertContent(doc.content ?? []),
+      insertDoc: (doc) => {
+        // A caret never placed sits at the start of the draft; the quote goes after it.
+        const chain = editor?.chain()
+        if (!focused.current) chain?.focus('end')
+        chain?.insertContent(doc.content ?? []).run()
+      },
       deleteBefore: (length) => {
         const at = editor?.state.selection.from ?? 0
         editor?.commands.deleteRange({ from: at - length, to: at })
