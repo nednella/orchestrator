@@ -598,3 +598,36 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 		t.Errorf("user lines = %q, want the review prompt, then the marked checks prompt", users)
 	}
 }
+
+func TestCleanedUpThreadIsLeftOutOfTheWebhook(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	h.GH.WebhookWorks()
+	repoFixture(t, h)
+	issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	eventually(t, "the forward to start", func() bool { return h.GH.Forwards() == 1 })
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	h.RefreshPRs()
+
+	h.GH.SetPRFor("issue-13", "[]")
+	issueSession(h, t, 13)
+	eventually(t, "a new forward for the other thread, so the old watcher had stopped", func() bool { return h.GH.Forwards() == 2 })
+	lookups := func(branch string) int { return h.GH.Calls("pr list --head " + branch) }
+	before7, before13 := lookups("issue-7"), lookups("issue-13")
+	h.GH.SetPRFor("issue-7", prJSON("OPEN", false, "[]", 1, 0))
+	h.GH.Event(`{"action":"created","issue":{"number":12,"pull_request":{"url":"x"}},"comment":{"body":"hi"}}`)
+	eventually(t, "the event to refresh the other thread", func() bool { return lookups("issue-13") > before13 })
+	time.Sleep(300 * time.Millisecond)
+	if got := lookups("issue-7"); got != before7 {
+		t.Errorf("the cleaned-up thread's branch was looked up %d more times", got-before7)
+	}
+	for _, v := range h.Sessions().List() {
+		if v.Issue == 7 && v.ID != s.ID {
+			t.Errorf("a new thread started for the issue: %+v", v)
+		}
+	}
+	if got, _ := h.Session(s.ID); !cleanedUp(h, s.ID)() {
+		t.Errorf("row = %+v", got)
+	}
+}

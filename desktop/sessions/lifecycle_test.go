@@ -225,8 +225,8 @@ func TestCleanupBlocked(t *testing.T) {
 			eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
 
 			got, _ := h.Session(s.ID)
-			if got.CleanupReason != tt.reason {
-				t.Errorf("reason = %q, want %q", got.CleanupReason, tt.reason)
+			if got.State != "settled" || got.CleanupReason != tt.reason {
+				t.Errorf("state %q, reason %q, want settled, %q", got.State, got.CleanupReason, tt.reason)
 			}
 			if !exists(wt) || branches(t, h.Dir) == "" {
 				t.Error("something was removed although the clean-up was blocked")
