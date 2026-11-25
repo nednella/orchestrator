@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, chatEvent, errorMessage, on } from './api'
-import { EMPTY_CHAT, mergeEvents } from './chatEvents'
+import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import type { ChatState } from './chatEvents'
 import { buildTimeline } from './chatTimeline'
 import type { Timeline } from './chatTimeline'
-import type { ChatEvent } from './types'
 
 const keptThreads = 20
 const kept = new Map<string, ChatState>()
@@ -34,6 +33,12 @@ function inTurn<T>(id: string, call: () => Promise<T>): Promise<T> {
 
 type View = { id: string; state: ChatState; loading: boolean; error: string }
 
+// later runs on the next frame.
+function later(run: () => void): () => void {
+  const frame = requestAnimationFrame(run)
+  return () => cancelAnimationFrame(frame)
+}
+
 // useChat is the thread's chat: its history, then its live events, as a timeline.
 export function useChat(id: string): { timeline: Timeline; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
@@ -43,58 +48,28 @@ export function useChat(id: string): { timeline: Timeline; loading: boolean; err
   useEffect(() => {
     const start = startOf(id)
     setView(start)
-    let state = start.state
-    let held: ChatEvent[] = []
-    let loaded = false
-    let frame = 0
-    let filling = false
     let gone = false
-
-    const fail = (err: unknown) => {
-      if (!gone) setView((v) => ({ ...v, loading: false, error: errorMessage(err) }))
-    }
-    const apply = (incoming: ChatEvent[]) => {
-      const { state: next, gapAfter } = mergeEvents(state, incoming)
-      if (next !== state) {
-        state = next
-        keep(id, next)
-        setView((v) => ({ ...v, state: next }))
-      }
-      if (gapAfter === null || filling) return
-      filling = true
-      api
-        .chatHistory(id, gapAfter)
-        .then((events) => {
-          if (!gone) apply(events)
-        }, fail)
-        .finally(() => (filling = false))
-    }
-    const flush = () => {
-      frame = 0
-      const events = held
-      held = []
-      apply(events)
-    }
-
-    const off = on(chatEvent(id), ({ events }) => {
-      held.push(...events)
-      if (loaded && !frame) frame = requestAnimationFrame(flush)
+    const feed = chatFeed(start.state, {
+      history: (after) => api.chatHistory(id, after),
+      later,
+      onState(state) {
+        keep(id, state)
+        setView((v) => ({ ...v, state }))
+      },
+      onError: (err) => setView((v) => ({ ...v, loading: false, error: errorMessage(err) })),
     })
+    const off = on(chatEvent(id), ({ events }) => feed.push(events))
     // An ended thread cannot be watched, and its history is all there is.
     inTurn(id, () => api.chatWatch(id).catch(() => undefined))
-      .then(() => api.chatHistory(id, state.last))
-      .then((events) => {
-        if (gone) return
-        loaded = true
-        held = [...events, ...held]
-        flush()
-        setView((v) => ({ ...v, loading: false }))
-      }, fail)
+      .then(() => feed.load())
+      .then(() => {
+        if (!gone) setView((v) => ({ ...v, loading: false }))
+      })
 
     return () => {
       gone = true
+      feed.stop()
       off()
-      cancelAnimationFrame(frame)
       inTurn(id, () => api.chatUnwatch(id)).catch(() => undefined)
     }
   }, [id])

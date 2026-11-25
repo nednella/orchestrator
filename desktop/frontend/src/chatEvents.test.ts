@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { EMPTY_CHAT, mergeEvents } from './chatEvents.ts'
+import { EMPTY_CHAT, chatFeed, mergeEvents } from './chatEvents.ts'
+import type { ChatState } from './chatEvents.ts'
 import type { ChatEvent } from './types.ts'
 
 const logged = (seq: number, kind: ChatEvent['kind'] = 'tool_use'): ChatEvent => ({ seq, at: seq * 1000, kind })
@@ -43,4 +44,54 @@ test('deltas pass through without a seq', () => {
 
   const stopped = mergeEvents(replied.state, [{ seq: 3, at: 3000, kind: 'turn_end', error: true }])
   assert.deepEqual(stopped.state.live, {}, 'a reply cut off at the turn end is never logged')
+})
+
+// feed builds a chat feed whose history reads wait until the test answers them, and whose later runs wait for frame().
+function feed() {
+  const reads: { after: number; answer(events: ChatEvent[]): void; fail(err: string): void }[] = []
+  const runs: (() => void)[] = []
+  const seen: { state: ChatState; errors: unknown[] } = { state: EMPTY_CHAT, errors: [] }
+  const f = chatFeed(EMPTY_CHAT, {
+    history: (after) => new Promise((answer, fail) => reads.push({ after, answer, fail })),
+    later: (run) => {
+      runs.push(run)
+      return () => runs.splice(runs.indexOf(run), 1)
+    },
+    onState: (state) => (seen.state = state),
+    onError: (err) => seen.errors.push(err),
+  })
+  const frame = () => runs.splice(0).forEach((run) => run())
+  return { f, reads, runs, seen, frame }
+}
+
+const settle = () => new Promise((done) => setTimeout(done, 0))
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => logged(from + i))
+
+test('live events wait for the first history read', async () => {
+  const { f, reads, runs, seen } = feed()
+  f.push([delta('msg_1', 'Hi'), logged(1), logged(2)])
+  assert.equal(runs.length, 0, 'nothing is merged before the history')
+  const loading = f.load()
+  reads[0].answer([logged(1)])
+  await loading
+  assert.deepEqual(seqs(seen.state.events), [1, 2])
+  assert.deepEqual(seen.state.live, { msg_1: 'Hi' })
+})
+
+test('a gap seen while a fill runs is filled after it', async () => {
+  const { f, reads, seen, frame } = feed()
+  const loading = f.load()
+  reads[0].answer(range(1, 2))
+  await loading
+  f.push([logged(4)])
+  frame()
+  f.push([logged(6)])
+  frame()
+  assert.deepEqual(reads.map((r) => r.after), [0, 2], 'one fill at a time')
+  reads[1].answer(range(3, 4))
+  await settle()
+  assert.deepEqual(reads.map((r) => r.after), [0, 2, 4])
+  reads[2].answer(range(5, 6))
+  await settle()
+  assert.deepEqual(seqs(seen.state.events), [1, 2, 3, 4, 5, 6])
 })

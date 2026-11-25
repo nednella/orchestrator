@@ -43,3 +43,90 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
   }
   return { state: changed ? { events, last, live } : s, gapAfter }
 }
+
+export type ChatFeedDeps = {
+  history(after: number): Promise<ChatEvent[]>
+  // later runs run soon, once, and gives back a way to cancel it.
+  later(run: () => void): () => void
+  onState(state: ChatState): void
+  onError(err: unknown): void
+}
+
+// chatFeed keeps a thread's state from its history and its live events. Live events are held until the first history
+// read, which goes first, then merged in batches, in the order they came: a delta merged after its message would show
+// its text again. A gap is filled from the history; one seen while a fill runs is filled once that fill ends.
+export function chatFeed(start: ChatState, deps: ChatFeedDeps) {
+  let state = start
+  let held: ChatEvent[] = []
+  let loaded = false
+  let stopped = false
+  let filling = false
+  let gapWhileFilling = false
+  let cancel: (() => void) | null = null
+
+  const apply = (incoming: ChatEvent[]) => {
+    const { state: next, gapAfter } = mergeEvents(state, incoming)
+    if (next !== state) {
+      state = next
+      deps.onState(next)
+    }
+    if (gapAfter !== null) fill(gapAfter)
+  }
+  const fill = (after: number) => {
+    if (filling) {
+      gapWhileFilling = true
+      return
+    }
+    filling = true
+    deps
+      .history(after)
+      .then(
+        (events) => {
+          if (!stopped) apply(events)
+        },
+        (err) => {
+          gapWhileFilling = false
+          if (!stopped) deps.onError(err)
+        },
+      )
+      .finally(() => {
+        filling = false
+        if (!gapWhileFilling || stopped) return
+        gapWhileFilling = false
+        fill(state.last)
+      })
+  }
+  const flush = () => {
+    cancel = null
+    const events = held
+    held = []
+    apply(events)
+  }
+
+  return {
+    push(events: ChatEvent[]) {
+      if (stopped) return
+      held.push(...events)
+      if (loaded) cancel ??= deps.later(flush)
+    },
+    // load reads the history after the state's last seq.
+    load(): Promise<void> {
+      return deps.history(state.last).then(
+        (events) => {
+          if (stopped) return
+          loaded = true
+          held = [...events, ...held]
+          flush()
+        },
+        (err) => {
+          if (!stopped) deps.onError(err)
+        },
+      )
+    },
+    stop() {
+      stopped = true
+      held = []
+      cancel?.()
+    },
+  }
+}
