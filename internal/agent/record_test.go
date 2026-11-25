@@ -61,8 +61,7 @@ func recordHook(file, event string) {
 
 // recorder runs one provider's agent for real, with the provider's own hooks calling this test binary.
 type recorder struct {
-	provider Provider
-	version  []string
+	version []string
 	// command is the agent's command line, on the conversation to resume or a new one.
 	command func(exe, resume string) []string
 	// trust are the keys that answer the agent's question whether it trusts a new folder.
@@ -75,8 +74,7 @@ type recorder struct {
 // recorders run cheap models with no settings, plugins or MCP servers of the owner's.
 var recorders = map[string]recorder{
 	"claude": {
-		provider: Claude{},
-		version:  []string{"claude", "--version"},
+		version: []string{"claude", "--version"},
 		command: func(exe, resume string) []string {
 			argv := Claude{Exe: exe}.Command(Launch{Model: "haiku", Resume: resume})
 			return append(argv, "--setting-sources", "project", "--strict-mcp-config", "--permission-mode", "default")
@@ -155,13 +153,13 @@ func (r recorder) record(t *testing.T, name, exe string, sc scenario, dir string
 			tm.typeLine("/exit")
 			waitUntil(t, "the agent to exit", func() bool { return !tm.running() })
 		case s.resume:
-			start(lastConversation(r.provider, readHooks(t, hooks)))
+			start(lastConversation(Claude{}, readHooks(t, hooks)))
 		}
 	}
 	// The agent writes its transcript a moment after the hook, and a kill would add the hooks of an exit.
 	time.Sleep(2 * time.Second)
 	recorded := readHooks(t, hooks)
-	transcripts := transcriptsOf(r.provider, recorded)
+	transcripts := transcriptsOf(Claude{}, recorded)
 	tm.kill()
 	save(t, dir, work, r.step, recorded, transcripts)
 }

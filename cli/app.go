@@ -111,7 +111,7 @@ func newNewCmd() *cobra.Command {
 	return cmd
 }
 
-// maxPrompt keeps a prompt, with the agent's command line or as typed text, under the 16 KB tmux takes in one command.
+// maxPrompt is the most a --prompt may hold.
 const maxPrompt = 6 << 10
 
 // readPrompt is the value of a --prompt flag, read from stdin when it is "-".

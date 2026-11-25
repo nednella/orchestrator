@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/term"
@@ -78,11 +79,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		if nameErr == nil {
 			mark = s.loadUsageMark(name, after)
 		}
-		p, err := s.Provider()
-		if err != nil {
-			return
-		}
-		r.cursor = p.Usage(mark)
+		r.cursor = agent.Claude{}.Usage(mark)
 	}
 	parts, cur, err := r.cursor.Read(transcript, model)
 	if err != nil {

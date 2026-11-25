@@ -22,7 +22,8 @@ type Commands struct {
 
 func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs: prs} }
 
-// Issue starts a session for each issue number given, or finds the one already running. A prompt is the asking session's handover; it reaches only a session that starts.
+// Issue starts a session for each issue number given, or finds the one already running. A prompt is the asking
+// session's handover; it reaches only a session that starts.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("usage: agentos issue <number...>")

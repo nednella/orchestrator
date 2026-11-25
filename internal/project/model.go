@@ -19,8 +19,7 @@ func (m Model) over(base Model) Model {
 
 // Pick chooses the model and effort for a session. From weakest to strongest: the action's, then the issue's
 // `model:<x>` and `effort:<y>` labels. A label value that valid rejects is skipped, and ignored says why, a sentence
-// per label. A session for no issue passes an empty action
-// and no labels.
+// per label. A session for no issue passes an empty action and no labels.
 func Pick(action Action, labels []string, valid func(model, effort string) error) (m Model, ignored []string) {
 	m = Model{Model: action.Model, Effort: action.Effort}
 	for _, l := range slices.Backward(labels) {
