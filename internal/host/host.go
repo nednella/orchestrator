@@ -640,12 +640,13 @@ func (h *host) busyLocked() bool {
 	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0
 }
 
-// setMode asks Claude to change its permission mode and logs the mode once Claude takes it. It is refused while the host
-// is busy: a turn keeps the mode it started with. The request is written under stdinMu, as a send is, so no message gets
-// in between the check and the write.
+// setMode asks Claude to change its permission mode, plan or default, and logs the mode once Claude takes it. A change
+// to or from bypassPermissions is a restart, never this op. It is refused while the host is busy: a turn keeps the mode
+// it started with. The request is written under stdinMu, as a send is, so no message gets in between the check and the
+// write.
 func (h *host) setMode(mode string) error {
-	if mode == "" {
-		return errors.New("mode needs a permission mode")
+	if mode != "plan" && mode != "default" {
+		return fmt.Errorf("the mode op takes plan or default, not %q", mode)
 	}
 	id := h.nextID()
 	got := make(chan chat.Event, 1)

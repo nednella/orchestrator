@@ -921,6 +921,7 @@ export function createMock(params: URLSearchParams) {
     // a change to or from Full starts the thread again. The thread's chat, not its row, says whether a turn is open: a
     // thread waiting on a reply that asks has none.
     SetAccess: async (id: string, access: Access) => {
+      if (!access) throw 'Pick an access level'
       if (!['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       const s = find(id)
       if (!s.hosted) throw `Thread ${id} ran in a terminal; its access cannot change`

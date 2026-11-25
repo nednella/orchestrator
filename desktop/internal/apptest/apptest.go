@@ -853,8 +853,9 @@ func CLIPath(t *testing.T) string {
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
-// once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, and
-// "leave plan" reports the mode default before its reply, as Claude does when it leaves plan mode itself.
+// once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
+// asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, and "leave plan"
+// reports the mode default before its reply with no plan approved.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
 // standIn is the path of the stand-in claude's file of the session with that extension.
@@ -912,11 +913,16 @@ while IFS= read -r line; do
 			i=$((i + 1))
 		done
 		reply ;;
+	*'"type":"user"'*'"text":"plan"'*)
+		printf '%s\n' "$init" '{"type":"control_request","request_id":"plan-1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Add made.txt"}}}' ;;
 	*'"type":"user"'*'"text":"leave plan"'*)
 		printf '%s\n' "$init" '{"type":"system","subtype":"status","status":null,"permissionMode":"default"}'
 		reply ;;
 	*'"type":"user"'*)
 		printf '%s\n' "$init"
+		reply ;;
+	*'"type":"control_response"'*'"request_id":"plan-1"'*'"behavior":"allow"'*)
+		printf '%s\n' '{"type":"system","subtype":"status","status":null,"permissionMode":"default"}'
 		reply ;;
 	*'"type":"control_response"'*)
 		reply ;;

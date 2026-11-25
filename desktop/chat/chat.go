@@ -26,12 +26,12 @@ const (
 )
 
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
-// AccessChanged follows the permission mode its Claude reports.
+// AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
 	TurnEnded(id string, e chatlog.Event)
-	AccessChanged(id, mode string)
+	AccessChanged(id, mode string, planApproved bool)
 	Wake(id string) (sessions.Chat, error)
 }
 
@@ -215,9 +215,11 @@ type follower struct {
 
 	mu        sync.Mutex
 	approvals []chatlog.Event // waiting, oldest first
-	batch     []chatlog.Event // for the next chat:<id> event
-	flushing  bool            // a flush of batch is due
-	sent      time.Time       // when the last chat:<id> event went out
+	// planApproved is set from the owner allowing an ExitPlanMode until the mode Claude then reports, or the turn's end.
+	planApproved bool
+	batch        []chatlog.Event // for the next chat:<id> event
+	flushing     bool            // a flush of batch is due
+	sent         time.Time       // when the last chat:<id> event went out
 }
 
 // run reads the log once, for the approvals that wait and where it ends, then follows the host's stream from there,
@@ -229,17 +231,32 @@ func (f *follower) run(ctx context.Context) {
 	}
 	var last int64
 	var turnEnd *chatlog.Event
+	// mode is the latest mode Claude reported in the host's current run, which starts after its last exit, or after the
+	// commands Claude lists at its start for a host that was killed before it logged its exit.
+	var mode struct {
+		text         string
+		planApproved bool
+	}
 	for _, e := range logged {
 		last = e.Seq
-		f.track(e)
-		if e.Kind == chatlog.KindTurnEnd {
+		text, approved := f.see(e)
+		switch e.Kind {
+		case chatlog.KindTurnEnd:
 			turnEnd = &e
+		case chatlog.KindExit, chatlog.KindCommands:
+			mode.text = ""
+		case chatlog.KindMode:
+			mode.text, mode.planApproved = text, approved
 		}
 	}
 	close(f.read)
 	// A turn interrupted while the app was closed ends now; the earlier turn_ends would change nothing after it.
 	if turnEnd != nil {
 		f.chats.threads.TurnEnded(f.chat.ID, *turnEnd)
+	}
+	// A mode Claude reported while the app was closed is followed now, by the same rule as a live one.
+	if mode.text != "" {
+		f.chats.threads.AccessChanged(f.chat.ID, mode.text, mode.planApproved)
 	}
 	f.announce(nil)
 	defer f.announceGone()
@@ -269,28 +286,39 @@ func (f *follower) run(ctx context.Context) {
 	}
 }
 
-// take handles one event from the host's stream. A mode in the log from before the follower started is not followed:
-// the thread may have started again since with another access.
+// take handles one event from the host's stream.
 func (f *follower) take(e chatlog.Event) {
 	before := f.waiting()
-	f.track(e)
+	mode, approved := f.see(e)
 	f.announce(before)
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
 		f.chats.threads.TurnEnded(f.chat.ID, e)
 	case chatlog.KindMode:
-		f.chats.threads.AccessChanged(f.chat.ID, e.Text)
+		f.chats.threads.AccessChanged(f.chat.ID, mode, approved)
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)
 	}
 }
 
-// track keeps the approvals that wait: an answer takes one, and a turn's end or Claude's exit takes them all.
-func (f *follower) track(e chatlog.Event) {
+// see keeps the approvals that wait: an answer takes one, and a turn's end or Claude's exit takes them all. For a mode
+// event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in the same turn.
+func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if e.Kind == chatlog.KindAnswer && e.Text == "allow" && slices.ContainsFunc(f.approvals, func(a chatlog.Event) bool { return a.ID == e.ID && a.Tool == "ExitPlanMode" }) {
+		f.planApproved = true
+	}
 	f.approvals = waitingAfter(f.approvals, e)
+	switch e.Kind {
+	case chatlog.KindMode:
+		mode, planApproved = e.Text, f.planApproved
+		f.planApproved = false
+	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindCommands:
+		f.planApproved = false
+	}
+	return mode, planApproved
 }
 
 // waitingAfter is the approvals that wait, oldest first, once e has happened.

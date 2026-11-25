@@ -74,7 +74,7 @@ func AnswerWith(ctx context.Context, socket, id string, input json.RawMessage) e
 	return err
 }
 
-// SetMode changes Claude's permission mode, such as plan or default, between turns. A refusal is Claude's own reason, or
+// SetMode changes Claude's permission mode, plan or default, between turns. A refusal is Claude's own reason, or
 // the host's while a turn runs.
 func SetMode(ctx context.Context, socket, mode string) error {
 	_, err := call(ctx, socket, request{Op: opMode, Mode: mode})

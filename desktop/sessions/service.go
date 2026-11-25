@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
@@ -75,6 +76,9 @@ func (v *Service) WakeThread(id string) (Session, error) {
 // SetAccess gives the thread the access, read, supervised or full, between turns: a settled thread wakes with it, and a
 // change to or from full starts a live thread again under its id.
 func (v *Service) SetAccess(id, access string) error {
+	if access == "" {
+		return errors.New("Pick an access level")
+	}
 	a, err := session.ParseAccess(access)
 	if err != nil {
 		return err

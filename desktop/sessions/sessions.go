@@ -2045,10 +2045,11 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 	return nil
 }
 
-// checkAccess records the access of a settled thread, and settles a live one that must start again for it, recording
-// the access there. Its host says whether a turn is open: the hook state lags a message just written to Claude, and a reply that
+// checkAccess records the access of a settled thread, and of a live one that must start again for it, which it then
+// settles. Its host says whether a turn is open: the hook state lags a message just written to Claude, and a reply that
 // ends in a question waits on the owner with no turn open. A live change is checked by the host as it makes it. It holds
-// createMu, so neither a refresh nor a wake comes between the check and the settle.
+// createMu, so neither a refresh nor a wake comes between the check and the settle. A settle that fails puts the access
+// back.
 func (s *Sessions) checkAccess(name session.Name, access session.Access) (accessChange, error) {
 	id := name.String()
 	s.createMu.Lock()
@@ -2086,10 +2087,16 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	case busy:
 		return accessDone, errAccessDuringTurn
 	}
+	if err := s.liveAccess(name, access); err != nil {
+		return accessDone, fmt.Errorf("saving the thread's access: %w", err)
+	}
 	if err := s.Settle(id); err != nil {
+		if undo := s.liveAccess(name, in.Access); undo != nil {
+			log.Printf("agentos: putting back the access of thread %s: %v", id, undo)
+		}
 		return accessDone, err
 	}
-	return accessRestart, s.settledAccess(id, access)
+	return accessRestart, nil
 }
 
 // readyHost is the socket of the live thread's host once it listens, waiting for one that is still starting.
@@ -2143,13 +2150,30 @@ func (s *Sessions) changeMode(name session.Name, access session.Access) error {
 	return s.liveAccess(name, access)
 }
 
-// AccessChanged follows a permission mode the live thread's Claude reports: the owner's change, or Claude's own, as when
-// the owner approves its plan and it leaves plan mode to write.
-func (s *Sessions) AccessChanged(id, mode string) {
+// AccessChanged follows a permission mode the live thread's Claude reports. A mode that gives less access is recorded.
+// One that gives more is recorded only when it takes a Read thread to Supervised right after the owner approved its
+// plan (planApproved), as Claude leaves plan mode to carry the plan out; the owner's own changes are recorded by
+// SetAccess, and nothing Claude reports raises a thread to Full.
+func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 	access, ok := agent.AccessOfMode(mode)
 	name, err := session.ParseName(id)
 	if !ok || err != nil {
 		log.Printf("agentos: thread %s reports a permission mode agentos does not know: %q", id, mode)
+		return
+	}
+	s.mu.Lock()
+	i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name })
+	var have session.Access
+	if i >= 0 {
+		have = s.info[i].Access
+	}
+	s.mu.Unlock()
+	if i < 0 {
+		return
+	}
+	planDone := planApproved && have == session.Read && access == session.Supervised
+	if access.Rank() > have.Rank() && !planDone {
+		log.Printf("agentos: thread %s reports the mode %s, which gives more than its access %s; the access stays", id, mode, have)
 		return
 	}
 	if err := s.liveAccess(name, access); err != nil {

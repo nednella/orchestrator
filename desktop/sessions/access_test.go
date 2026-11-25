@@ -1,14 +1,19 @@
 package sessions_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -180,6 +185,37 @@ func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Supervised))
 }
 
+func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", apptest.PathWithout("claude"))
+
+	if err := h.SetAccess(s.ID, "full"); err == nil || !strings.Contains(err.Error(), "claude is not installed") {
+		t.Fatalf("err = %v, want the wake's", err)
+	}
+	if row, _ := h.Session(s.ID); row.State != "settled" {
+		t.Errorf("row = %+v, want it settled", row)
+	}
+	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Full))
+
+	t.Setenv("PATH", path)
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "claude started as full", func() bool {
+		return strings.Contains(strings.Join(h.Args(t, s.ID), " "), "--permission-mode bypassPermissions")
+	})
+}
+
 func TestSetAccessOfASettledThread(t *testing.T) {
 	h := apptest.New(t)
 	before := talkedThenSettled(t, h)
@@ -226,9 +262,47 @@ func TestSetAccessRefusesWhatCannotChange(t *testing.T) {
 	if err := h.SetAccess(s.ID, "write"); err == nil {
 		t.Error("an access agentos does not know was taken")
 	}
+	if err := h.SetAccess(s.ID, ""); err == nil || err.Error() != "Pick an access level" {
+		t.Errorf("blank: err = %v", err)
+	}
+}
+
+// askToExitPlan has the Read thread ask to exit plan mode and waits until it asks.
+func askToExitPlan(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	if _, err := h.ChatSend(id, "plan"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the plan to approve", func() bool {
+		return slices.ContainsFunc(h.ChatPending(), func(p chat.Pending) bool { return p.ID == id && p.Kind == "plan" })
+	})
+}
+
+// modeLogged says whether the thread's chat log has the mode.
+func modeLogged(h *apptest.Harness, id, mode string) func() bool {
+	return func() bool { return chatLogHas(h, id, "mode", mode) }
 }
 
 func TestClaudesOwnModeChangeIsFollowed(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewThread("plan it", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	askToExitPlan(t, h, s.ID)
+	if err := h.ChatAnswer(s.ID, "plan-1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the access Claude left plan mode for", accessIs(h, s.ID, session.Supervised))
+	if got := accessTag(t, h, s.ID); got != "supervised" {
+		t.Errorf("tagged %q, want supervised", got)
+	}
+
+	fresh := h.Restart(t)
+	eventually(t, "the access after a restart", func() bool { row, _ := fresh.Session(s.ID); return row.Access == session.Supervised })
+}
+
+func TestModeWithoutAnApprovedPlanGivesNoMoreAccess(t *testing.T) {
 	h := apptest.New(t)
 	s, err := h.NewThread("plan it", "", "", "", "read")
 	if err != nil {
@@ -240,11 +314,43 @@ func TestClaudesOwnModeChangeIsFollowed(t *testing.T) {
 	if _, err := h.ChatSend(s.ID, "leave plan"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the access Claude left plan mode for", accessIs(h, s.ID, session.Supervised))
-	if got := accessTag(t, h, s.ID); got != "supervised" {
-		t.Errorf("tagged %q, want supervised", got)
+	eventually(t, "the mode in the log", modeLogged(h, s.ID, "default"))
+	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+	time.Sleep(300 * time.Millisecond) // the follower takes the turn's end after the mode
+	if row, _ := h.Session(s.ID); row.Access != session.Read || accessTag(t, h, s.ID) != "read" {
+		t.Errorf("row = %+v, tagged %q, want read", row, accessTag(t, h, s.ID))
 	}
+}
+
+func TestModeLoggedWhileTheAppWasClosedIsFollowed(t *testing.T) {
+	h := apptest.New(t)
+	approved, err := h.NewThread("approved", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, err := h.NewThread("left", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	askToExitPlan(t, h, approved.ID)
+	claudeArgs(t, h, left.ID)
+	h.App.Stop()
+
+	_, socket := hostFiles(h, approved.ID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := host.Answer(ctx, socket, "plan-1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := sendToHost(h, left.ID, "leave plan"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the approved thread's mode in the log", modeLogged(h, approved.ID, "default"))
+	eventually(t, "the other thread's mode in the log", modeLogged(h, left.ID, "default"))
 
 	fresh := h.Restart(t)
-	eventually(t, "the access after a restart", func() bool { row, _ := fresh.Session(s.ID); return row.Access == session.Supervised })
+	eventually(t, "the approved plan's access after the restart", accessIs(fresh, approved.ID, session.Supervised))
+	if row, _ := fresh.Session(left.ID); row.Access != session.Read {
+		t.Errorf("row of the thread with no approved plan = %+v, want read", row)
+	}
 }

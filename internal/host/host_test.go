@@ -128,10 +128,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		reply(strings.Join(texts, " "))
 		result(false)
 	}
-	// setMode answers a mode change as Claude does: a status line after the reply, and bypassPermissions refused, as
-	// for a Claude not started with it allowed.
+	// setMode answers a mode change as Claude does: a status line after the reply. With AOS_FAKE_REFUSE_MODE set it
+	// refuses, with the reason Claude gives for bypassPermissions when it was not started with it allowed.
 	setMode := func(l fakeLine) {
-		if l.Request.Mode == "bypassPermissions" {
+		if os.Getenv("AOS_FAKE_REFUSE_MODE") == "1" {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID,
 				"error": "Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions", "error_code": "bypass_not_launched"}})
 			return
@@ -1608,11 +1608,11 @@ func TestModeIsRefusedDuringATurn(t *testing.T) {
 
 func TestModeReportsClaudesError(t *testing.T) {
 	t.Parallel()
-	h := startHost(t)
+	h := startHost(t, "AOS_FAKE_REFUSE_MODE=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
-	err := SetMode(ctxT(t), h.socket, "bypassPermissions")
+	err := SetMode(ctxT(t), h.socket, "default")
 	if refused := (*Refused)(nil); !errors.As(err, &refused) || !strings.Contains(refused.Reason, "was not launched with --dangerously-skip-permissions") {
 		t.Fatalf("err = %v, want Claude's reason", err)
 	}
@@ -1620,6 +1620,22 @@ func TestModeReportsClaudesError(t *testing.T) {
 	waitKind(t, events, chat.KindTurnEnd)
 	if got := modes(t, h.log); len(got) != 0 {
 		t.Errorf("logged modes = %q, want none", got)
+	}
+}
+
+func TestModeTakesOnlyPlanOrDefault(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	for _, mode := range []string{"bypassPermissions", "acceptEdits", ""} {
+		if err := SetMode(ctxT(t), h.socket, mode); err == nil {
+			t.Errorf("%q: the host took it", mode)
+		}
+	}
+	if got := modeRequests(t, h.stdin); len(got) != 0 {
+		t.Errorf("stdin = %q, want no mode request", got)
 	}
 }
 
