@@ -19,7 +19,7 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"thread", Thread(), "f6704bff01616896a5f0c833891bf924a166a2a782c864610ba4ec93661862a0"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "7baaded65c2f3d475e2d43dc2c998d28e8c9feb839f55f0384b4fc249e0c9e76"},
 		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
-		{"child", Child("{parent}"), "7f8145498820b9c3495802fb1c5b726a07db522a4e9e49cd43a0a1ff5f2ad353"},
+		{"child", Child("{parent}"), "c03b84f66728347627298a325f5f0f196a5ff02db99cd845ed02ad2c695553e4"},
 		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
 		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
 		{"setup brief", SetupBrief(), "3fd3fdfb3c5df412ad078a78f02d163e5ad0b5be8ee1c0e97c06cd3ae2dd81be"},

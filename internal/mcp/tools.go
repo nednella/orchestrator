@@ -33,7 +33,7 @@ func Tools() []Tool {
 			"access":{"type":"string","enum":["read","supervised","full"],"description":"The child's access; never more than yours. Default: yours."},
 			"model":{"type":"string","description":"The child's model."},
 			"effort":{"type":"string","description":"The child's effort."},
-			"project":{"type":"string","description":"A project's name or key. Default: yours."},
+			"project":{"type":"string","description":"A project's name or key. Default: yours. In another project, folder is its folder and worktree starts from its default branch."},
 			"where":{"type":"string","enum":["folder","worktree","issue"],"description":"Where the child works. Default: folder for a read child, worktree for the others."},
 			"issue":{"type":"integer","description":"The issue number; needed with where issue."}
 		},"required":["task"],` + noExtra + `}`, false},
