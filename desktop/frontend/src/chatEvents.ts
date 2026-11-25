@@ -1,0 +1,45 @@
+import type { ChatEvent } from './types'
+
+// ChatState is a thread's chat as the front end holds it: its logged events in seq order, the seq of the last one,
+// and the text streamed so far of each message, by message id, that is not logged yet.
+export type ChatState = { events: ChatEvent[]; last: number; live: Record<string, string> }
+
+export const EMPTY_CHAT: ChatState = { events: [], last: 0, live: {} }
+
+// mergeEvents adds events from the stream or the history. A logged event the state already holds is dropped; one past
+// a gap is dropped too, and gapAfter says to read the history after it, which brings it again.
+export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatState; gapAfter: number | null } {
+  const events = [...s.events]
+  const live = { ...s.live }
+  let last = s.last
+  let gapAfter: number | null = null
+  let changed = false
+  for (const e of incoming) {
+    if (e.kind === 'delta') {
+      if (!e.id || !e.text) continue
+      live[e.id] = (live[e.id] ?? '') + e.text
+      changed = true
+      continue
+    }
+    // A double clears too: the stream can send a block's deltas, the block, then the next block's deltas, while the
+    // block came first in the history read meanwhile.
+    if (e.kind === 'message' && e.id && e.id in live) {
+      delete live[e.id]
+      changed = true
+    }
+    // A reply cut off by an interrupt or an exit streamed text that is never logged.
+    if ((e.kind === 'turn_end' || e.kind === 'exit') && Object.keys(live).length > 0) {
+      for (const id of Object.keys(live)) delete live[id]
+      changed = true
+    }
+    if (e.seq <= last) continue
+    if (e.seq > last + 1) {
+      gapAfter ??= last
+      continue
+    }
+    events.push(e)
+    last = e.seq
+    changed = true
+  }
+  return { state: changed ? { events, last, live } : s, gapAfter }
+}

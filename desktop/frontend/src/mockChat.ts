@@ -9,6 +9,11 @@ type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
 const minute = 60_000
 const batchEvery = 33 // the service sends a thread's events at most this often, in ms
+const commands = [
+  { name: 'review', description: 'Review a pull request', argumentHint: '<pr>', builtin: true },
+  { name: 'compact', description: 'Clear the conversation but keep a summary of it', argumentHint: '<instructions>', builtin: true },
+  { name: 'greet', description: 'Say a fixed greeting (project)', argumentHint: '' },
+]
 const replies = [
   'Done. The checkout route now loads its own data, and the cart page no longer calls the cart API twice.',
   'I read the router and the checkout page. Nothing else needs to change for this.',
@@ -77,19 +82,24 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       clearInterval(timer)
       replying.delete(id)
       append(id, { kind: 'message', id: message, text })
-      const next = queued.get(id)?.shift()
-      if (next) {
-        append(id, { kind: 'user', id: next.id, text: next.text })
-        reply(id)
-        return
-      }
+      if (runQueued(id)) return
       append(id, { kind: 'turn_end', cost: 0.04 })
       t.setState('idle')
     }, 1000 / words.length)
     replying.set(id, () => clearInterval(timer))
   }
 
-  // stop ends the turn that runs, as an interrupt does.
+  // runQueued takes in every queued message and replies to them, as Claude does once it can.
+  function runQueued(id: string): boolean {
+    const held = queued.get(id) ?? []
+    if (held.length === 0) return false
+    queued.delete(id)
+    held.forEach((m) => append(id, { kind: 'user', id: m.id, text: m.text }))
+    reply(id)
+    return true
+  }
+
+  // stop ends the turn that runs, as an interrupt does. Claude then runs the messages it still holds, in order.
   function stop(id: string) {
     const running = replying.get(id)
     if (!running && !pending.has(id)) return
@@ -97,6 +107,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     replying.delete(id)
     setPending(id, null)
     append(id, { kind: 'turn_end', error: true, cost: 0.04 })
+    if (runQueued(id)) return
     thread(id).setState('idle')
   }
 
@@ -104,6 +115,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   function seed(id: string) {
     const ago = (minutes: number) => Date.now() - minutes * minute
     const turns: Draft[] = [
+      { kind: 'commands', input: commands, at: ago(38) },
       { kind: 'user', id: 'u-1', text: 'Move checkout to its own route, and keep the cart page as it is.', at: ago(38) },
       { kind: 'init', id: 'mock-session', at: ago(38) },
       { kind: 'message', id: 'msg_1', text: "I'll read the router first.", at: ago(37) },
@@ -180,16 +192,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       stop(id)
     },
     ChatSendNow: async (id: string, message: string) => {
-      const t = live(id)
-      const waiting = queued.get(id) ?? []
-      const at = waiting.findIndex((m) => m.id === message)
-      if (at < 0) throw `No queued message ${message}`
+      live(id)
+      if (!queued.get(id)?.some((m) => m.id === message)) throw `No queued message ${message}`
       append(id, { kind: 'interrupt', id: message })
       stop(id)
-      const [now] = waiting.splice(at, 1)
-      append(id, { kind: 'user', id: now.id, text: now.text })
-      t.setState('working')
-      reply(id)
     },
     ChatAnswer: async (id: string, request: string, allow: boolean, message: string) => answer(id, request, allow, message),
     ChatAnswerInput: async (id: string, request: string, input: string) => {
@@ -209,6 +215,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     replying.delete(id)
     queued.delete(id)
     setPending(id, null)
+    if (logs.has(id)) append(id, { kind: 'exit' })
   }
 
   return { backend, seed, end }

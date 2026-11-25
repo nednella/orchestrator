@@ -5,7 +5,7 @@ import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, writeStored } from './storage'
 import { liveThreads, sidebarThreads } from './threads'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -41,6 +41,8 @@ type AgentosState = {
   cleanups: Cleanup[]
   evidence: Record<string, Evidence[]>
   browserStates: Record<string, BrowserState>
+  // The approval each live thread waits on, by thread id.
+  pending: Record<string, Pending>
   digest: Digest | null
   digestSeen: number
   digestUnseenCount: number
@@ -232,6 +234,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [cleanups, setCleanups] = useState<Cleanup[]>([])
   const [evidence, setEvidence] = useState<Record<string, Evidence[]>>({})
   const [browserStates, setBrowserStates] = useState<Record<string, BrowserState>>({})
+  const [pending, setPending] = useState<Record<string, Pending>>({})
   const [views, setViews] = useState<Record<string, SessionView>>({})
   const [digest, setDigest] = useState<Digest | null>(null)
   const [digestSeen, setDigestSeen] = useState(0)
@@ -484,6 +487,16 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   useEffect(() => on('update', ({ version }) => setUpdate(version)), [])
   useEffect(() => on('evidence', ({ id, items }) => setEvidence((map) => ({ ...map, [id]: items }))), [])
   useEffect(() => on('browser:state', (state) => setBrowserStates((map) => ({ ...map, [state.id]: state }))), [])
+  useEffect(() => {
+    const off = on('chat:pending', ({ id, pending: p }) =>
+      setPending((map) => {
+        const { [id]: _, ...rest } = map
+        return p ? { ...rest, [id]: p } : rest
+      }),
+    )
+    report(async () => setPending(Object.fromEntries((await api.chatPending()).map((p) => [p.id, p]))))
+    return off
+  }, [report])
   useEffect(
     () =>
       on('digest', (next) => {
@@ -906,6 +919,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       cleanups,
       evidence,
       browserStates,
+      pending,
       digest,
       digestSeen,
       digestUnseenCount,
@@ -928,7 +942,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))
