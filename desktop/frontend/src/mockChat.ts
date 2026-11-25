@@ -328,7 +328,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   function save(id: string, images: ChatImage[]): string[] {
     if (images.length > maxImages) throw `A message takes at most ${maxImages} images`
     images.forEach((image, i) => {
-      if (Math.floor((image.base64.length * 3) / 4) > maxImage + 3) throw `Image ${i + 1} is too large (the limit is ${maxImage / 2 ** 20} MB)`
+      if (image.base64.length > Math.ceil(maxImage / 3) * 4) throw `Image ${i + 1} is too large (the limit is ${maxImage / 2 ** 20} MB)`
       if (!(image.mime in imageExts)) throw `Image ${i + 1} is not png, jpeg, gif or webp`
     })
     const [key, token] = id.split('/')

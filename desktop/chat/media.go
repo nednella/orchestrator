@@ -57,7 +57,7 @@ func saveImages(dir string, images []Image) ([]string, error) {
 // "Image <n>".
 func decodeImage(image Image) ([]byte, string, error) {
 	tooLarge := fmt.Errorf("is too large (the limit is %s MB)", strconv.FormatFloat(float64(host.MaxImage)/(1<<20), 'f', -1, 64))
-	if base64.StdEncoding.DecodedLen(len(image.Base64)) > host.MaxImage+3 {
+	if len(image.Base64) > base64.StdEncoding.EncodedLen(host.MaxImage) {
 		return nil, "", tooLarge
 	}
 	data, err := base64.StdEncoding.DecodeString(image.Base64)
