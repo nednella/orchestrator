@@ -149,6 +149,7 @@ type Sessions struct {
 	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
 	lastNum    map[string]int           // the highest number given or recorded in each project
 	deleted    map[string]bool          // the threads the owner deleted in this run, and those whose state files say archived: nothing brings them back
+	deleting   map[string]bool          // the threads a delete runs for: they are not woken, forked or given children
 	records    map[string]session.Record
 	cwds       map[string]string // the working directory each session's last hook reported
 	seen       map[string]session.State
@@ -260,7 +261,7 @@ func newSessions(o Options) *Sessions {
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
-		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{},
+		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{},
 		records:   map[string]session.Record{},
 		cwds:      map[string]string{},
@@ -740,8 +741,9 @@ func (s *Sessions) handoverOf(id string) string {
 // its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-up
 // with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
 // nothing goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the thread,
-// so no clean-up removes it later. An old terminal session whose pane still runs is refused: the owner ends it there,
-// and until then it keeps its row, so no second thread claims its issue's branch.
+// so no clean-up removes it later. A thread with a running descendant is refused, and so is an old terminal session
+// whose pane still runs: the owner ends it there, and until then it keeps its row, so no second thread claims its
+// issue's branch. While the delete runs, the thread cannot be woken or forked, and it starts no child.
 func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -750,19 +752,24 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	if name.IsShell() {
 		return errNotSession
 	}
+	if err := s.startDelete(id); err != nil {
+		return err
+	}
+	dropped := false
+	defer func() {
+		if !dropped {
+			s.mu.Lock()
+			delete(s.deleting, id)
+			s.mu.Unlock()
+		}
+	}()
 	s.mu.Lock()
-	old, deleted, n := s.isOld(id), s.deleted[id], s.nums[id]
-	rec := s.records[id]
+	n, rec := s.nums[id], s.records[id]
 	if e, ok := s.ended[id]; ok {
 		rec = e.rec
 	}
 	s.mu.Unlock()
-	switch {
-	case deleted:
-		return fmt.Errorf("Thread %s was deleted", id)
-	case old:
-		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
-	case s.life.CleaningUp(id):
+	if s.life.CleaningUp(id) {
 		return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", n)
 	}
 	if worktree {
@@ -781,6 +788,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	if err := s.dropThread(name); err != nil {
 		return err
 	}
+	dropped = true
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
@@ -795,6 +803,31 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
 		}
 	}
+	return nil
+}
+
+// startDelete marks the thread id as being deleted, or says why it cannot be: it was deleted, a delete of it runs, it
+// runs in an old terminal, or one of its descendants runs. It takes childMu, so a child whose start passed its checks
+// is running before the descendants are looked at, and mu.
+func (s *Sessions) startDelete(id string) error {
+	s.childMu.Lock()
+	defer s.childMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case s.deleted[id]:
+		return fmt.Errorf("Thread %s was deleted", id)
+	case s.deleting[id]:
+		return fmt.Errorf("Thread %d is being deleted", s.nums[id])
+	case s.isOld(id):
+		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
+	}
+	for _, d := range s.descendants(id) {
+		if in, live := s.liveInfo(d); live {
+			return fmt.Errorf("Thread %d has a running child, %s; stop it first", s.nums[id], cmp.Or(in.Title, defaultTitle))
+		}
+	}
+	s.deleting[id] = true
 	return nil
 }
 
@@ -813,6 +846,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 		return fmt.Errorf("deleting the thread: %w", err)
 	}
 	s.deleted[id] = true
+	delete(s.deleting, id)
 	delete(s.ended, id)
 	delete(s.history, id)
 	delete(s.known, id)
@@ -1662,7 +1696,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	if settled {
 		in = e.info
 	}
-	deleted := s.deleted[id]
+	deleted, deleting := s.deleted[id], s.deleting[id]
 	old := s.isOld(id) || settled && !in.Hosted
 	proj, known := s.projectOf(in)
 	conversation := s.conversationOf(id)
@@ -1673,6 +1707,8 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	switch {
 	case deleted:
 		return fmt.Errorf("Thread %s was deleted", id)
+	case deleting:
+		return fmt.Errorf("Thread %d is being deleted", n)
 	case old:
 		return fmt.Errorf("Thread %s ran in a terminal and cannot be woken", id)
 	case !settled:
@@ -1796,7 +1832,7 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	defer s.childMu.Unlock()
 	s.mu.Lock()
 	parent, live := s.liveInfo(o.Parent)
-	live = live && !s.deleted[o.Parent]
+	live = live && !s.deleted[o.Parent] && !s.deleting[o.Parent]
 	depth, running := s.depthOf(o.Parent), 0
 	for _, in := range s.info {
 		if in.Parent == o.Parent {
@@ -1984,6 +2020,11 @@ func (s *Sessions) childrenOf(id string) []string {
 func (s *Sessions) Descendants(id string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.descendants(id)
+}
+
+// descendants needs mu.
+func (s *Sessions) descendants(id string) []string {
 	seen := map[string]bool{id: true}
 	var out []string
 	for next := []string{id}; len(next) > 0; {
@@ -2164,10 +2205,13 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	in, found := s.infoOf(id)
 	conversation := s.conversationOf(id)
 	proj, known := s.projectOf(in)
+	deleting := s.deleting[id]
 	s.mu.Unlock()
 	switch {
 	case !found:
 		return Session{}, fmt.Errorf("No thread %s", id)
+	case deleting:
+		return Session{}, fmt.Errorf("Thread %d is being deleted", s.Number(id))
 	case !in.Hosted:
 		return Session{}, errors.New("Only a thread with a chat can be forked")
 	case conversation == "":

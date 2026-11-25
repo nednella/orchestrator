@@ -1,6 +1,7 @@
 package sessions_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -625,5 +626,65 @@ func TestDeleteWaitingOnAHostThatDoesNotStopHoldsUpNoNewThread(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDeleteIsRefusedWhileAChildRuns(t *testing.T) {
+	h := apptest.New(t)
+	parent := talked(t, h)
+	child, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "Read the code", Title: "Helper", Access: parent.Access, Where: sessions.WhereFolder})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("Thread %d has a running child, Helper; stop it first", parent.N)
+	for _, worktree := range []bool{false, true} {
+		if err := h.DeleteThread(parent.ID, worktree); err == nil || err.Error() != want {
+			t.Errorf("Delete with the worktree %v = %v, want %q", worktree, err, want)
+		}
+	}
+	if _, ok := h.Session(parent.ID); !ok || !tmuxHas(h, parent.ID) || !hasState(t, h, parent.ID) {
+		t.Errorf("the parent: row there %v, running %v, state file there %v", ok, tmuxHas(h, parent.ID), hasState(t, h, parent.ID))
+	}
+
+	if err := h.SettleThread(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the child asleep", func() bool { return stateOf(h, child.ID) == "settled" })
+	if err := h.DeleteThread(parent.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := h.Session(child.ID); !ok || got.State != "settled" {
+		t.Errorf("the asleep child = %+v, %v; want it left asleep", got, ok)
+	}
+}
+
+func TestThreadBeingDeletedIsNotWoken(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread asleep", func() bool { return stateOf(h, s.ID) == "settled" })
+	hold := t.TempDir()
+	reached, released := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; git-upload-pack", reached, released))
+	done := make(chan error, 1)
+	go func() { done <- h.DeleteThread(s.ID, true) }()
+	eventually(t, "the delete held in its clean-up", func() bool { return exists(reached) })
+
+	_, err := h.WakeThread(s.ID)
+	if want := fmt.Sprintf("Thread %d is being deleted", s.N); err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	if err := os.WriteFile(released, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := h.Session(s.ID); ok || tmuxHas(h, s.ID) || exists(s.Worktree) {
+		t.Errorf("after the delete: row there %v, running %v, worktree there %v", ok, tmuxHas(h, s.ID), exists(s.Worktree))
 	}
 }

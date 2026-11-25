@@ -745,6 +745,15 @@ export function createMock(params: URLSearchParams) {
     emit('issues', { project: current.name, items: currentIssues() })
   }
 
+  // runningDescendant is a child of the thread, or a child of an asleep one, that runs, as a delete refuses.
+  const runningDescendant = (id: string): Session | undefined => {
+    for (const child of sessions.filter((x) => x.parent === id)) {
+      const running = child.state === 'settled' ? runningDescendant(child.id) : child
+      if (running) return running
+    }
+    return undefined
+  }
+
   // worktreeUser is another thread that works in the thread's worktree, as far as the mock can tell: a fork of it, or a
   // child in its folder.
   const worktreeUser = (s: Session) => sessions.find((x) => x.id !== s.id && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
@@ -925,6 +934,8 @@ export function createMock(params: URLSearchParams) {
       if (deleted.has(id)) throw `Thread ${id} was deleted`
       const s = find(id)
       if (s.cleanup === 'pending') throw `Thread ${s.n} is being cleaned up; delete it when that ends`
+      const child = runningDescendant(id)
+      if (child) throw `Thread ${s.n} has a running child, ${child.title}; stop it first`
       const user = worktree && s.worktree ? worktreeUser(s) : undefined
       if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree, or clean it up first`
       const own = worktree ? s.worktree : ''
