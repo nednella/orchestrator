@@ -34,6 +34,8 @@ case " $* " in
     if [ -e %[1]s/fail-list ]; then echo "error connecting to /tmp/x (Permission denied)" >&2; exit 1; fi
     if [ -e %[1]s/fail-slow-list ]; then out=$(%[2]s "$@"); rc=$?; sleep 0.4; printf '%%s\n' "$out"; exit $rc; fi ;;
   *"@agentos-issue"*) if [ -e %[1]s/fail-issue ]; then echo "no space for the option" >&2; exit 1; fi ;;
+  *"@agentos-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
+  *" kill-session "*) if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi ;;
 esac
 exec %[2]s "$@"
 `, dir, real)
@@ -44,7 +46,7 @@ exec %[2]s "$@"
 	return fakeTmux{dir}
 }
 
-// fail makes the named call ("list" or "issue") fail, or work again. "slow-list" makes list-sessions
+// fail makes the named call ("list", "issue", "access" or "kill") fail, or work again. "slow-list" makes list-sessions
 // answer late with what tmux held when it was asked.
 func (f fakeTmux) fail(t *testing.T, call string, on bool) {
 	t.Helper()

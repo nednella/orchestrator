@@ -96,6 +96,13 @@ func PlanStop(ctx context.Context, socket, reason, access string) error {
 	return err
 }
 
+// Release undoes a hold and a planned stop, for a restart or a settle that did not happen: the host takes input again,
+// and a later exit is logged as it comes.
+func Release(ctx context.Context, socket string) error {
+	_, err := call(ctx, socket, request{Op: opRelease})
+	return err
+}
+
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.
 func Subscribe(ctx context.Context, socket string, after int64, fn func(chat.Event)) error {
 	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after})

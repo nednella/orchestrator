@@ -2044,7 +2044,7 @@ func (s *Sessions) deliverWakes() {
 func (s *Sessions) Settle(id string) error { return s.settle(id, chat.StopSettle, "") }
 
 // settle stops the thread for reason, chat.StopSettle or chat.StopRestart with the access it starts again with. Its host
-// is told first, so it logs Claude's exit as that stop and not as a crash.
+// is told first, so it logs Claude's exit as that stop and not as a crash; a kill that fails takes that back.
 func (s *Sessions) settle(id, reason string, access session.Access) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -2070,10 +2070,13 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	s.mu.Lock()
 	delete(s.wakes, id)
 	s.mu.Unlock()
-	s.planStop(name, reason, access)
+	planned := s.planStop(name, reason, access)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Kill(ctx, name); err != nil {
+		if planned {
+			s.release(name)
+		}
 		return err
 	}
 	s.mu.Lock()
@@ -2084,14 +2087,24 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	return nil
 }
 
-// planStop tells the thread's host that the app stops it for reason. A host that did not hear logs the exit as it comes.
-func (s *Sessions) planStop(name session.Name, reason string, access session.Access) {
+// planStop tells the thread's host that the app stops it for reason, and says whether the host heard. A host that did
+// not logs the exit as it comes.
+func (s *Sessions) planStop(name session.Name, reason string, access session.Access) bool {
 	socket, err := s.readyHost(name)
 	if err == nil {
 		err = host.PlanStop(s.context(), socket, reason, string(access))
 	}
 	if err != nil {
 		log.Printf("agentos: thread %s stops without telling its host: %v", name, err)
+		return false
+	}
+	return true
+}
+
+// release takes back the hold and the planned stop of the thread's host, for a restart or a settle that did not happen.
+func (s *Sessions) release(name session.Name) {
+	if err := host.Release(s.context(), s.hostSocket(name)); err != nil {
+		log.Printf("agentos: releasing the host of thread %s: %v", name, err)
 	}
 }
 
@@ -2133,8 +2146,8 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 // checkAccess records the access of a settled thread, and of a live one that must start again for it, which it then
 // settles. Its host says whether a turn is open: the hook state lags a message just written to Claude, and a reply that
 // ends in a question waits on the owner with no turn open. A live change is checked by the host as it makes it. It holds
-// createMu, so neither a refresh nor a wake comes between the check and the settle. A settle that fails puts the access
-// back.
+// createMu, so neither a refresh nor a wake comes between the check and the settle. A record or a settle that fails
+// after the hold releases the host, and a failed settle puts the access back.
 func (s *Sessions) checkAccess(name session.Name, access session.Access) (accessChange, error) {
 	id := name.String()
 	s.createMu.Lock()
@@ -2174,9 +2187,11 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		return accessDone, errAccessDuringTurn
 	}
 	if err := s.liveAccess(name, access); err != nil {
+		s.release(name)
 		return accessDone, fmt.Errorf("saving the thread's access: %w", err)
 	}
 	if err := s.settle(id, chat.StopRestart, access); err != nil {
+		s.release(name)
 		if undo := s.liveAccess(name, in.Access); undo != nil {
 			log.Printf("agentos: putting back the access of thread %s: %v", id, undo)
 		}

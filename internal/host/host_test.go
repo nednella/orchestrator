@@ -1738,6 +1738,18 @@ func TestOnlyAStopTheAppPlannedIsNoError(t *testing.T) {
 		{"a crash", func(*testing.T, *testHost) {}, crash, chat.Event{Kind: chat.KindExit, Text: "exit status 3", Error: true}},
 		// The host cannot tell a crash from the stop it was told of; the stop comes a moment after the op.
 		{"a crash after a planned stop", planStop(chat.StopSettle, ""), crash, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
+		{"a released stop", func(t *testing.T, h *testHost) {
+			if _, err := Hold(ctxT(t), h.socket); err != nil {
+				t.Fatal(err)
+			}
+			planStop(chat.StopRestart, "full")(t, h)
+			if err := Release(ctxT(t), h.socket); err != nil {
+				t.Fatal(err)
+			}
+			if err := Send(ctxT(t), h.socket, "hi"); err != nil {
+				t.Errorf("a send after the release = %v, want it taken", err)
+			}
+		}, cancel, chat.Event{Kind: chat.KindExit, Error: true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

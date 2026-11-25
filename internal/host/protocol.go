@@ -12,6 +12,7 @@ const (
 	opAnswer    = "answer"
 	opMode      = "mode"
 	opHold      = "hold"
+	opRelease   = "release"
 	opStop      = "stop"
 	opSubscribe = "subscribe"
 )

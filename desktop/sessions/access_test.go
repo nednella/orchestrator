@@ -178,10 +178,43 @@ func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	want := []chatlog.Event{{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}}
+	assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle})
+}
+
+func TestAFailedRestartReleasesTheThread(t *testing.T) {
+	for _, call := range []string{"access", "kill"} {
+		t.Run(call, func(t *testing.T) {
+			h := apptest.New(t)
+			s, err := h.NewThread("restart", "", "", "", "supervised")
+			if err != nil {
+				t.Fatal(err)
+			}
+			claudeArgs(t, h, s.ID)
+			fake := newFakeTmux(t)
+			fake.fail(t, call, true)
+			if err := h.SetAccess(s.ID, "full"); err == nil {
+				t.Fatal("SetAccess took the restart that failed")
+			}
+			fake.fail(t, call, false)
+
+			if _, err := h.ChatSend(s.ID, "hi"); err != nil {
+				t.Errorf("ChatSend = %v, want the thread to take it again", err)
+			}
+			eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+			if err := h.SettleThread(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle})
+		})
+	}
+}
+
+// assertExits waits until the thread's chat log holds as many exits as want, then checks them.
+func assertExits(t *testing.T, h *apptest.Harness, id string, want ...chatlog.Event) {
+	t.Helper()
 	var got []chatlog.Event
-	eventually(t, "both exits in the log", func() bool {
-		path, _ := hostFiles(h, s.ID)
+	eventually(t, "the exits in the log", func() bool {
+		path, _ := hostFiles(h, id)
 		logged, _ := chatlog.ReadLog(path, 0)
 		got = nil
 		for _, e := range logged {
@@ -189,7 +222,7 @@ func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
 				got = append(got, chatlog.Event{Kind: e.Kind, Stop: e.Stop, Text: e.Text, Error: e.Error})
 			}
 		}
-		return len(got) == len(want)
+		return len(got) >= len(want)
 	})
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("exits = %+v, want %+v", got, want)

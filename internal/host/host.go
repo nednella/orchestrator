@@ -492,6 +492,9 @@ func (h *host) do(req request) (string, error) {
 		return "", h.setMode(req.Mode)
 	case opStop:
 		return "", h.planStop(req.Reason, req.Access)
+	case opRelease:
+		h.release()
+		return "", nil
 	}
 	return "", fmt.Errorf("unknown op %q", req.Op)
 }
@@ -681,6 +684,13 @@ func (h *host) planStop(reason, access string) error {
 	defer h.mu.Unlock()
 	h.plannedStop, h.restartAccess = reason, access
 	return nil
+}
+
+// release ends a hold and forgets a planned stop.
+func (h *host) release() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.holding, h.plannedStop, h.restartAccess = false, "", ""
 }
 
 // busyLocked needs h.mu.
