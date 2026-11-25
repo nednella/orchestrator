@@ -2,14 +2,17 @@ package sessions_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
@@ -39,10 +42,17 @@ func inToolCall(h *apptest.Harness, t *testing.T, s sessions.Session, dir string
 	h.Hook(t, s.ID, "PostToolUse", string(cwd))
 }
 
-// madeBranch has the session check out my-fix in the project folder, as ownBranch does.
-func madeBranch(h *apptest.Harness, t *testing.T, s sessions.Session) {
+// worktreeThread starts a Supervised thread with no issue in the worktree agentos makes for it, on my-work.
+func worktreeThread(h *apptest.Harness, t *testing.T) sessions.Session {
 	t.Helper()
-	inToolCall(h, t, s, h.Dir, func() { ownBranch(t, h.Dir) })
+	s, err := h.NewThreadIn("my work", "", "supervised", "worktree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Branch != "my-work" || s.Worktree == "" {
+		t.Fatalf("thread = %+v, want it in its worktree on my-work", s)
+	}
+	return s
 }
 
 // ownBranch checks out my-fix in dir with one pushed commit.
@@ -64,22 +74,23 @@ func hasPR(h *apptest.Harness, id string) func() bool {
 func TestPRIsFoundWhenTheTurnEnds(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	madeBranch(h, t, s)
-	worksIn(h, t, s, h.Dir)
-	eventually(t, "the branch", func() bool { got, _ := h.Session(s.ID); return got.Branch == "my-fix" })
+	s := worktreeThread(h, t)
+	worksIn(h, t, s, s.Worktree)
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.PR != nil {
+		t.Fatalf("a PR before there is one: %+v", got.PR)
+	}
 
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-	worksIn(h, t, s, h.Dir)
+	worksIn(h, t, s, s.Worktree)
 	eventually(t, "the PR the agent opened during the turn", hasPR(h, s.ID))
 }
 
 func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	madeBranch(h, t, s)
-	worksIn(h, t, s, h.Dir)
+	s := worktreeThread(h, t)
+	worksIn(h, t, s, s.Worktree)
 	eventually(t, "the lookup of the turn", func() bool { return h.GH.Calls("pr list") > 0 })
 	time.Sleep(300 * time.Millisecond)
 
@@ -90,123 +101,6 @@ func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	if got := h.GH.Calls("pr list"); got != before {
 		t.Errorf("pr lookups after refreshes of an idle session = %d, want %d", got, before)
-	}
-}
-
-func TestSessionWithoutAnIssueFindsItsPR(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	madeBranch(h, t, s)
-	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-
-	worksIn(h, t, s, h.Dir)
-	eventually(t, "the PR of the branch the session works on", hasPR(h, s.ID))
-	if got, _ := h.Session(s.ID); got.Branch != "my-fix" || got.PR.State != "draft" {
-		t.Errorf("session = %+v", got)
-	}
-
-	fresh := h.Restart(t)
-	fresh.RefreshPRs()
-	var again sessions.Session
-	for _, v := range fresh.Sessions().List() {
-		if v.ID == s.ID {
-			again = v
-		}
-	}
-	if again.Branch != "my-fix" || again.PR == nil {
-		t.Errorf("after restart = %+v", again)
-	}
-}
-
-func TestSessionWithoutAnIssueOnMainHasNoPR(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-
-	worksIn(h, t, s, h.Dir)
-	h.RefreshPRs()
-	if got, _ := h.Session(s.ID); got.PR != nil || got.Branch != "" {
-		t.Errorf("session on main = %+v", got)
-	}
-	if err := h.Cleanup(s.ID, false); err == nil {
-		t.Error("cleaned up a session with no branch")
-	}
-}
-
-func TestSessionWithoutAnIssueCleanupCommandRunsInTheProjectFolder(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git -C {dir} switch main && git branch -D {branch}"})
-	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	madeBranch(h, t, s)
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
-	worksIn(h, t, s, h.Dir)
-	eventually(t, "the PR", hasPR(h, s.ID))
-
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-
-	if got := gitIn(t, h.Dir, "branch", "--show-current"); got != "main" {
-		t.Errorf("project folder is on %q", got)
-	}
-	if got := gitIn(t, h.Dir, "branch", "--list", "my-fix"); got != "" {
-		t.Errorf("branch left: %q", got)
-	}
-	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 0 || log[0].PR != 12 {
-		t.Fatalf("log = %+v", log)
-	}
-	if want := []string{"clean-up command for my-fix", "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
-		t.Errorf("removed = %q, want %q", log[0].Removed, want)
-	}
-}
-
-func TestSessionWithoutAnIssueCleanupBlockedByChangesInTheProjectFolder(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	s := sessionWithoutIssue(h, t)
-	madeBranch(h, t, s)
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
-	worksIn(h, t, s, h.Dir)
-	eventually(t, "the PR", hasPR(h, s.ID))
-	if err := os.WriteFile(filepath.Join(h.Dir, "fix.txt"), []byte("changed\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
-
-	if got, _ := h.Session(s.ID); got.CleanupReason != "the worktree of my-fix has uncommitted changes" {
-		t.Errorf("reason = %q", got.CleanupReason)
-	}
-	if got := gitIn(t, h.Dir, "branch", "--show-current"); got != "my-fix" {
-		t.Errorf("project folder is on %q although the clean-up was blocked", got)
-	}
-}
-
-func TestSessionWithoutAnIssueCleanupRemovesItsWorktree(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	wt := filepath.Join(h.Dir, "trees", "my-fix")
-	gitIn(t, h.Dir, "worktree", "add", "-b", "my-fix", wt)
-	gitIn(t, wt, "push", "-u", "origin", "my-fix")
-	s := sessionWithoutIssue(h, t)
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
-	worksIn(h, t, s, wt)
-	eventually(t, "the PR", hasPR(h, s.ID))
-
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-
-	if exists(wt) || gitIn(t, h.Dir, "branch", "--list", "my-fix") != "" {
-		t.Errorf("worktree exists: %v, branches: %q", exists(wt), gitIn(t, h.Dir, "branch", "--list", "my-fix"))
-	}
-	if got := gitIn(t, h.Dir, "branch", "--show-current"); got != "main" {
-		t.Errorf("project folder is on %q", got)
 	}
 }
 
@@ -242,5 +136,104 @@ func TestIssueSessionKnowsItsIssue(t *testing.T) {
 	s := issueSession(h, t, 9)
 	if env := claudeEnv(t, h, s.ID); env["AGENTOS_ISSUE"] != "9" || env["AGENTOS_SESSION"] != s.ID {
 		t.Errorf("claude was started with %v, want AGENTOS_ISSUE=9 and AGENTOS_SESSION=%s", env, s.ID)
+	}
+}
+
+func TestThreadBranchComesFromItsRecord(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	other := filepath.Join(t.TempDir(), "other")
+	gitIn(t, filepath.Dir(other), "init", other)
+	commitIn(t, other, "a.txt")
+	gitIn(t, other, "checkout", "-b", "theirs")
+	h.GH.SetPRFor("issue-7", "[]")
+	h.GH.SetPRFor("theirs", numberedPR(20, "OPEN"))
+	h.GH.SetPRFor("my-fix", numberedPR(21, "OPEN"))
+	s := issueThread(h, t, 7)
+
+	worksIn(h, t, s, other)
+	inToolCall(h, t, s, h.Dir, func() { ownBranch(t, h.Dir) })
+	worksIn(h, t, s, h.Dir)
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.Branch != "issue-7" || got.PR != nil {
+		t.Errorf("row = %+v, want issue-7 and no PR", got)
+	}
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Branch != "issue-7" {
+		t.Errorf("state file branch = %q, %v", rec.Branch, err)
+	}
+	if n := h.GH.Calls("pr list --head theirs") + h.GH.Calls("pr list --head my-fix"); n != 0 {
+		t.Errorf("the PRs of branches the thread only ran on were looked up %d times", n)
+	}
+}
+
+// branchTag is the branch tmux keeps for the thread.
+func branchTag(t *testing.T, h *apptest.Harness, id string) string {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@agentos-branch}").Output()
+	if err != nil {
+		t.Fatalf("reading the branch tag of %s: %v", id, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestTrackMovesTheThreadsBranch(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	gitIn(t, s.Worktree, "checkout", "-b", "issue-7-fix")
+	h.GH.SetPRFor("issue-7", "[]")
+	h.GH.SetPRFor("issue-7-fix", numberedPR(20, "OPEN"))
+
+	if resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "issue-7-fix"}}); !resp.OK {
+		t.Fatalf("track: %s", resp.Error)
+	}
+	eventually(t, "the PR of the tracked branch", func() bool { got, _ := h.Session(s.ID); return got.PR != nil && got.PR.Number == 20 })
+	if got, _ := h.Session(s.ID); got.Branch != "issue-7-fix" || got.Worktree != s.Worktree {
+		t.Errorf("row = %+v", got)
+	}
+	if got := branchTag(t, h, s.ID); got != "issue-7-fix" {
+		t.Errorf("tag = %q", got)
+	}
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Branch != "issue-7-fix" {
+		t.Errorf("state file branch = %q, %v", rec.Branch, err)
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Branch != "issue-7-fix" || records[0].Thread != s.ID {
+		t.Errorf("records = %+v", records)
+	}
+}
+
+func TestTrackRefusesAnotherThreadsBranch(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	first := issueThread(h, t, 7)
+	second := issueThread(h, t, 8)
+	want := fmt.Sprintf("Thread %d works on issue-7", first.N)
+	if err := h.Sessions().Track(second.ID, "issue-7"); err == nil || err.Error() != want {
+		t.Errorf("track of a live thread's branch = %v, want %q", err, want)
+	}
+	if err := h.SettleThread(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Sessions().Track(second.ID, "issue-7"); err == nil || err.Error() != want {
+		t.Errorf("track of a settled thread's branch = %v, want %q", err, want)
+	}
+	if got, _ := h.Session(second.ID); got.Branch != "issue-8" || branchTag(t, h, second.ID) != "issue-8" {
+		t.Errorf("the refused thread = %+v, tag %q", got, branchTag(t, h, second.ID))
+	}
+}
+
+func TestTrackRefusesAReadThread(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	read, err := h.NewThread("ask", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Sessions().Track(read.ID, "my-fix"); err == nil || err.Error() != "A Read thread works on no branch" {
+		t.Errorf("track = %v", err)
+	}
+	if got, _ := h.Session(read.ID); got.Branch != "" || branchTag(t, h, read.ID) != "" {
+		t.Errorf("the Read thread = %+v, tag %q", got, branchTag(t, h, read.ID))
 	}
 }

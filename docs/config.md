@@ -21,9 +21,9 @@ projects:
     session_branch_fallback: "" # branch agentos makes for an issue thread; {n} is the issue number; "" means issue-{n}
     session_cleanup_command: "" # shell command that removes the worktree agentos made, the branch stays; {worktree}, {branch}, {dir}, {force} (--force when forced, else empty); "" means git worktree remove {force} {worktree}
     session_worktree_command: "" # shell command that makes a thread's worktree on a new branch; {branch}, {worktree}, {dir}, {base}; "" means git worktree add -b {branch} {worktree} {base}
-    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles a thread that hears the PR, saw it open and works on its branch as its newest, and a clean-up keeps the thread, settled. The settings panel writes it
-      merge: auto              # auto or manual: after the pull request merged; auto needs the session to have seen it open
-      close: manual            # auto or manual: after the pull request closed unmerged; auto needs the session to have seen it open
+    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close of the PR of a thread's branch settles the thread, and a clean-up keeps the thread, settled. The settings panel writes it
+      merge: auto              # auto or manual: after the pull request merged, also while the app was closed
+      close: manual            # auto or manual: after the pull request closed unmerged, also while the app was closed
     browser_start_url: ""      # page a session's browser opens first
     browser_enabled: true      # give sessions the browser tools, and tell them about the browser. The settings panel writes it
     digest_schedule: weekly    # weekly or off. The settings panel writes it
@@ -127,6 +127,8 @@ The worktree is `<project>/trees/<branch>`. Before it makes the first one, agent
 
 A start that fails after agentos made the worktree removes that worktree with `git worktree remove`, never forced, so one with changes stays; the branch stays too. A fork runs in its thread's folder and has no branch of its own.
 
+A thread's branch is the one agentos made its worktree on, or the one it reported with `agentos track --branch <name>`; the folder the agent works in never changes it. A thread in the project folder has no branch, and so no pull request and no clean-up, until it runs `agentos track`. `track` refuses the default branch, a branch another thread that is not archived works on (`Thread <n> works on <branch>`), a fork and a Read thread (`A Read thread works on no branch`). When the thread's own worktree has the branch checked out, the record of the worktree follows it.
+
 ### Keeping the Mac awake
 
 While at least one session is working, in any project whose `keep_mac_awake` is on (the project's own setting, else the top-level one, else on), the app runs `caffeinate -i -w <app pid>`: the Mac does not idle-sleep and the display still may. It does not stop a closed lid from sleeping the Mac unless the Mac is in clamshell mode (external display and power connected), and it does not stop a manual sleep or a sleep from low battery.
@@ -153,7 +155,7 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs, clean up or list what waits |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
 | Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |
-| From inside a session | `issue <n> --prompt -`, `new <title> [--access read\|supervised] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (not the default branch) | `issue` and `new` hand work to a new thread, a read-only one with `--access read`, as under Work; `agentos browser help` explains the browser |
+| From inside a session | `issue <n> --prompt -`, `new <title> [--access read\|supervised] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (makes it the thread's branch; see [Where a thread runs](#where-a-thread-runs)) | `issue` and `new` hand work to a new thread, a read-only one with `--access read`, as under Work; `agentos browser help` explains the browser |
 
 `stats [--days N] [--json]` prints the interruption tally. `agentos settle` without a number settles this project's threads directly through tmux, with the app closed too, and keeps their state files, so the app shows them as settled; `--all` does it for every project and stops the shells. Neither touches a session that ran in a terminal before the host; the command says how many it left. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
 

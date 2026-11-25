@@ -201,36 +201,6 @@ func TestRemovingAProjectEndsItsSessions(t *testing.T) {
 	}
 }
 
-func TestNewSessionDoesNotInheritAnOlderOnesLiveFlag(t *testing.T) {
-	h := newHarness(t)
-	long := time.Now().Add(-time.Hour)
-	if err := bus.WriteState(h.State, session.Record{Session: "main/1", State: session.Settled, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old", Issue: 7}, SettledAt: long.UnixMilli()}); err != nil {
-		t.Fatal(err)
-	}
-	prs := filepath.Join(h.State, "data", "main", "prs.json")
-	if err := os.MkdirAll(filepath.Dir(prs), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(prs, []byte(`{"acks":{},"live":{"main/1":true}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.Sessions().Refresh()
-	if err := h.ArchiveThread("main/1"); err != nil {
-		t.Fatal(err)
-	}
-
-	s := issueSession(h, t, 7)
-	if s.ID == "main/1" {
-		t.Fatal("the new session took the id of the old one")
-	}
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	h.RefreshPRs()
-	if got, _ := h.Session(s.ID); got.Cleanup != "ask" {
-		t.Errorf("a PR first seen merged gave cleanup %q: the new session inherited the old one's live flag", got.Cleanup)
-	}
-}
-
 func TestSessionIsKilledWhenItsIssueCannotBeRecorded(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
@@ -263,8 +233,8 @@ func TestEventsNameTheirProject(t *testing.T) {
 func TestCleanupStopsWhenTheAppCloses(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "sleep 30; : {worktree} {branch}"})
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 	openThenMerge(h)
 	eventually(t, "the clean-up to start", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "pending" })
 
@@ -280,8 +250,12 @@ func TestCleanupStopsWhenTheAppCloses(t *testing.T) {
 }
 
 func TestPollFailuresAreWarnedAboutOnce(t *testing.T) {
-	h := newHarness(t) // its folder is no git repo, so listing the worktrees fails too
-	issueSession(h, t, 7)
+	h := newHarness(t)
+	repoFixture(t, h)
+	issueThread(h, t, 7)
+	if err := os.Rename(filepath.Join(h.Dir, ".git"), filepath.Join(h.Dir, "git-gone")); err != nil { // listing the worktrees fails too
+		t.Fatal(err)
+	}
 	h.GH.PRErr = errors.New("gh pr list: exit status 1: HTTP 502 from GitHub\nmore detail")
 	h.RefreshPRs()
 	h.RefreshPRs()

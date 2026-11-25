@@ -241,13 +241,14 @@ func TestReadThreadFollowsItsBranch(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-	read, err := h.NewThread("ask", "", "", "", "read")
+	read, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	madeBranch(h, t, read)
-	worksIn(h, t, read, h.Dir)
-	eventually(t, "the Read thread's branch", func() bool { got, _ := h.Session(read.ID); return got.Branch == "my-fix" })
+	if read.Access != session.Read || read.Branch != "issue-7" {
+		t.Fatalf("the Plan thread = %+v, want a Read thread on issue-7", read)
+	}
+	worksIn(h, t, read, read.Worktree)
 	eventually(t, "the Read thread's PR", hasPR(h, read.ID))
 }
 
@@ -313,6 +314,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
+			repoFixture(t, h)
 			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
@@ -357,6 +359,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 	}{{"live", false}, {"held while working", true}} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+			repoFixture(t, h)
 			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)

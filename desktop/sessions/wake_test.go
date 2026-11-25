@@ -248,6 +248,7 @@ func TestPRReviewWakesASettledThread(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
+			repoFixture(t, h)
 			s := issueSession(h, t, 12)
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 			h.RefreshPRs()
@@ -313,8 +314,9 @@ func TestIssueStartWakesTheSettledThread(t *testing.T) {
 func TestPRBeforeTheLastWakeIsAnEarlierWakes(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	ended(t, h, s)
 	closed := time.Now()
 	time.Sleep(2 * time.Millisecond) // the wake must come after the close to the millisecond
@@ -333,8 +335,8 @@ func TestPRBeforeTheLastWakeIsAnEarlierWakes(t *testing.T) {
 func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 	openThenMerge(h)
 	eventually(t, "the first clean-up", cleanedUp(h, s.ID))
 
@@ -440,6 +442,7 @@ func TestWakeOfALiveThreadFails(t *testing.T) {
 
 func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
 	h := apptest.New(t)
+	repoFixture(t, h)
 	s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)

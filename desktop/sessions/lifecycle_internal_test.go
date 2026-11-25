@@ -125,83 +125,37 @@ func TestPollResultForAForgottenSessionIsDropped(t *testing.T) {
 			if tt.forget {
 				l.forget(id)
 			}
-			o := l.update(target{id: id, proj: proj}, "issue-7", "", &PR{Number: 7, State: "open"}, true)
+			o := l.update(target{id: id, branch: "issue-7", proj: proj}, "", &PR{Number: 7, State: "open"})
 			_, tracked := l.tracks[id]
-			if tracked != tt.want || slices.Contains(l.prs("p").SawOpen[id], "issue-7") != tt.want || (!tt.want && o != (outcome{})) {
-				t.Errorf("tracked %v, saw open %v, outcome %+v, want tracked %v", tracked, l.prs("p").SawOpen[id], o, tt.want)
+			if tracked != tt.want || (!tt.want && o != (outcome{})) {
+				t.Errorf("tracked %v, outcome %+v, want tracked %v", tracked, o, tt.want)
 			}
 		})
 	}
 }
 
-func TestHearerOfASharedBranch(t *testing.T) {
-	on := func(id string, branches []string, owns, ended bool) done {
-		tg := target{id: id, branches: branches, ended: ended}
-		if owns {
-			tg.owned = []string{"x"}
-		}
-		return done{target: tg, branch: "x"}
-	}
-	for _, tt := range []struct {
-		name    string
-		fetched []done
-		want    string
-	}{
-		{"the owner over one that only saw it", []done{on("seen", []string{"x"}, false, false), on("owner", []string{"x"}, true, false)}, "owner"},
-		{"a live session over an ended one", []done{on("ended", []string{"x"}, true, true), on("live", []string{"x"}, true, false)}, "live"},
-		{"one on the branch now over one that moved on", []done{on("moved", []string{"x", "y"}, true, false), on("now", []string{"x"}, true, false)}, "now"},
-		{"the first of equals", []done{on("first", []string{"x"}, true, false), on("second", []string{"x"}, true, false)}, "first"},
-		{"none on another branch", []done{{target: target{id: "other", branches: []string{"y"}}, branch: "y"}}, ""},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := hearer(tt.fetched, "x"); got != tt.want {
-				t.Errorf("hearer = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestSharingAddsTheSessionsOnABranchOfThoseNamed(t *testing.T) {
-	targets := []target{{id: "a", branches: []string{"x", "y"}}, {id: "b", branches: []string{"x"}}, {id: "c", branches: []string{"z"}}}
-	var ids []string
-	for _, tg := range sharing(targets, []string{"y"}) {
-		ids = append(ids, tg.id)
-	}
-	if !slices.Equal(ids, []string{"a", "b"}) {
-		t.Errorf("sharing = %v, want a and b", ids)
-	}
-	if got := sharing(targets, nil); len(got) != 3 {
-		t.Errorf("sharing with no filter = %d targets, want 3", len(got))
-	}
-}
-
-func TestOnlyTheHearerGetsTheCommandsAndTheOpenedAlert(t *testing.T) {
+func TestThreadGetsItsPRsCommandsAndOpenedAlert(t *testing.T) {
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p", OnReview: "/address-review {n}"}
-	other, hearer := target{id: "p/other", proj: proj, branches: []string{"x"}}, target{id: "p/hearer", proj: proj, branches: []string{"x"}}
-	l.update(other, "x", "", &PR{Number: 7, State: "open"}, false)
-	l.update(hearer, "x", "", &PR{Number: 7, State: "open"}, true)
-	if l.opened(other.id) || !l.opened(hearer.id) {
-		t.Error("the opened alert did not go to the hearer alone")
+	tg := target{id: "p/a", proj: proj, branch: "x"}
+	l.update(tg, "", &PR{Number: 7, State: "open"})
+	if !l.opened(tg.id) {
+		t.Error("the thread did not hear of its new PR")
 	}
-
-	if o := l.update(other, "x", "", &PR{Number: 7, State: "open", Comments: 1}, false); o.wake != "" {
-		t.Errorf("the other session got %q", o.wake)
-	}
-	if o := l.update(hearer, "x", "", &PR{Number: 7, State: "open", Comments: 1}, true); o.wake != "/address-review 7" {
-		t.Errorf("the hearer got %q, want the review command", o.wake)
+	if o := l.update(tg, "", &PR{Number: 7, State: "open", Comments: 1}); o.wake != "/address-review 7" {
+		t.Errorf("the thread got %q, want the review command", o.wake)
 	}
 }
 
 func TestReviewAfterACommentIsDeletedWakesTheSession(t *testing.T) {
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p", OnReview: "/address-review {n}"}
-	tg := target{id: "p/a", proj: proj, branches: []string{"x"}}
+	tg := target{id: "p/a", proj: proj, branch: "x"}
 	for i, tt := range []struct {
 		comments int
 		want     string
 	}{{3, ""}, {2, ""}, {3, "/address-review 7"}, {3, ""}} {
-		if o := l.update(tg, "x", "", &PR{Number: 7, State: "open", Comments: tt.comments}, true); o.wake != tt.want {
+		if o := l.update(tg, "", &PR{Number: 7, State: "open", Comments: tt.comments}); o.wake != tt.want {
 			t.Errorf("fetch %d with %d comments woke with %q, want %q", i, tt.comments, o.wake, tt.want)
 		}
 	}

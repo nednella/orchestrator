@@ -16,7 +16,6 @@ import (
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -33,6 +32,7 @@ func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session 
 
 func TestPRTracking(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	if s.Branch != "issue-12" || s.PR != nil || s.PRAttention != "" || s.Cleanup != "" {
 		t.Errorf("fresh session = %+v", s)
@@ -128,18 +128,6 @@ func repoFixture(t *testing.T, h *apptest.Harness) string {
 	return origin
 }
 
-// projectIssueSession starts the thread of issue n in the project folder, as threads ran before agentos made worktrees.
-func projectIssueSession(h *apptest.Harness, t *testing.T, n int) sessions.Session {
-	t.Helper()
-	s, _, err := h.Sessions().CreateIssue(fmt.Sprintf("#%d work", n), "", n, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{Place: sessions.InProject})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, socket := hostFiles(h, s.ID)
-	eventually(t, "the host's socket", func() bool { return exists(socket) })
-	return s
-}
-
 // issueThread starts the thread of issue n in the worktree agentos makes for it; repoFixture comes first.
 func issueThread(h *apptest.Harness, t *testing.T, n int) sessions.Session {
 	t.Helper()
@@ -161,26 +149,6 @@ func pushWork(t *testing.T, wt string) {
 	gitIn(t, wt, "push", "-u", "origin", "HEAD")
 }
 
-// issueWorktree adds a worktree on issue-7 with one pushed commit.
-func issueWorktree(t *testing.T, h *apptest.Harness) string {
-	t.Helper()
-	return branchWorktree(t, h, "issue-7")
-}
-
-// branchWorktree adds a worktree on branch with one pushed commit.
-func branchWorktree(t *testing.T, h *apptest.Harness, branch string) string {
-	t.Helper()
-	wt := filepath.Join(h.Dir, "trees", branch)
-	gitIn(t, h.Dir, "worktree", "add", "-b", branch, wt)
-	if err := os.WriteFile(filepath.Join(wt, "work.txt"), []byte("work\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	gitIn(t, wt, "add", "work.txt")
-	gitIn(t, wt, "commit", "-m", "work")
-	gitIn(t, wt, "push", "-u", "origin", branch)
-	return wt
-}
-
 func branches(t *testing.T, dir string) string {
 	return gitIn(t, dir, "branch", "--list", "issue-7")
 }
@@ -188,8 +156,9 @@ func branches(t *testing.T, dir string) string {
 func TestCleanupMerged(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	if resp := h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
@@ -250,9 +219,10 @@ func TestCleanupBlocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t)
 			repoFixture(t, h)
-			wt := issueWorktree(t, h)
+			s := issueThread(h, t, 7)
+			wt := s.Worktree
+			pushWork(t, wt)
 			tt.spoil(t, wt)
-			s := issueSession(h, t, 7)
 
 			openThenMerge(h)
 			eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
@@ -293,8 +263,9 @@ func TestCleanupBlocked(t *testing.T) {
 func TestCleanupClosedAsksFirst(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	h.GH.SetPR(prJSON("CLOSED", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -330,8 +301,9 @@ func TestPRClosedBeforeTheSessionStartedIsNotItsPR(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t)
 			repoFixture(t, h)
-			wt := issueWorktree(t, h)
-			s := issueSession(h, t, 7)
+			s := issueThread(h, t, 7)
+			wt := s.Worktree
+			pushWork(t, wt)
 
 			h.GH.SetPR(closedAt(prJSON(tt.state, false, "[]", 0, 0), tt.at))
 			h.RefreshPRs()
@@ -347,10 +319,11 @@ func TestPRClosedBeforeTheSessionStartedIsNotItsPR(t *testing.T) {
 func TestCleanupMergedWithRemoteBranchGone(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	gitIn(t, origin, "branch", "-D", "issue-7")
 	gitIn(t, h.Dir, "fetch", "--prune")
-	s := issueSession(h, t, 7)
 
 	openThenMergeAt(h, gitIn(t, h.Dir, "rev-parse", "issue-7"))
 	eventually(t, "clean-up of a merged branch GitHub deleted", cleanedUp(h, s.ID))
@@ -380,8 +353,9 @@ func keptFor(t *testing.T, h *apptest.Harness, id, wt, reason string) {
 func TestRebaseMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	head := apptest.MergeAs(t, origin, "issue-7", "rebase+delete")
 	if head != gitIn(t, wt, "rev-parse", "HEAD") || onOrigin(t, origin, head) {
 		t.Fatal("the rebase kept the branch's commit ids, so the test proves nothing")
@@ -397,10 +371,11 @@ func TestRebaseMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 func TestSquashMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	commitIn(t, wt, "second.txt")
 	gitIn(t, wt, "push", "origin", "issue-7")
-	s := issueSession(h, t, 7)
 	head := apptest.MergeAs(t, origin, "issue-7", "squash+delete")
 	if onOrigin(t, origin, head) {
 		t.Fatal("the squash kept the branch's commits on origin")
@@ -416,8 +391,9 @@ func TestSquashMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 func TestMergeCommitInTheDefaultBranchIsMerged(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	apptest.MergeAs(t, origin, "issue-7", "merge+delete")
 
 	openThenMerge(h)
@@ -430,8 +406,9 @@ func TestMergeCommitInTheDefaultBranchIsMerged(t *testing.T) {
 func TestWorktreePastTheMergedHeadIsKept(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	head := apptest.MergeAs(t, origin, "issue-7", "rebase+delete")
 	commitIn(t, wt, "after.txt")
 	after := gitIn(t, wt, "rev-parse", "HEAD")
@@ -446,8 +423,9 @@ func TestWorktreePastTheMergedHeadIsKept(t *testing.T) {
 func TestWorktreeThatMovedOnAfterTheMergeIsKept(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	head := apptest.MergeAs(t, origin, "issue-7", "rebase")
 	commitIn(t, wt, "after.txt")
 	gitIn(t, wt, "push", "origin", "issue-7")
@@ -459,8 +437,9 @@ func TestWorktreeThatMovedOnAfterTheMergeIsKept(t *testing.T) {
 func TestForcePushBeforeTheMergeKeepsTheOldWork(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	other := filepath.Join(t.TempDir(), "other")
 	gitIn(t, filepath.Dir(other), "clone", "--branch", "issue-7", origin, other)
 	gitIn(t, other, "reset", "--hard", "origin/main")
@@ -479,8 +458,9 @@ func TestForcePushBeforeTheMergeKeepsTheOldWork(t *testing.T) {
 func TestWorktreeBehindThePRsHeadIsMerged(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	owners := filepath.Join(t.TempDir(), "owners")
 	gitIn(t, filepath.Dir(owners), "clone", "--branch", "issue-7", origin, owners)
 	commitIn(t, owners, "fixup.txt")
@@ -498,8 +478,9 @@ func TestWorktreeBehindThePRsHeadIsMerged(t *testing.T) {
 func TestFailedFetchKeepsTheWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	gitIn(t, h.Dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 
 	openThenMerge(h)
@@ -509,7 +490,9 @@ func TestFailedFetchKeepsTheWorktree(t *testing.T) {
 func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	gitIn(t, h.Dir, "config", "status.showUntrackedFiles", "no")
 	if err := os.WriteFile(filepath.Join(wt, "new.txt"), []byte("x\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -517,7 +500,6 @@ func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
 	if gitIn(t, wt, "status", "--porcelain") != "" {
 		t.Fatal("git still shows untracked files, so the test proves nothing")
 	}
-	s := issueSession(h, t, 7)
 
 	openThenMerge(h)
 	keptFor(t, h, s.ID, wt, "the worktree of issue-7 has uncommitted changes")
@@ -526,8 +508,9 @@ func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
 func TestMergedPRWithoutAHeadAndNotInMainIsKept(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	apptest.MergeAs(t, origin, "issue-7", "rebase+delete")
 
 	openThenMerge(h)
@@ -537,8 +520,9 @@ func TestMergedPRWithoutAHeadAndNotInMainIsKept(t *testing.T) {
 func TestMergedPRAtACommitGitDoesNotKnowIsKept(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	apptest.MergeAs(t, origin, "issue-7", "rebase+delete")
 
 	openThenMergeAt(h, strings.Repeat("0", 40))
@@ -548,8 +532,9 @@ func TestMergedPRAtACommitGitDoesNotKnowIsKept(t *testing.T) {
 func TestClosedPRWithPushedWorkIsRemovedOnConfirm(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -588,8 +573,9 @@ func gitStatus(t *testing.T, h *apptest.Harness, id string) sessions.BranchStatu
 func TestBranchStatus(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	worksIn(h, t, s, wt)
 	h.RefreshPRs()
@@ -622,11 +608,9 @@ func TestBranchStatus(t *testing.T) {
 func TestBranchStatusOfABranchOriginHasNot(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := filepath.Join(h.Dir, "trees", "issue-7")
-	gitIn(t, h.Dir, "worktree", "add", "-b", "issue-7", wt)
-	commitIn(t, wt, "a.txt")
-	commitIn(t, wt, "b.txt")
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	commitIn(t, s.Worktree, "a.txt")
+	commitIn(t, s.Worktree, "b.txt")
 	h.RefreshPRs()
 	if got := gitStatus(t, h, s.ID); got != (sessions.BranchStatus{Base: "main", Ahead: 2, Unpushed: 2}) {
 		t.Errorf("a branch never pushed = %+v", got)
@@ -636,12 +620,13 @@ func TestBranchStatusOfABranchOriginHasNot(t *testing.T) {
 func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 	h := newHarness(t)
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	head := gitIn(t, wt, "rev-parse", "HEAD")
 	commitIn(t, wt, "after.txt")
 	gitIn(t, origin, "branch", "-D", "issue-7")
 	gitIn(t, h.Dir, "fetch", "--prune")
-	s := issueSession(h, t, 7)
 
 	openThenMergeAt(h, head)
 	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
@@ -651,13 +636,14 @@ func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 }
 
 func TestBranchStatusAfterARebaseMerge(t *testing.T) {
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	origin := repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	head := apptest.MergeAs(t, origin, "issue-7", "rebase+delete")
 
-	h.GH.SetPR(apptest.WithHead(prJSON("MERGED", false, "[]", 0, 0), head)) // never seen open, so the owner decides and the row stays
+	h.GH.SetPR(apptest.WithHead(prJSON("MERGED", false, "[]", 0, 0), head)) // the owner decides, so the row stays
 	h.RefreshPRs()
 	if got := gitStatus(t, h, s.ID); got.NotInMain != 0 || got.Unpushed != 0 {
 		t.Errorf("at the merged head = %+v, want nothing left out", got)
@@ -672,8 +658,9 @@ func TestBranchStatusAfterARebaseMerge(t *testing.T) {
 func TestCleanupCustomCommand(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree} && git branch -D {branch} && touch {dir}/cleaned-{branch}"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenMerge(h)
 	eventually(t, "clean-up", cleanedUp(h, s.ID))
@@ -688,8 +675,9 @@ func TestCleanupCustomCommand(t *testing.T) {
 func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "printf '[%s]' {force} > {dir}/force-{branch}; git worktree remove {force} {worktree} && git branch -D {branch}"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	marker := filepath.Join(h.Dir, "force-issue-7")
 
 	openThenMerge(h)
@@ -698,12 +686,11 @@ func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 		t.Errorf("unforced {force} = %q, want empty", got)
 	}
 
-	gitIn(t, h.Dir, "worktree", "add", "-b", "issue-8", filepath.Join(filepath.Dir(wt), "issue-8"))
-	dirty := filepath.Join(filepath.Dir(wt), "issue-8")
+	s8 := issueThread(h, t, 8)
+	dirty := s8.Worktree
 	if err := os.WriteFile(filepath.Join(dirty, "new.txt"), []byte("x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s8 := issueSession(h, t, 8)
 	if err := h.Cleanup(s8.ID, true); err != nil {
 		t.Fatal(err)
 	}
@@ -726,60 +713,12 @@ func TestCleanupCommandMayWorkInTheMainTree(t *testing.T) {
 	}
 }
 
-func TestOwnersBranchInTheProjectFolderIsNotTheSessions(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	ownBranch(t, h.Dir)
-	h.GH.SetPRFor("my-fix", numberedPR(20, "OPEN"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	s := projectIssueSession(h, t, 7)
-
-	worksIn(h, t, s, h.Dir)
-	wt := issueWorktree(t, h)
-	worksIn(h, t, s, wt)
-	inToolCall(h, t, s, h.Dir, func() {})
-	worksIn(h, t, s, h.Dir)
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.PR == nil || got.PR.Number != 21 {
-		t.Fatalf("session = %+v, want the PR of issue-7", got)
-	}
-
-	h.GH.SetPRFor("my-fix", numberedPR(20, "MERGED"))
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, ok := h.Session(s.ID); !ok || got.Cleanup != "" {
-		t.Errorf("session = %+v after the owner's PR merged", got)
-	}
-	if len(h.Cleanups()) != 0 || gitIn(t, h.Dir, "branch", "--list", "my-fix") == "" {
-		t.Errorf("cleanups = %+v, branches %q", h.Cleanups(), gitIn(t, h.Dir, "branch", "--list"))
-	}
-}
-
-func TestOwnersSwitchDuringSessionsWorkIsNotTheSessions(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	h.GH.SetPRFor("my-fix", numberedPR(20, "OPEN"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	s := projectIssueSession(h, t, 7)
-	wt := issueWorktree(t, h)
-
-	worksIn(h, t, s, wt)
-	inToolCall(h, t, s, wt, func() { ownBranch(t, h.Dir) })
-	inToolCall(h, t, s, h.Dir, func() {})
-	worksIn(h, t, s, h.Dir)
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.Branch != "issue-7" || got.PR == nil || got.PR.Number != 21 {
-		t.Errorf("session = %+v, want issue-7 and its PR", got)
-	}
-}
-
 func TestCleanupWithoutCommandRemovesOnlyTheSession(t *testing.T) {
 	h := apptest.New(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenMerge(h)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
@@ -795,8 +734,8 @@ func TestCleanupWithoutCommandRemovesOnlyTheSession(t *testing.T) {
 func TestCleanupCommandFailureStopsBeforeTheSession(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "false"})
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 
 	openThenMerge(h)
 	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
@@ -808,8 +747,9 @@ func TestCleanupCommandFailureStopsBeforeTheSession(t *testing.T) {
 func TestCleanupCommandFailureWithNothingLeftCleansUpTheSession(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove --force {worktree} && git branch -D {branch}; exit 3"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenMerge(h)
 	eventually(t, "clean-up", cleanedUp(h, s.ID))
@@ -825,8 +765,8 @@ func TestCleanupCommandFailureWithNothingLeftCleansUpTheSession(t *testing.T) {
 func TestCleanupCommandFailureWithABranchLeftStillBlocks(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove --force {worktree}; exit 3"})
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 
 	openThenMerge(h)
 	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
@@ -878,32 +818,66 @@ func openThenMergeAt(h *apptest.Harness, head string) {
 	h.RefreshPRs()
 }
 
-func TestMergedBeforeTheSessionAsksFirst(t *testing.T) {
+func TestPRMergedWhileTheAppWasClosedIsCleanedUp(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.RefreshPRs()
 
+	fresh := h.Restart(t)
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(wt) || branches(t, h.Dir) == "" || len(h.Cleanups()) != 0 {
-		t.Fatalf("an old merged PR: cleanup %q, worktree %v", got.Cleanup, exists(wt))
+	fresh.RefreshPRs()
+	eventually(t, "the clean-up at the next start", cleanedUp(fresh, s.ID))
+	if exists(wt) || branches(t, h.Dir) != "" {
+		t.Error("the clean-up left things behind")
 	}
-	if err := h.Cleanup(s.ID, true); err != nil {
+	if log := fresh.Cleanups(); len(log) != 1 || log[0].Status != "done" || !log[0].Merged {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestOldPRsFileLoads(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	path := filepath.Join(h.State, "data", "main", "prs.json")
+	old := fmt.Sprintf(`{"acks":{"12":{"comments":1,"checks":false}},"nudged":{},"opened":{},"branches":{%[1]q:["side","issue-7"]},"reported":{%[1]q:["issue-7"]},"sawOpen":{%[1]q:["issue-7"]},"cleaned":[]}`, s.ID)
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("the confirmed clean-up left things behind")
+
+	fresh := h.Restart(t)
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 0))
+	fresh.RefreshPRs()
+	if got, _ := fresh.Session(s.ID); got.PR == nil || got.PRAttention != "comments" || got.PR.NewComments != 1 {
+		t.Fatalf("row = %+v, want the one comment the old file had not seen", got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved map[string]json.RawMessage
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{"branches", "reported", "sawOpen"} {
+		if _, ok := saved[gone]; ok {
+			t.Errorf("the saved file still has %q: %s", gone, data)
+		}
+	}
+	if string(saved["acks"]) != `{"12":{"comments":1,"checks":false}}` {
+		t.Errorf("acks = %s", saved["acks"])
 	}
 }
 
 func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 
@@ -916,37 +890,10 @@ func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
 	}
 }
 
-func TestLiveFlagGoesWithTheSession(t *testing.T) {
-	h := newHarness(t)
-	s := issueSession(h, t, 7)
-	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-	h.RefreshPRs()
-	live := func() bool {
-		data, _ := os.ReadFile(filepath.Join(h.State, "data", "main", "prs.json"))
-		var f struct{ SawOpen map[string][]string }
-		_ = json.Unmarshal(data, &f)
-		return len(f.SawOpen[s.ID]) > 0
-	}
-	if !live() {
-		t.Fatal("a draft PR was not counted as live")
-	}
-	if err := h.SettleThread(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	if !live() {
-		t.Error("the live flag went with the session's end, although its row still tracks the PR")
-	}
-	if err := h.ArchiveThread(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	if live() {
-		t.Error("the live flag outlived its row")
-	}
-}
-
 func TestPROpenedAttention(t *testing.T) {
 	t.Run("a PR seen while the session is idle", func(t *testing.T) {
 		h := newHarness(t)
+		repoFixture(t, h)
 		s := issueSession(h, t, 12)
 		h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 		h.RefreshPRs()
@@ -963,6 +910,7 @@ func TestPROpenedAttention(t *testing.T) {
 
 	t.Run("a PR seen while the session works waits for its reply", func(t *testing.T) {
 		h := newHarness(t)
+		repoFixture(t, h)
 		s := issueSession(h, t, 12)
 		h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 		eventually(t, "working", func() bool {
@@ -1001,8 +949,9 @@ func openThenClose(h *apptest.Harness) {
 func TestCleanupMergeManualAsks(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenMerge(h)
 	h.RefreshPRs()
@@ -1015,8 +964,9 @@ func TestCleanupMergeManualAsks(t *testing.T) {
 func TestCleanupCloseAuto(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenClose(h)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
@@ -1028,8 +978,9 @@ func TestCleanupCloseAuto(t *testing.T) {
 func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	if err := os.WriteFile(filepath.Join(wt, "unsaved"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1041,329 +992,12 @@ func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
 	}
 }
 
-func TestCleanupCloseAutoAsksForAPRNeverSeenOpen(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
-	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
-
-	h.GH.SetPR(prJSON("CLOSED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(wt) {
-		t.Fatalf("an old closed PR: cleanup %q, worktree %v", got.Cleanup, exists(wt))
-	}
-}
-
 func numberedPR(n int, state string) string {
 	return strings.Replace(prJSON(state, false, "[]", 0, 0), `"number":12`, fmt.Sprintf(`"number":%d`, n), 1)
 }
 
-// twoBranchSession is a session of issue 7 that worked on side first and then on issue-7.
-func twoBranchSession(t *testing.T, h *apptest.Harness) (s sessions.Session, side, wt string) {
-	t.Helper()
-	repoFixture(t, h)
-	side = branchWorktree(t, h, "side")
-	wt = issueWorktree(t, h)
-	s = issueSession(h, t, 7)
-	onBranch := func(branch string) func() bool {
-		return func() bool { got, _ := h.Session(s.ID); return got.Branch == branch }
-	}
-	worksIn(h, t, s, side)
-	eventually(t, "the side branch", onBranch("side"))
-	worksIn(h, t, s, wt)
-	eventually(t, "the issue branch", onBranch("issue-7"))
-	return s, side, wt
-}
-
-func TestCleanupOfABranchTheSessionMovedOnFrom(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	if err := os.WriteFile(filepath.Join(wt, "work.txt"), []byte("unfinished\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.GH.SetPRFor("issue-7", "[]")
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.RefreshPRs()
-	if got, _ := h.Session(s.ID); got.PR == nil || got.PR.Number != 20 {
-		t.Fatalf("session = %+v, want the PR of side", got)
-	}
-
-	h.GH.SetPRFor("side", numberedPR(20, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the session back on its own branch", func() bool {
-		got, ok := h.Session(s.ID)
-		return ok && got.PR == nil && got.Branch == "issue-7" && got.Cleanup == ""
-	})
-	if exists(side) || gitIn(t, h.Dir, "branch", "--list", "side") != "" {
-		t.Error("the side branch is still there")
-	}
-	if !exists(wt) || branches(t, h.Dir) == "" {
-		t.Error("the branch the session works on was touched")
-	}
-	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || log[0].PR != 20 || !slices.Equal(log[0].Removed, []string{"clean-up command for side"}) {
-		t.Fatalf("log = %+v", log)
-	}
-
-	gitIn(t, wt, "commit", "-am", "finished")
-	gitIn(t, wt, "push")
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("the issue branch is still there")
-	}
-}
-
-func TestOlderBranchIsCleanedUpWhenItsPRMerges(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-
-	h.GH.SetPRFor("side", numberedPR(20, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the side branch cleaned up", func() bool { return !exists(side) })
-	if got, ok := h.Session(s.ID); !ok || got.PR == nil || got.PR.Number != 21 || got.Cleanup != "" {
-		t.Errorf("session = %+v", got)
-	}
-	if !exists(wt) || branches(t, h.Dir) == "" {
-		t.Error("the branch the session works on was touched")
-	}
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if log := h.Cleanups(); len(log) != 1 || log[0].PR != 20 {
-		t.Errorf("log = %+v", log)
-	}
-}
-
-func TestCleanupBlockedByAnOlderBranchWithAnOpenPR(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-
-	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
-	if got, _ := h.Session(s.ID); got.CleanupReason != "side has an open pull request" {
-		t.Errorf("reason = %q", got.CleanupReason)
-	}
-	if !exists(side) || !exists(wt) || branches(t, h.Dir) == "" {
-		t.Error("something was removed although the session still has an open PR")
-	}
-}
-
-// mergeLeavesSide merges the PR of issue-7 while side has an open PR, and checks that s is cleaned
-// up and that side, which other works on, is left alone.
-func mergeLeavesSide(t *testing.T, h *apptest.Harness, s, other sessions.Session, side, wt string) {
-	t.Helper()
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-	if exists(wt) {
-		t.Error("the issue worktree is still there")
-	}
-	if !exists(side) || gitIn(t, h.Dir, "branch", "--list", "side") == "" {
-		t.Error("the branch the other session works on was removed")
-	}
-	if got, _ := h.Session(other.ID); got.PR == nil || got.PR.Number != 20 {
-		t.Errorf("other session = %+v, want the PR of side", got)
-	}
-	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || slices.Contains(log[0].Removed, "clean-up command for side") {
-		t.Errorf("log = %+v", log)
-	}
-}
-
-func TestBranchHandedToAnotherSessionIsLeftToIt(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	other := issueSession(h, t, 8)
-	if err := h.Sessions().Track(other.ID, "side"); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the other session on side", func() bool { got, _ := h.Session(other.ID); return got.Branch == "side" })
-	mergeLeavesSide(t, h, s, other, side, wt)
-}
-
-func TestLookingInAnotherSessionsWorktreeDoesNotTakeItsBranch(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	side := branchWorktree(t, h, "side")
-	wt := issueWorktree(t, h)
-	other := issueSession(h, t, 8)
-	worksIn(h, t, other, side)
-	eventually(t, "the other session on side", func() bool { got, _ := h.Session(other.ID); return got.Branch == "side" })
-	s := issueSession(h, t, 7)
-	worksIn(h, t, s, side)
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.Branch == "side" {
-		t.Fatal("the session took the branch of the other session")
-	}
-	worksIn(h, t, s, wt)
-	eventually(t, "the issue branch", func() bool { got, _ := h.Session(s.ID); return got.Branch == "issue-7" })
-	mergeLeavesSide(t, h, s, other, side, wt)
-}
-
-func TestClosedPROfABranchTheSessionMovedOnFromAsksThenCleansUpThatBranch(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	h.GH.SetPRFor("issue-7", "[]")
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.RefreshPRs()
-	h.GH.SetPRFor("side", numberedPR(20, "CLOSED"))
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(side) {
-		t.Fatalf("a closed PR: cleanup %q, side exists %v", got.Cleanup, exists(side))
-	}
-
-	if err := h.Cleanup(s.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := h.Session(s.ID); !ok || got.PR != nil || got.Branch != "issue-7" || got.Cleanup != "" {
-		t.Errorf("session = %+v", got)
-	}
-	if exists(side) || !exists(wt) {
-		t.Errorf("side exists %v, issue worktree exists %v", exists(side), exists(wt))
-	}
-}
-
 func onBranch(h *apptest.Harness, id, branch string) func() bool {
 	return func() bool { got, ok := h.Session(id); return ok && got.Branch == branch }
-}
-
-func TestIssueSessionTakesItsBranchFromTheSessionThatMadeIt(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	handedOn := branchWorktree(t, h, "issue-8")
-	s := issueSession(h, t, 7)
-	worksIn(h, t, s, wt)
-	worksIn(h, t, s, handedOn)
-	eventually(t, "the session in the worktree it made", onBranch(h, s.ID, "issue-8"))
-
-	other := issueSession(h, t, 8)
-	eventually(t, "the session back on its own branch", onBranch(h, s.ID, "issue-7"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.GH.SetPRFor("issue-8", numberedPR(22, "OPEN"))
-	h.RefreshPRs()
-	h.GH.SetPRFor("issue-8", numberedPR(22, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the other session to be cleaned up", cleanedUp(h, other.ID))
-	if got, ok := h.Session(s.ID); !ok || got.PR == nil || got.PR.Number != 21 {
-		t.Errorf("session = %+v, want it running on its own PR", got)
-	}
-	if !exists(wt) || exists(handedOn) {
-		t.Errorf("issue-7 worktree exists %v, issue-8 worktree exists %v", exists(wt), exists(handedOn))
-	}
-
-	t.Run("a look after the other session started does not take its branch", func(t *testing.T) {
-		later := branchWorktree(t, h, "issue-9")
-		third := issueSession(h, t, 9)
-		worksIn(h, t, s, later)
-		time.Sleep(300 * time.Millisecond)
-		if got, _ := h.Session(s.ID); got.Branch != "issue-7" {
-			t.Errorf("session moved to %q, the branch of %s", got.Branch, third.ID)
-		}
-	})
-}
-
-func TestSeenBranchWithAPRNeverSeenOpenLeavesTheSession(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	old := branchWorktree(t, h, "old")
-	h.GH.SetPRFor("old", numberedPR(20, "MERGED"))
-	h.GH.SetPRFor("issue-7", "[]")
-	s := issueSession(h, t, 7)
-	worksIn(h, t, s, wt)
-	eventually(t, "the issue branch", onBranch(h, s.ID, "issue-7"))
-
-	worksIn(h, t, s, old)
-	eventually(t, "the old branch dropped", func() bool {
-		got, ok := h.Session(s.ID)
-		return ok && got.Branch == "issue-7" && got.PR == nil
-	})
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, ok := h.Session(s.ID); !ok || got.Cleanup != "" {
-		t.Errorf("session = %+v, want it running with no clean-up", got)
-	}
-	if !exists(old) || !exists(wt) || len(h.Cleanups()) != 0 {
-		t.Errorf("old exists %v, issue-7 exists %v, log %+v", exists(old), exists(wt), h.Cleanups())
-	}
-}
-
-func TestOlderSeenBranchWithAPRNeverSeenOpenIsLeftAlone(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	old := branchWorktree(t, h, "old")
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
-	worksIn(h, t, s, old)
-	eventually(t, "the old branch", onBranch(h, s.ID, "old"))
-	worksIn(h, t, s, wt)
-	eventually(t, "the issue branch", onBranch(h, s.ID, "issue-7"))
-
-	h.GH.SetPRFor("old", numberedPR(20, "MERGED"))
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-	h.RefreshPRs()
-	time.Sleep(300 * time.Millisecond)
-	if got, ok := h.Session(s.ID); !ok || got.PR == nil || got.PR.Number != 21 || got.Cleanup != "" {
-		t.Errorf("session = %+v", got)
-	}
-	if !exists(old) || len(h.Cleanups()) != 0 {
-		t.Errorf("old exists %v, log %+v", exists(old), h.Cleanups())
-	}
-}
-
-func TestSeenBranchWithNoPRIsNotCleanedUp(t *testing.T) {
-	h := newHarness(t)
-	s, side, wt := twoBranchSession(t, h)
-	h.GH.SetPRFor("side", "[]")
-	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	h.RefreshPRs()
-	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
-	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-	if exists(wt) || !exists(side) || gitIn(t, h.Dir, "branch", "--list", "side") == "" {
-		t.Errorf("issue-7 exists %v, side exists %v", exists(wt), exists(side))
-	}
-	if log := h.Cleanups(); len(log) != 1 || slices.Contains(log[0].Removed, "clean-up command for side") {
-		t.Errorf("log = %+v", log)
-	}
-}
-
-func TestForcedCleanupOfABranchTheSessionLostIsRefused(t *testing.T) {
-	h := newHarness(t)
-	s, side, _ := twoBranchSession(t, h)
-	h.GH.SetPRFor("issue-7", "[]")
-	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
-	h.RefreshPRs()
-	if got, _ := h.Session(s.ID); got.PR == nil || got.PR.Number != 20 {
-		t.Fatalf("session = %+v, want the PR of side", got)
-	}
-	other := issueSession(h, t, 8)
-	worksIn(h, t, other, side)
-	eventually(t, "the other session on side", onBranch(h, other.ID, "side"))
-
-	if err := h.Cleanup(s.ID, true); err == nil || !strings.Contains(err.Error(), "side is no longer a branch of this session") {
-		t.Errorf("forced clean-up = %v", err)
-	}
-	if !exists(side) || len(h.Cleanups()) != 0 {
-		t.Errorf("side exists %v, log %+v", exists(side), h.Cleanups())
-	}
 }
 
 func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
@@ -1390,29 +1024,12 @@ func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 	}
 }
 
-func TestTrackTakesTheBranchFromASessionThatOnlySawIt(t *testing.T) {
-	h := newHarness(t)
-	repoFixture(t, h)
-	side := branchWorktree(t, h, "side")
-	s := issueSession(h, t, 7)
-	worksIn(h, t, s, side)
-	eventually(t, "the session on side", onBranch(h, s.ID, "side"))
-
-	other := issueSession(h, t, 8)
-	if err := h.Sessions().Track(other.ID, "side"); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the other session on side", onBranch(h, other.ID, "side"))
-	if got, _ := h.Session(s.ID); got.Branch != "issue-7" {
-		t.Errorf("the session that only saw side is still on %q", got.Branch)
-	}
-}
-
 func TestMergedPRSettlesTheThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenMerge(h)
 	got, _ := h.Session(s.ID)
@@ -1430,8 +1047,9 @@ func TestMergedPRSettlesTheThread(t *testing.T) {
 func TestClosedPRSettlesTheThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 
 	openThenClose(h)
 	h.RefreshPRs()
@@ -1469,8 +1087,9 @@ func TestPRMergedBeforeTheLastWakeDoesNotSettle(t *testing.T) {
 func TestCleanupKeepsTheThread(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	if resp := h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
@@ -1501,8 +1120,8 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 func TestCleanupRunsOnceForASettledThread(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 
 	openThenMerge(h)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))

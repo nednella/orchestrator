@@ -59,6 +59,7 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 
 func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	gitRepo(t, h)
 	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
 	}

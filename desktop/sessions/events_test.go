@@ -11,6 +11,7 @@ import (
 
 func TestPROpenedThenMergedAcrossARestartCountsOnce(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	s := issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	h.RefreshPRs()
@@ -54,6 +55,7 @@ func TestPRFirstSeenMergedCountsNothing(t *testing.T) {
 
 func TestPRClosedUnmerged(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -68,21 +70,9 @@ func TestPRClosedUnmerged(t *testing.T) {
 	}
 }
 
-func TestTwoSessionsOnOnePRCountOnce(t *testing.T) {
-	h := newHarness(t)
-	issueSession(h, t, 7)
-	issueSession(h, t, 7)
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
-	h.RefreshPRs()
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
-	h.RefreshPRs()
-	if o, m := len(h.Events(t, activity.PROpened)), len(h.Events(t, activity.PRMerged)); o != 1 || m != 1 {
-		t.Errorf("pr_opened %d, pr_merged %d, want 1 each", o, m)
-	}
-}
-
 func TestReviewChecksAndConflictAreRecordedWhenSent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n    pr_conflict_command: \"/rebase {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -119,6 +109,7 @@ func TestReviewWithoutACommandIsNotRecorded(t *testing.T) {
 
 func TestWokenThreadIsLabelled(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))

@@ -415,6 +415,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+			repoFixture(t, h)
 			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)

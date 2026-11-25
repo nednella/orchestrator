@@ -105,8 +105,9 @@ func TestSessionCommands(t *testing.T) {
 
 func TestPRAndCleanupCommands(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	issueSession(h, t, 12)
-	if _, err := h.NewSession("plain", ""); err != nil {
+	if _, err := h.NewThreadIn("plain", "", "supervised", "project"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,7 +130,7 @@ func TestPRAndCleanupCommands(t *testing.T) {
 	if resp := h.Ask(t, ctl.Request{Cmd: "cleanup"}); !resp.OK || resp.Out != "nothing to clean up" {
 		t.Errorf("cleanup list = %+v", resp)
 	}
-	for _, bad := range [][]string{{"9"}, {"x"}, {"2"}} { // no such session, not a number, a session without an issue
+	for _, bad := range [][]string{{"9"}, {"x"}, {"2"}} { // no such session, not a number, a thread without a branch
 		if resp := h.Ask(t, ctl.Request{Cmd: "cleanup", Args: bad}); resp.OK {
 			t.Errorf("cleanup %v succeeded", bad)
 		}

@@ -214,6 +214,7 @@ func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 
 func TestForkDoesNotTakeOverThePR(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	repoFixture(t, h)
 	src, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
@@ -327,11 +328,12 @@ func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork se
 	ran = filepath.Join(t.TempDir(), "cleanups")
 	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + removeWorktreeAndBranch})
 	repoFixture(t, h)
-	wt = issueWorktree(t, h)
 	src, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
+	wt = src.Worktree
+	pushWork(t, wt)
 	withConversation(t, h, src.ID)
 	writeChat(t, h, src.ID, oneReply...)
 	if fork, err = h.ForkSession(src.ID, "r1b"); err != nil {

@@ -259,17 +259,14 @@ func (l *Lifecycle) changedBranches(ctx context.Context, proj project.Project, r
 	l.etags[key] = etag
 	changed := []string{}
 	for _, t := range targets {
+		at, listed := updated[t.branch]
+		if !listed {
+			continue
+		}
 		tr := l.tracks[t.id]
-		for _, branch := range slices.Backward(t.branches) { // the newest branch with a PR is the one tracked
-			at, listed := updated[branch]
-			if !listed {
-				continue
-			}
-			known := tr != nil && tr.pr != nil && tr.branch == branch
-			if (!known || tr.pr.UpdatedAt != at) && !slices.Contains(changed, branch) {
-				changed = append(changed, branch)
-			}
-			break
+		known := tr != nil && tr.pr != nil && tr.branch == t.branch
+		if (!known || tr.pr.UpdatedAt != at) && !slices.Contains(changed, t.branch) {
+			changed = append(changed, t.branch)
 		}
 	}
 	return changed, nil

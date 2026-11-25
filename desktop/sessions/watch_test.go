@@ -21,8 +21,9 @@ func pulls(branch, updatedAt string) string {
 func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	h.RefreshPRs()
 	if err := h.SettleThread(s.ID); err != nil {
@@ -49,6 +50,7 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 
 func TestQueueIsReadAgainWhenAPRMergesOrCloses(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	if _, err := h.Issues(false); err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +78,7 @@ func TestQueueIsReadAgainWhenAPRMergesOrCloses(t *testing.T) {
 
 func TestReviewWakesTheSession(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	h.Hook(t, s.ID, "Stop", `{}`)
@@ -110,6 +113,7 @@ func TestReviewWakesTheSession(t *testing.T) {
 
 func TestDraftCommentsAreSeenButSendNoReviewPrompt(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	h.RefreshPRs()
@@ -133,6 +137,7 @@ func TestDraftCommentsAreSeenButSendNoReviewPrompt(t *testing.T) {
 
 func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_review_drafts: true\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	h.RefreshPRs()
@@ -143,6 +148,7 @@ func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
 
 func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"Read PR {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 0))
 	h.RefreshPRs()
@@ -153,6 +159,7 @@ func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
 
 func TestFailingChecksWakeOncePerCommit(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	failing := `[{"status":"COMPLETED","conclusion":"FAILURE"}]`
 	h.GH.SetPR(apptest.WithHead(prJSON("OPEN", false, failing, 0, 0), "aaa"))
@@ -173,6 +180,7 @@ func TestFailingChecksWakeOncePerCommit(t *testing.T) {
 
 func TestConflictWakesOncePerCommit(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_conflict_command: \"/rebase {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(apptest.WithMergeable(apptest.WithHead(prJSON("OPEN", false, "[]", 0, 0), "aaa"), "UNKNOWN"))
 	h.RefreshPRs()
@@ -199,6 +207,7 @@ func TestConflictWakesOncePerCommit(t *testing.T) {
 
 func TestWakeWaitsUntilTheTurnEnds(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -232,6 +241,7 @@ func reviewBy(login, state string) string {
 
 func TestOneReviewAndItsRepliesWakeTheSessionOnce(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -279,6 +289,7 @@ func waitingWithHeldReview(t *testing.T, h *apptest.Harness) sessions.Session {
 
 func TestEveryHeldPromptIsSent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
+	repoFixture(t, h)
 	s := waitingWithHeldReview(t, h)
 	h.GH.SetPR(prJSON("OPEN", false, `[{"status":"COMPLETED","conclusion":"FAILURE"}]`, 1, 0))
 	h.RefreshPRs()
@@ -307,6 +318,7 @@ func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+			repoFixture(t, h)
 			s := waitingWithHeldReview(t, h)
 			if err := tt.end(h, s.ID); err != nil {
 				t.Fatal(err)
@@ -323,6 +335,7 @@ func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
 
 func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -351,8 +364,9 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 func TestWokenThreadIsCleanedUpOnMerge(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 	if err := h.SettleThread(s.ID); err != nil {
@@ -406,6 +420,7 @@ func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
 
 func TestPollWatcherFetchesOnlyWhatMoved(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
+	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	s := issueSession(h, t, 12)
@@ -426,6 +441,7 @@ func TestPollWatcherFetchesOnlyWhatMoved(t *testing.T) {
 
 func TestStoppingTheAppStopsItsWatchers(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
+	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
 	issueSession(h, t, 12)
 	eventually(t, "the poll to run", func() bool { return h.GH.Calls("api -i") >= 2 })
@@ -439,6 +455,7 @@ func TestStoppingTheAppStopsItsWatchers(t *testing.T) {
 
 func TestPollWatcherKeepsLookingWhileChecksRun(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
+	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
 	h.GH.SetPR(prJSON("OPEN", false, `[{"status":"IN_PROGRESS"}]`, 0, 0))
 	s := issueSession(h, t, 12)
@@ -449,6 +466,7 @@ func TestPollWatcherKeepsLookingWhileChecksRun(t *testing.T) {
 
 func TestWebhookWatcherRefreshesThePRAnEventNames(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	h.GH.WebhookWorks()
 	s := issueSession(h, t, 12)
 	eventually(t, "the forward to start", func() bool { return h.GH.Forwards() == 1 })
@@ -471,6 +489,7 @@ func TestWebhookWatcherRefreshesThePRAnEventNames(t *testing.T) {
 
 func TestWebhookAskedForButDownIsWarnedAbout(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: webhook\n"})
+	repoFixture(t, h)
 	issueSession(h, t, 12)
 	eventually(t, "a warning that the stream is down", func() bool {
 		for _, w := range h.Rec.Warnings() {
@@ -487,6 +506,7 @@ func TestWebhookAskedForButDownIsWarnedAbout(t *testing.T) {
 
 func TestWebhookThatDoesNotWorkLeavesThePoll(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_poll_interval: 1s\n"})
+	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	s := issueSession(h, t, 12)
@@ -503,6 +523,7 @@ func TestWebhookThatDoesNotWorkLeavesThePoll(t *testing.T) {
 
 func TestNoWakeWithoutACommand(t *testing.T) {
 	h := newHarness(t)
+	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	failing := `[{"status":"COMPLETED","conclusion":"FAILURE"}]`
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -520,6 +541,7 @@ func TestNoWakeWithoutACommand(t *testing.T) {
 func hostedIssueSession(t *testing.T, extra string) (h *apptest.Harness, s sessions.Session) {
 	t.Helper()
 	h = apptest.NewWith(t, apptest.Options{ProjectExtra: extra})
+	repoFixture(t, h)
 	return h, issueSession(h, t, 12)
 }
 
@@ -569,8 +591,8 @@ func TestCleanedUpThreadIsLeftOutOfTheWebhook(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	h.GH.WebhookWorks()
 	repoFixture(t, h)
-	issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
 	eventually(t, "the forward to start", func() bool { return h.GH.Forwards() == 1 })
 	openThenMerge(h)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))

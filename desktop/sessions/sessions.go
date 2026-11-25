@@ -145,7 +145,6 @@ type Sessions struct {
 	archived   map[string]bool          // the threads the owner archived, whose state files say so: nothing brings them back
 	records    map[string]session.Record
 	cwds       map[string]string // the working directory each session's last hook reported
-	heads      map[string]string // the HEAD of the project folder at each session's latest PreToolUse
 	seen       map[string]session.State
 	history    map[string][]session.Change
 	loaded     bool                 // the first refresh is in, so later changes may raise attention
@@ -255,7 +254,6 @@ func newSessions(o Options) *Sessions {
 		nums: map[string]int{}, lastNum: map[string]int{},
 		records:   map[string]session.Record{},
 		cwds:      map[string]string{},
-		heads:     map[string]string{},
 		seen:      map[string]session.State{},
 		history:   map[string][]session.Change{},
 		wakes:     map[string][]string{},
@@ -771,7 +769,6 @@ func (s *Sessions) Archive(id string) error {
 	delete(s.spent, id)
 	delete(s.wakes, id)
 	delete(s.cwds, id)
-	delete(s.heads, id)
 	delete(s.stateRead, id)
 	s.life.forget(id)
 	s.sync()
@@ -828,47 +825,27 @@ func (s *Sessions) take(rec session.Record) {
 // endsTurn says whether a record's event ends the agent's turn: its Stop hook, or the app's TurnError.
 func endsTurn(event string) bool { return event == "Stop" || event == session.TurnError }
 
-// followBranch has the lifecycle look at the branch of a session, when the agent moved,
-// finished a turn or switched the branch of the project folder, and read its git status again after
-// each tool call. It needs mu.
+// followBranch has the lifecycle look up the PR of the thread's branch when its turn ends, since the agent may just
+// have opened it, and read the branch's git status again after each tool call. It needs mu.
 func (s *Sessions) followBranch(rec session.Record) {
-	if rec.Cwd == "" {
-		return
+	if rec.Cwd != "" {
+		s.cwds[rec.Session] = rec.Cwd
 	}
-	moved := rec.Cwd != s.cwds[rec.Session] || endsTurn(rec.Event)
-	s.cwds[rec.Session] = rec.Cwd
 	for _, in := range s.info {
-		if in.Name.String() != rec.Session || in.Fork != "" {
+		if in.Name.String() != rec.Session || in.Fork != "" || in.Branch == "" {
 			continue
 		}
 		proj, ok := s.projectOf(in)
 		if !ok {
 			continue
 		}
-		if switched := s.switched(rec, proj.Dir); moved || switched {
-			go s.life.learn(s.ctx, rec.Session, proj, rec.Cwd, endsTurn(rec.Event), switched)
+		if endsTurn(rec.Event) {
+			go s.life.track(s.ctx, rec.Session, proj, in.Branch)
 		}
 		if rec.Event == "PostToolUse" {
 			go s.life.restatus(s.ctx, rec.Session, proj)
 		}
 	}
-}
-
-// switched says whether the session's tool call changed the branch of the project folder. The owner
-// works in that folder too, so a branch they check out there must not become the session's. The HEAD
-// file is read, not git run: a PreToolUse must be read before the tool starts. It needs mu.
-func (s *Sessions) switched(rec session.Record, dir string) bool {
-	if rec.Event != "PreToolUse" && rec.Event != "PostToolUse" {
-		return false
-	}
-	data, _ := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
-	head := string(data)
-	if rec.Event == "PreToolUse" {
-		s.heads[rec.Session] = head
-		return false
-	}
-	before, ok := s.heads[rec.Session]
-	return ok && head != before
 }
 
 // sync updates history and attention from what is known, and tells the front
@@ -1132,7 +1109,6 @@ func (s *Sessions) list() []Session {
 		rail = append(rail, session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Settled, At: in.Created})
 	}
 	session.Sort(rail)
-	projs := s.projects()
 	out := make([]Session, 0, len(rail))
 	for _, ss := range rail {
 		in := byName[ss.Name]
@@ -1153,16 +1129,11 @@ func (s *Sessions) list() []Session {
 		}
 		if in.Hosted {
 			f := s.life.fields(id)
-			view.Branch, view.PR, view.Git = cmp.Or(f.branch, in.Branch), f.pr, f.git
+			view.Branch, view.PR, view.Git = in.Branch, f.pr, f.git
 			if w, ok := s.made.Of(ss.Name.Project, id); ok && w.Removed == 0 {
 				view.Worktree = w.Path
 			}
 			view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
-			if view.Branch == "" && issue > 0 {
-				if p, ok := projectIn(projs, in); ok {
-					view.Branch = p.BranchFor(issue)
-				}
-			}
 		} else {
 			view.Detail = oldDetail
 		}
@@ -1581,16 +1552,13 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		return err
 	}
 	s.life.unretire(id)
-	if branch := proj.BranchFor(issue); issue > 0 && branch != "" && in.Fork == "" {
-		s.life.claim(proj, id, branch)
-	}
 	s.mu.Lock()
 	delete(s.ended, id)
 	s.records[id] = rec
 	s.info = append(s.info, in)
 	s.sync()
 	s.mu.Unlock()
-	if issue > 0 {
+	if in.Branch != "" {
 		s.life.ensureWatchers(ctx)
 	}
 	return nil
@@ -1656,7 +1624,7 @@ func fromApp(text string) string {
 
 // createIn is Create in the project given, which need not be the current one, with the model given. A brief or a
 // handover is added to the agent's system prompt. In a worktree the thread works on its issue's branch, or on a new one
-// named from its title; else it runs in the project folder, or a fork in its source's folder. A fork claims no branch.
+// named from its title; else it runs in the project folder, or a fork in its source's folder, on no branch.
 func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, brief, handover string, access session.Access, action string, fork forkStart, place Place) (Session, error) {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
@@ -1697,13 +1665,10 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		return Session{}, err
 	}
 	view := s.register(name, title, work, issue, model, created, access, action, fork.of)
-	if branch := proj.BranchFor(issue); issue > 0 && branch != "" && fork.of == "" {
-		s.life.claim(proj, name.String(), branch)
-	}
 	if text != "" {
 		go s.giveHost(ctx, name, text, send)
 	}
-	if issue > 0 {
+	if work.branch != "" {
 		s.life.ensureWatchers(ctx)
 	}
 	return view, nil
@@ -1733,8 +1698,8 @@ type forkStart struct {
 // Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
 // ends at the message at: the uuid of a reply's last block. The fork has the same access, issue, model, effort and
 // handover, starts in the folder the thread runs in, its worktree too, since Claude finds a conversation by its folder,
-// and its chat starts as the source's does up to that reply. The issue is only shown: the fork has no branch, claims
-// none and hears no pull request.
+// and its chat starts as the source's does up to that reply. The issue is only shown: the fork has no branch and hears
+// no pull request.
 func (s *Sessions) Fork(id, at string) (Session, error) {
 	s.mu.Lock()
 	in, found := s.infoOf(id)
@@ -2464,26 +2429,21 @@ func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 	return t, nil
 }
 
-// targetOf finds the session's project in projs. A fork or an old terminal session has no branch or PR. It needs mu.
+// targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork, an old terminal
+// session and a thread started before agentos recorded branches have none. It needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
-	if !ok || in.Fork != "" || !in.Hosted {
+	if !ok || in.Fork != "" || !in.Hosted || in.Branch == "" {
 		return target{}, false
 	}
 	issue, _ := strconv.Atoi(in.Issue)
 	id := in.Name.String()
-	branches, owned := s.life.branchesOf(proj, id)
-	if fallback := proj.BranchFor(issue); issue > 0 && fallback != "" {
-		owned = append(owned, fallback)
-		if len(branches) == 0 {
-			branches = []string{fallback}
-		}
-	}
-	if len(branches) == 0 {
-		return target{}, false
-	}
 	_, woke := s.startsOf(id, in)
-	return target{id: id, title: cmp.Or(in.Title, defaultTitle), issue: issue, branches: branches, owned: owned, proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke}, true
+	t := target{id: id, title: cmp.Or(in.Title, defaultTitle), issue: issue, branch: in.Branch, dir: cmp.Or(in.Path, proj.Dir), proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke}
+	if w, ok := s.made.Of(proj.Key(), id); ok && w.Removed == 0 {
+		t.dir, t.made = w.Path, true
+	}
+	return t, true
 }
 
 // conversationOf is the agent's conversation id of a session, running or ended, "" until the agent has written its
@@ -2653,30 +2613,68 @@ func (s *Sessions) Run(ctx context.Context) error {
 }
 
 // Has says whether a session of that id is running, in any project.
-// Track records branch as the one the session works on, and watches its worktree and pull request.
+// Track makes branch the one the thread works on, and looks up its pull request.
 func (s *Sessions) Track(id, branch string) error {
+	proj, err := s.setBranch(id, branch)
+	if err != nil {
+		return err
+	}
+	s.life.track(s.context(), id, proj, branch)
+	return nil
+}
+
+// setBranch records branch as the live thread's, where its start choice is kept, unless another thread has it. When the
+// thread's own worktree has the branch checked out, the record of the worktree follows it.
+func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
+	// createMu keeps a start from taking the branch between the check and the record.
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
 	s.mu.Lock()
+	var in term.Info
 	var proj project.Project
-	var found, fork bool
-	for _, in := range s.info {
-		if in.Name.String() == id {
-			proj, found = s.projectOf(in)
-			fork = in.Fork != ""
-			break
-		}
+	found := false
+	if i := slices.IndexFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }); i >= 0 {
+		in = s.info[i]
+		proj, found = s.projectOf(in)
 	}
 	s.mu.Unlock()
-	if !found {
-		return fmt.Errorf("session %q is not running", id)
+	switch {
+	case !found:
+		return proj, fmt.Errorf("session %q is not running", id)
+	case in.Fork != "":
+		return proj, fmt.Errorf("session %s is a fork, which works on no branch of its own", id)
+	case in.Access == session.Read:
+		return proj, errors.New("A Read thread works on no branch")
 	}
-	if fork {
-		return fmt.Errorf("session %s is a fork, which works on no branch of its own", id)
+	ctx := s.context()
+	if branch == s.life.mainBranch(ctx, proj.Dir) {
+		return proj, fmt.Errorf("%s is the project's default branch; track the branch your work is on", branch)
 	}
-	if branch == s.life.mainBranch(s.ctx, proj.Dir) {
-		return fmt.Errorf("%s is the project's default branch; track the branch your work is on", branch)
+	if n, ok := s.threadOn(proj.Key(), branch, id); ok {
+		return proj, fmt.Errorf("Thread %d works on %s", n, branch)
 	}
-	s.life.track(s.ctx, id, proj, branch, false, true)
-	return nil
+	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
+	defer cancel()
+	if err := s.tmux.SetBranch(tctx, in.Name, branch); err != nil {
+		return proj, err
+	}
+	if w, ok := s.made.Of(proj.Key(), id); ok && w.Removed == 0 {
+		if out, err := s.life.git(ctx, w.Path, "branch", "--show-current"); err == nil && strings.TrimSpace(string(out)) == branch {
+			if err := s.made.SetBranch(proj.Key(), w.Path, branch); err != nil {
+				return proj, err
+			}
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.info {
+		if s.info[i].Name == in.Name {
+			s.info[i].Branch = branch
+			s.saveIdentity(s.info[i])
+		}
+	}
+	s.sync()
+	return proj, nil
 }
 
 // forkIn is the title of a live fork whose working folder is dir or a folder inside it, "" when none. It takes mu.
