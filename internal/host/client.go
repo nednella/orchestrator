@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/nednella/agentos/internal/chat"
@@ -173,13 +175,13 @@ func Gone(ctx context.Context, socket string) error {
 	var d net.Dialer
 	for {
 		conn, err := d.DialContext(ctx, "unix", socket)
-		if err != nil {
-			if ctx.Err() != nil {
-				return fmt.Errorf("host at %s still listens: %w", socket, ctx.Err())
-			}
+		// Only a refused dial or a missing socket means the host is gone: a busy listener's full backlog also fails a dial.
+		if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT) {
 			return nil
 		}
-		conn.Close()
+		if err == nil {
+			conn.Close()
+		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("host at %s still listens: %w", socket, ctx.Err())
