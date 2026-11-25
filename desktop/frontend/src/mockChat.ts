@@ -70,6 +70,13 @@ const replies = [
   'Tests pass: 48 passed, 0 failed.',
 ]
 
+// thoughts are the thinking Claude streams before each reply, one per reply, as summaries Claude Code shows.
+const thoughts = [
+  "**Checking the checkout route**\n\nThe router lists the cart and the checkout. The checkout page fetched the cart again on load, which is the double call.",
+  'I need to see whether anything else imports the old checkout data. The router and the page are the only two places, so nothing else moves.',
+  "**Reading the test run**\n\nAll 48 pass and none were skipped, so the change holds.",
+]
+
 const olderReplies = [
   'The cart total rounds each line before it adds them up, so two lines of 0.005 come to 0.02 where the order says 0.01.',
   'Two places read the locale:\n\n- `formatPrice` in `money.ts`, which takes it from the store\n- `Checkout.tsx`, which reads `navigator.language` itself\n\nThe second one is the odd one out.',
@@ -170,7 +177,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   function append(id: string, draft: Draft): ChatEvent {
     const log = logOf(id)
     const at = draft.at ?? Date.now()
-    const e: ChatEvent = { ...draft, at, seq: draft.kind === 'delta' ? 0 : (log.at(-1)?.seq ?? 0) + 1 }
+    const e: ChatEvent = { ...draft, at, seq: draft.kind === 'delta' || draft.kind === 'thinking' ? 0 : (log.at(-1)?.seq ?? 0) + 1 }
     if (e.seq > 0) logs.set(id, [...log, e])
     if (e.kind === 'commands') keepCommands(id.slice(0, id.indexOf('/')), e)
     if (watched.has(id)) batch(id, e)
@@ -218,15 +225,26 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     return t
   }
 
-  // reply streams a reply to the message asked, then ends the turn, or runs the next queued message as its own turn.
+  // reply streams Claude's thinking, then its reply to the message asked, at the pace of a reply over a second, or over
+  // eight to a message that says "slow", then ends the turn, or runs the next queued message as its own turn.
   function reply(id: string, asked = '') {
     const t = thread(id)
+    const n = nextReply++
     const long = /\blong\b/i.test(asked)
-    const text = long ? longReply : replies[nextReply++ % replies.length]
+    const text = long ? longReply : replies[n % replies.length]
+    const thought = thoughts[n % thoughts.length]
     const words = long ? text.match(/[^]{1,15}/g)! : text.split(/(?<= )/)
+    const thinking = thought.split(/(?<= )/)
     const message = `msg_${Math.random().toString(36).slice(2, 10)}`
     let i = 0
+    let j = -1
     const timer = setInterval(() => {
+      if (j < thinking.length) {
+        if (j === -1) append(id, { kind: 'thinking', id: message })
+        else append(id, { kind: 'thinking', id: message, text: thinking[j] })
+        if (++j === thinking.length) append(id, { kind: 'thought', id: message, text: thought })
+        return
+      }
       if (i < words.length) {
         append(id, { kind: 'delta', id: message, text: words[i++] })
         return
@@ -277,6 +295,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       ...olderTurns(earlier, ago),
       { kind: 'user', id: 'u-1', text: 'Move checkout to its own route, and keep the cart page as it is.', at: ago(38) },
       { kind: 'init', id: 'mock-session', at: ago(38) },
+      { kind: 'thought', id: 'msg_1', text: '**Finding the routes**\n\nThe router is the one place that lists the pages, so I read it before I add a route.', at: ago(37) },
       { kind: 'message', id: 'msg_1', uuid: 'r-1', text: "I'll read the router first.", at: ago(37) },
       { kind: 'tool_use', id: 'toolu_1', tool: 'Read', input: { file_path: '~/code/acme/storefront/trees/issue-444/app-frontend/src/js/routes.tsx' }, at: ago(37) },
       { kind: 'tool_result', parent: 'toolu_1', text: "export const routes = [\n  { path: '/', page: Home },\n  { path: '/cart', page: Cart },\n]", at: ago(37) },
@@ -293,6 +312,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       { kind: 'turn_end', cost: 0.21, at: ago(35) },
       { kind: 'user', id: 'u-2', text: 'Run the tests, and install whatever they need.', at: ago(5) },
       { kind: 'init', id: 'mock-session', at: ago(5) },
+      { kind: 'thought', id: 'msg_3', text: 'The test run failed on an import of a package that is not in node_modules. Installing it should fix the run.', at: ago(4) },
       { kind: 'message', id: 'msg_3', uuid: 'r-3', text: 'The tests need a package that is not installed yet.', at: ago(4) },
       { kind: 'tool_use', id: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
       { kind: 'approval', id: 'req-1', parent: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },

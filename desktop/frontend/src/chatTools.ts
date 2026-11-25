@@ -82,11 +82,17 @@ export function resultLines(text: string, all: boolean): { shown: string; total:
   return { shown: all ? text : rows.slice(0, resultLimit).join('\n'), total: rows.length }
 }
 
-export function formatWorked(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000))
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  return minutes % 60 ? `${hours}h ${minutes % 60}m` : `${hours}h`
+// formatWorked is how long a turn has worked. A finished turn's time is precise: below a second in ms, below ten seconds
+// to a tenth.
+export function formatWorked(ms: number, finished = false): string {
+  const span = Math.max(0, ms)
+  if (finished && span < 1000) return `${Math.floor(span)}ms`
+  if (finished && span < 10_000) return `${(Math.floor(span / 100) / 10).toFixed(1)}s`
+  const seconds = Math.floor(span / 1000)
+  const parts = [
+    [Math.floor(seconds / 3600), 'h'],
+    [Math.floor(seconds / 60) % 60, 'm'],
+    [seconds % 60, 's'],
+  ] as const
+  return parts.filter(([n]) => n > 0).map(([n, unit]) => `${n}${unit}`).join(' ') || '0s'
 }

@@ -45,8 +45,12 @@ test('finished turn folds tools into one work row', () => {
   )
   const open = buildTimeline(events.slice(0, -1), {})
   assert.equal(open.turnOpen, true)
-  assert.deepEqual(kinds(open.items), ['user', 'reply', 'work', 'reply', 'work', 'reply'], 'an open turn stays in order')
-  assert.equal(only(open.items, 'work')[0].endedAt, null)
+  assert.deepEqual(kinds(open.items), ['user', 'work', 'reply', 'work', 'reply', 'work', 'reply'], 'an open turn stays in order, under the work item that heads it')
+  assert.deepEqual(only(open.items, 'work').map((w) => [w.header, w.endedAt, w.calls.length]), [
+    [true, null, 0],
+    [false, null, 1],
+    [false, null, 1],
+  ])
 
   const t = buildTimeline(events, {})
   assert.equal(t.turnOpen, false)
@@ -67,6 +71,43 @@ test('finished turn folds tools into one work row', () => {
   )
   assert.equal(only(t.items, 'reply')[0].text, 'Done.')
   assert.equal(new Set(t.items.map((i) => i.key)).size, t.items.length, 'keys are unique')
+})
+
+test('the turn that runs is headed by its work item, which its thinking streams into', () => {
+  const thought = (id: string, text: string): Draft => ({ kind: 'thought', id, text })
+  const [u, first, use, result] = log(user('u1', 'Fix it', 10_000), thought('msg_1', '**Reading the router**\n\nIt holds the routes.'), toolUse('t1', 'Read'), toolResult('t1', 'a'))
+  const lines = (items: TimelineItem[]) => only(items, 'work').map((w) => [w.key, w.header, w.steps.map((st) => (st.kind === 'thought' ? [st.key, st.text, st.live] : st.kind))])
+
+  const started = buildTimeline([u], {}, '', { msg_1: '' }).items
+  assert.deepEqual(kinds(started), ['user', 'work'])
+  assert.deepEqual(lines(started), [['work-u1', true, [['thought-msg_1-0', '', true]]]], 'a block shows from its start')
+  assert.equal(only(started, 'work')[0].startedAt, 10_000)
+
+  const thinking = buildTimeline([u, first, use, result], {}, '', { msg_2: 'Now I can ' }).items
+  assert.deepEqual(lines(thinking), [['work-u1', true, [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can ', true]]]])
+
+  const [second, reply] = log(thought('msg_2', 'Now I can answer.'), message('msg_2', 'Done.')).map((e, i) => ({ ...e, seq: 5 + i, at: 20_000 + i }))
+  const writing = buildTimeline([u, first, use, result, second], { msg_2: 'Do' }).items
+  assert.deepEqual(kinds(writing), ['user', 'work', 'reply'])
+  assert.deepEqual(lines(writing)[0][2], [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can answer.', false]], 'the logged thought keeps the key it streamed under')
+  assert.equal(only(writing, 'reply')[0].streaming, true)
+
+  const ended = { ...turnEnd(false, 73_000), seq: 7 } as ChatEvent
+  const events = [u, first, use, result, second, reply, ended]
+  const done = buildTimeline(events, {}).items
+  assert.deepEqual(kinds(done), ['user', 'work', 'reply'])
+  const [work] = only(done, 'work')
+  assert.deepEqual([work.key, work.header, work.endedAt! - work.startedAt], ['work-u1', true, 63_000], 'the heading item folds where it was')
+  assert.deepEqual(lines(done), lines(writing), 'the fold holds the same lines')
+
+  const reloaded = mergeEvents(EMPTY_CHAT, events).state
+  assert.deepEqual(buildTimeline(reloaded.events, reloaded.live, '', reloaded.thinking).items, done, 'the log alone gives the fold again')
+})
+
+test('a turn that only thought folds its thoughts', () => {
+  const t = buildTimeline(log(user('u1', 'Hi'), { kind: 'thought', id: 'msg_1', text: 'A greeting.' }, message('msg_1', 'Hello.'), turnEnd()), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
+  assert.deepEqual(only(t.items, 'work')[0].steps.map((st) => st.kind), ['thought'])
 })
 
 test('blocks of one message join', () => {
@@ -146,7 +187,7 @@ test('unanswered approval expires at turn end', () => {
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')
   assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' })
-  assert.deepEqual(kinds(waiting.items), ['user', 'approval'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
   assert.equal(only(waiting.items, 'approval')[0].expired, false)
 
   const ended = buildTimeline(log(...events, turnEnd(true)), {})
@@ -172,7 +213,7 @@ test('question and plan items', () => {
   const plan = { plan: '# Move checkout\n\n1. Add the route' }
   const asking = log(user('u1', 'Ask me'), toolUse('t1', 'AskUserQuestion', questions), approval('r1', 'AskUserQuestion', questions))
   const t = buildTimeline(asking, {})
-  assert.deepEqual(kinds(t.items), ['user', 'question'])
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'question'])
   const [q] = only(t.items, 'question')
   assert.deepEqual([q.id, q.request, q.input, q.answer, q.result, q.expired], ['t1', 'r1', questions, undefined, null, false])
   assert.equal(t.pending?.kind, 'question')
@@ -326,7 +367,7 @@ test('queued until delivered', () => {
   const sent = log(user('u1', 'Slow job'), message('msg_1', 'Working.'), { kind: 'queued', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] })
   const waiting = buildTimeline(sent, {})
   assert.deepEqual(waiting.queued, [{ id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] }])
-  assert.deepEqual(kinds(waiting.items), ['user', 'reply'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'reply'])
 
   const delivered = buildTimeline(log(...sent, { kind: 'user', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] }), {})
   assert.deepEqual(delivered.queued, [])

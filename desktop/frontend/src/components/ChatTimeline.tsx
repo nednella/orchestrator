@@ -53,7 +53,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatNotice text={label ? `Restarted with ${label}` : 'Restarted'} error={false} />
     }
     case 'work': {
-      const work = <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
+      const work = <ChatWorkRow thread={thread} turn={item.key} header={item.header} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
       // The reply these tool rows follow shows its actions under them.
       const reply = items[index - 1]
       if (reply?.kind !== 'reply') return work

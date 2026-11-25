@@ -79,8 +79,15 @@ test('formatWorked', () => {
   assert.equal(formatWorked(60_000), '1m')
   assert.equal(formatWorked(134_000), '2m 14s')
   assert.equal(formatWorked(3_780_000), '1h 3m')
+  assert.equal(formatWorked(3_723_000), '1h 2m 3s')
+  assert.equal(formatWorked(3_603_000), '1h 3s')
   assert.equal(formatWorked(3_600_000), '1h')
   assert.equal(formatWorked(-5), '0s')
+  assert.equal(formatWorked(420), '0s')
+})
+
+test('a finished turn\'s time is precise below ten seconds', () => {
+  assert.deepEqual([420, 6_340, 9_990, 10_000, 42_500, 63_000].map((ms) => formatWorked(ms, true)), ['420ms', '6.3s', '9.9s', '10s', '42s', '1m 3s'])
 })
 
 test('an Edit opens as a diff and a Bash as its full command', () => {

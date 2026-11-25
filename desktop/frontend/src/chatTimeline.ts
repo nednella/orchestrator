@@ -3,8 +3,9 @@ import type { Access, ChatEvent, Pending } from './types'
 // Command is one slash command, as Claude lists them in a commands event.
 export type Command = { name: string; description: string; argumentHint: string; builtin?: boolean; aliases?: string[] }
 
-// A step is one thing a fold holds, in the order it came: a tool call, or text Claude wrote between calls.
-export type WorkStep = { kind: 'call'; call: ToolCall } | { kind: 'note'; key: string; text: string }
+// A step is one thing a fold holds, in the order it came: a tool call, text Claude wrote between calls, or a thinking
+// block, live while it streams.
+export type WorkStep = { kind: 'call'; call: ToolCall } | { kind: 'note'; key: string; text: string } | { kind: 'thought'; key: string; text: string; live: boolean }
 
 export type ToolCall = { id: string; tool: string; input: unknown; result: string | null; error: boolean; answer?: 'allow' | 'deny' }
 
@@ -20,7 +21,10 @@ export type TimelineItem =
   // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
   // failed on: the turn's last part.
   | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean; ended?: TurnEnd }
-  | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
+  // header is whether the work item heads its turn and shows how long the turn has worked: the first item of the turn
+  // that runs, and the fold of a finished one. In the turn that runs, the calls and thoughts after a reply or a card
+  // are a work item that does not head it.
+  | { kind: 'work'; key: string; header: boolean; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
   | ({ kind: 'plan' } & Ask)
@@ -41,8 +45,9 @@ type ApprovalItem = Extract<TimelineItem, { kind: 'approval' }>
 type AskItem = Extract<TimelineItem, { kind: 'question' | 'plan' }>
 type Reply = { kind: 'reply'; key: string; at: number; id: string; uuid: string; blocks: string[] }
 type ReplyItem = Extract<TimelineItem, { kind: 'reply' }>
+type Thought = { kind: 'thought'; key: string; id: string; text: string }
 // A part is one thing a turn holds, in the order it came.
-type Part = Reply | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem
+type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem
 // An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
 type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean }
 // unsent holds the not-sent notices logged during the turn: the host drops a message before the turn ends, and the
@@ -66,9 +71,9 @@ const answersOf = (input: unknown): Record<string, string> | null => {
   return answers && typeof answers === 'object' ? (answers as Record<string, string>) : null
 }
 
-// buildTimeline turns a thread's logged events, and the text its messages have streamed so far, into what its chat
-// shows. thread is the thread's id, for the pending approval.
-export function buildTimeline(events: ChatEvent[], live: Record<string, string>, thread = ''): Timeline {
+// buildTimeline turns a thread's logged events, and the text its messages and their thinking have streamed so far,
+// into what its chat shows. thread is the thread's id, for the pending approval.
+export function buildTimeline(events: ChatEvent[], live: Record<string, string>, thread = '', thinking: Record<string, string> = {}): Timeline {
   const items: TimelineItem[] = []
   const calls = new Map<string, ToolCall>()
   const asks = new Map<string, AskItem>()
@@ -141,6 +146,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
           reply.uuid = uuid || reply.uuid
           reply.at = e.at
         } else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, uuid, blocks: [e.text ?? ''] })
+        return
+      }
+      case 'thought': {
+        const t = open(e)
+        const id = e.id || `seq-${e.seq}`
+        t.parts.push({ kind: 'thought', key: thoughtKey(t, id), id, text: e.text ?? '' })
         return
       }
       case 'tool_use': {
@@ -217,7 +228,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   })
 
   const running = turn as Turn | null
-  if (running) items.push(...unfolded(running, live, events.at(-1)?.at ?? 0))
+  if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
   const waiting = running?.approvals.find((a) => !a.answered)
   return {
     items,
@@ -239,40 +250,53 @@ function exitItem(e: ChatEvent): Notice | Restart {
   return noticeOf(e, e.stop === 'settle' ? 'Settled' : 'Claude stopped', e.error ?? false)
 }
 
-// folded is a finished turn. When it made tool calls, they and every reply but the last go into one work item. A turn
-// that ended unfinished marks its last part, when that is a reply.
+// thoughtKey is the key of the next thought of message id in the turn, the same while it streams and once logged.
+const thoughtKey = (turn: Turn, id: string) => `thought-${id}-${turn.parts.filter((p) => p.kind === 'thought' && p.id === id).length}`
+
+// folded is a finished turn. When it made tool calls or thought, they and every reply but the last go into one work
+// item. A turn that ended unfinished marks its last part, when that is a reply.
 function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const calls = turn.parts.flatMap((p) => (p.kind === 'call' ? [p.call] : []))
   const endedOn = turn.parts.at(-1)
   const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
-  if (calls.length === 0) return turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))
+  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
-  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply')
+  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
   const last = replies.at(-1)
   const steps = turn.parts.flatMap((p): WorkStep[] => {
     if (p.kind === 'call') return [{ kind: 'call', call: p.call }]
+    if (p.kind === 'thought') return [{ kind: 'thought', key: p.key, text: p.text, live: false }]
     if (p.kind === 'reply' && p !== last) return [{ kind: 'note', key: p.key, text: p.blocks.join('\n\n') }]
     return []
   })
-  return [{ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [reply(last)] : [])]
+  return [{ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [reply(last)] : [])]
 }
 
-// unfolded is the turn that runs: its parts in order, each run of calls as one work item, then the messages that have
-// only streamed so far. A call that waits on its approval shows only as the approval's card.
-function unfolded(turn: Turn, live: Record<string, string>, now: number): TimelineItem[] {
-  const out: TimelineItem[] = []
+// unfolded is the turn that runs: the work item that heads it, then its parts in order, each run of calls and thoughts
+// as one work item, the first in the heading one, then the thinking and the messages that have only streamed so far. A
+// call that waits on its approval shows only as the approval's card.
+function unfolded(turn: Turn, live: Record<string, string>, thinking: Record<string, string>, now: number): TimelineItem[] {
+  const out: TimelineItem[] = [{ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt: null, calls: [], steps: [] }]
   const asked = new Set(turn.approvals.filter((a) => !a.answered && a.item).map((a) => a.call))
-  for (const p of turn.parts) {
-    if (p.kind !== 'call') {
-      out.push(p.kind === 'reply' ? replyItem(p, live[p.id] ?? '') : p)
-      continue
+  // line adds a step to the work item the items end with, or to a new one after a reply or a card.
+  const line = (step: WorkStep, key: string) => {
+    let work = out.at(-1)
+    if (work?.kind !== 'work') {
+      work = { kind: 'work', key: `work-${key}`, header: false, startedAt: turn.startedAt, endedAt: null, calls: [], steps: [] }
+      out.push(work)
     }
-    if (asked.has(p.call)) continue
-    const work = out.at(-1)
-    if (work?.kind === 'work') {
-      work.calls.push(p.call)
-      work.steps.push({ kind: 'call', call: p.call })
-    } else out.push({ kind: 'work', key: `work-${p.call.id}`, startedAt: turn.startedAt, endedAt: null, calls: [p.call], steps: [{ kind: 'call', call: p.call }] })
+    work.steps.push(step)
+    if (step.kind === 'call') work.calls.push(step.call)
+  }
+  for (const p of turn.parts) {
+    if (p.kind === 'call') {
+      if (!asked.has(p.call)) line({ kind: 'call', call: p.call }, p.call.id)
+    } else if (p.kind === 'thought') line({ kind: 'thought', key: p.key, text: p.text, live: false }, p.key)
+    else out.push(p.kind === 'reply' ? replyItem(p, live[p.id] ?? '') : p)
+  }
+  for (const [id, text] of Object.entries(thinking)) {
+    const key = thoughtKey(turn, id)
+    line({ kind: 'thought', key, text, live: true }, key)
   }
   for (const [id, text] of Object.entries(live)) {
     if (!turn.parts.some((p) => p.kind === 'reply' && p.id === id)) out.push({ kind: 'reply', key: `reply-${id}`, at: now, id, uuid: '', text, streaming: true })

@@ -1,16 +1,18 @@
 import type { ChatEvent } from './types'
 
 // ChatState is a thread's chat as the front end holds it: its logged events in seq order, the seq of the last one,
-// and the text streamed so far of each message, by message id, that is not logged yet.
-export type ChatState = { events: ChatEvent[]; last: number; live: Record<string, string> }
+// the text streamed so far of each message, by message id, that is not logged yet, and the same for the thinking block
+// each message has open.
+export type ChatState = { events: ChatEvent[]; last: number; live: Record<string, string>; thinking: Record<string, string> }
 
-export const EMPTY_CHAT: ChatState = { events: [], last: 0, live: {} }
+export const EMPTY_CHAT: ChatState = { events: [], last: 0, live: {}, thinking: {} }
 
 // mergeEvents adds events from the stream or the history. A logged event the state already holds is dropped; one past
 // a gap is dropped too, and gapAfter says to read the history after it, which brings it again.
 export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatState; gapAfter: number | null } {
   let events = s.events
   const live = { ...s.live }
+  const thinking = { ...s.thinking }
   let last = s.last
   let gapAfter: number | null = null
   let changed = false
@@ -21,6 +23,16 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
       changed = true
       continue
     }
+    if (e.kind === 'thinking') {
+      if (!e.id) continue
+      thinking[e.id] = (thinking[e.id] ?? '') + (e.text ?? '')
+      changed = true
+      continue
+    }
+    if (e.kind === 'thought' && e.id && e.id in thinking) {
+      delete thinking[e.id]
+      changed = true
+    }
     // A double clears too: the stream can send a block's deltas, the block, then the next block's deltas, while the
     // block came first in the history read meanwhile.
     if (e.kind === 'message' && e.id && e.id in live) {
@@ -28,8 +40,9 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
       changed = true
     }
     // A reply cut off by an interrupt or an exit streamed text that is never logged.
-    if ((e.kind === 'turn_end' || e.kind === 'exit') && Object.keys(live).length > 0) {
+    if ((e.kind === 'turn_end' || e.kind === 'exit') && Object.keys(live).length + Object.keys(thinking).length > 0) {
       for (const id of Object.keys(live)) delete live[id]
+      for (const id of Object.keys(thinking)) delete thinking[id]
       changed = true
     }
     if (e.seq <= last) continue
@@ -42,7 +55,7 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
     last = e.seq
     changed = true
   }
-  return { state: changed ? { events, last, live } : s, gapAfter }
+  return { state: changed ? { events, last, live, thinking } : s, gapAfter }
 }
 
 // Events that come before the first history read are held for it; past this many, they are dropped and read again.

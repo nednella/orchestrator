@@ -21,7 +21,7 @@ function keep(id: string, state: ChatState) {
 // The text streamed while a thread was not watched is lost, so a kept thread starts again with none.
 function startOf(id: string): View {
   const state = kept.get(id)
-  return { id, state: state ? { ...state, live: {} } : EMPTY_CHAT, loading: !state, error: '' }
+  return { id, state: state ? { ...state, live: {}, thinking: {} } : EMPTY_CHAT, loading: !state, error: '' }
 }
 
 const calls = new Map<string, Promise<unknown>>()
@@ -65,7 +65,7 @@ export function useChat(id: string, state: State): { timeline: Timeline; events:
     if (watchAgain(before, state)) setWakes((n) => n + 1)
   }, [id, state])
   const shown = view.id === id ? view : startOf(id)
-  const timeline = useMemo(() => buildTimeline(shown.state.events, shown.state.live, id), [shown.state, id])
+  const timeline = useMemo(() => buildTimeline(shown.state.events, shown.state.live, id, shown.state.thinking), [shown.state, id])
 
   useEffect(() => {
     const start = startOf(id)

@@ -336,11 +336,14 @@ export type Release = {
   sections: ReleaseSection[]
 }
 
-// ChatKind is what a chat event is; a delta is never logged and has seq 0.
+// ChatKind is what a chat event is. A delta, a thinking event (a thinking block's start, with no text, or a piece of its
+// text) and a thought with no text are never logged and have seq 0; a thought ends a thinking block, with its text.
 export type ChatKind =
   | 'init'
   | 'user'
   | 'delta'
+  | 'thinking'
+  | 'thought'
   | 'message'
   | 'tool_use'
   | 'tool_result'

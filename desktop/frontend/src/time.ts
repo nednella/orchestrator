@@ -13,6 +13,11 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener)
 }
 
+// onTick calls show with the time at every tick of the clock, for text written straight into the page with no render.
+export function onTick(show: (now: number) => void): () => void {
+  return subscribe(() => show(now))
+}
+
 // Renders again only when `read` gives a new value, so text that reads the clock renders when the text changes.
 export function useClock<T extends string | number>(read: (now: number) => T): T {
   return useSyncExternalStore(subscribe, () => read(now))

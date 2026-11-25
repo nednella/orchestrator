@@ -7,7 +7,7 @@ const user = (key: string, text = key, files: string[] = []): TimelineItem => ({
 const reply = (key: string, text: string): TimelineItem => ({ kind: 'reply', key, at: 0, id: key, uuid: '', text, streaming: false })
 const failure = (key: string, text: string): TimelineItem => ({ kind: 'notice', key, at: 0, text, error: true })
 const note = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: false })
-const work = (key: string): TimelineItem => ({ kind: 'work', key, startedAt: 0, endedAt: 0, calls: [], steps: [] })
+const work = (key: string): TimelineItem => ({ kind: 'work', key, header: true, startedAt: 0, endedAt: 0, calls: [], steps: [] })
 
 test('a strip for each message and each error, in order, with its preview', () => {
   const items = [user('a', 'Fix the **cart**'), work('w'), reply('r1', 'Looking.'), reply('r2', 'Done: see [the PR](https://x/1).'), failure('e', 'API Error: 529\nOverloaded'), note('n'), user('b', '', ['img.png']), reply('r3', 'A picture.')]

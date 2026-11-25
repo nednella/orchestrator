@@ -47,6 +47,21 @@ test('deltas pass through without a seq', () => {
   assert.deepEqual(stopped.state.live, {}, 'a reply cut off at the turn end is never logged')
 })
 
+test('thinking streams until its thought ends it', () => {
+  const thinking = (id: string, text?: string): ChatEvent => ({ seq: 0, at: 0, kind: 'thinking', id, ...(text ? { text } : {}) })
+  const started = mergeEvents(EMPTY_CHAT, [logged(1, 'user'), thinking('msg_1')]).state
+  assert.deepEqual(started.thinking, { msg_1: '' }, 'a block shows from its start, before any text')
+  const streamed = mergeEvents(started, [thinking('msg_1', 'Read the '), thinking('msg_1', 'router.'), delta('msg_1', 'x')]).state
+  assert.deepEqual([streamed.thinking, streamed.live], [{ msg_1: 'Read the router.' }, { msg_1: 'x' }], 'thinking and text stream apart')
+
+  const thought = mergeEvents(streamed, [{ seq: 2, at: 2000, kind: 'thought', id: 'msg_1', text: 'Read the router.' }]).state
+  assert.deepEqual([thought.thinking, seqs(thought.events)], [{}, [1, 2]])
+  const hidden = mergeEvents(started, [{ seq: 0, at: 0, kind: 'thought', id: 'msg_1' }]).state
+  assert.deepEqual([hidden.thinking, seqs(hidden.events)], [{}, [1]], 'a thought with no text ends the block and is not logged')
+  const stopped = mergeEvents(streamed, [{ seq: 2, at: 2000, kind: 'turn_end', error: true }]).state
+  assert.deepEqual(stopped.thinking, {}, 'the turn end clears thinking cut off')
+})
+
 // feed builds a chat feed whose history reads wait until the test answers them, and whose later runs wait for frame().
 function feed() {
   const reads: { after: number; answer(events: ChatEvent[]): void; fail(err: string): void }[] = []
