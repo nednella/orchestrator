@@ -129,7 +129,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       { kind: 'init', id: 'mock-session', at: ago(5) },
       { kind: 'message', id: 'msg_3', text: 'The tests need a package that is not installed yet.', at: ago(4) },
       { kind: 'tool_use', id: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
-      { kind: 'approval', id: 'req-1', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
+      { kind: 'approval', id: 'req-1', parent: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
     ]
     turns.forEach((e) => append(id, e))
     setPending(id, { id, request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool' })

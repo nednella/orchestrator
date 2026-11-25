@@ -127,9 +127,9 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const t = open(e)
         const a: Approval = { request: e.id ?? '', tool: e.tool ?? '', answered: false }
         const kind = askKinds[a.tool]
-        // The approval names the tool, not the call: it is for the latest call of that tool still waiting on one.
-        if (kind) a.ask = [...asks.values()].reverse().find((x) => x.kind === kind && x.request === '' && x.result === null)
-        else a.call = [...calls.values()].reverse().find((c) => c.tool === a.tool && c.result === null && !requested.has(c))
+        // An approval in an older log names only the tool: it is for the turn's earliest call of it still waiting on one.
+        if (kind) a.ask = e.parent ? asks.get(e.parent) : t.parts.find((p): p is AskItem => p.kind === kind && p.request === '' && p.result === null)
+        else a.call = e.parent ? calls.get(e.parent) : t.parts.flatMap((p) => (p.kind === 'call' ? [p.call] : [])).find((c) => c.tool === a.tool && c.result === null && !requested.has(c))
         if (a.ask) a.ask.request = a.request
         else {
           if (a.call) requested.add(a.call)

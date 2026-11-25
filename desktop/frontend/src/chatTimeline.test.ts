@@ -16,7 +16,7 @@ const user = (id: string, text: string, at?: number): Draft => ({ kind: 'user', 
 const message = (id: string, text: string): Draft => ({ kind: 'message', id, text })
 const toolUse = (id: string, tool: string, input: unknown = {}): Draft => ({ kind: 'tool_use', id, tool, input })
 const toolResult = (parent: string, text: string, error = false): Draft => ({ kind: 'tool_result', parent, text, ...(error ? { error } : {}) })
-const approval = (id: string, tool: string, input: unknown = {}): Draft => ({ kind: 'approval', id, tool, input })
+const approval = (id: string, tool: string, input: unknown = {}, parent?: string): Draft => ({ kind: 'approval', id, tool, input, ...(parent ? { parent } : {}) })
 const answer = (id: string, text: 'allow' | 'deny'): Draft => ({ kind: 'answer', id, text })
 const turnEnd = (error = false, at?: number): Draft => ({ kind: 'turn_end', cost: 0.01, ...(error ? { error } : {}), ...(at ? { at } : {}) })
 
@@ -117,6 +117,18 @@ test('answered approval folds as a call answer', () => {
     ],
   )
   assert.equal(t.pending, null)
+})
+
+test('approvals pair with their calls by id', () => {
+  const answers = (...drafts: Draft[]) => only(buildTimeline(log(user('u1', 'Clean up'), toolUse('t1', 'Bash'), toolUse('t2', 'Bash'), ...drafts, turnEnd()), {}).items, 'work')[0].calls.map((c) => [c.id, c.answer])
+  assert.deepEqual(answers(approval('r2', 'Bash', {}, 't2'), answer('r2', 'deny'), approval('r1', 'Bash', {}, 't1'), answer('r1', 'allow')), [
+    ['t1', 'allow'],
+    ['t2', 'deny'],
+  ])
+  assert.deepEqual(answers(approval('r1', 'Bash'), answer('r1', 'allow'), approval('r2', 'Bash'), answer('r2', 'deny')), [
+    ['t1', 'allow'],
+    ['t2', 'deny'],
+  ], 'an older log with no parent pairs in order')
 })
 
 test('unanswered approval expires at turn end', () => {
