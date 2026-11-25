@@ -809,9 +809,9 @@ func parseWorktrees(out string) worktrees {
 
 func samePath(a, b string) bool { return realPath(a) == realPath(b) }
 
-// inside says whether path is dir or a folder inside it.
+// inside says whether path is dir or a folder inside it, also when either is gone.
 func inside(path, dir string) bool {
-	rel, err := filepath.Rel(realPath(dir), realPath(path))
+	rel, err := filepath.Rel(canonicalPath(dir), canonicalPath(path))
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
@@ -1136,7 +1136,8 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (
 	return p, l.shellIn(ctx, w.Path)
 }
 
-// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say. It is "" when none is.
+// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, also of one shell whose folder
+// it does not know. It is "" when none is.
 func (l *Lifecycle) shellIn(ctx context.Context, worktree string) string {
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
@@ -1145,7 +1146,7 @@ func (l *Lifecycle) shellIn(ctx context.Context, worktree string) string {
 		return fmt.Sprintf("tmux could not list the open shells: %v", err)
 	}
 	for _, path := range shells {
-		if inside(path, worktree) {
+		if path == "" || inside(path, worktree) {
 			return "a shell is open in this worktree"
 		}
 	}
