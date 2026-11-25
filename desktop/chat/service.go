@@ -202,21 +202,27 @@ type FilesRewind struct {
 	Deletions  int      `json:"deletions"`
 }
 
-// RewindPreview is what a rewind of the thread to before its user message would do to the files, with nothing changed.
-// A settled thread whose files may be rewound is woken for it, as a message would wake it.
+// RewindFilesOffer is whether Edit from here offers to put the thread's files back, and why it cannot when it does
+// not, with no dry run: the thread is not woken for it.
+func (v *Service) RewindFilesOffer(id string) FilesRewind {
+	_, inProject, reason := v.c.threads.FilesRewind(id)
+	return FilesRewind{Offered: !inProject, Reason: sentence(reason), Files: []string{}}
+}
+
+// RewindPreview is what a rewind of the thread's files to before its user message would change, from Claude's dry run,
+// with nothing changed. A settled thread is woken for it, as a message would wake it.
 func (v *Service) RewindPreview(id, message string) (FilesRewind, error) {
 	if off := v.RewindOff(); off != "" {
 		return FilesRewind{}, errors.New(off)
 	}
-	preview := FilesRewind{Files: []string{}}
-	if _, inProject, _ := v.c.threads.FilesRewind(id); inProject {
+	preview := v.RewindFilesOffer(id)
+	if !preview.Offered || preview.Reason != "" {
 		return preview, nil
 	}
 	ch, err := v.awake(id)
 	if err != nil {
 		return FilesRewind{}, err
 	}
-	preview.Offered = true
 	dir, _, reason := v.c.threads.FilesRewind(id)
 	if reason != "" {
 		preview.Reason = sentence(reason)

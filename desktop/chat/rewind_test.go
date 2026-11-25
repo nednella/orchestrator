@@ -101,6 +101,9 @@ func TestRewindTheConversationOnly(t *testing.T) {
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one", "two")
 
+	if offer := h.RewindFilesOffer(id); offer.Offered {
+		t.Errorf("RewindFilesOffer = %+v; want no files offered in the project folder", offer)
+	}
 	preview, err := h.RewindPreview(id, ids[1])
 	if err != nil || preview.Offered || preview.Files == nil {
 		t.Fatalf("RewindPreview = %+v, %v; want no files offered in the project folder", preview, err)
@@ -290,6 +293,9 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 		return reason != ""
 	})
 
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell is open in this worktree" {
+		t.Errorf("RewindFilesOffer = %+v", offer)
+	}
 	preview, err := h.RewindPreview(id, ids[0])
 	if err != nil || !preview.Offered || preview.Reason != "A shell is open in this worktree" {
 		t.Errorf("RewindPreview = %+v, %v", preview, err)
@@ -305,5 +311,27 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	}
 	if err := h.ShellClose(shell.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTheFilesOfferWakesNoThread(t *testing.T) {
+	h, id, _ := worktreeThread(t)
+	ids := talked(t, h, id, "one")
+	if err := h.SettleThread(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "" {
+		t.Errorf("RewindFilesOffer = %+v", offer)
+	}
+	if s, _ := h.Session(id); s.State != "settled" {
+		t.Errorf("the offer woke the thread: %s", s.State)
+	}
+	if preview, err := h.RewindPreview(id, ids[0]); err != nil || len(preview.Files) != 1 {
+		t.Errorf("RewindPreview = %+v, %v", preview, err)
+	}
+	if s, _ := h.Session(id); s.State == "settled" {
+		t.Errorf("the dry run did not wake the thread")
 	}
 }

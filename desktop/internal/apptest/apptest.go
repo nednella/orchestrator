@@ -1136,6 +1136,9 @@ func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 }
 func (h *Harness) ChatWatch(id string) error { return h.chat.ChatWatch(id) }
 func (h *Harness) ChatUnwatch(id string)     { h.chat.ChatUnwatch(id) }
+func (h *Harness) RewindFilesOffer(id string) chat.FilesRewind {
+	return h.chat.RewindFilesOffer(id)
+}
 func (h *Harness) RewindPreview(id, message string) (chat.FilesRewind, error) {
 	return h.chat.RewindPreview(id, message)
 }
