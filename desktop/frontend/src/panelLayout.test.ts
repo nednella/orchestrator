@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { dockedMax, fit, modeFor, nextOverlay, OVERLAY_BELOW, sidebarPushesRightOver } from './panelLayout.ts'
+import { closesPanel, dockedMax, fit, modeFor, nextOverlay, OVERLAY_BELOW, sidebarPushesRightOver } from './panelLayout.ts'
 
 const ROOT = 16
 
@@ -86,6 +86,14 @@ test('opening the sidebar pushes the right panel over the thread only when it th
   assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, false), ROOT), true)
   assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, true), ROOT), true)
   assert.equal(sidebarPushesRightOver(700, prefs(18, 22, false), ROOT), false)
+})
+
+test('closing an overlay closes its panel, opening a thread only puts it away', () => {
+  assert.equal(closesPanel({ close: 'right' }), true)
+  assert.equal(closesPanel('escape'), true)
+  assert.equal(closesPanel('thread-focused'), true)
+  assert.equal(closesPanel('thread-opened'), false)
+  assert.equal(closesPanel({ open: 'right' }), false)
 })
 
 test('the window width picks the layout band', () => {

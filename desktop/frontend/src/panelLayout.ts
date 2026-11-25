@@ -69,6 +69,12 @@ export function modeFor(width: number): LayoutMode {
 // other. Esc, a click on the thread beside it or a move to the thread, and opening a thread close it.
 export type OverlayEvent = { open: SidePanel } | { close: SidePanel } | 'escape' | 'thread-focused' | 'thread-opened'
 
+// An overlay the owner closes (its trigger, Esc, a click on the thread) closes its panel for good, so the panel does
+// not dock open again when the window widens. Opening a thread only puts the overlay away.
+export function closesPanel(event: OverlayEvent): boolean {
+  return typeof event === 'string' ? event !== 'thread-opened' : 'close' in event
+}
+
 export function nextOverlay(open: SidePanel | null, event: OverlayEvent): SidePanel | null {
   if (typeof event === 'string') return null
   if ('open' in event) return event.open

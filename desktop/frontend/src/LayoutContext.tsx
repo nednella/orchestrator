@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
 import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
-import { dockedMax, fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, sidebarPushesRightOver } from './panelLayout'
+import { closesPanel, dockedMax, fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, sidebarPushesRightOver } from './panelLayout'
 import type { Band, FitPrefs, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
@@ -285,6 +285,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (!overlay) return
         refocusOnClose(overlay)
         moveOverlay(why)
+        if (overlay === 'right' && closesPanel(why)) updatePrefs({ rightOpen: false })
       },
       setWidth(panel, rem, commit) {
         const limit = docked[panel] ? Math.min(MAX_REM, dockedMax(panel, width, { ...fitPrefs, rightOpen: prefs.rightOpen }, 16 * scale)) : MAX_REM
