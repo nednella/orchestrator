@@ -37,6 +37,7 @@ test('deltas pass through without a seq', () => {
   assert.equal(state.last, 1)
   assert.equal(gapAfter, null)
   assert.deepEqual(state.live, { msg_1: 'Hello', msg_2: 'x' })
+  assert.equal(mergeEvents(state, [delta('msg_1', '!')]).state.events, state.events, 'deltas alone keep the events as they were')
 
   const replied = mergeEvents(state, [{ seq: 2, at: 2000, kind: 'message', id: 'msg_1', text: 'Hello' }])
   assert.deepEqual(replied.state.live, { msg_2: 'x' })

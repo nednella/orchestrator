@@ -9,7 +9,7 @@ export const EMPTY_CHAT: ChatState = { events: [], last: 0, live: {} }
 // mergeEvents adds events from the stream or the history. A logged event the state already holds is dropped; one past
 // a gap is dropped too, and gapAfter says to read the history after it, which brings it again.
 export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatState; gapAfter: number | null } {
-  const events = [...s.events]
+  let events = s.events
   const live = { ...s.live }
   let last = s.last
   let gapAfter: number | null = null
@@ -37,6 +37,7 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
       gapAfter ??= last
       continue
     }
+    if (events === s.events) events = [...s.events]
     events.push(e)
     last = e.seq
     changed = true
