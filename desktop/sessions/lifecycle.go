@@ -363,11 +363,12 @@ func (l *Lifecycle) Run(ctx context.Context) {
 
 // sweep tries again, with every check, each clean-up the checks kept after the thread's PR merged or closed, since what
 // kept it, as a turn, a shell or work since pushed, may be gone. An ask waits on the owner, a running clean-up is left
-// to end, and a thread that runs again, as after a wake, is left alone.
+// to end, and a thread that runs again, as after a wake, is left alone. A try that keeps it for the same reason logs
+// nothing, so the log does not fill with one line an hour.
 func (l *Lifecycle) sweep(ctx context.Context) {
 	for _, t := range l.workTargets() {
 		if l.keptAfterPR(t) {
-			l.autoCleanup(ctx, t.id)
+			l.inBackground(ctx, func(ctx context.Context) { _, _ = l.cleanupNow(ctx, t.id, false, bySweep) })
 		}
 	}
 }
@@ -1014,13 +1015,22 @@ func verdict(reviews []review) string {
 // Cleanup removes the worktree agentos made for a thread and its temp folder, and settles the thread, which stays with
 // its branch. Without force it first checks that nothing would be lost.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
-	_, err := l.cleanupNow(ctx, id, force, false)
+	_, err := l.cleanupNow(ctx, id, force, byOwner)
 	return err
 }
 
+// cleanupBy is what started a clean-up.
+type cleanupBy int
+
+const (
+	byOwner  cleanupBy = iota // the owner, or a PR that merged or closed
+	byDelete                  // a delete that takes the worktree with the thread
+	bySweep                   // the sweep, which logs a clean-up kept again only when its reason changed
+)
+
 // cleanupNow is Cleanup, which it runs to the end before it returns the reason the clean-up stopped, "" when it went
 // through. A clean-up that cannot start is an error, as one of a thread being deleted, unless the delete runs it.
-func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force, ofDelete bool) (reason string, err error) {
+func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cleanupBy) (reason string, err error) {
 	t, err := l.sessions.target(id)
 	if err != nil {
 		return "", err
@@ -1053,7 +1063,7 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force, ofDelete b
 	l.mu.Unlock()
 	// The mark goes on before the look at the delete's, as a delete marks itself before it looks for a running
 	// clean-up: one of the two always sees the other.
-	if !ofDelete && l.sessions.beingDeleted(id) {
+	if by != byDelete && l.sessions.beingDeleted(id) {
 		l.mu.Lock()
 		tr.cleanup, tr.reason = was, wasReason
 		l.mu.Unlock()
@@ -1062,7 +1072,11 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force, ofDelete b
 	l.sessions.changed()
 
 	removed, reason := l.removeAll(ctx, t, pr, force)
-	if reason = l.logCleanup(ctx, t, pr, removed, reason); reason != "" {
+	again := by == bySweep && was == "blocked" && reason == wasReason && len(removed) == 0 && ctx.Err() == nil
+	if !again {
+		reason = l.logCleanup(ctx, t, pr, removed, reason)
+	}
+	if reason != "" {
 		l.mu.Lock()
 		tr.cleanup, tr.reason = "blocked", reason
 		l.mu.Unlock()

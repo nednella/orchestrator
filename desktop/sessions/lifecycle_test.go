@@ -1245,16 +1245,15 @@ func keptByAFile(t *testing.T, h *apptest.Harness, s sessions.Session) string {
 
 const keptReason = "the worktree of issue-7 has uncommitted changes"
 
-// keptThenDone checks the log, newest first: the clean-up that removed the worktree, after the tries that kept it.
-func keptThenDone(t *testing.T, log []sessions.Cleanup, wt string) {
+// keptThenDone checks the log, newest first, and the events: the clean-up that kept the worktree, then the one that
+// removed it, and nothing for a try that kept it again for the same reason.
+func keptThenDone(t *testing.T, h *apptest.Harness, log []sessions.Cleanup, wt string) {
 	t.Helper()
-	if len(log) < 2 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "worktree "+wt) {
-		t.Fatalf("log = %+v, want the tries that kept it, then one that removed %s", log, wt)
+	if len(log) != 2 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "worktree "+wt) || log[1].Status != "blocked" || log[1].Reason != keptReason {
+		t.Fatalf("log = %+v, want one kept for %q, then one that removed %s", log, keptReason, wt)
 	}
-	for _, c := range log[1:] {
-		if c.Status != "blocked" || c.Reason != keptReason {
-			t.Errorf("an earlier try = %+v, want kept for %q", c, keptReason)
-		}
+	if ev := h.Events(t, activity.Cleanup); len(ev) != 2 || ev[0].Label != "blocked" || ev[1].Label != "done" {
+		t.Errorf("cleanup events = %+v, want blocked then done", ev)
 	}
 }
 
@@ -1263,9 +1262,10 @@ func TestKeptCleanupIsTriedAgainByTheSweep(t *testing.T) {
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	file := keptByAFile(t, h, s)
-	eventually(t, "a sweep to try again", func() bool { return len(h.Cleanups()) >= 2 })
-	if got, _ := h.Session(s.ID); got.Cleanup != "blocked" || !exists(file) {
-		t.Fatalf("a sweep while the file is there: cleanup %q, file there %v", got.Cleanup, exists(file))
+	time.Sleep(700 * time.Millisecond) // some sweeps, each kept for the same reason
+	eventually(t, "the sweep's try to end", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
+	if got, _ := h.Session(s.ID); got.Cleanup != "blocked" || got.CleanupReason != keptReason || !exists(file) || len(h.Cleanups()) != 1 {
+		t.Fatalf("sweeps while the file is there: cleanup %q, reason %q, file there %v, log %+v", got.Cleanup, got.CleanupReason, exists(file), h.Cleanups())
 	}
 
 	if err := os.Remove(file); err != nil {
@@ -1276,7 +1276,7 @@ func TestKeptCleanupIsTriedAgainByTheSweep(t *testing.T) {
 		t.Errorf("worktree there %v, branches %q", exists(s.Worktree), branches(t, h.Dir))
 	}
 	log := h.Cleanups()
-	keptThenDone(t, log, s.Worktree)
+	keptThenDone(t, h, log, s.Worktree)
 	time.Sleep(600 * time.Millisecond)
 	if n := len(h.Cleanups()); n != len(log) {
 		t.Errorf("the sweep ran on a thread cleaned up already: %d entries, then %d", len(log), n)
@@ -1294,10 +1294,11 @@ func TestKeptCleanupIsTriedAgainAtStart(t *testing.T) {
 
 	fresh := h.Restart(t)
 	eventually(t, "the clean-up at the next start", func() bool { log := fresh.Cleanups(); return len(log) > 1 && log[0].Status == "done" })
-	if !cleanedUp(fresh, s.ID)() || exists(s.Worktree) || branches(t, h.Dir) == "" {
+	eventually(t, "the row to show the clean-up done", cleanedUp(fresh, s.ID))
+	if exists(s.Worktree) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree there %v, branches %q", exists(s.Worktree), branches(t, h.Dir))
 	}
-	keptThenDone(t, fresh.Cleanups(), s.Worktree)
+	keptThenDone(t, fresh, fresh.Cleanups(), s.Worktree)
 }
 
 func TestAskedCleanupIsNotSwept(t *testing.T) {
