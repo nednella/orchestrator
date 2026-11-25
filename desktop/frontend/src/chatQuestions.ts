@@ -2,6 +2,8 @@ import type { Pending } from './types'
 
 export type QuestionOption = { label: string; description: string }
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }
+// A pick is the labels picked for one question, and the text typed for Other, null while Other is not picked.
+export type Pick = { labels: string[]; other: string | null }
 
 type Input = Record<string, unknown>
 
@@ -19,6 +21,28 @@ export function questionsOf(input: unknown): Question[] {
       const options = Array.isArray(i.options) ? i.options.map((o) => ({ label: str(asInput(o).label), description: str(asInput(o).description) })).filter((o) => o.label !== '') : []
       return { question: str(i.question), header: str(i.header), options, multiSelect: i.multiSelect === true }
     })
+}
+
+// pickedAnswer is a question's entry in questionAnswer's picks.
+export function pickedAnswer(question: Question, { labels, other }: Pick): string[] | string {
+  if (question.multiSelect) return other === null ? labels : [...labels, other]
+  return other ?? labels[0] ?? ''
+}
+
+// The picks of questions not yet answered, kept outside the card so that they outlive it when the list lets go of
+// its row. Keys are a thread and the question's tool call, which, unlike its approval, is known from the start.
+const keptQuestions = 20
+const picked = new Map<string, Pick[]>()
+
+export const keptPicks = (thread: string, call: string): Pick[] | undefined => picked.get(`${thread} ${call}`)
+
+// keepPicks marks the question as the newest one touched, and drops the oldest past the limit.
+export function keepPicks(thread: string, call: string, picks: Pick[]) {
+  const key = `${thread} ${call}`
+  picked.delete(key)
+  picked.set(key, picks)
+  const oldest = picked.keys().next().value
+  if (picked.size > keptQuestions && oldest !== undefined) picked.delete(oldest)
 }
 
 // questionAnswer is the input that allows an AskUserQuestion call: its own, plus each question's answer keyed by the

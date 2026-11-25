@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { answeredLate, approvalLine, questionAnswer, questionsOf } from './chatQuestions.ts'
+import { answeredLate, approvalLine, keepPicks, keptPicks, pickedAnswer, questionAnswer, questionsOf } from './chatQuestions.ts'
 
 const colour = { question: 'Which colour do you like?', header: 'Colour', options: [{ label: 'Red', description: 'Warm' }, { label: 'Blue', description: 'Cool' }], multiSelect: false }
 const sizes = { question: 'Which sizes do you stock?', header: 'Sizes', options: [{ label: 'Small', description: '' }, { label: 'Medium', description: '' }, { label: 'Large', description: '' }], multiSelect: true }
@@ -41,4 +41,19 @@ test('a tool approval reads as its tool and summary', () => {
   const p = { id: 'p/a', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' as const }
   assert.equal(approvalLine(p), 'Bash: npm install')
   assert.equal(approvalLine({ ...p, tool: 'mcp__browser__click', summary: '' }), 'mcp__browser__click')
+})
+
+test('a pick gives the labels and the Other text', () => {
+  assert.equal(pickedAnswer(colour, { labels: ['Red'], other: null }), 'Red')
+  assert.equal(pickedAnswer(colour, { labels: [], other: 'Green' }), 'Green')
+  assert.deepEqual(pickedAnswer(sizes, { labels: ['Small'], other: 'Huge' }), ['Small', 'Huge'])
+})
+
+test('picks are kept per question, for at most 20 questions', () => {
+  keepPicks('p/a', 'toolu_1', [{ labels: ['Red'], other: null }])
+  assert.deepEqual(keptPicks('p/a', 'toolu_1'), [{ labels: ['Red'], other: null }])
+  assert.equal(keptPicks('p/b', 'toolu_1'), undefined)
+  for (let i = 0; i < 20; i++) keepPicks('p/c', `toolu_${i}`, [])
+  assert.equal(keptPicks('p/a', 'toolu_1'), undefined)
+  assert.deepEqual(keptPicks('p/c', 'toolu_19'), [])
 })

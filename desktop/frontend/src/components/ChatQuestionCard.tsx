@@ -1,15 +1,16 @@
 import { memo, useId, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { questionAnswer, questionsOf } from '../chatQuestions'
-import type { Question } from '../chatQuestions'
+import { keepPicks, keptPicks, pickedAnswer, questionAnswer, questionsOf } from '../chatQuestions'
+import type { Pick, Question } from '../chatQuestions'
 import { useAnswering } from '../useAnswering'
 
-// request is '' until Claude asks for the approval that answers the questions; answers is what they were answered with.
-type ChatQuestionCardProps = { thread: string; request: string; input: unknown; answer: 'allow' | 'deny' | undefined; answers: Record<string, string> | null; expired: boolean; result: string | null }
+// id is the question's tool call; request is '' until Claude asks for the approval that answers the questions; answers
+// is what they were answered with.
+type ChatQuestionCardProps = { thread: string; id: string; request: string; input: unknown; answer: 'allow' | 'deny' | undefined; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
-export const ChatQuestionCard = memo(function ChatQuestionCard({ thread, request, input, answer, answers, expired, result }: ChatQuestionCardProps) {
+export const ChatQuestionCard = memo(function ChatQuestionCard({ thread, id, request, input, answer, answers, expired, result }: ChatQuestionCardProps) {
   const questions = questionsOf(input)
-  if (!answer && !expired && result === null) return <OpenQuestions thread={thread} request={request} input={input} questions={questions} />
+  if (!answer && !expired && result === null) return <OpenQuestions thread={thread} id={id} request={request} input={input} questions={questions} />
   const status = answer === 'deny' ? 'Not answered' : expired ? 'The question expired' : answers ? '' : 'Answered'
 
   return (
@@ -36,26 +37,23 @@ function QuestionTitle({ question }: QuestionTitleProps) {
   )
 }
 
-// A pick is the labels picked for one question, and the text typed for Other, null while Other is not picked.
-type Pick = { labels: string[]; other: string | null }
 
-const given = (question: Question, { labels, other }: Pick): string[] | string => {
-  if (question.multiSelect) return other === null ? labels : [...labels, other]
-  return other ?? labels[0] ?? ''
-}
+type OpenQuestionsProps = { thread: string; id: string; request: string; input: unknown; questions: Question[] }
 
-type OpenQuestionsProps = { thread: string; request: string; input: unknown; questions: Question[] }
-
-function OpenQuestions({ thread, request, input, questions }: OpenQuestionsProps) {
+function OpenQuestions({ thread, id, request, input, questions }: OpenQuestionsProps) {
   const a = useAgentos('answerQuestion')
   const { busy, send } = useAnswering()
-  const [picks, setPicks] = useState<Pick[]>(() => questions.map(() => ({ labels: [], other: null })))
+  const [picks, setPicks] = useState<Pick[]>(() => keptPicks(thread, id) ?? questions.map(() => ({ labels: [], other: null })))
 
-  const setPick = (i: number, pick: Pick) => setPicks((list) => list.map((p, n) => (n === i ? pick : p)))
+  const setPick = (i: number, pick: Pick) => {
+    const next = picks.map((p, n) => (n === i ? pick : p))
+    keepPicks(thread, id, next)
+    setPicks(next)
+  }
 
   const submit = () => {
     if (busy || request === '') return
-    const answers = Object.fromEntries(questions.map((q, i) => [q.question, given(q, picks[i])]))
+    const answers = Object.fromEntries(questions.map((q, i) => [q.question, pickedAnswer(q, picks[i])]))
     send(() => a.answerQuestion(thread, request, questionAnswer(input, answers)))
   }
 

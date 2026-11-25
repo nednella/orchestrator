@@ -28,7 +28,7 @@ function rowOf(item: TimelineItem, thread: string, folder: string) {
     case 'approval':
       return <ChatApprovalCard thread={thread} request={item.request} tool={item.tool} input={item.input} expired={item.expired} folder={folder} />
     case 'question':
-      return <ChatQuestionCard thread={thread} request={item.request} input={item.input} answer={item.answer} answers={item.answers} expired={item.expired} result={item.result} />
+      return <ChatQuestionCard thread={thread} id={item.id} request={item.request} input={item.input} answer={item.answer} answers={item.answers} expired={item.expired} result={item.result} />
     case 'plan':
       return <ChatPlanCard thread={thread} request={item.request} input={item.input} answer={item.answer} expired={item.expired} result={item.result} />
   }
