@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/desktop/stats"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
@@ -110,6 +111,20 @@ func TestNewThreadKeepsItsAccess(t *testing.T) {
 }
 
 func TestOlderBuildsChatWakesAsRead(t *testing.T) {
+	wakesAsRead(t, func(file map[string]any) {
+		delete(file, "access")
+		file["chat"] = true
+	})
+}
+
+func TestUnknownAccessWakesAsRead(t *testing.T) {
+	wakesAsRead(t, func(file map[string]any) { file["access"] = "root" })
+}
+
+// wakesAsRead settles a Supervised thread, edits its state file while the app is stopped, and checks the thread is
+// Read after a restart and after a wake.
+func wakesAsRead(t *testing.T, edit func(file map[string]any)) {
+	t.Helper()
 	h := newHarness(t)
 	s, err := h.NewSession("ask", "")
 	if err != nil {
@@ -129,8 +144,7 @@ func TestOlderBuildsChatWakesAsRead(t *testing.T) {
 	if err := json.Unmarshal(data, &file); err != nil {
 		t.Fatal(err)
 	}
-	delete(file, "access")
-	file["chat"] = true
+	edit(file)
 	if data, err = json.Marshal(file); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +155,7 @@ func TestOlderBuildsChatWakesAsRead(t *testing.T) {
 	fresh := h.Restart(t)
 	eventually(t, "the settled row", func() bool { got, _ := fresh.Session(s.ID); return got.State == "settled" })
 	if got, _ := fresh.Session(s.ID); got.Access != session.Read {
-		t.Errorf("an older build's chat = %+v, want read", got)
+		t.Errorf("row = %+v, want read", got)
 	}
 	if _, err := fresh.WakeThread(s.ID); err != nil {
 		t.Fatal(err)
@@ -374,6 +388,10 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	full, err := h.NewThread("full", "", "", "", "full")
+	if err != nil {
+		t.Fatal(err)
+	}
 	prompt := func(id string) string {
 		args := claudeArgs(t, h, id)
 		i := slices.Index(args, "--append-system-prompt")
@@ -382,7 +400,10 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 		}
 		return strings.Join(args[i+1:], "\n")
 	}
-	if a, b := prompt(read.ID), prompt(supervised.ID); a != b {
-		t.Errorf("a Read thread and a Supervised thread get different prompts:\n%s\n---\n%s", a, b)
+	want := prompt(supervised.ID)
+	for _, other := range []sessions.Session{read, full} {
+		if got := prompt(other.ID); got != want {
+			t.Errorf("a %s thread and a Supervised thread get different prompts:\n%s\n---\n%s", other.Access, got, want)
+		}
 	}
 }

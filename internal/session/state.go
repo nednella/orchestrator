@@ -78,6 +78,16 @@ func ParseAccess(s string) (Access, error) {
 	return "", fmt.Errorf("access must be %s, %s or %s, not %q", Read, Supervised, Full, s)
 }
 
+// StoredAccess is the access a tag or state file holds: Supervised for none, as a build before access ran a task, and
+// Read for a value this build does not know, so a thread never gains access it was not given.
+func StoredAccess(s string) Access {
+	a, err := ParseAccess(s)
+	if err != nil {
+		return Read
+	}
+	return a
+}
+
 // Rank orders the levels by what they allow: Read, then Supervised, then Full.
 func (a Access) Rank() int {
 	switch a {

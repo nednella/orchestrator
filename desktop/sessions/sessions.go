@@ -528,7 +528,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
 	rec.Changes = session.SettledChanges(rec.Changes)
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: cmp.Or(rec.Access, session.Supervised), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}

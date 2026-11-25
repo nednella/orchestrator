@@ -113,6 +113,14 @@ func TestParseAccess(t *testing.T) {
 	}
 }
 
+func TestStoredAccess(t *testing.T) {
+	for in, want := range map[string]Access{"": Supervised, "read": Read, "supervised": Supervised, "full": Full, "root": Read, "Full": Read} {
+		if got := StoredAccess(in); got != want {
+			t.Errorf("StoredAccess(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRecordReadsAnOlderBuildsChatAsRead(t *testing.T) {
 	tests := []struct {
 		name, file string

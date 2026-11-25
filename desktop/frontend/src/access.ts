@@ -9,6 +9,12 @@ export const ACCESS_LABEL: Record<Access, string> = {
   full: 'Write · Full access',
 }
 
+export const ACCESS_HINT: Record<Access, string> = {
+  read: 'It reads the project and plans; Claude asks before it changes anything',
+  supervised: 'Your Claude allow rules apply; other tools ask in the chat',
+  full: 'Every tool runs without asking',
+}
+
 export function accessOf(choice: AccessChoice): Access {
   return choice.level === 'read' ? 'read' : choice.write
 }

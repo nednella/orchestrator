@@ -150,17 +150,12 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	return infos, shells, nil
 }
 
-// accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag, else
-// Supervised, as an older build's task ran. A tag no build writes gives Read, so it never gains access.
+// accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag.
 func accessOf(tag, chat string) session.Access {
 	if tag == "" && chat != "" {
 		return session.Read
 	}
-	access, err := session.ParseAccess(tag)
-	if err != nil {
-		return session.Read
-	}
-	return access
+	return session.StoredAccess(tag)
 }
 
 // ServerPID is the tmux server's process, or 0 when no server runs.

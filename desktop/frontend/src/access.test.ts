@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ACCESS_LABEL, accessOf, choiceOf } from './access.ts'
+import { ACCESS_HINT, ACCESS_LABEL, accessOf, choiceOf } from './access.ts'
 import type { Access } from './types.ts'
 
 test('accessOf and choiceOf round-trip', () => {
@@ -13,4 +13,6 @@ test('accessOf and choiceOf round-trip', () => {
 
 test('labels', () => {
   assert.deepEqual(ACCESS_LABEL, { read: 'Read', supervised: 'Write · Supervised', full: 'Write · Full access' })
+  assert.equal(ACCESS_HINT.supervised, 'Your Claude allow rules apply; other tools ask in the chat')
+  assert.equal(ACCESS_HINT.full, 'Every tool runs without asking')
 })

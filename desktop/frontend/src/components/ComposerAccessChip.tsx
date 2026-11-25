@@ -1,4 +1,4 @@
-import { ACCESS_LABEL, accessOf, choiceOf } from '../access'
+import { ACCESS_HINT, ACCESS_LABEL, accessOf, choiceOf } from '../access'
 import type { AccessChoice } from '../access'
 import type { Access } from '../types'
 import { ComposerMenuChip } from './ComposerMenuChip'
@@ -10,9 +10,9 @@ const LEVELS: { value: AccessChoice['level']; label: string }[] = [
   { value: 'write', label: 'Write' },
 ]
 
-const WRITE: { value: AccessChoice['write']; label: string; hint: string }[] = [
-  { value: 'supervised', label: 'Supervised', hint: 'Your Claude allow rules apply; other tools ask in the chat' },
-  { value: 'full', label: 'Full access', hint: 'Every tool runs without asking' },
+const WRITE: { value: AccessChoice['write']; label: string }[] = [
+  { value: 'supervised', label: 'Supervised' },
+  { value: 'full', label: 'Full access' },
 ]
 
 // disabled is why the access cannot change now; the chip shows it and does not open.
@@ -29,14 +29,14 @@ export function ComposerAccessChip({ access, disabled, onAccess }: ComposerAcces
         <div className="flex w-64 flex-col gap-1.5 p-1">
           <SegmentedControl label="Access" variant="track" options={LEVELS} value={choice.level} onChange={(level) => pick({ level })} />
           {choice.level === 'read' ? (
-            <p className="px-1 text-label text-soft">It reads the project and plans; Claude asks before it changes anything</p>
+            <p className="px-1 text-label text-soft">{ACCESS_HINT.read}</p>
           ) : (
             <div role="radiogroup" aria-label="Write access" className="flex flex-col gap-0.5">
               {WRITE.map((w) => (
                 <button key={w.value} role="radio" aria-checked={choice.write === w.value} className="composer-option h-auto items-start py-1.5" onClick={() => pick({ write: w.value })}>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span>{w.label}</span>
-                    <span className="text-label text-soft">{w.hint}</span>
+                    <span className="text-label text-soft">{ACCESS_HINT[w.value]}</span>
                   </span>
                   {choice.write === w.value && <Icon name="check" size={13} />}
                 </button>
