@@ -1551,7 +1551,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		return fmt.Errorf("Thread %s is not settled", id)
 	case !known:
 		return fmt.Errorf("The project of thread %s is gone", id)
-	case s.life.cleaningUp(id):
+	case s.life.CleaningUp(id):
 		return fmt.Errorf("Thread %d is being cleaned up; wake it when that ends", n)
 	}
 
