@@ -324,6 +324,10 @@ func (s *Sessions) Refresh() {
 	s.warn.Clear("tmux")
 	stamps := map[string]fileStamp{}
 	records := bus.ReadAll(s.stateDir, func(name string, info fs.FileInfo) bool {
+		// An older build could write a state file for a shell, which is no thread.
+		if n, err := session.ParseName(name); err == nil && n.IsShell() {
+			return true
+		}
 		stamps[name] = stampOf(info)
 		return s.stateRead[name] == stamps[name]
 	})
@@ -504,10 +508,10 @@ func (s *Sessions) saveIdentity(in term.Info) {
 }
 
 // adoptEnded takes in a state file whose tmux session is gone, as a settled row. One that says ended, an older
-// build's, is written back as settled. A shell is no thread, and an archived thread has no row. It needs mu.
+// build's, is written back as settled. An archived thread has no row. It needs mu.
 func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	n, err := session.ParseName(name)
-	if err != nil || n.IsShell() || s.archived[name] {
+	if err != nil || s.archived[name] {
 		return
 	}
 	if e, ok := s.ended[name]; ok {
@@ -580,7 +584,7 @@ func (s *Sessions) endSession(id string, at time.Time) {
 func (s *Sessions) number() {
 	var fresh []term.Info
 	for _, in := range slices.Concat(s.info, s.old) {
-		if _, ok := s.nums[in.Name.String()]; !ok && !s.archived[in.Name.String()] {
+		if _, ok := s.nums[in.Name.String()]; !ok {
 			fresh = append(fresh, in)
 		}
 	}
@@ -644,8 +648,8 @@ func (s *Sessions) handoverOf(id string) string {
 
 // Archive takes the thread off the list for good and keeps its history. A live thread is settled first. Its state file
 // then says archived, and it keeps that, its chat log, images, handover and evidence; its temp folder, browser window
-// and host socket go. An old terminal session that still runs only leaves the list: its pane and what it keeps are its
-// own until it ends.
+// and host socket go. An old terminal session whose pane still runs is refused: the owner ends it there, and until then
+// it keeps its row, so no second thread claims its issue's branch.
 func (s *Sessions) Archive(id string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -665,7 +669,7 @@ func (s *Sessions) Archive(id string) error {
 	case archived:
 		return fmt.Errorf("Thread %s is archived", id)
 	case old:
-		return s.archiveOld(id)
+		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	case live:
 		if err := s.Settle(id); err != nil {
 			return err
@@ -698,6 +702,9 @@ func (s *Sessions) Archive(id string) error {
 	delete(s.readers, id)
 	delete(s.spent, id)
 	delete(s.wakes, id)
+	delete(s.cwds, id)
+	delete(s.heads, id)
+	delete(s.stateRead, id)
 	s.life.forget(id)
 	s.sync()
 	s.mu.Unlock()
@@ -711,32 +718,6 @@ func (s *Sessions) Archive(id string) error {
 	if err := os.Remove(s.hostSocket(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		log.Printf("agentos: removing the host socket of archived thread %s: %v", id, err)
 	}
-	return nil
-}
-
-// archiveOld takes an old terminal session that still runs off the list: its state file says archived, so it stays
-// off after a restart, and its pane runs on untouched. It needs createMu.
-func (s *Sessions) archiveOld(id string) error {
-	unlock, err := bus.LockState(s.stateDir, id)
-	if err != nil {
-		return err
-	}
-	rec, err := bus.ReadState(s.stateDir, id)
-	if err == nil {
-		if rec.Session == "" {
-			rec = session.Record{Session: id, At: time.Now()}
-		}
-		rec.State = session.Archived
-		err = bus.WriteState(s.stateDir, rec)
-	}
-	unlock()
-	if err != nil {
-		return fmt.Errorf("saving the archived thread: %w", err)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.archived[id] = true
-	s.sync()
 	return nil
 }
 
@@ -1093,9 +1074,6 @@ func (s *Sessions) list() []Session {
 		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Settled, At: e.at})
 	}
 	for _, in := range s.old {
-		if s.archived[in.Name.String()] {
-			continue
-		}
 		byName[in.Name] = in
 		rail = append(rail, session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Settled, At: in.Created})
 	}
@@ -1284,12 +1262,12 @@ func (s *Sessions) liveIssueSessions(key string) []string {
 
 // liveIssueSession is the id of the running task, or chat, of the project for the issue, "" when none. A fork only
 // shows its source's issue. An old terminal session counts: a second session would claim the branch it works on, and
-// clean it up under it; one the owner archived has no row to give back. It takes mu.
+// clean it up under it. It takes mu.
 func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range slices.Concat(s.info, s.old) {
-		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Chat == chat && in.Fork == "" && !s.archived[in.Name.String()] {
+		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Chat == chat && in.Fork == "" {
 			return in.Name.String()
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/agentos/desktop/stats"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -302,32 +303,62 @@ func TestArchiveLeavesAnOldTerminalAlone(t *testing.T) {
 		t.Fatal("the old session has no row")
 	}
 
-	if err := h.ArchiveThread(id); err != nil {
-		t.Fatal(err)
+	if err, want := h.ArchiveThread(id), "Thread "+id+" runs in an old terminal; end it there"; err == nil || err.Error() != want {
+		t.Errorf("Archive of a live old session = %v, want %q", err, want)
 	}
-	if _, ok := h.Session(id); ok {
-		t.Error("an archived old session still has a row")
+	h.Sessions().Refresh()
+	if _, ok := h.Session(id); !ok {
+		t.Error("the refused archive took the old session's row")
 	}
-	paneRuns := func(h *apptest.Harness) bool {
-		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}#{@agentos-name}").Output()
-		return err == nil && strings.TrimSpace(string(out)) == "sleep#12 work"
-	}
-	if !paneRuns(h) {
-		t.Error("the old session's pane does not run sleep under its name")
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}#{@agentos-name}").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "sleep#12 work" {
+		t.Errorf("old session's pane runs and is named %q (%v), want sleep#12 work", out, err)
 	}
 	if !exists(scratch) {
 		t.Error("the old session's own temp folder went")
 	}
-	if !archived(t, h, id) {
-		t.Error("the old session's state file does not say archived")
+	if rec, _ := bus.ReadState(h.State, id); rec.State == session.Archived {
+		t.Error("the refused archive wrote archived into the old session's state file")
 	}
 
-	fresh := h.Restart(t)
-	fresh.Sessions().Refresh()
-	if _, ok := fresh.Session(id); ok {
-		t.Error("the archived old session came back after a restart")
+	got, did, err := h.Sessions().CreateIssue("#12 work", "/ship 12", 12, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{})
+	if err != nil || did != sessions.Kept || got.ID != id {
+		t.Errorf("CreateIssue = %+v, %v, %v; want the old session %s kept", got, did, err, id)
 	}
-	if !paneRuns(fresh) || !exists(scratch) {
-		t.Error("the restart touched the old session")
+	if names := tmuxNames(t, h); names != id {
+		t.Errorf("tmux sessions = %q, want only the old one", names)
+	}
+}
+
+func TestArchiveOfAnEndedOldSessionRemovesItsTempFolder(t *testing.T) {
+	h := newHarness(t)
+	id := "main/bbbbbbbb"
+	rec := session.Record{Session: id, State: session.Idle, Event: "Stop", At: time.Now().Add(-time.Hour), Identity: session.Identity{Title: "old work"}}
+	if err := bus.WriteState(h.State, rec); err != nil {
+		t.Fatal(err)
+	}
+	scratch := filepath.Join(tmpOf(h, id), "notes.txt")
+	if err := os.MkdirAll(filepath.Dir(scratch), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(scratch, []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.Sessions().Refresh()
+	if row, ok := h.Session(id); !ok || row.State != session.Settled || row.Hosted {
+		t.Fatalf("ended old session's row = %+v (%v), want settled, not hosted", row, ok)
+	}
+
+	if err := h.ArchiveThread(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := h.Session(id); ok {
+		t.Error("the archived old session still has a row")
+	}
+	if exists(tmpOf(h, id)) {
+		t.Error("the archived old session's temp folder is still there")
+	}
+	if !archived(t, h, id) {
+		t.Error("the state file does not say archived")
 	}
 }

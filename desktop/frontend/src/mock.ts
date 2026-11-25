@@ -876,6 +876,7 @@ export function createMock(params: URLSearchParams) {
     },
     ArchiveThread: async (id: string) => {
       const s = find(id)
+      if (!s.hosted) throw `Thread ${id} runs in an old terminal; end it there`
       if (s.state !== 'settled') {
         emit('term:exit', { id })
         chats.end(id)
