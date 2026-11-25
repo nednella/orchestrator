@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -45,6 +47,12 @@ func (f *fakeHost) serve(t *testing.T, ln net.Listener, streams [][]int64) {
 			After int64  `json:"after"`
 		}
 		line, err := bufio.NewReader(conn).ReadBytes('\n')
+		if len(line) == 0 && errors.Is(err, io.EOF) {
+			// The follower waiting for the host to listen.
+			conn.Close()
+			i--
+			continue
+		}
 		if err != nil || json.Unmarshal(line, &req) != nil || req.Op != "subscribe" {
 			t.Errorf("request %q: %v", line, err)
 			conn.Close()
@@ -133,6 +141,10 @@ func serveUpTo(t *testing.T, ln net.Listener, last int64) {
 			After int64 `json:"after"`
 		}
 		line, _ := bufio.NewReader(conn).ReadBytes('\n')
+		if len(line) == 0 {
+			conn.Close()
+			continue
+		}
 		if err := json.Unmarshal(line, &req); err != nil {
 			t.Errorf("request %q: %v", line, err)
 		}

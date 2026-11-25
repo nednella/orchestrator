@@ -232,6 +232,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   function seed(id: string, earlier = 0) {
     const ago = (minutes: number) => Date.now() - minutes * minute
     const turns: Draft[] = [
+      { kind: 'start', at: ago(38 + earlier) },
       { kind: 'commands', input: commands, at: ago(38 + earlier) },
       ...olderTurns(earlier, ago),
       { kind: 'user', id: 'u-1', text: 'Move checkout to its own route, and keep the cart page as it is.', at: ago(38) },
@@ -286,6 +287,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const tool = kind === 'question' ? 'AskUserQuestion' : 'ExitPlanMode'
     const input = kind === 'question' ? { questions: askedQuestions } : { plan: askedPlan }
     const turn: Draft[] = [
+      { kind: 'start', at },
       { kind: 'commands', input: commands, at },
       { kind: 'user', id: 'u-1', text: kind === 'question' ? 'Why does checkout call the cart API twice?' : 'Plan how to split the checkout page.', at },
       { kind: 'init', id: 'mock-session', at },
@@ -432,13 +434,16 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     if (logs.has(id)) append(id, { kind: 'exit' })
   }
 
-  // start logs the commands Claude lists once it runs, a moment after its thread starts.
-  const start = (id: string) => setTimeout(() => append(id, { kind: 'commands', input: commands }), 1500)
+  // start logs the run's start, as the host does before Claude runs, then the commands Claude lists a moment later.
+  const start = (id: string) => {
+    append(id, { kind: 'start' })
+    setTimeout(() => append(id, { kind: 'commands', input: commands }), 1500)
+  }
 
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  // busy says whether a turn runs, an approval waits or a message is queued, as the host's busy op does.
+  // busy says whether a turn runs, an approval waits or a message is queued, as the host's hold op does.
   const busy = (id: string) => replying.has(id) || pending.has(id) || (queued.get(id)?.length ?? 0) > 0
 
   // mode logs Claude's new permission mode, as the host does once Claude changes it.

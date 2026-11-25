@@ -107,6 +107,8 @@ type host struct {
 	replies map[string]chan chat.Event
 	// mode is the permission mode the log holds last, "" until Claude reports one.
 	mode string
+	// holding is set once the host answered a hold as idle, before a restart: it takes no more input.
+	holding bool
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -114,13 +116,18 @@ func Run(ctx context.Context, c Config) error {
 	if len(c.Argv) == 0 {
 		return errors.New("host: no command to run")
 	}
-	ln, err := listen(c.Socket)
+	log, err := chat.OpenLog(c.Log)
 	if err != nil {
 		return err
 	}
-	log, err := chat.OpenLog(c.Log)
+	// The run's start is logged before anyone can connect, so a reader that reached the socket finds it in the log.
+	if _, err := log.Append(chat.Event{Kind: chat.KindStart}); err != nil {
+		log.Close()
+		return err
+	}
+	ln, err := listen(c.Socket)
 	if err != nil {
-		ln.Close()
+		log.Close()
 		return err
 	}
 	echo := c.Echo
@@ -443,8 +450,8 @@ func (h *host) handle(conn net.Conn) {
 	case opSubscribe:
 		h.subscribe(conn, req.After)
 		return
-	case opBusy:
-		writeJSON(conn, reply{OK: true, Busy: h.busy()})
+	case opHold:
+		writeJSON(conn, reply{OK: true, Busy: !h.hold()})
 		return
 	}
 	id, err := h.do(req)
@@ -491,6 +498,10 @@ func (h *host) send(text string, files []string) (string, error) {
 		return "", h.stdinErr
 	}
 	h.mu.Lock()
+	if h.holding {
+		h.mu.Unlock()
+		return "", errRestarting
+	}
 	lines, logged, err := h.sendLocked(id, text, files, images)
 	h.mu.Unlock()
 	for _, e := range logged {
@@ -626,13 +637,24 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 	}
 }
 
-var errModeDuringTurn = errors.New("Change access when the turn ends")
+var (
+	errModeDuringTurn = errors.New("Change access when the turn ends")
+	errRestarting     = errors.New("This thread is restarting")
+)
 
-// busy says whether a turn runs, an approval waits or a queued message is still to run.
-func (h *host) busy() bool {
+// hold says whether the host is idle and, when it is, holds it: every later send, answer and mode change is refused
+// until it exits. A restart holds the host before it stops it, so no message gets in between the check and the stop.
+// It takes stdinMu, as a send does, so a send that is being written is seen as the turn it opens.
+func (h *host) hold() (idle bool) {
+	h.stdinMu.Lock()
+	defer h.stdinMu.Unlock()
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.busyLocked()
+	if h.busyLocked() {
+		return false
+	}
+	h.holding = true
+	return true
 }
 
 // busyLocked needs h.mu.
@@ -656,6 +678,11 @@ func (h *host) setMode(mode string) error {
 		h.mu.Unlock()
 		h.stdinMu.Unlock()
 		return errExited
+	}
+	if h.holding {
+		h.mu.Unlock()
+		h.stdinMu.Unlock()
+		return errRestarting
 	}
 	if h.busyLocked() {
 		h.mu.Unlock()
@@ -731,6 +758,10 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 	if h.exited {
 		h.mu.Unlock()
 		return errExited
+	}
+	if h.holding {
+		h.mu.Unlock()
+		return errRestarting
 	}
 	i := h.approvalIndex(id)
 	if i < 0 {

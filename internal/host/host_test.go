@@ -1639,34 +1639,82 @@ func TestModeTakesOnlyPlanOrDefault(t *testing.T) {
 	}
 }
 
-func TestBusyWhileATurnRunsOrAMessageWaits(t *testing.T) {
+func TestHoldIsRefusedWhileATurnRunsOrAMessageWaits(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
-	busy := func() bool {
+	idle := func() bool {
 		t.Helper()
-		b, err := Busy(ctxT(t), h.socket)
+		ok, err := Hold(ctxT(t), h.socket)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return b
+		return ok
 	}
 
-	if busy() {
-		t.Fatal("busy before any message")
-	}
 	sendMessage(t, h.socket, "slow")
-	if !busy() {
-		t.Error("not busy once a message is written, before Claude answers")
+	if idle() {
+		t.Error("idle once a message is written, before Claude answers")
 	}
 	waitKind(t, events, chat.KindTurnEnd)
-	if busy() {
-		t.Error("busy after the turn ended")
-	}
 	sendMessage(t, h.socket, "ask")
 	waitKind(t, events, chat.KindApproval)
-	if !busy() {
-		t.Error("not busy while an approval waits")
+	if idle() {
+		t.Error("idle while an approval waits")
+	}
+	// Neither busy answer held the host.
+	if err := Answer(ctxT(t), h.socket, "r1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	sendMessage(t, h.socket, "hi")
+	waitKind(t, events, chat.KindTurnEnd)
+}
+
+func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	idle, err := Hold(ctxT(t), h.socket)
+	if err != nil || !idle {
+		t.Fatalf("Hold = %v, %v, want idle", idle, err)
+	}
+	restarting := func(what string, err error) {
+		t.Helper()
+		if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "This thread is restarting" {
+			t.Errorf("%s: err = %v, want the host's refusal", what, err)
+		}
+	}
+	restarting("send", Send(ctxT(t), h.socket, "keep this"))
+	restarting("answer", Answer(ctxT(t), h.socket, "r1", true, ""))
+	restarting("mode", SetMode(ctxT(t), h.socket, "plan"))
+	for _, line := range stdinLines(t, h.stdin) {
+		if strings.Contains(line, "keep this") || strings.Contains(line, "set_permission_mode") {
+			t.Errorf("stdin has %s, want nothing written once held", line)
+		}
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range logged {
+		if e.Kind == chat.KindUser || e.Kind == chat.KindQueued || e.Kind == chat.KindMode {
+			t.Errorf("log has %+v, want nothing logged once held", e)
+		}
+	}
+}
+
+func TestEachRunStartsTheLog(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logged) == 0 || logged[0].Kind != chat.KindStart {
+		t.Fatalf("log = %+v, want the run's start first, written before the socket listens", logged)
 	}
 }

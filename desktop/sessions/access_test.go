@@ -1,7 +1,9 @@
 package sessions_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +15,7 @@ import (
 	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/internal/bus"
+	chatlog "github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/session"
 )
@@ -352,5 +355,110 @@ func TestModeLoggedWhileTheAppWasClosedIsFollowed(t *testing.T) {
 	eventually(t, "the approved plan's access after the restart", accessIs(fresh, approved.ID, session.Supervised))
 	if row, _ := fresh.Session(left.ID); row.Access != session.Read {
 		t.Errorf("row of the thread with no approved plan = %+v, want read", row)
+	}
+}
+
+// diedMidRun leaves the settled thread's chat log as a host that was killed leaves it: no exit, with events after the
+// run's start.
+func diedMidRun(t *testing.T, h *apptest.Harness, id string, events ...chatlog.Event) {
+	t.Helper()
+	path, _ := hostFiles(h, id)
+	logged, err := chatlog.ReadLog(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept bytes.Buffer
+	enc := json.NewEncoder(&kept)
+	for _, e := range logged {
+		if e.Kind != chatlog.KindExit {
+			enc.Encode(e)
+		}
+	}
+	if err := os.WriteFile(path, kept.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l, err := chatlog.OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	for _, e := range events {
+		if _, err := l.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// followedATurn waits until the thread's follower has handed on a turn, which it does only after its replay of the log.
+func followedATurn(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	if err := h.ChatWatch(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(id, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "a turn's end in a chat event", func() bool {
+		for _, p := range h.Rec.All("chat:" + id) {
+			if slices.ContainsFunc(p.(chat.Update).Events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindTurnEnd }) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestAModeOfAKilledRunIsNotFollowedAfterAWake(t *testing.T) {
+	approvedPlan := []chatlog.Event{
+		{Kind: chatlog.KindApproval, ID: "plan-1", Tool: "ExitPlanMode", Input: json.RawMessage(`{"plan":"p"}`)},
+		{Kind: chatlog.KindAnswer, ID: "plan-1", Text: "allow"},
+		{Kind: chatlog.KindMode, Text: "default"},
+	}
+	for _, c := range []struct {
+		name   string
+		access session.Access
+		run    []chatlog.Event
+	}{
+		{"an approved plan does not raise a thread woken at read", session.Read, approvedPlan},
+		{"a plan mode does not lower a thread woken at full", session.Full, []chatlog.Event{{Kind: chatlog.KindMode, Text: "plan"}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := apptest.New(t)
+			s := talkedThenSettled(t, h)
+			diedMidRun(t, h, s.ID, c.run...)
+			if err := h.SetAccess(s.ID, string(c.access)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.WakeThread(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			followedATurn(t, h, s.ID)
+			if row, _ := h.Session(s.ID); row.Access != c.access || accessTag(t, h, s.ID) != string(c.access) {
+				t.Errorf("row = %+v, tagged %q; want %s, as it was woken", row, accessTag(t, h, s.ID), c.access)
+			}
+		})
+	}
+}
+
+func TestASendWhileTheThreadRestartsIsRefused(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewThread("restarting", "", "", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, socket := hostFiles(h, s.ID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := host.Ready(ctx, socket); err != nil {
+		t.Fatal(err)
+	}
+	if idle, err := host.Hold(ctx, socket); err != nil || !idle {
+		t.Fatalf("Hold = %v, %v; want idle", idle, err)
+	}
+	if _, err := h.ChatSend(s.ID, "keep this"); err == nil || err.Error() != "This thread is restarting" {
+		t.Fatalf("ChatSend = %v, want the host's refusal, so the composer keeps the text", err)
+	}
+	if strings.Contains(sentTo(t, h, s.ID), "keep this") {
+		t.Error("claude got the message sent while the thread restarts")
 	}
 }

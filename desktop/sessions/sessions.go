@@ -1667,7 +1667,7 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 // copyChat writes the fork's chat log before the fork's host opens it: the source's events, with the turn they stop in
 // ended at the last of them, and copies the images they show into the fork's folder. Drafts are left out, and so are
 // queued messages and those not sent, which only the source's host held: a message Claude took in is logged again as
-// a user event. restore removes what it wrote, for a fork that did not start.
+// a user event. The source's run starts are left out too: the fork's host logs its own. restore removes what it wrote, for a fork that did not start.
 func (s *Sessions) copyChat(fork forkStart, to session.Name) (restore func(), err error) {
 	from, err := session.ParseName(fork.of)
 	if err != nil {
@@ -1697,7 +1697,7 @@ func (s *Sessions) copyChat(fork forkStart, to session.Name) (restore func(), er
 func (s *Sessions) copyEvents(chatLog *chat.Log, events []chat.Event, from, to session.Name) error {
 	for _, e := range events {
 		switch e.Kind {
-		case chat.KindDraft, chat.KindQueued, chat.KindUnsent:
+		case chat.KindDraft, chat.KindQueued, chat.KindUnsent, chat.KindStart:
 			continue
 		}
 		for _, file := range e.Files {
@@ -2076,15 +2076,16 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	case in.Access != session.Full && access != session.Full:
 		return accessLive, nil
 	}
+	// A host that answers idle is held: it takes no message from here until Settle stops it.
 	socket, err := s.readyHost(name)
-	busy := false
+	idle := false
 	if err == nil {
-		busy, err = host.Busy(s.context(), socket)
+		idle, err = host.Hold(s.context(), socket)
 	}
 	switch {
 	case err != nil:
 		return accessDone, accessFailed(name, access, err)
-	case busy:
+	case !idle:
 		return accessDone, errAccessDuringTurn
 	}
 	if err := s.liveAccess(name, access); err != nil {

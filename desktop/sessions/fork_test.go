@@ -104,7 +104,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"init:", "user:first", "message:one", "message:two", "turn_end:"}
+	want := []string{"init:", "user:first", "message:one", "message:two", "turn_end:", "start:"}
 	if got := kindsAndTexts(events); !slices.Equal(got, want) {
 		t.Errorf("fork's chat = %q, want %q", got, want)
 	}
@@ -113,7 +113,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 			t.Errorf("event %d has seq %d", i, e.Seq)
 		}
 	}
-	if end := events[len(events)-1]; end.At != 5000 {
+	if end := events[len(events)-2]; end.At != 5000 {
 		t.Errorf("the fork's turn ends at %d, not at its last block", end.At)
 	}
 
@@ -130,7 +130,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	if !exists(filepath.Join(srcChat.Media, filepath.Base(shown))) {
 		t.Error("the source lost its image")
 	}
-	if srcEvents, _ := chat.ReadLog(srcChat.Log, 0); len(srcEvents) != 10 {
+	if srcEvents, _ := chat.ReadLog(srcChat.Log, 0); len(srcEvents) != 11 {
 		t.Errorf("the source's chat changed: %q", kindsAndTexts(srcEvents))
 	}
 
@@ -274,7 +274,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 	}
 	forkLog, _ := hostFiles(h, fork.ID)
 	events, _ := chat.ReadLog(forkLog, 0)
-	if got, want := kindsAndTexts(events), []string{"user:first", "message:one", "turn_end:"}; !slices.Equal(got, want) {
+	if got, want := kindsAndTexts(events), []string{"user:first", "message:one", "turn_end:", "start:"}; !slices.Equal(got, want) {
 		t.Errorf("fork's chat = %q, want %q", got, want)
 	}
 	if got, ok := h.Session(src.ID); !ok || got.State != "settled" {

@@ -101,15 +101,15 @@ func TestHistoryReadsTheChatLog(t *testing.T) {
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
 
 	events := history(t, h, id, 0)
-	want := []chatlog.Kind{chatlog.KindUser, chatlog.KindInit, chatlog.KindMessage, chatlog.KindTurnEnd}
+	want := []chatlog.Kind{chatlog.KindStart, chatlog.KindUser, chatlog.KindInit, chatlog.KindMessage, chatlog.KindTurnEnd}
 	if !slices.Equal(kinds(events), want) {
 		t.Fatalf("history kinds = %v, want %v", kinds(events), want)
 	}
-	if user := events[0]; user.ID != msg || user.Text != "hi" {
+	if user := events[1]; user.ID != msg || user.Text != "hi" {
 		t.Errorf("user event = %+v, want id %s", user, msg)
 	}
-	if after := history(t, h, id, events[0].Seq); !slices.Equal(kinds(after), want[1:]) {
-		t.Errorf("history after the user's seq = %v, want %v", kinds(after), want[1:])
+	if after := history(t, h, id, events[1].Seq); !slices.Equal(kinds(after), want[2:]) {
+		t.Errorf("history after the user's seq = %v, want %v", kinds(after), want[2:])
 	}
 }
 
@@ -122,7 +122,7 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 	}
 	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
 
-	if events := history(t, h, id, 0); len(events) < 4 || events[0].Kind != chatlog.KindUser {
+	if events := history(t, h, id, 0); len(events) < 5 || events[1].Kind != chatlog.KindUser {
 		t.Errorf("history of the ended thread = %v", kinds(events))
 	}
 	want := "Thread " + id + " has settled"
@@ -148,7 +148,8 @@ func TestWatchedThreadGetsLiveEvents(t *testing.T) {
 			t.Fatalf("emitted seqs %v do not strictly increase", got)
 		}
 	}
-	if want := seqs(history(t, h, id, 0)); !slices.Equal(got, want) {
+	// The run's start, seq 1, was logged before the watch.
+	if want := seqs(history(t, h, id, 1)); !slices.Equal(got, want) {
 		t.Errorf("emitted seqs = %v, want the history's %v", got, want)
 	}
 }
@@ -363,7 +364,7 @@ func TestImagesAreSavedAndSent(t *testing.T) {
 	if !strings.Contains(stdin, `"type":"user"`) || !strings.Contains(stdin, `"media_type":"image/png"`) {
 		t.Errorf("claude's stdin = %s, want a user message with a png", stdin)
 	}
-	user := history(t, h, id, 0)[0]
+	user := history(t, h, id, 0)[1]
 	if user.Kind != chatlog.KindUser || user.ID != sent.ID || len(user.Files) != 1 {
 		t.Fatalf("user event = %+v, want the image's file", user)
 	}
@@ -448,7 +449,7 @@ func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
 		t.Fatalf("ChatSend of a png given as a jpeg = %v, want it sent", err)
 	}
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
-	user := history(t, h, id, 0)[0]
+	user := history(t, h, id, 0)[1]
 	if user.ID != sent.ID || len(user.Files) != 1 || filepath.Ext(user.Files[0]) != ".png" {
 		t.Errorf("user event = %+v, want the image saved as a .png", user)
 	}

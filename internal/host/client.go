@@ -81,10 +81,12 @@ func SetMode(ctx context.Context, socket, mode string) error {
 	return err
 }
 
-// Busy says whether a turn runs on the host, an approval waits or a message it was given has still to run.
-func Busy(ctx context.Context, socket string) (bool, error) {
-	rep, err := call(ctx, socket, request{Op: opBusy})
-	return rep.Busy, err
+// Hold says whether the host is idle, with no turn running, no approval waiting and no message it was given still to
+// run, and when it is, holds it: the host then refuses every send, answer and mode change until it exits. A restart
+// holds the host before it stops it.
+func Hold(ctx context.Context, socket string) (idle bool, err error) {
+	rep, err := call(ctx, socket, request{Op: opHold})
+	return err == nil && !rep.Busy, err
 }
 
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.

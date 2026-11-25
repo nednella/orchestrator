@@ -22,7 +22,8 @@ const (
 	batchEvery     = 33 * time.Millisecond // about one frame at 30 per second
 	retryFirst     = 100 * time.Millisecond
 	retryMost      = 2 * time.Second
-	startWait      = 3 * time.Second // for a watch that comes before Start
+	startWait      = 3 * time.Second  // for a watch that comes before Start
+	hostStartWait  = 10 * time.Second // for the host of a thread that is starting, before its log is read
 )
 
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
@@ -223,17 +224,24 @@ type follower struct {
 }
 
 // run reads the log once, for the approvals that wait and where it ends, then follows the host's stream from there,
-// subscribing again after the last event it had when the stream ends.
+// subscribing again after the last event it had when the stream ends. It reads the log once the host listens, or has
+// had hostStartWait to: the host logs its run's start before it listens, so the log then holds the current run's start.
 func (f *follower) run(ctx context.Context) {
+	ready, cancel := context.WithTimeout(ctx, hostStartWait)
+	if err := host.Ready(ready, f.chat.Socket); err != nil {
+		log.Printf("agentos: the host of thread %s does not listen; reading its chat log: %v", f.chat.ID, err)
+	}
+	cancel()
 	logged, err := chatlog.ReadLog(f.chat.Log, 0)
 	if err != nil {
 		log.Printf("agentos: reading the chat log of %s: %v", f.chat.ID, err)
 	}
 	var last int64
 	var turnEnd *chatlog.Event
-	// mode is the latest mode Claude reported in the host's current run, which starts after its last exit, or after the
-	// commands Claude lists at its start for a host that was killed before it logged its exit.
+	// mode is the latest mode Claude reported after the last run start: an earlier run's mode, also one whose host was
+	// killed before it logged its exit, is not this run's, and a log with no start has no run to follow.
 	var mode struct {
+		started      bool
 		text         string
 		planApproved bool
 	}
@@ -243,10 +251,12 @@ func (f *follower) run(ctx context.Context) {
 		switch e.Kind {
 		case chatlog.KindTurnEnd:
 			turnEnd = &e
-		case chatlog.KindExit, chatlog.KindCommands:
-			mode.text = ""
+		case chatlog.KindStart:
+			mode.started, mode.text = true, ""
 		case chatlog.KindMode:
-			mode.text, mode.planApproved = text, approved
+			if mode.started {
+				mode.text, mode.planApproved = text, approved
+			}
 		}
 	}
 	close(f.read)
@@ -315,7 +325,7 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	case chatlog.KindMode:
 		mode, planApproved = e.Text, f.planApproved
 		f.planApproved = false
-	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindCommands:
+	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindStart:
 		f.planApproved = false
 	}
 	return mode, planApproved
