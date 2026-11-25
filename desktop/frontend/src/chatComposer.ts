@@ -1,16 +1,17 @@
 import type { Command, Timeline } from './chatTimeline'
 import type { ChatEvent } from './types'
 
-export type EscapeAction = 'close-overlay' | 'close-picker' | 'interrupt' | 'blur' | 'none'
+export type EscapeAction = 'close-overlay' | 'close-picker' | 'send-now' | 'interrupt' | 'blur' | 'none'
 export type ComposerAction = 'send' | 'queue' | 'deny' | 'stop'
 
-// escapeAction is what Esc does in a thread's chat: it closes what is open over the chat first, and stops a running
-// turn only once.
-export function escapeAction({ overlay, picker, turnOpen, stopping }: { overlay: boolean; picker: boolean; turnOpen: boolean; stopping: boolean }): EscapeAction {
+// escapeAction is what Esc does in a thread's chat: it closes what is open over the chat first, then stops a running
+// turn only once, so that Claude takes in the queued messages at once or, with none queued, waits.
+export function escapeAction({ overlay, picker, turnOpen, stopping, queued }: { overlay: boolean; picker: boolean; turnOpen: boolean; stopping: boolean; queued: boolean }): EscapeAction {
   if (overlay) return 'close-overlay'
   if (picker) return 'close-picker'
   if (!turnOpen) return 'blur'
-  return stopping ? 'none' : 'interrupt'
+  if (stopping) return 'none'
+  return queued ? 'send-now' : 'interrupt'
 }
 
 // composerAction is what the composer's button does: with the turn open and nothing typed it stops the turn, and a

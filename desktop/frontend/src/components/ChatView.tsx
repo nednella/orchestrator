@@ -76,8 +76,11 @@ export function ChatView({ session }: ChatViewProps) {
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
 
+  // Esc never sends what is typed in the composer: it stays there.
   const escape = (picker: boolean): EscapeAction => {
-    const action = escapeAction({ overlay: latest().overlay !== null, picker, turnOpen: timeline.turnOpen, stopping })
+    const queued = timeline.queued[0]
+    const action = escapeAction({ overlay: latest().overlay !== null, picker, turnOpen: timeline.turnOpen, stopping, queued: queued !== undefined })
+    if (action === 'send-now') sendNow(queued.id)
     if (action === 'interrupt') stop()
     return action
   }
@@ -85,7 +88,8 @@ export function ChatView({ session }: ChatViewProps) {
   // A text field, the composer among them, takes its own Esc.
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || isTyping(e.target)) return
-    if (escape(false) === 'interrupt') e.preventDefault()
+    const action = escape(false)
+    if (action === 'send-now' || action === 'interrupt') e.preventDefault()
   }
 
   return (

@@ -15,24 +15,34 @@ const idle = { turnOpen: false, pending: null }
 const running = { turnOpen: true, pending: null }
 const approving = { turnOpen: true, pending: waiting }
 
-test('escapeAction: a picker open while running closes the picker', () => {
-  assert.equal(escapeAction({ overlay: false, picker: true, turnOpen: true, stopping: false }), 'close-picker')
-})
+const esc = { overlay: false, picker: false, turnOpen: true, stopping: false, queued: false }
 
 test('escapeAction: an overlay closes first', () => {
-  assert.equal(escapeAction({ overlay: true, picker: true, turnOpen: true, stopping: false }), 'close-overlay')
+  assert.equal(escapeAction({ ...esc, overlay: true, picker: true, queued: true }), 'close-overlay')
+  assert.equal(escapeAction({ ...esc, overlay: true, turnOpen: false }), 'close-overlay')
 })
 
-test('escapeAction: a running turn is interrupted', () => {
-  assert.equal(escapeAction({ overlay: false, picker: false, turnOpen: true, stopping: false }), 'interrupt')
+test('escapeAction: a picker open closes the picker, before the turn is stopped', () => {
+  assert.equal(escapeAction({ ...esc, picker: true }), 'close-picker')
+  assert.equal(escapeAction({ ...esc, picker: true, queued: true }), 'close-picker')
+  assert.equal(escapeAction({ ...esc, picker: true, turnOpen: false }), 'close-picker')
 })
 
-test('escapeAction: a turn already stopping is not interrupted again', () => {
-  assert.equal(escapeAction({ overlay: false, picker: false, turnOpen: true, stopping: true }), 'none')
+test('escapeAction: a running turn with no queued message is interrupted', () => {
+  assert.equal(escapeAction(esc), 'interrupt')
+})
+
+test('escapeAction: a running turn with queued messages sends them now', () => {
+  assert.equal(escapeAction({ ...esc, queued: true }), 'send-now')
+})
+
+test('escapeAction: a turn already stopping is not stopped again', () => {
+  assert.equal(escapeAction({ ...esc, stopping: true }), 'none')
+  assert.equal(escapeAction({ ...esc, stopping: true, queued: true }), 'none')
 })
 
 test('escapeAction: an idle thread blurs the composer', () => {
-  assert.equal(escapeAction({ overlay: false, picker: false, turnOpen: false, stopping: false }), 'blur')
+  assert.equal(escapeAction({ ...esc, turnOpen: false }), 'blur')
 })
 
 test('composerAction: an idle thread sends', () => {
