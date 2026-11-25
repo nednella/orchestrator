@@ -188,7 +188,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
       }
       right={
         <>
-          <ComposerAccessChip access={session.access} disabled={accessDisabled(timeline.turnOpen, timeline.pending !== null)} onAccess={(next) => report(() => setAccess(id, next))} />
+          <ComposerAccessChip access={session.access} disabled={accessDisabled(timeline.turnOpen, timeline.pending !== null, timeline.agentsRunning)} onAccess={(next) => report(() => setAccess(id, next))} />
           {(model || effort) && (
             <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-ink/80" title="The thread's model and reasoning effort">
               <ClaudeMark />

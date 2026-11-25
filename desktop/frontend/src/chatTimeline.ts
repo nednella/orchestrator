@@ -46,7 +46,8 @@ export type TurnEnd = 'stopped' | 'failed'
 
 export type QueuedMessage = { id: string; text: string; files: string[] }
 
-export type Timeline = { items: TimelineItem[]; queued: QueuedMessage[]; turnOpen: boolean; pending: Pending | null; commands: Command[] }
+// agentsRunning is whether a subagent still works, which it does in the background after the turn that started it.
+export type Timeline = { items: TimelineItem[]; queued: QueuedMessage[]; turnOpen: boolean; agentsRunning: boolean; pending: Pending | null; commands: Command[] }
 
 type Notice = Extract<TimelineItem, { kind: 'notice' }>
 type Restart = Extract<TimelineItem, { kind: 'restart' }>
@@ -312,6 +313,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     items,
     queued: [...queued.values()],
     turnOpen: running !== null,
+    agentsRunning: [...agents.values()].some((a) => a.state === 'running'),
     pending: waiting ? pendingOf(thread, waiting) : null,
     commands,
   }

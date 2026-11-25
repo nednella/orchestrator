@@ -492,6 +492,14 @@ test('parallel subagents are rows of their own beside the fold, holding their ow
   assert.equal(second.turn, first.turn)
 })
 
+test('subagents in the background run on after their turn', () => {
+  const t = buildTimeline(parallel, {})
+  assert.deepEqual([t.turnOpen, t.agentsRunning], [false, true], 'one still works after the turn ended')
+  const done = buildTimeline([...parallel, { ...taskEnd('a2', '5'), seq: parallel.length + 1, at: 22_000 }], {})
+  assert.equal(done.agentsRunning, false)
+  assert.equal(buildTimeline(log(user('u1', 'Hi'), message('msg_1', 'Hello.'), turnEnd()), {}).agentsRunning, false)
+})
+
 test('subagents of the turn that runs split its work like a card', () => {
   const t = buildTimeline(log(user('u1', 'Go'), toolUse('t1', 'Read'), agentCall('a1', 'Look'), from('a1', toolUse('s1', 'Grep')), toolUse('t2', 'Read')), {})
   assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'work'])

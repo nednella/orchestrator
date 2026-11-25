@@ -22,4 +22,5 @@ test('accessDisabled during a turn and an approval', () => {
   assert.equal(accessDisabled(true, false), 'Change access when the turn ends')
   assert.equal(accessDisabled(false, true), 'Change access when the turn ends')
   assert.equal(accessDisabled(true, true), 'Change access when the turn ends')
+  assert.equal(accessDisabled(false, false, true), 'Change access when the subagents end', 'a change restarts Claude, which stops them')
 })

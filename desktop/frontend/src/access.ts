@@ -19,9 +19,11 @@ export function accessOf(choice: AccessChoice): Access {
   return choice.level === 'read' ? 'read' : choice.write
 }
 
-// accessDisabled is why a thread's access cannot change now, "" when it can: a turn keeps the access it started with.
-export function accessDisabled(turnOpen: boolean, pending: boolean): string {
-  return turnOpen || pending ? 'Change access when the turn ends' : ''
+// accessDisabled is why a thread's access cannot change now, "" when it can: a turn keeps the access it started with,
+// and a change restarts Claude, which would stop the subagents that run.
+export function accessDisabled(turnOpen: boolean, pending: boolean, agentsRunning = false): string {
+  if (turnOpen || pending) return 'Change access when the turn ends'
+  return agentsRunning ? 'Change access when the subagents end' : ''
 }
 
 // choiceOf is the chip's choice for an access. Read keeps Supervised under Write, so turning to Write never gives Full
