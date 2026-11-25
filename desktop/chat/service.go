@@ -173,13 +173,24 @@ func (v *Service) live(id string) (sessions.Chat, error) {
 	return ch, nil
 }
 
-// awake is the chat of a thread that runs, woken first when it has settled.
+// awake is the chat of a thread that runs, woken first when it has settled. When another wake started it first, it is
+// that wake's chat, once its host listens.
 func (v *Service) awake(id string) (sessions.Chat, error) {
 	ch, err := v.c.threads.ChatOf(id)
 	if err != nil || ch.Live {
 		return ch, err
 	}
-	return v.c.threads.Wake(id)
+	woken, err := v.c.threads.Wake(id)
+	if err == nil {
+		return woken, nil
+	}
+	ch, again := v.c.threads.ChatOf(id)
+	if again != nil || !ch.Live {
+		return sessions.Chat{}, err
+	}
+	ready, cancel := context.WithTimeout(v.ctx(), hostStarting)
+	defer cancel()
+	return ch, v.failed(id, "the wake", host.Ready(ready, ch.Socket))
 }
 
 // failed is the host's own reason when it refused, else why the thread did not take what, in plain words, with the

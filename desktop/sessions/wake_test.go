@@ -2,7 +2,9 @@ package sessions_test
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -223,10 +225,14 @@ func TestWakeWithoutAConversationStartsAfresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	args := filepath.Join(h.ClaudeDir(), strings.ReplaceAll(s.ID, "/", "_")+".args")
+	if err := os.Remove(args); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.WakeThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(300 * time.Millisecond) // the stand-in writes its arguments just after the host listens
+	eventually(t, "claude started again", func() bool { return exists(args) })
 	if args := claudeArgs(t, h, s.ID); slices.Contains(args, "--resume") {
 		t.Errorf("args = %q, want no conversation to resume", args)
 	}
@@ -466,5 +472,33 @@ func TestIssueStartReportsACommandTheWokenThreadRefused(t *testing.T) {
 	}
 	if got, _ := h.Session(s.ID); got.State == "settled" {
 		t.Errorf("the thread did not wake: %+v", got)
+	}
+}
+
+func TestTwoMessagesAtOnceWakeTheThreadOnce(t *testing.T) {
+	h := apptest.New(t)
+	s := talkedThenSettled(t, h)
+
+	errs := make(chan error, 2)
+	for _, text := range []string{"one", "two"} {
+		go func() {
+			_, err := h.ChatSend(s.ID, text)
+			errs <- err
+		}()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+	eventually(t, "both messages on stdin", func() bool {
+		users := strings.Join(userLines(t, h, s.ID), "\n")
+		return strings.Contains(users, `"text":"one"`) && strings.Contains(users, `"text":"two"`)
+	})
+	if starts := h.Events(t, activity.SessionStart); len(starts) != 2 {
+		t.Errorf("session_start = %+v, want the first start and one wake", starts)
+	}
+	if list := h.Sessions().List(); len(list) != 1 || list[0].State == "settled" {
+		t.Errorf("rows = %+v, want the one thread awake", list)
 	}
 }

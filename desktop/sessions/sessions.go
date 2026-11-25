@@ -1382,6 +1382,18 @@ func (s *Sessions) wakeWith(id, handover string) (Chat, error) {
 	return s.ChatOf(id)
 }
 
+// wakeOrJoin wakes the settled thread id as wakeWith does, or gives its chat when another wake started it first.
+func (s *Sessions) wakeOrJoin(id, handover string) (Chat, error) {
+	ch, err := s.wakeWith(id, handover)
+	if err == nil {
+		return ch, nil
+	}
+	if live, again := s.ChatOf(id); again == nil && live.Live {
+		return live, nil
+	}
+	return Chat{}, err
+}
+
 // startAgain starts the tmux session of the settled thread again and takes the thread back as live. Its state file says
 // it runs before Claude starts, so the first hook builds on it; a launch that fails writes back the settled one.
 func (s *Sessions) startAgain(name session.Name, handover string) error {
@@ -1461,7 +1473,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 		return Session{ID: live}, Kept, nil
 	}
 	if settled := s.settledIssueThread(proj.Key(), issue, chat); settled != "" {
-		ch, err := s.wakeWith(settled, handover)
+		ch, err := s.wakeOrJoin(settled, handover)
 		if err != nil {
 			return Session{}, Kept, err
 		}
@@ -1877,7 +1889,7 @@ func (s *Sessions) wakeFor(t target) bool {
 	if live := s.liveIssueSession(t.proj.Key(), t.issue, false); live != "" {
 		return live == t.id
 	}
-	if _, err := s.Wake(t.id); err != nil {
+	if _, err := s.wakeOrJoin(t.id, ""); err != nil {
 		fmt.Fprintf(os.Stderr, "agentos: waking thread %s for #%d: %v\n", t.id, t.issue, err)
 		return false
 	}
@@ -1939,6 +1951,10 @@ func (s *Sessions) Settle(id string) error {
 		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
 	s.closeTerm(id)
+	// Dropped before the kill, so a Refresh that sees the session gone first does not wake it for them.
+	s.mu.Lock()
+	delete(s.wakes, id)
+	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Kill(ctx, name); err != nil {
@@ -1948,7 +1964,6 @@ func (s *Sessions) Settle(id string) error {
 	defer s.mu.Unlock()
 	// The session is gone: sync turns it into a settled row.
 	s.info = slices.DeleteFunc(s.info, func(i term.Info) bool { return i.Name == name })
-	delete(s.wakes, id)
 	s.sync()
 	return nil
 }
