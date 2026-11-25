@@ -53,8 +53,8 @@ func (c Claude) Name() string { return "claude" }
 func (c Claude) Can(want Capability) bool { return want != StartArg }
 
 // headless makes claude read user messages as stream-json on stdin and write its turns as stream-json on stdout,
-// partial messages too, and ask for each permission with a control request on stdout.
-var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+// partial messages too, echo each user message back when claude takes it in, and ask for each permission with a control request on stdout.
+var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
 
 // Command is claude's command line, run headless for agentos host.
 func (c Claude) Command(l Launch) []string {

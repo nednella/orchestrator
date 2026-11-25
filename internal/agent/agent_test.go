@@ -14,7 +14,7 @@ import (
 )
 
 // headlessFlags are what claude needs to run under agentos host.
-var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
 
 func TestClaudeCommand(t *testing.T) {
 	argv := Claude{Exe: "/opt/it's here/agentos"}.Command(Launch{})

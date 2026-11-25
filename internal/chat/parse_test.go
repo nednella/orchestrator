@@ -2,6 +2,7 @@ package chat
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -161,5 +162,44 @@ func TestParseAssistantKeepsBlockOrder(t *testing.T) {
 	kinds := []Kind{events[0].Kind, events[1].Kind, events[2].Kind}
 	if kinds[0] != KindMessage || kinds[1] != KindToolUse || kinds[2] != KindMessage || events[0].Text != "one" || events[2].Text != "two" {
 		t.Errorf("got %+v", events)
+	}
+}
+
+func TestParseInitializeListsCommands(t *testing.T) {
+	events := parseFile(t, "initialize.jsonl")
+	var got []Event
+	for _, e := range events {
+		if e.Kind == KindCommands {
+			got = append(got, e)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("want one commands event, got %d", len(got))
+	}
+	var commands []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(got[0].Input, &commands); err != nil || len(commands) == 0 || commands[0].Name == "" {
+		t.Fatalf("want an array of commands with names, got %s (%v)", got[0].Input, err)
+	}
+}
+
+func TestParseQuestionApproval(t *testing.T) {
+	ev, ok := first(parseFile(t, "question.jsonl"), KindApproval)
+	if !ok || ev.Tool != "AskUserQuestion" || !strings.Contains(string(ev.Input), `"questions"`) {
+		t.Fatalf("want an AskUserQuestion approval with questions, got %+v", ev)
+	}
+}
+
+func TestParseReplayedUserIsAnEcho(t *testing.T) {
+	events := parseFile(t, "queued.jsonl")
+	var echoes []Event
+	for _, e := range events {
+		if e.Kind == KindEcho {
+			echoes = append(echoes, e)
+		}
+	}
+	if len(echoes) != 2 || echoes[0].ID != "11111111-1111-4111-8111-111111111111" || echoes[1].ID != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("want an echo of each message by its uuid, got %+v", echoes)
 	}
 }

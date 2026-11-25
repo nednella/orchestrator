@@ -7,9 +7,20 @@ type textBlock struct {
 	Text string `json:"text"`
 }
 
+type imageBlock struct {
+	Type   string      `json:"type"`
+	Source imageSource `json:"source"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
 type chatMessage struct {
-	Role    string      `json:"role"`
-	Content []textBlock `json:"content"`
+	Role    string `json:"role"`
+	Content []any  `json:"content"`
 }
 
 type userLine struct {
@@ -17,6 +28,7 @@ type userLine struct {
 	Message         chatMessage `json:"message"`
 	ParentToolUseID *string     `json:"parent_tool_use_id"`
 	SessionID       string      `json:"session_id"`
+	UUID            string      `json:"uuid,omitempty"`
 }
 
 type controlRequest struct {
@@ -52,11 +64,27 @@ type denyBody struct {
 
 // UserMessage is one user turn for claude's stdin.
 func UserMessage(text string) []byte {
+	return UserMessageWith("", text, nil)
+}
+
+// Image is one picture of a user turn: its media type and its base64 data.
+type Image struct{ Mime, Data string }
+
+// UserMessageWith is a user turn that carries id, which claude echoes back, and images before the text.
+func UserMessageWith(id, text string, images []Image) []byte {
+	content := make([]any, 0, len(images)+1)
+	for _, im := range images {
+		content = append(content, imageBlock{Type: "image", Source: imageSource{Type: "base64", MediaType: im.Mime, Data: im.Data}})
+	}
+	if text != "" || len(images) == 0 {
+		content = append(content, textBlock{Type: "text", Text: text})
+	}
 	return encodeLine(userLine{
 		Type:            "user",
-		Message:         chatMessage{Role: "user", Content: []textBlock{{Type: "text", Text: text}}},
+		Message:         chatMessage{Role: "user", Content: content},
 		ParentToolUseID: nil,
 		SessionID:       "default",
+		UUID:            id,
 	})
 }
 

@@ -18,6 +18,8 @@ type line struct {
 	Request      json.RawMessage `json:"request"`
 	IsError      bool            `json:"is_error"`
 	TotalCost    float64         `json:"total_cost_usd"`
+	IsReplay     bool            `json:"isReplay"`
+	Response     json.RawMessage `json:"response"`
 }
 
 type block struct {
@@ -48,6 +50,8 @@ func Parse(data []byte) ([]Event, error) {
 		return parseAssistant(l)
 	case "user":
 		return parseUser(l)
+	case "control_response":
+		return parseControlResponse(l)
 	case "control_request":
 		return parseControlRequest(l)
 	case "result":
@@ -116,6 +120,9 @@ func parseAssistant(l line) ([]Event, error) {
 }
 
 func parseUser(l line) ([]Event, error) {
+	if l.IsReplay {
+		return []Event{{Kind: KindEcho, ID: l.UUID}}, nil
+	}
 	_, content, err := blocks(l.Message)
 	if err != nil {
 		return nil, err
@@ -164,4 +171,23 @@ func parseControlRequest(l line) ([]Event, error) {
 		return nil, nil
 	}
 	return []Event{{Kind: KindApproval, ID: l.RequestID, Tool: req.ToolName, Input: req.Input}}, nil
+}
+
+// parseControlResponse reads the reply to initialize, which lists the slash commands; other replies give none.
+func parseControlResponse(l line) ([]Event, error) {
+	if len(l.Response) == 0 {
+		return nil, nil
+	}
+	var r struct {
+		Response struct {
+			Commands json.RawMessage `json:"commands"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(l.Response, &r); err != nil {
+		return nil, fmt.Errorf("parse control response: %w", err)
+	}
+	if !isArray(r.Response.Commands) {
+		return nil, nil
+	}
+	return []Event{{Kind: KindCommands, Input: r.Response.Commands}}, nil
 }

@@ -69,3 +69,16 @@ func TestAllowWithoutInputSendsEmptyObject(t *testing.T) {
 	assertLine(t, Allow("ffd4", nil), want)
 	assertLine(t, Allow("ffd4", json.RawMessage{}), want)
 }
+
+func TestUserMessageCarriesTheID(t *testing.T) {
+	assertLine(t, UserMessageWith("abc", "hi", nil),
+		`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]},"parent_tool_use_id":null,"session_id":"default","uuid":"abc"}`)
+}
+
+func TestUserMessageWithImages(t *testing.T) {
+	got := UserMessageWith("abc", "look", []Image{{Mime: "image/png", Data: "QUJD"}})
+	assertLine(t, got,
+		`{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"QUJD"}},{"type":"text","text":"look"}]},"parent_tool_use_id":null,"session_id":"default","uuid":"abc"}`)
+	assertLine(t, UserMessageWith("abc", "", []Image{{Mime: "image/png", Data: "QUJD"}}),
+		`{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"QUJD"}}]},"parent_tool_use_id":null,"session_id":"default","uuid":"abc"}`)
+}
