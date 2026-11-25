@@ -63,8 +63,8 @@ func SocketPath(stateDir string) string { return filepath.Join(stateDir, socketF
 var ErrNotRunning = errors.New("agentos is not running: open the app and try again")
 
 // Call sends req and waits for the answer.
-func Call(ctx context.Context, socket string, req Request) (Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, req.Timeout()+requestTimeout)
+func Call(parent context.Context, socket string, req Request) (Response, error) {
+	ctx, cancel := context.WithTimeout(parent, req.Timeout()+requestTimeout)
 	defer cancel()
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
@@ -72,6 +72,8 @@ func Call(ctx context.Context, socket string, req Request) (Response, error) {
 		return Response{}, ErrNotRunning
 	}
 	defer conn.Close()
+	// A cancelled caller must not wait for the app's answer.
+	defer context.AfterFunc(ctx, func() { conn.Close() })()
 	if dl, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(dl)
 	}
@@ -80,10 +82,16 @@ func Call(ctx context.Context, socket string, req Request) (Response, error) {
 		return Response{}, fmt.Errorf("encoding the request: %w", err)
 	}
 	if _, err := conn.Write(append(line, '\n')); err != nil {
+		if parent.Err() != nil {
+			return Response{}, parent.Err()
+		}
 		return Response{}, fmt.Errorf("sending the request: %w", err)
 	}
 	reply, err := bufio.NewReaderSize(conn, 1<<16).ReadBytes('\n')
 	if err != nil && !(errors.Is(err, io.EOF) && len(reply) > 0) {
+		if parent.Err() != nil {
+			return Response{}, parent.Err()
+		}
 		return Response{}, fmt.Errorf("waiting for the app: %w", err)
 	}
 	var resp Response

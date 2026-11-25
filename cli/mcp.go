@@ -21,6 +21,7 @@ const (
 	// A slice's control call outlasts the slice, so the app answers before the call times out.
 	waitSliceCall    = 65 * time.Second
 	defaultWaitLimit = 300
+	maxWaitLimit     = 3600
 )
 
 // newMCPCmd serves the orchestration tools to the agent that started it, over stdin and stdout.
@@ -82,8 +83,14 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 	if in.TimeoutSeconds <= 0 {
 		in.TimeoutSeconds = defaultWaitLimit
 	}
+	if in.TimeoutSeconds > maxWaitLimit {
+		return "", errors.New("timeout_seconds is at most 3600")
+	}
 	deadline := time.Now().Add(time.Duration(in.TimeoutSeconds) * time.Second)
 	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		slice := min(waitSlice, time.Until(deadline))
 		slice = max(slice, time.Millisecond)
 		out, err := orchestrate(ctx, socket, token, "wait", input, map[string]string{"slice_ms": strconv.FormatInt(slice.Milliseconds(), 10)}, waitSliceCall)
@@ -91,10 +98,14 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 			return "", err
 		}
 		var answer struct {
-			Done bool `json:"done"`
+			Done bool   `json:"done"`
+			Text string `json:"text"`
 		}
-		if json.Unmarshal([]byte(out), &answer) == nil && answer.Done || !time.Now().Before(deadline) {
-			return out, nil
+		if err := json.Unmarshal([]byte(out), &answer); err != nil {
+			return "", errors.New("the app's answer to wait was not understood")
+		}
+		if answer.Done || !time.Now().Before(deadline) {
+			return answer.Text, nil
 		}
 	}
 }
