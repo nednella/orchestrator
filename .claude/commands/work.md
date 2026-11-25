@@ -14,7 +14,7 @@ Work issue #$ARGUMENTS on `nednella/agentos`, start to finish, without waiting f
 
 ## 2. Branch
 
-In an agentos thread (`AGENTOS_SESSION` is set) agentos already made your worktree on branch `issue-$ARGUMENTS` and started you in it: work there. Otherwise make it yourself:
+If you run in a worktree agentos made (your system prompt names its folder and branch), work there. Otherwise make it yourself:
 
 ```
 git fetch origin

@@ -83,7 +83,7 @@ Work issue #<n> start to finish, without waiting for the owner unless a decision
 
 ## 2. Branch
 
-In an agentos thread (`AGENTOS_SESSION` is set) agentos already made your worktree on branch `issue-<n>` and started you in it: work there. Otherwise make it yourself: make a worktree on branch `issue-<n>` from the default branch on origin, where and with the set-up `AGENTS.md` names. Work only inside it.
+If you run in a worktree agentos made (your system prompt names its folder and branch), work there. Otherwise make it yourself: a worktree on branch `issue-<n>` from the default branch on origin, where and with the set-up `AGENTS.md` names. Work only inside it.
 
 ## 3. Build
 

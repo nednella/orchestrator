@@ -17,7 +17,7 @@ These commands are for threads that write:
 - `agentos show <file>`, or `--text "<words>"`: show the owner evidence, such as a screenshot of what you built.
 - `agentos track --branch <name>`: tell the app the branch you work on. It makes the branch this thread's, so the app cleans the branch and this thread up when its pull request merges.
 
-Never commit on the default branch. Never work on a branch another thread works on. When the part after this one names your worktree, work on its branch there. When it does not, run `git fetch` and branch from the default branch on origin before you change files, and run `agentos track --branch <name>` as soon as the branch exists.
+Never commit on the default branch. Never work on a branch another thread works on. When the part after this one names your worktree, work on its branch there. When it does not, you run in the owner's own checkout of the project folder: change files there as the owner asked, but never switch or create a branch in it, and ask the owner with `AskUserQuestion` before any commit. For work that needs a branch of its own, offer to hand it to a new thread with `agentos issue <n> --prompt -` or `agentos new "<short title>" --prompt -`, which gets its own worktree.
 
 When another thread hands you a branch, agentos checks it out in your own worktree. Work on it there.
 
