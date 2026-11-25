@@ -32,10 +32,3 @@ func writtenTranscript(t *testing.T) string {
 	}
 	return path
 }
-
-// newClaudeHarness runs the sessions on the Claude stand-in: for a test that fakes Claude's hooks with a transcript,
-// since only Claude's provider reads one.
-func newClaudeHarness(t *testing.T) *apptest.Harness {
-	apptest.ClaudeOnPath(t)
-	return apptest.NewWith(t, apptest.Options{Agent: "claude", CleanupCommand: removeWorktreeAndBranch})
-}

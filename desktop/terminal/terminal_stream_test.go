@@ -9,32 +9,28 @@ import (
 )
 
 func TestTerminalStream(t *testing.T) {
-	h := newHarness(t)
-	s, err := h.NewSession("term", "")
-	if err != nil {
+	h, id := newShell(t)
+	if err := h.TermOpen(id, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.TermOpen(s.ID, 100, 30); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "shell output", func() bool { return len(h.Rec.Output(s.ID)) > 0 })
+	eventually(t, "shell output", func() bool { return len(h.Rec.Output(id)) > 0 })
 
-	if err := h.TermWrite(s.ID, "echo $((40+2))\n"); err != nil {
+	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "echo result", func() bool { return strings.Contains(h.Rec.Output(s.ID), "\r\n42\r\n") })
+	eventually(t, "echo result", func() bool { return strings.Contains(h.Rec.Output(id), "\r\n42\r\n") })
 
-	if err := h.TermResize(s.ID, 77, 20); err != nil {
+	if err := h.TermResize(id, 77, 20); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)
-	if err := h.TermWrite(s.ID, "stty size\n"); err != nil {
+	if err := h.TermWrite(id, "stty size\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "resized pty", func() bool { return strings.Contains(h.Rec.Output(s.ID), "\r\n20 77\r\n") })
+	eventually(t, "resized pty", func() bool { return strings.Contains(h.Rec.Output(id), "\r\n20 77\r\n") })
 
-	h.TermClose(s.ID)
-	if err := h.TermWrite(s.ID, "x"); err == nil {
+	h.TermClose(id)
+	if err := h.TermWrite(id, "x"); err == nil {
 		t.Error("writing to a closed terminal succeeded")
 	}
 	if err := h.TermOpen("not a session", 80, 24); err == nil {
@@ -92,38 +88,36 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 }
 
 func TestHeavyOutputIsMerged(t *testing.T) {
-	h := newHarness(t)
-	s, _ := h.NewSession("heavy", "")
-	if err := h.TermOpen(s.ID, 120, 30); err != nil {
+	h, id := newShell(t)
+	if err := h.TermOpen(id, 120, 30); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the prompt", func() bool { return len(h.Rec.Output(s.ID)) > 0 })
+	eventually(t, "the prompt", func() bool { return len(h.Rec.Output(id)) > 0 })
 	before := h.Rec.Count("term:data")
-	if err := h.TermWrite(s.ID, "seq 1 30000; echo done-seq\n"); err != nil {
+	if err := h.TermWrite(id, "seq 1 30000; echo done-seq\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the end of the output", func() bool { return strings.Contains(h.Rec.Output(s.ID), "done-seq") })
+	eventually(t, "the end of the output", func() bool { return strings.Contains(h.Rec.Output(id), "done-seq") })
 	events := h.Rec.Count("term:data") - before
-	if bytes := len(h.Rec.Output(s.ID)); events > bytes/200 {
+	if bytes := len(h.Rec.Output(id)); events > bytes/200 {
 		t.Errorf("%d events for %d bytes: output is not merged", events, bytes)
 	}
 }
 
 func TestClipboardFromTheAgent(t *testing.T) {
-	h := newHarness(t)
-	s, _ := h.NewSession("clip", "")
-	if err := h.TermOpen(s.ID, 100, 30); err != nil {
+	h, id := newShell(t)
+	if err := h.TermOpen(id, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "shell output", func() bool { return len(h.Rec.Output(s.ID)) > 0 })
+	eventually(t, "shell output", func() bool { return len(h.Rec.Output(id)) > 0 })
 	cmd := `printf '\033]52;c;%s\a' $(printf copied-text | base64)` + "\n"
-	if err := h.TermWrite(s.ID, cmd); err != nil {
+	if err := h.TermWrite(id, cmd); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the clipboard", func() bool { return h.Rec.HasClip("copied-text") })
 	// The clipboard copy runs synchronously off each PTY read; the matching term:data event
 	// waits for the output flush timer, so it can still be pending once HasClip turns true.
-	eventually(t, "the OSC 52 bytes forwarded in the output", func() bool { return strings.Contains(h.Rec.Output(s.ID), "\x1b]52;") })
+	eventually(t, "the OSC 52 bytes forwarded in the output", func() bool { return strings.Contains(h.Rec.Output(id), "\x1b]52;") })
 }
 
 func TestTerminalAttachesToTheShell(t *testing.T) {

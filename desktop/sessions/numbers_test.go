@@ -119,13 +119,10 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 	if !exists(tmp) {
 		t.Fatalf("no temp folder at %s", tmp)
 	}
-	if err := h.TypeInto(s.ID, "touch $TMPDIR/shot.png"); err != nil {
-		t.Fatal(err)
+	out, err := exec.Command("tmux", "-L", h.Socket, "show-environment", "-t", s.ID, "TMPDIR").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "TMPDIR="+tmp {
+		t.Errorf("the session's environment has %q, %v; want TMPDIR=%s", out, err, tmp)
 	}
-	if out, err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", s.ID, "Enter").CombinedOutput(); err != nil {
-		t.Fatalf("pressing Enter: %v: %s", err, out)
-	}
-	eventually(t, "a file made in $TMPDIR to land in the temp folder", func() bool { return exists(filepath.Join(tmp, "shot.png")) })
 
 	if err := h.KillSession(s.ID); err != nil {
 		t.Fatal(err)

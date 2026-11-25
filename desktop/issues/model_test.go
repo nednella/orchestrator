@@ -10,6 +10,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	chatlog "github.com/nednella/agentos/internal/chat"
 )
 
 // argsOf is the arguments a session's claude was started with, one per line.
@@ -43,8 +44,7 @@ func flagsOf(t *testing.T, dir, id string) (model, effort string) {
 }
 
 func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 
 	tests := []struct {
 		name          string
@@ -65,27 +65,25 @@ func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
 		if s.Model != tt.model || s.Effort != tt.effort {
 			t.Errorf("%s: session runs %s %s, want %s %s", tt.name, s.Model, s.Effort, tt.model, tt.effort)
 		}
-		if model, effort := flagsOf(t, dir, s.ID); model != tt.model || effort != tt.effort {
+		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != tt.effort {
 			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, model, effort, tt.model, tt.effort)
 		}
 	}
 }
 
 func TestPlainSessionGetsNoModelFlags(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.NewSession("plain", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if model, effort := flagsOf(t, dir, s.ID); model != "" || effort != "" || s.Model != "" || s.Effort != "" {
+	if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != "" || effort != "" || s.Model != "" || s.Effort != "" {
 		t.Errorf("claude got %q %q, session %q %q, want none", model, effort, s.Model, s.Effort)
 	}
 }
 
 func TestSessionsGetClaudesOwnSettings(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	user := os.Getenv("CLAUDE_CONFIG_DIR")
 	if err := os.MkdirAll(user, 0o700); err != nil {
 		t.Fatal(err)
@@ -108,15 +106,14 @@ func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
-		if model, effort := flagsOf(t, dir, s.ID); model != tt.model || effort != tt.effort || s.Model != tt.model || s.Effort != tt.effort {
+		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != tt.effort || s.Model != tt.model || s.Effort != tt.effort {
 			t.Errorf("%s: claude got %q %q, session %q %q, want %s %s", tt.name, model, effort, s.Model, s.Effort, tt.model, tt.effort)
 		}
 	}
 }
 
 func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.StartIssue(8)
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +140,7 @@ func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
 }
 
 func TestAnotherAgentIsNotGivenAModel(t *testing.T) {
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
 	s, err := h.StartIssue(8)
 	if err != nil {
 		t.Fatal(err)
@@ -154,19 +151,14 @@ func TestAnotherAgentIsNotGivenAModel(t *testing.T) {
 }
 
 func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 
 	s, err := h.StartIssueOwn(7, "", "be careful", "haiku", "low")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdin := filepath.Join(dir, strings.ReplaceAll(s.ID, "/", "_")+".stdin")
-	eventually(t, "the command then the prompt on claude's stdin", func() bool {
-		data, _ := os.ReadFile(stdin)
-		return strings.Contains(string(data), `"text":"/ship 7 be careful"`)
-	})
-	if model, effort := flagsOf(t, dir, s.ID); model != "haiku" || effort != "low" {
+	eventually(t, "the command then the prompt on claude's stdin", func() bool { return sent(t, h, s.ID, "/ship 7 be careful") })
+	if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != "haiku" || effort != "low" {
 		t.Errorf("claude got --model %q --effort %q, want haiku low", model, effort)
 	}
 
@@ -174,14 +166,13 @@ func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if model, effort := flagsOf(t, dir, plan.ID); model != "opus" || effort != "max" {
+	if model, effort := flagsOf(t, h.ClaudeDir(), plan.ID); model != "opus" || effort != "max" {
 		t.Errorf("claude got --model %q --effort %q, want the action's model and the owner's effort", model, effort)
 	}
 }
 
 func TestOwnersPromptDoesNotReachALiveSession(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	first, err := h.StartIssueOwn(7, "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +185,8 @@ func TestOwnersPromptDoesNotReachALiveSession(t *testing.T) {
 		t.Fatalf("started %s, want the live session %s", again.ID, first.ID)
 	}
 	time.Sleep(500 * time.Millisecond)
-	if pane := h.Pane(t, first.ID); strings.Contains(pane, "type this") {
-		t.Errorf("the prompt was typed into the live session:\n%s", pane)
+	events, _ := h.ChatHistory(first.ID, 0)
+	if stdin := strings.Join(h.Stdin(t, first.ID), "\n"); strings.Contains(stdin, "type this") || slices.ContainsFunc(events, func(e chatlog.Event) bool { return strings.Contains(e.Text, "type this") }) {
+		t.Errorf("the prompt reached the live session: stdin %q, chat %+v", stdin, events)
 	}
 }

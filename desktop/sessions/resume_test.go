@@ -31,8 +31,7 @@ func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Sessio
 }
 
 func TestResumeContinuesAnEndedSession(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	for _, tt := range []struct {
 		name  string
 		start func() (sessions.Session, error)
@@ -55,7 +54,7 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 			if fresh.ID == old.ID || fresh.State == "ended" || fresh.Title != old.Title || fresh.Issue != old.Issue || fresh.Chat != old.Chat {
 				t.Errorf("resumed %+v from %+v", fresh, old)
 			}
-			args := claudeArgs(t, dir, fresh.ID)
+			args := claudeArgs(t, h, fresh.ID)
 			if i := slices.Index(args, "--resume"); i < 0 || args[i+1] != "abc" {
 				t.Errorf("args = %q", args)
 			}
@@ -70,8 +69,7 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 }
 
 func TestResumedSessionKeepsTheChatLog(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	old, err := h.Sessions().Create("#12 work", "the first ask", true, 12, "")
 	if err != nil {
 		t.Fatal(err)
@@ -98,8 +96,7 @@ func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 }
 
 func TestResumedSessionKeepsItsImages(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
 	if err != nil {
 		t.Fatal(err)
@@ -143,8 +140,7 @@ func TestResumedSessionKeepsItsImages(t *testing.T) {
 }
 
 func TestResumedSessionShowsTheEndedOnesPRAtOnce(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +180,6 @@ func endedWhileClosed(t *testing.T, h *apptest.Harness, id string) *apptest.Harn
 }
 
 func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
 	for _, tt := range []struct {
 		name  string
 		start func(h *apptest.Harness) (sessions.Session, error)
@@ -206,7 +201,7 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+			h := apptest.New(t)
 			old, err := tt.start(h)
 			if err != nil {
 				t.Fatal(err)
@@ -224,7 +219,7 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 			if resumed.Title != old.Title || resumed.Issue != old.Issue || resumed.Chat != old.Chat {
 				t.Errorf("resumed %+v from %+v", resumed, old)
 			}
-			if args := claudeArgs(t, dir, resumed.ID); old.Chat != slices.Contains(args, "--permission-mode") {
+			if args := claudeArgs(t, h, resumed.ID); old.Chat != slices.Contains(args, "--permission-mode") {
 				t.Errorf("args of a resumed chat=%v: %q", old.Chat, args)
 			}
 		})
@@ -232,8 +227,7 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 }
 
 func TestResumeGivesBackTheIssuesLiveSession(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
 	if err != nil {
 		t.Fatal(err)
@@ -254,8 +248,7 @@ func TestResumeGivesBackTheIssuesLiveSession(t *testing.T) {
 
 func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 	t.Run("no conversation", func(t *testing.T) {
-		apptest.ClaudeOnPath(t)
-		h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+		h := apptest.New(t)
 		s, err := h.NewSession("work", "")
 		if err != nil {
 			t.Fatal(err)
@@ -267,8 +260,7 @@ func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 		assertNoResume(t, h, s.ID)
 	})
 	t.Run("no prompt", func(t *testing.T) {
-		apptest.ClaudeOnPath(t)
-		h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+		h := apptest.New(t)
 		s, err := h.NewChat("ask")
 		if err != nil {
 			t.Fatal(err)
@@ -282,7 +274,7 @@ func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 		assertNoResume(t, h, s.ID)
 	})
 	t.Run("plain agent", func(t *testing.T) {
-		h := newHarness(t)
+		h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
 		s, err := h.NewSession("work", "")
 		if err != nil {
 			t.Fatal(err)

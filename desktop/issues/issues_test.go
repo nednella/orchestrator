@@ -65,8 +65,7 @@ func TestIssues(t *testing.T) {
 	if s.Issue != 7 || s.Action != "Work" || s.Title != "#7 Fix the thing that breaks when the window is narrow" {
 		t.Errorf("session = %+v", s)
 	}
-	// The agent is bash: a sent command fails, a typed one just sits on the prompt.
-	eventually(t, "/ship sent", func() bool { return strings.Contains(h.Pane(t, s.ID), "/ship: No such file or directory") })
+	eventually(t, "/ship sent", func() bool { return sent(t, h, s.ID, "/ship 7") })
 	again, err := h.StartIssue(7)
 	if err != nil || again.ID != s.ID {
 		t.Errorf("second start = %+v, %v", again, err)
@@ -99,7 +98,7 @@ func TestIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "issues event after the session ends", func() bool { return issuesEvent(7) == "" })
-	eventually(t, "/investigate typed", func() bool { return strings.Contains(h.Pane(t, plan.ID), "/investigate 8") })
+	eventually(t, "/investigate sent", func() bool { return sent(t, h, plan.ID, "/investigate 8") })
 }
 
 func TestStartReadsTheListAgainForANewIssue(t *testing.T) {
@@ -164,18 +163,18 @@ func TestIssuesDisabled(t *testing.T) {
 	}
 }
 
-func TestStartTypesTheChosenActionsCommand(t *testing.T) {
+func TestStartSendsTheChosenActionsCommand(t *testing.T) {
 	h := newHarness(t)
 	inbox, err := h.StartIssue(11)
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "/investigate typed", func() bool { return strings.Contains(h.Pane(t, inbox.ID), "/investigate 11") })
+	eventually(t, "/investigate sent", func() bool { return sent(t, h, inbox.ID, "/investigate 11") })
 	plan, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "/plan typed", func() bool { return strings.Contains(h.Pane(t, plan.ID), "/plan 7") })
+	eventually(t, "/plan sent", func() bool { return sent(t, h, plan.ID, "/plan 7") })
 	if _, err := h.StartIssueWith(8, "Plan"); err == nil || !strings.Contains(err.Error(), `no action "Plan"`) {
 		t.Errorf("an action of another section: %v", err)
 	}
@@ -233,14 +232,14 @@ func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 	}
 }
 
-func TestIssueOfNoSectionTypesTheStartLine(t *testing.T) {
+func TestIssueOfNoSectionSendsTheStartLine(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.StartIssue(10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "start line typed", func() bool {
-		return strings.Contains(h.Pane(t, s.ID), "APPLICATION_PROMPT: Work on issue #10 on branch `issue-10`: Maybe")
+	eventually(t, "start line sent", func() bool {
+		return sent(t, h, s.ID, "APPLICATION_PROMPT: Work on issue #10 on branch `issue-10`: Maybe")
 	})
 }
 
@@ -250,19 +249,19 @@ func TestStartLineLeavesOutBranchProjectDoesNotName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "start line typed", func() bool { return strings.Contains(h.Pane(t, s.ID), "APPLICATION_PROMPT: Work on issue #10: Maybe") })
+	eventually(t, "start line sent", func() bool { return sent(t, h, s.ID, "APPLICATION_PROMPT: Work on issue #10: Maybe") })
 }
 
-func TestManualPromptSendTypesWithoutSending(t *testing.T) {
+func TestManualPromptSendDraftsWithoutSending(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	s, err := h.StartIssue(7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "/ship typed", func() bool { return strings.Contains(h.Pane(t, s.ID), "/ship 7") })
+	eventually(t, "/ship drafted", func() bool { return drafted(h, s.ID, "/ship 7") })
 	time.Sleep(600 * time.Millisecond)
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "No such file or directory") {
-		t.Errorf("the command was sent:\n%s", pane)
+	if sent(t, h, s.ID, "/ship 7") {
+		t.Errorf("the command was sent: %q", h.Stdin(t, s.ID))
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -576,7 +576,7 @@ type Options struct {
 	Queue          string        // the project's queue_sections block, in place of the usual one
 	NoBranch       bool          // leave out the project's `session_branch_fallback: "issue-{n}"` pattern
 	CleanupCommand string        // the project's session_cleanup_command; none by default
-	Agent          string        // the config's agent; bash by default
+	Agent          string        // the config's agent; claude by default
 	TopExtra       string        // yaml lines added at the top of the config
 	DigestFirst    time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick     time.Duration
@@ -588,7 +588,7 @@ type Options struct {
 	AbsentProject  string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 }
 
-// Harness is an app with a plain bash as its agent.
+// Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
 type Harness struct {
 	App    *app.App
 	Rec    *Recorder
@@ -598,6 +598,8 @@ type Harness struct {
 	Dir    string
 	State  string
 	Conf   string
+
+	claudeDir string
 
 	projects *projects.Service
 	sessions *sessions.Service
@@ -644,11 +646,11 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if o.DataDirConfig {
 		top += "data_dir: " + filepath.Join(state, "data") + "\n"
 	}
-	conf := fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: main\n    directory: %s\n%s%s%s%s", cmp.Or(o.Agent, "bash"), top, dir, branch, cleanup, cmp.Or(o.Queue, queueSections), o.ProjectExtra)
+	conf := fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: main\n    directory: %s\n%s%s%s%s", cmp.Or(o.Agent, "claude"), top, dir, branch, cleanup, cmp.Or(o.Queue, queueSections), o.ProjectExtra)
 	if o.NoProject {
-		conf = fmt.Sprintf("agent_command: %s\n%sprojects: []\n", cmp.Or(o.Agent, "bash"), top)
+		conf = fmt.Sprintf("agent_command: %s\n%sprojects: []\n", cmp.Or(o.Agent, "claude"), top)
 		if o.AbsentProject != "" {
-			conf = fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: %s\n    directory: /nonexistent/%[3]s\n", cmp.Or(o.Agent, "bash"), top, o.AbsentProject)
+			conf = fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: %s\n    directory: /nonexistent/%[3]s\n", cmp.Or(o.Agent, "claude"), top, o.AbsentProject)
 		}
 	}
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
@@ -669,6 +671,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	t.Setenv("AGENTOS_AGY_CONFIG_DIR", filepath.Join(state, "agy")) // nor agy's own hooks and MCP servers
 
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
+	h.claudeDir = agentOnPath(t, "claude", "", fakeClaudeTurns)
 	h.App = h.build(t)
 	h.App.Sessions().SetPrefillWait(300 * time.Millisecond)
 	first, tick := o.DigestFirst, o.DigestTick
@@ -705,9 +708,7 @@ func (h *Harness) build(t *testing.T) *app.App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claudeOnPath.Load() {
-		cfg.Binary = CLIPath(t) // the test binary runs the app but has no host command
-	}
+	cfg.Binary = CLIPath(t) // the test binary runs the app but has no host command
 	a := app.New(cfg, app.Host{Emit: h.Rec.Emit, Clipboard: h.Rec.Clip, PickDir: h.Rec.Picker, Quit: h.Rec.Quit, Awake: h.Rec.Awake}, h.GH.Run, h.GH.Stream, h.Claude.RunEnv)
 	for _, svc := range a.Services() {
 		switch s := svc.(type) {
@@ -741,7 +742,7 @@ func (h *Harness) build(t *testing.T) *app.App {
 // Restart starts a second app on the same dirs, as if the first was quit and opened again.
 func (h *Harness) Restart(t *testing.T) *Harness {
 	t.Helper()
-	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf}
+	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, claudeDir: h.claudeDir}
 	second.App = second.build(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -811,6 +812,10 @@ func (h *Harness) Session(id string) (sessions.Session, bool) {
 	return sessions.Session{}, false
 }
 
+// startEnv is the environment the tests started in. The command is built in it, not in one a test changed: under a
+// throwaway HOME, go would fetch every module again.
+var startEnv = os.Environ()
+
 var (
 	cliOnce sync.Once
 	cliBin  string
@@ -831,6 +836,7 @@ func CLIPath(t *testing.T) string {
 		root := filepath.Join(filepath.Dir(file), "..", "..", "..")
 		cmd := exec.Command("go", "build", "-tags", "stub", "-o", cliBin, "./desktop")
 		cmd.Dir = root
+		cmd.Env = startEnv
 		if out, err := cmd.CombinedOutput(); err != nil {
 			cliErr = fmt.Errorf("building the agentos command: %w: %s", err, out)
 		}
@@ -841,21 +847,43 @@ func CLIPath(t *testing.T) string {
 	return cliBin
 }
 
-// ClaudeOnPath puts a stand-in `claude` and the built agentos command first on PATH, so the app runs its Claude
-// adapter and the session's host starts the stand-in. The stand-in writes its arguments to <dir>/<session id, "/" as
-// "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin until its stdin ends. It answers
-// each user message with an init line, a reply and a result, as Claude does each turn, and an interrupt with a result
-// that has an error. The message "ask" asks to run a Bash command instead and replies once answered, "slow" replies a
-// second later, and "stream" streams 200 deltas, "0 " to "199 ", before its reply. Call it before New. It returns dir.
-func ClaudeOnPath(t *testing.T) string {
-	claudeOnPath.Store(true)
-	t.Cleanup(func() { claudeOnPath.Store(false) })
-	return agentOnPath(t, "claude", "", fakeClaudeTurns)
+// ClaudeDir is the folder of the stand-in claude, which NewWith puts first on PATH beside the built agentos command,
+// so the app runs its Claude provider and each session's host starts the stand-in. The stand-in writes its arguments
+// to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
+// until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
+// turn, an interrupt with a result that has an error, and any other control request with a success. The message
+// "ask" asks to run a Bash command instead and replies once answered, "slow" replies a second later, and "stream"
+// streams 200 deltas, "0 " to "199 ", before its reply.
+func (h *Harness) ClaudeDir() string { return h.claudeDir }
+
+// standIn is the path of the stand-in claude's file of the session with that extension.
+func (h *Harness) standIn(id, ext string) string {
+	return filepath.Join(h.claudeDir, strings.ReplaceAll(id, "/", "_")+ext)
 }
 
-// claudeOnPath says that the test put the stand-in claude on PATH, so its Claude sessions run under the built command's
-// host. A test that sets the environment never runs in parallel.
-var claudeOnPath atomic.Bool
+// Stdin are the lines the session's stand-in claude has read so far, none before it starts.
+func (h *Harness) Stdin(t *testing.T, id string) []string {
+	t.Helper()
+	return readLines(t, h.standIn(id, ".stdin"))
+}
+
+// Args are the arguments the session's stand-in claude was started with, none before it starts.
+func (h *Harness) Args(t *testing.T, id string) []string {
+	t.Helper()
+	return readLines(t, h.standIn(id, ".args"))
+}
+
+func readLines(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+}
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
@@ -886,6 +914,9 @@ while IFS= read -r line; do
 		reply ;;
 	*'"subtype":"interrupt"'*)
 		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}' ;;
+	*'"type":"control_request"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$id" ;;
 	esac
 done
 `
@@ -893,8 +924,9 @@ done
 // AgyModels is what the stand-in agy answers to agy models: each model's id and name.
 var AgyModels = [][2]string{{"gemini-4-argon-medium", "Gemini 4 Argon (Medium)"}, {"gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"}}
 
-// AgyOnPath is ClaudeOnPath for a stand-in `agy`, which also answers `agy models` with AgyModels and writes the
-// AGENTOS_PROMPT and AGENTOS_CHAT it was started with to <dir>/<session id, "/" as "_">.env.
+// AgyOnPath puts a stand-in `agy` first on PATH, as NewWith does the stand-in claude (see ClaudeDir). It writes its
+// arguments as the stand-in claude does, answers `agy models` with AgyModels and writes the AGENTOS_PROMPT and
+// AGENTOS_CHAT it was started with to <dir>/<session id, "/" as "_">.env. It returns dir.
 func AgyOnPath(t *testing.T) string { return agyOnPath(t, "") }
 
 // AgyAskingOnPath is AgyOnPath with a stand-in that shows agy's permission prompt in its pane.

@@ -82,19 +82,19 @@ func TestReviewWakesTheSession(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the comments a PR had when first seen woke the session")
 	}
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 1))
 	h.RefreshPRs()
-	eventually(t, "the review prompt in the session", func() bool { return strings.Contains(h.Pane(t, s.ID), "/address-review 12") })
-	if strings.Contains(h.Pane(t, s.ID), "APPLICATION_PROMPT") {
+	eventually(t, "the review prompt in the session", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
+	if strings.Contains(sentTo(t, h, s.ID), "APPLICATION_PROMPT") {
 		t.Error("a slash command got the app's prefix, so Claude Code would not run it")
 	}
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if n := strings.Count(h.Pane(t, s.ID), "/address-review 12"); n != 1 {
+	if n := strings.Count(sentTo(t, h, s.ID), "/address-review 12"); n != 1 {
 		t.Errorf("the prompt appears %d times, want once", n)
 	}
 
@@ -102,7 +102,7 @@ func TestReviewWakesTheSession(t *testing.T) {
 		fresh := h.Restart(t)
 		fresh.RefreshPRs()
 		time.Sleep(500 * time.Millisecond)
-		if n := strings.Count(h.Pane(t, s.ID), "/address-review 12"); n != 1 {
+		if n := strings.Count(sentTo(t, h, s.ID), "/address-review 12"); n != 1 {
 			t.Errorf("the prompt appears %d times after a restart, want once", n)
 		}
 	})
@@ -115,20 +115,20 @@ func TestDraftCommentsAreSeenButSendNoReviewPrompt(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPR(prJSON("OPEN", true, `[{"status":"COMPLETED","conclusion":"FAILURE"}]`, 1, 0))
 	h.RefreshPRs()
-	eventually(t, "the checks prompt on the draft", func() bool { return strings.Contains(h.Pane(t, s.ID), "/fix-checks 12") })
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	eventually(t, "the checks prompt on the draft", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/fix-checks 12") })
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("a comment on a draft woke the session")
 	}
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("a comment made while the PR was a draft woke the session once it was ready")
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 1))
 	h.RefreshPRs()
-	eventually(t, "the review prompt once the PR is ready", func() bool { return strings.Contains(h.Pane(t, s.ID), "/address-review 12") })
+	eventually(t, "the review prompt once the PR is ready", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 }
 
 func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
@@ -138,7 +138,7 @@ func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 1, 0))
 	h.RefreshPRs()
-	eventually(t, "the review prompt on the draft", func() bool { return strings.Contains(h.Pane(t, s.ID), "/address-review 12") })
+	eventually(t, "the review prompt on the draft", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 }
 
 func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
@@ -148,7 +148,7 @@ func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 1))
 	h.RefreshPRs()
-	eventually(t, "the marked review prompt", func() bool { return strings.Contains(h.Pane(t, s.ID), "APPLICATION_PROMPT: Read PR 12") })
+	eventually(t, "the marked review prompt", func() bool { return strings.Contains(sentTo(t, h, s.ID), "APPLICATION_PROMPT: Read PR 12") })
 }
 
 func TestFailingChecksWakeOncePerCommit(t *testing.T) {
@@ -157,17 +157,17 @@ func TestFailingChecksWakeOncePerCommit(t *testing.T) {
 	failing := `[{"status":"COMPLETED","conclusion":"FAILURE"}]`
 	h.GH.SetPR(apptest.WithHead(prJSON("OPEN", false, failing, 0, 0), "aaa"))
 	h.RefreshPRs()
-	eventually(t, "the checks prompt", func() bool { return strings.Contains(h.Pane(t, s.ID), "/fix-checks 12") })
+	eventually(t, "the checks prompt", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/fix-checks 12") })
 	h.RefreshPRs()
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if n := strings.Count(h.Pane(t, s.ID), "/fix-checks 12"); n != 1 {
+	if n := strings.Count(sentTo(t, h, s.ID), "/fix-checks 12"); n != 1 {
 		t.Fatalf("the same failure woke the session %d times, want once", n)
 	}
 	h.GH.SetPR(apptest.WithHead(prJSON("OPEN", false, failing, 0, 0), "bbb"))
 	h.RefreshPRs()
 	eventually(t, "a second checks prompt for the new commit", func() bool {
-		return strings.Count(h.Pane(t, s.ID), "/fix-checks 12") == 2
+		return strings.Count(sentTo(t, h, s.ID), "/fix-checks 12") == 2
 	})
 }
 
@@ -177,23 +177,23 @@ func TestConflictWakesOncePerCommit(t *testing.T) {
 	h.GH.SetPR(apptest.WithMergeable(apptest.WithHead(prJSON("OPEN", false, "[]", 0, 0), "aaa"), "UNKNOWN"))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/rebase") {
+	if strings.Contains(sentTo(t, h, s.ID), "/rebase") {
 		t.Fatal("a PR whose mergeability GitHub has not worked out woke the session")
 	}
 
 	h.GH.SetPR(apptest.WithMergeable(apptest.WithHead(prJSON("OPEN", false, "[]", 0, 0), "aaa"), "CONFLICTING"))
 	h.RefreshPRs()
-	eventually(t, "the conflict prompt", func() bool { return strings.Contains(h.Pane(t, s.ID), "/rebase 12") })
+	eventually(t, "the conflict prompt", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/rebase 12") })
 	h.RefreshPRs()
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if n := strings.Count(h.Pane(t, s.ID), "/rebase 12"); n != 1 {
+	if n := strings.Count(sentTo(t, h, s.ID), "/rebase 12"); n != 1 {
 		t.Fatalf("the same conflict woke the session %d times, want once", n)
 	}
 	h.GH.SetPR(apptest.WithMergeable(apptest.WithHead(prJSON("OPEN", false, "[]", 0, 0), "bbb"), "CONFLICTING"))
 	h.RefreshPRs()
 	eventually(t, "a second conflict prompt for the new commit", func() bool {
-		return strings.Count(h.Pane(t, s.ID), "/rebase 12") == 2
+		return strings.Count(sentTo(t, h, s.ID), "/rebase 12") == 2
 	})
 }
 
@@ -208,17 +208,17 @@ func TestWakeWaitsUntilTheTurnEnds(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session waiting on the user")
 	}
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session in the middle of its turn")
 	}
 	h.Hook(t, s.ID, "Stop", `{}`)
-	eventually(t, "the held prompt once the turn ends", func() bool { return strings.Contains(h.Pane(t, s.ID), "/address-review 12") })
+	eventually(t, "the held prompt once the turn ends", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 }
 
 // withReviews puts the reviews in place of the none PRJSON printed.
@@ -246,20 +246,20 @@ func TestOneReviewAndItsRepliesWakeTheSessionOnce(t *testing.T) {
 		h.RefreshPRs()
 	}
 	time.Sleep(500 * time.Millisecond)
-	if strings.Contains(h.Pane(t, s.ID), "/address-review") {
+	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session in the middle of its turn")
 	}
 	h.Hook(t, s.ID, "Stop", `{}`)
-	eventually(t, "the review prompt once the turn ends", func() bool { return strings.Contains(h.Pane(t, s.ID), "/address-review 12") })
+	eventually(t, "the review prompt once the turn ends", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 	time.Sleep(500 * time.Millisecond)
-	if n := strings.Count(h.Pane(t, s.ID), "/address-review 12"); n != 1 {
+	if n := strings.Count(sentTo(t, h, s.ID), "/address-review 12"); n != 1 {
 		t.Errorf("the prompt appears %d times, want once", n)
 	}
 
 	h.GH.SetPR(withReviews(prJSON("OPEN", false, "[]", 0, 0), review, mine, mine, answer, answer, mine))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if n := strings.Count(h.Pane(t, s.ID), "/address-review 12"); n != 1 {
+	if n := strings.Count(sentTo(t, h, s.ID), "/address-review 12"); n != 1 {
 		t.Errorf("a reply by the gh user woke the idle session: the prompt appears %d times, want once", n)
 	}
 }
@@ -283,16 +283,16 @@ func TestEveryHeldPromptIsSent(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, `[{"status":"COMPLETED","conclusion":"FAILURE"}]`, 1, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "/address-review") || strings.Contains(pane, "/fix-checks") {
+	if pane := sentTo(t, h, s.ID); strings.Contains(pane, "/address-review") || strings.Contains(pane, "/fix-checks") {
 		t.Fatal("a prompt was typed into a session waiting on the user")
 	}
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
 	h.Hook(t, s.ID, "Stop", `{}`)
 	eventually(t, "both held prompts", func() bool {
-		pane := h.Pane(t, s.ID)
+		pane := sentTo(t, h, s.ID)
 		return strings.Contains(pane, "/address-review 12") && strings.Contains(pane, "/fix-checks 12")
 	})
-	if pane := h.Pane(t, s.ID); strings.Index(pane, "/address-review 12") > strings.Index(pane, "/fix-checks 12") {
+	if pane := sentTo(t, h, s.ID); strings.Index(pane, "/address-review 12") > strings.Index(pane, "/fix-checks 12") {
 		t.Errorf("the held prompts came out of order:\n%s", pane)
 	}
 }
@@ -321,7 +321,7 @@ func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
 	}
 }
 
-func TestResumeTypesItsPromptWithoutSendingWhenSendIsManual(t *testing.T) {
+func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -341,10 +341,10 @@ func TestResumeTypesItsPromptWithoutSendingWhenSendIsManual(t *testing.T) {
 		}
 		return false
 	})
-	eventually(t, "the prompt typed", func() bool { return strings.Contains(h.Pane(t, fresh), "/address-review 12") })
+	eventually(t, "the prompt drafted", func() bool { return chatLogHas(h, fresh, "draft", "/address-review 12") })
 	time.Sleep(600 * time.Millisecond)
-	if pane := h.Pane(t, fresh); strings.Contains(pane, "No such file or directory") {
-		t.Errorf("the prompt was sent:\n%s", pane)
+	if users := userLines(t, h, fresh); len(users) != 0 {
+		t.Errorf("the prompt was sent: %q", users)
 	}
 }
 
@@ -369,7 +369,7 @@ func TestReviewOnAnEndedSessionStartsANewOne(t *testing.T) {
 		return false
 	})
 	eventually(t, "the ended row to go", func() bool { _, ok := h.Session(s.ID); return !ok })
-	eventually(t, "the prompt in the new session", func() bool { return strings.Contains(h.Pane(t, fresh), "/address-review 12") })
+	eventually(t, "the prompt in the new session", func() bool { return strings.Contains(sentTo(t, h, fresh), "/address-review 12") })
 	if got, _ := h.Session(fresh); got.Title != "#12 work" {
 		t.Errorf("the new session is titled %q", got.Title)
 	}
@@ -545,28 +545,20 @@ func TestNoWakeWithoutACommand(t *testing.T) {
 	h.RefreshPRs()
 	eventually(t, "the row flagged", func() bool { got, _ := h.Session(s.ID); return got.PRAttention != "" })
 	time.Sleep(500 * time.Millisecond)
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "PR") || strings.Contains(pane, "12") {
-		t.Errorf("a project with no wake settings typed into the session:\n%s", pane)
+	if users := userLines(t, h, s.ID); len(users) != 0 || chatLogHas(h, s.ID, "draft", "") {
+		t.Errorf("a project with no wake settings gave the session %q or a draft", users)
 	}
 }
 
-// hostedIssueSession is a Claude session of issue 12 under its host, in a project with the yaml lines extra. dir is
-// where the stand-in claude writes what it read.
-func hostedIssueSession(t *testing.T, extra string) (h *apptest.Harness, s sessions.Session, dir string) {
+// hostedIssueSession is a Claude session of issue 12 under its host, in a project with the yaml lines extra.
+func hostedIssueSession(t *testing.T, extra string) (h *apptest.Harness, s sessions.Session) {
 	t.Helper()
-	dir = apptest.ClaudeOnPath(t)
-	h = apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: extra})
-	s, err := h.Sessions().Create("#12 work", "", false, 12, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, socket := hostFiles(h, s.ID)
-	eventually(t, "the host's socket", func() bool { return exists(socket) })
-	return h, s, dir
+	h = apptest.NewWith(t, apptest.Options{ProjectExtra: extra})
+	return h, issueSession(h, t, 12)
 }
 
 func TestWakeSendsThroughTheHost(t *testing.T) {
-	h, s, dir := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n")
+	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
@@ -575,15 +567,15 @@ func TestWakeSendsThroughTheHost(t *testing.T) {
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 	h.RefreshPRs()
-	eventually(t, "the review prompt on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) > 0 })
+	eventually(t, "the review prompt on claude's stdin", func() bool { return len(userLines(t, h, s.ID)) > 0 })
 	time.Sleep(300 * time.Millisecond)
-	if users := userLines(t, dir, s.ID); len(users) != 1 || !strings.Contains(users[0], `"text":"/address-review 12"`) {
+	if users := userLines(t, h, s.ID); len(users) != 1 || !strings.Contains(users[0], `"text":"/address-review 12"`) {
 		t.Errorf("user lines = %q, want one with the review prompt", users)
 	}
 }
 
 func TestHeldWakesGoInOrder(t *testing.T) {
-	h, s, dir := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"Fix the checks of {n}\"\n")
+	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"Fix the checks of {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
@@ -593,23 +585,22 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, `[{"status":"COMPLETED","conclusion":"FAILURE"}]`, 1, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
-	if users := userLines(t, dir, s.ID); len(users) != 0 {
+	if users := userLines(t, h, s.ID); len(users) != 0 {
 		t.Fatalf("a session waiting on the user got %q", users)
 	}
 
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
 	h.Hook(t, s.ID, "Stop", `{}`)
-	eventually(t, "both held prompts on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) >= 2 })
+	eventually(t, "both held prompts on claude's stdin", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
 	time.Sleep(300 * time.Millisecond)
-	users := userLines(t, dir, s.ID)
+	users := userLines(t, h, s.ID)
 	if len(users) != 2 || !strings.Contains(users[0], `"text":"/address-review 12"`) || !strings.Contains(users[1], `"text":"APPLICATION_PROMPT: Fix the checks of 12"`) {
 		t.Errorf("user lines = %q, want the review prompt, then the marked checks prompt", users)
 	}
 }
 
 func TestAClaudeSessionWithoutAHostGetsItsWakeTyped(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	// A Claude session from a release before the host: its agent runs in its pane, and it has no hosted tag.
 	id := "main/aaaaaaaa"
 	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "bash", "--norc", "--noprofile")

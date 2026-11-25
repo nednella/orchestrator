@@ -24,8 +24,7 @@ func sessionNumbered(t *testing.T, h *apptest.Harness, n int) sessions.Session {
 }
 
 func TestNewWithAgentClaudeStartsAsWithoutTheFlag(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	if resp := h.Ask(t, ctl.Request{Cmd: "new", Args: []string{"flagged"}, Opts: map[string]string{"agent": "claude"}}); !resp.OK {
 		t.Fatalf("new --agent claude = %+v", resp)
 	}
@@ -36,7 +35,7 @@ func TestNewWithAgentClaudeStartsAsWithoutTheFlag(t *testing.T) {
 	if flagged.Agent != "claude" || bare.Agent != "claude" {
 		t.Errorf("agents = %q and %q, want claude", flagged.Agent, bare.Agent)
 	}
-	if a, b := claudeArgs(t, dir, flagged.ID), claudeArgs(t, dir, bare.ID); !slices.Equal(a, b) {
+	if a, b := claudeArgs(t, h, flagged.ID), claudeArgs(t, h, bare.ID); !slices.Equal(a, b) {
 		t.Errorf("--agent claude started\n%q\nwithout the flag\n%q", a, b)
 	}
 }
@@ -55,8 +54,7 @@ func TestNewAndIssueRefuseAnUnknownAgent(t *testing.T) {
 }
 
 func TestAgentSettingAppliesToTheNextSession(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
 	if got := h.Settings(); got.Agent != "bash" || !slices.Equal(got.Agents, []string{"claude", "agy"}) {
 		t.Fatalf("settings = %+v", got)
 	}
@@ -78,7 +76,7 @@ func TestAgentSettingAppliesToTheNextSession(t *testing.T) {
 	if claude.Agent != "claude" {
 		t.Errorf("agent of a session after the change = %q, want claude", claude.Agent)
 	}
-	if args := claudeArgs(t, dir, claude.ID); !slices.Contains(args, "--settings") {
+	if args := claudeArgs(t, h, claude.ID); !slices.Contains(args, "--settings") {
 		t.Errorf("the session did not run the claude provider: %q", args)
 	}
 	if _, err := h.SetAgent("  "); err == nil {
@@ -90,13 +88,12 @@ func TestAgentSettingAppliesToTheNextSession(t *testing.T) {
 }
 
 func TestSessionKeepsItsAgentOverARestartAndAResume(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
 	if resp := h.Ask(t, ctl.Request{Cmd: "new", Args: []string{"#12", "work"}, Opts: map[string]string{"agent": "claude"}}); !resp.OK {
 		t.Fatalf("new --agent claude = %+v", resp)
 	}
 	started := sessionNumbered(t, h, 1)
-	claudeArgs(t, dir, started.ID)
+	claudeArgs(t, h, started.ID)
 	if started.Agent != "claude" {
 		t.Fatalf("agent = %q", started.Agent)
 	}
@@ -123,7 +120,7 @@ func TestSessionKeepsItsAgentOverARestartAndAResume(t *testing.T) {
 	if resumed.Agent != "claude" {
 		t.Errorf("resumed row = %+v", resumed)
 	}
-	if args := claudeArgs(t, dir, resumed.ID); !slices.Contains(args, "--resume") {
+	if args := claudeArgs(t, h, resumed.ID); !slices.Contains(args, "--resume") {
 		t.Errorf("the resumed session did not run claude: %q", args)
 	}
 }
@@ -139,8 +136,7 @@ func TestSessionWithAnAgentNotOnPathDoesNotStart(t *testing.T) {
 }
 
 func TestDefaultModelIsWhatClaudesSettingsGive(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	if got := h.DefaultModel(""); got != (sessions.ModelChoice{}) {
 		t.Errorf("with no settings: %+v, want none", got)
 	}

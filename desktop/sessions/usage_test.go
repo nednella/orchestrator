@@ -36,7 +36,7 @@ func appendLines(t *testing.T, path string, lines ...string) {
 }
 
 func TestUsageIsCountedOncePerMessage(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4, "")
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestUsageIsCountedOncePerMessage(t *testing.T) {
 }
 
 func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4, "")
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
 }
 
 func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4, "")
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 }
 
 func TestResumedSessionShowsTheWholeConversationsUsage(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4, "")
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +229,7 @@ func TestResumedSessionShowsTheWholeConversationsUsage(t *testing.T) {
 }
 
 func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4, "")
 	if err != nil {
 		t.Fatal(err)

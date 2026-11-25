@@ -16,10 +16,22 @@ import (
 	"github.com/nednella/agentos/internal/prompts"
 )
 
+// agyArgs are the arguments the stand-in agy in dir was started with.
+func agyArgs(t *testing.T, dir, id string) []string {
+	t.Helper()
+	var args []string
+	eventually(t, "agy started", func() bool {
+		data, err := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(id, "/", "_")+".args"))
+		args = strings.Split(strings.TrimSpace(string(data)), "\n")
+		return err == nil && len(data) > 0
+	})
+	return args
+}
+
 // agyEnv is what the stand-in agy was started with: AGENTOS_PROMPT and AGENTOS_CHAT, by name.
 func agyEnv(t *testing.T, dir, id string) map[string]string {
 	t.Helper()
-	claudeArgs(t, dir, id) // the env file comes first
+	agyArgs(t, dir, id) // the env file comes first
 	data, err := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(id, "/", "_")+".env"))
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +62,7 @@ func TestAgySessionStartsWithItsPromptInAFileAndItsHooksInAgysConfig(t *testing.
 	if s.Agent != "agy" || s.Chat {
 		t.Errorf("session = %+v", s)
 	}
-	args := claudeArgs(t, dir, s.ID)
+	args := agyArgs(t, dir, s.ID)
 	if i := slices.Index(args, "-i"); i < 0 || args[i+1] != "say hi" || slices.Contains(args, "--mode") || strings.Contains(strings.Join(args, " "), prompts.Task()) {
 		t.Errorf("args = %q", args)
 	}
@@ -77,7 +89,7 @@ func TestAgySessionStartsWithItsPromptInAFileAndItsHooksInAgysConfig(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if args := claudeArgs(t, dir, chat.ID); !slices.Contains(args, "--mode") {
+	if args := agyArgs(t, dir, chat.ID); !slices.Contains(args, "--mode") {
 		t.Errorf("args of a chat = %q", args)
 	}
 	env = agyEnv(t, dir, chat.ID)
@@ -169,7 +181,7 @@ func TestResumedAgySessionContinuesItsConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := claudeArgs(t, dir, fresh.ID)
+	args := agyArgs(t, dir, fresh.ID)
 	if i := slices.Index(args, "--conversation"); i < 0 || args[i+1] != "conv-1" || fresh.Agent != "agy" {
 		t.Errorf("resumed with %q as %+v", args, fresh)
 	}

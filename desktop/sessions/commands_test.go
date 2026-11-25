@@ -56,9 +56,9 @@ func TestSessionCommands(t *testing.T) {
 	}
 	list := h.Sessions().List()
 	third := list[slices.IndexFunc(list, func(s sessions.Session) bool { return s.N == 3 })]
-	eventually(t, "the prompt in the new session", func() bool { return strings.Contains(h.Pane(t, third.ID), "context for the new session") })
-	if strings.Contains(h.Pane(t, third.ID), "APPLICATION_PROMPT") {
-		t.Errorf("the owner's prompt is framed as the app's: %q", h.Pane(t, third.ID))
+	eventually(t, "the prompt in the new session", func() bool { return strings.Contains(sentTo(t, h, third.ID), "context for the new session") })
+	if strings.Contains(sentTo(t, h, third.ID), "APPLICATION_PROMPT") {
+		t.Errorf("the owner's prompt is framed as the app's: %q", sentTo(t, h, third.ID))
 	}
 
 	req := ctl.Request{Cmd: "new", Session: third.ID, Args: []string{"handed"}, Opts: map[string]string{"prompt": "what the side session found"}}
@@ -68,7 +68,7 @@ func TestSessionCommands(t *testing.T) {
 	list = h.Sessions().List()
 	fourth := list[slices.IndexFunc(list, func(s sessions.Session) bool { return s.N == 4 })]
 	eventually(t, "the handover in the new session", func() bool {
-		pane := h.Pane(t, fourth.ID)
+		pane := sentTo(t, h, fourth.ID)
 		return strings.Contains(pane, "APPLICATION_PROMPT: Another session asked for this task") && strings.Contains(pane, "what the side session found")
 	})
 	if fourth.Chat {
@@ -85,7 +85,7 @@ func TestSessionCommands(t *testing.T) {
 		t.Errorf("new --chat started %+v", fifth)
 	}
 	eventually(t, "the handover in the new chat", func() bool {
-		pane := h.Pane(t, fifth.ID)
+		pane := sentTo(t, h, fifth.ID)
 		return strings.Contains(pane, "APPLICATION_PROMPT: Another session asked") && strings.Contains(pane, "what the chat should look at")
 	})
 

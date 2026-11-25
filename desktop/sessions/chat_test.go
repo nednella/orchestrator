@@ -14,20 +14,18 @@ import (
 	"github.com/nednella/agentos/internal/prompts"
 )
 
-func claudeArgs(t *testing.T, dir, id string) []string {
+func claudeArgs(t *testing.T, h *apptest.Harness, id string) []string {
 	t.Helper()
 	var args []string
 	eventually(t, "claude started", func() bool {
-		data, err := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(id, "/", "_")+".args"))
-		args = strings.Split(strings.TrimSpace(string(data)), "\n")
-		return err == nil && len(data) > 0
+		args = h.Args(t, id)
+		return len(args) > 0
 	})
 	return args
 }
 
 func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 
 	tests := []struct {
 		name, title, wantTitle string
@@ -44,7 +42,7 @@ func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
 			if !c.Chat || c.Title != tt.wantTitle || c.Issue != 0 || c.State != "idle" {
 				t.Errorf("chat = %+v", c)
 			}
-			args := claudeArgs(t, dir, c.ID)
+			args := claudeArgs(t, h, c.ID)
 			if i := slices.Index(args, "--permission-mode"); i < 0 || args[i+1] != "plan" {
 				t.Errorf("args = %q", args)
 			}
@@ -64,7 +62,7 @@ func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
 	if work.Chat {
 		t.Error("a session is flagged as a chat")
 	}
-	args := claudeArgs(t, dir, work.ID)
+	args := claudeArgs(t, h, work.ID)
 	if slices.Contains(args, "--permission-mode") || !strings.Contains(strings.Join(args, "\n"), prompts.Task()) {
 		t.Errorf("args of a session = %q", args)
 	}
@@ -102,7 +100,7 @@ func TestChatFlagSurvivesARestart(t *testing.T) {
 }
 
 func TestChatStaysOutOfTheStats(t *testing.T) {
-	h := newClaudeHarness(t)
+	h := newHarness(t)
 	chat, err := h.NewChat("ask")
 	if err != nil {
 		t.Fatal(err)
@@ -197,34 +195,31 @@ func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
 }
 
 func TestUnsentPromptIsADraft(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "write the queue", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the draft in the chat log", func() bool { return chatLogHas(h, s.ID, "draft", "write the queue") })
-	if users := userLines(t, dir, s.ID); len(users) != 0 {
+	if users := userLines(t, h, s.ID); len(users) != 0 {
 		t.Errorf("user lines on stdin = %v, want none", users)
 	}
 }
 
 func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
 	}
 	id := h.Sessions().List()[0].ID
 	eventually(t, "the draft in the chat log", func() bool { return chatLogHas(h, id, "draft", "write the queue") })
-	if users := userLines(t, dir, id); len(users) != 0 {
+	if users := userLines(t, h, id); len(users) != 0 {
 		t.Errorf("user lines on stdin = %v, want none", users)
 	}
 }
 
 func TestTypeIntoIsADraft(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +230,7 @@ func TestTypeIntoIsADraft(t *testing.T) {
 	eventually(t, "the draft in the chat log", func() bool {
 		return chatLogHas(h, s.ID, "draft", "Address the review comments on PR #12.")
 	})
-	if users := userLines(t, dir, s.ID); len(users) != 0 {
+	if users := userLines(t, h, s.ID); len(users) != 0 {
 		t.Errorf("user lines on stdin = %v, want none", users)
 	}
 }
@@ -249,8 +244,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 		{"manual drafts", "    session_prompt_send: manual\n", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := apptest.ClaudeOnPath(t)
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
+			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
 			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
 			if err != nil {
 				t.Fatal(err)
@@ -275,12 +269,12 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 			if tt.draft {
 				eventually(t, "the draft", func() bool { return chatLogHas(h, fresh, "draft", "/address-review 12") })
 				time.Sleep(300 * time.Millisecond)
-				if users := userLines(t, dir, fresh); len(users) != 0 {
+				if users := userLines(t, h, fresh); len(users) != 0 {
 					t.Errorf("user lines on stdin = %v, want none", users)
 				}
 				return
 			}
-			eventually(t, "the prompt on stdin", func() bool { return len(userLines(t, dir, fresh)) == 1 })
+			eventually(t, "the prompt on stdin", func() bool { return len(userLines(t, h, fresh)) == 1 })
 			if chatLogHas(h, fresh, "draft", "/address-review 12") {
 				t.Error("an auto wake was left as a draft")
 			}
@@ -294,8 +288,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 		work bool
 	}{{"live", false}, {"held while working", true}} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := apptest.ClaudeOnPath(t)
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
 			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
 			if err != nil {
 				t.Fatal(err)
@@ -310,7 +303,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 			h.RefreshPRs()
 			eventually(t, "the draft", func() bool { return chatLogHas(h, s.ID, "draft", "/address-review 12") })
 			time.Sleep(300 * time.Millisecond)
-			if users := userLines(t, dir, s.ID); len(users) != 0 {
+			if users := userLines(t, h, s.ID); len(users) != 0 {
 				t.Errorf("user lines on stdin = %v, want none", users)
 			}
 		})

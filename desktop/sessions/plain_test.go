@@ -264,13 +264,8 @@ func TestIssueSessionWithoutBranchPatternFollowsItsFolder(t *testing.T) {
 func TestIssueSessionKnowsItsIssue(t *testing.T) {
 	h := newHarness(t)
 	s := issueSession(h, t, 9)
-	if err := h.TypeInto(s.ID, "echo issue=$AGENTOS_ISSUE"); err != nil {
-		t.Fatal(err)
+	out, err := exec.Command("tmux", "-L", h.Socket, "show-environment", "-t", s.ID, "AGENTOS_ISSUE").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "AGENTOS_ISSUE=9" {
+		t.Errorf("the session's environment has %q, %v; want AGENTOS_ISSUE=9", out, err)
 	}
-	if out, err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", s.ID, "Enter").CombinedOutput(); err != nil {
-		t.Fatalf("pressing Enter: %v: %s", err, out)
-	}
-	eventually(t, "the issue number in the session's environment", func() bool {
-		return strings.Contains(h.Pane(t, s.ID), "issue=9")
-	})
 }

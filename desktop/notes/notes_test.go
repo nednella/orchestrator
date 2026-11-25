@@ -18,6 +18,7 @@ import (
 	"github.com/nednella/agentos/desktop/notes"
 	"github.com/nednella/agentos/desktop/stats"
 	"github.com/nednella/agentos/internal/activity"
+	chatlog "github.com/nednella/agentos/internal/chat"
 )
 
 func TestNotes(t *testing.T) {
@@ -159,27 +160,27 @@ func TestNoteToSession(t *testing.T) {
 	if s.Title != "remember this" {
 		t.Errorf("title = %q", s.Title)
 	}
-	eventually(t, "note text typed", func() bool { return strings.Contains(h.Pane(t, s.ID), "remember this") })
+	eventually(t, "note text sent", func() bool {
+		return slices.ContainsFunc(h.Stdin(t, s.ID), func(line string) bool {
+			return strings.HasPrefix(line, `{"type":"user"`) && strings.Contains(line, `"text":"remember this"`)
+		})
+	})
 }
 
 func TestNoteToSessionKeepsLineBreaksUnsent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
-	// Pasted before bash's prompt, the line breaks would run: type only once the session reports ready.
-	h.App.Sessions().SetPrefillWait(time.Minute)
 	n, _ := h.AddNote("first line\nsecond line")
 	s, err := h.NoteToSession(n.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the shell's prompt", func() bool { return strings.HasSuffix(strings.TrimSpace(h.Pane(t, s.ID)), "$") })
-	h.Hook(t, s.ID, "SessionStart", `{}`)
-	eventually(t, "both lines typed", func() bool {
-		pane := h.Pane(t, s.ID)
-		return strings.Contains(pane, "first line") && strings.Contains(pane, "second line")
+	eventually(t, "both lines in a draft", func() bool {
+		events, _ := h.ChatHistory(s.ID, 0)
+		return slices.ContainsFunc(events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindDraft && e.Text == "first line\nsecond line" })
 	})
 	time.Sleep(300 * time.Millisecond)
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "not found") {
-		t.Errorf("the note was submitted:\n%s", pane)
+	if stdin := h.Stdin(t, s.ID); slices.ContainsFunc(stdin, func(line string) bool { return strings.HasPrefix(line, `{"type":"user"`) }) {
+		t.Errorf("the note was submitted: %q", stdin)
 	}
 }
 

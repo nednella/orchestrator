@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -147,12 +146,15 @@ func TestOwnersPromptIsSentOnceTheAgentIsReady(t *testing.T) {
 	if s.Title != "printf 'ran-%s' prompt" {
 		t.Errorf("title = %q, want the first line of the prompt", s.Title)
 	}
-	eventually(t, "the prompt submitted", func() bool { return strings.Contains(h.Pane(t, s.ID), "ran-prompt") })
+	text, _ := json.Marshal("printf 'ran-%s' prompt\nignored second line")
+	eventually(t, "the prompt sent", func() bool {
+		users := userLines(t, h, s.ID)
+		return len(users) == 1 && strings.Contains(users[0], `"text":`+string(text))
+	})
 }
 
 func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	long := strings.Repeat("é", 80)
 
 	tests := []struct {
@@ -180,7 +182,7 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 		if s.Title != tt.wantTitle {
 			t.Errorf("%s: title = %q, want %q", tt.name, s.Title, tt.wantTitle)
 		}
-		args := claudeArgs(t, dir, s.ID)
+		args := claudeArgs(t, h, s.ID)
 		flag := func(name string) string {
 			if i := slices.Index(args, name); i >= 0 {
 				return args[i+1]
@@ -193,7 +195,7 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 		if tt.prompt != "" {
 			text, _ := json.Marshal(tt.prompt)
 			eventually(t, tt.name+": the prompt on claude's stdin", func() bool {
-				users := userLines(t, dir, s.ID)
+				users := userLines(t, h, s.ID)
 				return len(users) == 1 && strings.Contains(users[0], `"text":`+string(text))
 			})
 		}
@@ -201,8 +203,7 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 }
 
 func TestThreadWithAnUnknownModelDoesNotStart(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	if s, err := h.NewSessionWith("", "hi", "nope", ""); err == nil {
 		t.Errorf("started %+v with a model claude does not take", s)
 	}
@@ -234,15 +235,17 @@ func sendToHost(h *apptest.Harness, id, text string) error {
 	return host.Send(ctx, socket, text)
 }
 
-// userLines are the user messages the stand-in claude read on its stdin.
-func userLines(t *testing.T, dir, id string) []string {
+// sentTo is the user messages the stand-in claude read on its stdin, one per line.
+func sentTo(t *testing.T, h *apptest.Harness, id string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(id, "/", "_")+".stdin"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
+	return strings.Join(userLines(t, h, id), "\n")
+}
+
+// userLines are the user messages the stand-in claude read on its stdin.
+func userLines(t *testing.T, h *apptest.Harness, id string) []string {
+	t.Helper()
 	var users []string
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+	for _, line := range h.Stdin(t, id) {
 		if strings.HasPrefix(line, `{"type":"user"`) {
 			users = append(users, line)
 		}
@@ -251,8 +254,7 @@ func userLines(t *testing.T, dir, id string) []string {
 }
 
 func TestClaudeRunsUnderTheHost(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +271,7 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 	if got := strings.TrimSpace(string(out)); !strings.HasPrefix(got, want) {
 		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
 	}
-	args := claudeArgs(t, dir, s.ID)
+	args := claudeArgs(t, h, s.ID)
 	joined := strings.Join(args, " ")
 	for _, flag := range []string{"-p", "--input-format stream-json", "--output-format stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool stdio"} {
 		if !strings.Contains(" "+joined+" ", " "+flag+" ") {
@@ -287,13 +289,15 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 }
 
 func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
+	first := apptest.New(t)
 	older := filepath.Join(t.TempDir(), "agentos")
 	if err := os.WriteFile(older, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	// The harness puts the built command first on PATH; the app reads PATH when it starts, so start it again.
 	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	first.App.Stop()
+	h := first.Restart(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -305,14 +309,13 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	if got, want := strings.TrimSpace(string(out)), apptest.CLIPath(t)+" host "; !strings.HasPrefix(got, want) {
 		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
 	}
-	if args := strings.Join(claudeArgs(t, dir, s.ID), " "); !strings.Contains(args, older+"' hook Stop") {
+	if args := strings.Join(claudeArgs(t, h, s.ID), " "); !strings.Contains(args, older+"' hook Stop") {
 		t.Errorf("the hooks do not call the agentos on PATH: %q", args)
 	}
 }
 
 func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	folder := hostFolder(h, "main")
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		t.Fatal(err)
@@ -332,8 +335,7 @@ func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 }
 
 func TestALongProjectKeyStartsItsHost(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	dir := filepath.Join(t.TempDir(), strings.Repeat("a-long-project-name-", 5))
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -353,15 +355,14 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 }
 
 func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("#7 work", "/work 7; and a ';' at the end;", true, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) > 0 })
+	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, h, s.ID)) > 0 })
 	time.Sleep(300 * time.Millisecond)
-	users := userLines(t, dir, s.ID)
+	users := userLines(t, h, s.ID)
 	if len(users) != 1 || !strings.Contains(users[0], `"text":"/work 7; and a ';' at the end;"`) {
 		t.Errorf("user lines = %q, want one with the prompt", users)
 	}
@@ -379,21 +380,19 @@ func loggedUser(path, text string) bool {
 }
 
 func TestAppPromptKeepsItsMark(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
 	}
 	id := h.Sessions().List()[0].ID
-	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, id)) == 1 })
-	if users := userLines(t, dir, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
+	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, h, id)) == 1 })
+	if users := userLines(t, h, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
 		t.Errorf("user line = %s", users[0])
 	}
 }
 
 func TestDismissRemovesTheChatLog(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "hello", true, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -426,8 +425,7 @@ func TestDismissRemovesTheChatLog(t *testing.T) {
 }
 
 func TestInterruptReachesTheHost(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -438,8 +436,7 @@ func TestInterruptReachesTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the interrupt on claude's stdin", func() bool {
-		data, _ := os.ReadFile(filepath.Join(dir, strings.ReplaceAll(s.ID, "/", "_")+".stdin"))
-		for _, line := range strings.Split(string(data), "\n") {
+		for _, line := range h.Stdin(t, s.ID) {
 			if strings.Contains(line, `"type":"control_request"`) && strings.Contains(line, `"subtype":"interrupt"`) {
 				return true
 			}
@@ -457,8 +454,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 		{"waiting", "waiting", [][2]string{{"PreToolUse", `{"tool_name":"Bash"}`}, {"Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := apptest.ClaudeOnPath(t)
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
 			if err != nil {
 				t.Fatal(err)
@@ -475,7 +471,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 			h.RefreshPRs()
 			time.Sleep(300 * time.Millisecond)
-			if users := userLines(t, dir, s.ID); len(users) > 0 {
+			if users := userLines(t, h, s.ID); len(users) > 0 {
 				t.Fatalf("a prompt was sent in the middle of the turn: %q", users)
 			}
 
@@ -487,7 +483,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 				t.Errorf("state after the interrupt = %+v, %v; want a %s", rec, err, session.TurnError)
 			}
 			eventually(t, "the held prompt once the turn ends", func() bool {
-				users := userLines(t, dir, s.ID)
+				users := userLines(t, h, s.ID)
 				return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
 			})
 			eventually(t, "the turn's usage in the event log", func() bool {
@@ -508,8 +504,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 		{"an interrupt", func(h *apptest.Harness, id string) error { return h.Interrupt(id) }, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			apptest.ClaudeOnPath(t)
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+			h := apptest.New(t)
 			s, err := h.Sessions().Create("work", "", false, 0, "")
 			if err != nil {
 				t.Fatal(err)
@@ -538,8 +533,7 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 		{"a question", `{"last_assistant_message":"Which branch should I use?"}`, "waiting"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			apptest.ClaudeOnPath(t)
-			h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+			h := apptest.New(t)
 			s, err := h.Sessions().Create("work", "", false, 0, "")
 			if err != nil {
 				t.Fatal(err)
@@ -576,8 +570,7 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 }
 
 func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
@@ -620,7 +613,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 }
 
 func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
 	s, err := h.NewSession("work", "")
 	if err != nil {
 		t.Fatal(err)
@@ -632,8 +625,7 @@ func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
 }
 
 func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)

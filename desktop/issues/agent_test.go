@@ -18,9 +18,8 @@ const agentQueue = `    queue_sections:
 `
 
 func TestIssueSessionsGetTheirActionsAgent(t *testing.T) {
-	claude := apptest.ClaudeOnPath(t)
 	agy := apptest.AgyOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", Queue: agentQueue})
+	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	h.GH.SetIssues(`[
 		{"number":7,"title":"By the action","url":"https://x/7","labels":[{"name":"ready"}]},
 		{"number":8,"title":"By the label","url":"https://x/8","labels":[{"name":"ready"},{"name":"agent:claude"}]},
@@ -52,7 +51,7 @@ func TestIssueSessionsGetTheirActionsAgent(t *testing.T) {
 		if s.Agent != tt.agent || s.Model != tt.model || s.Effort != tt.effort {
 			t.Errorf("%s: session runs %s %s %s, want %s %s %s", tt.name, s.Agent, s.Model, s.Effort, tt.agent, tt.model, tt.effort)
 		}
-		dir := claude
+		dir := h.ClaudeDir()
 		if tt.agent == "agy" {
 			dir = agy
 		}
@@ -67,7 +66,7 @@ func TestIssueSessionsGetTheirActionsAgent(t *testing.T) {
 
 func TestTheQueueSaysWhichLabelsTheProviderIgnores(t *testing.T) {
 	apptest.AgyOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", Queue: agentQueue})
+	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	h.GH.SetIssues(`[
 		{"number":7,"title":"Labels agy takes","url":"https://x/7","labels":[{"name":"ready"},{"name":"model:gemini-4-argon"},{"name":"effort:medium"}]},
 		{"number":8,"title":"Labels agy refuses","url":"https://x/8","labels":[{"name":"ready"},{"name":"model:opus"},{"name":"effort:hgih"}]},
@@ -91,7 +90,7 @@ func TestTheQueueSaysWhichLabelsTheProviderIgnores(t *testing.T) {
 
 func TestAgySessionsGetAgysOwnSettings(t *testing.T) {
 	dir := apptest.AgyOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", Queue: agentQueue})
+	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	// agy keeps its settings one folder up from the config folder the app writes its hooks to.
 	settings := filepath.Join(filepath.Dir(os.Getenv("AGENTOS_AGY_CONFIG_DIR")), "antigravity-cli", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(settings), 0o700); err != nil {

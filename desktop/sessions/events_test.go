@@ -81,7 +81,7 @@ func TestTwoSessionsOnOnePRCountOnce(t *testing.T) {
 	}
 }
 
-func TestReviewChecksAndConflictAreRecordedWhenTyped(t *testing.T) {
+func TestReviewChecksAndConflictAreRecordedWhenSent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n    pr_conflict_command: \"/rebase {n}\"\n"})
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -96,7 +96,7 @@ func TestReviewChecksAndConflictAreRecordedWhenTyped(t *testing.T) {
 	h.RefreshPRs()
 	h.RefreshPRs()
 	eventually(t, "all three prompts", func() bool {
-		pane := h.Pane(t, s.ID)
+		pane := sentTo(t, h, s.ID)
 		return strings.Contains(pane, "/address-review 12") && strings.Contains(pane, "/fix-checks 12") && strings.Contains(pane, "/rebase 12")
 	})
 	r, c, x := h.Events(t, activity.Review), h.Events(t, activity.Checks), h.Events(t, activity.Conflict)

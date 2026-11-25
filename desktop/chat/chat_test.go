@@ -26,20 +26,12 @@ var eventually = apptest.Eventually
 // newThread starts a hosted session on the stand-in claude.
 func newThread(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
-	h, id, _ := newThreadWithClaude(t)
-	return h, id
-}
-
-// newThreadWithClaude is newThread that also gives the stand-in claude's folder, where it writes what it reads.
-func newThreadWithClaude(t *testing.T) (*apptest.Harness, string, string) {
-	t.Helper()
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return h, s.ID, dir
+	return h, s.ID
 }
 
 func history(t *testing.T, h *apptest.Harness, id string, after int64) []chatlog.Event {
@@ -328,18 +320,15 @@ func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
 const dot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
 func TestImagesAreSavedAndSent(t *testing.T) {
-	h, id, claude := newThreadWithClaude(t)
+	h, id := newThread(t)
 	sent, err := h.ChatSend(id, "", chat.Image{Base64: dot, Mime: "image/png"})
 	if err != nil || sent.ID == "" || sent.Notice != "" {
 		t.Fatalf("ChatSend = %+v, %v; want an id and no notice", sent, err)
 	}
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
 
-	stdin, err := os.ReadFile(filepath.Join(claude, strings.ReplaceAll(id, "/", "_")+".stdin"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(stdin), `"type":"user"`) || !strings.Contains(string(stdin), `"media_type":"image/png"`) {
+	stdin := strings.Join(h.Stdin(t, id), "\n")
+	if !strings.Contains(stdin, `"type":"user"`) || !strings.Contains(stdin, `"media_type":"image/png"`) {
 		t.Errorf("claude's stdin = %s, want a user message with a png", stdin)
 	}
 	user := history(t, h, id, 0)[0]
@@ -446,8 +435,7 @@ func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
 }
 
 func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
-	apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	gitIn(t, h.Dir, "init", "-q")
 	if err := os.WriteFile(filepath.Join(h.Dir, "README"), []byte("hi\n"), 0o600); err != nil {
 		t.Fatal(err)

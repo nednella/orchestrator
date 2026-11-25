@@ -34,8 +34,7 @@ func TestIssueCommand(t *testing.T) {
 }
 
 func TestIssueCommandHandsThePromptOver(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}})
 	if !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
@@ -44,7 +43,7 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 	if len(list) != 1 || list[0].Issue != 7 {
 		t.Fatalf("sessions = %+v, want one for #7", list)
 	}
-	if args := argsOf(t, dir, list[0].ID); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
+	if args := argsOf(t, h.ClaudeDir(), list[0].ID); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
 		t.Errorf("the system prompt lacks the handover:\n%s", args)
 	}
 
@@ -55,13 +54,12 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 }
 
 func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
 	}
 	old := h.Sessions().List()[0]
-	argsOf(t, dir, old.ID)
+	argsOf(t, h.ClaudeDir(), old.ID)
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[],"updatedAt":"2026-10-01T12:00:00Z"}]`)
 	h.RefreshPRs()
 	if err := h.KillSession(old.ID); err != nil {
@@ -79,19 +77,18 @@ func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
 		}
 		return false
 	})
-	if args := argsOf(t, dir, fresh); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
+	if args := argsOf(t, h.ClaudeDir(), fresh); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
 		t.Errorf("the resumed session's system prompt lacks the handover:\n%s", args)
 	}
 }
 
 func TestLongestPromptStartsTheSession(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	h := apptest.New(t)
 	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most agentos issue --prompt takes
 	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": handover}}); !resp.OK {
 		t.Fatalf("issue 7 with the longest prompt = %+v", resp)
 	}
-	if args := argsOf(t, dir, h.Sessions().List()[0].ID); !strings.Contains(args, strings.TrimSpace(handover)) {
+	if args := argsOf(t, h.ClaudeDir(), h.Sessions().List()[0].ID); !strings.Contains(args, strings.TrimSpace(handover)) {
 		t.Error("the system prompt lacks the handover")
 	}
 }
