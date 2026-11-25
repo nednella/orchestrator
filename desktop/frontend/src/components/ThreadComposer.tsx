@@ -14,6 +14,7 @@ import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { ChatQueued } from './ChatQueued'
+import { ClaudeMark } from './ClaudeMark'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
 import type { ComposerInput } from './ComposerEditor'
@@ -242,9 +243,10 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
         <>
           <ComposerAccessChip access={session.access} disabled={accessDisabled(timeline.turnOpen, timeline.pending !== null)} onAccess={(next) => report(() => setAccess(id, next))} />
           {(model || effort) && (
-            <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-soft" title="The thread's model and reasoning effort">
+            <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-ink/80" title="The thread's model and reasoning effort">
+              <ClaudeMark />
               {model && <span className="max-w-24 truncate">{model}</span>}
-              {effort && <span className="max-w-24 truncate text-dim">{effort}</span>}
+              {effort && <span className="max-w-24 truncate text-soft">{effort}</span>}
             </span>
           )}
         </>

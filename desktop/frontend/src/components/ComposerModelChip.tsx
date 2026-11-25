@@ -3,6 +3,7 @@ import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
 import { EFFORTS, modelAlias, modelShortName } from '../model'
 import type { ModelChoice } from '../types'
+import { ClaudeMark } from './ClaudeMark'
 import { ComposerMenuChip } from './ComposerMenuChip'
 import { ModelPicker } from './ModelPicker'
 
@@ -41,10 +42,11 @@ export function ComposerModelChip({ model, effort, onModel, onEffort }: Composer
       label={`Model and reasoning: ${label}`}
       menu={(close) => <ModelPicker model={model} effort={effort} defaults={defaults} onModel={onModel} onEffort={onEffort} onDone={close} />}
     >
+      <ClaudeMark />
       {modelName || effortName ? (
         <>
           {modelName && <span className="max-w-24 truncate">{modelName}</span>}
-          {effortName && <span className="max-w-24 truncate text-soft">{effortName}</span>}
+          {effortName && <span className="composer-chip-detail max-w-24 truncate">{effortName}</span>}
         </>
       ) : (
         <span>Default</span>

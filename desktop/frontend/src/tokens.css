@@ -56,6 +56,7 @@
   --agent-claude: #e0875f;
   --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
   --bg-ghost-hover: rgba(255, 255, 255, 0.04);
+  --claude-mark: #d97757;
 
   --pr-open: #238636;
   --pr-draft: #5a6270;
