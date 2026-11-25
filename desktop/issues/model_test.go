@@ -161,10 +161,11 @@ func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := strings.Split(argsOf(t, dir, s.ID), "\n")
-	if got := args[len(args)-2:]; !slices.Equal(got, []string{"--", "/ship 7 be careful"}) {
-		t.Errorf("start argument = %q, want the command then the prompt", got)
-	}
+	stdin := filepath.Join(dir, strings.ReplaceAll(s.ID, "/", "_")+".stdin")
+	eventually(t, "the command then the prompt on claude's stdin", func() bool {
+		data, _ := os.ReadFile(stdin)
+		return strings.Contains(string(data), `"text":"/ship 7 be careful"`)
+	})
 	if model, effort := flagsOf(t, dir, s.ID); model != "haiku" || effort != "low" {
 		t.Errorf("claude got --model %q --effort %q, want haiku low", model, effort)
 	}

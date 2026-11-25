@@ -187,8 +187,12 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 		if flag("--model") != tt.model || flag("--effort") != tt.effort {
 			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, flag("--model"), flag("--effort"), tt.model, tt.effort)
 		}
-		if tt.prompt != "" && !slices.Contains(args, "--") {
-			t.Errorf("%s: the prompt is not the start argument: %q", tt.name, args)
+		if tt.prompt != "" {
+			text, _ := json.Marshal(tt.prompt)
+			eventually(t, tt.name+": the prompt on claude's stdin", func() bool {
+				users := userLines(t, dir, s.ID)
+				return len(users) == 1 && strings.Contains(users[0], `"text":`+string(text))
+			})
 		}
 	}
 }
