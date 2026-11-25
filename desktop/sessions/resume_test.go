@@ -2,9 +2,11 @@ package sessions_test
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +63,37 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 				t.Error("the ended row stayed")
 			}
 		})
+	}
+}
+
+func TestResumedSessionKeepsTheChatLog(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	old, err := h.Sessions().Create("#12 work", "the first ask", true, 12, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldLog, _ := hostFiles(h, old.ID)
+	eventually(t, "the first turn in the chat log", func() bool {
+		data, _ := os.ReadFile(oldLog)
+		return strings.Contains(string(data), `"kind":"turn_end"`)
+	})
+	ended(t, h, old)
+	fresh, err := h.ResumeSession(old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshLog, _ := hostFiles(h, fresh.ID)
+	eventually(t, "the resumed session's host", func() bool {
+		data, _ := os.ReadFile(freshLog)
+		return strings.Count(string(data), `"kind":"init"`) == 2
+	})
+	data, _ := os.ReadFile(freshLog)
+	if !strings.Contains(string(data), `"kind":"user","text":"the first ask"`) {
+		t.Errorf("the resumed session's chat log lacks the first ask:\n%s", data)
+	}
+	if exists(oldLog) {
+		t.Error("the ended session's chat log stayed")
 	}
 }
 

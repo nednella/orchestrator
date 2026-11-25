@@ -1389,6 +1389,13 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		start, typed = text, ""
 	}
 	name, ctx, ready := s.reserve(proj, typed)
+	restore := func() {}
+	if conversation != "" && p.Can(agent.Hosted) {
+		var err error
+		if restore, err = s.carryChatLog(from, name); err != nil {
+			return Session{}, err
+		}
+	}
 	created := time.Now()
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
@@ -1397,6 +1404,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		s.mu.Lock()
 		delete(s.ready, name.String())
 		s.mu.Unlock()
+		restore()
 		return Session{}, err
 	}
 	if from != "" {
@@ -1430,6 +1438,24 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 		return project.Model{}
 	}
 	return fill(s.Provider(""), proj.Dir, project.Model{Model: model})
+}
+
+// carryChatLog moves the chat log of the ended session from to the session that continues its conversation, before
+// that session's host opens it, so the thread keeps what was said; dismissing the ended row would delete it. restore
+// moves it back, for a session that did not start.
+func (s *Sessions) carryChatLog(from string, to session.Name) (restore func(), err error) {
+	old, err := session.ParseName(from)
+	if err != nil {
+		return func() {}, nil
+	}
+	src, dst := s.chatLogPath(old), s.chatLogPath(to)
+	if err := os.Rename(src, dst); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return func() {}, nil
+		}
+		return nil, fmt.Errorf("carrying the chat log over: %w", err)
+	}
+	return func() { _ = os.Rename(dst, src) }, nil
 }
 
 // fill sets what model leaves unset from the agent's own settings, skipping a value the agent would not accept.
