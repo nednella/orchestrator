@@ -1230,8 +1230,13 @@ export function createMock(params: URLSearchParams) {
     RunDigest: async () => {
       if (digest.running) throw 'A digest run is already in progress'
       const startedAt = Date.now()
-      digest = { ...digest, running: true, startedAt, tools: 23, error: '', stoppedAt: 0 }
+      digest = { ...digest, running: true, startedAt, error: '', stoppedAt: 0 }
       pushDigest()
+      // The run counts the project's tools in the background, after it has started.
+      setTimeout(() => {
+        digest = { ...digest, tools: 23 }
+        pushDigest()
+      }, 100)
       // As the real run, each item arrives as the agent hands it in, after the run's earlier items.
       const fresh = [
         ['Claude Code', 'Skills can declare allowed tools', 'Lets /work run without a permission prompt for tsc.', 'https://code.claude.com/docs/changelog'],

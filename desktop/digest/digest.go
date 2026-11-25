@@ -131,8 +131,8 @@ func (d *Digests) Due(key string, now time.Time) bool {
 		now.Sub(time.UnixMilli(f.LastAttemptAt)) > digestRetry
 }
 
-// Begin marks a run as started on the given number of tools.
-func (d *Digests) Begin(key string, now time.Time, tools int) error {
+// Begin marks a run as started.
+func (d *Digests) Begin(key string, now time.Time) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, running := d.running[key]; running {
@@ -141,8 +141,17 @@ func (d *Digests) Begin(key string, now time.Time, tools int) error {
 	d.running[key] = 0
 	delete(d.failures, key)
 	f := d.read(key)
-	f.LastAttemptAt, f.Tools = now.UnixMilli(), tools
+	f.LastAttemptAt = now.UnixMilli()
 	return d.write(key, f)
+}
+
+// SetTools records how many tools the run in progress checks.
+func (d *Digests) SetTools(key string, tools int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	f := d.read(key)
+	f.Tools = tools
+	_ = d.write(key, f)
 }
 
 // Finish ends a run. A failed run keeps the old digest and records why.

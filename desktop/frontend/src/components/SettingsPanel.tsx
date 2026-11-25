@@ -103,8 +103,8 @@ export function SettingsPanel() {
           <SettingRow label="Browser enabled" hint="Tells new tasks about the browser and media commands.">
             <SegmentedControl label="Browser enabled" options={SWITCH} value={settings.browserEnabled ? 'on' : 'off'} onChange={(value) => report(() => setBrowserEnabled(value === 'on'))} />
           </SettingRow>
-          <SettingRow label="Digest schedule" hint="Weekly runs the digest by itself. Off leaves it to you.">
-            <SegmentedControl label="Digest schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />
+          <SettingRow label="News schedule" hint="Weekly checks for news by itself. Off leaves it to you.">
+            <SegmentedControl label="News schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />
           </SettingRow>
           </>
         )}

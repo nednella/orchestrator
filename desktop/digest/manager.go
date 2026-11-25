@@ -36,13 +36,14 @@ type Manager struct {
 	emit     func(event string, payload any)
 	stateDir string
 	ctx      func() context.Context
-	first    time.Duration // wait before the first automatic check
-	tick     time.Duration // between checks after that
+	walk     func(dir string) []string // lists the project's dependencies
+	first    time.Duration             // wait before the first automatic check
+	tick     time.Duration             // between checks after that
 }
 
 // NewManager runs the digests with run in the project's folder.
 func NewManager(d *Digests, p Projects, n Notes, runner run.EnvRunner, emit func(string, any), stateDir string, ctx func() context.Context) *Manager {
-	return &Manager{digests: d, project: p, notes: n, run: runner, emit: emit, stateDir: stateDir, ctx: ctx, first: time.Minute, tick: time.Hour}
+	return &Manager{digests: d, project: p, notes: n, run: runner, emit: emit, stateDir: stateDir, ctx: ctx, walk: dependencies, first: time.Minute, tick: time.Hour}
 }
 
 // SetLoop sets how long to wait before the first automatic check, and between checks.
@@ -70,14 +71,16 @@ func (m *Manager) runCurrent() error { return m.start(m.project.Current()) }
 
 func (m *Manager) start(proj project.Project) error {
 	key := proj.Key()
-	deps := dependencies(proj.Dir)
-	if err := m.digests.Begin(key, time.Now(), len(deps)); err != nil {
+	if err := m.digests.Begin(key, time.Now()); err != nil {
 		return err
 	}
 	m.emitDigest(key)
 	go func() {
 		ctx, cancel := context.WithTimeout(m.ctx(), digestTimeout)
 		defer cancel()
+		deps := m.walk(proj.Dir)
+		m.digests.SetTools(key, len(deps))
+		m.emitDigest(key)
 		err := m.runAgent(ctx, key, deps)
 		failure := ""
 		switch {
