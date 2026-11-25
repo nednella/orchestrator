@@ -21,14 +21,16 @@ const hostStarting = 3 * time.Second
 
 // Service is bound to the front end.
 type Service struct {
-	c     *Chats
-	files *files
-	ctx   func() context.Context
+	c          *Chats
+	files      *files
+	projectDir func(project string) string
+	ctx        func() context.Context
 }
 
-// NewService binds the chats; runner runs git, and ctx gives the app's context at call time.
-func NewService(c *Chats, runner run.Runner, ctx func() context.Context) *Service {
-	return &Service{c: c, files: newFiles(runner), ctx: ctx}
+// NewService binds the chats; runner runs git, projectDir gives a project's folder, "" for none, and ctx gives the
+// app's context at call time.
+func NewService(c *Chats, runner run.Runner, projectDir func(project string) string, ctx func() context.Context) *Service {
+	return &Service{c: c, files: newFiles(runner), projectDir: projectDir, ctx: ctx}
 }
 
 // ChatHistory is the thread's logged events with a seq above after, live or settled. Call ChatWatch first and merge the
@@ -147,13 +149,27 @@ func (v *Service) ChatFiles(id, query string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ch.Dir == "" {
+	return v.filesIn(ch.Dir, query, "thread "+id)
+}
+
+// ProjectFiles is the files of the project's folder, where a new thread starts, that best match query, as ChatFiles.
+func (v *Service) ProjectFiles(project, query string) ([]string, error) {
+	dir := v.projectDir(project)
+	if dir == "" {
+		return nil, fmt.Errorf("No project %s", project)
+	}
+	return v.filesIn(dir, query, "project "+project)
+}
+
+// filesIn is the files of dir that best match query; of names whose files they are, for the error.
+func (v *Service) filesIn(dir, query, of string) ([]string, error) {
+	if dir == "" {
 		return []string{}, nil
 	}
-	paths, err := v.files.list(v.ctx(), ch.Dir)
+	paths, err := v.files.list(v.ctx(), dir)
 	if err != nil {
-		log.Printf("agentos: listing the files of thread %s in %s: %v", id, ch.Dir, err)
-		return nil, fmt.Errorf("Could not list the files of thread %s", id)
+		log.Printf("agentos: listing the files of %s in %s: %v", of, dir, err)
+		return nil, fmt.Errorf("Could not list the files of %s", of)
 	}
 	return rankFiles(paths, query, fileLimit), nil
 }
