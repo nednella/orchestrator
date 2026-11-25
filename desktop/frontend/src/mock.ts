@@ -2,7 +2,7 @@ import { buildIssueDetail, buildIssues, movesFrom, moveIssue, sortBySection } fr
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -238,7 +238,7 @@ export function createMock(params: URLSearchParams) {
       cleanupReason: s.cleanupReason,
       browser: s.browser,
       evidence: s.evidence,
-      chat: s.chat,
+      access: s.access,
       hosted: s.hosted,
       action: s.action,
       forkOf: s.forkOf,
@@ -288,7 +288,7 @@ export function createMock(params: URLSearchParams) {
   function currentIssues(): Issue[] {
     return current.issues.map((issue) => ({
       ...issue,
-      sessionId: sessions.find((s) => s.project === current.name && !s.chat && !s.forkOf && s.issue === issue.number)?.id ?? '',
+      sessionId: sessions.find((s) => s.project === current.name && !s.forkOf && s.issue === issue.number)?.id ?? '',
     }))
   }
 
@@ -364,8 +364,7 @@ export function createMock(params: URLSearchParams) {
     }
   }
 
-  function usageFor(chat: boolean, createdAt: number) {
-    if (chat) return { tokens: 0, cost: 0 }
+  function usageFor(createdAt: number) {
     const tokens = 180_000 + (Math.floor(createdAt / 1000) % 7) * 410_000
     return { tokens, cost: tokens * 0.0000021 }
   }
@@ -377,7 +376,7 @@ export function createMock(params: URLSearchParams) {
     history: HistoryEntry[] = [],
     createdAt = Date.now(),
     owner = current,
-    chat = false,
+    access: Access = 'supervised',
   ): Session {
     const s: Session = {
       id: `${owner.name}/${Math.random().toString(36).slice(2, 10)}`,
@@ -400,12 +399,12 @@ export function createMock(params: URLSearchParams) {
       cleanupReason: '',
       browser: false,
       evidence: 0,
-      chat,
+      access,
       hosted: true,
       action: issue ? 'Work' : '',
       forkOf: '',
-      ...usageFor(chat, createdAt),
-      memory: (chat ? 3 : 4 + (nextN % 5) * 3) * tenthGB,
+      ...usageFor(createdAt),
+      memory: (4 + (nextN % 5) * 3) * tenthGB,
       project: owner.name,
     }
     sessions.push(s)
@@ -432,10 +431,10 @@ export function createMock(params: URLSearchParams) {
     chats.start(s.id)
   }
 
-  function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], chat = false) {
+  function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], access: Access = 'supervised') {
     const now = Date.now()
     const history = trail.map(([st, minutesAgo]) => ({ state: st, at: now - minutesAgo * minute }))
-    const s = create(title, issue, state, history, history[0] ? history[0].at - minute : now, owner, chat)
+    const s = create(title, issue, state, history, history[0] ? history[0].at - minute : now, owner, access)
     s.state = state
   }
 
@@ -477,9 +476,9 @@ export function createMock(params: URLSearchParams) {
     seed('#8 drop old flag', 8, 'settled', [['working', 300], ['settled', 240]], data[2])
     seed('#12 session memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
-    seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
-    seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
-    if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], true)
+    seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], 'read')
+    seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], 'read')
+    if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], 'read')
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     const brokenChat = byIssue(326)
     const questionChat = sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!
@@ -558,8 +557,8 @@ export function createMock(params: URLSearchParams) {
   const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
 
   // The thread gets its first message through its chat, as the app gives it to the host.
-  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = ''): Session {
-    const s = create(title, issue, 'idle')
+  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised'): Session {
+    const s = create(title, issue, 'idle', [], Date.now(), current, access)
     s.action = action
     if (model) s.model = model
     if (effort) s.effort = effort
@@ -863,16 +862,9 @@ export function createMock(params: URLSearchParams) {
   const backend = {
     Snapshot: async () => snapshot(),
     Awake: async () => data.some((p) => projectView(p).working > 0),
-    NewSession: async (title: string, prompt: string, model: string, effort: string) =>
-      startSessionFor(title.trim() || titleFromPrompt(prompt) || `session ${nextN}`, 0, prompt, '', model, effort),
-    NewChat: async (title: string, prompt: string, model: string, effort: string) => {
-      const s = create(title.trim() || titleFromPrompt(prompt) || `chat ${nextN}`, 0, 'idle', [], Date.now(), current, true)
-      if (model) s.model = model
-      if (effort) s.effort = effort
-      chats.start(s.id)
-      if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
-      publish()
-      return view(s)
+    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access) => {
+      if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
+      return startSessionFor(title.trim() || titleFromPrompt(prompt) || 'agent', 0, prompt, '', model, effort, access || 'supervised')
     },
     ArchiveThread: async (id: string) => {
       const s = find(id)
@@ -892,7 +884,7 @@ export function createMock(params: URLSearchParams) {
     ForkSession: async (id: string, at: string) => {
       const from = find(id)
       if (!from.hosted) throw 'Only a thread with a chat can be forked'
-      const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
+      const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.access)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
       Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, worktree: '' })
       try {
@@ -1054,7 +1046,7 @@ export function createMock(params: URLSearchParams) {
     StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string) => {
       const issue = current.issues.find((i) => i.number === number)
       if (!issue) throw 'No such issue'
-      const mine = sessions.filter((s) => s.project === current.name && !s.chat && !s.forkOf && s.issue === number)
+      const mine = sessions.filter((s) => s.project === current.name && !s.forkOf && s.issue === number)
       const live = mine.find((s) => s.state !== 'settled')
       if (live) return view(live)
       if (action && !issue.actions.includes(action)) throw `issue #${number} has no action "${action}"`
@@ -1067,7 +1059,7 @@ export function createMock(params: URLSearchParams) {
         return view(settled)
       }
       const short = issue.title.split(' ').slice(0, 3).join(' ')
-      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort)
+      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, name === 'Plan' ? 'read' : 'supervised')
       emit('issues', { project: current.name, items: currentIssues() })
       return session
     },

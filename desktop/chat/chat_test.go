@@ -18,6 +18,7 @@ import (
 	"github.com/nednella/agentos/internal/bus"
 	chatlog "github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/agentos/internal/session"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
@@ -28,7 +29,7 @@ var eventually = apptest.Eventually
 func newThread(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +478,7 @@ func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(wt, "only-here.go"), []byte("package here\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s, err := h.Sessions().Create("#7 work", "", false, 7)
+	s, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

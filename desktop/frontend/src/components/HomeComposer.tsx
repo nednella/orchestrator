@@ -30,7 +30,7 @@ const MODES: { value: ComposerMode; label: string }[] = [
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const a = useAgentos('issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerKind', 'setComposerKind', 'newSession', 'newChat', 'startIssue', 'addNote', 'report')
+  const a = useAgentos('issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
   const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })
@@ -52,7 +52,7 @@ export function HomeComposer() {
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
   const highlighted = pickCursor(cursor, candidates.length)
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
-  const chat = a.composerKind === 'chat'
+  const read = a.composerAccess === 'read'
   const live = Boolean(pickedIssue?.sessionId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
   // The top of the queue: the issues of its first section, which the core lists first.
@@ -97,8 +97,7 @@ export function HomeComposer() {
         } else {
           const start = { prompt: text.trim(), model, effort }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
-          else if (chat) await a.newChat(start)
-          else await a.newSession(start)
+          else await a.newThread(start, a.composerAccess)
           setPicked(null)
         }
         a.setComposerDraft(EMPTY_DRAFT)
@@ -131,7 +130,7 @@ export function HomeComposer() {
       ? 'The thread opens; this text is not sent'
       : pickedIssue
         ? 'Add to the issue’s command (optional)'
-        : chat
+        : read
           ? 'Ask anything about the project. # picks an issue'
           : 'Describe a task. # picks an issue'
 
@@ -143,7 +142,7 @@ export function HomeComposer() {
         label={note ? 'New note' : 'New thread'}
         placeholder={placeholder}
         canSend={canSend}
-        sendLabel={note ? 'Add note' : live ? 'Open its thread' : pickedIssue ? `Start #${pickedIssue.number}` : chat ? 'Start chat' : 'Start task'}
+        sendLabel={note ? 'Add note' : live ? 'Open its thread' : pickedIssue ? `Start #${pickedIssue.number}` : 'Start thread'}
         sendText={note ? 'Add note' : live ? 'Open thread' : undefined}
         banner={live && <p className="px-2 py-1 text-label text-soft">#{pickedIssue?.number} already has a thread; sending opens it.</p>}
         drawer={token && <IssuePickList issues={candidates} cursor={highlighted} onPick={pick} />}
@@ -178,7 +177,7 @@ export function HomeComposer() {
         right={
           !note && (
             <>
-              {!pickedIssue && <ComposerAccessChip kind={a.composerKind} onKind={a.setComposerKind} />}
+              {!pickedIssue && <ComposerAccessChip access={a.composerAccess} onAccess={a.setComposerAccess} />}
               {!live && <ComposerModelChip model={model} effort={effort} onModel={setModel} onEffort={setEffort} />}
             </>
           )

@@ -56,7 +56,7 @@ queue_sections:
   - name: Inbox
     labels: []                  # issues with no labels
     actions:
-      - {name: Plan, command: "/plan {n}", model: opus, effort: high, kind: chat}
+      - {name: Plan, command: "/plan {n}", model: opus, effort: high, access: read}
       - {name: Work, command: "/work {n}"}
   - name: Needs plan
     labels: [plan]
@@ -83,7 +83,7 @@ queue_sections:
 - So a `"*"` section placed last takes every issue the sections above it did not. A section after it would never be reached, so a config with one does not load.
 - An issue no section matches goes under one folded row below the last section, `<n> more issues match no section`, with the `Start` action. A last `"*"` section is only needed to give those issues a name or other actions.
 - In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`, `issue-{n}` when unset. The `Start` action always names the branch. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
-- `kind` is `task` (the default) or `chat`. A chat action starts a read-only chat for the issue: it gets `AGENTOS_ISSUE`, but no branch, no pull request commands and no clean-up. An issue can have one live task and one live chat; starting an action of a kind that already runs on the issue opens that session. The queue row links to the task.
+- `access` is what the action's thread may do without asking: `read` (Claude plans and asks before it changes anything), `supervised` (the default: your Claude allow rules apply and other tools ask in the chat) or `full` (every tool runs without asking). Every thread follows its branch and pull request, whatever its access. An issue has one thread: starting any action of an issue whose thread runs opens that thread, and one whose thread has settled wakes it with its own access. The queue row links to it. The old `kind` is gone: a config whose action sets `kind` does not load, and says to use `access: read` for a read-only action, so an old `kind: chat` action never starts with write access.
 - A session started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
 - The first action of a section is its default. A section needs a name, an action needs a name, and each is unique in its list; a config that breaks this does not load.
 - Dragging an issue to another section relabels it on GitHub: it loses the labels of the section it left and gains the first label of the section it enters. No session starts. A section with no labels takes an issue only when no label is left.
@@ -136,11 +136,11 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 | Group | Command | Does |
 |---|---|---|
 | Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running, and one whose thread settled has that thread woken and is reported as woken. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new or woken thread's system prompt as a handover from the session that asked, in place of the one a woken thread had, and a running session does not get it |
-| Work | `new [title] [--chat] [--prompt <text>\|-]`, `settle <n>`, `open <n\|title>`, `next` | start, settle, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
+| Work | `new [title] [--access read\|supervised\|full] [--prompt <text>\|-]`, `settle <n>`, `open <n\|title>`, `next` | start, settle, show a session, or show the one that needs you most. `--access` sets the new thread's access, `supervised` by default; from inside a thread, `full` is refused unless that thread is Full access (`A thread that is not Full access cannot start one that is`), and from a shell or a terminal it is allowed. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs, clean up or list what waits |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
 | Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |
-| From inside a session | `issue <n> --prompt -`, `new <title> [--chat] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (not the default branch) | `issue` and `new` hand work to a new task, or a chat with `--chat`, as under Work; `agentos browser help` explains the browser |
+| From inside a session | `issue <n> --prompt -`, `new <title> [--access read\|supervised] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (not the default branch) | `issue` and `new` hand work to a new thread, a read-only one with `--access read`, as under Work; `agentos browser help` explains the browser |
 
 `stats [--days N] [--json]` prints the interruption tally. `agentos settle` without a number settles this project's threads directly through tmux, with the app closed too, and keeps their state files, so the app shows them as settled; `--all` does it for every project and stops the shells. Neither touches a session that ran in a terminal before the host; the command says how many it left. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
 

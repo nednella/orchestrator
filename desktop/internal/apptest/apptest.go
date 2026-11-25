@@ -560,7 +560,7 @@ const queueSections = `    queue_sections:
         labels: [ready]
         actions:
           - {name: Work, command: "/ship {n}"}
-          - {name: Plan, command: "/plan {n}", model: opus, effort: high, kind: chat}
+          - {name: Plan, command: "/plan {n}", model: opus, effort: high, access: read}
       - name: Plan
         labels: [needs-plan]
         actions:
@@ -984,24 +984,22 @@ func (h *Harness) RemoveProject(name string) (projects.Snapshot, error) {
 func (h *Harness) SetUpProject() (sessions.Session, error)  { return h.projects.SetUpProject() }
 func (h *Harness) DismissSetup() (projects.Snapshot, error) { return h.projects.DismissSetup() }
 
-func (h *Harness) NewChat(title string) (sessions.Session, error) {
-	return h.sessions.NewChat(title, "", "", "")
-}
-
-func (h *Harness) NewChatWith(title, prompt, model, effort string) (sessions.Session, error) {
-	return h.sessions.NewChat(title, prompt, model, effort)
+func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessions.Session, error) {
+	return h.sessions.NewThread(title, prompt, model, effort, access)
 }
 
 func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
 	return h.sessions.DefaultModel(model)
 }
 
+// NewSession starts a Supervised thread.
 func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
-	return h.sessions.NewSession(title, prompt, "", "")
+	return h.sessions.NewThread(title, prompt, "", "", "supervised")
 }
 
+// NewSessionWith starts a Supervised thread with the model and effort given.
 func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
-	return h.sessions.NewSession(title, prompt, model, effort)
+	return h.sessions.NewThread(title, prompt, model, effort, "supervised")
 }
 func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.sessions.ShellOpen(id) }
 func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }

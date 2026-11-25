@@ -11,6 +11,7 @@ import (
 
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/usage"
 )
 
@@ -35,7 +36,7 @@ func appendLines(t *testing.T, path string, lines ...string) {
 
 func TestUsageIsCountedOncePerMessage(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestUsageIsCountedOncePerMessage(t *testing.T) {
 
 func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
 
 func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +163,7 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 
 func TestSessionThatContinuedAnotherInAnOlderBuildShowsBothsUsage(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func TestSessionThatContinuedAnotherInAnOlderBuildShowsBothsUsage(t *testing.T) 
 
 func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

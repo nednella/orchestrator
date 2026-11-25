@@ -1,5 +1,8 @@
 export type State = 'waiting' | 'working' | 'idle' | 'settled'
 
+// Access is what a thread may do without asking the owner.
+export type Access = 'read' | 'supervised' | 'full'
+
 export type HistoryEntry = { state: State; at: number }
 
 export type PR = {
@@ -50,7 +53,7 @@ export type Session = {
   cleanupReason: string
   browser: boolean
   evidence: number
-  chat: boolean
+  access: Access
   hosted: boolean
   action: string
   forkOf: string // the thread this one was forked from, '' when none

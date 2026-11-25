@@ -1,8 +1,8 @@
 import { gigabytes } from '../memory'
 import { dollars, tokenCount } from '../spend'
 import type { Session } from '../types'
+import { AccessTag } from './AccessTag'
 import { ActionTag } from './ActionTag'
-import { ChatTag } from './ChatTag'
 import { ModelTag } from './ModelTag'
 import { StateBadge } from './StateBadge'
 
@@ -15,9 +15,9 @@ export function ThreadFacts({ session }: ThreadFactsProps) {
         <span className="mono text-small font-semibold text-soft" title="Thread number">
           {session.n}
         </span>
-        <StateBadge state={session.state} chat={session.chat} />
+        <StateBadge state={session.state} />
         <ActionTag action={session.action} />
-        {session.chat && <ChatTag />}
+        <AccessTag access={session.access} />
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <ModelTag

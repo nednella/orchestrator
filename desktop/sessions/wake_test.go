@@ -35,7 +35,7 @@ func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Sessio
 // settled.
 func talkedThenSettled(t *testing.T, h *apptest.Harness) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("work", "", false, 0)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,9 +171,9 @@ func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
 		name  string
 		start func(h *apptest.Harness) (sessions.Session, error)
 	}{
-		{"chat", func(h *apptest.Harness) (sessions.Session, error) { return h.NewChat("ask") }},
+		{"read", func(h *apptest.Harness) (sessions.Session, error) { return h.NewThread("ask", "", "", "", "read") }},
 		{"issue task", func(h *apptest.Harness) (sessions.Session, error) {
-			return h.Sessions().Create("#12 work", "", false, 12)
+			return h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 		}},
 		{"renamed task", func(h *apptest.Harness) (sessions.Session, error) {
 			s, err := h.NewSession("work", "")
@@ -196,19 +196,19 @@ func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
 			fresh := settledWhileClosed(t, h, old.ID)
 			var gone sessions.Session
 			eventually(t, "the settled row", func() bool { gone, _ = fresh.Session(old.ID); return gone.State == "settled" })
-			if gone.Title != old.Title || gone.Issue != old.Issue || gone.Chat != old.Chat {
+			if gone.Title != old.Title || gone.Issue != old.Issue || gone.Access != old.Access {
 				t.Errorf("settled row %+v of %+v", gone, old)
 			}
 			woken, err := fresh.WakeThread(old.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if woken.ID != old.ID || woken.Title != old.Title || woken.Issue != old.Issue || woken.Chat != old.Chat || woken.State == "settled" {
+			if woken.ID != old.ID || woken.Title != old.Title || woken.Issue != old.Issue || woken.Access != old.Access || woken.State == "settled" {
 				t.Errorf("woken %+v from %+v", woken, old)
 			}
 			eventually(t, "claude resuming the conversation", resumes(t, fresh, old.ID, "abc"))
-			if args := fresh.Args(t, old.ID); old.Chat != slices.Contains(args, "--permission-mode") {
-				t.Errorf("args of a woken chat=%v: %q", old.Chat, args)
+			if args := fresh.Args(t, old.ID); (old.Access == session.Read) != slices.Contains(args, "plan") {
+				t.Errorf("args of a woken %s thread: %q", old.Access, args)
 			}
 		})
 	}
@@ -356,7 +356,7 @@ func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
 
 func TestWokenThreadKeepsItsCost(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestWakeOfALiveThreadFails(t *testing.T) {
 
 func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("#12 work", "", false, 12)
+	s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

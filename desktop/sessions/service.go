@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // Service is bound to the front end.
@@ -15,15 +16,11 @@ type Service struct {
 // NewService binds the sessions; ctx gives the app's context at call time.
 func NewService(s *Sessions, ctx func() context.Context) *Service { return &Service{s: s, ctx: ctx} }
 
-// NewSession starts the agent in the current project and sends it the prompt once it is ready. A blank title is the
-// first line of the prompt. A model or effort that is not empty is passed to the agent.
-func (v *Service) NewSession(title, prompt, model, effort string) (Session, error) {
-	return v.s.CreateWith(title, false, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
-}
-
-// NewChat starts a chat in the current project: a read-only session for questions about it.
-func (v *Service) NewChat(title, prompt, model, effort string) (Session, error) {
-	return v.s.CreateWith(title, true, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
+// NewThread starts a thread in the current project with the access given, read, supervised or full, and sends it the
+// prompt once it is ready. A blank title is the first line of the prompt. A model or effort that is not empty is
+// passed to the agent; a blank access is supervised.
+func (v *Service) NewThread(title, prompt, model, effort, access string) (Session, error) {
+	return v.s.CreateThread(title, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}, Access: session.Access(access)})
 }
 
 // ModelChoice is a model and an effort; "" where nothing sets one.

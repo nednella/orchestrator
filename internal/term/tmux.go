@@ -21,7 +21,8 @@ const (
 	issueOption  = "@agentos-issue"
 	modelOption  = "@agentos-model"
 	effortOption = "@agentos-effort"
-	chatOption   = "@agentos-chat"
+	accessOption = "@agentos-access"
+	chatOption   = "@agentos-chat" // an older build's tag of a read-only session
 	actionOption = "@agentos-action"
 	hostedOption = "@agentos-hosted"
 	forkOption   = "@agentos-fork"
@@ -69,7 +70,7 @@ type Info struct {
 	Issue   string // the GitHub issue number the session was started for, or ""
 	Model   string // the model the agent runs: the start choice until its first turn, then what it used last, or ""
 	Effort  string // the effort the agent runs, kept like Model, or ""
-	Chat    bool   // a chat: a read-only session for questions, not work
+	Access  session.Access
 	Hosted  bool   // the agent runs under agentos host, which takes its messages over a socket
 	Action  string // the queue action the session was started with, or ""
 	Fork    string // the session a fork was forked from, or ""
@@ -116,7 +117,7 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -128,7 +129,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	var shells []session.Name
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 12 {
+		if len(f) != 13 {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -139,14 +140,27 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 			shells = append(shells, name)
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Chat: f[6] != "", Action: f[7], Hosted: f[8] != "", Fork: f[9]}
-		if secs, err := strconv.ParseInt(f[10], 10, 64); err == nil {
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10]}
+		if secs, err := strconv.ParseInt(f[11], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
-		info.PID, _ = strconv.Atoi(f[11])
+		info.PID, _ = strconv.Atoi(f[12])
 		infos = append(infos, info)
 	}
 	return infos, shells, nil
+}
+
+// accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag, else
+// Supervised, as an older build's task ran. A tag no build writes gives Read, so it never gains access.
+func accessOf(tag, chat string) session.Access {
+	if tag == "" && chat != "" {
+		return session.Read
+	}
+	access, err := session.ParseAccess(tag)
+	if err != nil {
+		return session.Read
+	}
+	return access
 }
 
 // ServerPID is the tmux server's process, or 0 when no server runs.
@@ -241,10 +255,10 @@ func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error
 	return nil
 }
 
-// SetChat records that a session is a chat.
-func (t *Tmux) SetChat(ctx context.Context, name session.Name) error {
-	if _, err := t.run(ctx, "set-option", "-t", target(name), chatOption, "1"); err != nil {
-		return fmt.Errorf("tagging chat %s: %w", name, err)
+// SetAccess records a session's access.
+func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.Access) error {
+	if _, err := t.run(ctx, "set-option", "-t", target(name), accessOption, string(access)); err != nil {
+		return fmt.Errorf("recording the access of session %s: %w", name, err)
 	}
 	return nil
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { stateLabel } from './stateMeta.ts'
+import { STATE_LABEL } from './stateMeta.ts'
 import { currentTask, goneThreads, shortAgo, sortThreads } from './threads.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -28,7 +28,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     cleanupReason: '',
     browser: false,
     evidence: 0,
-    chat: false,
+    access: 'supervised',
     hosted: true,
     action: '',
     forkOf: '',
@@ -62,13 +62,11 @@ test('settled threads go last, newest first', () => {
   )
 })
 
-test('stateLabel names attention', () => {
-  assert.equal(stateLabel('waiting', false), 'Attention')
-  assert.equal(stateLabel('waiting', true), 'Attention')
-  assert.equal(stateLabel('working', false), 'Working')
-  assert.equal(stateLabel('working', true), 'Thinking')
-  assert.equal(stateLabel('idle', false), 'Idle')
-  assert.equal(stateLabel('settled', false), 'Settled')
+test('STATE_LABEL names attention', () => {
+  assert.equal(STATE_LABEL.waiting, 'Attention')
+  assert.equal(STATE_LABEL.working, 'Working')
+  assert.equal(STATE_LABEL.idle, 'Idle')
+  assert.equal(STATE_LABEL.settled, 'Settled')
 })
 
 function pullRequest(state: PR['state'], checks: PR['checks']): PR {

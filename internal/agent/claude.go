@@ -13,14 +13,15 @@ import (
 	"github.com/nednella/agentos/internal/util"
 )
 
-// chatTools are the commands a chat may run in plan mode: the ones that hand work to the owner's queue, plan
-// an issue in it, or open the session's own browser window.
-var chatTools = []string{
+// threadTools are the commands every thread may run without asking, at every access, so a change between Read and
+// Supervised needs no restart: the ones that hand work to the owner's queue, plan an issue in it, or open the
+// thread's own browser window.
+var threadTools = []string{
 	"Bash(agentos issue:*)", "Bash(agentos new:*)", "Bash(agentos note:*)", "Bash(agentos refresh:*)", "Bash(agentos browser:*)",
 	"Bash(gh issue create:*)", "Bash(gh issue comment:*)", "Bash(gh issue edit:*)",
 }
 
-// browserTool drives the session's browser tab. A session with a browser may run it without asking, a chat too.
+// browserTool drives the session's browser tab. A session with a browser may run it without asking.
 const browserTool = "Bash(agent-browser:*)"
 
 var claudeEvents = []string{
@@ -79,21 +80,26 @@ func (c Claude) Command(l Launch) []string {
 			argv = append(argv, "--fork-session", "--resume-session-at", l.ForkAt)
 		}
 	}
-	var allowed []string
-	if l.Chat {
-		argv = append(argv, "--permission-mode", "plan")
-		allowed = chatTools
-	}
+	allowed := threadTools
 	if l.Browser {
 		allowed = append(slices.Clip(allowed), browserTool)
 	}
-	if len(allowed) > 0 {
-		argv = append(argv, "--allowedTools", strings.Join(allowed, ","))
-	}
+	argv = append(argv, "--permission-mode", permissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {
 		argv = append(argv, "--append-system-prompt", l.Prompt)
 	}
 	return argv
+}
+
+// permissionMode is claude's mode for the access. A level it does not know is Supervised, never more.
+func permissionMode(a session.Access) string {
+	switch a {
+	case session.Read:
+		return "plan"
+	case session.Full:
+		return "bypassPermissions"
+	}
+	return "default"
 }
 
 // Env sets claude's temp folder to the session's own.

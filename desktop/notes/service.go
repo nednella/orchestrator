@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 var issueURL = regexp.MustCompile(`https://[^\s/]+/[^\s/]+/[^\s/]+/issues/\d+`)
@@ -25,7 +26,7 @@ type Projects interface{ Current() project.Project }
 
 // Sessions starts sessions.
 type Sessions interface {
-	Create(title, text string, send bool, issue int) (sessions.Session, error)
+	Create(title, text string, send bool, issue int, access session.Access) (sessions.Session, error)
 }
 
 // Issues knows a folder's GitHub repo and can reload a project's issues.
@@ -183,14 +184,14 @@ func (s *Service) NoteToIssue(id string) error {
 	return nil
 }
 
-// NoteToSession starts a session titled by the note, with the project's note command typed in.
+// NoteToSession starts a Supervised thread titled by the note, with the project's note command typed in.
 func (s *Service) NoteToSession(id string) (sessions.Session, error) {
 	cur := s.project.Current()
 	n, err := s.notes.Get(cur.Key(), id)
 	if err != nil {
 		return sessions.Session{}, err
 	}
-	return s.sessions.Create(n.title(), cur.NoteCommand(n.Text), cur.SendsPrompt(), 0)
+	return s.sessions.Create(n.title(), cur.NoteCommand(n.Text), cur.SendsPrompt(), 0, session.Supervised)
 }
 
 // issueBody is the issue template filled with the note's text; gh appends the pictures.

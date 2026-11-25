@@ -11,11 +11,12 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/session"
 )
 
 func sessionWithoutIssue(h *apptest.Harness, t *testing.T) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("my work", "", false, 0)
+	s, err := h.Sessions().Create("my work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

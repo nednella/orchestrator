@@ -18,7 +18,7 @@ var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-fo
 
 func TestClaudeCommand(t *testing.T) {
 	argv := Claude{Exe: "/opt/it's here/agentos"}.Command(Launch{})
-	if len(argv) != 3+len(headlessFlags) || argv[0] != "claude" || argv[1] != "--settings" {
+	if len(argv) != 3+len(headlessFlags)+4 || argv[0] != "claude" || argv[1] != "--settings" {
 		t.Fatalf("argv = %q", argv)
 	}
 	var settings struct {
@@ -51,37 +51,77 @@ func TestClaudeGrantsDirs(t *testing.T) {
 	}
 }
 
+// supervised is what a launch that sets nothing ends with: Supervised, and the tools every thread may run.
+var supervised = []string{"--permission-mode", "default", "--allowedTools", tools}
+
+const tools = "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"
+
 func TestClaudeLaunch(t *testing.T) {
 	tests := []struct {
 		name string
 		l    Launch
 		want []string
 	}{
-		{"none", Launch{}, nil},
-		{"model", Launch{Model: "opus"}, []string{"--model", "opus"}},
-		{"effort", Launch{Effort: "high"}, []string{"--effort", "high"}},
-		{"both", Launch{Model: "sonnet", Effort: "medium"}, []string{"--model", "sonnet", "--effort", "medium"}},
-		{"resume", Launch{Resume: "abc"}, []string{"--resume", "abc"}},
-		{"chat", Launch{Chat: true}, []string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"}},
-		{"browser", Launch{Browser: true}, []string{"--allowedTools", "Bash(agent-browser:*)"}},
-		{"prompt", Launch{Prompt: "where you run"}, []string{"--append-system-prompt", "where you run"}},
-		{"all, in order", Launch{Chat: true, Browser: true, Prompt: "p"},
-			[]string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)", "--append-system-prompt", "p"}},
+		{"none", Launch{}, supervised},
+		{"model", Launch{Model: "opus"}, append([]string{"--model", "opus"}, supervised...)},
+		{"effort", Launch{Effort: "high"}, append([]string{"--effort", "high"}, supervised...)},
+		{"both", Launch{Model: "sonnet", Effort: "medium"}, append([]string{"--model", "sonnet", "--effort", "medium"}, supervised...)},
+		{"resume", Launch{Resume: "abc"}, append([]string{"--resume", "abc"}, supervised...)},
+		{"read", Launch{Access: session.Read}, []string{"--permission-mode", "plan", "--allowedTools", tools}},
+		{"browser", Launch{Browser: true}, []string{"--permission-mode", "default", "--allowedTools", tools + ",Bash(agent-browser:*)"}},
+		{"prompt", Launch{Prompt: "where you run"}, append(slices.Clone(supervised), "--append-system-prompt", "where you run")},
+		{"all, in order", Launch{Access: session.Read, Browser: true, Prompt: "p"},
+			[]string{"--permission-mode", "plan", "--allowedTools", tools + ",Bash(agent-browser:*)", "--append-system-prompt", "p"}},
 	}
 	for _, tt := range tests {
 		argv := Claude{Exe: "/x"}.Command(tt.l)
 		if !slices.Equal(argv[3:3+len(headlessFlags)], headlessFlags) {
 			t.Errorf("%s: argv = %q, want the headless flags after --settings", tt.name, argv)
 		}
-		if got := argv[3+len(headlessFlags):]; !slices.Equal(got, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
+		if got := argv[3+len(headlessFlags):]; !slices.Equal(got, tt.want) {
 			t.Errorf("%s: flags = %q, want %q", tt.name, got, tt.want)
 		}
 	}
 }
 
+func TestAccessFlags(t *testing.T) {
+	modes := map[session.Access]string{session.Read: "plan", session.Supervised: "default", session.Full: "bypassPermissions"}
+	base := Launch{Model: "opus", Effort: "high", Resume: "abc", Browser: true, Prompt: "p", TmpDir: "/tmp/s"}
+	without := func(argv []string) []string {
+		i := slices.Index(argv, "--permission-mode")
+		if i < 0 {
+			t.Fatalf("argv = %q, want a --permission-mode", argv)
+		}
+		return slices.Delete(slices.Clone(argv), i, i+2)
+	}
+	var rest []string
+	for access, mode := range modes {
+		l := base
+		l.Access = access
+		argv := Claude{Exe: "/x"}.Command(l)
+		if i := slices.Index(argv, "--permission-mode"); argv[i+1] != mode {
+			t.Errorf("%s: --permission-mode %q, want %q", access, argv[i+1], mode)
+		}
+		if i := slices.Index(argv, "--allowedTools"); i < 0 || argv[i+1] != tools+",Bash(agent-browser:*)" {
+			t.Errorf("%s: argv = %q, want the same --allowedTools as every access", access, argv)
+		}
+		if rest == nil {
+			rest = without(argv)
+		} else if got := without(argv); !slices.Equal(got, rest) {
+			t.Errorf("%s: argv besides the mode = %q, want %q", access, got, rest)
+		}
+		if env := (Claude{}).Env(l); !slices.Equal(env, []string{"CLAUDE_CODE_TMPDIR=/tmp/s"}) {
+			t.Errorf("%s: env = %q", access, env)
+		}
+	}
+	if argv := (Claude{Exe: "/x"}).Command(Launch{Access: "write"}); !slices.Contains(argv, "default") || slices.Contains(argv, "bypassPermissions") {
+		t.Errorf("a level claude does not know: argv = %q, want Supervised", argv)
+	}
+}
+
 func TestClaudeForkFlags(t *testing.T) {
 	argv := Claude{Exe: "/x"}.Command(Launch{Resume: "abc", ForkAt: "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", Prompt: "p"})
-	want := []string{"--resume", "abc", "--fork-session", "--resume-session-at", "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", "--append-system-prompt", "p"}
+	want := append(append([]string{"--resume", "abc", "--fork-session", "--resume-session-at", "1203a261-38c2-4e41-b43b-07f6c4fdb1bd"}, supervised...), "--append-system-prompt", "p")
 	if got := argv[3+len(headlessFlags):]; !slices.Equal(got, want) {
 		t.Errorf("flags = %q, want %q", got, want)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // withConversation tells the app, as Claude's hook does, that the thread's conversation is abc.
@@ -58,7 +59,7 @@ func kindsAndTexts(events []chat.Event) []string {
 
 func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0)
+	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 			t.Errorf("fork at %q: %v", at, err)
 		}
 	}
-	fresh, err := h.Sessions().Create("fresh", "", false, 0)
+	fresh, err := h.Sessions().Create("fresh", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 
 func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0)
+	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,11 +182,11 @@ func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
 	}
 }
 
-func TestForkKeepsFolderKindAndModel(t *testing.T) {
+func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 	h := apptest.New(t)
-	for _, chatKind := range []bool{false, true} {
-		t.Run(fmt.Sprintf("chat=%v", chatKind), func(t *testing.T) {
-			src, err := h.Sessions().CreateWith("ask", chatKind, sessions.StartOptions{Model: project.Model{Model: "haiku", Effort: "low"}})
+	for access, mode := range map[session.Access]string{session.Read: "plan", session.Supervised: "default", session.Full: "bypassPermissions"} {
+		t.Run(string(access), func(t *testing.T) {
+			src, err := h.Sessions().CreateThread("ask", sessions.StartOptions{Model: project.Model{Model: "haiku", Effort: "low"}, Access: access})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,7 +196,7 @@ func TestForkKeepsFolderKindAndModel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fork.Title != "ask (fork)" || fork.Chat != chatKind || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "settled" {
+			if fork.Title != "ask (fork)" || fork.Access != access || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "settled" {
 				t.Errorf("fork = %+v", fork)
 			}
 			srcChat, _ := h.Sessions().ChatOf(src.ID)
@@ -204,7 +205,7 @@ func TestForkKeepsFolderKindAndModel(t *testing.T) {
 				t.Errorf("fork works in %q, its source in %q", forkChat.Dir, srcChat.Dir)
 			}
 			args := strings.Join(claudeArgs(t, h, fork.ID), " ")
-			if !strings.Contains(args, "--model haiku --effort low") || strings.Contains(args, "--permission-mode plan") != chatKind {
+			if !strings.Contains(args, "--model haiku --effort low") || !strings.Contains(args, "--permission-mode "+mode) {
 				t.Errorf("args = %s", args)
 			}
 		})
@@ -213,7 +214,7 @@ func TestForkKeepsFolderKindAndModel(t *testing.T) {
 
 func TestForkDoesNotTakeOverThePR(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
-	src, err := h.Sessions().Create("#12 work", "", false, 12)
+	src, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +255,7 @@ func TestForkDoesNotTakeOverThePR(t *testing.T) {
 
 func TestForkOfAnEndedThread(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0)
+	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +284,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 
 func TestForkStaysAFork(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("#12 work", "", false, 12)
+	src, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +328,7 @@ func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork se
 	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + removeWorktreeAndBranch})
 	repoFixture(t, h)
 	wt = issueWorktree(t, h)
-	src, err := h.Sessions().Create("#7 work", "", false, 7)
+	src, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +423,7 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 
 func TestForkIsToldNotToTrack(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("Source work", "", false, 0)
+	src, err := h.Sessions().Create("Source work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,14 @@
 package project
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/nednella/agentos/internal/session"
 )
 
 func TestSection(t *testing.T) {
@@ -46,6 +51,52 @@ func TestActionList(t *testing.T) {
 	if want := "Work on issue #7 on branch `issue-7`: Fix it"; len(got) != 1 || got[0].Name != "Start" || got[0].Render(7, "Fix it", "issue-7") != want {
 		t.Errorf("without actions: %+v, want %q", got, want)
 	}
+}
+
+func TestActionAccess(t *testing.T) {
+	tests := []struct {
+		access string
+		want   session.Access
+	}{
+		{"", session.Supervised},
+		{"read", session.Read},
+		{"supervised", session.Supervised},
+		{"full", session.Full},
+	}
+	for _, tt := range tests {
+		line := "{name: X}"
+		if tt.access != "" {
+			line = "{name: X, access: " + tt.access + "}"
+		}
+		cfg, err := Load(writeConfig(t, "projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: A, actions: ["+line+"]}]}\n"))
+		if err != nil {
+			t.Fatalf("access %q: %v", tt.access, err)
+		}
+		if got := cfg.Projects[0].QueueSections[0].Actions[0].ThreadAccess(); got != tt.want {
+			t.Errorf("access %q: the action starts %q, want %q", tt.access, got, tt.want)
+		}
+	}
+	if _, err := Load(writeConfig(t, "projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: A, actions: [{name: X, access: write}]}]}\n")); err == nil || !strings.Contains(err.Error(), `not "write"`) {
+		t.Errorf("access: write loaded: %v", err)
+	}
+}
+
+func TestKindIsRefused(t *testing.T) {
+	for _, kind := range []string{"chat", "task"} {
+		_, err := Load(writeConfig(t, "projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: Ready, actions: [{name: Plan, command: \"/plan {n}\", kind: "+kind+"}]}]}\n"))
+		if want := "queue_sections.Ready.Plan: kind is gone; use access: read for a read-only action"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("kind: %s loaded: %v, want an error that says %q", kind, err, want)
+		}
+	}
+}
+
+func writeConfig(t *testing.T, yaml string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestRender(t *testing.T) {

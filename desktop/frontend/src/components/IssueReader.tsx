@@ -10,7 +10,6 @@ import { IssueBody } from './IssueBody'
 import { IssueThread } from './IssueThread'
 import { IssueWorkflow } from './IssueWorkflow'
 import { Loading } from './Loading'
-import { SessionMark } from './SessionMark'
 import { TypeMark } from './TypeMark'
 
 const dateOf = (at: number) => new Date(at).toLocaleString()
@@ -18,14 +17,13 @@ const dateOf = (at: number) => new Date(at).toLocaleString()
 type IssueReaderProps = { number: number; onBack(): void }
 
 export function IssueReader({ number, onBack }: IssueReaderProps) {
-  const { issues, projectSessions: sessions, select, report } = useAgentos('issues', 'projectSessions', 'select', 'report')
+  const { issues, projectSessions: sessions, report } = useAgentos('issues', 'projectSessions', 'report')
   const body = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<IssueDetail | null>(null)
   const [error, setError] = useState('')
   const loading = useMinimumLoading(!detail && !error)
   const issue = issues.find((i) => i.number === number)
   const session = sessions.find((s) => s.id === issue?.sessionId)
-  const chat = sessions.find((s) => s.chat && !s.forkOf && s.issue === number)
 
   useEffect(() => {
     api.issueDetail(number).then(setDetail, (err) => setError(errorMessage(err)))
@@ -75,12 +73,6 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
         {issue && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5 text-small">
             {session ? <IssueThread session={session} /> : <IssueWorkflow issue={issue} />}
-            {chat && (
-              <button className="btn h-6 px-2" title={`Open chat ${chat.n}`} onClick={() => select(chat.id)}>
-                <SessionMark session={chat} />
-                Chat {chat.n}
-              </button>
-            )}
           </div>
         )}
       </header>

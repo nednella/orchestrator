@@ -17,13 +17,14 @@ import (
 
 // Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.
 // Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
-// continues the conversation up to there under a new id. Chat starts the agent read-only, able to run only the
-// commands that hand work off. Prompt is the text agentos adds to the agent's system prompt. Browser says the session
-// drives its browser tab with agent-browser. TmpDir is the session's own temp folder.
+// continues the conversation up to there under a new id. Access is what the agent may do without asking. Prompt is
+// the text agentos adds to the agent's system prompt. Browser says the session drives its browser tab with
+// agent-browser. TmpDir is the session's own temp folder.
 type Launch struct {
 	Model, Effort, Resume string
 	ForkAt                string
-	Chat, Browser         bool
+	Access                session.Access
+	Browser               bool
 	Prompt                string
 	TmpDir                string
 }

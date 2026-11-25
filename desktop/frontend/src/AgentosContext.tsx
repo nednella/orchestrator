@@ -6,7 +6,7 @@ import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './comp
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { goneThreads, liveThreads, sidebarThreads } from './threads'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -24,7 +24,6 @@ export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser']
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
-export type ComposerKind = 'session' | 'chat'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
 // A thread's composer text, and the seq of the last draft agentos left in it that the composer has shown.
@@ -56,7 +55,7 @@ type AgentosState = {
   overlay: Overlay
   composerDraft: ComposerDraft
   composerMode: ComposerMode
-  composerKind: ComposerKind
+  composerAccess: Access
   focusRequest: { target: FocusTarget; n: number }
   shellIds: string[]
   shellId: string
@@ -79,8 +78,7 @@ type AgentosActions = {
   showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
-  newSession(start: ThreadStart): Promise<Session>
-  newChat(start: ThreadStart): Promise<Session>
+  newThread(start: ThreadStart, access: Access): Promise<Session>
   settleThread(id: string): Promise<void>
   // archiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
   archiveThread(id: string): Promise<void>
@@ -136,7 +134,7 @@ type AgentosActions = {
   setBrowserEnabled(on: boolean): Promise<void>
   setDigestSchedule(schedule: DigestSchedule): Promise<void>
   setComposerMode(mode: ComposerMode): void
-  setComposerKind(kind: ComposerKind): void
+  setComposerAccess(access: Access): void
   setIssueFilter(query: string): void
   focus(target: FocusTarget): void
   report(run: () => unknown): void
@@ -271,7 +269,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
   const [composerDraft, setComposerDraftState] = useState(EMPTY_DRAFT)
   const [composerMode, setComposerModeState] = useState<ComposerMode>('thread')
-  const [composerKind, setComposerKind] = useState<ComposerKind>('session')
+  const [composerAccess, setComposerAccess] = useState<Access>('supervised')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'thread', n: 0 })
 
   const sessionsRef = useRef(sessions)
@@ -624,7 +622,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const projectSessions = useMemo(() => sessions.filter((s) => s.project === project?.key), [sessions, project?.key])
 
   const issues = useMemo(() => {
-    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.chat && !s.forkOf && s.issue === issue.number)?.id ?? '' }))
+    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.forkOf && s.issue === issue.number)?.id ?? '' }))
     issuesRef.current = keepUnchanged(issuesRef.current, next, (issue) => issue.number)
     return issuesRef.current
   }, [rawIssues, projectSessions])
@@ -725,11 +723,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = list.findIndex((s) => s.id === selectedRef.current)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
-      async newSession({ prompt, model, effort }) {
-        return addSession(await api.newSession('', prompt, model, effort))
-      },
-      async newChat({ prompt, model, effort }) {
-        return addSession(await api.newChat('', prompt, model, effort))
+      async newThread({ prompt, model, effort }, access) {
+        return addSession(await api.newThread('', prompt, model, effort, access))
       },
       async settleThread(id) {
         await api.settleThread(id)
@@ -947,7 +942,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         setComposerModeState(mode)
         if (projectRef.current) writeStored(composerModeKey(projectRef.current.name), mode)
       },
-      setComposerKind,
+      setComposerAccess,
       setIssueFilter(query) {
         setIssueFilterState(query)
         if (projectRef.current) writeStored(filterKey(projectRef.current.name), query)
@@ -986,7 +981,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       overlay,
       composerDraft,
       composerMode,
-      composerKind,
+      composerAccess,
       focusRequest,
       shellIds,
       shellId,
@@ -998,7 +993,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerKind, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

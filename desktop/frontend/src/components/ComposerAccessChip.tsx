@@ -1,37 +1,53 @@
-import type { ComposerKind } from '../AgentosContext'
+import { ACCESS_LABEL, accessOf, choiceOf } from '../access'
+import type { AccessChoice } from '../access'
+import type { Access } from '../types'
 import { ComposerMenuChip } from './ComposerMenuChip'
 import { Icon } from './Icon'
 import { SegmentedControl } from './SegmentedControl'
 
-const ACCESS: Record<ComposerKind, { label: string; hint: string }> = {
-  chat: { label: 'Read', hint: 'A chat: it reads the project and answers, and changes no files.' },
-  session: { label: 'Write', hint: 'A task: it works on its own branch and can change files.' },
-}
+const LEVELS: { value: AccessChoice['level']; label: string }[] = [
+  { value: 'read', label: 'Read' },
+  { value: 'write', label: 'Write' },
+]
 
-type ComposerAccessChipProps = { kind: ComposerKind; onKind(kind: ComposerKind): void }
+const WRITE: { value: AccessChoice['write']; label: string; hint: string }[] = [
+  { value: 'supervised', label: 'Supervised', hint: 'Your Claude allow rules apply; other tools ask in the chat' },
+  { value: 'full', label: 'Full access', hint: 'Every tool runs without asking' },
+]
 
-export function ComposerAccessChip({ kind, onKind }: ComposerAccessChipProps) {
+// disabled is why the access cannot change now; the chip shows it and does not open.
+type ComposerAccessChipProps = { access: Access; disabled?: string; onAccess(access: Access): void }
+
+export function ComposerAccessChip({ access, disabled, onAccess }: ComposerAccessChipProps) {
+  const choice = choiceOf(access)
+  const pick = (next: Partial<AccessChoice>) => onAccess(accessOf({ ...choice, ...next }))
   return (
     <ComposerMenuChip
-      label={`Access: ${ACCESS[kind].label}`}
+      label={`Access: ${ACCESS_LABEL[access]}`}
+      disabled={disabled}
       menu={() => (
         <div className="flex w-64 flex-col gap-1.5 p-1">
-          <SegmentedControl
-            label="Access"
-            variant="track"
-            options={[
-              { value: 'chat', label: ACCESS.chat.label },
-              { value: 'session', label: ACCESS.session.label },
-            ]}
-            value={kind}
-            onChange={onKind}
-          />
-          <p className="px-1 text-label text-soft">{ACCESS[kind].hint}</p>
+          <SegmentedControl label="Access" variant="track" options={LEVELS} value={choice.level} onChange={(level) => pick({ level })} />
+          {choice.level === 'read' ? (
+            <p className="px-1 text-label text-soft">It reads the project and plans; Claude asks before it changes anything</p>
+          ) : (
+            <div role="radiogroup" aria-label="Write access" className="flex flex-col gap-0.5">
+              {WRITE.map((w) => (
+                <button key={w.value} role="radio" aria-checked={choice.write === w.value} className="composer-option h-auto items-start py-1.5" onClick={() => pick({ write: w.value })}>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span>{w.label}</span>
+                    <span className="text-label text-soft">{w.hint}</span>
+                  </span>
+                  {choice.write === w.value && <Icon name="check" size={13} />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     >
-      <Icon name={kind === 'chat' ? 'eye' : 'git-branch'} size={14} />
-      {ACCESS[kind].label}
+      <Icon name={access === 'read' ? 'eye' : 'git-branch'} size={14} />
+      {ACCESS_LABEL[access]}
     </ComposerMenuChip>
   )
 }

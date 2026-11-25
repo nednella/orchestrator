@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -54,7 +55,7 @@ func TestApply(t *testing.T) {
 	t0 := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	t1 := t0.Add(time.Minute)
 	stop := Record{Session: "p/1", State: Idle, Event: "Stop", At: t0, Detail: "done"}
-	chat := Identity{Title: "ask", Issue: 7, Chat: true, Action: "plan", Model: "opus", Effort: "high", Path: "/p", Created: t0.UnixMilli()}
+	chat := Identity{Title: "ask", Issue: 7, Access: Read, Action: "plan", Model: "opus", Effort: "high", Path: "/p", Created: t0.UnixMilli()}
 	tests := []struct {
 		name string
 		prev Record
@@ -85,6 +86,58 @@ func TestApply(t *testing.T) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseAccess(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    Access
+		wantErr bool
+	}{
+		{"", Supervised, false},
+		{"read", Read, false},
+		{"supervised", Supervised, false},
+		{"full", Full, false},
+		{"write", "", true},
+		{"Read", "", true},
+	}
+	for _, tt := range tests {
+		got, err := ParseAccess(tt.in)
+		if got != tt.want || (err != nil) != tt.wantErr {
+			t.Errorf("ParseAccess(%q) = %q, %v", tt.in, got, err)
+		}
+	}
+	if !(Read.Rank() < Supervised.Rank() && Supervised.Rank() < Full.Rank()) {
+		t.Errorf("ranks = %d, %d, %d, want Read < Supervised < Full", Read.Rank(), Supervised.Rank(), Full.Rank())
+	}
+}
+
+func TestRecordReadsAnOlderBuildsChatAsRead(t *testing.T) {
+	tests := []struct {
+		name, file string
+		want       Access
+	}{
+		{"an older build's chat", `{"session":"p/abcdefgh","state":"idle","title":"ask","chat":true}`, Read},
+		{"an older build's task", `{"session":"p/abcdefgh","state":"idle","title":"work"}`, ""},
+		{"a thread", `{"session":"p/abcdefgh","state":"idle","title":"work","access":"full"}`, Full},
+		{"access wins over the chat flag", `{"session":"p/abcdefgh","state":"idle","access":"supervised","chat":true}`, Supervised},
+	}
+	for _, tt := range tests {
+		var rec Record
+		if err := json.Unmarshal([]byte(tt.file), &rec); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if rec.Access != tt.want || rec.Session != "p/abcdefgh" || rec.State != Idle {
+			t.Errorf("%s: record = %+v, want access %q", tt.name, rec, tt.want)
+		}
+		data, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), `"chat"`) {
+			t.Errorf("%s: written back as %s, still with the chat flag", tt.name, data)
+		}
 	}
 }
 

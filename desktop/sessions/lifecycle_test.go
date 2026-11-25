@@ -21,7 +21,7 @@ import (
 
 func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create(fmt.Sprintf("#%d work", issue), "", false, issue)
+	s, err := h.Sessions().Create(fmt.Sprintf("#%d work", issue), "", false, issue, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

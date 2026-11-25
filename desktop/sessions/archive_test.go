@@ -39,7 +39,7 @@ func archived(t *testing.T, h *apptest.Harness, id string) bool {
 // talked is a thread whose chat log has the message hello.
 func talked(t *testing.T, h *apptest.Harness) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("work", "hello", true, 0)
+	s, err := h.Sessions().Create("work", "hello", true, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

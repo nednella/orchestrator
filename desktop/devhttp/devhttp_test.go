@@ -22,7 +22,7 @@ import (
 
 func TestCallRunsABoundMethod(t *testing.T) {
 	h := apptest.New(t)
-	got, err := call(h.App.Services(), "sessions.Service", "NewSession", []byte(`["via call","","",""]`))
+	got, err := call(h.App.Services(), "sessions.Service", "NewThread", []byte(`["via call","","","","supervised"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +42,8 @@ func TestCallReportsProblems(t *testing.T) {
 	h := apptest.New(t)
 	for _, tt := range []struct{ method, body string }{
 		{"sessions.Service/NoSuchMethod", `[]`},
-		{"sessions.Service/NewSession", `["only one argument"]`},
-		{"sessions.Service/NewSession", `[1,2]`},
+		{"sessions.Service/NewThread", `["only one argument"]`},
+		{"sessions.Service/NewThread", `[1,2]`},
 		{"projects.Service/Snapshot", `not json`},
 		{"sessions.Service/SettleThread", `["main/99"]`}, // the method itself fails
 		{"nothing.Service/Snapshot", `[]`},

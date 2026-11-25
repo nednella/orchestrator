@@ -1,11 +1,10 @@
 import { chatMediaURL } from './chatEvents'
 import { createMock } from './mock'
-import type { BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
-  NewSession(title: string, prompt: string, model: string, effort: string): Promise<Session>
-  NewChat(title: string, prompt: string, model: string, effort: string): Promise<Session>
+  NewThread(title: string, prompt: string, model: string, effort: string, access: Access): Promise<Session>
   SettleThread(id: string): Promise<void>
   ArchiveThread(id: string): Promise<void>
   WakeThread(id: string): Promise<Session>
@@ -108,7 +107,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewSession', 'NewChat', 'SettleThread', 'ArchiveThread', 'WakeThread', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'ArchiveThread', 'WakeThread', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -145,8 +144,7 @@ export const devFlags: DevFlags = mock?.flags ?? {}
 
 export const api = {
   snapshot: () => backend.Snapshot(),
-  newSession: (title: string, prompt = '', model = '', effort = '') => backend.NewSession(title, prompt, model, effort),
-  newChat: (title: string, prompt = '', model = '', effort = '') => backend.NewChat(title, prompt, model, effort),
+  newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised') => backend.NewThread(title, prompt, model, effort, access),
   settleThread: (id: string) => backend.SettleThread(id),
   archiveThread: (id: string) => backend.ArchiveThread(id),
   wakeThread: (id: string) => backend.WakeThread(id),

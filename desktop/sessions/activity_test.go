@@ -3,11 +3,13 @@ package sessions_test
 import (
 	"testing"
 	"time"
+
+	"github.com/nednella/agentos/internal/session"
 )
 
 func TestActivityIsCounted(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

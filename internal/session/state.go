@@ -1,6 +1,8 @@
 package session
 
 import (
+	"encoding/json"
+	"fmt"
 	"slices"
 	"sort"
 	"time"
@@ -45,7 +47,7 @@ type Record struct {
 type Identity struct {
 	Title   string `json:"title,omitempty"`
 	Issue   int    `json:"issue,omitempty"`
-	Chat    bool   `json:"chat,omitempty"`
+	Access  Access `json:"access,omitempty"`
 	Hosted  bool   `json:"hosted,omitempty"` // the agent ran under agentos host, which keeps its chat log
 	Action  string `json:"action,omitempty"`
 	Model   string `json:"model,omitempty"`
@@ -54,6 +56,54 @@ type Identity struct {
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
 	Created int64  `json:"created,omitempty"` // unix ms of the first start
 	Woke    int64  `json:"woke,omitempty"`    // unix ms of the latest start: the first one or a wake
+}
+
+// Access is what a thread may do without asking the owner.
+type Access string
+
+const (
+	Read       Access = "read"       // it reads and plans; Claude asks before it changes anything
+	Supervised Access = "supervised" // it writes; the owner's allow rules apply and Claude asks for the rest
+	Full       Access = "full"       // every tool runs without asking
+)
+
+// ParseAccess reads an access level; "" is Supervised.
+func ParseAccess(s string) (Access, error) {
+	switch a := Access(s); a {
+	case "":
+		return Supervised, nil
+	case Read, Supervised, Full:
+		return a, nil
+	}
+	return "", fmt.Errorf("access must be %s, %s or %s, not %q", Read, Supervised, Full, s)
+}
+
+// Rank orders the levels by what they allow: Read, then Supervised, then Full.
+func (a Access) Rank() int {
+	switch a {
+	case Supervised:
+		return 1
+	case Full:
+		return 2
+	}
+	return 0
+}
+
+// UnmarshalJSON reads a record, and takes the chat flag an older build wrote for a read-only thread as Read.
+func (r *Record) UnmarshalJSON(data []byte) error {
+	type plain Record
+	var v struct {
+		plain
+		Chat bool `json:"chat"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*r = Record(v.plain)
+	if r.Access == "" && v.Chat {
+		r.Access = Read
+	}
+	return nil
 }
 
 // Change is one entry of a session's state timeline.

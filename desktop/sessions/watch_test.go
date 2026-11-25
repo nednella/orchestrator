@@ -10,6 +10,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // pulls is what the repo's pull request list says of one branch.
@@ -382,7 +383,7 @@ func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	live, err := h.Sessions().Create("#12 again", "", false, 12)
+	live, err := h.Sessions().Create("#12 again", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

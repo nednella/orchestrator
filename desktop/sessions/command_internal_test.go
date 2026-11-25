@@ -24,8 +24,8 @@ func (f fakeBrowsers) Forget(context.Context, string)            {}
 func (f fakeBrowsers) PIDs() []int                               { return nil }
 
 // commandFor is the argv claude starts with.
-func (s *Sessions) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, chat bool) []string {
-	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, chat, s.hasBrowser(proj, brief), forkStart{}, workTree{}))
+func (s *Sessions) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, access session.Access) []string {
+	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, access, s.hasBrowser(proj, brief), forkStart{}, workTree{}))
 }
 
 // allowedTools is the --allowedTools value in argv, "" when there is none.
@@ -51,8 +51,8 @@ func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Sessions{browsers: fakeBrowsers{tt.browser}}
-			argv := s.commandFor(tt.proj, project.Model{}, "", "", "", false)
-			if (allowedTools(argv) == "Bash(agent-browser:*)") != tt.want {
+			argv := s.commandFor(tt.proj, project.Model{}, "", "", "", session.Supervised)
+			if strings.Contains(allowedTools(argv), "Bash(agent-browser:*)") != tt.want {
 				t.Fatalf("argv = %q", argv)
 			}
 			prompt := slices.Index(argv, "--append-system-prompt")
@@ -71,7 +71,7 @@ func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
 
 func TestCommandResumesAConversation(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{}}
-	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "abc", "", "", false)
+	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "abc", "", "", session.Supervised)
 	if i := slices.Index(argv, "--resume"); i < 0 || argv[i+1] != "abc" {
 		t.Errorf("argv = %q", argv)
 	}
@@ -102,8 +102,8 @@ func TestConversationOfARunningAndAnEndedSession(t *testing.T) {
 
 func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{ready: true}}
-	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "set it up", "", false)
-	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != "set it up" || allowedTools(argv) != "" {
+	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "set it up", "", session.Supervised)
+	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != "set it up" || strings.Contains(allowedTools(argv), "agent-browser") {
 		t.Errorf("argv = %q", argv)
 	}
 }
@@ -126,16 +126,16 @@ func TestHostedRefusesASocketPathTooLong(t *testing.T) {
 
 func TestCommandEndsATasksPromptWithTheHandover(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{}}
-	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "", "the patch is in /tmp/x", false)
+	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "", "the patch is in /tmp/x", session.Supervised)
 	want := prompts.Session() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != want {
 		t.Errorf("argv = %q", argv)
 	}
 }
 
-func TestCommandMakesAChatReadOnlyWithTheBrowser(t *testing.T) {
+func TestCommandStartsAReadThreadInPlanModeWithTheBrowser(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{ready: true}}
-	argv := s.commandFor(project.Project{Name: "p", Dir: "/work/p"}, project.Model{}, "", "", "", true)
+	argv := s.commandFor(project.Project{Name: "p", Dir: "/work/p"}, project.Model{}, "", "", "", session.Read)
 	if i := slices.Index(argv, "--permission-mode"); i < 0 || argv[i+1] != "plan" {
 		t.Errorf("no plan mode: %q", argv)
 	}
@@ -148,8 +148,8 @@ func TestCommandMakesAChatReadOnlyWithTheBrowser(t *testing.T) {
 		t.Errorf("system prompt = %q", argv)
 	}
 
-	work := s.commandFor(project.Project{Name: "p", Dir: "/work/p"}, project.Model{}, "", "", "", false)
-	if slices.Contains(work, "--permission-mode") || allowedTools(work) != "Bash(agent-browser:*)" {
-		t.Errorf("a task runs read-only or without the browser: %q", work)
+	write := s.commandFor(project.Project{Name: "p", Dir: "/work/p"}, project.Model{}, "", "", "", session.Supervised)
+	if i := slices.Index(write, "--permission-mode"); i < 0 || write[i+1] != "default" || allowedTools(write) != tools {
+		t.Errorf("a Supervised thread: %q", write)
 	}
 }

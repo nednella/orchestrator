@@ -180,6 +180,36 @@ func gone(pid int) bool {
 	return false
 }
 
+func TestAccessTag(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	full, olderChat, olderTask := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}, session.Name{Project: "demo", Token: "c3"}
+	for _, n := range []session.Name{full, olderChat, olderTask} {
+		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tmux.SetAccess(ctx, full, session.Full); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmux.run(ctx, "set-option", "-t", target(olderChat), chatOption, "1"); err != nil {
+		t.Fatal(err)
+	}
+	infos, err := list(tmux, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[session.Name]session.Access{full: session.Full, olderChat: session.Read, olderTask: session.Supervised}
+	for _, in := range infos {
+		if in.Access != want[in.Name] {
+			t.Errorf("%s: access = %q, want %q", in.Name, in.Access, want[in.Name])
+		}
+	}
+	if len(infos) != len(want) {
+		t.Errorf("listed %d sessions, want %d", len(infos), len(want))
+	}
+}
+
 func TestListSkipsSessionsAgentosDidNotMake(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()

@@ -21,25 +21,25 @@ const describe = (s: Session) => `${s.n} ${s.title}`
 export const sessionActions = ({ a, layout, current }: ActionContext): Action[] => [
   {
     id: 'new-session',
-    label: 'New task',
+    label: 'New thread',
     group: 'Sessions',
     shortcut: { key: 'm' },
     run() {
       layout.showHome()
       a.setComposerMode('thread')
-      a.setComposerKind('session')
+      a.setComposerAccess('supervised')
       a.focus('composer')
     },
   },
   {
     id: 'new-chat',
-    label: 'New chat',
+    label: 'New read-only thread',
     group: 'Sessions',
     shortcut: { key: 'n' },
     run() {
       layout.showHome()
       a.setComposerMode('thread')
-      a.setComposerKind('chat')
+      a.setComposerAccess('read')
       a.focus('composer')
     },
   },

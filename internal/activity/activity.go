@@ -8,7 +8,7 @@ const (
 	Prompt       = "prompt"
 	SessionStart = "session_start" // label "resumed" when a wake starts the thread again; from, in older logs, the session whose conversation it continued
 	SessionEnd   = "session_end"   // ms is how long the session ran
-	ChatStart    = "chat_start"    // a chat records only that it started, with label and from as on session_start, and its usage
+	ChatStart    = "chat_start"    // an older build's start of a chat, which it recorded only with its usage; no longer written
 	Worked       = "worked"        // ms is how long a session worked
 	Wait         = "wait"          // ms is how long a session waited on the user; label is its kind (permission, question or idle)
 	PROpened     = "pr_opened"
@@ -21,7 +21,7 @@ const (
 	Cleanup      = "cleanup" // label done or blocked
 	Evidence     = "evidence"
 	Usage        = "usage"      // the tokens one model used since the last count; label "subagent" for a session's subagents
-	ChatUsage    = "chat_usage" // usage of a chat, kept apart so it counts only in the cost
+	ChatUsage    = "chat_usage" // an older build's usage of a chat, kept apart so it counts only in the cost; no longer written
 )
 
 // Subagent is the label of usage by a session's subagents.

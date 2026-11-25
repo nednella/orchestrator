@@ -7,11 +7,13 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/nednella/agentos/internal/session"
 )
 
 func TestWaitsAreRecorded(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#3 work", "", false, 3)
+	s, err := h.Sessions().Create("#3 work", "", false, 3, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -79,16 +79,16 @@ func TestNewSendsThePrompt(t *testing.T) {
 		return control.Response{OK: true, Out: "ok"}
 	})
 	tests := []struct {
-		name  string
-		args  []string
-		stdin string
-		want  string
-		chat  string
+		name   string
+		args   []string
+		stdin  string
+		want   string
+		access string
 	}{
 		{"flag", []string{"new", "side", "topic", "--prompt", "look at auth"}, "", "look at auth", ""},
 		{"stdin", []string{"new", "side", "topic", "--prompt", "-"}, "line one\nline two\n", "line one\nline two", ""},
 		{"none", []string{"new", "side", "topic"}, "", "", ""},
-		{"chat", []string{"new", "side", "topic", "--chat", "--prompt", "look at auth"}, "", "look at auth", "true"},
+		{"read", []string{"new", "side", "topic", "--access", "read", "--prompt", "look at auth"}, "", "look at auth", "read"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestNewSendsThePrompt(t *testing.T) {
 			if err := root.Execute(); err != nil {
 				t.Fatal(err)
 			}
-			if got.Cmd != "new" || strings.Join(got.Args, " ") != "side topic" || got.Opts["prompt"] != tt.want || got.Opts["chat"] != tt.chat {
+			if got.Cmd != "new" || strings.Join(got.Args, " ") != "side topic" || got.Opts["prompt"] != tt.want || got.Opts["access"] != tt.access {
 				t.Errorf("request = %+v", got)
 			}
 		})

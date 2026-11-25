@@ -177,36 +177,29 @@ func TestStartSendsTheChosenActionsCommand(t *testing.T) {
 	}
 }
 
-func TestChatActionRunsBesideTheTask(t *testing.T) {
+func TestReadActionGivesTheIssueItsOneThread(t *testing.T) {
 	h := newHarness(t)
 	plan, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !plan.Chat || plan.Issue != 7 || plan.Action != "Plan" || plan.Title != "#7 Fix the thing that breaks when the window is narrow" {
+	if plan.Access != session.Read || plan.Issue != 7 || plan.Action != "Plan" || plan.Title != "#7 Fix the thing that breaks when the window is narrow" {
 		t.Errorf("plan = %+v", plan)
 	}
-	if got, _ := h.Issues(false); got[0].SessionID != "" {
-		t.Errorf("issue 7 links to the chat %q", got[0].SessionID)
-	}
+	eventually(t, "claude in plan mode", func() bool { return strings.Contains(strings.Join(h.Args(t, plan.ID), " "), "--permission-mode plan") })
+	eventually(t, "issue 7 links to its thread", func() bool { got, _ := h.Issues(false); return got[0].SessionID == plan.ID })
 	work, err := h.StartIssue(7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if work.ID == plan.ID || work.Chat {
-		t.Errorf("work = %+v, want a task beside the chat %s", work, plan.ID)
-	}
-	if again, err := h.StartIssueWith(7, "Plan"); err != nil || again.ID != plan.ID {
-		t.Errorf("second plan = %+v, %v", again, err)
-	}
-	if got, _ := h.Issues(false); got[0].SessionID != work.ID {
-		t.Errorf("issue 7 links to %q, want the task %s", got[0].SessionID, work.ID)
+	if work.ID != plan.ID || work.Access != session.Read {
+		t.Errorf("work = %+v, want the issue's Read thread %s back", work, plan.ID)
 	}
 }
 
 func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 	h := newHarness(t)
-	work, err := h.StartIssue(7)
+	work, err := h.StartIssue(11)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +215,7 @@ func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 		return ok && s.State == session.Settled
 	})
 	again := h.Restart(t)
-	for id, want := range map[string]string{work.ID: "Work", plan.ID: "Plan"} {
+	for id, want := range map[string]string{work.ID: "Investigate", plan.ID: "Plan"} {
 		if s, ok := again.Session(id); !ok || s.Action != want {
 			t.Errorf("after a restart, session %s = %+v, want action %q", id, s, want)
 		}

@@ -50,10 +50,6 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		s.readers[id] = r
 	}
 	s.mu.Unlock()
-	kind := activity.Usage
-	if in.Chat {
-		kind = activity.ChatUsage
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var before usage.Tokens
@@ -65,7 +61,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 			case e.Session != id:
 			case e.Kind == activity.SessionStart || e.Kind == activity.ChatStart:
 				from = cmp.Or(e.From, from)
-			case e.Kind == kind:
+			case isUsage(e.Kind):
 				before.Add(e.Tokens)
 				if at := time.UnixMilli(e.At); at.After(after) {
 					after = at
@@ -73,7 +69,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 			}
 		})
 		if from != "" {
-			before.Add(s.usedBefore(session.ProjectKey(id), from, kind))
+			before.Add(s.usedBefore(session.ProjectKey(id), from))
 		}
 		mark := usage.Mark{After: after}
 		if nameErr == nil {
@@ -105,7 +101,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	}
 	if record {
 		for _, p := range r.pending {
-			e := activity.Event{At: r.cursor.After().UnixMilli(), Kind: kind, Issue: issue, Model: p.Model, Effort: in.Effort, Title: cmp.Or(in.Title, defaultTitle), Tokens: p.Tokens}
+			e := activity.Event{At: r.cursor.After().UnixMilli(), Kind: activity.Usage, Issue: issue, Model: p.Model, Effort: in.Effort, Title: cmp.Or(in.Title, defaultTitle), Tokens: p.Tokens}
 			if p.Subagent {
 				e.Label = activity.Subagent
 			}
@@ -151,15 +147,18 @@ func (s *Sessions) saveUsageMark(name session.Name, m usage.Mark) {
 	}
 }
 
+// isUsage says whether an event of the log records usage: an older build recorded a chat's as chat_usage.
+func isUsage(kind string) bool { return kind == activity.Usage || kind == activity.ChatUsage }
+
 // usedBefore is what the session from and each session it continues used, as the event log of the project holds it.
-func (s *Sessions) usedBefore(projectKey, from, kind string) usage.Tokens {
+func (s *Sessions) usedBefore(projectKey, from string) usage.Tokens {
 	used := map[string]usage.Tokens{}
 	continues := map[string]string{}
 	s.activity.Since(projectKey, "", func(e activity.Event) {
 		switch e.Kind {
 		case activity.SessionStart, activity.ChatStart:
 			continues[e.Session] = cmp.Or(e.From, continues[e.Session])
-		case kind:
+		case activity.Usage, activity.ChatUsage:
 			t := used[e.Session]
 			t.Add(e.Tokens)
 			used[e.Session] = t

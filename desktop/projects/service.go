@@ -136,8 +136,8 @@ func (s *Service) RemoveProject(name string) (Snapshot, error) {
 	return s.Snapshot(), nil
 }
 
-// SetUpProject writes a basic agentos block into the current project's config and starts a session that sets up
-// the repository with the user. A project that has queue sections keeps its config: only the session starts.
+// SetUpProject writes a basic agentos block into the current project's config and starts a Supervised thread that
+// sets up the repository with the user. A project that has queue sections keeps its config: only the session starts.
 func (s *Service) SetUpProject() (sessions.Session, error) {
 	key, err := s.configure()
 	if err != nil {

@@ -1,8 +1,10 @@
 package sessions_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -10,8 +12,10 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/stats"
 	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/session"
 )
 
 func claudeArgs(t *testing.T, h *apptest.Harness, id string) []string {
@@ -40,84 +44,116 @@ func claudeEnv(t *testing.T, h *apptest.Harness, id string) map[string]string {
 	return env
 }
 
-func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
-	h := apptest.New(t)
-
-	tests := []struct {
-		name, title, wantTitle string
-	}{
-		{"a title", "what does the queue do", "what does the queue do"},
-		{"no title", "  ", "chat"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c, err := h.NewChat(tt.title)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !c.Chat || c.Title != tt.wantTitle || c.Issue != 0 || c.State != "idle" {
-				t.Errorf("chat = %+v", c)
-			}
-			args := claudeArgs(t, h, c.ID)
-			if i := slices.Index(args, "--permission-mode"); i < 0 || args[i+1] != "plan" {
-				t.Errorf("args = %q", args)
-			}
-			if i := slices.Index(args, "--allowedTools"); i < 0 || !strings.Contains(args[i+1], "Bash(agentos new:*)") {
-				t.Errorf("args = %q", args)
-			}
-			if joined := strings.Join(args, "\n"); !strings.Contains(joined, prompts.Thread()) {
-				t.Errorf("system prompt of the chat = %q", joined)
-			}
-		})
-	}
-
-	work, err := h.NewSession("work", "")
+// accessTag is the access the thread's tmux session is tagged with.
+func accessTag(t *testing.T, h *apptest.Harness, id string) string {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@agentos-access}").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if work.Chat {
-		t.Error("a session is flagged as a chat")
-	}
-	args := claudeArgs(t, h, work.ID)
-	if slices.Contains(args, "--permission-mode") || !strings.Contains(strings.Join(args, "\n"), prompts.Thread()) {
-		t.Errorf("args of a session = %q", args)
-	}
+	return strings.TrimSpace(string(out))
 }
 
-func TestChatFlagSurvivesARestart(t *testing.T) {
+func TestNewThreadKeepsItsAccess(t *testing.T) {
 	h := newHarness(t)
-	live, err := h.NewChat("live")
+	read, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, err := h.NewChat("gone")
+	write, err := h.NewSession("work", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, err := h.NewSession("plain", "")
-	if err != nil {
-		t.Fatal(err)
+	if read.Access != session.Read || write.Access != session.Supervised {
+		t.Errorf("rows = %+v and %+v, want read and supervised", read, write)
 	}
-	if err := h.SettleThread(gone.ID); err != nil {
-		t.Fatal(err)
+	for id, want := range map[string]session.Access{read.ID: session.Read, write.ID: session.Supervised} {
+		if got := accessTag(t, h, id); got != string(want) {
+			t.Errorf("%s: tagged %q, want %q", id, got, want)
+		}
+		eventually(t, "the access in the state file", func() bool { rec, _ := bus.ReadState(h.State, id); return rec.Access == want })
 	}
-	eventually(t, "the chat settled", func() bool { got, _ := h.Session(gone.ID); return got.State == "settled" })
+	if args := strings.Join(claudeArgs(t, h, read.ID), " "); !strings.Contains(args, "--permission-mode plan") {
+		t.Errorf("args of the Read thread = %s", args)
+	}
+	if args := strings.Join(claudeArgs(t, h, write.ID), " "); !strings.Contains(args, "--permission-mode default") {
+		t.Errorf("args of the Supervised thread = %s", args)
+	}
 
 	fresh := h.Restart(t)
-	for id, want := range map[string]bool{live.ID: true, gone.ID: true, plain.ID: false} {
-		eventually(t, "the row after a restart", func() bool {
-			got, ok := fresh.Session(id)
-			return ok && got.Chat == want
-		})
+	eventually(t, "the rows after a restart", func() bool {
+		r, _ := fresh.Session(read.ID)
+		w, _ := fresh.Session(write.ID)
+		return r.Access == session.Read && w.Access == session.Supervised
+	})
+	if err := fresh.SettleThread(read.ID); err != nil {
+		t.Fatal(err)
 	}
-	if got, _ := fresh.Session(gone.ID); got.State != "settled" {
-		t.Errorf("ended chat = %+v", got)
+	eventually(t, "the thread settled", func() bool { got, _ := fresh.Session(read.ID); return got.State == "settled" })
+	if got, _ := fresh.Session(read.ID); got.Access != session.Read {
+		t.Errorf("settled row = %+v, want read", got)
+	}
+	args := filepath.Join(fresh.ClaudeDir(), strings.ReplaceAll(read.ID, "/", "_")+".args")
+	if err := os.Remove(args); err != nil {
+		t.Fatal(err)
+	}
+	woken, err := fresh.WakeThread(read.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if woken.Access != session.Read || accessTag(t, fresh, read.ID) != "read" {
+		t.Errorf("woken row = %+v, tagged %q", woken, accessTag(t, fresh, read.ID))
+	}
+	if args := strings.Join(claudeArgs(t, fresh, read.ID), " "); !strings.Contains(args, "--permission-mode plan") {
+		t.Errorf("args of the woken Read thread = %s", args)
 	}
 }
 
-func TestChatStaysOutOfTheStats(t *testing.T) {
+func TestOlderBuildsChatWakesAsRead(t *testing.T) {
 	h := newHarness(t)
-	chat, err := h.NewChat("ask")
+	s, err := h.NewSession("ask", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	h.App.Stop()
+	path := filepath.Join(h.State, "sessions", s.ID+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file map[string]any
+	if err := json.Unmarshal(data, &file); err != nil {
+		t.Fatal(err)
+	}
+	delete(file, "access")
+	file["chat"] = true
+	if data, err = json.Marshal(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := h.Restart(t)
+	eventually(t, "the settled row", func() bool { got, _ := fresh.Session(s.ID); return got.State == "settled" })
+	if got, _ := fresh.Session(s.ID); got.Access != session.Read {
+		t.Errorf("an older build's chat = %+v, want read", got)
+	}
+	if _, err := fresh.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := accessTag(t, fresh, s.ID); got != "read" {
+		t.Errorf("woken thread tagged %q, want read", got)
+	}
+}
+
+func TestReadThreadCountsInStats(t *testing.T) {
+	h := newHarness(t)
+	read, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,78 +161,80 @@ func TestChatStaysOutOfTheStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{chat.ID, work.ID} {
+	for _, id := range []string{read.ID, work.ID} {
 		h.Hook(t, id, "UserPromptSubmit", `{"prompt":"a"}`)
 		h.Hook(t, id, "Notification", `{"message":"Claude needs your permission","notification_type":"permission_prompt"}`)
 		h.Hook(t, id, "Stop", `{}`)
 	}
-	eventually(t, "the session's prompt", func() bool { return len(h.Events(t, activity.Prompt)) == 1 })
-	eventually(t, "the session's wait", func() bool { st, _ := h.Stats(7, ""); return st.Total > 0 })
-
 	for _, kind := range []string{activity.Prompt, activity.SessionStart, activity.Worked, activity.Wait} {
-		for _, e := range h.Events(t, kind) {
-			if e.Session == chat.ID {
-				t.Errorf("%s event of the chat: %+v", kind, e)
-			}
-		}
+		eventually(t, kind+" of the Read thread", func() bool {
+			return slices.ContainsFunc(h.Events(t, kind), func(e activity.Event) bool { return e.Session == read.ID })
+		})
 	}
-	st, _ := h.Stats(7, "")
-	for _, w := range st.Recent {
-		if w.SessionTitle == chat.Title {
-			t.Errorf("wait of the chat: %+v", w)
-		}
+	if starts := h.Events(t, activity.ChatStart); len(starts) != 0 {
+		t.Errorf("chat_start events = %+v", starts)
 	}
+	eventually(t, "the Read thread's wait", func() bool {
+		st, _ := h.Stats(7, "")
+		return slices.ContainsFunc(st.Recent, func(w stats.Wait) bool { return w.SessionTitle == read.Title })
+	})
 	led, err := h.Ledger(30, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if starts := h.Events(t, activity.ChatStart); len(starts) != 1 || starts[0].Session != chat.ID {
-		t.Errorf("chat_start events = %+v", starts)
-	}
-	if led.Totals.Prompts != 1 || led.Totals.Sessions != 1 || led.Totals.Chats != 1 {
+	if led.Totals.Prompts != 2 || led.Totals.Sessions != 2 || led.Totals.Chats != 0 {
 		t.Errorf("totals = %+v", led.Totals)
 	}
 
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(time.Second), 1000, 100))
-	h.Hook(t, chat.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
-	eventually(t, "the chat's usage", func() bool { return len(h.Events(t, activity.ChatUsage)) == 1 })
-	if got := h.Events(t, activity.Usage); len(got) != 0 {
-		t.Errorf("usage events = %+v, want the chat's under chat_usage only", got)
-	}
-
-	if err := h.SettleThread(chat.ID); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the chat settled", func() bool { got, _ := h.Session(chat.ID); return got.State == "settled" })
-	if got := h.Events(t, activity.SessionEnd); len(got) != 0 {
-		t.Errorf("session_end events = %+v", got)
+	h.Hook(t, read.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
+	eventually(t, "the Read thread's usage", func() bool { return len(h.Events(t, activity.Usage)) == 1 })
+	if got := h.Events(t, activity.ChatUsage); len(got) != 0 {
+		t.Errorf("chat_usage events = %+v, want the usage under usage", got)
 	}
 }
 
-func TestChatHasNoBranchOrPR(t *testing.T) {
+func TestIssueHasOneThread(t *testing.T) {
 	h := newHarness(t)
-	repoFixture(t, h)
-	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
-
-	chat, err := h.NewChat("ask")
+	plan, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	work := sessionWithoutIssue(h, t)
-	madeBranch(h, t, work)
-	worksIn(h, t, chat, h.Dir)
-	worksIn(h, t, work, h.Dir)
-	eventually(t, "the session's branch", func() bool { got, _ := h.Session(work.ID); return got.Branch == "my-fix" })
-	eventually(t, "the session's PR", hasPR(h, work.ID))
+	if plan.Access != session.Read {
+		t.Fatalf("plan = %+v, want a Read thread", plan)
+	}
+	work, err := h.StartIssueWith(7, "Work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if work.ID != plan.ID || work.Access != session.Read {
+		t.Errorf("work = %+v, want the live Read thread %s", work, plan.ID)
+	}
+	out, err := exec.Command("tmux", "-L", h.Socket, "list-sessions", "-F", "#{session_name}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := strings.Fields(string(out)); len(names) != 1 || names[0] != plan.ID {
+		t.Errorf("tmux sessions = %q, want only %s", names, plan.ID)
+	}
+	if got := h.Sessions().IssueSessions(); got[7] != plan.ID {
+		t.Errorf("issue sessions = %v, want #7 linked to its Read thread", got)
+	}
+}
 
-	got, _ := h.Session(chat.ID)
-	if got.Branch != "" || got.PR != nil || got.Worktree != "" {
-		t.Errorf("chat = %+v", got)
+func TestReadThreadFollowsItsBranch(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
+	read, err := h.NewThread("ask", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := h.Cleanup(chat.ID, true); err == nil {
-		t.Error("cleaning up a chat did not fail")
-	}
+	madeBranch(h, t, read)
+	worksIn(h, t, read, h.Dir)
+	eventually(t, "the Read thread's branch", func() bool { got, _ := h.Session(read.ID); return got.Branch == "my-fix" })
+	eventually(t, "the Read thread's PR", hasPR(h, read.ID))
 }
 
 func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
@@ -212,7 +250,7 @@ func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
 
 func TestUnsentPromptIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "write the queue", false, 0)
+	s, err := h.Sessions().Create("work", "write the queue", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +274,7 @@ func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
 
 func TestTypeIntoIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +299,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
-			s, err := h.Sessions().Create("#12 work", "", false, 12)
+			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -305,7 +343,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 	}{{"live", false}, {"held while working", true}} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
-			s, err := h.Sessions().Create("#12 work", "", false, 12)
+			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -328,7 +366,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 
 func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 	h := newHarness(t)
-	read, err := h.NewChat("read")
+	read, err := h.NewThread("read", "", "", "", "read")
 	if err != nil {
 		t.Fatal(err)
 	}
