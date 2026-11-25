@@ -10,7 +10,7 @@ import type { Command, Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
-import type { ChatEvent, Pending, Session } from '../types'
+import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { ChatQueued } from './ChatQueued'
@@ -38,13 +38,6 @@ type ThreadComposerProps = {
   onStop(): void
   onSendNow(id: string): void
   onEscape(picker: boolean): EscapeAction
-}
-
-// The host turns down what waits with the message, and Claude does what it says instead.
-const WAITING_PLACEHOLDER: Record<Pending['kind'], string> = {
-  tool: 'A message now declines the tool and tells Claude why',
-  question: 'A message now skips the question and tells Claude what to do instead',
-  plan: 'A message now turns down the plan and tells Claude what to do instead',
 }
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
@@ -193,14 +186,11 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     if (done === 'blur') input.current?.blur()
   }
 
-  const placeholder = timeline.pending ? WAITING_PLACEHOLDER[timeline.pending.kind] : timeline.turnOpen ? 'Claude takes in a message at its next step' : 'Message Claude'
-
   return (
     <Composer
       inputRef={input}
       value={current.draft}
       label="Message"
-      placeholder={placeholder}
       canSend={!empty}
       sendLabel={SEND_LABEL[action]}
       sendText={action === 'deny' ? SEND_LABEL.deny : undefined}

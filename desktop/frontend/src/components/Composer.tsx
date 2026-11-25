@@ -9,7 +9,7 @@ type ComposerProps = {
   inputRef: RefObject<ComposerInput | null>
   value: ComposerDraft
   label: string
-  placeholder: string
+  placeholder?: string
   canSend: boolean
   sendLabel: string
   sendText?: string

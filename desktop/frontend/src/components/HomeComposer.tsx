@@ -55,7 +55,6 @@ export function HomeComposer() {
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
   const highlighted = pickCursor(cursor, candidates.length)
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
-  const read = a.composerAccess === 'read'
   // A place the owner has not picked follows the access.
   const place = chosenPlace && !pickedIssue ? chosenPlace : defaultPlace(a.composerAccess, Boolean(pickedIssue))
   const live = Boolean(pickedIssue?.sessionId)
@@ -130,23 +129,13 @@ export function HomeComposer() {
     if (e.key === 'Escape') input.current?.blur()
   }
 
-  const placeholder = note
-    ? 'Jot a note. Paste or drop images to attach them'
-    : live
-      ? 'The thread opens; this text is not sent'
-      : pickedIssue
-        ? 'Add to the issue’s command (optional)'
-        : read
-          ? 'Ask anything about the project. # picks an issue'
-          : 'Describe a task. # picks an issue'
-
   return (
     <div className="flex flex-col">
       <Composer
         inputRef={input}
         value={a.composerDraft}
         label={note ? 'New note' : 'New thread'}
-        placeholder={placeholder}
+        placeholder={note ? 'Jot a note. Paste or drop images to attach them' : undefined}
         canSend={canSend}
         sendLabel={note ? 'Add note' : live ? 'Open its thread' : pickedIssue ? `Start #${pickedIssue.number}` : 'Start thread'}
         sendText={note ? 'Add note' : live ? 'Open thread' : undefined}

@@ -17,11 +17,13 @@ export type ComposerInput = {
   deleteBefore(length: number): void
 }
 
+const PROMPT_PLACEHOLDER = 'Ask anything. @ files, / commands'
+
 type ComposerEditorProps = {
   inputRef: RefObject<ComposerInput | null>
   value: ComposerDraft
   label: string
-  placeholder: string
+  placeholder?: string
   onChange(draft: ComposerDraft): void
   onCaret?(before: string, after: string): void
   onKeyDown?(e: KeyboardEvent): void
@@ -30,7 +32,7 @@ type ComposerEditorProps = {
 }
 
 // Edits markdown as rendered text. The value is read in when it changes from outside and written out on every edit.
-export function ComposerEditor({ inputRef, value, label, placeholder, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerEditorProps) {
+export function ComposerEditor({ inputRef, value, label, placeholder = PROMPT_PLACEHOLDER, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerEditorProps) {
   const handlers = useRef({ onChange, onCaret, onKeyDown, onAttach, onSend })
   const written = useRef(value)
   const focused = useRef(false)
