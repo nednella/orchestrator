@@ -7,7 +7,7 @@ import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
 import { EFFORTS, modelName } from '../model'
-import type { ChatEvent, Session } from '../types'
+import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
@@ -25,6 +25,13 @@ type ThreadComposerProps = {
   onStop(): void
   onSendNow(id: string): void
   onEscape(picker: boolean): EscapeAction
+}
+
+// The host turns down what waits with the message, and Claude does what it says instead.
+const WAITING_PLACEHOLDER: Record<Pending['kind'], string> = {
+  tool: 'A message now declines the tool and tells Claude why',
+  question: 'A message now skips the question and tells Claude what to do instead',
+  plan: 'A message now turns down the plan and tells Claude what to do instead',
 }
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
@@ -95,7 +102,7 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
     })
   }
 
-  const placeholder = timeline.pending ? 'A message now declines the tool and tells Claude why' : timeline.turnOpen ? 'Claude takes in a message at its next step' : 'Message Claude'
+  const placeholder = timeline.pending ? WAITING_PLACEHOLDER[timeline.pending.kind] : timeline.turnOpen ? 'Claude takes in a message at its next step' : 'Message Claude'
 
   return (
     <Composer
