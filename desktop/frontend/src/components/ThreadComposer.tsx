@@ -3,23 +3,23 @@ import type { RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
 import { accessDisabled } from '../access'
-import { api, errorMessage } from '../api'
-import { commandMatches, commandToken, composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
+import { api } from '../api'
+import { composerAction, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
-import type { Command, Timeline } from '../chatTimeline'
+import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
-import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
+import { pickCursor, pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
+import { usePromptPicks } from '../usePromptPicks'
 import { ChatQueued } from './ChatQueued'
 import { ClaudeMark } from './ClaudeMark'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerPickList } from './ComposerPickList'
-import type { PickRow } from './ComposerPickList'
 import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
 
@@ -42,19 +42,6 @@ type ThreadComposerProps = {
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
-// PickList is the pick list open in the composer: what it lists and what picking a row does.
-type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: number): void }
-
-// Files are what the thread's folder lists for the mention, or why it did not.
-type Files = { paths: string[]; error: string }
-
-const commandRow = (c: Command): PickRow => ({ key: c.name, icon: <Icon name="terminal" size={14} />, name: `/${c.name}`, description: c.description, badge: c.argumentHint })
-
-const fileRow = (path: string): PickRow => {
-  const slash = path.lastIndexOf('/')
-  return { key: path, icon: <Icon name="file" size={14} />, name: path.slice(slash + 1), description: path.slice(0, slash + 1) }
-}
-
 export function ThreadComposer({ inputRef: input, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
@@ -68,9 +55,16 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const [caret, setCaret] = useState({ before: '', after: '' })
   const [cursor, setCursor] = useState(-1)
   const [dismissed, setDismissed] = useState(false)
-  const [files, setFiles] = useState<Files | null>(null)
-  const command = dismissed ? null : commandToken(caret.before)
-  const mention = dismissed || command !== null ? null : mentionToken(caret.before)
+  const listFiles = useCallback((query: string) => api.chatFiles(id, query), [id])
+  const pickList = usePromptPicks({
+    input,
+    caret,
+    off: dismissed,
+    commands: timeline.commands,
+    noCommands: 'Commands load when the thread starts',
+    listFiles,
+    onPicked: () => setCursor(-1),
+  })
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -87,18 +81,6 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     if (unseen.length === 0) return
     update({ draft: unseen.reduce((d, e) => appendText(d, e.text ?? ''), latest.current.draft), seen: unseen[unseen.length - 1].seq })
   }, [events, update])
-
-  useEffect(() => {
-    if (mention === null) return
-    let current = true
-    api.chatFiles(id, mention).then(
-      (paths) => current && setFiles({ paths, error: '' }),
-      (err) => current && setFiles({ paths: [], error: errorMessage(err) }),
-    )
-    return () => {
-      current = false
-    }
-  }, [id, mention])
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
@@ -141,31 +123,6 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     })
   }
 
-  // replaceToken puts text where the token typed so far is, with the @ or / before it.
-  const replaceToken = (token: string, text: string) => {
-    input.current?.deleteBefore(token.length + 1)
-    input.current?.insertLiteral(doubledSpace(text, caret.after) ? text.slice(0, -1) : text)
-    setCursor(-1)
-  }
-
-  const shownFiles = files ?? { paths: [], error: '' }
-  const commands = command === null ? [] : commandMatches(timeline.commands, command)
-  const pickList: PickList | null =
-    command !== null
-      ? {
-          label: 'Commands',
-          rows: commands.map(commandRow),
-          empty: timeline.commands.length === 0 ? 'Commands load when the thread starts' : 'No command matches',
-          pick: (i) => replaceToken(command, `/${commands[i].name} `),
-        }
-      : mention !== null
-        ? {
-            label: 'Files',
-            rows: shownFiles.paths.map(fileRow),
-            empty: files === null ? 'Listing the files' : shownFiles.error || 'No file matches',
-            pick: (i) => replaceToken(mention, `@${shownFiles.paths[i]} `),
-          }
-        : null
   const highlighted = pickList ? pickCursor(cursor, pickList.rows.length) : -1
 
   const onKeyDown = (e: KeyboardEvent) => {

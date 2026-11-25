@@ -145,6 +145,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const media = new Map<string, string>() // a saved image's data URL, by its path
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
   const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
+  // The command list a thread of each project reported last, as the service keeps it for Home.
+  const projectCommands = new Map<string, { at: number; list: typeof commands }>()
   let nextReply = 0
 
   const logOf = (id: string) => logs.get(id) ?? []
@@ -154,8 +156,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     const at = draft.at ?? Date.now()
     const e: ChatEvent = { ...draft, at, seq: draft.kind === 'delta' ? 0 : (log.at(-1)?.seq ?? 0) + 1 }
     if (e.seq > 0) logs.set(id, [...log, e])
+    if (e.kind === 'commands') keepCommands(id.slice(0, id.indexOf('/')), e)
     if (watched.has(id)) batch(id, e)
     return e
+  }
+
+  function keepCommands(project: string, e: ChatEvent) {
+    if ((projectCommands.get(project)?.at ?? 0) >= e.at) return
+    projectCommands.set(project, { at: e.at, list: e.input as typeof commands })
   }
 
   function batch(id: string, e: ChatEvent) {
@@ -416,6 +424,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       thread(id)
       return rankFiles(files, query)
     },
+    ProjectFiles: async (_project: string, query: string) => rankFiles(files, query),
+    ProjectCommands: async (project: string) => (projectCommands.get(project)?.list ?? []).map((c) => ({ ...c })),
   }
 
   // save checks the images as the service does and keeps each at the path it would have, under the thread's

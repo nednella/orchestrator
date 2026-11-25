@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { api } from '../api'
+import { commandToken } from '../chatComposer'
+import type { Command } from '../chatTimeline'
 import { EMPTY_DRAFT } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
@@ -8,11 +11,13 @@ import { defaultPlace, PLACE_ISSUE_HINT } from '../place'
 import type { Issue, Place } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
+import { usePromptPicks } from '../usePromptPicks'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
 import { ComposerPlaceChip } from './ComposerPlaceChip'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
+import { ComposerPickList } from './ComposerPickList'
 import { Icon } from './Icon'
 import { IssueChips } from './IssueChips'
 import { IssuePickList } from './IssuePickList'
@@ -32,7 +37,7 @@ const MODES: { value: ComposerMode; label: string }[] = [
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const a = useAgentos('issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
+  const a = useAgentos('project', 'issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
   const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })
@@ -42,8 +47,10 @@ export function HomeComposer() {
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
   const [chosenPlace, setChosenPlace] = useState<Place | null>(null)
+  const [commands, setCommands] = useState<Command[]>([])
   const pending = usePendingImages()
   const sending = useRef(false)
+  const projectKey = a.project?.key ?? ''
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
@@ -53,7 +60,20 @@ export function HomeComposer() {
   const token = note || dismissed ? null : TOKEN.exec(caret.before)
   const query = token?.[2].toLowerCase()
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
-  const highlighted = pickCursor(cursor, candidates.length)
+  // A new thread starts in the project folder, so a mention lists its files.
+  const listFiles = useCallback((q: string) => api.projectFiles(projectKey, q), [projectKey])
+  const picks = usePromptPicks({
+    input,
+    caret,
+    off: note || dismissed || token !== null,
+    commands,
+    noCommands: 'Commands show once a thread has run in this project.',
+    listFiles,
+    onPicked: () => setCursor(-1),
+  })
+  const rows = token ? candidates.length : (picks?.rows.length ?? 0)
+  const highlighted = pickCursor(cursor, rows)
+  const typingCommand = !note && commandToken(caret.before) !== null
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   // A place the owner has not picked follows the access.
   const place = chosenPlace && !pickedIssue ? chosenPlace : defaultPlace(a.composerAccess, Boolean(pickedIssue))
@@ -65,6 +85,19 @@ export function HomeComposer() {
   useEffect(() => {
     if (picked !== null && !a.issues.some((i) => i.number === picked)) setPicked(null)
   }, [picked, a.issues])
+
+  // A thread that ran since the list was read may have reported a newer one.
+  useEffect(() => {
+    if (!typingCommand || !projectKey) return
+    let current = true
+    a.report(async () => {
+      const list = await api.projectCommands(projectKey)
+      if (current) setCommands(list)
+    })
+    return () => {
+      current = false
+    }
+  }, [typingCommand, projectKey, a.report])
 
   const edit = (draft: ComposerDraft) => {
     a.setComposerDraft(draft)
@@ -113,14 +146,16 @@ export function HomeComposer() {
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    const step = token && pickListKey(e.key, candidates.length, highlighted)
+    const open = token !== null || picks !== null
+    const step = open && pickListKey(e.key, rows, highlighted)
     if (step) {
       e.preventDefault()
-      if ('pick' in step) pick(candidates[step.pick].number)
-      else setCursor(step.move)
+      if (!('pick' in step)) setCursor(step.move)
+      else if (token) pick(candidates[step.pick].number)
+      else picks?.pick(step.pick)
       return
     }
-    if (token && e.key === 'Escape') {
+    if (open && e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
       setDismissed(true)
@@ -140,7 +175,13 @@ export function HomeComposer() {
         sendLabel={note ? 'Add note' : live ? 'Open its thread' : pickedIssue ? `Start #${pickedIssue.number}` : 'Start thread'}
         sendText={note ? 'Add note' : live ? 'Open thread' : undefined}
         banner={live && <p className="px-2 py-1 text-label text-soft">#{pickedIssue?.number} already has a thread; sending opens it.</p>}
-        drawer={token && <IssuePickList issues={candidates} cursor={highlighted} onPick={pick} />}
+        drawer={
+          token ? (
+            <IssuePickList issues={candidates} cursor={highlighted} onPick={pick} />
+          ) : (
+            picks && <ComposerPickList label={picks.label} rows={picks.rows} cursor={highlighted} empty={picks.empty} onPick={picks.pick} />
+          )
+        }
         attachments={
           note
             ? pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} onRemove={pending.remove} />
