@@ -256,3 +256,100 @@ func TestLedgerChatUsage(t *testing.T) {
 		t.Errorf("work = %+v, want the task only", led.Work)
 	}
 }
+
+func TestLedgerPerDay(t *testing.T) {
+	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
+	at := func(ago int) int64 { return now.AddDate(0, 0, -ago).UnixMilli() }
+	day := func(ago int) string { return now.AddDate(0, 0, -ago).Format(time.DateOnly) }
+	log := loaded(t, t.TempDir())
+	for _, r := range []struct {
+		key  string
+		ago  int
+		kind string
+		ms   int64
+		cost int64
+	}{
+		{"alpha", 0, activity.Prompt, 0, 0},
+		{"alpha", 0, activity.Worked, 1000, 0},
+		{"beta", 0, activity.Prompt, 0, 0},
+		{"beta", 0, activity.Usage, 0, 1_500_000},
+		{"alpha", 2, activity.Prompt, 0, 0},
+		{"alpha", 2, activity.ChatUsage, 0, 250_000},
+		{"alpha", 6, activity.Prompt, 0, 0},
+		{"alpha", 6, activity.Worked, 3000, 0},
+		{"alpha", 7, activity.Prompt, 0, 0},
+		{"alpha", 13, activity.Worked, 500, 0},
+		{"alpha", 14, activity.Prompt, 0, 0},
+	} {
+		log.Record(r.key, activity.Event{At: at(r.ago), Kind: r.kind, Session: r.key + "/aaaaaaaa", Ms: r.ms, Tokens: usage.Tokens{Input: 1, Cost: r.cost}})
+	}
+	books := NewBooks(log, fakeProjects{{Name: "Alpha", Dir: "/a"}, {Name: "Beta", Dir: "/b"}})
+	build := func(days int, key string) Ledger {
+		t.Helper()
+		led, err := books.Ledger(days, key, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return led
+	}
+
+	t.Run("a day each, every project summed", func(t *testing.T) {
+		led := build(7, "")
+		want := []DayFigures{
+			{Day: day(6), Prompts: 1, WorkMs: 3000},
+			{Day: day(5)}, {Day: day(4)}, {Day: day(3)},
+			{Day: day(2), Prompts: 1, Cost: 0.25},
+			{Day: day(1)},
+			{Day: day(0), Prompts: 2, WorkMs: 1000, Cost: 1.5},
+		}
+		if !slices.Equal(led.PerDay, want) {
+			t.Errorf("per day = %+v, want %+v", led.PerDay, want)
+		}
+	})
+
+	t.Run("the period before ends where the range starts", func(t *testing.T) {
+		prev := build(7, "").Previous
+		if prev.Prompts != 1 || prev.WorkMs != 500 || prev.Cost != 0 {
+			t.Errorf("previous = %+v, want day 7's prompt and day 13's work, not day 14's prompt", prev)
+		}
+	})
+
+	t.Run("one project", func(t *testing.T) {
+		led := build(1, "beta")
+		if want := []DayFigures{{Day: day(0), Prompts: 1, Cost: 1.5}}; !slices.Equal(led.PerDay, want) {
+			t.Errorf("per day = %+v, want %+v", led.PerDay, want)
+		}
+		if led.Previous != (LedgerRow{}) {
+			t.Errorf("previous = %+v, want nothing: beta had no record yesterday", led.Previous)
+		}
+	})
+
+	t.Run("lifetime runs from the first record to today", func(t *testing.T) {
+		led := build(0, "")
+		if len(led.PerDay) != 15 || led.PerDay[0] != (DayFigures{Day: day(14), Prompts: 1}) || led.PerDay[14].Day != day(0) {
+			t.Errorf("per day = %d days, %+v .. %+v", len(led.PerDay), led.PerDay[0], led.PerDay[len(led.PerDay)-1])
+		}
+		if led.Previous != (LedgerRow{}) {
+			t.Errorf("previous = %+v, want none for lifetime", led.Previous)
+		}
+	})
+}
+
+func TestLedgerPerDayWithoutRecord(t *testing.T) {
+	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
+	books := NewBooks(loaded(t, t.TempDir()), fakeProjects{{Name: "Solo", Dir: "/s"}})
+	for _, days := range []int{0, 30} {
+		led, err := books.Ledger(days, "", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[int]int{0: 0, 30: 30}[days]; len(led.PerDay) != want || led.PerDay == nil {
+			t.Errorf("%d days: per day = %d days, want %d", days, len(led.PerDay), want)
+		}
+		for _, f := range led.PerDay {
+			if f.Prompts != 0 || f.WorkMs != 0 || f.Cost != 0 {
+				t.Errorf("%d days: %+v, want an empty day", days, f)
+			}
+		}
+	}
+}

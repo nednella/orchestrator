@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/usage"
 )
 
 // heatDays is how many days the heat map covers: 52 weeks.
@@ -14,13 +15,23 @@ const heatDays = 364
 
 // Ledger is what the agents did in one project or across every project, from the event log.
 type Ledger struct {
-	Days     int         `json:"days"`     // 0 for lifetime
-	Since    string      `json:"since"`    // the first day with any record, "" when there is none
-	Totals   LedgerRow   `json:"totals"`   // every project summed
-	Projects []LedgerRow `json:"projects"` // most prompts first, then by name
-	Heat     []DayCount  `json:"heat"`     // prompts per day, the 364 days ending today, oldest first
-	Usage    Usage       `json:"usage"`
-	Work     []WorkRow   `json:"work"` // latest first
+	Days     int          `json:"days"`     // 0 for lifetime
+	Since    string       `json:"since"`    // the first day with any record, "" when there is none
+	Totals   LedgerRow    `json:"totals"`   // every project summed
+	Projects []LedgerRow  `json:"projects"` // most prompts first, then by name
+	Previous LedgerRow    `json:"previous"` // every project summed over the days days before these; zero for lifetime
+	PerDay   []DayFigures `json:"perDay"`   // each of the ledger's days, oldest first; for lifetime from Since to today
+	Heat     []DayCount   `json:"heat"`     // prompts per day, the 364 days ending today, oldest first
+	Usage    Usage        `json:"usage"`
+	Work     []WorkRow    `json:"work"` // latest first
+}
+
+// DayFigures is what the agents did on one day, every project in the ledger summed.
+type DayFigures struct {
+	Day     string  `json:"day"`
+	Prompts int     `json:"prompts"`
+	WorkMs  int64   `json:"workMs"`
+	Cost    float64 `json:"cost"` // US dollars at list prices
 }
 
 // LedgerRow is one project's figures, or all of them in the totals.
@@ -64,6 +75,27 @@ func (t total) row(project string) LedgerRow {
 	return r
 }
 
+// dayFigures is one day's figures, summed over projects, with the cost kept in millionths of a dollar.
+type dayFigures struct {
+	prompts int
+	workMs  int64
+	cost    int64
+}
+
+func (f *dayFigures) add(d Day) {
+	f.prompts += d.Prompts
+	f.workMs += d.WorkMs
+	f.cost += d.spending.all.Cost
+}
+
+// of is the day's figures, zero for a day with no record.
+func (f *dayFigures) of(day string) DayFigures {
+	if f == nil {
+		return DayFigures{Day: day}
+	}
+	return DayFigures{Day: day, Prompts: f.prompts, WorkMs: f.workMs, Cost: usage.Tokens{Cost: f.cost}.Dollars()}
+}
+
 // Registry lists the configured projects.
 type Registry interface{ List() []project.Project }
 
@@ -82,36 +114,57 @@ func NewBooks(l *Log, p Registry) *Books {
 func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 	days = max(days, 0)
 	y, m, d := now.Date()
-	from := ""
+	date := func(day int) string { return time.Date(y, m, day, 0, 0, 0, 0, now.Location()).Format(time.DateOnly) }
+	from, before := "", ""
 	if days > 0 {
-		from = time.Date(y, m, d-(days-1), 0, 0, 0, 0, now.Location()).Format(time.DateOnly)
+		from, before = date(d-(days-1)), date(d-(2*days-1))
 	}
-	led := Ledger{Days: days, Projects: []LedgerRow{}, Heat: make([]DayCount, heatDays), Work: []WorkRow{}}
+	led := Ledger{Days: days, Projects: []LedgerRow{}, PerDay: []DayFigures{}, Heat: make([]DayCount, heatDays), Work: []WorkRow{}}
 	heat := map[string]int{}
-	var totals total
+	figures := map[string]*dayFigures{}
+	var totals, previous total
 	for _, p := range b.projects.List() {
 		if key != "" && p.Key() != key {
 			continue
 		}
-		var sum total
-		closed := map[int]bool{}
+		var sum, prev total
+		closed, prevClosed := map[int]bool{}, map[int]bool{}
 		for day, v := range b.log.Days(p.Key()) {
 			if led.Since == "" || day < led.Since {
 				led.Since = day
 			}
 			heat[day] += v.Prompts
-			if day >= from {
+			switch {
+			case day >= from:
 				sum.add(v)
 				for _, n := range v.ClosedIssues {
 					closed[n] = true
+				}
+				if figures[day] == nil {
+					figures[day] = &dayFigures{}
+				}
+				figures[day].add(v)
+			case day >= before:
+				prev.add(v)
+				for _, n := range v.ClosedIssues {
+					prevClosed[n] = true
 				}
 			}
 		}
 		sum.issuesClosed = len(closed)
 		totals.add(sum.Day)
 		totals.issuesClosed += sum.issuesClosed
+		prev.issuesClosed = len(prevClosed)
+		previous.add(prev.Day)
+		previous.issuesClosed += prev.issuesClosed
 		led.Projects = append(led.Projects, sum.row(p.Name))
 		led.Work = append(led.Work, sum.spending.work(p.Name)...)
+	}
+	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	start, err := time.ParseInLocation(time.DateOnly, cmp.Or(from, led.Since), now.Location())
+	for t := start; err == nil && !t.After(today); t = t.AddDate(0, 0, 1) {
+		day := t.Format(time.DateOnly)
+		led.PerDay = append(led.PerDay, figures[day].of(day))
 	}
 	for i := range led.Heat {
 		day := time.Date(y, m, d-(heatDays-1-i), 0, 0, 0, 0, now.Location()).Format(time.DateOnly)
@@ -128,6 +181,7 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 		return cmp.Or(cmp.Compare(b.LastAt, a.LastAt), cmp.Compare(a.Project, b.Project), cmp.Compare(a.Issue, b.Issue), cmp.Compare(a.Session, b.Session))
 	})
 	led.Totals = totals.row("")
+	led.Previous = previous.row("")
 	led.Usage = totals.spending.usage()
 	return led, nil
 }

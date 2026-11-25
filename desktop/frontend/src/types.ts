@@ -247,11 +247,20 @@ export type WorkRow = {
   lastAt: number
 }
 
+export type DayFigures = {
+  day: string
+  prompts: number
+  workMs: number
+  cost: number
+}
+
 export type Ledger = {
   days: number
   since: string
   totals: LedgerRow
   projects: LedgerRow[]
+  previous: LedgerRow
+  perDay: DayFigures[]
   heat: { day: string; count: number }[]
   usage: { totals: UsageRow; tasks: UsageRow; byModel: UsageRow[]; pricesAsOf: string }
   work: WorkRow[]

@@ -698,7 +698,15 @@ export function createMock(params: URLSearchParams) {
       { project: 'agentos', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
     const usage = { totals: usageRow('', '', 1, totals.sessions + totals.chats), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
-    return { days, since: dayKey(120), totals, projects, heat, usage, work: work.filter((w) => !project || w.project === project) }
+    const span = heat.slice(-(days === 0 ? 121 : Math.min(days, heat.length)))
+    const weight = span.reduce((a, d) => a + d.count, 0) || 1
+    const perDay = span.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.count) / weight), workMs: Math.round((totals.workMs * d.count) / weight), cost: (totals.cost * d.count) / weight }))
+    const before = (n: number) => Math.round(n * 0.88)
+    const previous: LedgerRow =
+      days === 0
+        ? row('', 0)
+        : { ...totals, prompts: before(totals.prompts), sessions: before(totals.sessions * 1.1), workMs: before(totals.workMs * 0.9), cost: totals.cost * 0.85, prsMerged: before(totals.prsMerged) }
+    return { days, since: dayKey(120), totals, projects, previous, perDay, heat, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
   function finishCleanup(s: Session) {
