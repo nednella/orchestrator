@@ -147,8 +147,10 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
               {session.branch && (
                 <>
                   <GitBranch size={12} className="flex-none text-dim" aria-hidden="true" />
-                  <span className="truncate">{branch.head}</span>
-                  {branch.tail && <span className="flex-none">{branch.tail}</span>}
+                  <span className="flex min-w-0">
+                    <span className="truncate">{branch.head}</span>
+                    {branch.tail && <span className="flex-none">{branch.tail}</span>}
+                  </span>
                 </>
               )}
             </span>

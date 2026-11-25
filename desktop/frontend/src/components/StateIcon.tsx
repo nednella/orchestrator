@@ -9,7 +9,7 @@ const ICON: Record<State, IconName> = { waiting: 'needs-you', working: 'loader',
 
 export function StateIcon({ state }: StateIconProps) {
   return (
-    <span role="img" aria-label={STATE_LABEL[state]} data-state={state} className={`flex flex-none ${state === 'working' ? 'animate-spin' : ''}`} style={{ color: 'var(--c)' }}>
+    <span role="img" aria-label={STATE_LABEL[state]} data-state={state} className="flex flex-none" style={{ color: 'var(--c)' }}>
       <Icon name={ICON[state]} size={16} />
     </span>
   )
