@@ -33,7 +33,7 @@ export function DigestToolsMenu({ tools, onPick }: DigestToolsMenuProps) {
   return (
     <div ref={root} className="relative flex-none">
       <button
-        className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-small font-medium whitespace-nowrap text-[color-mix(in_srgb,var(--text)_80%,transparent)] hover:bg-hover hover:text-ink aria-expanded:bg-hover aria-expanded:text-ink"
+        className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-small font-medium whitespace-nowrap text-[var(--text-chip)] hover:bg-hover hover:text-ink aria-expanded:bg-hover aria-expanded:text-ink"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}

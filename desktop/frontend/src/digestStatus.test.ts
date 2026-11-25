@@ -13,6 +13,9 @@ test('the run state comes from running, then the error, then whether it ever ran
   assert.equal(runState({ ...never, lastRunAt: now }), 'checked')
   assert.equal(runState({ ...never, lastRunAt: now, error: 'claude exited' }), 'failed')
   assert.equal(runState({ ...never, error: 'claude exited', running: true }), 'running')
+  assert.equal(runState({ ...never, startedAt: now }), 'failed')
+  assert.equal(runState({ ...never, startedAt: now, lastRunAt: now - day }), 'failed')
+  assert.equal(runState({ ...never, startedAt: now - day, lastRunAt: now }), 'checked')
 })
 
 test('ago reads in words', () => {
@@ -28,9 +31,13 @@ test('a finished run says when it ran and how long it took', () => {
   assert.equal(runStatus({ ...never, startedAt: lastRunAt - 124_000, lastRunAt }, now, formatWorked), 'Checked 2 days ago in 2m 4s')
 })
 
-test('a finished run with a later start that failed and was forgotten says only when it ran', () => {
-  const lastRunAt = now - 2 * day
-  assert.equal(runStatus({ ...never, startedAt: now - day, lastRunAt }, now, formatWorked), 'Checked 2 days ago')
+test('a run that ran before start times were kept says only when it ran', () => {
+  assert.equal(runStatus({ ...never, lastRunAt: now - 2 * day }, now, formatWorked), 'Checked 2 days ago')
+})
+
+test('a run that failed before a restart, which forgot why, says the last run failed', () => {
+  assert.equal(runStatus({ ...never, startedAt: now - day }, now, formatWorked), 'Last run failed')
+  assert.equal(runStatus({ ...never, startedAt: now - day, lastRunAt: now - 2 * day }, now, formatWorked), 'Last run failed')
 })
 
 test('a running run says how long it has been checking and when it started', () => {
@@ -42,7 +49,6 @@ test('a running run says how long it has been checking and when it started', () 
 test('a failed run says how long it ran and when it stopped', () => {
   const stoppedAt = now - 2 * day
   assert.equal(runStatus({ ...never, error: 'claude exited', startedAt: stoppedAt - 124_000, stoppedAt }, now, formatWorked), 'Stopped after 2m 4s, 2 days ago')
-  assert.equal(runStatus({ ...never, error: 'claude exited' }, now, formatWorked), 'Stopped')
 })
 
 test('a project that never ran says so', () => {

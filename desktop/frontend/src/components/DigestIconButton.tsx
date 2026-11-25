@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
-type DigestIconButtonProps = { label: string; onClick(): void; children: ReactNode }
+// tip is the short name the tooltip shows when the label is longer.
+type DigestIconButtonProps = { label: string; tip?: string; onClick(): void; children: ReactNode }
 
-export function DigestIconButton({ label, onClick, children }: DigestIconButtonProps) {
+export function DigestIconButton({ label, tip = label, onClick, children }: DigestIconButtonProps) {
   return (
     <button
       className="group/tip relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-lg text-soft transition-[background-color,color,transform] duration-[120ms] hover:bg-[var(--bg-ghost-hover)] hover:text-ink active:scale-[0.97] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
@@ -15,7 +16,7 @@ export function DigestIconButton({ label, onClick, children }: DigestIconButtonP
         style={{ zIndex: 'var(--z-popup)' }}
         aria-hidden="true"
       >
-        {label}
+        {tip}
       </span>
     </button>
   )

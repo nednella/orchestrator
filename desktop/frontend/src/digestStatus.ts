@@ -4,9 +4,10 @@ export type RunState = 'running' | 'failed' | 'never' | 'checked'
 
 type RunTimes = Pick<Digest, 'running' | 'startedAt' | 'lastRunAt' | 'nextRunAt' | 'error' | 'stoppedAt'>
 
+// A start after the last finish with no error is a run that failed before a restart, which forgets why.
 export function runState(d: RunTimes): RunState {
   if (d.running) return 'running'
-  if (d.error) return 'failed'
+  if (d.error || d.startedAt > d.lastRunAt) return 'failed'
   return d.lastRunAt === 0 ? 'never' : 'checked'
 }
 
@@ -30,13 +31,12 @@ export function runStatus(d: RunTimes, now: number, took: (ms: number) => string
     case 'running':
       return `Checking for ${took(now - d.startedAt)}`
     case 'failed':
-      return d.stoppedAt ? `Stopped after ${took(d.stoppedAt - d.startedAt)}, ${agoWords(d.stoppedAt, now)}` : 'Stopped'
+      return d.stoppedAt ? `Stopped after ${took(d.stoppedAt - d.startedAt)}, ${agoWords(d.stoppedAt, now)}` : 'Last run failed'
     case 'never':
       return 'Never run'
     case 'checked': {
       const ago = `Checked ${agoWords(d.lastRunAt, now)}`
-      // A start after the last finish is a run that failed since; how long the last good run took is not kept.
-      return d.startedAt > 0 && d.startedAt <= d.lastRunAt ? `${ago} in ${took(d.lastRunAt - d.startedAt)}` : ago
+      return d.startedAt > 0 ? `${ago} in ${took(d.lastRunAt - d.startedAt)}` : ago
     }
   }
 }

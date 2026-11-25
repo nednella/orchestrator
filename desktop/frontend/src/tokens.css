@@ -74,6 +74,7 @@
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
   --bg-ghost-hover: color-mix(in srgb, var(--text) 7%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
+  --text-chip: color-mix(in srgb, var(--text) 80%, transparent);
   --bg-danger: color-mix(in srgb, var(--danger) 6%, transparent);
   --border-danger: color-mix(in srgb, var(--danger) 35%, transparent);
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);

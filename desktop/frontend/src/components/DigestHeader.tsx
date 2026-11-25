@@ -1,14 +1,16 @@
 import { Newspaper, RefreshCw } from 'lucide-react'
 import { DigestTile } from './DigestTile'
 
+// button is the header's own: Run now once the digest has items, Checking while a run goes, none otherwise,
+// since the empty and failed states carry their own.
 type DigestHeaderProps = {
   project: string
   automatic: boolean
-  running: boolean
+  button: 'run' | 'checking' | null
   onRun(): void
 }
 
-export function DigestHeader({ project, automatic, running, onRun }: DigestHeaderProps) {
+export function DigestHeader({ project, automatic, button, onRun }: DigestHeaderProps) {
   return (
     <header className="flex flex-wrap items-center gap-3">
       <DigestTile size="md">
@@ -20,12 +22,13 @@ export function DigestHeader({ project, automatic, running, onRun }: DigestHeade
           What changed in the tools {project} depends on, picked by an agent {automatic ? 'each week' : 'when you run it'}
         </p>
       </div>
-      {running ? (
+      {button === 'checking' && (
         <button className="btn" disabled>
           <span className="spinner" aria-hidden="true" />
           Checking
         </button>
-      ) : (
+      )}
+      {button === 'run' && (
         <button className="btn" onClick={onRun}>
           <RefreshCw size={14} aria-hidden />
           Run now

@@ -40,20 +40,22 @@ export function DigestView() {
 
   const run = () => report(runDigest)
   const showTool = (key: string) => panel.current?.querySelector(`[data-tool="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  const state = digest ? runState(digest) : 'never'
+  const state = digest ? runState(digest) : null
+  const empty = (digest?.items.length ?? 0) === 0
+  const button = loading ? null : state === 'running' ? 'checking' : state === 'checked' && !empty ? 'run' : null
 
   return (
     <section ref={panel} data-panel="thread" tabIndex={-1} aria-label="News" className="panel @container h-full min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-[46rem] px-4 pt-6 pb-16 @max-[40rem]:pt-4">
-        <DigestHeader project={project?.name ?? 'this project'} automatic={(digest?.nextRunAt ?? 0) > 0} running={!digest || digest.running} onRun={run} />
+        <DigestHeader project={project?.name ?? 'this project'} automatic={(digest?.nextRunAt ?? 0) > 0} button={button} onRun={run} />
         {loading && <Loading />}
         {!loading && digest && (
           <>
             <DigestStatusRow digest={digest} />
             {state === 'running' && <DigestRunLines found={digest.items.filter((i) => i.at >= digest.startedAt)} />}
             {state === 'failed' && <DigestFailure error={digest.error} onRun={run} />}
-            {(state === 'never' || state === 'checked') && digest.items.length === 0 && <DigestEmpty onRun={run} />}
-            {digest.items.length > 0 && (
+            {(state === 'never' || state === 'checked') && empty && <DigestEmpty onRun={run} />}
+            {!empty && (
               <>
                 <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-2">
                   <DigestFilters value={filter} counts={counts} onChange={setFilter} />

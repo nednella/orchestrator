@@ -39,7 +39,7 @@ export function DigestItemRow({ item, fresh }: DigestItemRowProps) {
       {item.why && <p className="col-start-2 mt-0.5 leading-[1.625] text-soft">{item.why}</p>}
       <div className="col-start-3 row-start-1 flex h-5 items-center gap-2 @max-[40rem]:col-start-2 @max-[40rem]:row-start-auto @max-[40rem]:mt-1.5 @max-[40rem]:h-auto @max-[40rem]:flex-row-reverse @max-[40rem]:justify-end">
         <div className="flex gap-0.5 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100 @max-[40rem]:opacity-100 [@media(hover:none)]:opacity-100">
-          <DigestIconButton label="Open source" onClick={() => report(() => api.openURL(item.url))}>
+          <DigestIconButton label={host ? `Open the source on ${host}` : 'Open the source'} tip="Open source" onClick={() => report(() => api.openURL(item.url))}>
             <ExternalLink size={12} aria-hidden />
           </DigestIconButton>
           {!saved && (
