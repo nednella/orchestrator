@@ -864,6 +864,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 	delete(s.nums, id)
 	delete(s.readers, id)
 	delete(s.spent, id)
+	s.dropTold(id, "it was deleted")
 	delete(s.wakes, id)
 	delete(s.afterTurn, id)
 	delete(s.cwds, id)
@@ -2893,6 +2894,32 @@ func (s *Sessions) awaken(id string) error {
 		return fmt.Errorf("No thread %s", id)
 	}
 	return nil
+}
+
+// DropTold drops the messages threads told the thread id that are held for it, and says how many: a thread stopped
+// at another thread's ask must not start a new turn for them once its approval ends. It takes mu.
+func (s *Sessions) DropTold(id string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dropTold(id, "it was stopped")
+}
+
+// dropTold drops the messages threads told the thread that are held for it, logs it with why, and says how many. It
+// needs mu.
+func (s *Sessions) dropTold(id, why string) int {
+	all := s.wakes[id]
+	kept := slices.DeleteFunc(slices.Clone(all), func(h heldPrompt) bool { return !h.command })
+	dropped := len(all) - len(kept)
+	if dropped == 0 {
+		return 0
+	}
+	if len(kept) > 0 {
+		s.wakes[id] = kept
+	} else {
+		delete(s.wakes, id)
+	}
+	log.Printf("agentos: dropped %d messages held for thread %s: %s", dropped, id, why)
+	return dropped
 }
 
 // hold puts what a host refused while an approval waited back before what is held for the thread. It takes mu.

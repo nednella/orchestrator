@@ -467,6 +467,33 @@ func TestStopReachesDescendants(t *testing.T) {
 	}
 }
 
+func TestStopDropsTheMessagesHeldForAThread(t *testing.T) {
+	h := apptest.New(t)
+	tr := newTree(t, h)
+	if _, err := h.ChatSend(tr.child, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
+	if a := sendAs(t, h, tr.sibling, `{"thread":"`+tr.child+`","text":"also check the index"}`); !a.Held {
+		t.Fatalf("send answered %+v, want it held", a)
+	}
+
+	var out struct {
+		Stopped []string
+		Dropped int
+	}
+	mustUse(t, h, tr.top, "stop", `{"thread":"`+tr.child+`"}`, &out)
+	if !slices.Equal(out.Stopped, []string{tr.child}) || out.Dropped != 1 {
+		t.Fatalf("stop = %+v, want the child stopped and one message dropped", out)
+	}
+	apptest.Eventually(t, "the turn's end", func() bool { return !turnOpen(t, h, tr.child) })
+	h.Sessions().Refresh() // a refresh delivers what is held once the thread may take it
+	time.Sleep(time.Second)
+	if stdinHas(t, h, tr.child, "also check the index") || turnOpen(t, h, tr.child) {
+		t.Errorf("stdin = %q: the stopped thread got the held message and started a turn for it", h.Stdin(t, tr.child))
+	}
+}
+
 func TestStopRefusesAThreadThatIsNotADescendant(t *testing.T) {
 	h := apptest.New(t)
 	tr := newTree(t, h)

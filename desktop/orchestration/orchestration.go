@@ -24,6 +24,7 @@ type Threads interface {
 	Title(id string) string
 	Tell(id string, m sessions.Told) (string, error)
 	Descendants(id string) []string
+	DropTold(id string) int
 }
 
 // tool runs one agentos tool as the caller, the thread the call's token names.

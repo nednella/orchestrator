@@ -69,8 +69,9 @@ type stopInput struct {
 }
 
 // stop answers the stop tool: it ends the running turn of a descendant of the caller and of each of that thread's own
-// descendants, and answers those it stopped. Each interrupt is logged as from the caller, so a stop the caller asked
-// for is told from the owner's. No other thread can be stopped.
+// descendants, and answers those it stopped and how many messages held for them it dropped, so none of them starts a
+// new turn once its approval ends. Each interrupt is logged as from the caller, so a stop the caller asked for is told
+// from the owner's. No other thread can be stopped.
 func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (string, error) {
 	var in stopInput
 	if err := decode(req.Opts["input"], &in); err != nil {
@@ -82,7 +83,7 @@ func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (st
 	if !slices.Contains(c.threads.Descendants(caller), in.Thread) {
 		return "", fmt.Errorf("Thread %s is not a child of this thread", in.Thread)
 	}
-	stopped := []string{}
+	stopped, dropped := []string{}, 0
 	for _, id := range append([]string{in.Thread}, c.threads.Descendants(in.Thread)...) {
 		ch, err := c.threads.ChatOf(id)
 		if err != nil || !ch.Live {
@@ -96,6 +97,7 @@ func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (st
 		if !turnRuns(events) {
 			continue
 		}
+		dropped += c.threads.DropTold(id)
 		if err := host.InterruptFrom(ctx, ch.Socket, caller); err != nil {
 			log.Printf("agentos: thread %s did not stop thread %s: %v", caller, id, err)
 			continue
@@ -104,7 +106,8 @@ func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (st
 	}
 	data, err := json.Marshal(struct {
 		Stopped []string `json:"stopped"`
-	}{stopped})
+		Dropped int      `json:"dropped"`
+	}{stopped, dropped})
 	if err != nil {
 		return "", fmt.Errorf("writing the answer: %w", err)
 	}
