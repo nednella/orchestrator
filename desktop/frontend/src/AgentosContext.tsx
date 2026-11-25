@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { agentsTabShown } from './chatAgents'
 import { answeredLate } from './chatQuestions'
+import { nextView } from './detailsTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
@@ -21,7 +22,6 @@ export type Toast = {
 }
 
 export type SessionView = 'pr' | 'evidence' | 'browser' | 'agents'
-export const SESSION_VIEWS: SessionView[] = ['pr', 'evidence', 'browser', 'agents']
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
@@ -810,9 +810,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       cycleSessionView(delta) {
         const id = selectedRef.current
         if (!id) return
-        const views = SESSION_VIEWS.filter((v) => v !== 'agents' || agentsTabShown(id, sessionsRef.current))
-        const at = views.indexOf(viewsRef.current[id] ?? 'pr')
-        const next = views[(at + delta + views.length) % views.length]
+        const next = nextView(viewsRef.current[id] ?? 'pr', delta, agentsTabShown(id, sessionsRef.current))
         setViews((map) => ({ ...map, [id]: next }))
       },
       async openBrowser(id, url) {

@@ -1,6 +1,7 @@
 import { useAgentos } from '../AgentosContext'
 import type { SessionView } from '../AgentosContext'
 import { agentsTabShown, useAgentsRunning } from '../chatAgents'
+import { shownView } from '../detailsTabs'
 import type { PanelContext } from '../panelViews'
 import { AgentsTab } from './AgentsTab'
 import { BrowserTab } from './BrowserTab'
@@ -15,8 +16,7 @@ export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) 
   const agentsRunning = useAgentsRunning(session?.id ?? '')
   if (!session) return null
   const withAgents = agentsTabShown(session.id, sessions)
-  const chosen = viewOf(session.id)
-  const view = chosen === 'agents' && !withAgents ? 'pr' : chosen
+  const view = shownView(viewOf(session.id), withAgents)
   const browserOpen = browserStates[session.id]?.open ?? session.browser
   const running = (agentsRunning ?? 0) + sessions.filter((s) => s.parent === session.id && s.state === 'working').length
   const tabs: { id: SessionView; label: string; count?: number; live?: boolean }[] = [
