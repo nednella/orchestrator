@@ -212,22 +212,43 @@ type claudeSettings struct {
 }
 
 // modelEffort is the effort set for a model in modelSettings, which names models by full id. An alias
-// stands for the newest id of its family, so it takes the highest id that starts with claude-<alias>-.
+// stands for the newest id of its family, so it takes the newest id that starts with claude-<alias>-.
 func (s claudeSettings) modelEffort(model string) string {
 	model = strings.TrimSuffix(model, "[1m]")
-	if m, ok := s.ModelSettings[model]; ok {
-		return m.EffortLevel
-	}
-	if !slices.Contains(claudeAliases, model) {
-		return ""
-	}
-	var newest string
-	for id := range s.ModelSettings {
-		if strings.HasPrefix(id, "claude-"+model+"-") && id > newest {
-			newest = id
+	var exact, newest string
+	found := false
+	for key, m := range s.ModelSettings {
+		id := strings.TrimSuffix(key, "[1m]")
+		if id == model {
+			exact = m.EffortLevel
+			found = true
+		}
+		if strings.HasPrefix(id, "claude-"+model+"-") && (newest == "" || newerModelID(id, strings.TrimSuffix(newest, "[1m]"))) {
+			newest = key
 		}
 	}
+	if found || !slices.Contains(claudeAliases, model) {
+		return exact
+	}
 	return s.ModelSettings[newest].EffortLevel
+}
+
+// newerModelID reports whether id a is newer than b: segments split on "-" compare as numbers when both
+// are numbers, else as strings, and an id that extends another one is newer.
+func newerModelID(a, b string) bool {
+	as, bs := strings.Split(a, "-"), strings.Split(b, "-")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if as[i] == bs[i] {
+			continue
+		}
+		x, errX := strconv.Atoi(as[i])
+		y, errY := strconv.Atoi(bs[i])
+		if errX == nil && errY == nil {
+			return x > y
+		}
+		return as[i] > bs[i]
+	}
+	return len(as) > len(bs)
 }
 
 // Fill reads claude's settings files, the project's local and shared ones before the user's, so the first
