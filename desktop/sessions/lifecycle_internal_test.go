@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -289,12 +290,15 @@ func (noEvidence) Count(string) int { return 0 }
 func (noEvidence) Purge(string) int { return 0 }
 
 // asleepAndKept is an app with one asleep thread whose clean-up the checks kept after its PR merged. The thread has no
-// worktree agentos made, so a clean-up that goes on runs no git.
+// worktree agentos made, so a clean-up that goes on runs no git, and every command fails.
 func asleepAndKept(t *testing.T) (*Sessions, session.Name) {
 	t.Helper()
 	dir := t.TempDir()
 	proj := project.Project{Name: "p", Dir: dir}
-	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Projects: fixedProjects{proj}, Current: proj, Activity: noActivity{}, Browsers: fakeBrowsers{}, Evidence: noEvidence{}, Emit: func(string, any) {}})
+	noCommands := func(context.Context, string, string, ...string) ([]byte, error) {
+		return nil, errors.New("this test runs no commands")
+	}
+	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Run: noCommands, Projects: fixedProjects{proj}, Current: proj, Activity: noActivity{}, Browsers: fakeBrowsers{}, Evidence: noEvidence{}, Emit: func(string, any) {}})
 	name := session.Name{Project: "p", Token: "abcdefgh"}
 	id := name.String()
 	s.nums[id] = 3
@@ -354,6 +358,18 @@ func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
 	s.life.sweep(t.Context())
 	s.life.cleanups.Wait()
 	if f := s.life.fields(id); f.cleanup != "blocked" || len(s.life.Cleanups("p")) != 0 {
+		t.Errorf("cleanup %q, log %+v; want the kept clean-up left as it was", f.cleanup, s.life.Cleanups("p"))
+	}
+}
+
+func TestNoSweepRunsWhenItIsOff(t *testing.T) {
+	s, name := asleepAndKept(t)
+	s.SetCleanupSweep(0)
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	s.life.Run(ctx)
+	s.life.cleanups.Wait()
+	if f := s.life.fields(name.String()); f.cleanup != "blocked" || len(s.life.Cleanups("p")) != 0 {
 		t.Errorf("cleanup %q, log %+v; want the kept clean-up left as it was", f.cleanup, s.life.Cleanups("p"))
 	}
 }

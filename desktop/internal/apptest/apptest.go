@@ -594,7 +594,7 @@ type Options struct {
 	NoProject       bool          // leave the project out of the config, so the app starts in a folder it does not know
 	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
-	CleanupSweep    time.Duration // how often kept clean-ups are tried again; an hour by default
+	CleanupSweep    time.Duration // how often kept clean-ups are tried again; 0 keeps the app's hour
 }
 
 // Harness is an app whose Claude sessions run the stand-in claude under the built command's host.

@@ -3623,7 +3623,8 @@ func (s *Sessions) isOld(id string) bool {
 	return slices.ContainsFunc(s.old, func(in term.Info) bool { return in.Name.String() == id })
 }
 
-// SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default. It comes before Run.
+// SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default; 0 or less turns the
+// sweep off. It comes before Run.
 func (s *Sessions) SetCleanupSweep(every time.Duration) { s.life.sweepEvery = every }
 
 // Run follows tmux, the hook bus and the pull requests until ctx ends.

@@ -346,8 +346,12 @@ func (l *Lifecycle) workTargets() []target {
 func (l *Lifecycle) Run(ctx context.Context) {
 	tick := time.NewTicker(reconcileEvery)
 	defer tick.Stop()
-	sweep := time.NewTicker(l.sweepEvery)
-	defer sweep.Stop()
+	var sweep <-chan time.Time // nil, so never ready, while the sweep is off
+	if l.sweepEvery > 0 {
+		t := time.NewTicker(l.sweepEvery)
+		defer t.Stop()
+		sweep = t.C
+	}
 	l.Poll(ctx)
 	for {
 		select {
@@ -355,7 +359,7 @@ func (l *Lifecycle) Run(ctx context.Context) {
 			return
 		case <-tick.C:
 			l.Poll(ctx)
-		case <-sweep.C:
+		case <-sweep:
 			l.sweep(ctx)
 		}
 	}
