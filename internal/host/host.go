@@ -267,7 +267,7 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 
 // echoEvent shows e in the pane. Claude sends its session id at every turn and its running cost at every turn's end,
 // so the echo shows the id only when it changes and the cost as the turn's own; a total below the last starts a new
-// count.
+// count, and a result with no cost shows none and keeps the count.
 func (h *host) echoEvent(e chat.Event) {
 	if !e.Persisted() {
 		return
@@ -281,11 +281,12 @@ func (h *host) echoEvent(e chat.Event) {
 		}
 		h.echoSession = e.ID
 	case chat.KindTurnEnd:
-		total := e.Cost
-		if total >= h.echoTotal {
-			e.Cost -= h.echoTotal
+		if total := e.Cost; total > 0 {
+			if total >= h.echoTotal {
+				e.Cost -= h.echoTotal
+			}
+			h.echoTotal = total
 		}
-		h.echoTotal = total
 	}
 	fmt.Fprintln(h.echo, echoLine(e))
 }
@@ -619,7 +620,10 @@ func echoLine(e chat.Event) string {
 	case chat.KindAnswer:
 		s = "answer: " + e.Text
 	case chat.KindTurnEnd:
-		s = fmt.Sprintf("turn ended, $%.4f", e.Cost)
+		s = "turn ended"
+		if e.Cost > 0 {
+			s += fmt.Sprintf(", $%.4f", e.Cost)
+		}
 		if e.Error {
 			s += ", with an error"
 		}

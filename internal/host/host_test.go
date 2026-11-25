@@ -955,11 +955,13 @@ func TestEchoShowsEachTurnsOwnCostAndANewSessionOnce(t *testing.T) {
 		{Kind: chat.KindTurnEnd, Cost: 0.0091},
 		{Kind: chat.KindInit, ID: "s2"},
 		{Kind: chat.KindTurnEnd, Cost: 0.0104, Error: true},
+		{Kind: chat.KindTurnEnd},
+		{Kind: chat.KindTurnEnd, Cost: 0.0111},
 		{Kind: chat.KindTurnEnd, Cost: 0.002},
 	} {
 		h.echoEvent(e)
 	}
-	want := "session s1\nturn ended, $0.0061\nturn ended, $0.0030\nsession s2\nturn ended, $0.0013, with an error\nturn ended, $0.0020\n"
+	want := "session s1\nturn ended, $0.0061\nturn ended, $0.0030\nsession s2\nturn ended, $0.0013, with an error\nturn ended\nturn ended, $0.0007\nturn ended, $0.0020\n"
 	if got := out.String(); got != want {
 		t.Errorf("echo =\n%s\nwant\n%s", got, want)
 	}
