@@ -498,6 +498,12 @@ func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {
 	}
 }
 
+func TestEchoShowsAThoughtsFirstLine(t *testing.T) {
+	if got := echoLine(chat.Event{Kind: chat.KindThought, Text: "**Reading the router**\n\nIt holds the routes."}); got != "thinking: **Reading the router**" {
+		t.Errorf("echo = %q", got)
+	}
+}
+
 func TestApprovalRoundTrip(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)

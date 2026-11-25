@@ -1148,6 +1148,9 @@ func echoLine(e chat.Event) string {
 		s = "you: " + e.Text
 	case chat.KindMessage:
 		s = "claude: " + e.Text
+	case chat.KindThought:
+		first, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
+		s = "thinking: " + first
 	case chat.KindToolUse:
 		s = "tool: " + e.Tool + " " + string(e.Input)
 	case chat.KindToolResult:
