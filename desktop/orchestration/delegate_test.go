@@ -1,13 +1,17 @@
 package orchestration_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
@@ -254,7 +258,7 @@ func TestDelegateChecksItsInput(t *testing.T) {
 		`{"task":"x","where":"there"}`:        `where must be folder, worktree or issue, not "there"`,
 		`{"task":"x","where":"issue"}`:        "Where issue needs the issue's number",
 		`{"task":"x","issue":7}`:              "An issue number goes with where issue",
-		`{"task":"x","project":"elsewhere"}`:  "Delegating to another project is not supported yet",
+		`{"task":"x","project":"elsewhere"}`:  `No project "elsewhere": the projects are main`,
 		`{"task":"x","model":"nope-model"}`:   "nope-model",
 		`{"task":"x","colour":"red"}`:         `json: unknown field "colour"`,
 		`{"task":"x","where":"folder","n":1}`: `json: unknown field "n"`,
@@ -475,7 +479,7 @@ func TestChildInTheParentsFolderTracksNoBranch(t *testing.T) {
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
 	inFolder := mustDelegate(t, h, parent.ID, `{"task":"read the login code","where":"folder","access":"supervised"}`)
-	want := "session " + inFolder.ID + " is a child in its parent's folder, which works on no branch of its own"
+	want := "session " + inFolder.ID + " is a child with no worktree, which works on no branch of its own"
 	for _, branch := range []string{"side-work", parent.Branch} {
 		if err := h.Sessions().Track(inFolder.ID, branch); err == nil || err.Error() != want {
 			t.Errorf("the child in its parent's folder tracks %s: %v, want %q", branch, err, want)
@@ -502,5 +506,187 @@ func TestCancelledDelegateStartsNoChild(t *testing.T) {
 	}
 	if got := h.Sessions().ChildrenOf(parent.ID); len(got) != 0 {
 		t.Errorf("ChildrenOf = %q, want none", got)
+	}
+}
+
+// otherProject adds a second project, in a folder of its own, and makes main current again, so the other one is not on
+// screen. It returns the other project's name and key.
+func otherProject(t *testing.T, h *apptest.Harness, dir string) (name, key string) {
+	t.Helper()
+	snap, err := h.AddProjectDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+	return snap.Project.Name, snap.Project.Key
+}
+
+// lockedBuffer is a log the app's goroutines may write to at once.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestDelegateToAnotherProject(t *testing.T) {
+	logged := &lockedBuffer{}
+	before := log.Writer()
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(before) })
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release")
+	main7, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	name, key := otherProject(t, h, dir)
+
+	c := mustDelegate(t, h, parent.ID, `{"task":"read the docs","title":"Read the docs","access":"read","project":"`+strings.ToUpper(name)+`"}`)
+	if c.Project != key || c.Where != "folder" || realDir(t, c.Dir) != realDir(t, dir) {
+		t.Errorf("delegate answered %+v; want project %s, folder %s", c, key, dir)
+	}
+	if got := panePath(t, h, c.ID); got != realDir(t, dir) {
+		t.Errorf("the child runs in %s, want the other project's folder %s", got, dir)
+	}
+	if r := row(t, h, c.ID); r.Project != key || r.Parent != parent.ID || r.Branch != "" {
+		t.Errorf("the child's row: project %q, parent %q, branch %q; want %s, %s, none", r.Project, r.Parent, r.Branch, key, parent.ID)
+	}
+	if session.ProjectKey(c.ID) != key {
+		t.Errorf("the child's id %s is not of project %s", c.ID, key)
+	}
+	apptest.Eventually(t, "the other project's sessions event with the child", func() bool {
+		return slices.ContainsFunc(h.Rec.LastSessionsOf(key), func(s sessions.Session) bool { return s.ID == c.ID && s.Parent == parent.ID })
+	})
+	if slices.ContainsFunc(h.Rec.LastSessionsOf("main"), func(s sessions.Session) bool { return s.ID == c.ID }) {
+		t.Error("main's sessions event lists the child")
+	}
+	if got := h.Sessions().ChildrenOf(parent.ID); !slices.Equal(got, []string{c.ID}) {
+		t.Errorf("ChildrenOf = %q, want the child in the other project", got)
+	}
+
+	issue := mustDelegate(t, h, parent.ID, `{"task":"fix it","where":"issue","issue":7,"project":"`+key+`"}`)
+	if r := row(t, h, issue.ID); r.Project != key || r.Issue != 7 || r.Parent != parent.ID || issue.ID == main7.ID {
+		t.Errorf("the child for the other project's #7: %+v; main's #7 is %s", r, main7.ID)
+	}
+	if _, err := delegateAs(t, h, parent.ID, `{"task":"again","where":"issue","issue":7,"project":"`+key+`"}`); err != "Issue #7 has thread "+issue.ID+": send to it instead" {
+		t.Errorf("a second child for the other project's #7: %q", err)
+	}
+
+	lines := strings.Count(logged.String(), "started child")
+	want := fmt.Sprintf("thread %s %q in project main started child %s %q in project %s", parent.ID, "Plan the release", c.ID, "Read the docs", name)
+	if lines != 2 || !strings.Contains(logged.String(), want) {
+		t.Errorf("logged %d delegations, want 2 with %q:\n%s", lines, want, logged.String())
+	}
+	mustDelegate(t, h, parent.ID, `{"task":"here","where":"folder","project":"main"}`)
+	if n := strings.Count(logged.String(), "started child"); n != 2 {
+		t.Errorf("after a delegation in the caller's own project %d delegations are logged, want 2", n)
+	}
+}
+
+func TestDelegateToAnUnknownProjectNamesTheProjects(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "parent")
+	dir := t.TempDir()
+	name, _ := otherProject(t, h, dir)
+	before := tmuxSessions(t, h)
+	for _, project := range []string{"nowhere", dir, "../" + name, "main/../" + name} {
+		want := fmt.Sprintf("No project %q: the projects are main, %s", project, name)
+		if c, err := delegateAs(t, h, parent.ID, `{"task":"x","access":"read","project":"`+project+`"}`); err != want {
+			t.Errorf("delegate to project %q: %+v, %q; want %q", project, c, err, want)
+		}
+	}
+	if after := tmuxSessions(t, h); !slices.Equal(after, before) {
+		t.Errorf("tmux sessions = %q, want %q: a refused delegate started one", after, before)
+	}
+}
+
+func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
+	h := apptest.New(t)
+	repoFixture(t, h)
+	parent := newThread(t, h, "Fix the login")
+	if err := os.WriteFile(filepath.Join(parent.Worktree, "login.txt"), []byte("fixed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, parent.Worktree, "add", "login.txt")
+	gitIn(t, parent.Worktree, "commit", "-m", "fix the login")
+	parentHead := gitIn(t, parent.Worktree, "rev-parse", "HEAD")
+
+	// The other project's clone is on a branch of its own, and its copy of origin's main is behind origin.
+	root := t.TempDir()
+	origin, dir, pusher := filepath.Join(root, "docs.git"), filepath.Join(root, "docs"), filepath.Join(root, "pusher")
+	gitIn(t, root, "init", "--bare", origin)
+	gitIn(t, root, "init", dir)
+	if err := os.WriteFile(filepath.Join(dir, "README"), []byte("docs\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "add", "README")
+	gitIn(t, dir, "commit", "-m", "first")
+	gitIn(t, dir, "remote", "add", "origin", origin)
+	gitIn(t, dir, "push", "-u", "origin", "main")
+	gitIn(t, dir, "checkout", "-b", "draft")
+	gitIn(t, dir, "commit", "--allow-empty", "-m", "a draft")
+	localHead := gitIn(t, dir, "rev-parse", "HEAD")
+	gitIn(t, root, "clone", origin, pusher)
+	gitIn(t, pusher, "commit", "--allow-empty", "-m", "newer on origin")
+	gitIn(t, pusher, "push", "origin", "main")
+	originMain := gitIn(t, pusher, "rev-parse", "HEAD")
+	_, key := otherProject(t, h, dir)
+
+	c := mustDelegate(t, h, parent.ID, `{"task":"write the docs","title":"Write the login docs","where":"worktree","project":"`+key+`"}`)
+	tree := realDir(t, filepath.Join(dir, "trees", "write-the-login-docs"))
+	if c.Branch != "write-the-login-docs" || c.Project != key || realDir(t, c.Dir) != tree || panePath(t, h, c.ID) != tree {
+		t.Errorf("delegate answered %+v; want branch write-the-login-docs in %s", c, tree)
+	}
+	if got := gitIn(t, tree, "rev-parse", "HEAD"); got != originMain || got == localHead || got == parentHead {
+		t.Errorf("the child's worktree is at %s, want origin's main %s (the clone's own HEAD is %s, the parent's %s)", got, originMain, localHead, parentHead)
+	}
+	if r := row(t, h, c.ID); r.Project != key || r.Branch != "write-the-login-docs" || r.Worktree != tree || r.Parent != parent.ID {
+		t.Errorf("the child's row: project %q, branch %q, worktree %q, parent %q", r.Project, r.Branch, r.Worktree, r.Parent)
+	}
+	if got := gitIn(t, h.Dir, "branch", "--list", "write-the-login-docs"); got != "" {
+		t.Errorf("the caller's project has the child's branch: %q", got)
+	}
+}
+
+func TestCrossProjectRankStillApplies(t *testing.T) {
+	h := apptest.New(t)
+	supervised := newThread(t, h, "supervised")
+	read := threadWith(t, h, "read", session.Read)
+	_, key := otherProject(t, h, t.TempDir())
+	before := tmuxSessions(t, h)
+	for _, where := range []string{"", `"where":"folder",`, `"where":"worktree",`, `"where":"issue","issue":8,`} {
+		for _, tt := range []struct {
+			caller, asked, want string
+		}{
+			{supervised.ID, "full", "A thread with supervised access cannot start a child with full access"},
+			{read.ID, "supervised", "A thread with read access cannot start a child with supervised access"},
+			{read.ID, "full", "A thread with read access cannot start a child with full access"},
+		} {
+			input := `{` + where + `"task":"do it","access":"` + tt.asked + `","project":"` + key + `"}`
+			if c, err := delegateAs(t, h, tt.caller, input); err != tt.want {
+				t.Errorf("%s: %+v, %q; want %q", input, c, err, tt.want)
+			}
+		}
+	}
+	if after := tmuxSessions(t, h); !slices.Equal(after, before) {
+		t.Errorf("tmux sessions = %q, want %q: a refused delegate started one", after, before)
+	}
+	c := mustDelegate(t, h, read.ID, `{"task":"look","project":"`+key+`"}`)
+	if r := row(t, h, c.ID); r.Access != session.Read || r.Project != key || c.Where != "folder" {
+		t.Errorf("a read caller's child in the other project: access %q, project %q, where %q", r.Access, r.Project, c.Where)
 	}
 }

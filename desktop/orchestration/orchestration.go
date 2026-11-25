@@ -18,7 +18,6 @@ import (
 type Threads interface {
 	CreateChild(ctx context.Context, o sessions.ChildOptions) (sessions.Session, error)
 	AccessOf(id string) session.Access
-	Projects() []sessions.Project
 	ChatOf(id string) (sessions.Chat, error)
 }
 

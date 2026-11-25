@@ -36,8 +36,9 @@ type started struct {
 	Branch  string         `json:"branch"`
 }
 
-// delegate starts a child of the caller for the task the input gives. The child gets the caller's access unless the
-// input asks for less, and works in the caller's folder when it is Read, else in a worktree of its own.
+// delegate starts a child of the caller for the task the input gives, in the project the input names, else the
+// caller's. The child gets the caller's access unless the input asks for less, and works in a folder when it is Read,
+// the caller's in the caller's own project, else in a worktree of its own.
 func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request) (string, error) {
 	var in delegateInput
 	if err := decode(req.Opts["input"], &in); err != nil {
@@ -54,12 +55,9 @@ func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request)
 			where = sessions.WhereFolder
 		}
 	}
-	if in.Project != "" && !c.isOwnProject(caller, in.Project) {
-		return "", errors.New("Delegating to another project is not supported yet")
-	}
 	child, err := c.threads.CreateChild(ctx, sessions.ChildOptions{
 		Parent: caller, Task: in.Task, Title: in.Title, Access: access,
-		Model: project.Model{Model: in.Model, Effort: in.Effort}, Where: where, Issue: in.Issue,
+		Model: project.Model{Model: in.Model, Effort: in.Effort}, Project: in.Project, Where: where, Issue: in.Issue,
 	})
 	if err != nil {
 		return "", err
@@ -70,17 +68,6 @@ func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request)
 	}
 	data, err := json.Marshal(out)
 	return string(data), err
-}
-
-// isOwnProject says whether name, a project's name or key, names the caller's project.
-func (c *Commands) isOwnProject(caller, name string) bool {
-	key := session.ProjectKey(caller)
-	for _, p := range c.threads.Projects() {
-		if p.Key == key {
-			return strings.EqualFold(p.Name, name) || p.Key == name
-		}
-	}
-	return name == key
 }
 
 // decode reads a tool's input, which must be a JSON object with no field its schema lacks.

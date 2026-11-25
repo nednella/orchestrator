@@ -1356,8 +1356,8 @@ func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
 }
 
 // threadIn is the number of a thread of the project other than except whose folder, or the worktree agentos made for
-// it, is dir, live or settled, and whether there is one. A fork and a child in its parent's folder run in another
-// thread's folder and are left out. It takes mu.
+// it, is dir, live or settled, and whether there is one. A fork and a child with no worktree run in a folder that is
+// not theirs alone and are left out. It takes mu.
 func (s *Sessions) threadIn(key, dir, except string) (int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1629,7 +1629,8 @@ const (
 	maxLiveChildren = 8
 )
 
-// Where a child works.
+// Where a child works. In another project than its parent's, the folder is that project's, and a new branch starts at
+// that project's default branch on origin.
 const (
 	WhereFolder   = "folder"   // its parent's folder, on no branch of its own
 	WhereWorktree = "worktree" // a new worktree, on a new branch that starts at the commit its parent's folder is at
@@ -1637,13 +1638,13 @@ const (
 )
 
 // ChildOptions is what a thread asks for when it delegates a task: the child's title, "" for the task's first line,
-// its access, model and project, the project of the parent when unset, and where it works, with the issue's number for
-// WhereIssue.
+// its access and model, its project, a configured project's name or key or "" for the parent's, and where it works in
+// that project, with the issue's number for WhereIssue.
 type ChildOptions struct {
 	Parent, Task, Title string
 	Access              session.Access
 	Model               project.Model
-	Project             project.Project
+	Project             string
 	Where               string
 	Issue               int
 }
@@ -1712,13 +1713,16 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	case o.Where != WhereIssue && o.Issue != 0:
 		return Session{}, "", fmt.Errorf("An issue number goes with where %s", WhereIssue)
 	}
-	if o.Project.Name != "" {
-		proj, known = o.Project, true
-	}
 	if !known {
 		return Session{}, "", fmt.Errorf("The project of thread %s is gone", o.Parent)
 	}
-	own := proj.Key() == parent.Name.Project
+	home := proj
+	if o.Project != "" {
+		if proj, err = s.configuredProject(o.Project, home); err != nil {
+			return Session{}, "", err
+		}
+	}
+	own := proj.Key() == home.Key()
 	start := StartOptions{Model: o.Model, Access: o.Access, Parent: o.Parent, Place: InWorktree}
 	switch o.Where {
 	case WhereFolder:
@@ -1747,24 +1751,47 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	if err := ctx.Err(); err != nil {
 		return Session{}, "", fmt.Errorf("The call ended, so no child started: %w", err)
 	}
-	if o.Where != WhereIssue {
-		view, err := s.createIn(proj, title, "", false, 0, "", "", "", forkStart{}, start)
-		return view, parentTitle, err
-	}
-	s.issueMu.Lock()
-	defer s.issueMu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return Session{}, "", fmt.Errorf("The call ended, so no child started: %w", err)
-	}
-	thread := s.liveIssueSession(proj.Key(), o.Issue)
-	if thread == "" {
-		thread, _ = s.settledIssueThread(proj.Key(), o.Issue)
-	}
-	if thread != "" {
-		return Session{}, "", fmt.Errorf("Issue #%d has thread %s: send to it instead", o.Issue, thread)
+	if o.Where == WhereIssue {
+		s.issueMu.Lock()
+		defer s.issueMu.Unlock()
+		if err := ctx.Err(); err != nil {
+			return Session{}, "", fmt.Errorf("The call ended, so no child started: %w", err)
+		}
+		thread := s.liveIssueSession(proj.Key(), o.Issue)
+		if thread == "" {
+			thread, _ = s.settledIssueThread(proj.Key(), o.Issue)
+		}
+		if thread != "" {
+			return Session{}, "", fmt.Errorf("Issue #%d has thread %s: send to it instead", o.Issue, thread)
+		}
 	}
 	view, err := s.createIn(proj, title, "", false, o.Issue, "", "", "", forkStart{}, start)
+	if err == nil && !own {
+		// The owner may not have that project on screen, so the log says who started work there.
+		log.Printf("agentos: thread %s %q in project %s started child %s %q in project %s", o.Parent, parentTitle, home.Name, view.ID, title, proj.Name)
+	}
 	return view, parentTitle, err
+}
+
+// configuredProject is the project that name, a project's name or key, names: home, the parent's, or a configured
+// one. A name never becomes a folder, so a child runs only where the owner's config points.
+func (s *Sessions) configuredProject(name string, home project.Project) (project.Project, error) {
+	names := func(p project.Project) bool { return strings.EqualFold(p.Name, name) || p.Key() == name }
+	if names(home) {
+		return home, nil
+	}
+	list := s.configured.List()
+	if i := slices.IndexFunc(list, names); i >= 0 {
+		return list[i], nil
+	}
+	var known []string
+	for _, p := range list {
+		known = append(known, p.Name)
+	}
+	if !slices.ContainsFunc(list, func(p project.Project) bool { return p.Key() == home.Key() }) {
+		known = append(known, home.Name)
+	}
+	return project.Project{}, fmt.Errorf("No project %q: the projects are %s", name, strings.Join(known, ", "))
 }
 
 // headOf is the commit dir, a folder of the project, stands at; "" in a project that is not a git repository, whose
@@ -1781,8 +1808,8 @@ func (s *Sessions) headOf(proj project.Project, dir string) (string, error) {
 	return head, nil
 }
 
-// inOthersFolder says whether the thread runs in another thread's folder with no branch of its own: a fork, or a child
-// that delegate started in its parent's folder.
+// inOthersFolder says whether the thread runs in a folder that is not its own, with no branch of its own: a fork, or a
+// child that delegate started with no worktree, in its parent's folder or another project's.
 func inOthersFolder(in term.Info) bool { return in.Fork != "" || in.Parent != "" && in.Branch == "" }
 
 // liveInfo is the live thread id's info, and whether it runs under a host. It needs mu.
@@ -3153,7 +3180,7 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 	case in.Fork != "":
 		return proj, fmt.Errorf("session %s is a fork, which works on no branch of its own", id)
 	case inOthersFolder(in):
-		return proj, fmt.Errorf("session %s is a child in its parent's folder, which works on no branch of its own", id)
+		return proj, fmt.Errorf("session %s is a child with no worktree, which works on no branch of its own", id)
 	case in.Access == session.Read:
 		return proj, errors.New("A Read thread works on no branch")
 	}
