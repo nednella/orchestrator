@@ -1,6 +1,7 @@
 package sessions_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1337,6 +1338,38 @@ func TestForkInTheWorktreeKeepsIt(t *testing.T) {
 	}
 	if !cleanedUp(h, src.ID)() || exists(wt) || !slices.Equal(cleanupRuns(ran), []string{"issue-7"}) {
 		t.Errorf("the clean-up after the fork settled: cleaned up %v, worktree there %v, runs %q", cleanedUp(h, src.ID)(), exists(wt), cleanupRuns(ran))
+	}
+}
+
+func TestChildInTheWorktreeKeepsIt(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	wt := parent.Worktree
+	pushWork(t, wt)
+	child, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "Read the code", Title: "Helper", Access: parent.Access, Where: sessions.WhereFolder})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child.Parent != parent.ID || child.Worktree != "" {
+		t.Fatalf("the child = %+v", child)
+	}
+
+	openThenMerge(h)
+	keptFor(t, h, parent.ID, wt, "Thread Helper also works in this worktree")
+	if got, ok := h.Session(child.ID); !ok || got.State == "settled" {
+		t.Errorf("the child = %+v, %v", got, ok)
+	}
+
+	if err := h.SettleThread(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the child settled", func() bool { return stateOf(h, child.ID) == "settled" })
+	if err := h.Cleanup(parent.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, parent.ID)() || exists(wt) {
+		t.Errorf("the clean-up after the child settled: cleaned up %v, worktree there %v", cleanedUp(h, parent.ID)(), exists(wt))
 	}
 }
 
