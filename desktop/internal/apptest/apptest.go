@@ -609,6 +609,7 @@ type Harness struct {
 	Conf   string
 
 	claudeDir string
+	cancel    context.CancelFunc // ends the context the app started with
 
 	projects *projects.Service
 	sessions *sessions.Service
@@ -709,6 +710,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 		h.App.Sessions().SetCleanupSweep(o.CleanupSweep)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel = cancel
 	if err := h.App.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -772,6 +774,9 @@ func (h *Harness) Restart(t *testing.T) *Harness {
 	}
 	return second
 }
+
+// EndContext ends the context the app started with, as the app's quit does before it stops answering commands.
+func (h *Harness) EndContext() { h.cancel() }
 
 // Sessions is the session list behind the bound service.
 func (h *Harness) Sessions() *sessions.Sessions { return h.App.Sessions() }

@@ -209,6 +209,20 @@ func TestWaitReturnsWhenTheHostDies(t *testing.T) {
 	}
 }
 
+func TestWaitGoesOnWhenTheAppStops(t *testing.T) {
+	h := apptest.New(t)
+	parent, c := busyChild(t, h)
+	got := waitInBackground(t, h, parent, c, 30*time.Second)
+	// The quit ends the followers before the control socket closes.
+	h.EndContext()
+	if r := waitResultOf(t, got, 5*time.Second); r.err != nil || r.refused != "" || r.a.Done {
+		t.Errorf("wait answered %+v while the app stopped, want not done", r)
+	}
+	if !slices.Contains(tmuxSessions(t, h), c) {
+		t.Errorf("thread %s does not run after the app stopped", c)
+	}
+}
+
 func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 	h := apptest.New(t)
 	top := newThread(t, h, "Plan the release").ID

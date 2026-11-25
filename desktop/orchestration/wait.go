@@ -130,9 +130,26 @@ func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFun
 	if len(events) > 0 {
 		newest = events[len(events)-1].Seq
 	}
-	if _, err := c.chats.AwaitTurn(ctx, caller, newest); err == nil || errors.Is(err, chat.ErrThreadGone) {
+	_, err = c.chats.AwaitTurn(ctx, caller, newest)
+	if errors.Is(err, chat.ErrThreadGone) {
+		if _, runs, err := c.stillRuns(caller); err == nil && runs {
+			return
+		}
+	}
+	if err == nil || errors.Is(err, chat.ErrThreadGone) {
 		cancel()
 	}
+}
+
+// stillRuns is how the thread's turn stands once its follower stopped, and whether the thread runs on: a follower also
+// stops when the app quits, and the thread's turn may then still end. It errs for a thread that was deleted.
+func (c *Commands) stillRuns(id string) (turn, bool, error) {
+	ch, err := c.threads.ChatOf(id)
+	if err != nil {
+		return turn{}, false, err
+	}
+	t := c.turnOf(ch)
+	return t, ch.Live && !t.ran, nil
 }
 
 // waitFor is the answer once the thread's turn ends, it no longer runs or ctx ends. Each turn_end its follower takes
@@ -149,10 +166,14 @@ func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 		_, err := c.chats.AwaitTurn(ctx, ch.ID, t.newest)
 		switch {
 		case errors.Is(err, chat.ErrThreadGone):
-			if _, err := c.threads.ChatOf(ch.ID); err != nil {
+			t, runs, err := c.stillRuns(ch.ID)
+			switch {
+			case err != nil:
 				return answer(ch.ID, turn{}, outcomeDeleted)
+			case runs:
+				return answer(ch.ID, t, "")
 			}
-			return answer(ch.ID, c.turnOf(ch), outcomeSettled)
+			return answer(ch.ID, t, outcomeSettled)
 		case err != nil:
 			return answer(ch.ID, c.turnOf(ch), "")
 		}
