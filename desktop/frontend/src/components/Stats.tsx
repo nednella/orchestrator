@@ -84,7 +84,7 @@ export function Stats() {
       className="panel @container/page h-full min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]"
       onKeyDown={(e) => e.key === 'Escape' && closeCentre()}
     >
-      <div className="mx-auto w-full max-w-[46rem] px-4 pt-6 pb-16 @max-[40rem]/page:pt-4">
+      <div className="mx-auto w-full max-w-(--chat-column) px-4 pt-6 pb-16 @max-[40rem]/page:pt-4">
         <header className="flex flex-wrap items-center gap-3">
           <span className="grid size-8 flex-none place-items-center rounded-lg bg-(--bg-tile) text-soft shadow-[inset_0_0_0_1px_var(--border)]">
             <ChartColumn size={16} aria-hidden="true" />

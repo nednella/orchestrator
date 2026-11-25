@@ -156,7 +156,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="chat-scroll h-full overflow-y-auto px-3 outline-none sm:px-12">
+      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="chat-scroll h-full overflow-y-auto outline-none">
         <div ref={lane} className="chat-column relative" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full pb-5" style={{ transform: `translateY(${row.start}px)` }}>
