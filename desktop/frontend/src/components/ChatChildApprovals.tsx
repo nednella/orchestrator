@@ -29,15 +29,15 @@ export function ChatChildApprovals({ parent }: ChatChildApprovalsProps) {
 type ChildApprovalProps = { id: string }
 
 // ChildApproval is the approval one descendant waits on, on the card its own chat shows for it, answered from here as
-// the descendant's. One whose input is not known offers no answer, since the owner would not see what it lets run: it
-// opens the descendant instead. A question's picks are kept by the request, as the pending names no tool call.
+// the descendant's. One whose input is not known, or too large to send, offers no answer, since the owner would not see
+// what it lets run: it opens the descendant, whose own chat has the full card. A question's picks are kept by the request, as the pending names no tool call.
 function ChildApproval({ id }: ChildApprovalProps) {
   const { select } = useAgentos('select')
   const child = useAgentosSelector((a) => a.sessions.find((s) => s.id === id))
   const pending = useAgentosSelector((a) => a.pending[id])
   const projectDir = useAgentosSelector((a) => a.projects.find((p) => p.key === child?.project)?.dir ?? '')
   if (!pending || !child) return null
-  const known = pending.input !== null && pending.input !== undefined
+  const known = !pending.inputTooLarge && pending.input !== null && pending.input !== undefined
   return (
     <div className="flex flex-col gap-1">
       <p className="px-1 text-small text-dim">

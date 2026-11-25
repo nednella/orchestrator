@@ -407,7 +407,8 @@ export type FilesRewind = { offered: boolean; reason: string; files: string[]; i
 export type ChatSent = { id: string; notice?: string }
 
 // Pending is the approval a thread waits on; id is the thread's and request the approval's. input is the tool's, for a
-// card that answers the approval away from the thread's chat; null when the log holds none.
+// card that answers the approval away from the thread's chat; null when the log holds none, or when its JSON is over
+// 64 KiB, which inputTooLarge says.
 export type Pending = {
   id: string
   request: string
@@ -415,6 +416,7 @@ export type Pending = {
   summary: string
   kind: 'tool' | 'question' | 'plan'
   input: unknown
+  inputTooLarge: boolean
 }
 
 export type ChatUpdate = { id: string; events: ChatEvent[] }

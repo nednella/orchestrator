@@ -200,7 +200,7 @@ test('claude started again without a flag it did not know goes on with the same 
 test('unanswered approval expires at turn end', () => {
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')
-  assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install\nnpm test' } })
+  assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install\nnpm test' }, inputTooLarge: false })
   assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
   assert.equal(only(waiting.items, 'approval')[0].expired, false)
 

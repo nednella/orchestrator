@@ -474,7 +474,7 @@ function pendingOf(thread: string, a: Approval): Pending {
   if (kind === 'question') summary = input.questions?.[0]?.question ?? ''
   else if (kind === 'plan') summary = firstLine(input.plan ?? '')
   else summary = firstLine([input.command, input.file_path, input.path, input.pattern, input.url].find((s) => typeof s === 'string' && s !== '') ?? '')
-  return { id: thread, request: a.request, tool: a.tool, summary, kind, input: raw }
+  return { id: thread, request: a.request, tool: a.tool, summary, kind, input: raw, inputTooLarge: false }
 }
 
 // sameSteps is whether two builds of the timeline hold the same steps: it is built anew on every streamed delta, so its

@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	chatlog "github.com/nednella/agentos/internal/chat"
@@ -32,6 +33,35 @@ func TestToolSummaryMatchesPending(t *testing.T) {
 			}
 			if string(p.Input) != tt.input {
 				t.Errorf("pendingOf's input = %s, want the approval's %s", p.Input, tt.input)
+			}
+		})
+	}
+}
+
+func TestPendingInputIsCapped(t *testing.T) {
+	inputOf := func(size int) json.RawMessage {
+		frame := `{"file_path":"a.go","content":""}`
+		return json.RawMessage(strings.Replace(frame, `""`, `"`+strings.Repeat("a", size-len(frame))+`"`, 1))
+	}
+	tests := []struct {
+		name  string
+		input json.RawMessage
+		kept  bool
+	}{
+		{"at the cap", inputOf(maxPendingInput), true},
+		{"one byte over", inputOf(maxPendingInput + 1), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := pendingOf("main/aaaaaaaa", chatlog.Event{Kind: chatlog.KindApproval, ID: "r1", Tool: "Write", Input: tt.input})
+			if tt.kept && (string(p.Input) != string(tt.input) || p.InputTooLarge) {
+				t.Errorf("pending carries %d bytes of input, too large %v; want all %d, not too large", len(p.Input), p.InputTooLarge, len(tt.input))
+			}
+			if !tt.kept && (p.Input != nil || !p.InputTooLarge) {
+				t.Errorf("pending carries %d bytes of input, too large %v; want none, too large", len(p.Input), p.InputTooLarge)
+			}
+			if p.Summary != "a.go" {
+				t.Errorf("summary = %q, want the file either way", p.Summary)
 			}
 		})
 	}

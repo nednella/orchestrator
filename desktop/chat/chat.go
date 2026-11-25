@@ -42,13 +42,19 @@ type Threads interface {
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.
 type Pending struct {
-	ID      string          `json:"id"`      // the thread's
-	Request string          `json:"request"` // the approval's, to answer it by
-	Tool    string          `json:"tool"`
-	Summary string          `json:"summary"` // what the tool would do, in one line
-	Kind    string          `json:"kind"`    // "tool", "question" or "plan"
-	Input   json.RawMessage `json:"input"`   // the tool's input, for a card that answers the approval away from its chat
+	ID      string `json:"id"`      // the thread's
+	Request string `json:"request"` // the approval's, to answer it by
+	Tool    string `json:"tool"`
+	Summary string `json:"summary"` // what the tool would do, in one line
+	Kind    string `json:"kind"`    // "tool", "question" or "plan"
+	// Input is the tool's input, for a card that answers the approval away from its chat; none when it is over
+	// maxPendingInput, as a whole file an Edit or a Write carries can be, and InputTooLarge says so.
+	Input         json.RawMessage `json:"input"`
+	InputTooLarge bool            `json:"inputTooLarge"`
 }
+
+// maxPendingInput is the most input a Pending carries: each change of what a thread waits on sends it to the front end.
+const maxPendingInput = 64 << 10
 
 // Update is the payload of a chat:<id> event: the thread's events since the last one, deltas among them.
 type Update struct {
@@ -434,6 +440,9 @@ func (f *follower) flush() {
 // pendingOf describes the approval e of the thread id.
 func pendingOf(id string, e chatlog.Event) Pending {
 	p := Pending{ID: id, Request: e.ID, Tool: e.Tool, Kind: "tool", Summary: ToolSummary(e.Tool, e.Input), Input: e.Input}
+	if len(e.Input) > maxPendingInput {
+		p.Input, p.InputTooLarge = nil, true
+	}
 	switch e.Tool {
 	case "AskUserQuestion":
 		p.Kind = "question"
