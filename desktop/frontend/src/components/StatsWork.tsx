@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { ArrowDown, ChevronRight, CircleDot } from 'lucide-react'
 import { dollars, tokenCount } from '../spend'
-import { counted, workTitle } from '../statsFigures'
+import { counted } from '../statsFigures'
 import { shortAgo } from '../threads'
 import { useClock } from '../time'
 import type { WorkRow } from '../types'
 import { StatsCard } from './StatsCard'
+import { StatsWorkTitle } from './StatsWorkTitle'
 
 type StatsWorkProps = { work: WorkRow[]; showProject: boolean }
 
@@ -58,29 +59,24 @@ export function StatsWork({ work, showProject }: StatsWorkProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((w) => {
-                const { ref, title } = workTitle(w)
-                return (
-                  <tr key={`${w.project} ${w.issue} ${w.session}`} className="group">
-                    <td className="h-9 w-full max-w-0 truncate rounded-l-lg px-2 group-hover:bg-(--bg-row-hover)" title={w.title}>
-                      {ref && <span className="text-soft">{ref} </span>}
-                      {title}
-                      {showProject && <span className="text-soft"> · {w.project}</span>}
-                    </td>
-                    <td className="h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover)">{w.sessions.toLocaleString()}</td>
-                    <td className={`h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover) ${NARROW_HIDDEN}`}>{tokenCount(w.tokens, true)}</td>
-                    <td className="h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover)">
-                      <span className="inline-grid grid-cols-[3rem_4.5rem] items-center gap-2">
-                        <span aria-hidden="true" className="h-1 overflow-hidden rounded-full bg-(--bg-segment)">
-                          <span className="block h-full rounded-full bg-(--chart-bar-on)" style={{ width: `${topCost > 0 ? (w.cost / topCost) * 100 : 0}%` }} />
-                        </span>
-                        ~{dollars(w.cost)}
+              {rows.map((w) => (
+                <tr key={`${w.project} ${w.issue} ${w.session}`} className="group">
+                  <td className="h-9 w-full max-w-0 truncate rounded-l-lg px-2 group-hover:bg-(--bg-row-hover)" title={w.title}>
+                    <StatsWorkTitle row={w} showProject={showProject} />
+                  </td>
+                  <td className="h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover)">{w.sessions.toLocaleString()}</td>
+                  <td className={`h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover) ${NARROW_HIDDEN}`}>{tokenCount(w.tokens, true)}</td>
+                  <td className="h-9 px-2 text-right whitespace-nowrap group-hover:bg-(--bg-row-hover)">
+                    <span className="inline-grid grid-cols-[3rem_4.5rem] items-center gap-2">
+                      <span aria-hidden="true" className="h-1 overflow-hidden rounded-full bg-(--bg-segment)">
+                        <span className="block h-full rounded-full bg-(--chart-bar-on)" style={{ width: `${topCost > 0 ? (w.cost / topCost) * 100 : 0}%` }} />
                       </span>
-                    </td>
-                    <td className={`h-9 rounded-r-lg px-2 text-right whitespace-nowrap text-soft group-hover:bg-(--bg-row-hover) ${NARROW_HIDDEN}`}>{shortAgo(w.lastAt, now)}</td>
-                  </tr>
-                )
-              })}
+                      ~{dollars(w.cost)}
+                    </span>
+                  </td>
+                  <td className={`h-9 rounded-r-lg px-2 text-right whitespace-nowrap text-soft group-hover:bg-(--bg-row-hover) ${NARROW_HIDDEN}`}>{shortAgo(w.lastAt, now)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

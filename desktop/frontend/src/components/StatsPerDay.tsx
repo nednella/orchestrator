@@ -35,7 +35,7 @@ const METRICS: Record<Metric, MetricText> = {
 export function StatsPerDay({ days }: StatsPerDayProps) {
   const [metric, setMetric] = useState<Metric>(() => {
     const stored = readStored<Metric>(METRIC_KEY, 'cost')
-    return stored in METRICS ? stored : 'cost'
+    return Object.hasOwn(METRICS, stored) ? stored : 'cost'
   })
   const pick = (next: Metric) => {
     setMetric(next)

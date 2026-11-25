@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { aDay, change, changeLabel, costAxis, counted, kindCounts, periodBefore, workAxis, workTime, workTitle } from './statsFigures.ts'
+import { aDay, change, changeLabel, costAxis, counted, workLink, kindCounts, periodBefore, workAxis, workTime, workTitle } from './statsFigures.ts'
 
 test('the change on the period before is in whole percent, up or down', () => {
   assert.deepEqual(change(112, 100), { direction: 'up', text: '12%' })
@@ -78,4 +78,11 @@ test('a count takes the noun for one or many', () => {
   assert.equal(counted(1, 'issue', 'issues'), '1 issue')
   assert.equal(counted(0, 'chat', 'chats'), '0 chats')
   assert.equal(counted(1209, 'prompt', 'prompts'), '1,209 prompts')
+})
+
+test('a work row leads to its issue, or to its thread while the thread is there', () => {
+  assert.deepEqual(workLink({ issue: 549, session: '' }, 'nednella/agentos', []), { url: 'https://github.com/nednella/agentos/issues/549' })
+  assert.equal(workLink({ issue: 549, session: '' }, '', []), null)
+  assert.deepEqual(workLink({ issue: 0, session: 'agentos/abcdefgh' }, 'nednella/agentos', ['agentos/abcdefgh']), { thread: 'agentos/abcdefgh' })
+  assert.equal(workLink({ issue: 0, session: 'agentos/abcdefgh' }, 'nednella/agentos', []), null)
 })

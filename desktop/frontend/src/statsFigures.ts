@@ -63,6 +63,12 @@ export function workTitle(row: Pick<WorkRow, 'issue' | 'title'>): { ref: string;
   return { ref, title: row.title.startsWith(`${ref} `) ? row.title.slice(ref.length + 1) : row.title }
 }
 
+// Where a work row leads: its issue or PR on GitHub, else its thread while the thread is still there.
+export function workLink(row: Pick<WorkRow, 'issue' | 'session'>, repo: string, threads: string[]): { url: string } | { thread: string } | null {
+  if (row.issue > 0) return repo ? { url: `https://github.com/${repo}/issues/${row.issue}` } : null
+  return threads.includes(row.session) ? { thread: row.session } : null
+}
+
 // The waits of each kind, most first.
 export function kindCounts(byCause: { kind: WaitKind; count: number }[]): { kind: WaitKind; count: number }[] {
   const counts = new Map<WaitKind, number>()

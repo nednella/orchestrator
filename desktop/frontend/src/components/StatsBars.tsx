@@ -40,7 +40,7 @@ export function StatsBars({ bars, label, caption, tip, axis }: StatsBarsProps) {
               {on && (
                 <span
                   aria-hidden="true"
-                  className={`absolute bottom-[calc(100%+0.25rem)] z-(--z-popup) rounded-md bg-(--bg-glass) px-2 py-1 text-small whitespace-nowrap shadow-[0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent),var(--shadow-tip)] backdrop-blur-[16px] backdrop-saturate-[1.08] ${TIP_ALIGN[tipAlign(i, bars.length)]}`}
+                  className={`absolute bottom-[calc(100%+0.25rem)] z-(--z-popup) rounded-md bg-(--bg-glass) px-2 py-1 text-small whitespace-nowrap shadow-[0_0_0_1px_var(--border-tip),var(--shadow-tip)] backdrop-blur-[16px] backdrop-saturate-[1.08] ${TIP_ALIGN[tipAlign(i, bars.length)]}`}
                 >
                   {text}
                 </span>
