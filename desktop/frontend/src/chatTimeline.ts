@@ -149,9 +149,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   let turn: Turn | null = null
   let interrupted = false
   // The tasks Claude runs in the background: Claude's id for each, the call that started it, '' for one only Claude's
-  // list names so far, and whether it is work, which a shell is not: it may be a server that never ends. While a task
-  // that is work runs, or until Claude has told of the end of the last one in a turn of its own, the turns are one
-  // piece of work: the turn rests at its end, from held, and Claude's next turn goes on with it.
+  // list names so far, and whether it is work, which only a subagent is: a shell may be a server that never ends, and
+  // a monitor may watch with no end. While a task that is work runs, or until Claude has told of the end of the last
+  // one in a turn of its own, the turns are one piece of work: the turn rests at its end, from held, and Claude's next
+  // turn goes on with it.
   const tasks: { id: string; call: string; works: boolean }[] = []
   const taskOf = (e: ChatEvent) => tasks.findIndex((t) => (t.call !== '' && t.call === e.parent) || (!!e.id && t.id === e.id))
   const working = () => tasks.some((t) => t.works)
@@ -387,7 +388,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       }
       case 'task_start': {
         const at = taskOf(e)
-        if (at < 0) tasks.push({ id: e.id ?? '', call: e.parent ?? '', works: e.tool !== 'local_bash' })
+        if (at < 0) tasks.push({ id: e.id ?? '', call: e.parent ?? '', works: e.tool === 'local_agent' })
         else tasks[at].call ||= e.parent ?? ''
         // Claude wakes a subagent that ended again under its call.
         const a = agents.get(e.parent ?? '')
@@ -414,7 +415,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const gone = new Set(tasks.filter((t) => t.id !== '' && t.call !== '' && !ids.has(t.id)).map((t) => t.call))
         expire((w) => w.agent !== undefined && gone.has(w.agent))
         tasks.splice(0, tasks.length, ...tasks.filter((t) => t.id === '' || ids.has(t.id)))
-        for (const l of listed) if (typeof l.id === 'string' && !tasks.some((t) => t.id === l.id)) tasks.push({ id: l.id, call: '', works: l.kind !== 'local_bash' })
+        for (const l of listed) if (typeof l.id === 'string' && !tasks.some((t) => t.id === l.id)) tasks.push({ id: l.id, call: '', works: l.kind === 'local_agent' })
         if (wasWorking && held !== null && !working()) close(held)
         return
       }

@@ -583,15 +583,19 @@ test("Claude's list of its tasks ends the piece when a subagent's end was missed
   assert.deepEqual([only(missed.items, 'work')[0].endedAt, missed.turnOpen], [15_000, false], 'Claude tells of no end it never sent')
   const shellOnly = buildTimeline([...rest, { ...listed({ id: 'b9', kind: 'local_bash' }), seq: 7, at: 40_000 }], {})
   assert.equal(only(shellOnly.items, 'work')[0].endedAt, 15_000, 'a shell is no work')
+  const monitorOnly = buildTimeline([...rest, { ...listed({ id: 'm9', kind: 'monitor_mcp' }), seq: 7, at: 40_000 }], {})
+  assert.equal(only(monitorOnly.items, 'work')[0].endedAt, 15_000, 'a monitor is no work')
   const unknown = buildTimeline(log(user('u1', 'Go', 1_000), listed({ id: 'a7', kind: 'local_agent' }), message('msg_1', 'On it.'), turnEnd(false, 3_000)), {})
   assert.equal(only(unknown.items, 'work')[0].endedAt, null, 'a subagent only the list names holds the work')
   const started = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), listed({ id: 'task-a1', kind: 'local_agent' }), taskStart('a1'), turnEnd(), taskEnd('a1', 'done', 'stopped')), {})
   assert.equal(only(started.items, 'work')[0].endedAt, 5_000, 'the start after the list is the same task, which its end ends')
 })
 
-test('a shell in the background does not hold the work open', () => {
+test('a shell or a monitor in the background does not hold the work open', () => {
   const t = buildTimeline(log(user('u1', 'Serve it', 1_000), toolUse('b1', 'Bash', { command: 'npm start', run_in_background: true }), taskStart('b1', 'local_bash'), toolResult('b1', 'Running'), turnEnd(false, 4_000)), {})
   assert.equal(only(t.items, 'work')[0].endedAt, 4_000)
+  const m = buildTimeline(log(user('u1', 'Watch it', 1_000), toolUse('m1', 'Monitor', {}), taskStart('m1', 'monitor_mcp'), toolResult('m1', 'Watching'), turnEnd(false, 4_000)), {})
+  assert.equal(only(m.items, 'work')[0].endedAt, 4_000, 'a monitor')
 })
 
 test("a subagent's own task holds the work open, and a subagent woken again runs", () => {

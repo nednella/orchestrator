@@ -9,13 +9,14 @@ import (
 type Task struct {
 	Call  string // the tool call that started it, "" for a task only Claude's list names so far
 	ID    string // Claude's id for it
-	Kind  string // TaskShell, or another kind, such as a subagent's
+	Kind  string // TaskAgent, TaskShell or another kind
 	Agent string // the Agent call of the subagent that started it, "" for the thread's own Claude
 }
 
-// Works reports whether the thread works while the task runs. A shell may be a server that never ends, and Claude
-// itself counts its session idle while only shells run.
-func (t Task) Works() bool { return t.Kind != TaskShell }
+// Works reports whether the thread works while the task runs, which only a subagent's does. A shell may be a server
+// that never ends, Claude itself counts its session idle while only shells run, and a task of another kind, such as
+// a monitor, may watch with no end.
+func (t Task) Works() bool { return t.Kind == TaskAgent }
 
 // ReportedAlone reports whether Claude tells of the end of the task in a turn of its own: it does for a task of its
 // own that was not stopped. A subagent's task wakes that subagent instead, and the end of a stopped one comes with the

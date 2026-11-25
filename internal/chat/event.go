@@ -46,8 +46,8 @@ const (
 	// Error and Text say that it failed and why. The host consumes it and never logs it.
 	KindReply Kind = "reply"
 	// KindTaskStart is a task Claude runs in the background starting, beside its turn and outliving it: Parent is the tool
-	// call that started it, ID Claude's id for it, Tool its kind (TaskShell, or another, such as a subagent's
-	// local_agent), Text what it does, and Agent the Agent call of the subagent that started it, "" for the thread's own
+	// call that started it, ID Claude's id for it, Tool its kind (TaskAgent for a subagent, TaskShell for a shell, or
+	// another), Text what it does, and Agent the Agent call of the subagent that started it, "" for the thread's own
 	// Claude. Parse gives that subagent by Claude's id for it, which the host turns into its Agent call.
 	KindTaskStart Kind = "task_start"
 	// KindTaskEnd is a task Claude ran beside its turn ending, as a subagent or a shell in the background: Parent is the
@@ -76,8 +76,11 @@ const (
 // TaskStopped is the Stop of a task_end for a task that was stopped.
 const TaskStopped = "stopped"
 
-// TaskShell is the kind of a shell Claude runs in the background.
-const TaskShell = "local_bash"
+// TaskAgent is the kind of a subagent Claude runs as a task, and TaskShell the kind of a shell it runs in the background.
+const (
+	TaskAgent = "local_agent"
+	TaskShell = "local_bash"
+)
 
 // ListedTask is one task of a tasks event: Claude's id for it, its kind, and the task id of the subagent that started
 // it, "" for the thread's own Claude.
