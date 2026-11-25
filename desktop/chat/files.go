@@ -3,6 +3,7 @@ package chat
 import (
 	"cmp"
 	"context"
+	"log"
 	"path"
 	"slices"
 	"strings"
@@ -45,8 +46,14 @@ func (f *files) list(ctx context.Context, dir string) ([]string, error) {
 	if err != nil && !strings.Contains(err.Error(), "not a git repository") {
 		return nil, err
 	}
+	text := string(out)
+	if !strings.HasSuffix(text, "\x00") && text != "" {
+		// The runner keeps only the first part of a long output, so the last path may be cut.
+		log.Printf("agentos: git listed more files in %s than the app reads; the list is cut short", dir)
+		text = text[:strings.LastIndex(text, "\x00")+1]
+	}
 	paths := []string{}
-	for p := range strings.SplitSeq(string(out), "\x00") {
+	for p := range strings.SplitSeq(text, "\x00") {
 		if p != "" {
 			paths = append(paths, p)
 		}

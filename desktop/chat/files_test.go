@@ -69,6 +69,16 @@ func TestChatFilesOutsideGitIsEmpty(t *testing.T) {
 	}
 }
 
+func TestFilesDropsAPathCutShort(t *testing.T) {
+	cut := func(context.Context, string, string, ...string) ([]byte, error) {
+		return []byte("a.go\x00src/b.go\x00src/c.g"), nil
+	}
+	got, err := newFiles(cut).list(context.Background(), t.TempDir())
+	if want := []string{"a.go", "src/b.go"}; err != nil || !slices.Equal(got, want) {
+		t.Errorf("list = %q, %v; want %q", got, err, want)
+	}
+}
+
 // folderThread is one ended thread that works in dir.
 type folderThread string
 
