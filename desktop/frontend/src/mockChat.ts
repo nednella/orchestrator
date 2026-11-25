@@ -72,7 +72,8 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 }
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
-// reply streamed as deltas over a second. thread throws for an id that has no chat.
+// reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
+// another. Claude exits on a message that is just "exit". thread throws for an id that has no chat.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const logs = new Map<string, ChatEvent[]>()
   const unreadable = new Set<string>()
@@ -119,8 +120,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     return t
   }
 
-  // reply streams a reply over a second, then ends the turn, or runs the next queued message as its own turn.
-  function reply(id: string) {
+  // reply streams a reply, then ends the turn, or runs the next queued message as its own turn.
+  function reply(id: string, slow = false) {
     const t = thread(id)
     const text = replies[nextReply++ % replies.length]
     const words = text.split(/(?<= )/)
@@ -137,7 +138,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       if (runQueued(id)) return
       append(id, { kind: 'turn_end', cost: 0.04 })
       t.setState('idle')
-    }, 1000 / words.length)
+    }, (slow ? 8000 : 1000) / words.length)
     replying.set(id, () => clearInterval(timer))
   }
 
@@ -263,6 +264,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       if (waiting) {
         append(id, { kind: 'answer', id: waiting.request, text: 'deny' })
         append(id, { kind: 'user', id: message, text, parent: waiting.request })
+        const asked = logOf(id).find((e) => e.kind === 'approval' && e.id === waiting.request)
+        append(id, { kind: 'tool_result', parent: asked?.parent, text, error: true })
         setPending(id, null)
         t.setState('working')
         reply(id)
@@ -274,9 +277,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
         return message
       }
       append(id, { kind: 'user', id: message, text })
+      if (text === 'exit') {
+        end(id)
+        t.setState('ended')
+        return message
+      }
       append(id, { kind: 'init', id: 'mock-session' })
       t.setState('working')
-      reply(id)
+      reply(id, /\bslow\b/i.test(text))
       return message
     },
     ChatDraft: async (id: string, text: string) => {

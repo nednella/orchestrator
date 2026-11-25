@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { getSchema } from '@tiptap/react'
 import { EditorState, TextSelection } from '@tiptap/pm/state'
-import { EMPTY_DRAFT, composerSchema, draftOf, fromMarkdown, fromPlainText, readDraft, saveDraft, toMarkdown } from './composerMarkdown.ts'
+import { EMPTY_DRAFT, appendText, composerSchema, draftOf, fromMarkdown, fromPlainText, readDraft, saveDraft, toMarkdown } from './composerMarkdown.ts'
 
 const roundTrip = (text: string) => toMarkdown(fromMarkdown(text))
 
@@ -210,4 +210,14 @@ test('a saved draft with no text loads empty', () => {
   assert.equal(readDraft({ version: 1, doc: doc({ type: 'nope' }) }), EMPTY_DRAFT)
   assert.equal(readDraft({ version: 1, doc: 'not a document' }), EMPTY_DRAFT)
   assert.equal(readDraft(null), EMPTY_DRAFT)
+})
+
+test('appended text follows a blank line and is sent as it is', () => {
+  const draft = appendText(draftOf(fromMarkdown('*mine*')), 'Fix **PR** #12\nnow')
+  assert.equal(draft.text, '*mine*\n\nFix **PR** #12\nnow')
+  assert.equal(appendText(draftOf(fromMarkdown('mine')), 'one\n\ntwo').text, 'mine\n\none\n\ntwo')
+})
+
+test('text appended to an empty draft is the whole draft', () => {
+  assert.equal(appendText(EMPTY_DRAFT, 'Address the review comments on PR #452.').text, 'Address the review comments on PR #452.')
 })

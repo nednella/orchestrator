@@ -4,7 +4,7 @@ import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
 import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
-import { readStored, writeStored } from './storage'
+import { readStored, removeStored, writeStored } from './storage'
 import { liveThreads, sidebarThreads } from './threads'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
@@ -27,6 +27,8 @@ export type FocusTarget = 'terminal' | 'shell' | 'sidebar' | 'right' | 'thread-s
 export type ComposerKind = 'session' | 'chat'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
+// A thread's composer text, and the seq of the last draft agentos left in it that the composer has shown.
+export type ThreadDraft = { draft: ComposerDraft; seen: number }
 
 type AgentosState = {
   project: Project | null
@@ -117,6 +119,8 @@ type AgentosActions = {
   noteToSession(id: string): Promise<void>
   nextAttention(): void
   setComposerDraft(draft: ComposerDraft): void
+  threadDraft(id: string): ThreadDraft
+  setThreadDraft(id: string, draft: ThreadDraft): void
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
   setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
@@ -208,6 +212,8 @@ const digestKey = (project: string) => `agentos.digestSeen.${project}`
 const filterKey = (project: string) => `agentos.filter.${project}`
 const draftKey = (project: string) => `agentos.draft.${project}`
 const composerModeKey = (project: string) => `agentos.composerMode.${project}`
+const threadDraftKey = (id: string) => `agentos.thread.draft.${id}`
+const draftSeenKey = (id: string) => `agentos.thread.draftSeen.${id}`
 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -724,6 +730,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async dismissSession(id) {
         await api.dismissSession(id)
+        removeStored(threadDraftKey(id))
+        removeStored(draftSeenKey(id))
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
       },
@@ -885,6 +893,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setComposerDraft(draft) {
         setComposerDraftState(draft)
         if (projectRef.current) writeStored(draftKey(projectRef.current.name), saveDraft(draft))
+      },
+      threadDraft(id) {
+        return { draft: readDraft(readStored<unknown>(threadDraftKey(id), '')), seen: readStored(draftSeenKey(id), 0) }
+      },
+      setThreadDraft(id, { draft, seen }) {
+        if (draft.text.trim() === '') removeStored(threadDraftKey(id))
+        else writeStored(threadDraftKey(id), saveDraft(draft))
+        writeStored(draftSeenKey(id), seen)
       },
       setOverlay,
       async setTheme(theme) {

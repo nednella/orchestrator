@@ -498,6 +498,15 @@
     transform: scale(1.05);
   }
 
+  .composer-send[data-stop='true'] {
+    background: var(--danger);
+    color: var(--text-on-danger);
+  }
+
+  .composer-send[data-stop='true']:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 90%, var(--text));
+  }
+
   .composer-send:disabled {
     opacity: 1;
     background: color-mix(in srgb, var(--text) 12%, transparent);

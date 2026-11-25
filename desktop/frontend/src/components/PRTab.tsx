@@ -1,4 +1,6 @@
 import { useAgentos } from '../AgentosContext'
+import { api } from '../api'
+import { useLayout } from '../LayoutContext'
 import type { PR, Session } from '../types'
 import { BranchBar } from './BranchBar'
 import { Chip } from './Chip'
@@ -34,7 +36,8 @@ const PR_ACTION = {
 }
 
 export function PRTab({ session }: PRTabProps) {
-  const { report, focus, typeInto, ackPR, openPR } = useAgentos('report', 'focus', 'typeInto', 'ackPR', 'openPR')
+  const { report, focus, select, typeInto, ackPR, openPR } = useAgentos('report', 'focus', 'select', 'typeInto', 'ackPR', 'openPR')
+  const { mode, setMobilePanel } = useLayout()
   const { pr, git } = session
   const live = pr?.state === 'draft' || pr?.state === 'open'
   const action = pr && session.prAttention ? PR_ACTION[session.prAttention] : null
@@ -113,11 +116,15 @@ export function PRTab({ session }: PRTabProps) {
           <button
             className="btn btn-accent"
             onClick={() => {
+              const text = action.sentence(pr.number)
               report(async () => {
-                await typeInto(session.id, action.sentence(pr.number))
+                await (session.hosted ? api.chatDraft(session.id, text) : typeInto(session.id, text))
                 await ackPR(session.id)
               })
-              focus('terminal')
+              if (!session.hosted) return focus('terminal')
+              select(session.id)
+              if (mode === 'narrow') setMobilePanel('session')
+              focus('composer')
             }}
           >
             {action.label}

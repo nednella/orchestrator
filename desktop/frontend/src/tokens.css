@@ -32,6 +32,7 @@
   --accent: oklch(0.571 0.21 264);
   --text-on-accent: #fff;
   --danger: #f5586a;
+  --text-on-danger: #fff;
 
   --bg-thread-waiting: rgba(255, 90, 74, 0.06);
   --bg-thread-waiting-hover: rgba(255, 90, 74, 0.11);

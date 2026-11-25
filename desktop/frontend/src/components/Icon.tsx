@@ -68,6 +68,7 @@ export type IconName =
   | 'agent'
   | 'terminal'
   | 'file'
+  | 'stop'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -142,6 +143,7 @@ export function Icon({ name, size = 14, fixed = false }: IconProps) {
 type IconShapeProps = { name: IconName }
 
 function IconShape({ name }: IconShapeProps) {
+  if (name === 'stop') return <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" stroke="none" />
   if (name === 'play') return <path d="M5 3.5v9l7-4.5Z" fill="currentColor" />
   if (name === 'chevron-left') return <path d="M9.5 4 5.5 8l4 4" />
   if (name === 'chevron') return <path d="m5 6.5 3 3 3-3" />

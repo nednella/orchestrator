@@ -250,7 +250,7 @@ function pendingOf(thread: string, a: Approval): Pending {
   return { id: thread, request: a.request, tool: a.tool, summary, kind }
 }
 
-function firstLine(s: string): string {
+export function firstLine(s: string): string {
   return (
     s
       .split('\n')

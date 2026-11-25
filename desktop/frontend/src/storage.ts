@@ -19,3 +19,11 @@ export function writeStored(key: string, value: unknown) {
     }
   }
 }
+
+export function removeStored(key: string) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // disabled storage holds nothing to remove
+  }
+}

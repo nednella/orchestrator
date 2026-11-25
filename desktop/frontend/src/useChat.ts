@@ -5,6 +5,7 @@ import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import type { ChatState } from './chatEvents'
 import { buildTimeline } from './chatTimeline'
 import type { Timeline } from './chatTimeline'
+import type { ChatEvent } from './types'
 
 const keptThreads = 20
 const kept = new Map<string, ChatState>()
@@ -50,8 +51,9 @@ function later(run: () => void): () => void {
   }
 }
 
-// useChat is the thread's chat: its history, then its live events, as a timeline.
-export function useChat(id: string): { timeline: Timeline; loading: boolean; error: string } {
+// useChat is the thread's chat: its history, then its live events, as a timeline, and the logged events it is built
+// from.
+export function useChat(id: string): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
   const latest = useLatestAgentos()
   const shown = view.id === id ? view : startOf(id)
@@ -90,5 +92,5 @@ export function useChat(id: string): { timeline: Timeline; loading: boolean; err
     }
   }, [id, latest])
 
-  return { timeline, loading: shown.loading, error: shown.error }
+  return { timeline, events: shown.state.events, loading: shown.loading, error: shown.error }
 }

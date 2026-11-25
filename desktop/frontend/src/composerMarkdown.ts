@@ -254,6 +254,13 @@ export const draftOf = (doc: JSONContent): ComposerDraft => ({ doc, text: toMark
 export const EMPTY_DRAFT = draftOf(fromMarkdown(''))
 export const saveDraft = (draft: ComposerDraft): SavedDraft => ({ version: 1, doc: draft.doc })
 
+// appendText adds text to the draft as it is, in a paragraph of its own.
+export function appendText(draft: ComposerDraft, text: string): ComposerDraft {
+  const added = fromPlainText(text).content ?? []
+  if (draft.text.trim() === '') return draftOf({ type: 'doc', content: added })
+  return draftOf({ ...draft.doc, content: [...(draft.doc.content ?? []), ...added] })
+}
+
 // The text of a saved document, a line per block.
 function textOf(node: JSONContent): string {
   if (typeof node.text === 'string') return node.text

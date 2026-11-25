@@ -1,0 +1,119 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAgentos } from '../AgentosContext'
+import type { ThreadDraft } from '../AgentosContext'
+import { api } from '../api'
+import { composerAction, sendText, unseenDrafts } from '../chatComposer'
+import type { ComposerAction, EscapeAction } from '../chatComposer'
+import type { Timeline } from '../chatTimeline'
+import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
+import { EFFORTS, modelName } from '../model'
+import type { ChatEvent, Session } from '../types'
+import { useFocusRequest } from '../useFocusRequest'
+import { ChatQueued } from './ChatQueued'
+import { Composer } from './Composer'
+import type { ComposerInput } from './ComposerEditor'
+
+// onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
+type ThreadComposerProps = {
+  session: Session
+  timeline: Timeline
+  events: ChatEvent[]
+  stopping: boolean
+  onStop(): void
+  onSendNow(id: string): void
+  onEscape(picker: boolean): EscapeAction
+}
+
+const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
+
+export function ThreadComposer({ session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
+  const { threadDraft, setThreadDraft, resumeSession, report } = useAgentos('threadDraft', 'setThreadDraft', 'resumeSession', 'report')
+  const { id } = session
+  const [current, setCurrent] = useState(() => threadDraft(id))
+  const latest = useRef(current)
+  const input = useRef<ComposerInput>(null)
+  const sending = useRef(false)
+
+  const update = useCallback(
+    (next: ThreadDraft) => {
+      latest.current = next
+      setCurrent(next)
+      setThreadDraft(id, next)
+    },
+    [id, setThreadDraft],
+  )
+
+  useEffect(() => {
+    const unseen = unseenDrafts(events, latest.current.seen)
+    if (unseen.length === 0) return
+    update({ draft: unseen.reduce((d, e) => appendText(d, e.text ?? ''), latest.current.draft), seen: unseen[unseen.length - 1].seq })
+  }, [events, update])
+
+  const focusInput = useCallback(() => input.current?.focus(), [])
+  useFocusRequest('composer', focusInput)
+
+  if (session.state === 'ended') {
+    return (
+      <div className="flex items-center justify-center gap-3 py-2 text-small text-dim">
+        This thread has ended
+        {session.resumable && (
+          <button className="btn" onClick={() => report(() => resumeSession(id))}>
+            Resume
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const empty = current.draft.text.trim() === ''
+  const action = composerAction(timeline, empty)
+  const model = modelName(session.model)
+  const effort = EFFORTS[session.effort] ?? session.effort
+
+  const send = () => {
+    const text = sendText(latest.current.draft.text)
+    if (sending.current || text.trim() === '') return
+    sending.current = true
+    const sent = latest.current.draft
+    update({ ...latest.current, draft: EMPTY_DRAFT })
+    report(async () => {
+      try {
+        await api.chatSend(id, text)
+      } catch (err) {
+        if (latest.current.draft.text.trim() === '') update({ ...latest.current, draft: sent })
+        throw err
+      } finally {
+        sending.current = false
+      }
+    })
+  }
+
+  const placeholder = timeline.pending ? 'A message now declines the tool and tells Claude why' : timeline.turnOpen ? 'Claude takes in a message at its next step' : 'Message Claude'
+
+  return (
+    <Composer
+      inputRef={input}
+      value={current.draft}
+      label="Message"
+      placeholder={placeholder}
+      canSend={!empty}
+      sendLabel={SEND_LABEL[action]}
+      sendText={action === 'deny' ? SEND_LABEL.deny : undefined}
+      banner={timeline.queued.length > 0 && <ChatQueued queued={timeline.queued} stopping={stopping} onSendNow={onSendNow} />}
+      right={
+        (model || effort) && (
+          <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-soft" title="The thread's model and reasoning effort">
+            {model && <span className="max-w-24 truncate">{model}</span>}
+            {effort && <span className="max-w-24 truncate text-dim">{effort}</span>}
+          </span>
+        )
+      }
+      stop={action === 'stop' ? { stopping, onStop } : undefined}
+      onChange={(next) => update({ ...latest.current, draft: next })}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && onEscape(false) === 'blur') input.current?.blur()
+      }}
+      onSend={send}
+    />
+  )
+}

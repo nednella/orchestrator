@@ -1208,6 +1208,7 @@ export function createMock(params: URLSearchParams) {
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
       if (s.state === 'ended') throw `session ${id} has ended`
+      if (s.hosted) return chats.backend.ChatDraft(id, text)
       write(s, text)
     },
     ...chats.backend,
