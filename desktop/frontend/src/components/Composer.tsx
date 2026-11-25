@@ -19,7 +19,6 @@ type ComposerProps = {
   attachments?: ReactNode
   left?: ReactNode
   right?: ReactNode
-  // stop puts a Stop button in the send button's place.
   stop?: { stopping: boolean; onStop(): void }
   onChange(draft: ComposerDraft): void
   onCaret?(before: string, after: string): void
