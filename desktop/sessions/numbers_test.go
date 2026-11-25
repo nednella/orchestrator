@@ -162,3 +162,27 @@ func TestExpiredEndedRowGoesWithItsEvidenceAndPRs(t *testing.T) {
 		t.Error("the expired row stayed")
 	}
 }
+
+func TestAnExpiredShellRowLeavesTheChatImages(t *testing.T) {
+	h := newHarness(t)
+	image := filepath.Join(h.State, "data", "main", "chat-media", "k3x9q0ab", "0123456789abcdef.png")
+	if err := os.MkdirAll(filepath.Dir(image), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(image, []byte("png"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	long := time.Now().Add(-8 * 24 * time.Hour)
+	// A shell's name has no token.
+	rec := session.Record{Session: "main/shell", State: session.Ended, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, EndedAt: long.UnixMilli()}
+	if err := bus.WriteState(h.State, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	h.Sessions().Refresh()
+	eventually(t, "the expired row to go", func() bool { return !exists(filepath.Join(h.State, "sessions", "main", "shell.json")) })
+	time.Sleep(100 * time.Millisecond) // past the row's clean-up
+	if !exists(image) {
+		t.Error("the project's chat images went with a row that has no token")
+	}
+}

@@ -567,7 +567,10 @@ func (s *Sessions) drop(id string) {
 		_ = os.Remove(s.handoverPath(name))
 		_ = os.Remove(s.usageMarkPath(name))
 		_ = os.Remove(s.chatLogPath(name))
-		go os.RemoveAll(s.chatMediaDir(name))
+		// A shell's name has no token, and would name the folder of every thread's images.
+		if name.Token != "" {
+			go os.RemoveAll(s.chatMediaDir(name))
+		}
 		_ = os.Remove(s.hostSocket(name))
 	}
 }
