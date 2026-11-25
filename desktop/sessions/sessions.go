@@ -755,10 +755,12 @@ func (s *Sessions) handoverOf(id string) string {
 // images, evidence, handover, usage mark, temp folder, browser window and host socket. Its clean-up log entries and
 // its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-up
 // with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
-// nothing goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the thread,
-// so no clean-up removes it later. A thread with a running descendant is refused, and so is an old terminal session
-// whose pane still runs: the owner ends it there, and until then it keeps its row, so no second thread claims its
-// issue's branch. While the delete runs, the thread cannot be woken or forked, and it starts no child.
+// no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
+// thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
+// first, so none is left without the parent that reaches it; their worktrees go before any thread does. A thread with a
+// running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
+// until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
+// nor a descendant can be woken or forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -767,31 +769,49 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	if name.IsShell() {
 		return errNotSession
 	}
-	if err := s.startDelete(id); err != nil {
+	family, err := s.startDelete(id)
+	if err != nil {
 		return err
 	}
-	dropped := false
 	defer func() {
-		if !dropped {
-			s.mu.Lock()
-			delete(s.deleting, id)
-			s.mu.Unlock()
+		s.mu.Lock()
+		for _, d := range family {
+			delete(s.deleting, d)
 		}
+		s.mu.Unlock()
 	}()
+	for _, d := range family {
+		if s.life.CleaningUp(d) {
+			return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
+		}
+	}
+	if worktree {
+		for _, d := range family {
+			if err := s.removeOwnWorktree(d, s.Number(d)); err != nil {
+				return err
+			}
+		}
+	}
+	for _, d := range family {
+		if err := s.remove(d); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// remove stops the thread id of a Delete when it runs and removes it with its files.
+func (s *Sessions) remove(id string) error {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	n, rec := s.nums[id], s.records[id]
+	rec := s.records[id]
 	if e, ok := s.ended[id]; ok {
 		rec = e.rec
 	}
 	s.mu.Unlock()
-	if s.life.CleaningUp(id) {
-		return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", n)
-	}
-	if worktree {
-		if err := s.removeOwnWorktree(id, n); err != nil {
-			return err
-		}
-	}
 	if err := s.settleToDelete(name); err != nil {
 		return err
 	}
@@ -803,7 +823,6 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	if err := s.dropThread(name); err != nil {
 		return err
 	}
-	dropped = true
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
@@ -822,29 +841,38 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	return nil
 }
 
-// startDelete marks the thread id as being deleted, or says why it cannot be: it was deleted, a delete of it runs, it
-// runs in an old terminal, or one of its descendants runs. It takes childMu, so a child whose start passed its checks
-// is running before the descendants are looked at, and mu.
-func (s *Sessions) startDelete(id string) error {
+// startDelete marks the thread id and its descendants as being deleted and returns them, the deepest first and id
+// last, or says why they cannot be: it was deleted, a delete of it or of a descendant runs, it runs in an old terminal,
+// or one of its descendants runs. It takes childMu, so a child whose start passed its checks is running before the
+// descendants are looked at, and mu.
+func (s *Sessions) startDelete(id string) ([]string, error) {
 	s.childMu.Lock()
 	defer s.childMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
 	case s.deleted[id]:
-		return fmt.Errorf("Thread %s was deleted", id)
+		return nil, fmt.Errorf("Thread %s was deleted", id)
 	case s.deleting[id]:
-		return fmt.Errorf("Thread %d is being deleted", s.nums[id])
+		return nil, fmt.Errorf("Thread %d is being deleted", s.nums[id])
 	case s.isOld(id):
-		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
+		return nil, fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
-	for _, d := range s.descendants(id) {
+	family := s.descendants(id)
+	for _, d := range family {
 		if in, live := s.liveInfo(d); live {
-			return fmt.Errorf("Thread %d has a running child, %s; stop it first", s.nums[id], cmp.Or(in.Title, defaultTitle))
+			return nil, fmt.Errorf("Thread %d has a running child, %s; stop it first", s.nums[id], cmp.Or(in.Title, defaultTitle))
+		}
+		if s.deleting[d] {
+			return nil, fmt.Errorf("Thread %d is being deleted", s.nums[d])
 		}
 	}
-	s.deleting[id] = true
-	return nil
+	slices.Reverse(family)
+	family = append(family, id)
+	for _, d := range family {
+		s.deleting[d] = true
+	}
+	return family, nil
 }
 
 // cleanupRefused says why a clean-up of the thread, marked pending already, must not go on, or nil when it may: a delete
@@ -979,14 +1007,14 @@ func (s *Sessions) OwnWorktree(id string) string {
 
 // ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
 // clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
-// it, as a fork or a child in the thread's folder does, or a shell is open in it.
+// it, as a fork does, or a shell is open in it. Its descendants do not count, as a Delete takes them with it.
 func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
 	if !ok || w.Removed != 0 || gone(w.Path) || s.life.cleanedUp(id) {
 		return "", ""
 	}
-	if user := s.usersOf(w.Path, id, true); user != "" {
+	if user := s.usersOf(w.Path, true, append(s.Descendants(id), id)...); user != "" {
 		return w.Path, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	return w.Path, s.life.shellIn(ctx, key, w.Path)
@@ -3772,15 +3800,15 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 	return proj, nil
 }
 
-// usersOf is the title of a live thread other than except that works in dir or a folder inside it, "" when none: one
-// that runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a
-// settled thread that would wake there counts too. It takes mu.
-func (s *Sessions) usersOf(dir, except string, asleep bool) string {
+// usersOf is the title of a live thread not in except that works in dir or a folder inside it, "" when none: one that
+// runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a settled
+// thread that would wake there counts too. It takes mu.
+func (s *Sessions) usersOf(dir string, asleep bool, except ...string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range s.info {
 		id := in.Name.String()
-		if id == except {
+		if slices.Contains(except, id) {
 			continue
 		}
 		if cwd := s.cwds[id]; in.Path != "" && folder.Inside(in.Path, dir) || cwd != "" && folder.Inside(cwd, dir) {
@@ -3791,7 +3819,7 @@ func (s *Sessions) usersOf(dir, except string, asleep bool) string {
 		return ""
 	}
 	for id, e := range s.ended {
-		if id != except && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
+		if !slices.Contains(except, id) && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
 			return cmp.Or(e.info.Title, defaultTitle)
 		}
 	}
@@ -3818,7 +3846,7 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	if !made || w.Removed != 0 || !folder.Inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
 		return "", false, "Files are rewound only in a worktree agentos made for this thread"
 	}
-	if user := s.usersOf(w.Path, id, true); user != "" {
+	if user := s.usersOf(w.Path, true, id); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	if shell := s.life.shellIn(ctx, proj.Key(), w.Path); shell != "" {

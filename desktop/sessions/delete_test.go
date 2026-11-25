@@ -654,8 +654,8 @@ func TestDeleteIsRefusedWhileAChildRuns(t *testing.T) {
 	if err := h.DeleteThread(parent.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := h.Session(child.ID); !ok || got.State != "settled" {
-		t.Errorf("the asleep child = %+v, %v; want it left asleep", got, ok)
+	if _, ok := h.Session(child.ID); ok || hasState(t, h, child.ID) {
+		t.Errorf("the asleep child: row there %v, state file there %v; want it deleted with its parent", ok, hasState(t, h, child.ID))
 	}
 }
 
