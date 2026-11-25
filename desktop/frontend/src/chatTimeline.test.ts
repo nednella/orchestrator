@@ -23,10 +23,18 @@ const turnEnd = (error = false, at?: number): Draft => ({ kind: 'turn_end', cost
 const kinds = (items: TimelineItem[]) => items.map((i) => i.kind)
 const only = <K extends TimelineItem['kind']>(items: TimelineItem[], kind: K) => items.filter((i): i is Extract<TimelineItem, { kind: K }> => i.kind === kind)
 
-test('reply with no tools has no fold', () => {
-  const t = buildTimeline(log(user('u1', 'Hi'), { kind: 'init', id: 's' }, message('msg_1', 'Hello.'), turnEnd()), {})
-  assert.deepEqual(kinds(t.items), ['user', 'reply'])
-  assert.equal(only(t.items, 'reply')[0].text, 'Hello.')
+test('a turn with no calls and no thinking keeps its heading, with nothing to open, where it was', () => {
+  const events = log(user('u1', 'Hi', 10_000), { kind: 'init', id: 's' }, message('msg_1', 'Hello.'), message('msg_2', 'And more.'), turnEnd(false, 13_500))
+  const heading = (items: TimelineItem[]) => only(items, 'work').map((w) => [w.key, w.header, w.steps.length])
+  const open = buildTimeline(events.slice(0, -1), {})
+  const t = buildTimeline(events, {})
+  assert.deepEqual(kinds(t.items), kinds(open.items), 'the items stay as they were, in the same order')
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply', 'reply'])
+  assert.deepEqual(heading(t.items), heading(open.items), 'the heading keeps its key, so its row stays')
+  assert.deepEqual(heading(t.items), [['work-u1', true, 0]])
+  const [work] = only(t.items, 'work')
+  assert.equal(work.endedAt! - work.startedAt, 3_500)
+  assert.deepEqual(only(t.items, 'reply').map((r) => r.text), ['Hello.', 'And more.'])
   assert.equal(t.turnOpen, false)
 })
 
@@ -112,7 +120,7 @@ test('a turn that only thought folds its thoughts', () => {
 
 test('blocks of one message join', () => {
   const t = buildTimeline(log(user('u1', 'Hi'), message('msg_1', 'First block.'), message('msg_1', 'Second block.'), turnEnd()), {})
-  assert.deepEqual(kinds(t.items), ['user', 'reply'])
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
   assert.equal(only(t.items, 'reply')[0].text, 'First block.\n\nSecond block.')
 })
 

@@ -43,8 +43,10 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
   switch (item.kind) {
     case 'user':
       return <ChatUserRow thread={thread} id={item.id} text={item.text} files={item.files} at={item.at} afterUser={items[index - 1]?.kind === 'user'} beforeUser={items[index + 1]?.kind === 'user'} onOpenImage={onOpenImage} />
-    case 'reply':
-      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={items[index + 1]?.kind === 'work'} onReply={onReply} onFork={onFork} />
+    case 'reply': {
+      const next = items[index + 1]
+      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && !next.header} onReply={onReply} onFork={onFork} />
+    }
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
     case 'restart': {
@@ -54,9 +56,9 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
     }
     case 'work': {
       const work = <ChatWorkRow thread={thread} turn={item.key} header={item.header} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
-      // The reply these tool rows follow shows its actions under them.
+      // The reply these tool rows follow shows its actions under them. A turn's heading follows no reply of its own turn.
       const reply = items[index - 1]
-      if (reply?.kind !== 'reply') return work
+      if (reply?.kind !== 'reply' || item.header) return work
       return (
         <>
           {work}

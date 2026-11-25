@@ -52,23 +52,29 @@ function Steps({ thread, steps, running, folder }: StepsProps) {
 
 type FinishedWorkProps = { thread: string; turn: string; steps: WorkStep[]; startedAt: number; worked: number; folder: string }
 
+// FinishedWork is the turn's heading once it ends, which opens its steps; a turn with none keeps it as a plain line.
 function FinishedWork({ thread, turn, steps, startedAt, worked, folder }: FinishedWorkProps) {
   const [open, setOpen] = useState(() => isOpened(thread, turn))
   const Chevron = open ? ChevronDown : ChevronRight
+  const label = `Worked for ${formatWorked(worked, true)}`
   return (
     <div>
       <div className="group chat-work-rule pr-0.5">
-        <button
-          className="flex items-center gap-1 rounded-md px-1 text-body leading-relaxed text-soft tabular-nums transition-colors duration-150 hover:text-ink"
-          aria-expanded={open}
-          onClick={() => {
-            setOpened(thread, turn, !open)
-            setOpen(!open)
-          }}
-        >
-          Worked for {formatWorked(worked, true)}
-          <Chevron size={14} aria-hidden />
-        </button>
+        {steps.length === 0 ? (
+          <p className="flex h-6 items-center px-1 text-body leading-relaxed text-soft tabular-nums">{label}</p>
+        ) : (
+          <button
+            className="flex h-6 items-center gap-1 rounded-md px-1 text-body leading-relaxed text-soft tabular-nums transition-colors duration-150 hover:text-ink"
+            aria-expanded={open}
+            onClick={() => {
+              setOpened(thread, turn, !open)
+              setOpen(!open)
+            }}
+          >
+            {label}
+            <Chevron size={14} aria-hidden />
+          </button>
+        )}
         <span className="ml-auto text-small text-soft tabular-nums opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
           {new Date(startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
         </span>

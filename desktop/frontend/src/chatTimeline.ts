@@ -261,7 +261,9 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const calls = turn.parts.flatMap((p) => (p.kind === 'call' ? [p.call] : []))
   const endedOn = turn.parts.at(-1)
   const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
-  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))
+  const work = (steps: WorkStep[]): TimelineItem => ({ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps })
+  // A turn with nothing to fold keeps its heading in place, so the timeline does not move when it ends.
+  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))]
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
   const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
   const last = replies.at(-1)
@@ -271,7 +273,7 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
     if (p.kind === 'reply' && p !== last) return [{ kind: 'note', key: p.key, text: p.blocks.join('\n\n') }]
     return []
   })
-  return [{ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [reply(last)] : [])]
+  return [work(steps), ...rest, ...(last ? [reply(last)] : [])]
 }
 
 // unfolded is the turn that runs: the work item that heads it, then its parts in order, each run of calls and thoughts
