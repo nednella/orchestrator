@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// PricesAsOf is the day the prices below were taken from Anthropic's and Google's API list prices.
+// PricesAsOf is the day the prices below were taken from Anthropic's API list prices.
 const PricesAsOf = "2026-10-20"
 
 // price is a model's list price in US dollars per million tokens. A cache write costs 1.25 times the
