@@ -25,7 +25,7 @@ const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey &
 // is the button that does it from the keyboard, so nothing interactive nests in another. Its actions are in its
 // right-click menu.
 export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: ChatChildCardProps) {
-  const a = useAgentos('select', 'settleThread', 'report')
+  const a = useAgentos('select', 'settleThread', 'wakeThread', 'report')
   const child = useAgentosSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
   const parentProject = useAgentosSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
   const facts = childFacts(child, title)
@@ -34,6 +34,7 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
   const remove = useArmedConfirm()
   const card = useRef<HTMLDivElement>(null)
   const working = facts.state === 'working' || facts.state === 'waiting'
+  const asleep = facts.state === 'settled'
 
   const open = () => child && a.select(child.id)
   const onKeyDown = (e: KeyboardEvent) => {
@@ -88,8 +89,9 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
           items={[
             { label: 'Open', run: open },
             working && { label: 'Stop', run: () => a.report(() => api.chatInterrupt(child.id)) },
-            facts.state !== 'settled' && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
-            { label: 'Delete', danger: true, separated: facts.state === 'settled', run: () => remove.arm() },
+            asleep && child.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
+            !asleep && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
+            { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => remove.arm() },
           ]}
         />
       )}
