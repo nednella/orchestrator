@@ -4,15 +4,19 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -45,6 +49,40 @@ func TestHelperFakeClaude(t *testing.T) {
 	os.Exit(0)
 }
 
+type fakeLine struct {
+	Type    string `json:"type"`
+	UUID    string `json:"uuid"`
+	Message struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	} `json:"message"`
+	RequestID string `json:"request_id"`
+	Request   struct {
+		Subtype string `json:"subtype"`
+	} `json:"request"`
+	Response struct {
+		RequestID string `json:"request_id"`
+		Response  struct {
+			Behavior string `json:"behavior"`
+		} `json:"response"`
+	} `json:"response"`
+}
+
+func (l fakeLine) text() string {
+	for _, c := range l.Message.Content {
+		if c.Type == "text" {
+			return c.Text
+		}
+	}
+	return ""
+}
+
+// fakeClaude acts as claude -p in stream-json mode with --replay-user-messages. "slow" waits up to 2 s for an
+// interrupt; a message read meanwhile joins it at its end, and one read before an interrupt runs as a turn of its own
+// after it. "late" ends its turn 300 ms after it starts and, a second later, runs the messages read meanwhile as a turn
+// of its own, as Claude does with a message written during a turn's last step.
 func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	logf, err := os.OpenFile(stdinLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
@@ -59,77 +97,131 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	result := func(isError bool) {
 		print(map[string]any{"type": "result", "subtype": "success", "is_error": isError, "total_cost_usd": 0.01})
 	}
-	fmt.Fprintln(out, fakeInit)
-
-	r := bufio.NewReader(in)
-	turn := 0
-	for {
-		line, err := r.ReadBytes('\n')
-		if len(line) > 0 {
-			logf.Write(line)
+	echo := func(l fakeLine) {
+		if l.UUID != "" {
+			print(map[string]any{"type": "user", "uuid": l.UUID, "isReplay": true, "message": map[string]any{"role": "user", "content": l.Message.Content}})
 		}
-		if err != nil {
+	}
+	turn := 0
+	reply := func(text string) {
+		turn++
+		id := fmt.Sprintf("msg_%d", turn)
+		print(map[string]any{"type": "stream_event", "api_message_id": id, "event": map[string]any{
+			"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": text},
+		}})
+		print(map[string]any{"type": "assistant", "uuid": "u" + id, "message": map[string]any{
+			"id": id, "role": "assistant", "content": []any{map[string]any{"type": "text", "text": text}},
+		}})
+	}
+	// ownTurn runs messages Claude held past a turn's end as one turn of their own.
+	ownTurn := func(held []fakeLine) {
+		if len(held) == 0 {
 			return
 		}
-		var msg struct {
-			Type    string `json:"type"`
-			Message struct {
-				Content []struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"message"`
-			RequestID string `json:"request_id"`
-			Request   struct {
-				Subtype string `json:"subtype"`
-			} `json:"request"`
-			Response struct {
-				RequestID string `json:"request_id"`
-				Response  struct {
-					Behavior string `json:"behavior"`
-				} `json:"response"`
-			} `json:"response"`
+		var texts []string
+		for _, l := range held {
+			echo(l)
+			texts = append(texts, l.text())
 		}
-		if json.Unmarshal(line, &msg) != nil {
-			continue
+		reply(strings.Join(texts, " "))
+		result(false)
+	}
+	fmt.Fprintln(out, fakeInit)
+
+	lines := make(chan fakeLine)
+	go func() {
+		defer close(lines)
+		r := bufio.NewReader(in)
+		for {
+			raw, err := r.ReadBytes('\n')
+			if len(raw) > 0 {
+				logf.Write(raw)
+			}
+			if err != nil {
+				return
+			}
+			var l fakeLine
+			if json.Unmarshal(raw, &l) == nil {
+				lines <- l
+			}
 		}
-		switch msg.Type {
+	}()
+	// during reads lines until stop, holding user messages and answering control requests, and reports whether an
+	// interrupt came.
+	during := func(stop <-chan time.Time) (held []fakeLine, interrupted bool) {
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					return held, false
+				}
+				switch l.Type {
+				case "user":
+					held = append(held, l)
+				case "control_request":
+					var still []string
+					for _, h := range held {
+						still = append(still, h.UUID)
+					}
+					print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"still_queued": still}}})
+					if l.Request.Subtype == "interrupt" {
+						return held, true
+					}
+				}
+			case <-stop:
+				return held, false
+			}
+		}
+	}
+
+	for l := range lines {
+		switch l.Type {
 		case "control_request":
-			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": msg.RequestID}})
-			if msg.Request.Subtype == "interrupt" {
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID}})
+			if l.Request.Subtype == "interrupt" {
 				result(true)
 			}
 		case "control_response":
-			if msg.Response.RequestID == "r1" {
-				result(msg.Response.Response.Behavior != "allow")
+			if l.Response.RequestID == "r1" {
+				result(l.Response.Response.Behavior != "allow")
 			}
 		case "user":
-			turn++
-			text := ""
-			if len(msg.Message.Content) > 0 {
-				text = msg.Message.Content[0].Text
-			}
-			id := fmt.Sprintf("msg_%d", turn)
+			echo(l)
+			text := l.text()
 			switch text {
 			case "ask":
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
 					"subtype": "can_use_tool", "tool_name": "Bash", "input": map[string]any{"command": "ls"},
 				}})
-				continue
+			case "slow":
+				reply("slow")
+				held, interrupted := during(time.After(2 * time.Second))
+				if interrupted {
+					result(true)
+					ownTurn(held)
+					continue
+				}
+				for _, h := range held {
+					echo(h)
+				}
+				result(false)
+			case "late":
+				reply("late")
+				held, _ := during(time.After(300 * time.Millisecond))
+				result(false)
+				more, _ := during(time.After(time.Second))
+				ownTurn(append(held, more...))
 			case "big":
-				text = strings.Repeat("x", 1<<20)
+				reply(strings.Repeat("x", 1<<20))
+				result(false)
 			case "quit":
 				os.Stdout.Close()
 				time.Sleep(time.Second)
 				os.Exit(0)
 			default:
-				print(map[string]any{"type": "stream_event", "api_message_id": id, "event": map[string]any{
-					"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": text},
-				}})
+				reply(text)
+				result(false)
 			}
-			print(map[string]any{"type": "assistant", "uuid": "u" + id, "message": map[string]any{
-				"id": id, "role": "assistant", "content": []any{map[string]any{"type": "text", "text": text}},
-			}})
-			result(false)
 		}
 	}
 }
@@ -744,6 +836,7 @@ func TestConcurrentSendsStayWholeLines(t *testing.T) {
 		return count
 	}
 	eventually(t, "50 user lines on stdin", func() bool { return users() == n })
+	eventually(t, "50 user events in the log", func() bool { return len(logged(t, h.log, chat.KindUser)) == n })
 	var sent []string
 	for i, l := range stdinLines(t, h.stdin) {
 		var line struct {
@@ -761,15 +854,9 @@ func TestConcurrentSendsStayWholeLines(t *testing.T) {
 			sent = append(sent, line.Message.Content[0].Text)
 		}
 	}
-	logged, err := chat.ReadLog(h.log, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var inLog []string
-	for _, e := range logged {
-		if e.Kind == chat.KindUser {
-			inLog = append(inLog, e.Text)
-		}
+	for _, e := range logged(t, h.log, chat.KindUser) {
+		inLog = append(inLog, e.Text)
 	}
 	if len(inLog) != len(sent) {
 		t.Fatalf("log has %d user events, stdin %d", len(inLog), len(sent))
@@ -965,4 +1052,368 @@ func TestEchoShowsEachTurnsOwnCostAndANewSessionOnce(t *testing.T) {
 	if got := out.String(); got != want {
 		t.Errorf("echo =\n%s\nwant\n%s", got, want)
 	}
+}
+
+// logged returns the logged events of the given kinds, all of them when none are given.
+func logged(t *testing.T, path string, kinds ...chat.Kind) []chat.Event {
+	t.Helper()
+	all, err := chat.ReadLog(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []chat.Event
+	for _, e := range all {
+		if len(kinds) == 0 || slices.Contains(kinds, e.Kind) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// userLines returns claude's stdin user lines.
+func userLines(t *testing.T, path string) []fakeLine {
+	t.Helper()
+	var out []fakeLine
+	for _, raw := range stdinLines(t, path) {
+		var l fakeLine
+		if json.Unmarshal([]byte(raw), &l) == nil && l.Type == "user" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func sendMessage(t *testing.T, socket, text string, files ...string) string {
+	t.Helper()
+	id, err := SendMessage(ctxT(t), socket, Message{Text: text, Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// index is the position of the first event with kind and id, -1 for none.
+func index(events []chat.Event, kind chat.Kind, id string) int {
+	return slices.IndexFunc(events, func(e chat.Event) bool { return e.Kind == kind && e.ID == id })
+}
+
+func TestSendReturnsTheMessageID(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	id := sendMessage(t, h.socket, "hi")
+	if id == "" {
+		t.Fatal("send replied with no id")
+	}
+	if e := waitKind(t, events, chat.KindUser); e.ID != id || e.Text != "hi" {
+		t.Fatalf("user event = %+v, want id %s", e, id)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	lines := userLines(t, h.stdin)
+	if len(lines) != 1 || lines[0].UUID != id {
+		t.Fatalf("stdin user lines = %+v, want one with uuid %s", lines, id)
+	}
+	if got := len(logged(t, h.log, chat.KindUser, chat.KindQueued)); got != 1 {
+		t.Fatalf("%d user and queued events, want 1: the echo is not logged again", got)
+	}
+}
+
+func TestSendWhileBusyIsQueuedThenDelivered(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	nextID := sendMessage(t, h.socket, "next")
+	waitKind(t, events, chat.KindTurnEnd)
+
+	log := logged(t, h.log)
+	queued, end, user := index(log, chat.KindQueued, nextID), index(log, chat.KindTurnEnd, ""), index(log, chat.KindUser, nextID)
+	if queued < 0 || queued > end || user < queued {
+		t.Fatalf("log = %+v, want queued{next} before the first turn_end, then user{next}", log)
+	}
+	if log[user].Text != "next" {
+		t.Fatalf("user event = %+v, want the queued text", log[user])
+	}
+	count := 0
+	for _, l := range userLines(t, h.stdin) {
+		if l.text() == "next" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("stdin holds next %d times, want once", count)
+	}
+
+	after := sendMessage(t, h.socket, "after")
+	if e := waitKind(t, events, chat.KindUser); e.ID != after {
+		t.Fatalf("event = %+v, want the message after the turn logged as the user's at once", e)
+	}
+}
+
+func TestMessageAfterTheLastStepWaitsForItsOwnTurn(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "late")
+	waitKind(t, events, chat.KindMessage)
+	first := sendMessage(t, h.socket, "one")
+	if e := waitKind(t, events, chat.KindQueued); e.ID != first {
+		t.Fatalf("queued = %+v, want %s", e, first)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	second := sendMessage(t, h.socket, "two")
+	if e := next(t, events); e.Kind != chat.KindQueued || e.ID != second {
+		t.Fatalf("event = %+v, want %s queued: a written message keeps the host busy after the turn ends", e, second)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	log := logged(t, h.log)
+	if index(log, chat.KindUser, first) < 0 || index(log, chat.KindUser, second) < 0 {
+		t.Fatalf("log = %+v, want both messages logged as the user's at their echo", log)
+	}
+}
+
+func TestSendNowInterruptsAndDeliversFirst(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	first := sendMessage(t, h.socket, "first")
+	second := sendMessage(t, h.socket, "second")
+	if err := SendNow(ctxT(t), h.socket, "not-queued"); err == nil || !strings.Contains(err.Error(), "no queued message not-queued") {
+		t.Fatalf("SendNow(unknown) = %v, want no queued message", err)
+	}
+	if err := SendNow(ctxT(t), h.socket, second); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindInterrupt); e.ID != second {
+		t.Fatalf("interrupt = %+v, want it to name %s", e, second)
+	}
+	if e := waitKind(t, events, chat.KindTurnEnd); !e.Error {
+		t.Fatal("interrupted turn ended without an error")
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+
+	log := logged(t, h.log)
+	interrupt := index(log, chat.KindInterrupt, second)
+	if index(log, chat.KindUser, first) < interrupt || index(log, chat.KindUser, second) < interrupt {
+		t.Fatalf("log = %+v, want both messages logged as the user's after the interrupt", log)
+	}
+	var texts []string
+	for _, l := range userLines(t, h.stdin) {
+		texts = append(texts, l.text())
+	}
+	if fmt.Sprint(texts) != "[slow first second]" {
+		t.Fatalf("stdin user lines = %v, want each message once: Claude runs the queued ones after the interrupt", texts)
+	}
+	interrupts := 0
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"subtype":"interrupt"`) {
+			interrupts++
+		}
+	}
+	if interrupts != 1 {
+		t.Fatalf("%d interrupts on stdin, want 1", interrupts)
+	}
+	if err := SendNow(ctxT(t), h.socket, second); err == nil {
+		t.Fatal("SendNow of a delivered message was accepted")
+	}
+}
+
+func TestSendDuringApprovalDeniesWithTheText(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "ask")
+	waitKind(t, events, chat.KindApproval)
+	png := writePNG(t)
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "look", Files: []string{png}}); err == nil || !strings.Contains(err.Error(), "Answer the approval before sending images") {
+		t.Fatalf("send with an image = %v, want a refusal", err)
+	}
+	id := sendMessage(t, h.socket, "use ls instead")
+	if e := waitKind(t, events, chat.KindAnswer); e.ID != "r1" || e.Text != "deny" {
+		t.Fatalf("answer = %+v, want r1 deny", e)
+	}
+	if e := next(t, events); e.Kind != chat.KindUser || e.ID != id || e.Parent != "r1" || e.Text != "use ls instead" {
+		t.Fatalf("event = %+v, want the user's message with parent r1", e)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+
+	var deny string
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"control_response"`) {
+			deny = l
+		}
+	}
+	if !strings.Contains(deny, `"behavior":"deny"`) || !strings.Contains(deny, `"message":"use ls instead"`) {
+		t.Fatalf("control_response = %s, want a deny with the text", deny)
+	}
+	if lines := userLines(t, h.stdin); len(lines) != 1 {
+		t.Fatalf("%d user lines on stdin, want only the first", len(lines))
+	}
+}
+
+func TestAnswerWithInputAllowsWithTheGivenInput(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "ask")
+	waitKind(t, events, chat.KindApproval)
+	if err := AnswerWith(ctxT(t), h.socket, "r1", json.RawMessage(`["not an object"]`)); err == nil {
+		t.Fatal("an input that is not an object was accepted")
+	}
+	given := `{"command":"ls -la","answers":{"Which?":"Red"}}`
+	if err := AnswerWith(ctxT(t), h.socket, "r1", json.RawMessage(given)); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindTurnEnd); e.Error {
+		t.Fatal("turn ended with an error after allow")
+	}
+	for _, l := range stdinLines(t, h.stdin) {
+		if !strings.Contains(l, `"control_response"`) {
+			continue
+		}
+		var answer struct {
+			Response struct {
+				Response struct {
+					Behavior     string          `json:"behavior"`
+					UpdatedInput json.RawMessage `json:"updatedInput"`
+				} `json:"response"`
+			} `json:"response"`
+		}
+		if err := json.Unmarshal([]byte(l), &answer); err != nil {
+			t.Fatal(err)
+		}
+		if r := answer.Response.Response; r.Behavior != "allow" || string(r.UpdatedInput) != given {
+			t.Fatalf("answer = %s, want allow with %s", l, given)
+		}
+		return
+	}
+	t.Fatal("no control_response on stdin")
+}
+
+func TestInterruptIsLogged(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	if err := Interrupt(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	if e := next(t, events); e.Kind != chat.KindInterrupt || e.ID != "" {
+		t.Fatalf("event = %+v, want an interrupt", e)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	eventually(t, "the interrupt in the pane", func() bool { return strings.Contains(h.echo.String(), "interrupted") })
+}
+
+// writePNG writes a 1x1 png and returns its path.
+func writePNG(t *testing.T) string {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "dot.png")
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestSendWithImagesBuildsImageBlocks(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	path := writePNG(t)
+	id := sendMessage(t, h.socket, "what is this", path)
+	if e := waitKind(t, events, chat.KindUser); e.ID != id || len(e.Files) != 1 || e.Files[0] != path {
+		t.Fatalf("user event = %+v, want files [%s]", e, path)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	var line struct {
+		Message struct {
+			Content []struct {
+				Type   string `json:"type"`
+				Text   string `json:"text"`
+				Source struct {
+					Type      string `json:"type"`
+					MediaType string `json:"media_type"`
+					Data      string `json:"data"`
+				} `json:"source"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"type":"user"`) {
+			if err := json.Unmarshal([]byte(l), &line); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	content := line.Message.Content
+	if len(content) != 2 || content[0].Type != "image" || content[0].Source.MediaType != "image/png" || content[1].Text != "what is this" {
+		t.Fatalf("content = %+v, want a png image block, then the text", content)
+	}
+	if content[0].Source.Type != "base64" || content[0].Source.Data != base64.StdEncoding.EncodeToString(readFile(t, path)) {
+		t.Fatalf("image source = %+v, want the file in base64", content[0].Source)
+	}
+}
+
+func TestImageOverTheLimitIsRefused(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	dir := t.TempDir()
+	big := filepath.Join(dir, "big.png")
+	if err := os.WriteFile(big, append(readFile(t, writePNG(t)), make([]byte, 6<<20)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	text := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(text, []byte("plain words"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := logged(t, h.log)
+	for _, path := range []string{big, text, filepath.Join(dir, "missing.png")} {
+		_, err := SendMessage(ctxT(t), h.socket, Message{Text: "see", Files: []string{path}})
+		if err == nil || !strings.Contains(err.Error(), path) {
+			t.Fatalf("send of %s = %v, want an error naming it", path, err)
+		}
+	}
+	if after := logged(t, h.log); len(after) != len(before) {
+		t.Fatalf("log went from %d to %d events, want it unchanged", len(before), len(after))
+	}
+	if lines := userLines(t, h.stdin); len(lines) != 0 {
+		t.Fatalf("%d user lines reached claude, want none", len(lines))
+	}
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

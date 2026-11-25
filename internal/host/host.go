@@ -5,11 +5,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +40,20 @@ const (
 	echoWidth      = 200
 	// subscriberBuffer is how many events a subscriber may fall behind before it is dropped.
 	subscriberBuffer = 1024
+	maxImage         = 5 << 20
 )
+
+var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
+
+type approval struct {
+	id    string
+	input json.RawMessage
+}
+
+type queuedMessage struct {
+	text  string
+	files []string
+}
 
 type subscriber struct {
 	ch   chan chat.Event
@@ -67,7 +83,12 @@ type host struct {
 	exited    bool
 	subs      map[*subscriber]struct{}
 	conns     map[net.Conn]struct{}
-	approvals map[string]json.RawMessage
+	approvals []approval // in the order Claude asked
+	// turnOpen is set from writing a user line, or from Claude taking in a queued one, until the turn ends.
+	turnOpen bool
+	// queued holds the messages written during a turn that Claude has not taken in yet. Claude runs one written during
+	// a turn's last step as a turn of its own after that turn ends, so the host stays busy while any is left.
+	queued map[string]queuedMessage
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -89,12 +110,12 @@ func Run(ctx context.Context, c Config) error {
 		echo = io.Discard
 	}
 	h := &host{
-		logPath:   c.Log,
-		log:       log,
-		echo:      &lockedWriter{w: echo},
-		subs:      map[*subscriber]struct{}{},
-		conns:     map[net.Conn]struct{}{},
-		approvals: map[string]json.RawMessage{},
+		logPath: c.Log,
+		log:     log,
+		echo:    &lockedWriter{w: echo},
+		subs:    map[*subscriber]struct{}{},
+		conns:   map[net.Conn]struct{}{},
+		queued:  map[string]queuedMessage{},
 	}
 	defer h.shutdown(ln)
 
@@ -217,6 +238,10 @@ func (h *host) handleLine(line []byte) {
 		return
 	}
 	for _, e := range events {
+		if e.Kind == chat.KindEcho {
+			h.echoed(e.ID)
+			continue
+		}
 		if _, err := h.publish(e); err != nil {
 			fmt.Fprintf(h.echo, "host: %v\n", err)
 		}
@@ -246,12 +271,13 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	}
 	switch e.Kind {
 	case chat.KindApproval:
-		h.approvals[e.ID] = e.Input
+		h.approvals = append(h.approvals, approval{id: e.ID, input: e.Input})
 	case chat.KindTurnEnd:
-		clear(h.approvals)
+		h.approvals = nil
+		h.turnOpen = false
 	case chat.KindExit:
 		h.exited = true
-		clear(h.approvals)
+		h.approvals = nil
 	}
 	for s := range h.subs {
 		select {
@@ -269,7 +295,7 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 // so the echo shows the id only when it changes and the cost as the turn's own; a total below the last starts a new
 // count, and a result with no cost shows none and keeps the count.
 func (h *host) echoEvent(e chat.Event) {
-	if !e.Persisted() {
+	if !e.Persisted() || e.Kind == chat.KindCommands {
 		return
 	}
 	h.echoMu.Lock()
@@ -309,21 +335,12 @@ func (h *host) writeLocked(line []byte) error {
 	return nil
 }
 
-func (h *host) running() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.exited {
-		return errExited
-	}
-	return nil
-}
-
 // interruptOn interrupts Claude's turn at each signal until done closes.
 func (h *host) interruptOn(signals <-chan os.Signal, done <-chan struct{}) {
 	for {
 		select {
 		case <-signals:
-			if err := h.do(request{Op: opInterrupt}); err != nil {
+			if err := h.interrupt(""); err != nil {
 				fmt.Fprintf(h.echo, "host: interrupt: %v\n", err)
 			}
 		case <-done:
@@ -379,56 +396,165 @@ func (h *host) handle(conn net.Conn) {
 	line, err := bufio.NewReader(io.LimitReader(conn, maxRequest+1)).ReadBytes('\n')
 	if err != nil {
 		if len(line) > maxRequest {
-			writeReply(conn, errors.New("request is over 1 MB"))
+			writeReply(conn, "", errors.New("request is over 1 MB"))
 		}
 		return
 	}
 	conn.SetReadDeadline(time.Time{})
 	var req request
 	if err := json.Unmarshal(line, &req); err != nil {
-		writeReply(conn, fmt.Errorf("bad request: %w", err))
+		writeReply(conn, "", fmt.Errorf("bad request: %w", err))
 		return
 	}
 	if req.Op == opSubscribe {
 		h.subscribe(conn, req.After)
 		return
 	}
-	writeReply(conn, h.do(req))
+	id, err := h.do(req)
+	writeReply(conn, id, err)
 }
 
-func (h *host) do(req request) error {
+// do runs one request and returns the id a send logged its message under.
+func (h *host) do(req request) (string, error) {
 	switch req.Op {
 	case opSend:
-		return h.send(req.Text)
+		return h.send(req.Text, req.Files)
+	case opSendNow:
+		if req.ID == "" {
+			return "", errors.New("send_now needs the id of a queued message")
+		}
+		return "", h.interrupt(req.ID)
 	case opDraft:
 		_, err := h.publish(chat.Event{Kind: chat.KindDraft, Text: req.Text})
-		return err
+		return "", err
 	case opInterrupt:
-		if err := h.running(); err != nil {
-			return err
-		}
-		return h.write(chat.Interrupt(h.nextID()))
+		return "", h.interrupt("")
 	case opAnswer:
-		return h.answer(req.ID, req.Allow, req.Message)
+		return "", h.answer(req.ID, req.Allow, req.Message, req.Input)
 	}
-	return fmt.Errorf("unknown op %q", req.Op)
+	return "", fmt.Errorf("unknown op %q", req.Op)
 }
 
-// send logs the user message and writes it to Claude under stdinMu, so the log and stdin hold messages in the same order. The lock order is stdinMu, then h.mu.
-func (h *host) send(text string) error {
+// send gives the user's message to Claude and returns its id. While an approval waits, the message denies each waiting
+// tool with the text as the reason and is not written as a message. While a turn runs, it is logged as queued and
+// written at once: Claude takes it in at the turn's next step, or runs it as its own turn after this one, and its echo
+// then logs it as the user's. Logging and writing happen under stdinMu, so the log and stdin hold messages in the same
+// order. The lock order is stdinMu, then h.mu.
+func (h *host) send(text string, files []string) (string, error) {
+	images, err := readImages(files)
+	if err != nil {
+		return "", err
+	}
+	id := newMessageID()
+	h.stdinMu.Lock()
+	defer h.stdinMu.Unlock()
+	if h.stdinErr != nil {
+		return "", h.stdinErr
+	}
+	h.mu.Lock()
+	lines, logged, err := h.sendLocked(id, text, files, images)
+	h.mu.Unlock()
+	for _, e := range logged {
+		h.echoEvent(e)
+	}
+	for _, line := range lines {
+		if werr := h.writeLocked(line); werr != nil {
+			return "", werr
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// sendLocked must be called with stdinMu and h.mu held. It logs the message and returns the lines to write for what it
+// logged, also when it fails partway.
+func (h *host) sendLocked(id, text string, files []string, images []chat.Image) (lines [][]byte, logged []chat.Event, err error) {
+	log := func(e chat.Event) error {
+		e, err := h.appendLocked(e)
+		if err == nil {
+			logged = append(logged, e)
+		}
+		return err
+	}
+	if len(h.approvals) > 0 {
+		if len(files) > 0 {
+			return nil, nil, errors.New("Answer the approval before sending images")
+		}
+		parent := h.approvals[0].id
+		for len(h.approvals) > 0 {
+			a := h.approvals[0]
+			if err := log(chat.Event{Kind: chat.KindAnswer, ID: a.id, Text: "deny"}); err != nil {
+				return lines, logged, err
+			}
+			h.approvals = h.approvals[1:]
+			lines = append(lines, chat.Deny(a.id, text))
+		}
+		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Parent: parent})
+	}
+	line := chat.UserMessageWith(id, text, images)
+	if h.turnOpen || len(h.queued) > 0 {
+		if err := log(chat.Event{Kind: chat.KindQueued, ID: id, Text: text, Files: files}); err != nil {
+			return nil, logged, err
+		}
+		h.queued[id] = queuedMessage{text: text, files: files}
+		return [][]byte{line}, logged, nil
+	}
+	if err := log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Files: files}); err != nil {
+		return nil, logged, err
+	}
+	h.turnOpen = true
+	return [][]byte{line}, logged, nil
+}
+
+// echoed handles Claude taking in the user message id. A queued one is logged as the user's now, and its turn is open:
+// Claude may run it as a turn of its own after the turn it was written during.
+func (h *host) echoed(id string) {
+	h.mu.Lock()
+	m, ok := h.queued[id]
+	if !ok {
+		h.mu.Unlock()
+		return
+	}
+	delete(h.queued, id)
+	h.turnOpen = true
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Files: m.files})
+	h.mu.Unlock()
+	if err != nil {
+		fmt.Fprintf(h.echo, "host: %v\n", err)
+		return
+	}
+	h.echoEvent(e)
+}
+
+// interrupt logs an interrupt and writes it. With queued set, it is Send now for that queued message: Claude answers the
+// interrupt with the messages it still holds and runs them next, so the message is not written again.
+func (h *host) interrupt(queued string) error {
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
 	if h.stdinErr != nil {
 		return h.stdinErr
 	}
-	if _, err := h.publish(chat.Event{Kind: chat.KindUser, Text: text}); err != nil {
+	h.mu.Lock()
+	if _, ok := h.queued[queued]; queued != "" && !ok {
+		h.mu.Unlock()
+		return fmt.Errorf("no queued message %s", queued)
+	}
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindInterrupt, ID: queued})
+	h.mu.Unlock()
+	if err != nil {
 		return err
 	}
-	return h.writeLocked(chat.UserMessage(text))
+	h.echoEvent(e)
+	return h.writeLocked(chat.Interrupt(h.nextID()))
 }
 
-// answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open.
-func (h *host) answer(id string, allow bool, message string) error {
+// answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own.
+func (h *host) answer(id string, allow bool, message string, given json.RawMessage) error {
+	if len(given) > 0 && !isObject(given) {
+		return errors.New("an answer's input must be a JSON object")
+	}
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
 	h.mu.Lock()
@@ -436,10 +562,14 @@ func (h *host) answer(id string, allow bool, message string) error {
 		h.mu.Unlock()
 		return errExited
 	}
-	input, ok := h.approvals[id]
-	if !ok {
+	i := h.approvalIndex(id)
+	if i < 0 {
 		h.mu.Unlock()
 		return fmt.Errorf("no approval %q is waiting", id)
+	}
+	input := h.approvals[i].input
+	if len(given) > 0 {
+		input = given
 	}
 	// chat.Allow panics on input that is not JSON, and a panic here would end the thread's Claude.
 	if allow && len(input) > 0 && !json.Valid(input) {
@@ -455,26 +585,83 @@ func (h *host) answer(id string, allow bool, message string) error {
 		h.mu.Unlock()
 		return err
 	}
-	delete(h.approvals, id)
+	h.approvals = append(h.approvals[:i], h.approvals[i+1:]...)
 	h.mu.Unlock()
 	h.echoEvent(e)
 	return h.writeLocked(line)
+}
+
+// approvalIndex must be called with h.mu held; it is -1 when no approval id waits.
+func (h *host) approvalIndex(id string) int {
+	for i, a := range h.approvals {
+		if a.id == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func isObject(raw json.RawMessage) bool {
+	var m map[string]json.RawMessage
+	return json.Unmarshal(raw, &m) == nil && m != nil
+}
+
+// readImages reads each file as an image block's data, refusing one that is too big or not a picture Claude takes.
+func readImages(files []string) ([]chat.Image, error) {
+	images := make([]chat.Image, 0, len(files))
+	for _, path := range files {
+		data, err := readLimited(path, maxImage)
+		if err != nil {
+			return nil, err
+		}
+		mime := http.DetectContentType(data)
+		if !imageTypes[mime] {
+			return nil, fmt.Errorf("%s is not a PNG, JPEG, GIF or WebP image", path)
+		}
+		images = append(images, chat.Image{Mime: mime, Data: base64.StdEncoding.EncodeToString(data)})
+	}
+	return images, nil
+}
+
+func readLimited(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s is over %d MB", path, limit>>20)
+	}
+	return data, nil
+}
+
+// newMessageID is a random UUID v4, the uuid Claude echoes back when it takes the message in.
+func newMessageID() string {
+	var b [16]byte
+	rand.Read(b[:])
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // subscribe sends the logged events after `after`, then live events, until the client hangs up, falls too far behind or the host stops.
 func (h *host) subscribe(conn net.Conn, after int64) {
 	s, err := h.addSubscriber(conn)
 	if err != nil {
-		writeReply(conn, err)
+		writeReply(conn, "", err)
 		return
 	}
 	defer h.removeSubscriber(s)
 	logged, err := chat.ReadLog(h.logPath, after)
 	if err != nil {
-		writeReply(conn, err)
+		writeReply(conn, "", err)
 		return
 	}
-	if writeReply(conn, nil) != nil {
+	if writeReply(conn, "", nil) != nil {
 		return
 	}
 	enc := json.NewEncoder(conn)
@@ -526,8 +713,8 @@ func (h *host) removeSubscriber(s *subscriber) {
 	delete(h.subs, s)
 }
 
-func writeReply(conn net.Conn, err error) error {
-	r := reply{OK: err == nil}
+func writeReply(conn net.Conn, id string, err error) error {
+	r := reply{OK: err == nil, ID: id}
 	if err != nil {
 		r.Error = err.Error()
 	}
@@ -629,6 +816,10 @@ func echoLine(e chat.Event) string {
 		}
 	case chat.KindDraft:
 		s = "draft: " + e.Text
+	case chat.KindQueued:
+		s = "queued: " + e.Text
+	case chat.KindInterrupt:
+		s = "interrupted"
 	case chat.KindExit:
 		s = "claude exited"
 		if e.Text != "" {

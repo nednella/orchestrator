@@ -89,7 +89,7 @@ func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 		return strings.Count(string(data), `"kind":"init"`) == 2
 	})
 	data, _ := os.ReadFile(freshLog)
-	if !strings.Contains(string(data), `"kind":"user","text":"the first ask"`) {
+	if !loggedUser(freshLog, "the first ask") {
 		t.Errorf("the resumed session's chat log lacks the first ask:\n%s", data)
 	}
 	if exists(oldLog) {

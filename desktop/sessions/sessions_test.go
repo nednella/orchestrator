@@ -17,6 +17,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -354,8 +355,14 @@ func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
 	chatLog, _ := hostFiles(h, s.ID)
 	eventually(t, "the prompt and the reply in the chat log", func() bool {
 		data, _ := os.ReadFile(chatLog)
-		return strings.Contains(string(data), `"kind":"user","text":"/work 7; and a ';' at the end;"`) && strings.Contains(string(data), `"kind":"turn_end"`)
+		return loggedUser(chatLog, "/work 7; and a ';' at the end;") && strings.Contains(string(data), `"kind":"turn_end"`)
 	})
+}
+
+// loggedUser reports whether the chat log at path holds the user message text.
+func loggedUser(path, text string) bool {
+	events, _ := chat.ReadLog(path, 0)
+	return slices.ContainsFunc(events, func(e chat.Event) bool { return e.Kind == chat.KindUser && e.Text == text })
 }
 
 func TestAppPromptKeepsItsMark(t *testing.T) {

@@ -16,25 +16,53 @@ const (
 	readyPoll   = 50 * time.Millisecond
 )
 
+// Message is what the user sends: text and the paths of images to go before it.
+type Message struct {
+	Text  string
+	Files []string
+}
+
+// SendMessage gives m to Claude and returns the id the host logged it under.
+func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
+	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files})
+	return rep.ID, err
+}
+
 func Send(ctx context.Context, socket, text string) error {
-	return call(ctx, socket, request{Op: opSend, Text: text})
+	_, err := SendMessage(ctx, socket, Message{Text: text})
+	return err
+}
+
+// SendNow interrupts the turn so Claude takes in the queued message id now, with any queued alongside it.
+func SendNow(ctx context.Context, socket, id string) error {
+	_, err := call(ctx, socket, request{Op: opSendNow, ID: id})
+	return err
 }
 
 func Draft(ctx context.Context, socket, text string) error {
-	return call(ctx, socket, request{Op: opDraft, Text: text})
+	_, err := call(ctx, socket, request{Op: opDraft, Text: text})
+	return err
 }
 
 func Interrupt(ctx context.Context, socket string) error {
-	return call(ctx, socket, request{Op: opInterrupt})
+	_, err := call(ctx, socket, request{Op: opInterrupt})
+	return err
 }
 
 func Answer(ctx context.Context, socket, id string, allow bool, message string) error {
-	return call(ctx, socket, request{Op: opAnswer, ID: id, Allow: allow, Message: message})
+	_, err := call(ctx, socket, request{Op: opAnswer, ID: id, Allow: allow, Message: message})
+	return err
+}
+
+// AnswerWith allows the approval id with input in place of the tool's own, such as a question's answers.
+func AnswerWith(ctx context.Context, socket, id string, input json.RawMessage) error {
+	_, err := call(ctx, socket, request{Op: opAnswer, ID: id, Allow: true, Input: input})
+	return err
 }
 
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.
 func Subscribe(ctx context.Context, socket string, after int64, fn func(chat.Event)) error {
-	conn, r, err := dial(ctx, socket, request{Op: opSubscribe, After: after})
+	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after})
 	if err != nil {
 		return err
 	}
@@ -74,32 +102,32 @@ func Ready(ctx context.Context, socket string) error {
 	}
 }
 
-func call(ctx context.Context, socket string, req request) error {
-	conn, _, err := dial(ctx, socket, req)
+func call(ctx context.Context, socket string, req request) (reply, error) {
+	conn, _, rep, err := dial(ctx, socket, req)
 	if err != nil {
-		return err
+		return reply{}, err
 	}
 	conn.Close()
-	return nil
+	return rep, nil
 }
 
 // dial sends req to the host and reads its reply, within callTimeout. The connection stays open for a subscribe stream.
-func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Reader, error) {
+func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Reader, reply, error) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
 	if err != nil {
-		return nil, nil, fmt.Errorf("reach host at %s: %w", socket, err)
+		return nil, nil, reply{}, fmt.Errorf("reach host at %s: %w", socket, err)
 	}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
-	fail := func(err error) (net.Conn, *bufio.Reader, error) {
+	fail := func(err error) (net.Conn, *bufio.Reader, reply, error) {
 		stop()
 		conn.Close()
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		return nil, nil, fmt.Errorf("host at %s: %w", socket, err)
+		return nil, nil, reply{}, fmt.Errorf("host at %s: %w", socket, err)
 	}
 	b, err := json.Marshal(req)
 	if err != nil {
@@ -123,5 +151,5 @@ func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Rea
 	if !rep.OK {
 		return fail(fmt.Errorf("%s", rep.Error))
 	}
-	return conn, r, nil
+	return conn, r, rep, nil
 }
