@@ -1235,8 +1235,10 @@ export function createMock(params: URLSearchParams) {
       if (s.pr) s.pr.newComments = 0
       publish()
     },
+    // A thread with a branch and no worktree lost its worktree to a clean-up; Go does not fall back to the project folder.
     OpenInEditor: async (id: string) => {
-      find(id)
+      const s = find(id)
+      if (s.branch !== '' && s.worktree === '') throw "This thread's folder is gone"
     },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)

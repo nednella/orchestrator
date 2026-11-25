@@ -1,4 +1,4 @@
-import { OPEN_IN_EDITOR_LABEL } from '../actions/sessions'
+import { sessionActions } from '../actions/sessions'
 import { useAgentos } from '../AgentosContext'
 import { passingReason } from '../cleanupConfirm'
 import { useLayout } from '../LayoutContext'
@@ -20,8 +20,10 @@ type ThreadMenuProps = {
 const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
 
 export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup, onDelete }: ThreadMenuProps) {
-  const a = useAgentos('select', 'settleThread', 'wakeThread', 'openInEditor', 'openPR', 'cleanupSession', 'pushToast', 'report')
-  const { rightOpen, showPanel, toggleRight } = useLayout()
+  const a = useAgentos()
+  const layout = useLayout()
+  const { rightOpen, showPanel, toggleRight } = layout
+  const openInEditor = sessionActions({ a, layout, current: session }).find((x) => x.id === 'open-in-editor')
   const settled = session.state === 'settled'
   const panelShown = selected && rightOpen
 
@@ -48,7 +50,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         session.cleanup === 'blocked' && passingReason(session.cleanupReason) && { label: 'Clean up', run: () => a.report(() => a.cleanupSession(session.id, false)) },
         CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: onCleanup },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
-        { label: OPEN_IN_EDITOR_LABEL, run: () => a.report(() => a.openInEditor(session.id)) },
+        openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run([])) },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },
         !settled && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
         { label: 'Delete', danger: true, separated: settled && !session.hosted, run: onDelete },

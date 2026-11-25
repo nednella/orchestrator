@@ -83,6 +83,21 @@ func TestOpenInEditorOpensTheProjectFolderOfAThreadWithoutAWorktree(t *testing.T
 	}
 }
 
+func TestOpenInEditorOpensTheFolderOfAThreadOfAnotherProject(t *testing.T) {
+	currentDir, otherDir := t.TempDir(), t.TempDir()
+	o := &opened{}
+	current, other := project.Project{Name: "shop", Dir: currentDir}, project.Project{Name: "blog", Dir: otherDir}
+	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Run: o.run, Projects: fixedProjects{current, other}, Current: current, Emit: func(string, any) {}})
+	name := session.Name{Project: other.Key(), Token: "bbbbbbbb"}
+	s.info = []term.Info{{Name: name, Hosted: true}}
+	if err := s.OpenInEditor(name.String()); err != nil {
+		t.Fatal(err)
+	}
+	if got := o.calls[0][3]; got != otherDir {
+		t.Errorf("opened %q, want the project of the thread, %q", got, otherDir)
+	}
+}
+
 func TestOpenInEditorNeverFallsBackToTheProjectFolderForARemovedWorktree(t *testing.T) {
 	projectDir, wt := t.TempDir(), filepath.Join(t.TempDir(), "gone")
 	o := &opened{}
