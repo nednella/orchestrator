@@ -437,6 +437,120 @@ func TestInterruptReachesTheHost(t *testing.T) {
 	})
 }
 
+func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
+	for _, tt := range []struct {
+		name, state string
+		hooks       [][2]string
+	}{
+		{"working", "working", nil},
+		{"waiting", "waiting", [][2]string{{"PreToolUse", `{"tool_name":"Bash"}`}, {"Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := apptest.ClaudeOnPath(t)
+			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			transcript := filepath.Join(t.TempDir(), "conv.jsonl")
+			h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
+			appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
+			for _, hook := range tt.hooks {
+				h.Hook(t, s.ID, hook[0], hook[1])
+			}
+			eventually(t, tt.state, func() bool { return stateOf(h, s.ID) == tt.state })
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+			h.RefreshPRs()
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
+			h.RefreshPRs()
+			time.Sleep(300 * time.Millisecond)
+			if users := userLines(t, dir, s.ID); len(users) > 0 {
+				t.Fatalf("a prompt was sent in the middle of the turn: %q", users)
+			}
+
+			if err := h.Interrupt(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "idle after the interrupt", func() bool { return stateOf(h, s.ID) == "idle" })
+			eventually(t, "the held prompt once the turn ends", func() bool {
+				users := userLines(t, dir, s.ID)
+				return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
+			})
+			eventually(t, "the turn's usage in the event log", func() bool {
+				events := h.Events(t, "usage")
+				return len(events) == 1 && events[0].Tokens.Input == 1000 && events[0].Tokens.Output == 100
+			})
+		})
+	}
+}
+
+func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
+	for _, tt := range []struct {
+		name, stop, state string
+	}{
+		{"a reply", `{"last_assistant_message":"Done."}`, "idle"},
+		{"a question", `{"last_assistant_message":"Which branch should I use?"}`, "waiting"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			apptest.ClaudeOnPath(t)
+			h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+			s, err := h.Sessions().Create("work", "", false, 0, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			transcript := filepath.Join(t.TempDir(), "conv.jsonl")
+			h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
+			appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
+			h.Hook(t, s.ID, "Stop", tt.stop)
+			stopped, err := bus.ReadState(h.State, s.ID)
+			if err != nil || stopped.Event != "Stop" {
+				t.Fatalf("state after Stop = %+v, %v", stopped, err)
+			}
+
+			if err := h.TypeInto(s.ID, "next"); err != nil {
+				t.Fatal(err)
+			}
+			chatLog, _ := hostFiles(h, s.ID)
+			eventually(t, "the host's turn_end after the Stop", func() bool {
+				data, _ := os.ReadFile(chatLog)
+				return strings.Contains(string(data), `"kind":"turn_end"`)
+			})
+			time.Sleep(1500 * time.Millisecond) // past the wait for the turn's last reply
+			if rec, err := bus.ReadState(h.State, s.ID); err != nil || !rec.At.Equal(stopped.At) {
+				t.Errorf("state after the host's turn_end = %+v, %v; want the Stop's, at %v", rec, err, stopped.At)
+			}
+			if got := stateOf(h, s.ID); got != tt.state {
+				t.Errorf("state = %s, want %s", got, tt.state)
+			}
+			if events := h.Events(t, "usage"); len(events) != 1 || events[0].Tokens.Input != 1000 {
+				t.Errorf("usage events = %+v, want the turn's once", events)
+			}
+		})
+	}
+}
+
+func TestARestartLeavesARunningTurnRunning(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "first", true, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatLog, _ := hostFiles(h, s.ID)
+	eventually(t, "the first turn's end in the chat log", func() bool {
+		data, _ := os.ReadFile(chatLog)
+		return strings.Contains(string(data), `"kind":"turn_end"`)
+	})
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"second"}`)
+	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+
+	second := h.Restart(t)
+	time.Sleep(time.Second) // the new app has read the chat log again by now
+	if got, _ := second.Session(s.ID); got.State != "working" {
+		t.Errorf("state after a restart = %s, want working: an earlier turn's end ended this one", got.State)
+	}
+}
+
 func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")

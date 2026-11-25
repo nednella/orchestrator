@@ -27,6 +27,7 @@ import (
 	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
@@ -49,6 +50,7 @@ const (
 	prefillWait   = 6 * time.Second
 	hostWait      = 10 * time.Second // for a new session's host to listen
 	hostStarting  = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
+	hostRetry     = time.Second      // before following a host again that could not be reached or broke off
 	promptSettles = 300 * time.Millisecond
 )
 
@@ -158,6 +160,7 @@ type Sessions struct {
 	wakes      map[string][]string      // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
 	prefillFor time.Duration
 	readers    map[string]*reader      // each session's transcript reader
+	hosts      map[string]func()       // stops the following of each live session's host
 	spent      map[string]usage.Tokens // what each session's agent used
 	began      map[string]time.Time    // when the conversation of each session that continues one began
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -264,6 +267,7 @@ func newSessions(o Options) *Sessions {
 		resumed:    map[string]string{},
 		wakes:      map[string][]string{},
 		readers:    map[string]*reader{},
+		hosts:      map[string]func(){},
 		spent:      map[string]usage.Tokens{},
 		began:      map[string]time.Time{},
 		held:       map[string]int64{},
@@ -828,6 +832,7 @@ func (s *Sessions) sync() {
 	if waitsChanged {
 		s.emit("stats", nil)
 	}
+	s.followHosts(live)
 	s.deliverWakes()
 	s.holdAwake()
 
@@ -1961,6 +1966,71 @@ func (s *Sessions) refuseEnded(id string) error {
 		return fmt.Errorf("session %s has ended", id)
 	}
 	return nil
+}
+
+// followHosts follows the host of each live session that runs under one, and stops following the others. It needs
+// mu.
+func (s *Sessions) followHosts(live map[string]bool) {
+	for id, stop := range s.hosts {
+		if !live[id] {
+			stop()
+			delete(s.hosts, id)
+		}
+	}
+	for _, in := range s.info {
+		id := in.Name.String()
+		if !in.Hosted || s.hosts[id] != nil {
+			continue
+		}
+		ctx, stop := context.WithCancel(s.ctx)
+		s.hosts[id] = stop
+		go s.followHost(ctx, id, s.hostSocket(in.Name))
+	}
+}
+
+// followHost ends each turn the session's host reports over, until ctx ends. It reads the chat log from its start, so
+// a turn that ended while the app was closed ends too, and follows the host again after a break.
+func (s *Sessions) followHost(ctx context.Context, id, socket string) {
+	var after int64
+	for {
+		_ = host.Subscribe(ctx, socket, after, func(e chat.Event) {
+			after = max(after, e.Seq)
+			if e.Kind == chat.KindTurnEnd {
+				s.endTurn(id, e)
+			}
+		})
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(hostRetry):
+		}
+	}
+}
+
+// endTurn folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
+// Claude Code runs none after an interrupt. A turn_end older than the latest hook is an earlier turn's. The Stop hook
+// of a normal turn runs just before the host reports its end, so the state file is read under its lock, as the hook
+// writes it.
+func (s *Sessions) endTurn(id string, e chat.Event) {
+	unlock, err := bus.LockState(s.stateDir, id)
+	if err != nil {
+		return
+	}
+	cur, err := bus.ReadState(s.stateDir, id)
+	if err != nil || !holdsPrompts(cur.State) || cur.Event == "Stop" || e.At < cur.At.UnixMilli() {
+		unlock()
+		return
+	}
+	at := time.UnixMilli(e.At)
+	if !at.After(cur.At) { // e.At has only milliseconds, and take drops a record no later than the one before
+		at = cur.At.Add(time.Millisecond)
+	}
+	next := session.Apply(id, cur, session.Event{Name: "Stop"}, at)
+	err = bus.WriteState(s.stateDir, next)
+	unlock()
+	if err == nil {
+		s.observe(next)
+	}
 }
 
 // hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before

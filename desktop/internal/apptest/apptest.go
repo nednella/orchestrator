@@ -822,8 +822,9 @@ func CLIPath(t *testing.T) string {
 
 // ClaudeOnPath puts a stand-in `claude` and the built agentos command first on PATH, so the app runs its Claude
 // adapter and the session's host starts the stand-in. The stand-in writes its arguments to <dir>/<session id, "/" as
-// "_">.args, prints an init line, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin and answers
-// each user message with a reply and a result, until its stdin ends. Call it before New. It returns dir.
+// "_">.args, prints an init line, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin, answers
+// each user message with a reply and a result and an interrupt with a result that has an error, until its stdin ends.
+// Call it before New. It returns dir.
 func ClaudeOnPath(t *testing.T) string { return agentOnPath(t, "claude", "", fakeClaudeTurns) }
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
@@ -833,6 +834,8 @@ while IFS= read -r line; do
 	case "$line" in
 	*'"type":"user"'*)
 		printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}' ;;
+	*'"subtype":"interrupt"'*)
+		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}' ;;
 	esac
 done
 `
