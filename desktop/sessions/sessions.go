@@ -3170,7 +3170,8 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	}
 	e, settled := s.ended[id]
 	old, deleted := s.isOld(id), s.deleted[id]
-	onlySubagents := s.background[id].Subagents > 0 && s.records[id].State == session.Idle
+	// The hooks of a subagent's tool calls say the thread works, so they cannot tell its own turn from its subagents'.
+	subagents := s.background[id].Subagents > 0
 	s.mu.Unlock()
 	switch {
 	case deleted:
@@ -3195,7 +3196,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	switch {
 	case err != nil:
 		return accessDone, accessFailed(name, access, err)
-	case !idle && onlySubagents:
+	case !idle && subagents:
 		return accessDone, errAccessWhileSubagents
 	case !idle:
 		return accessDone, errAccessDuringTurn
