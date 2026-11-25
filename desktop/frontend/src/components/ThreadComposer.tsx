@@ -3,9 +3,9 @@ import type { RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
 import { api } from '../api'
-import { composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
+import { commandMatches, commandToken, composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
-import type { Timeline } from '../chatTimeline'
+import type { Command, Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Pending, Session } from '../types'
@@ -51,6 +51,8 @@ type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: num
 // Files are what the thread's folder lists for the mention, or why it did not.
 type Files = { paths: string[]; error: string }
 
+const commandRow = (c: Command): PickRow => ({ key: c.name, icon: <Icon name="terminal" size={14} />, name: `/${c.name}`, description: c.description, badge: c.argumentHint })
+
 const fileRow = (path: string): PickRow => {
   const slash = path.lastIndexOf('/')
   return { key: path, icon: <Icon name="file" size={14} />, name: path.slice(slash + 1), description: path.slice(0, slash + 1) }
@@ -70,7 +72,8 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const [cursor, setCursor] = useState(-1)
   const [dismissed, setDismissed] = useState(false)
   const [files, setFiles] = useState<Files | null>(null)
-  const mention = dismissed ? null : mentionToken(caret)
+  const command = dismissed ? null : commandToken(caret)
+  const mention = dismissed || command !== null ? null : mentionToken(caret)
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -149,18 +152,31 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     })
   }
 
-  const pickFile = (path: string) => {
-    if (mention === null) return
-    input.current?.deleteBefore(mention.length + 1)
-    input.current?.insertLiteral(`@${path} `)
+  // replaceToken puts text where the token typed so far is, with the @ or / before it.
+  const replaceToken = (token: string, text: string) => {
+    input.current?.deleteBefore(token.length + 1)
+    input.current?.insertLiteral(text)
     setCursor(-1)
   }
 
-  const shown = files ?? { paths: [], error: '' }
+  const shownFiles = files ?? { paths: [], error: '' }
+  const commands = command === null ? [] : commandMatches(timeline.commands, command)
   const pickList: PickList | null =
-    mention === null
-      ? null
-      : { label: 'Files', rows: shown.paths.map(fileRow), empty: files === null ? 'Listing the files' : shown.error || 'No file matches', pick: (i) => pickFile(shown.paths[i]) }
+    command !== null
+      ? {
+          label: 'Commands',
+          rows: commands.map(commandRow),
+          empty: timeline.commands.length === 0 ? 'Commands load when the thread starts' : 'No command matches',
+          pick: (i) => replaceToken(command, `/${commands[i].name} `),
+        }
+      : mention !== null
+        ? {
+            label: 'Files',
+            rows: shownFiles.paths.map(fileRow),
+            empty: files === null ? 'Listing the files' : shownFiles.error || 'No file matches',
+            pick: (i) => replaceToken(mention, `@${shownFiles.paths[i]} `),
+          }
+        : null
   const highlighted = pickList ? Math.min(cursor, pickList.rows.length - 1) : -1
 
   const onKeyDown = (e: KeyboardEvent) => {

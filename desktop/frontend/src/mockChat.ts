@@ -399,8 +399,11 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     if (logs.has(id)) append(id, { kind: 'exit' })
   }
 
+  // start logs the commands Claude lists once it runs, a moment after its thread starts.
+  const start = (id: string) => setTimeout(() => append(id, { kind: 'commands', input: commands }), 1500)
+
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  return { backend, seed, ask, forget, end, breakLog, mediaURL }
+  return { backend, seed, ask, forget, end, start, breakLog, mediaURL }
 }

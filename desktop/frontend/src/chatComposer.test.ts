@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { composerAction, escapeAction, lastTurnEnd, mentionToken, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
+import { commandMatches, commandToken, composerAction, escapeAction, lastTurnEnd, mentionToken, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
+import type { Command } from './chatTimeline.ts'
 import type { ChatEvent, Pending } from './types.ts'
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'>
@@ -117,4 +118,26 @@ test('mentionToken: no mention inside a word or once a space ends it', () => {
   assert.equal(mentionToken('mail me@example'), null)
   assert.equal(mentionToken('@src/a.go '), null)
   assert.equal(mentionToken('no mention'), null)
+})
+
+test('slash only at the start', () => {
+  assert.equal(commandToken('/'), '')
+  assert.equal(commandToken('/rev'), 'rev')
+  assert.equal(commandToken('/plugin:skill-name'), 'plugin:skill-name')
+  assert.equal(commandToken('see /rev'), null)
+  assert.equal(commandToken('first line\n/rev'), null)
+  assert.equal(commandToken('/review the PR'), null)
+})
+
+test('prefix before contains', () => {
+  const command = (name: string): Command => ({ name, description: '', argumentHint: '' })
+  const commands = [command('pr-review'), command('compact'), command('Review'), command('init')]
+  assert.deepEqual(
+    commandMatches(commands, 'rev').map((c) => c.name),
+    ['Review', 'pr-review'],
+  )
+  assert.deepEqual(
+    commandMatches(commands, '').map((c) => c.name),
+    ['pr-review', 'compact', 'Review', 'init'],
+  )
 })

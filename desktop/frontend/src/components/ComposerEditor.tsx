@@ -69,8 +69,8 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
         written.current = draftOf(editor.getJSON())
         handlers.current.onChange(written.current)
       }
-      const { $from, $to } = editor.state.selection
-      handlers.current.onCaret?.($from.parent.textBetween(0, $from.parentOffset, undefined, '\n'), $to.parent.textBetween($to.parentOffset, $to.parent.content.size, undefined, '\n'))
+      const { doc, selection } = editor.state
+      handlers.current.onCaret?.(doc.textBetween(0, selection.from, '\n', '\n'), doc.textBetween(selection.to, doc.content.size, '\n', '\n'))
       setEmpty(editor.isEmpty)
     },
   }))

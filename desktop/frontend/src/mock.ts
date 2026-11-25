@@ -627,6 +627,7 @@ export function createMock(params: URLSearchParams) {
     if (model) s.model = model
     if (effort) s.effort = effort
     s.buffer = term.banner(current.dir) + term.promptLine(prefill)
+    chats.start(s.id)
     publish()
     return view(s)
   }
@@ -935,6 +936,7 @@ export function createMock(params: URLSearchParams) {
       if (model) s.model = model
       if (effort) s.effort = effort
       s.buffer = term.banner(current.dir) + term.promptLine(prompt)
+      chats.start(s.id)
       publish()
       return view(s)
     },

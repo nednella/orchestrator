@@ -1,4 +1,4 @@
-import type { Timeline } from './chatTimeline'
+import type { Command, Timeline } from './chatTimeline'
 import type { ChatEvent } from './types'
 
 export type EscapeAction = 'close-overlay' | 'close-picker' | 'interrupt' | 'blur' | 'none'
@@ -58,3 +58,13 @@ export function replyLabel(text: string): string {
 
 // mentionToken is what the @ mention the caret ends has typed after its @, or null when the caret ends none.
 export const mentionToken = (before: string): string | null => /(^|\s)@([\w./-]*)$/.exec(before)?.[2] ?? null
+
+// commandToken is what follows the / that starts the message, while the caret is still in that first word, or null.
+export const commandToken = (before: string): string | null => /^\/([\w:.-]*)$/.exec(before)?.[1] ?? null
+
+// commandMatches is the commands whose name starts with query, then those whose name has it elsewhere, ignoring case.
+export function commandMatches(commands: Command[], query: string): Command[] {
+  const q = query.toLowerCase()
+  const starts = (c: Command) => c.name.toLowerCase().startsWith(q)
+  return [...commands.filter(starts), ...commands.filter((c) => !starts(c) && c.name.toLowerCase().includes(q))]
+}
