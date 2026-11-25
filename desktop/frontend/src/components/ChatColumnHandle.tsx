@@ -7,13 +7,14 @@ const MOVE_PX = 2
 const SETTLE_MS = 200
 const KEY_STEP_REM = 1
 
-type Drag = { pointer: number; x: number; start: number; remPx: number; fullRem: number; moved: boolean; width: number; frame: number; blur(): void }
+type Drag = { pointer: number; x: number; start: number; remPx: number; room: number; moved: boolean; width: number; frame: number; blur(): void }
 
-// side is the column edge the handle sits on. The column is centred, so it grows by twice what the edge moves. pane is
-// the chat pane: it holds the width while a drag shows it, and its width is the column's full width.
-type ChatColumnHandleProps = { side: 'left' | 'right'; pane: RefObject<HTMLElement | null>; column: number; onColumn(rem: number): void }
+// side is the column edge the handle sits on, just outside the text, so that selecting text never starts a drag. The
+// column is centred, so it grows by twice what the edge moves. pane is the chat pane, which holds the width while a
+// drag shows it; room is the column's full width in rem.
+type ChatColumnHandleProps = { side: 'left' | 'right'; pane: RefObject<HTMLElement | null>; room: number; column: number; onColumn(rem: number): void }
 
-export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHandleProps) {
+export function ChatColumnHandle({ side, pane, room, column, onColumn }: ChatColumnHandleProps) {
   const drag = useRef<Drag | null>(null)
   const settling = useRef(0)
   const outward = side === 'right' ? 1 : -1
@@ -30,7 +31,7 @@ export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHan
     [],
   )
 
-  const fullRem = (remPx: number) => (pane.current?.clientWidth ?? 0) / remPx
+  const shown = clampColumn(column, room)
   const show = (rem: number) => pane.current?.style.setProperty('--chat-column', `${rem}rem`)
 
   // settle eases the column to its new width and keeps it.
@@ -51,13 +52,10 @@ export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHan
     handle.setPointerCapture(e.pointerId)
     handle.dataset.dragging = 'true'
     document.documentElement.dataset.columnDrag = 'true'
-    const remPx = rootRemPx()
-    const full = fullRem(remPx)
-    const start = clampColumn(column, full)
     const pointer = e.pointerId
     const blur = () => handle.releasePointerCapture(pointer)
     window.addEventListener('blur', blur)
-    drag.current = { pointer, x: e.clientX, start, remPx, fullRem: full, moved: false, width: start, frame: 0, blur }
+    drag.current = { pointer, x: e.clientX, start: shown, remPx: rootRemPx(), room, moved: false, width: shown, frame: 0, blur }
   }
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -66,7 +64,7 @@ export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHan
     const dx = e.clientX - d.x
     if (!d.moved && Math.abs(dx) <= MOVE_PX) return
     d.moved = true
-    d.width = dragColumn(d.start + (2 * outward * dx) / d.remPx, d.fullRem)
+    d.width = dragColumn(d.start + (2 * outward * dx) / d.remPx, d.room)
     if (d.frame) return
     d.frame = requestAnimationFrame(() => {
       d.frame = 0
@@ -83,15 +81,14 @@ export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHan
     window.removeEventListener('blur', d.blur)
     delete e.currentTarget.dataset.dragging
     delete document.documentElement.dataset.columnDrag
-    if (d.moved) settle(clampColumn(d.width, d.fullRem))
+    if (d.moved) settle(clampColumn(d.width, d.room))
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
     e.preventDefault()
-    const full = fullRem(rootRemPx())
     const grow = (e.key === 'ArrowRight' ? 1 : -1) * outward
-    settle(clampColumn(clampColumn(column, full) + 2 * grow * KEY_STEP_REM, full))
+    settle(clampColumn(shown + 2 * grow * KEY_STEP_REM, room))
   }
 
   return (
@@ -102,7 +99,8 @@ export function ChatColumnHandle({ side, pane, column, onColumn }: ChatColumnHan
       aria-orientation="vertical"
       aria-label="Message column width"
       aria-valuemin={COLUMN_DEFAULT_REM}
-      aria-valuenow={column}
+      aria-valuemax={Math.max(COLUMN_DEFAULT_REM, room)}
+      aria-valuenow={shown}
       tabIndex={0}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

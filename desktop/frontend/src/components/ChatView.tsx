@@ -22,8 +22,8 @@ import { ThreadComposer } from './ThreadComposer'
 
 // A stop that gets no turn end in this long can be asked for again.
 const stopWait = 10_000
-// The gap between the chat's last row, scrolled to the end, and the composer over it.
-const insetGap = 12
+// The gap between the chat's last row, scrolled to the end, and the composer over it: wider from this window width.
+const insetGap = { narrow: 12, wide: 16, from: 640 }
 
 type ChatViewProps = { session: Session }
 
@@ -60,16 +60,17 @@ export function ChatView({ session }: ChatViewProps) {
   const [inset, setInset] = useState(0)
   const [following, setFollowing] = useState(true)
   const [column, setColumn] = useState(() => storedColumn(readStored(COLUMN_KEY, null)))
-  // Whether the pane is wider than the default column, so that the column can be dragged wider.
-  const [roomy, setRoomy] = useState(false)
+  // The column's full width, in rem: the pane less its side padding.
+  const [room, setRoom] = useState(0)
 
   useLayoutEffect(() => {
     const root = pane.current
     const el = composer.current
     if (!root || !el) return
     const measure = () => {
-      setInset(el.offsetHeight + insetGap)
-      setRoomy(root.clientWidth / rootRemPx() > COLUMN_DEFAULT_REM)
+      setInset(el.offsetHeight + (window.innerWidth >= insetGap.from ? insetGap.wide : insetGap.narrow))
+      const style = getComputedStyle(el)
+      setRoom((root.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / rootRemPx())
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -148,8 +149,8 @@ export function ChatView({ session }: ChatViewProps) {
         />
       )}
       {/* The chat runs on under the composer; only the composer itself takes the pointer. */}
-      <div ref={composer} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-4 sm:pt-2 sm:pb-5">
-        <div className="chat-column px-4">
+      <div ref={composer} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pt-1.5 pb-4 sm:px-12 sm:pt-2 sm:pb-5">
+        <div className="chat-column">
           <div className="pointer-events-auto relative">
             {!empty && <ChatEndPill shown={!following} queued={timeline.queued.length} onClick={() => end.current?.scrollToEnd()} />}
             {!empty && error && (
@@ -161,11 +162,11 @@ export function ChatView({ session }: ChatViewProps) {
           </div>
         </div>
       </div>
-      {roomy && (
-        <div className="chat-column pointer-events-none absolute inset-0 z-21 px-4">
-          <div className="relative h-full">
-            <ChatColumnHandle side="left" pane={pane} column={column} onColumn={keepColumn} />
-            <ChatColumnHandle side="right" pane={pane} column={column} onColumn={keepColumn} />
+      {room > COLUMN_DEFAULT_REM && (
+        <div className="pointer-events-none absolute inset-0 z-21 px-3 sm:px-12">
+          <div className="chat-column relative h-full">
+            <ChatColumnHandle side="left" pane={pane} room={room} column={column} onColumn={keepColumn} />
+            <ChatColumnHandle side="right" pane={pane} room={room} column={column} onColumn={keepColumn} />
           </div>
         </div>
       )}
