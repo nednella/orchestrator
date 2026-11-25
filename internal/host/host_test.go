@@ -1386,8 +1386,13 @@ func TestImageOverTheLimitIsRefused(t *testing.T) {
 	waitKind(t, events, chat.KindInit)
 
 	dir := t.TempDir()
+	dot := readFile(t, writePNG(t))
 	big := filepath.Join(dir, "big.png")
-	if err := os.WriteFile(big, append(readFile(t, writePNG(t)), make([]byte, 6<<20)...), 0o600); err != nil {
+	if err := os.WriteFile(big, append(dot, make([]byte, maxImage+1-len(dot))...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	most := filepath.Join(dir, "most.png")
+	if err := os.WriteFile(most, append(dot, make([]byte, maxImage-len(dot))...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	text := filepath.Join(dir, "notes.txt")
@@ -1401,11 +1406,20 @@ func TestImageOverTheLimitIsRefused(t *testing.T) {
 			t.Fatalf("send of %s = %v, want an error naming it", path, err)
 		}
 	}
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "see", Files: []string{big}}); err == nil || !strings.Contains(err.Error(), "is over 3.75 MB") {
+		t.Fatalf("send of a file over the limit = %v, want it named over 3.75 MB", err)
+	}
 	if after := logged(t, h.log); len(after) != len(before) {
 		t.Fatalf("log went from %d to %d events, want it unchanged", len(before), len(after))
 	}
 	if lines := userLines(t, h.stdin); len(lines) != 0 {
 		t.Fatalf("%d user lines reached claude, want none", len(lines))
+	}
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "see", Files: []string{most}}); err != nil {
+		t.Fatalf("send of a file at the limit = %v, want it sent", err)
+	}
+	if encoded := base64.StdEncoding.EncodedLen(maxImage); encoded > 5<<20 {
+		t.Fatalf("an image at the limit is %d bytes in base64, over the API's 5 MB", encoded)
 	}
 }
 

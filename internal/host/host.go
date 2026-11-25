@@ -40,7 +40,8 @@ const (
 	echoWidth      = 200
 	// subscriberBuffer is how many events a subscriber may fall behind before it is dropped.
 	subscriberBuffer = 1024
-	maxImage         = 5 << 20
+	// maxImage keeps an image's base64, which the API limits to 5 MB, under that limit.
+	maxImage = 3932160
 )
 
 var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
@@ -634,7 +635,7 @@ func readLimited(path string, limit int64) ([]byte, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("%s is over %d MB", path, limit>>20)
+		return nil, fmt.Errorf("%s is over %.2f MB", path, float64(limit)/(1<<20))
 	}
 	return data, nil
 }
