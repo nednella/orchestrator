@@ -4,11 +4,13 @@ import { EMPTY_DRAFT } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
-import type { Issue } from '../types'
+import { defaultPlace, PLACE_ISSUE_HINT } from '../place'
+import type { Issue, Place } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { Composer } from './Composer'
 import { ComposerAccessChip } from './ComposerAccessChip'
+import { ComposerPlaceChip } from './ComposerPlaceChip'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
 import { Icon } from './Icon'
@@ -39,6 +41,7 @@ export function HomeComposer() {
   const [dismissed, setDismissed] = useState(false)
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
+  const [chosenPlace, setChosenPlace] = useState<Place | null>(null)
   const pending = usePendingImages()
   const sending = useRef(false)
 
@@ -53,6 +56,8 @@ export function HomeComposer() {
   const highlighted = pickCursor(cursor, candidates.length)
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   const read = a.composerAccess === 'read'
+  // A place the owner has not picked follows the access.
+  const place = pickedIssue ? 'worktree' : (chosenPlace ?? defaultPlace(a.composerAccess, false))
   const live = Boolean(pickedIssue?.sessionId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
   // The top of the queue: the issues of its first section, which the core lists first.
@@ -97,8 +102,9 @@ export function HomeComposer() {
         } else {
           const start = { prompt: text.trim(), model, effort }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
-          else await a.newThread(start, a.composerAccess)
+          else await a.newThread(start, a.composerAccess, place)
           setPicked(null)
+          setChosenPlace(null)
         }
         a.setComposerDraft(EMPTY_DRAFT)
       } finally {
@@ -177,6 +183,7 @@ export function HomeComposer() {
         right={
           !note && (
             <>
+              {!live && <ComposerPlaceChip place={place} disabled={pickedIssue ? PLACE_ISSUE_HINT : undefined} onPlace={setChosenPlace} />}
               {!live && (
                 <ComposerAccessChip access={pickedIssue?.access ?? a.composerAccess} disabled={pickedIssue && `The issue’s action, ${pickedIssue.actions[0]}, sets the access`} onAccess={a.setComposerAccess} />
               )}

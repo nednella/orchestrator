@@ -1,10 +1,10 @@
 import { chatMediaURL } from './chatEvents'
 import { createMock } from './mock'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
-  NewThread(title: string, prompt: string, model: string, effort: string, access: Access, place: string): Promise<Session>
+  NewThread(title: string, prompt: string, model: string, effort: string, access: Access, place: Place | ''): Promise<Session>
   SettleThread(id: string): Promise<void>
   ArchiveThread(id: string): Promise<void>
   WakeThread(id: string): Promise<Session>
@@ -145,7 +145,7 @@ export const devFlags: DevFlags = mock?.flags ?? {}
 
 export const api = {
   snapshot: () => backend.Snapshot(),
-  newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised', place = '') => backend.NewThread(title, prompt, model, effort, access, place),
+  newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised', place: Place | '' = '') => backend.NewThread(title, prompt, model, effort, access, place),
   settleThread: (id: string) => backend.SettleThread(id),
   archiveThread: (id: string) => backend.ArchiveThread(id),
   wakeThread: (id: string) => backend.WakeThread(id),

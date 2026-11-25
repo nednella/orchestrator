@@ -6,7 +6,7 @@ import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './comp
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { goneThreads, liveThreads, sidebarThreads } from './threads'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -78,7 +78,7 @@ type AgentosActions = {
   showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
-  newThread(start: ThreadStart, access: Access): Promise<Session>
+  newThread(start: ThreadStart, access: Access, place: Place): Promise<Session>
   settleThread(id: string): Promise<void>
   // archiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
   archiveThread(id: string): Promise<void>
@@ -725,8 +725,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const at = list.findIndex((s) => s.id === selectedRef.current)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
-      async newThread({ prompt, model, effort }, access) {
-        return addSession(await api.newThread('', prompt, model, effort, access))
+      async newThread({ prompt, model, effort }, access, place) {
+        return addSession(await api.newThread('', prompt, model, effort, access, place))
       },
       async settleThread(id) {
         await api.settleThread(id)

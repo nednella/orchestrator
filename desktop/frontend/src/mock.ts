@@ -2,7 +2,8 @@ import { actionAccess, buildIssueDetail, buildIssues, movesFrom, moveIssue, sort
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import { defaultPlace } from './place'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -874,10 +875,15 @@ export function createMock(params: URLSearchParams) {
   const backend = {
     Snapshot: async () => snapshot(),
     Awake: async () => data.some((p) => projectView(p).working > 0),
-    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access, place: string) => {
+    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access, place: Place | '') => {
       if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
-      return startSessionFor(title.trim() || titleFromPrompt(prompt) || 'agent', 0, prompt, '', model, effort, access || 'supervised')
+      const s = startSessionFor(title.trim() || titleFromPrompt(prompt) || 'agent', 0, prompt, '', model, effort, access || 'supervised')
+      if ((place || defaultPlace(s.access, false)) === 'project') return s
+      const live = find(s.id)
+      Object.assign(live, { branch: `thread-${live.n}`, worktree: `${current.dir}/trees/thread-${live.n}` })
+      publish()
+      return view(live)
     },
     ArchiveThread: async (id: string) => {
       const s = find(id)

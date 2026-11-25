@@ -26,6 +26,9 @@ export function ThreadFacts({ session }: ThreadFactsProps) {
           effort={session.effort}
           spend={session.tokens > 0 ? `${tokenCount(session.tokens)} tokens · ~${dollars(session.cost)}` : ''}
         />
+        <span className="mono min-w-0 truncate text-small text-dim" title={session.worktree ? `Worktree of ${session.branch}` : 'Where the thread runs'}>
+          {session.worktree || 'Project folder'}
+        </span>
         {session.memory > 0 && (
           <span className="mono text-small whitespace-nowrap text-dim" title="Memory this thread's processes use">
             {gigabytes(session.memory)}
