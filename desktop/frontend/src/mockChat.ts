@@ -102,13 +102,21 @@ const askedQuestions = [
 
 const askedPlan = '## Split checkout into three steps\n\n1. Add `/checkout/address`, `/checkout/payment` and `/checkout/review` routes.\n2. Move the form state into a `useCheckout` store so each step reads it.\n3. Keep the cart page as it is.\n\nThe tests for `Checkout.tsx` move with the steps.'
 
-// olderTurns is finished turns that give a chat at least that many items: each a message and its reply, every fifth
-// one a tool call that folds into a work item, and every ninth one an error that ends it.
+const longMessage = Array.from({ length: 14 }, (_, i) => `${i + 1}. Check that step ${i + 1} of the checkout keeps the cart total, the coupon and the address the owner typed.`).join('\n')
+
+// olderTurns is finished turns that give a chat at least that many items: each a message and its reply, every fifth one
+// a tool call that folds into a work item, every ninth one an error that ends it, every eleventh a long message and
+// every thirteenth a second message sent right after the first.
 function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
   const turns: Draft[] = []
   for (let n = 1, count = 0; count < items; n++) {
     const at = ago(38 + items - count)
-    turns.push({ kind: 'user', id: `old-u-${n}`, text: n % 7 === 0 ? `Question ${n}: what does the cart do with a coupon\nthat has run out?` : `Question ${n}: check the cart again.`, at })
+    const text = n % 11 === 0 ? `Question ${n}: go through the checkout steps:\n${longMessage}` : n % 7 === 0 ? `Question ${n}: what does the cart do with a coupon\nthat has run out?` : `Question ${n}: check the cart again.`
+    turns.push({ kind: 'user', id: `old-u-${n}`, text, at })
+    if (n % 13 === 0) {
+      turns.push({ kind: 'user', id: `old-u-${n}b`, text: 'And the coupon strip too.', at })
+      count++
+    }
     if (n % 5 === 0) {
       turns.push({ kind: 'tool_use', id: `old-t-${n}`, tool: 'Read', input: { file_path: 'app-frontend/src/js/cart.ts' }, at })
       turns.push({ kind: 'tool_result', parent: `old-t-${n}`, text: 'export const cart = {}', at })

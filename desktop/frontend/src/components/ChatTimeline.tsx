@@ -16,16 +16,17 @@ import { ChatWorkRow } from './ChatWorkRow'
 import { Icon } from './Icon'
 import { ImageViewer } from './ImageViewer'
 
-type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onReply(text: string): void; onQuote(text: string): void; onFork(at: string, draft: string): void }
+type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string; onQuote(text: string): void; onFork(at: string, draft: string): void }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => void, onOpenImage: (url: string) => void) {
+function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onQuote: (text: string) => void, onFork: (at: string, draft: string) => void, onOpenImage: (url: string) => void) {
+  const item = items[index]
   switch (item.kind) {
     case 'user':
-      return <ChatUserRow thread={thread} text={item.text} files={item.files} forkAt={item.forkAt} onReply={onReply} onFork={onFork} onOpenImage={onOpenImage} />
+      return <ChatUserRow thread={thread} id={item.id} text={item.text} files={item.files} at={item.at} afterUser={items[index - 1]?.kind === 'user'} beforeUser={items[index + 1]?.kind === 'user'} onOpenImage={onOpenImage} />
     case 'reply':
-      return <ChatReplyRow uuid={item.uuid} text={item.text} streaming={item.streaming} onReply={onReply} onFork={onFork} />
+      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} onQuote={onQuote} onFork={onFork} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
     case 'restart': {
@@ -44,7 +45,7 @@ function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (tex
   }
 }
 
-export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder, onQuote, onFork }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
@@ -123,7 +124,7 @@ export function ChatTimeline({ id, items, folder, onReply, onQuote, onFork }: Ch
         <div ref={lane} className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items[row.index], id, folder, onReply, onFork, setViewing)}
+              {rowOf(items, row.index, id, folder, onQuote, onFork, setViewing)}
             </div>
           ))}
         </div>

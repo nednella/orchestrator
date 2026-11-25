@@ -1,25 +1,28 @@
-import { useCopied } from '../useCopied'
+import { GitFork, Reply } from 'lucide-react'
+import { ChatActionButton, revealOnHover } from './ChatActionButton'
+import { ChatCopyButton } from './ChatCopyButton'
+import { ChatMessageTime } from './ChatMessageTime'
 
-// onFork is left out for a message the thread cannot be forked from.
-type ChatMessageActionsProps = { text: string; onReply(text: string): void; onFork?(): void; align: 'start' | 'end' }
+// The actions under a reply. The row keeps its height while the reply streams, so that it does not move the thread when
+// the reply ends. onFork is left out for a reply the thread cannot be forked from.
+type ChatMessageActionsProps = { text: string; at: number; streaming: boolean; onQuote(text: string): void; onFork?(): void }
 
-export function ChatMessageActions({ text, onReply, onFork, align }: ChatMessageActionsProps) {
-  const [copied, copy] = useCopied(text)
-
+export function ChatMessageActions({ text, at, streaming, onQuote, onFork }: ChatMessageActionsProps) {
   return (
-    <div
-      className={`absolute bottom-0 flex select-none gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100 ${align === 'end' ? 'right-0' : 'left-0'}`}
-    >
-      <button className="btn btn-ghost h-6 px-1.5" onClick={copy}>
-        {copied ? 'Copied' : 'Copy'}
-      </button>
-      <button className="btn btn-ghost h-6 px-1.5" onClick={() => onReply(text)}>
-        Reply
-      </button>
-      {onFork && (
-        <button className="btn btn-ghost h-6 px-1.5" onClick={onFork}>
-          Fork from here
-        </button>
+    <div className={`mt-1.5 flex h-7 items-center gap-2 select-none sm:h-6 ${revealOnHover}`}>
+      {!streaming && (
+        <>
+          <ChatCopyButton text={text} />
+          {onFork && (
+            <ChatActionButton label="Fork from this response" onClick={onFork}>
+              <GitFork className="size-3" />
+            </ChatActionButton>
+          )}
+          <ChatActionButton label="Reply to this response" muted onClick={() => onQuote(text)}>
+            <Reply className="size-3" />
+          </ChatActionButton>
+          <ChatMessageTime at={at} />
+        </>
       )}
     </div>
   )

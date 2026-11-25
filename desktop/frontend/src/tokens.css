@@ -54,6 +54,8 @@
   --border-thread-waiting: rgba(255, 90, 74, 0.22);
   --bg-thread-question: rgba(255, 255, 255, 0.04);
   --agent-claude: #e0875f;
+  --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
+  --bg-ghost-hover: rgba(255, 255, 255, 0.04);
 
   --pr-open: #238636;
   --pr-draft: #5a6270;
@@ -186,6 +188,8 @@
   --border-thread-waiting: rgba(217, 58, 43, 0.25);
   --bg-thread-question: rgba(0, 0, 0, 0.04);
   --agent-claude: #c15f3c;
+  --bg-user-message: color-mix(in srgb, #e4e4e7 55%, #f4f4f5);
+  --bg-ghost-hover: rgba(0, 0, 0, 0.045);
 
   --pr-open: #238636;
   --pr-draft: #6e7781;

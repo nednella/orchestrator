@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgentos } from './AgentosContext'
 
-// useCopied copies text to the clipboard and says "copied" for a moment, only when the copy worked.
-export function useCopied(text: string): [boolean, () => void] {
+// useCopied copies text to the clipboard and says "copied" for ms, only when the copy worked.
+export function useCopied(text: string, ms = 1500): [boolean, () => void] {
   const { report } = useAgentos('report')
   const [copied, setCopied] = useState(false)
 
@@ -14,7 +14,7 @@ export function useCopied(text: string): [boolean, () => void] {
       await navigator.clipboard.writeText(text)
       setCopied(true)
       clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), 1500)
+      timer.current = setTimeout(() => setCopied(false), ms)
     })
   }
 
