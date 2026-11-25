@@ -96,7 +96,7 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 	}
 
 	resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "now see /tmp/y"}})
-	if !resp.OK || resp.Out != "woke the settled: #7 (1, with the prompt)" {
+	if !resp.OK || resp.Out != "woke the sleeping: #7 (1, with the prompt)" {
 		t.Errorf("issue 7 on a settled thread = %+v", resp)
 	}
 	if list := h.Sessions().List(); len(list) != 1 || list[0].ID != old.ID || list[0].State == "settled" {
@@ -201,7 +201,7 @@ func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
 	if s, _ := h.Session(full.ID); s.State != session.Settled {
 		t.Errorf("a thread that is not Full woke the Full thread: %+v", s)
 	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the settled: #7") {
+	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
 		t.Errorf("issue 7 from the shell on the settled Full thread = %+v", resp)
 	}
 }

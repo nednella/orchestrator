@@ -1063,7 +1063,7 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 	}
 	if !t.ended {
 		if err := l.sessions.Settle(t.id); err != nil {
-			return removed, fmt.Sprintf("settling the thread failed: %v", err)
+			return removed, fmt.Sprintf("putting the thread to sleep failed: %v", err)
 		}
 		t.ended = true
 	}
@@ -1259,10 +1259,10 @@ func (l *Lifecycle) worktreeLeft(ctx context.Context, dir, path string) bool {
 func (l *Lifecycle) settleSession(ctx context.Context, t target, _ *cleanupPlan) (removed []string, reason string) {
 	if !t.ended {
 		if err := l.sessions.Settle(t.id); err != nil {
-			return removed, fmt.Sprintf("settling the thread failed: %v", err)
+			return removed, fmt.Sprintf("putting the thread to sleep failed: %v", err)
 		}
 	}
-	removed = append(removed, "settled thread")
+	removed = append(removed, "thread put to sleep")
 	if l.sessions.browsers.Has(t.id) {
 		l.sessions.browsers.Close(ctx, t.id)
 		removed = append(removed, "browser window")

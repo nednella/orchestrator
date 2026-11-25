@@ -125,7 +125,7 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 	if events := history(t, h, id, 0); len(events) < 5 || events[1].Kind != chatlog.KindUser {
 		t.Errorf("history of the ended thread = %v", kinds(events))
 	}
-	want := "Thread " + id + " has settled"
+	want := "Thread " + id + " is asleep"
 	if err := h.ChatInterrupt(id); err == nil || err.Error() != want {
 		t.Errorf("ChatInterrupt = %v, want %q", err, want)
 	}

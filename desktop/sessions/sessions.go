@@ -1660,7 +1660,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	case old:
 		return fmt.Errorf("Thread %s ran in a terminal and cannot be woken", id)
 	case !settled:
-		return fmt.Errorf("Thread %s is not settled", id)
+		return fmt.Errorf("Thread %s is not asleep", id)
 	case !known:
 		return fmt.Errorf("The project of thread %s is gone", id)
 	case s.life.CleaningUp(id):
@@ -2676,7 +2676,7 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	case deleted:
 		return fmt.Errorf("Thread %s was deleted", id)
 	case ended:
-		return fmt.Errorf("Thread %s has settled", id)
+		return fmt.Errorf("Thread %s is asleep", id)
 	case old:
 		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
@@ -2843,7 +2843,7 @@ func (s *Sessions) settledAccess(id string, access session.Access) error {
 	defer s.mu.Unlock()
 	e, ok := s.ended[id]
 	if !ok {
-		return fmt.Errorf("Thread %s did not settle", id)
+		return fmt.Errorf("Thread %s did not go to sleep", id)
 	}
 	if e.info.Access == access {
 		return nil
@@ -3126,7 +3126,7 @@ func (s *Sessions) refuseSettled(id string) error {
 	case deleted:
 		return fmt.Errorf("Thread %s was deleted", id)
 	case ended:
-		return fmt.Errorf("Thread %s has settled", id)
+		return fmt.Errorf("Thread %s is asleep", id)
 	case old:
 		return fmt.Errorf("Thread %s runs in an old terminal", id)
 	}

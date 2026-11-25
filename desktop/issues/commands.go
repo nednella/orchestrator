@@ -61,7 +61,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 		parts = append(parts, fmt.Sprintf("started %d %s: %s", len(started), noun, strings.Join(started, ", ")))
 	}
 	if len(woken) > 0 {
-		parts = append(parts, "woke the settled: "+strings.Join(woken, ", "))
+		parts = append(parts, "woke the sleeping: "+strings.Join(woken, ", "))
 	}
 	if len(running) > 0 {
 		parts = append(parts, "already running: "+strings.Join(running, ", "))

@@ -43,7 +43,7 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || log[0].PR != 12 {
 		t.Fatalf("log = %+v", log)
 	}
-	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "settled thread") || !strings.Contains(removed, "worktree "+wt) {
+	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "thread put to sleep") || !strings.Contains(removed, "worktree "+wt) {
 		t.Errorf("removed = %q", log[0].Removed)
 	}
 }

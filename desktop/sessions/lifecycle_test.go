@@ -177,7 +177,7 @@ func TestCleanupMerged(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 7 || log[0].PR != 12 || !log[0].Merged || log[0].SessionTitle != "#7 work" {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"worktree " + wt, "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"worktree " + wt, "thread put to sleep", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 	if got := h.Events(t, activity.Cleanup); len(got) != 1 || got[0].Label != "done" || got[0].Issue != 7 || got[0].PR != 12 || got[0].Session != s.ID {
@@ -787,7 +787,7 @@ func TestCleanupRemovesTheWorktreeAndKeepsTheBranch(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || !log[0].Merged {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"worktree " + wt, "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"worktree " + wt, "thread put to sleep", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 }
@@ -828,7 +828,7 @@ func TestCleanupNeverRemovesAWorktreeAHumanMade(t *testing.T) {
 			if runs := cleanupRuns(ran); len(runs) != 0 {
 				t.Errorf("the clean-up command ran for %q", runs)
 			}
-			if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
+			if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"thread put to sleep", "temp folder"}) {
 				t.Errorf("log = %+v", log)
 			}
 		})
@@ -876,7 +876,7 @@ func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
 	if runs := cleanupRuns(ran); len(runs) != 0 {
 		t.Errorf("the clean-up command ran for %q", runs)
 	}
-	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"thread put to sleep", "temp folder"}) {
 		t.Errorf("log = %+v", log)
 	}
 }
@@ -972,7 +972,7 @@ func TestCleanupCommandThatFailsWithTheWorktreeGoneCounts(t *testing.T) {
 	if exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree exists %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
-	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"worktree " + wt, "settled thread", "temp folder"}) {
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"worktree " + wt, "thread put to sleep", "temp folder"}) {
 		t.Errorf("log = %+v", log)
 	}
 	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed == 0 {
@@ -1642,7 +1642,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	if !exists(chatLog) || exists(tmp) || exists(wt) {
 		t.Errorf("chat log there %v, temp folder there %v, worktree there %v", exists(chatLog), exists(tmp), exists(wt))
 	}
-	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "settled thread") || !slices.Contains(log[0].Removed, "temp folder") {
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "thread put to sleep") || !slices.Contains(log[0].Removed, "temp folder") {
 		t.Errorf("log = %+v", log)
 	}
 }

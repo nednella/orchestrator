@@ -67,7 +67,7 @@ test('STATE_LABEL names attention', () => {
   assert.equal(STATE_LABEL.waiting, 'Attention')
   assert.equal(STATE_LABEL.working, 'Working')
   assert.equal(STATE_LABEL.idle, 'Idle')
-  assert.equal(STATE_LABEL.settled, 'Settled')
+  assert.equal(STATE_LABEL.settled, 'Sleeping')
 })
 
 function pullRequest(state: PR['state'], checks: PR['checks']): PR {

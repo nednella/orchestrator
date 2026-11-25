@@ -285,7 +285,7 @@ test('interrupt gives Stopped', () => {
 
 test('a settle or a restart the host made is a quiet line; a crash is red', () => {
   const ended = (exit: Draft) => buildTimeline(log(user('u1', 'Go'), message('msg_1', 'On it.'), turnEnd(), exit), {}).items.at(-1)
-  assert.deepEqual(ended({ kind: 'exit', stop: 'settle' }), { kind: 'notice', key: 'notice-4', at: 4000, text: 'Settled', error: false })
+  assert.deepEqual(ended({ kind: 'exit', stop: 'settle' }), { kind: 'notice', key: 'notice-4', at: 4000, text: 'Asleep', error: false })
   assert.deepEqual(ended({ kind: 'exit', stop: 'restart', text: 'full' }), { kind: 'restart', key: 'notice-4', at: 4000, access: 'full' })
   assert.deepEqual(ended({ kind: 'exit', text: 'exit status 143', error: true }), { kind: 'notice', key: 'notice-4', at: 4000, text: 'Claude stopped', error: true })
 })

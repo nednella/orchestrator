@@ -716,10 +716,10 @@ func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the settled session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
-	if err, want := h.Interrupt(s.ID), "Thread "+s.ID+" has settled"; err == nil || err.Error() != want {
+	if err, want := h.Interrupt(s.ID), "Thread "+s.ID+" is asleep"; err == nil || err.Error() != want {
 		t.Errorf("Interrupt = %v, want %q", err, want)
 	}
-	want := "Thread " + s.ID + " has settled"
+	want := "Thread " + s.ID + " is asleep"
 	if err := h.TypeInto(s.ID, "hello"); err == nil || err.Error() != want {
 		t.Errorf("TypeInto = %v, want %q", err, want)
 	}

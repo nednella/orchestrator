@@ -4,5 +4,5 @@ export const STATE_LABEL: Record<State, string> = {
   waiting: 'Attention',
   working: 'Working',
   idle: 'Idle',
-  settled: 'Settled',
+  settled: 'Sleeping',
 }

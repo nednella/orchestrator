@@ -237,7 +237,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
 
   function live(id: string): MockThread {
     const t = thread(id)
-    if (t.settled) throw `Thread ${id} has settled`
+    if (t.settled) throw `Thread ${id} is asleep`
     return t
   }
 

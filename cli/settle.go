@@ -58,7 +58,7 @@ func newSettleCmd() *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
 		Use:     "settle [n]",
-		Short:   "Settle thread n in the app, or without n this project's threads (--all: every project, shells too)",
+		Short:   "Put thread n to sleep in the app, or without n this project's threads (--all: every project, shells too)",
 		GroupID: groupWork,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,7 +85,7 @@ func newSettleCmd() *cobra.Command {
 					continue
 				}
 				// The state file stays: the app shows the thread as settled from it.
-				fmt.Fprintf(out, "settling %s (%s)\n", in.Name, in.Title)
+				fmt.Fprintf(out, "putting %s (%s) to sleep\n", in.Name, in.Title)
 				if err := e.tmux.Kill(cmd.Context(), in.Name); err != nil {
 					return err
 				}
@@ -101,7 +101,7 @@ func newSettleCmd() *cobra.Command {
 				}
 			}
 			if stopped == 0 {
-				fmt.Fprintln(out, "no threads to settle")
+				fmt.Fprintln(out, "no threads to put to sleep")
 			}
 			switch {
 			case left == 1:
@@ -112,6 +112,6 @@ func newSettleCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&all, "all", false, "settle the threads of every project, and stop the shells")
+	cmd.Flags().BoolVar(&all, "all", false, "put the threads of every project to sleep, and stop the shells")
 	return cmd
 }

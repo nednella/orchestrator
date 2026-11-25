@@ -431,7 +431,7 @@ func TestWakeOfALiveThreadFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Thread " + s.ID + " is not settled"
+	want := "Thread " + s.ID + " is not asleep"
 	if _, err := h.WakeThread(s.ID); err == nil || err.Error() != want {
 		t.Errorf("wake of a live thread = %v, want %q", err, want)
 	}

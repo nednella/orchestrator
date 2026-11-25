@@ -121,12 +121,12 @@ func (c *Commands) Settle(_ context.Context, req ctl.Request) (string, error) {
 		return "", err
 	}
 	if s.State == session.Settled {
-		return "", fmt.Errorf("thread %d has settled", s.N)
+		return "", fmt.Errorf("thread %d is asleep", s.N)
 	}
 	if err := c.s.Settle(s.ID); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("settled thread %d: %s", s.N, s.Title), nil
+	return fmt.Sprintf("put thread %d to sleep: %s", s.N, s.Title), nil
 }
 
 // PR lists the pull requests of the sessions, or of one session.

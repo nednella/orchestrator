@@ -197,7 +197,7 @@ func (v *Service) live(id string) (sessions.Chat, error) {
 		return sessions.Chat{}, err
 	}
 	if !ch.Live {
-		return sessions.Chat{}, fmt.Errorf("Thread %s has settled", id)
+		return sessions.Chat{}, fmt.Errorf("Thread %s is asleep", id)
 	}
 	return ch, nil
 }

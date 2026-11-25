@@ -48,7 +48,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: onCleanup },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },
-        !settled && { label: 'Settle', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
+        !settled && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
         { label: 'Delete', danger: true, separated: settled && !session.hosted, run: onDelete },
       ]}
     />

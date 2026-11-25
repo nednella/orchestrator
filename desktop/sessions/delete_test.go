@@ -280,7 +280,7 @@ func TestDeleteWithTheWorktreeRemovesItAndKeepsTheBranch(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || log[0].SessionTitle != "#7 work" {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"worktree " + wt, "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"worktree " + wt, "thread put to sleep", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 	if got := h.Events(t, activity.Cleanup); len(got) != 1 || got[0].Label != "done" || got[0].Session != s.ID {

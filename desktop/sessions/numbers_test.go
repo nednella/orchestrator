@@ -225,7 +225,7 @@ func TestSettledThreadStays(t *testing.T) {
 		got, ok := h.Session(s.ID)
 		return ok && got.State == session.Settled && got.SettledAt > 0
 	})
-	if err, want := h.SettleThread(s.ID), "Thread "+s.ID+" has settled"; err == nil || err.Error() != want {
+	if err, want := h.SettleThread(s.ID), "Thread "+s.ID+" is asleep"; err == nil || err.Error() != want {
 		t.Errorf("a second Settle = %v, want %q", err, want)
 	}
 

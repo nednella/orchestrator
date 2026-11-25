@@ -117,7 +117,7 @@ const details: Record<State, string[]> = {
   ],
   waiting: ['Claude needs your permission to use Bash: npx tsc --noEmit', 'Should I keep the old cart hook or replace it?'],
   idle: ['Done: 4 files changed', 'Done: tests pass'],
-  settled: ['Thread settled'],
+  settled: ['Thread asleep'],
 }
 
 const order: Record<State, number> = { waiting: 0, idle: 1, working: 2, settled: 3 }
@@ -199,7 +199,7 @@ export function createMock(params: URLSearchParams) {
   const handlers = new Map<string, Set<Handler>>()
   const sessions: Session[] = []
   const data: ProjectData[] = [
-    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'settled thread', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'settled thread', 'temp folder'], reason: '' }] },
+    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
     { name: 'agentos', dir: '~/code/agentos', repo: 'nednella/agentos', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/agentos')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
     { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], waits: [], cleanups: [] },
   ]
@@ -441,7 +441,7 @@ export function createMock(params: URLSearchParams) {
   // wake starts a settled thread again under its id, as the sessions do.
   function wake(s: Session) {
     if (!s.hosted) throw `Thread ${s.id} ran in a terminal and cannot be woken`
-    if (s.state !== 'settled') throw `Thread ${s.id} is not settled`
+    if (s.state !== 'settled') throw `Thread ${s.id} is not asleep`
     s.wokeAt = Date.now()
     setState(s, 'idle')
     chats.start(s.id)
@@ -734,7 +734,7 @@ export function createMock(params: URLSearchParams) {
   // finishCleanup acts as the app's clean-up: the worktree, browser window and temp folder go, and the thread settles
   // and keeps its row and branch, with no PR left on it.
   function finishCleanup(s: Session) {
-    const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'settled thread', ...(s.browser ? ['browser window'] : []), 'temp folder']
+    const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
     if (s.state !== 'settled') {
       emit('term:exit', { id: s.id })
@@ -936,7 +936,7 @@ export function createMock(params: URLSearchParams) {
           publish()
           throw `Thread ${s.n} keeps its worktree: ${reason}. Delete it without the worktree, or clean it up first`
         }
-        logCleanup(s, [`worktree ${own}`, 'settled thread', ...(s.browser ? ['browser window'] : []), 'temp folder'], '')
+        logCleanup(s, [`worktree ${own}`, 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder'], '')
       }
       if (s.state !== 'settled') {
         emit('term:exit', { id })
@@ -970,7 +970,7 @@ export function createMock(params: URLSearchParams) {
     },
     SettleThread: async (id: string) => {
       const s = find(id)
-      if (s.state === 'settled') throw `Thread ${id} has settled`
+      if (s.state === 'settled') throw `Thread ${id} is asleep`
       emit('term:exit', { id })
       chats.end(id, 'settle')
       setState(s, 'settled')
@@ -1227,7 +1227,7 @@ export function createMock(params: URLSearchParams) {
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
       if (!s.hosted) throw `Thread ${id} runs in an old terminal`
-      if (s.state === 'settled') throw `Thread ${id} has settled`
+      if (s.state === 'settled') throw `Thread ${id} is asleep`
       return chats.backend.ChatDraft(id, text)
     },
     ...chats.backend,

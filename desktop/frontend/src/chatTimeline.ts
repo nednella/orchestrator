@@ -327,7 +327,7 @@ function noticeOf(e: ChatEvent, text: string, error: boolean): Notice {
 // itself, and Claude's own failure in red.
 function exitItem(e: ChatEvent): Notice | Restart {
   if (e.stop === 'restart') return { kind: 'restart', key: `notice-${e.seq}`, at: e.at, access: e.text as Access }
-  return noticeOf(e, e.stop === 'settle' ? 'Settled' : 'Claude stopped', e.error ?? false)
+  return noticeOf(e, e.stop === 'settle' ? 'Asleep' : 'Claude stopped', e.error ?? false)
 }
 
 // thoughtKey is the key of the next thought of message id in the turn, the same while it streams and once logged.

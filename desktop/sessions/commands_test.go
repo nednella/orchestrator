@@ -93,7 +93,7 @@ func TestSessionCommands(t *testing.T) {
 		t.Errorf("new --access write = %+v", resp)
 	}
 
-	if resp := h.Ask(t, ctl.Request{Cmd: "settle", Args: []string{"2"}}); !resp.OK || resp.Out != "settled thread 2: fix logout" {
+	if resp := h.Ask(t, ctl.Request{Cmd: "settle", Args: []string{"2"}}); !resp.OK || resp.Out != "put thread 2 to sleep: fix logout" {
 		t.Errorf("settle = %+v", resp)
 	}
 	for _, bad := range [][]string{nil, {"x"}, {"9"}, {"2"}} {

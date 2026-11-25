@@ -92,7 +92,7 @@ func names(t *testing.T, tmux *term.Tmux) string {
 func TestSettleWithoutNumberKeepsStateFiles(t *testing.T) {
 	tmux, state := settleSetup(t)
 	out := runSettle(t)
-	if !strings.Contains(out, "settling demo/a1 (one)") || !strings.Contains(out, "settling demo/b2 (two)") || strings.Contains(out, "other/a1") {
+	if !strings.Contains(out, "putting demo/a1 (one) to sleep") || !strings.Contains(out, "putting demo/b2 (two) to sleep") || strings.Contains(out, "other/a1") {
 		t.Errorf("output = %q", out)
 	}
 	if got := names(t, tmux); got != "other/a1" {
@@ -101,7 +101,7 @@ func TestSettleWithoutNumberKeepsStateFiles(t *testing.T) {
 	if left := bus.ReadAll(state, nil); len(left) != 3 || left["demo/a1"].Session == "" || left["demo/b2"].Session == "" {
 		t.Errorf("state files left: %v", left)
 	}
-	if out := runSettle(t); !strings.Contains(out, "no threads to settle") {
+	if out := runSettle(t); !strings.Contains(out, "no threads to put to sleep") {
 		t.Errorf("a second settle printed %q", out)
 	}
 }
@@ -141,7 +141,7 @@ func TestSettleLeavesTerminalSessions(t *testing.T) {
 	if out := runSettle(t); !strings.Contains(out, "left 1 session that ran in a terminal") || strings.Contains(out, "demo/c3") {
 		t.Errorf("settle printed %q", out)
 	}
-	if out := runSettle(t, "--all"); !strings.Contains(out, "settling other/a1") || !strings.Contains(out, "left 1 session that ran in a terminal") {
+	if out := runSettle(t, "--all"); !strings.Contains(out, "putting other/a1") || !strings.Contains(out, "left 1 session that ran in a terminal") {
 		t.Errorf("settle --all printed %q", out)
 	}
 	if got := names(t, tmux); got != "demo/c3" {
