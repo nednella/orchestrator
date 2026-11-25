@@ -1134,22 +1134,29 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (
 	if user := l.sessions.usersOf(w.Path, t.id); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	return p, l.shellIn(ctx, w.Path)
+	return p, l.shellIn(ctx, t.proj.Key(), w.Path)
 }
 
-// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, also of one shell whose folder
-// it does not know. It is "" when none is.
-func (l *Lifecycle) shellIn(ctx context.Context, worktree string) string {
+// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, or a shell of the project is
+// open in a folder tmux does not know. It is "" when none is.
+func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string) string {
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	shells, err := l.sessions.tmux.ShellPaths(ctx)
 	if err != nil {
 		return fmt.Sprintf("tmux could not list the open shells: %v", err)
 	}
-	for _, path := range shells {
-		if path == "" || inside(path, worktree) {
+	unknown := false
+	for name, path := range shells {
+		switch {
+		case path == "":
+			unknown = unknown || name.Project == key
+		case inside(path, worktree):
 			return "a shell is open in this worktree"
 		}
+	}
+	if unknown {
+		return "a shell whose folder is unknown is open"
 	}
 	return ""
 }
