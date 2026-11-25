@@ -383,6 +383,13 @@ func TestDismissRemovesTheChatLog(t *testing.T) {
 	if got, _ := h.Session(s.ID); got.Detail != "" {
 		t.Errorf("ended row = %+v, want no failure shown", got)
 	}
+	// A host that dies without its shutdown leaves its socket behind.
+	if err := os.WriteFile(socket, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(chatLog) {
+		t.Fatal("the chat log is gone before the dismiss")
+	}
 	if err := h.DismissSession(s.ID); err != nil {
 		t.Fatal(err)
 	}
