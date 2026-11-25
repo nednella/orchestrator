@@ -168,6 +168,23 @@ func TestDigestFailures(t *testing.T) {
 	}
 }
 
+func TestDigestRunAfterAFailure(t *testing.T) {
+	h := newHarness(t)
+	h.Claude.Err = context.Canceled
+	if err := h.RunDigest(); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the failure", func() bool { d := lastDigest(h); return !d.Running && d.StoppedAt > 0 })
+	h.Claude.Err = nil
+	if err := h.RunDigest(); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the second run to finish", func() bool { d := lastDigest(h); return !d.Running && d.LastRunAt > 0 })
+	if d := h.Digest(); d.Error != "" || d.StoppedAt != 0 {
+		t.Errorf("after a good run the failure stays: %+v", d)
+	}
+}
+
 func TestDigestAutomaticRuns(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{DigestFirst: 50 * time.Millisecond, DigestTick: 50 * time.Millisecond})
 	eventually(t, "the automatic run", func() bool { return len(h.Claude.Calls()) == 1 && !h.Digest().Running })
