@@ -160,9 +160,10 @@ func parseControlRequest(l line) ([]Event, error) {
 		return nil, nil
 	}
 	var req struct {
-		Subtype  string          `json:"subtype"`
-		ToolName string          `json:"tool_name"`
-		Input    json.RawMessage `json:"input"`
+		Subtype   string          `json:"subtype"`
+		ToolName  string          `json:"tool_name"`
+		Input     json.RawMessage `json:"input"`
+		ToolUseID string          `json:"tool_use_id"`
 	}
 	if err := json.Unmarshal(l.Request, &req); err != nil {
 		return nil, fmt.Errorf("parse control request: %w", err)
@@ -170,7 +171,7 @@ func parseControlRequest(l line) ([]Event, error) {
 	if req.Subtype != "can_use_tool" {
 		return nil, nil
 	}
-	return []Event{{Kind: KindApproval, ID: l.RequestID, Tool: req.ToolName, Input: req.Input}}, nil
+	return []Event{{Kind: KindApproval, ID: l.RequestID, Parent: req.ToolUseID, Tool: req.ToolName, Input: req.Input}}, nil
 }
 
 // parseControlResponse reads the reply to initialize, which lists the slash commands, and the reply to an interrupt,

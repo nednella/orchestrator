@@ -102,6 +102,10 @@ func TestParseApprovalRequest(t *testing.T) {
 	if !ok || ap.ID == "" || ap.Tool != "Bash" || !strings.Contains(string(ap.Input), `"command"`) {
 		t.Fatalf("want a Bash approval with a command, got %+v", ap)
 	}
+	use, _ := first(events, KindToolUse)
+	if ap.Parent == "" || ap.Parent != use.ID {
+		t.Errorf("want the approval's parent to be its tool call %q, got %q", use.ID, ap.Parent)
+	}
 }
 
 func TestParseInterruptEndsTurnWithError(t *testing.T) {
@@ -185,9 +189,13 @@ func TestParseInitializeListsCommands(t *testing.T) {
 }
 
 func TestParseQuestionApproval(t *testing.T) {
-	ev, ok := first(parseFile(t, "question.jsonl"), KindApproval)
+	events := parseFile(t, "question.jsonl")
+	ev, ok := first(events, KindApproval)
 	if !ok || ev.Tool != "AskUserQuestion" || !strings.Contains(string(ev.Input), `"questions"`) {
 		t.Fatalf("want an AskUserQuestion approval with questions, got %+v", ev)
+	}
+	if use, _ := first(events, KindToolUse); ev.Parent != use.ID {
+		t.Errorf("want the approval's parent to be its tool call %q, got %q", use.ID, ev.Parent)
 	}
 }
 
