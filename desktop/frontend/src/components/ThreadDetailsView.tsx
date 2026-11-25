@@ -16,10 +16,10 @@ type ThreadDetailsViewProps = { ctx: PanelContext }
 export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) {
   const { viewOf, setSessionView, browserStates, sessions } = useAgentos('viewOf', 'setSessionView', 'browserStates', 'sessions')
   const agentsRunning = useAgentsRunning(session?.id ?? '')
-  const { servers, refresh } = useThreadServers(session?.id ?? '', session !== undefined && session.state !== 'settled')
+  const withAgents = session ? agentsTabShown(session.id, sessions) : false
+  const view = session ? shownView(viewOf(session.id), withAgents) : undefined
+  const { servers, refresh } = useThreadServers(session?.id ?? '', session?.state, view === 'servers')
   if (!session) return null
-  const withAgents = agentsTabShown(session.id, sessions)
-  const view = shownView(viewOf(session.id), withAgents)
   const browserOpen = browserStates[session.id]?.open ?? session.browser
   const running = (agentsRunning ?? 0) + sessions.filter((s) => s.parent === session.id && s.state === 'working').length
   const tabs: { id: SessionView; label: string; count?: number; live?: boolean }[] = [
