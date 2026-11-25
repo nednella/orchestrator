@@ -12,7 +12,7 @@ type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(item: TimelineItem, last: boolean, folder: string) {
+function rowOf(item: TimelineItem, thread: string, folder: string) {
   switch (item.kind) {
     case 'user':
       return <ChatUserRow text={item.text} />
@@ -21,7 +21,7 @@ function rowOf(item: TimelineItem, last: boolean, folder: string) {
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
     case 'work':
-      return <ChatWorkRow calls={item.calls} startedAt={item.startedAt} endedAt={item.endedAt} ticking={last} folder={folder} />
+      return <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
     case 'approval':
       return <ChatNotice text={item.expired ? `The approval to use ${item.tool} expired` : `Waiting for approval to use ${item.tool}`} error={false} />
     case 'question':
@@ -103,7 +103,7 @@ export function ChatTimeline({ id, items, folder }: ChatTimelineProps) {
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items[row.index], row.index === items.length - 1, folder)}
+              {rowOf(items[row.index], id, folder)}
             </div>
           ))}
         </div>

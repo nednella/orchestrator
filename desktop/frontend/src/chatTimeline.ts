@@ -3,6 +3,9 @@ import type { ChatEvent, Pending } from './types'
 // Command is one slash command, as Claude lists them in a commands event.
 export type Command = { name: string; description: string; argumentHint: string; builtin?: boolean; aliases?: string[] }
 
+// A step is one thing a fold holds, in the order it came: a tool call, or text Claude wrote between calls.
+export type WorkStep = { kind: 'call'; call: ToolCall } | { kind: 'note'; key: string; text: string }
+
 export type ToolCall = { id: string; tool: string; input: unknown; result: string | null; error: boolean; answer?: 'allow' | 'deny' }
 
 // Ask is a question Claude puts to the user, or a plan it asks the user to approve. request is the approval that
@@ -12,7 +15,7 @@ export type Ask = { key: string; at: number; id: string; input: unknown; request
 export type TimelineItem =
   | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[] }
   | { kind: 'reply'; key: string; at: number; id: string; text: string; streaming: boolean }
-  | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; notes: string[] }
+  | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
   | ({ kind: 'plan' } & Ask)
@@ -192,8 +195,12 @@ function folded(turn: Turn, endedAt: number): TimelineItem[] {
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
   const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply')
   const last = replies.at(-1)
-  const notes = replies.slice(0, -1).map((r) => r.blocks.join('\n\n'))
-  return [{ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, notes }, ...rest, ...(last ? [replyItem(last, '')] : [])]
+  const steps = turn.parts.flatMap((p): WorkStep[] => {
+    if (p.kind === 'call') return [{ kind: 'call', call: p.call }]
+    if (p.kind === 'reply' && p !== last) return [{ kind: 'note', key: p.key, text: p.blocks.join('\n\n') }]
+    return []
+  })
+  return [{ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, steps }, ...rest, ...(last ? [replyItem(last, '')] : [])]
 }
 
 // unfolded is the turn that runs: its parts in order, each run of calls as one work item, then the messages that have
@@ -206,8 +213,10 @@ function unfolded(turn: Turn, live: Record<string, string>, now: number): Timeli
       continue
     }
     const work = out.at(-1)
-    if (work?.kind === 'work') work.calls.push(p.call)
-    else out.push({ kind: 'work', key: `work-${p.call.id}`, startedAt: turn.startedAt, endedAt: null, calls: [p.call], notes: [] })
+    if (work?.kind === 'work') {
+      work.calls.push(p.call)
+      work.steps.push({ kind: 'call', call: p.call })
+    } else out.push({ kind: 'work', key: `work-${p.call.id}`, startedAt: turn.startedAt, endedAt: null, calls: [p.call], steps: [{ kind: 'call', call: p.call }] })
   }
   for (const [id, text] of Object.entries(live)) {
     if (!turn.parts.some((p) => p.kind === 'reply' && p.id === id)) out.push({ kind: 'reply', key: `reply-${id}`, at: now, id, text, streaming: true })

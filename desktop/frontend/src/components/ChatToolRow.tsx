@@ -1,18 +1,22 @@
 import { memo, useState } from 'react'
-import { resultLines, toolBody, toolSummary } from '../chatTools'
+import { isOpened, setOpened } from '../chatOpen'
+import { resultLimit, resultLines, toolBody, toolSummary } from '../chatTools'
 import { Icon } from './Icon'
 
-type ChatToolRowProps = { tool: string; input: unknown; result: string | null; error: boolean; running: boolean; folder: string }
+type ChatToolRowProps = { thread: string; id: string; tool: string; input: unknown; result: string | null; error: boolean; running: boolean; folder: string }
 
-export const ChatToolRow = memo(function ChatToolRow({ tool, input, result, error, running, folder }: ChatToolRowProps) {
-  const [open, setOpen] = useState(false)
+export const ChatToolRow = memo(function ChatToolRow({ thread, id, tool, input, result, error, running, folder }: ChatToolRowProps) {
+  const [open, setOpen] = useState(() => isOpened(thread, id))
   const [all, setAll] = useState(false)
   const { icon, title, detail } = toolSummary(tool, input, folder)
   const waiting = running && result === null
 
   return (
     <div>
-      <button className="flex w-full min-w-0 items-center gap-2 py-1 text-left text-small text-soft hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="flex w-full min-w-0 items-center gap-2 py-1 text-left text-small text-soft hover:text-ink" aria-expanded={open} onClick={() => {
+          setOpened(thread, id, !open)
+          setOpen(!open)
+        }}>
         <span className={`flex flex-none ${error ? 'text-danger' : 'text-dim'}`}>
           <Icon name={icon} size={12} />
         </span>
@@ -38,7 +42,7 @@ function ChatToolDetail({ tool, input, result, error, all, onShowAll }: ChatTool
     <div className="mb-2 ml-5 flex min-w-0 flex-col gap-1.5 select-text">
       <pre className="chat-tool-pre">
         {'diff' in body ? body.diff.map((l, n) => (
-          <span key={n} className={`block ${l.sign === '+' ? 'chat-diff-add' : 'chat-diff-del'}`}>
+          <span key={n} className={`block ${l.sign === '+' ? 'chat-diff-add' : l.sign === '−' ? 'chat-diff-del' : 'text-dim'}`}>
             {l.sign} {l.text}
           </span>
         )) : body.text}
@@ -46,7 +50,7 @@ function ChatToolDetail({ tool, input, result, error, all, onShowAll }: ChatTool
       {out && out.shown !== '' && (
         <pre className={`chat-tool-pre ${error ? 'text-danger' : ''}`}>{out.shown}</pre>
       )}
-      {out && !all && out.total > 20 && (
+      {out && !all && out.total > resultLimit && (
         <button className="btn btn-ghost self-start" onClick={onShowAll}>
           Show all {out.total} lines
         </button>

@@ -157,6 +157,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       { kind: 'tool_result', parent: 'toolu_1', text: "export const routes = [\n  { path: '/', page: Home },\n  { path: '/cart', page: Cart },\n]", at: ago(37) },
       { kind: 'tool_use', id: 'toolu_2', tool: 'Edit', input: { file_path: '~/code/acme/storefront/trees/issue-444/app-frontend/src/js/routes.tsx', old_string: "  { path: '/cart', page: Cart },", new_string: "  { path: '/cart', page: Cart },\n  { path: '/checkout', page: Checkout }," }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2', text: 'The file was updated.', at: ago(36) },
+      { kind: 'message', id: 'msg_1b', text: 'The route is in. Now I will **lint** and typecheck it.', at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2a', tool: 'Bash', input: { command: 'npm run lint\nnpm run typecheck', description: 'Check the new route' }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2a', text: Array.from({ length: 26 }, (_, i) => `src/js/file-${i + 1}.tsx  ok`).join('\n'), at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2b', tool: 'Bash', input: { command: 'cat src/js/missing.tsx' }, at: ago(36) },

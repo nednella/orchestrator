@@ -60,7 +60,11 @@ test('finished turn folds tools into one work row', () => {
       ['t2', 'Edit', 'The file was updated.', false],
     ],
   )
-  assert.deepEqual(work.notes, ["I'll read the router.", 'Now the edit.'])
+  assert.deepEqual(
+    work.steps.map((st) => (st.kind === 'call' ? st.call.id : st.text)),
+    ["I'll read the router.", 't1', 'Now the edit.', 't2'],
+    'notes sit between the calls in the order they came',
+  )
   assert.equal(only(t.items, 'reply')[0].text, 'Done.')
   assert.equal(new Set(t.items.map((i) => i.key)).size, t.items.length, 'keys are unique')
 })
