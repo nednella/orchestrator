@@ -343,24 +343,16 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 	}
 }
 
-func TestUnsentPromptIsADraft(t *testing.T) {
+func TestManualPromptIsSentToAHostedSession(t *testing.T) {
 	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
-	s, err := h.Sessions().Create("#7 work", "/work 7", false, 7, "")
-	if err != nil {
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    session_prompt_send: manual\n"})
+	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
 	}
-	chatLog, _ := hostFiles(h, s.ID)
-	eventually(t, "the draft in the chat log", func() bool {
-		data, _ := os.ReadFile(chatLog)
-		return strings.Contains(string(data), `"kind":"draft","text":"/work 7"`)
-	})
-	time.Sleep(300 * time.Millisecond)
-	if users := userLines(t, dir, s.ID); len(users) != 0 {
-		t.Errorf("claude got %q, want no message", users)
-	}
-	if pane := h.Pane(t, s.ID); strings.Contains(pane, "you: /work 7") {
-		t.Errorf("the draft was sent:\n%s", pane)
+	id := h.Sessions().List()[0].ID
+	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, id)) == 1 })
+	if users := userLines(t, dir, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
+		t.Errorf("user line = %s", users[0])
 	}
 }
 
@@ -453,24 +445,19 @@ func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
 	}
 }
 
-func TestTypeIntoAClaudeSessionLeavesADraft(t *testing.T) {
+func TestTypeIntoAHostedSessionSendsIt(t *testing.T) {
 	dir := apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
 	s, err := h.Sessions().Create("work", "", false, 0, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	chatLog, socket := hostFiles(h, s.ID)
-	eventually(t, "the host's socket", func() bool { return exists(socket) })
-	if err := h.TypeInto(s.ID, "Address the review of PR 12"); err != nil {
+	if err := h.TypeInto(s.ID, "Address the review comments on PR #12."); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the draft in the chat log", func() bool {
-		data, _ := os.ReadFile(chatLog)
-		return strings.Contains(string(data), `"kind":"draft","text":"Address the review of PR 12"`)
-	})
-	if users := userLines(t, dir, s.ID); len(users) != 0 {
-		t.Errorf("claude got %q, want no message", users)
+	eventually(t, "the text on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) == 1 })
+	if users := userLines(t, dir, s.ID); !strings.Contains(users[0], `"text":"Address the review comments on PR #12."`) {
+		t.Errorf("user line = %s", users[0])
 	}
 }
 

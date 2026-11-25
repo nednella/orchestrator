@@ -1423,7 +1423,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		go s.typeWhenReady(name, ready, typed, send)
 	}
 	if p.Can(agent.Hosted) && text != "" {
-		go s.giveHost(ctx, name, text, send)
+		go s.giveHost(ctx, name, text)
 	}
 	if issue > 0 {
 		s.life.ensureWatchers(ctx)
@@ -1645,34 +1645,31 @@ func (s *Sessions) typeWhenReady(name session.Name, ready <-chan struct{}, text 
 	s.send(ctx, name, text, send)
 }
 
-// giveHost gives text to the session's host once its socket takes connections: sent to the agent when send is set,
-// else left as a draft.
-func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string, send bool) {
-	if err := toHost(ctx, s.hostSocket(name), text, send, hostWait); err != nil {
+// giveHost sends text to the agent through the session's host once its socket takes connections.
+func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string) {
+	if err := toHost(ctx, s.hostSocket(name), text, hostWait); err != nil {
 		log.Printf("agentos: session %s did not get its first prompt: %v", name, err)
 	}
 }
 
-// toHost gives text to the host at socket once its socket takes connections, waiting at most wait: sent to the agent
-// when send is set, else left as a draft.
-func toHost(ctx context.Context, socket, text string, send bool, wait time.Duration) error {
+// toHost sends text to the agent through the host at socket once its socket takes connections, waiting at most wait.
+// Text the app would leave unsent on another agent's prompt is sent too: a draft in the chat log has no way to be sent
+// until the app has a chat composer.
+func toHost(ctx context.Context, socket, text string, wait time.Duration) error {
 	ready, cancel := context.WithTimeout(ctx, wait)
 	err := host.Ready(ready, socket)
 	cancel()
 	if err != nil {
 		return err
 	}
-	if send {
-		return host.Send(ctx, socket, text)
-	}
-	return host.Draft(ctx, socket, text)
+	return host.Send(ctx, socket, text)
 }
 
-// send gives text to the session. A session under a host gets it through the host, sent to the agent when submit is
-// set, else left as a draft; another has it typed into its prompt, and Enter pressed when submit is set.
+// send gives text to the session. A session under a host gets it sent through the host; another has it typed into its
+// prompt, and Enter pressed when submit is set.
 func (s *Sessions) send(ctx context.Context, name session.Name, text string, submit bool) {
 	if socket := s.hostOf(name); socket != "" {
-		if err := toHost(ctx, socket, text, submit, hostStarting); err != nil {
+		if err := toHost(ctx, socket, text, hostStarting); err != nil {
 			log.Printf("agentos: session %s did not get a prompt: %v", name, err)
 		}
 		return
@@ -1912,8 +1909,7 @@ func projectIn(projs []project.Project, in term.Info) (project.Project, bool) {
 	return project.Project{}, false
 }
 
-// TypeInto puts text into the session's prompt without pressing Enter: a draft in the chat log of a session under a
-// host.
+// TypeInto puts text into the session's prompt without pressing Enter. A session under a host gets it sent.
 func (s *Sessions) TypeInto(id, text string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -1923,8 +1919,8 @@ func (s *Sessions) TypeInto(id, text string) error {
 		return err
 	}
 	if socket := s.hostOf(name); socket != "" {
-		if err := host.Draft(s.context(), socket, text); err != nil {
-			log.Printf("agentos: session %s did not take a draft: %v", id, err)
+		if err := toHost(s.context(), socket, text, hostStarting); err != nil {
+			log.Printf("agentos: session %s did not take a message: %v", id, err)
 			return fmt.Errorf("session %s did not take the text", id)
 		}
 		return nil
