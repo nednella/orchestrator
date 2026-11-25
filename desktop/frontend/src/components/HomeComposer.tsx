@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { EMPTY_DRAFT } from '../composerMarkdown'
+import { pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
 import type { Issue } from '../types'
@@ -109,17 +110,12 @@ export function HomeComposer() {
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (token && candidates.length > 0) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        setCursor(e.key === 'ArrowDown' ? Math.min(highlighted + 1, candidates.length - 1) : Math.max(highlighted - 1, 0))
-        return
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        pick(candidates[Math.max(highlighted, 0)].number)
-        return
-      }
+    const step = token && pickListKey(e.key, candidates.length, highlighted)
+    if (step) {
+      e.preventDefault()
+      if ('pick' in step) pick(candidates[step.pick].number)
+      else setCursor(step.move)
+      return
     }
     if (token && e.key === 'Escape') {
       e.preventDefault()

@@ -7,6 +7,7 @@ import { commandMatches, commandToken, composerAction, mentionToken, replyLabel,
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Command, Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
+import { pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
@@ -180,17 +181,12 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const highlighted = pickList ? Math.min(cursor, pickList.rows.length - 1) : -1
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (pickList && pickList.rows.length > 0) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        setCursor(e.key === 'ArrowDown' ? Math.min(highlighted + 1, pickList.rows.length - 1) : Math.max(highlighted - 1, 0))
-        return
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        pickList.pick(Math.max(highlighted, 0))
-        return
-      }
+    const step = pickList && pickListKey(e.key, pickList.rows.length, highlighted)
+    if (step) {
+      e.preventDefault()
+      if ('pick' in step) pickList?.pick(step.pick)
+      else setCursor(step.move)
+      return
     }
     if (e.key !== 'Escape') return
     const done = onEscape(pickList !== null)
