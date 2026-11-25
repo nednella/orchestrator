@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
+import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
 import { duration } from '../time'
 import { ChatNotice } from './ChatNotice'
@@ -36,10 +36,10 @@ function rowOf(item: TimelineItem) {
 export function ChatTimeline({ id, items }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
-  const [unseen, setUnseen] = useState(false)
+  const [unseen, setUnseen] = useState(() => hasUnseen(kept, items.length))
   const following = useRef(kept === null)
   const lastTop = useRef(0)
-  const lastCount = useRef(items.length)
+  const seen = useRef(kept?.count ?? items.length)
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -60,7 +60,7 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
   useLayoutEffect(() => {
     if (kept) virtualizer.scrollToOffset(kept.top)
     else virtualizer.scrollToEnd()
-    return () => keepScroll(id, following.current ? null : { top: virtualizer.scrollOffset ?? 0, measured: virtualizer.takeSnapshot() })
+    return () => keepScroll(id, following.current ? null : { top: virtualizer.scrollOffset ?? 0, measured: virtualizer.takeSnapshot(), count: seen.current })
   }, [id, kept, virtualizer])
 
   useLayoutEffect(() => {
@@ -70,8 +70,8 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
   }, [total, virtualizer])
 
   useEffect(() => {
-    if (items.length > lastCount.current && !following.current) setUnseen(true)
-    lastCount.current = items.length
+    if (following.current) seen.current = items.length
+    else if (items.length > seen.current) setUnseen(true)
   }, [items.length])
 
   const onScroll = () => {
@@ -81,11 +81,14 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
     // follow.
     following.current = isAtBottom(el.scrollTop, el.clientHeight, el.scrollHeight) || (following.current && el.scrollTop >= lastTop.current)
     lastTop.current = el.scrollTop
-    if (following.current) setUnseen(false)
+    if (!following.current) return
+    seen.current = items.length
+    setUnseen(false)
   }
 
   const jump = () => {
     following.current = true
+    seen.current = items.length
     setUnseen(false)
     virtualizer.scrollToEnd()
   }
