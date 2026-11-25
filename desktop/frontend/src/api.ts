@@ -195,7 +195,7 @@ export const api = {
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),
   chatSendNow: (id: string, message: string) => backend.ChatSendNow(id, message),
   chatAnswer: (id: string, request: string, allow: boolean, message = '') => backend.ChatAnswer(id, request, allow, message),
-  chatAnswerInput: (id: string, request: string, input: unknown) => backend.ChatAnswerInput(id, request, JSON.stringify(input)),
+  chatAnswerInput: (id: string, request: string, input: string) => backend.ChatAnswerInput(id, request, input),
   chatPending: () => backend.ChatPending(),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),

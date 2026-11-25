@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { currentTask } from '../threads'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
@@ -11,6 +11,7 @@ import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
 import { StateIcon } from './StateIcon'
+import { ThreadAnswer } from './ThreadAnswer'
 import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
 import { ThreadTask } from './ThreadTask'
@@ -26,6 +27,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
+  const pending = useAgentosSelector((s) => s.pending[session.id])
   const cleanup = useArmedConfirm()
   const card = useHoverCard(400)
   const cardId = useId()
@@ -164,7 +166,12 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             )}
           </div>
         )}
-        {session.state === 'waiting' && session.detail && <p className="thread-question col-span-2 col-start-2 truncate">{session.detail}</p>}
+        {session.state === 'waiting' && (session.detail || pending) && (
+          <div className="thread-question col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5">
+            {session.detail && <p className="truncate">{session.detail}</p>}
+            {pending && <ThreadAnswer session={session} pending={pending} />}
+          </div>
+        )}
       </div>
       {cleanup.armed && (
         <div className="flex w-full pr-3 pb-2 pl-9">

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EMPTY_CHAT, mergeEvents } from './chatEvents.ts'
-import { buildTimeline } from './chatTimeline.ts'
+import { approvalKind, buildTimeline } from './chatTimeline.ts'
 import type { TimelineItem } from './chatTimeline.ts'
 import type { ChatEvent } from './types.ts'
 
@@ -183,6 +183,19 @@ test('question and plan items', () => {
   assert.equal(only(answered.items, 'question')[0].result?.includes('"Red"'), true)
   const [p] = only(answered.items, 'plan')
   assert.deepEqual([p.input, p.answer], [plan, 'allow'])
+})
+
+test('approvalKind', () => {
+  assert.deepEqual(['Bash', 'AskUserQuestion', 'ExitPlanMode', 'mcp__browser__click'].map(approvalKind), ['tool', 'question', 'plan', 'tool'])
+})
+
+test('a question keeps the answers its approval allowed with', () => {
+  const questions = { questions: [{ question: 'Which colour do you like?', options: [{ label: 'Red' }, { label: 'Blue' }] }] }
+  const asking = log(user('u1', 'Ask me'), toolUse('t1', 'AskUserQuestion', questions), approval('r1', 'AskUserQuestion', questions, 't1'))
+  const answers = (...drafts: Draft[]) => only(buildTimeline(log(...asking, ...drafts), {}).items, 'question')[0].answers
+  assert.equal(answers(), null)
+  assert.deepEqual(answers({ kind: 'answer', id: 'r1', text: 'allow', input: { ...questions, answers: { 'Which colour do you like?': 'Red' } } }), { 'Which colour do you like?': 'Red' })
+  assert.equal(answers(answer('r1', 'deny')), null, 'a deny, or an older log, has none')
 })
 
 test('interrupt gives Stopped', () => {

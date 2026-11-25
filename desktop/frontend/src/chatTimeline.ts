@@ -9,8 +9,8 @@ export type WorkStep = { kind: 'call'; call: ToolCall } | { kind: 'note'; key: s
 export type ToolCall = { id: string; tool: string; input: unknown; result: string | null; error: boolean; answer?: 'allow' | 'deny' }
 
 // Ask is a question Claude puts to the user, or a plan it asks the user to approve. request is the approval that
-// answers it, '' until Claude asks for one.
-export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; expired: boolean; result: string | null }
+// answers it, '' until Claude asks for one. answers is what a question was answered with, by question, once known.
+export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
 export type TimelineItem =
   | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[] }
@@ -38,6 +38,15 @@ type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall;
 type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval[]; unsent: Notice[] }
 
 const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'question', ExitPlanMode: 'plan' }
+
+// approvalKind is what an approval for the tool asks of the user: to let a tool run, to answer a question or to
+// approve a plan.
+export const approvalKind = (tool: string): Pending['kind'] => askKinds[tool] ?? 'tool'
+
+const answersOf = (input: unknown): Record<string, string> | null => {
+  const answers = (input as { answers?: unknown } | null)?.answers
+  return answers && typeof answers === 'object' ? (answers as Record<string, string>) : null
+}
 
 // buildTimeline turns a thread's logged events, and the text its messages have streamed so far, into what its chat
 // shows. thread is the thread's id, for the pending approval.
@@ -113,7 +122,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const id = e.id || `seq-${e.seq}`
         const kind = askKinds[e.tool ?? '']
         if (kind) {
-          const ask: AskItem = { kind, key: `${kind}-${id}`, at: e.at, id, input: e.input, request: '', expired: false, result: null }
+          const ask: AskItem = { kind, key: `${kind}-${id}`, at: e.at, id, input: e.input, request: '', answers: null, expired: false, result: null }
           asks.set(id, ask)
           t.parts.push(ask)
           return
@@ -152,7 +161,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (!a || a.answered) return
         const answer = e.text === 'allow' ? 'allow' : 'deny'
         a.answered = true
-        if (a.ask) a.ask.answer = answer
+        if (a.ask) Object.assign(a.ask, { answer, answers: answersOf(e.input) })
         if (a.call) a.call.answer = answer
         if (turn && a.item) turn.parts = turn.parts.filter((p) => p !== a.item)
         return
@@ -231,7 +240,7 @@ function replyItem(r: Reply, streamed: string): TimelineItem {
 // pendingOf describes the approval a thread waits on, as the chat service does.
 function pendingOf(thread: string, a: Approval): Pending {
   const input = (a.ask?.input ?? a.item?.input ?? {}) as { command?: string; file_path?: string; path?: string; pattern?: string; url?: string; plan?: string; questions?: { question?: string }[] }
-  const kind = askKinds[a.tool] ?? 'tool'
+  const kind = approvalKind(a.tool)
   let summary = ''
   if (kind === 'question') summary = input.questions?.[0]?.question ?? ''
   else if (kind === 'plan') summary = firstLine(input.plan ?? '')

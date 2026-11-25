@@ -1,6 +1,7 @@
 import { memo, useState } from 'react'
 import { isOpened, setOpened } from '../chatOpen'
-import { resultLimit, resultLines, toolBody, toolSummary } from '../chatTools'
+import { resultLimit, resultLines, toolSummary } from '../chatTools'
+import { ChatToolInput } from './ChatToolInput'
 import { Icon } from './Icon'
 
 type ChatToolRowProps = { thread: string; id: string; tool: string; input: unknown; result: string | null; error: boolean; running: boolean; folder: string }
@@ -36,17 +37,10 @@ export const ChatToolRow = memo(function ChatToolRow({ thread, id, tool, input, 
 type ChatToolDetailProps = { tool: string; input: unknown; result: string | null; error: boolean; all: boolean; onShowAll: () => void }
 
 function ChatToolDetail({ tool, input, result, error, all, onShowAll }: ChatToolDetailProps) {
-  const body = toolBody(tool, input)
   const out = result === null ? null : resultLines(result, all)
   return (
     <div className="mb-2 ml-5 flex min-w-0 flex-col gap-1.5 select-text">
-      <pre className="chat-tool-pre">
-        {'diff' in body ? body.diff.map((l, n) => (
-          <span key={n} className={`block ${l.sign === '+' ? 'chat-diff-add' : l.sign === '−' ? 'chat-diff-del' : 'text-dim'}`}>
-            {l.sign} {l.text}
-          </span>
-        )) : body.text}
-      </pre>
+      <ChatToolInput tool={tool} input={input} />
       {out && out.shown !== '' && (
         <pre className={`chat-tool-pre ${error ? 'text-danger' : ''}`}>{out.shown}</pre>
       )}

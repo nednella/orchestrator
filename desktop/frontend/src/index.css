@@ -969,6 +969,26 @@
     box-shadow: var(--shadow-popup);
   }
 
+  .chat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    border-radius: 0.75rem;
+    background: var(--bg-raised);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .chat-card[data-waiting='true'] {
+    background: var(--bg-thread-waiting);
+    box-shadow: inset 0 0 0 1px var(--border-thread-waiting);
+  }
+
+  .chat-card :is(input[type='radio'], input[type='checkbox']) {
+    margin: 0.1875rem 0 0;
+    accent-color: var(--accent);
+  }
+
   .note-card {
     background: var(--bg-note-card);
     border: 1px solid var(--border-note);

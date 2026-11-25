@@ -2,7 +2,10 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
+import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatNotice } from './ChatNotice'
+import { ChatPlanCard } from './ChatPlanCard'
+import { ChatQuestionCard } from './ChatQuestionCard'
 import { ChatReplyRow } from './ChatReplyRow'
 import { ChatUserRow } from './ChatUserRow'
 import { ChatWorkRow } from './ChatWorkRow'
@@ -23,11 +26,11 @@ function rowOf(item: TimelineItem, thread: string, folder: string) {
     case 'work':
       return <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
     case 'approval':
-      return <ChatNotice text={item.expired ? `The approval to use ${item.tool} expired` : `Waiting for approval to use ${item.tool}`} error={false} />
+      return <ChatApprovalCard thread={thread} request={item.request} tool={item.tool} input={item.input} expired={item.expired} folder={folder} />
     case 'question':
-      return <ChatNotice text="Claude asked a question" error={false} />
+      return <ChatQuestionCard thread={thread} request={item.request} input={item.input} answer={item.answer} answers={item.answers} expired={item.expired} result={item.result} />
     case 'plan':
-      return <ChatNotice text="Claude proposed a plan" error={false} />
+      return <ChatPlanCard thread={thread} request={item.request} input={item.input} answer={item.answer} expired={item.expired} result={item.result} />
   }
 }
 

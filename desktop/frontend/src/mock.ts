@@ -198,6 +198,7 @@ export function createMock(params: URLSearchParams) {
     noModel: params.has('nomodel'),
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
+    staleAnswer: params.has('stale'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: MockSession[] = []
@@ -442,8 +443,10 @@ export function createMock(params: URLSearchParams) {
     return s
   }
 
-  // Only one seeded thread runs under a host, so the rest keep their terminals; a thread started in the mock is hosted.
-  // With chatcases, two more do: one with an empty chat and one whose chat log cannot be read.
+  // Only two seeded threads run under a host, one waiting on a tool and one on a question, so the rest keep their
+  // terminals; a thread started in the mock is hosted. With chatcases, three more do: one with an empty chat, one whose
+  // chat log cannot be read and one waiting on a plan. With stale, the tool's approval ends on the host's side and the
+  // app is not told.
   const chats = mockChat(emit, (id) => {
     const s = find(id)
     if (!s.hosted) throw `Thread ${id} has no chat: its agent runs in its terminal`
@@ -497,13 +500,23 @@ export function createMock(params: URLSearchParams) {
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
+    if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], true)
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     const emptyChat = sessions.find((x) => x.title === 'Where do we set the cache headers?')!
     const brokenChat = byIssue(326)
-    sessions.forEach((s) => (s.hosted = s === byIssue(444) || (flags.chatCases && (s === emptyChat || s === brokenChat))))
+    const questionChat = sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!
+    const planChat = sessions.find((x) => x.title === 'Plan the checkout split')
+    sessions.forEach((s) => (s.hosted = s === byIssue(444) || s === questionChat || (flags.chatCases && (s === emptyChat || s === brokenChat || s === planChat))))
     if (flags.chatCases) chats.breakLog(brokenChat.id)
     chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
-    sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!.detail = 'Should I keep the old cart hook or replace it?'
+    // After the app's first read of what each thread waits on, so it still shows the approval.
+    if (flags.staleAnswer) setTimeout(() => chats.forget(byIssue(444).id), 2000)
+    questionChat.detail = 'Should I keep the old cart hook or replace it?'
+    chats.ask(questionChat.id, 'question')
+    if (planChat) {
+      planChat.detail = 'Claude needs your permission to use ExitPlanMode'
+      chats.ask(planChat.id, 'plan')
+    }
   }
 
   if (flags.warn) {

@@ -28,6 +28,30 @@ const olderReplies = [
   '## What changed\n\n1. The product page loads its sections in parallel.\n2. The reviews section waits for the fold.\n3. The gallery keeps its own state.\n\nNothing in the cart moved.',
 ]
 
+const askedQuestions = [
+  {
+    question: 'Should I keep the old cart hook or replace it?',
+    header: 'Cart hook',
+    options: [
+      { label: 'Keep it', description: 'Remove the new hook and leave useCart as it is.' },
+      { label: 'Replace it', description: 'Move every caller to the new hook and delete useCart.' },
+    ],
+    multiSelect: false,
+  },
+  {
+    question: 'Which pages should I check once it is fixed?',
+    header: 'Pages',
+    options: [
+      { label: 'Cart', description: '' },
+      { label: 'Checkout', description: '' },
+      { label: 'Product', description: 'The add-to-cart button reads the cart too.' },
+    ],
+    multiSelect: true,
+  },
+]
+
+const askedPlan = '## Split checkout into three steps\n\n1. Add `/checkout/address`, `/checkout/payment` and `/checkout/review` routes.\n2. Move the form state into a `useCheckout` store so each step reads it.\n3. Keep the cart page as it is.\n\nThe tests for `Checkout.tsx` move with the steps.'
+
 // olderTurns is finished turns that give a chat at least that many items: each a message and its reply, and every
 // fifth one a tool call that folds into a work item.
 function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
@@ -176,17 +200,42 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     setPending(id, { id, request: 'req-1', tool: 'Bash', summary: 'npm install', kind: 'tool' })
   }
 
-  function answer(id: string, request: string, allow: boolean, message: string) {
+  // answer logs the answer and the tool's result, with input when it allows with the user's own, then replies.
+  function answer(id: string, request: string, allow: boolean, message: string, input?: { answers?: Record<string, string> }) {
     const t = live(id)
     const p = pending.get(id)
     if (p?.request !== request) throw `No approval "${request}" is waiting`
-    append(id, { kind: 'answer', id: request, text: allow ? 'allow' : 'deny' })
+    append(id, { kind: 'answer', id: request, text: allow ? 'allow' : 'deny', ...(input ? { input } : {}) })
     setPending(id, null)
-    const tool = [...logOf(id)].reverse().find((e) => e.kind === 'tool_use')
-    append(id, { kind: 'tool_result', parent: tool?.id, text: allow ? 'added 12 packages in 3s' : message || 'The user denied this tool.', error: !allow })
+    const asked = logOf(id).find((e) => e.kind === 'approval' && e.id === request)
+    const answered = Object.entries(input?.answers ?? {}).map(([q, a]) => `"${q}"="${a}"`)
+    const allowed = { tool: 'added 12 packages in 3s', question: `The user answered: ${answered.join(', ')}.`, plan: 'User has approved your plan. You can now start coding.' }
+    const denied = { tool: 'The user denied this tool.', question: 'The user did not answer.', plan: 'The user wants to keep planning.' }
+    append(id, { kind: 'tool_result', parent: asked?.parent, text: allow ? allowed[p.kind] : message || denied[p.kind], error: !allow })
     t.setState('working')
     reply(id)
   }
+
+  // ask fills a chat's log with one turn that waits on Claude's question or plan.
+  function ask(id: string, kind: 'question' | 'plan') {
+    const at = Date.now() - 2 * minute
+    const tool = kind === 'question' ? 'AskUserQuestion' : 'ExitPlanMode'
+    const input = kind === 'question' ? { questions: askedQuestions } : { plan: askedPlan }
+    const turn: Draft[] = [
+      { kind: 'commands', input: commands, at },
+      { kind: 'user', id: 'u-1', text: kind === 'question' ? 'Why does checkout call the cart API twice?' : 'Plan how to split the checkout page.', at },
+      { kind: 'init', id: 'mock-session', at },
+      { kind: 'message', id: 'msg_1', text: kind === 'question' ? 'Checkout mounts the old cart hook and the new one, and each fetches the cart.' : 'I read the checkout page and its tests.', at },
+      { kind: 'tool_use', id: 'toolu_ask', tool, input, at },
+      { kind: 'approval', id: 'req-ask', parent: 'toolu_ask', tool, input, at },
+    ]
+    turn.forEach((e) => append(id, e))
+    const summary = kind === 'question' ? askedQuestions[0].question : 'Split checkout into three steps'
+    setPending(id, { id, request: 'req-ask', tool, summary, kind })
+  }
+
+  // forget drops what the thread waits on without a word, as a host whose turn ended while the event was missed.
+  const forget = (id: string) => pending.delete(id)
 
   const backend = {
     ChatHistory: async (id: string, after: number) => {
@@ -241,12 +290,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     },
     ChatAnswer: async (id: string, request: string, allow: boolean, message: string) => answer(id, request, allow, message),
     ChatAnswerInput: async (id: string, request: string, input: string) => {
+      let given
       try {
-        JSON.parse(input)
+        given = JSON.parse(input)
       } catch {
         throw 'The answer is not valid JSON'
       }
-      answer(id, request, true, '')
+      answer(id, request, true, '', given)
     },
     ChatPending: async () => [...pending.values()].map((p) => ({ ...p })),
   }
@@ -263,5 +313,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  return { backend, seed, end, breakLog }
+  return { backend, seed, ask, forget, end, breakLog }
 }

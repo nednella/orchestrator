@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
+import { answeredLate } from './chatQuestions'
 import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, writeStored } from './storage'
@@ -109,6 +110,8 @@ type AgentosActions = {
   ackPR(id: string): Promise<void>
   openPR(session: Session): Promise<void>
   typeInto(id: string, text: string): Promise<void>
+  answer(id: string, request: string, allow: boolean, reason?: string): Promise<void>
+  answerQuestion(id: string, request: string, input: string): Promise<void>
   cleanupSession(id: string, force: boolean): Promise<void>
   noteToIssue(id: string): Promise<void>
   noteToSession(id: string): Promise<void>
@@ -647,6 +650,18 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const viewOf = useCallback((id: string | null) => (id && views[id]) || 'pr', [views])
 
+  // An answer the host refused because its approval no longer waits says so, and drops the approval from pending in
+  // case the event that would have was missed.
+  const answerFailed = useCallback((id: string, request: string, err: unknown): never => {
+    if (!answeredLate(errorMessage(err))) throw err
+    setPending((map) => {
+      if (map[id]?.request !== request) return map
+      const { [id]: _, ...rest } = map
+      return rest
+    })
+    throw 'That request has already ended'
+  }, [])
+
   const actions = useMemo<AgentosActions>(
     () => ({
       async applyUpdate() {
@@ -840,6 +855,12 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async typeInto(id, text) {
         await api.typeInto(id, text)
       },
+      async answer(id, request, allow, reason = '') {
+        await api.chatAnswer(id, request, allow, reason).catch((err) => answerFailed(id, request, err))
+      },
+      async answerQuestion(id, request, input) {
+        await api.chatAnswerInput(id, request, input).catch((err) => answerFailed(id, request, err))
+      },
       async cleanupSession(id, force) {
         await api.cleanup(id, force)
       },
@@ -907,7 +928,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
   const value = useMemo<Agentos>(
