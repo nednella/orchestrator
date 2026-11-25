@@ -277,7 +277,7 @@
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
     .composer-box,
     .composer-attached {
-      background: var(--bg-composer-glass);
+      background: var(--bg-glass);
       -webkit-backdrop-filter: var(--glass-filter);
       backdrop-filter: var(--glass-filter);
     }
