@@ -1,3 +1,4 @@
+import { useAgentos } from '../AgentosContext'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { ChatNotice } from './ChatNotice'
@@ -8,6 +9,7 @@ import { Notice } from './Notice'
 type ChatViewProps = { session: Session }
 
 export function ChatView({ session }: ChatViewProps) {
+  const { project } = useAgentos('project')
   const { timeline, loading, error } = useChat(session.id)
   const empty = timeline.items.length === 0
 
@@ -16,7 +18,7 @@ export function ChatView({ session }: ChatViewProps) {
       {empty && loading && <Loading />}
       {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
-      {!empty && <ChatTimeline id={session.id} items={timeline.items} />}
+      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} />}
       <div className="mx-auto w-full max-w-[46rem] px-4 pb-4">
         {!empty && error && (
           <div className="pb-2">

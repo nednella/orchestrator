@@ -945,6 +945,26 @@
     overflow-wrap: normal;
   }
 
+  .chat-tool-pre {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-code);
+    color: var(--text-soft);
+    font-family: var(--font-mono);
+    font-size: var(--fs-small);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-diff-add {
+    background: color-mix(in srgb, var(--finished) 16%, transparent);
+  }
+
+  .chat-diff-del {
+    background: color-mix(in srgb, var(--danger) 16%, transparent);
+  }
+
   .chat-jump {
     box-shadow: var(--shadow-popup);
   }

@@ -2,17 +2,17 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { followScroll, hasUnseen, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
-import { duration } from '../time'
 import { ChatNotice } from './ChatNotice'
 import { ChatReplyRow } from './ChatReplyRow'
 import { ChatUserRow } from './ChatUserRow'
+import { ChatWorkRow } from './ChatWorkRow'
 import { Icon } from './Icon'
 
-type ChatTimelineProps = { id: string; items: TimelineItem[] }
+type ChatTimelineProps = { id: string; items: TimelineItem[]; folder: string }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(item: TimelineItem) {
+function rowOf(item: TimelineItem, last: boolean, folder: string) {
   switch (item.kind) {
     case 'user':
       return <ChatUserRow text={item.text} />
@@ -20,10 +20,8 @@ function rowOf(item: TimelineItem) {
       return <ChatReplyRow text={item.text} streaming={item.streaming} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
-    case 'work': {
-      const calls = `${item.calls.length} tool ${item.calls.length === 1 ? 'call' : 'calls'}`
-      return <ChatNotice text={item.endedAt === null ? `Working · ${calls}` : `Worked for ${duration(item.endedAt - item.startedAt)} · ${calls}`} error={false} />
-    }
+    case 'work':
+      return <ChatWorkRow calls={item.calls} startedAt={item.startedAt} endedAt={item.endedAt} ticking={last} folder={folder} />
     case 'approval':
       return <ChatNotice text={item.expired ? `The approval to use ${item.tool} expired` : `Waiting for approval to use ${item.tool}`} error={false} />
     case 'question':
@@ -33,7 +31,7 @@ function rowOf(item: TimelineItem) {
   }
 }
 
-export function ChatTimeline({ id, items }: ChatTimelineProps) {
+export function ChatTimeline({ id, items, folder }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
   const [unseen, setUnseen] = useState(() => hasUnseen(kept, items.length))
@@ -105,7 +103,7 @@ export function ChatTimeline({ id, items }: ChatTimelineProps) {
         <div className="relative mx-auto w-full max-w-[46rem]" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full px-4 pb-5" style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items[row.index])}
+              {rowOf(items[row.index], row.index === items.length - 1, folder)}
             </div>
           ))}
         </div>

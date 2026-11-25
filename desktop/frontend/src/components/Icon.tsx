@@ -66,6 +66,8 @@ export type IconName =
   | 'pull-request'
   | 'claude'
   | 'agent'
+  | 'terminal'
+  | 'file'
 
 // Octicons by GitHub, MIT License, Copyright (c) 2023 GitHub Inc.
 // https://github.com/primer/octicons
@@ -196,6 +198,8 @@ function IconShape({ name }: IconShapeProps) {
     )
   if (name === 'claude') return <path d="M8 1.7v4M8 10.3v4M1.7 8h4M10.3 8h4M3.5 3.5l2.8 2.8M9.7 9.7l2.8 2.8M12.5 3.5 9.7 6.3M6.3 9.7l-2.8 2.8" />
   if (name === 'agent') return <path d="M4.7 3.3h6.6a1.3 1.3 0 0 1 1.4 1.4v6.6a1.3 1.3 0 0 1-1.4 1.4H4.7a1.3 1.3 0 0 1-1.4-1.4V4.7a1.3 1.3 0 0 1 1.4-1.4ZM6 1.3v2M10 1.3v2M6 12.7v2M10 12.7v2M1.3 6h2M1.3 10h2M12.7 6h2M12.7 10h2" />
+  if (name === 'terminal') return <path d="M2.5 3h11v10h-11ZM5 6.5l2 1.8-2 1.8M8.5 10.5H11" />
+  if (name === 'file') return <path d="M4 2h5l3 3v9H4ZM9 2v3h3M6 8.5h4M6 11h4" />
   if (name === 'issue') return <path d="M8 13.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM8 5.5v3.2M8 10.8v.01" />
   return <path d="M2 4h4l1.5 1.5H14V13H2Z" />
 }
