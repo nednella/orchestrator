@@ -135,7 +135,7 @@ export function ChatView({ session }: ChatViewProps) {
           <ChatEditConfirm
             thread={session.id}
             message={uuid}
-            folder={folder}
+            worktree={session.worktree}
             draftEmpty={() => draft.current?.empty() ?? true}
             onRewound={(text, replace) => {
               setEditing(null)

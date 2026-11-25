@@ -531,6 +531,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       thread(id)
       return rankFiles(files, query)
     },
+    RewindFilesOffer: async (id: string): Promise<FilesRewind> => ({ offered: thread(id).worktree !== '', reason: '', files: [], insertions: 0, deletions: 0 }),
     RewindPreview: async (id: string, message: string): Promise<FilesRewind> => {
       if (!thread(id).worktree) return { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
       rewindable(id, message)
