@@ -234,8 +234,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     setPending(id, { id, request: 'req-ask', tool, summary, kind })
   }
 
-  // forget drops what the thread waits on without a word, as a host whose turn ended while the event was missed.
-  const forget = (id: string) => pending.delete(id)
+  // forget stops the turn that waits, as an interrupt from elsewhere does, but the app hears of neither the pending
+  // change nor the thread's state, as when that event was missed: the row still offers Allow, and the chat's card
+  // expires.
+  function forget(id: string) {
+    pending.delete(id)
+    append(id, { kind: 'interrupt' })
+    append(id, { kind: 'turn_end', error: true, cost: 0.02 })
+  }
 
   const backend = {
     ChatHistory: async (id: string, after: number) => {
