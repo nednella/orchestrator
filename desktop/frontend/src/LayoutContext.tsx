@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
 import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
+import { fit, MAX_REM, MIN_REM, SIDEBAR_DEFAULT_REM } from './panelLayout'
+import type { FitPrefs, SidePanel } from './panelLayout'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
 import type { ThemeName } from './types'
@@ -13,7 +15,7 @@ export type Band = 'compact' | 'medium' | 'wide'
 export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
 export type MobilePanel = 'thread' | 'panel' | 'threads' | 'shell'
-export type SidePanel = 'sidebar' | 'right'
+export { RAIL_REM, type SidePanel } from './panelLayout'
 export type TogglePanel = 'sidebar' | 'shell' | 'right'
 
 // The element that holds each panel and the focus target that moves the focus into it.
@@ -23,15 +25,8 @@ const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shel
 const TABS_BELOW = 640
 const COMPACT_BELOW = 900
 const MEDIUM_BELOW = 1250
-const TERMINAL_MIN_PX = 280
-export const RAIL_REM = 3
-// The rail's border and the line beside each side panel.
-const LINES_PX = 3
-const SHARE: Record<SidePanel, number> = { sidebar: 0.2, right: 0.24 }
-const DEFAULT_RANGE: Record<SidePanel, [number, number]> = { sidebar: [15, 22], right: [9.5, 22] }
-const MIN_REM: Record<SidePanel, number> = { sidebar: 13, right: 9.5 }
-const MAX_REM = 32
 const LAYOUT_KEY = 'agentos.layout.v3'
+const SIDEBAR_WIDTH_KEY = 'agentos.sidebarWidth'
 const PANEL_VIEW_KEY = 'agentos.panelView'
 const SHELL_ROW_REM = 1.0325
 const SHELL_PAD_REM = 0.5
@@ -39,10 +34,10 @@ export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PA
 const SHELL_DEFAULT_REM = shellRemForRows(6)
 const SHELL_MIN_REM = shellRemForRows(3)
 
-type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; shellOpen: boolean; sidebar: number | null; right: number | null; shell: number | null }
+type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; shellOpen: boolean; right: number | null; shell: number | null }
 type AllPrefs = Record<Band, BandPrefs>
 
-const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, shellOpen: false, sidebar: null, right: null, shell: null })
+const fresh = (): BandPrefs => ({ sidebarOpen: true, rightOpen: false, shellOpen: false, right: null, shell: null })
 
 export type Layout = {
   mode: LayoutMode
@@ -105,24 +100,7 @@ function useWindowSize(): { w: number; h: number } {
   return size
 }
 
-const clamp = (value: number, [min, max]: [number, number]) => Math.min(Math.max(value, min), max)
-
-type Fitted = { widths: Record<SidePanel, number>; rightForcedClosed: boolean }
-
-function fit(width: number, prefs: BandPrefs, root: number): Fitted {
-  const preferred = (panel: SidePanel) => prefs[panel] ?? clamp((SHARE[panel] * width) / root, DEFAULT_RANGE[panel])
-  let sidebar = prefs.sidebarOpen ? preferred('sidebar') * root : 0
-  let right = prefs.rightOpen ? preferred('right') * root : 0
-  const rail = prefs.sidebarOpen ? RAIL_REM * root : 0
-  const over = () => rail + LINES_PX + sidebar + right + TERMINAL_MIN_PX - width
-  if (over() > 0 && prefs.rightOpen) right = Math.max(MIN_REM.right * root, right - over())
-  if (over() > 0 && prefs.sidebarOpen) sidebar = Math.max(MIN_REM.sidebar * root, sidebar - over())
-  const forced = over() > 0 && prefs.rightOpen
-  if (forced) right = 0
-  return { widths: { sidebar: sidebar / root, right: right / root }, rightForcedClosed: forced }
-}
-
-function checkRightFits(width: number, prefs: BandPrefs, root: number) {
+function checkRightFits(width: number, prefs: FitPrefs, root: number) {
   if (fit(width, { ...prefs, rightOpen: true }, root).rightForcedClosed) throw 'The window is too narrow for the right panel'
 }
 
@@ -149,6 +127,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
+  const [sidebarRem, setSidebarRem] = useState(() => readStored<number | null>(SIDEBAR_WIDTH_KEY, null))
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('thread')
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
@@ -165,8 +144,9 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   }, [theme])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
+  const fitPrefs: FitPrefs = { ...prefs, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM }
   const narrow = mode === 'narrow'
-  const { widths: fittedWidths, rightForcedClosed } = fit(width, prefs, 16 * scale)
+  const { widths: fittedWidths, rightForcedClosed } = fit(width, fitPrefs, 16 * scale)
   const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
   const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
   const shellOpen = narrow ? mobilePanel === 'shell' : prefs.shellOpen
@@ -289,10 +269,17 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setMobilePanel,
       setWidth(panel, rem, commit) {
         const next = Math.min(Math.max(rem, MIN_REM[panel]), MAX_REM)
-        if (commit) updatePrefs({ [panel]: next })
-        else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], [panel]: next } }))
+        if (panel === 'sidebar') {
+          setSidebarRem(next)
+          if (commit) writeStored(SIDEBAR_WIDTH_KEY, next)
+        } else if (commit) updatePrefs({ right: next })
+        else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], right: next } }))
       },
-      resetWidth: (panel) => updatePrefs({ [panel]: null }),
+      resetWidth(panel) {
+        if (panel === 'right') return updatePrefs({ right: null })
+        setSidebarRem(null)
+        writeStored(SIDEBAR_WIDTH_KEY, null)
+      },
       setShellOpen,
       setRightOpen,
       toggleRight() {
@@ -301,7 +288,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
           return
         }
         const open = !rightOpen
-        if (open) checkRightFits(width, prefs, 16 * scale)
+        if (open) checkRightFits(width, fitPrefs, 16 * scale)
         updatePrefs({ rightOpen: open })
       },
       togglePanel(panel) {
@@ -309,7 +296,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightShown }[panel]
         const active = document.activeElement
         if (!shown) {
-          if (panel === 'right' && !narrow) checkRightFits(width, prefs, 16 * scale)
+          if (panel === 'right' && !narrow) checkRightFits(width, fitPrefs, 16 * scale)
           focusBefore.current[panel] = active && active !== document.body ? active : undefined
           setOpen(true)
           focus(PANEL_FOCUS[panel])
@@ -362,7 +349,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, rightShown, narrow, prefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, rightShown, narrow, prefs, fitPrefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>
