@@ -13,7 +13,7 @@ export const ChatThoughtRow = memo(function ChatThoughtRow({ text, live }: ChatT
   const label = line || 'Thinking'
   return (
     <div className="flex min-w-0 items-start gap-2 py-1 text-small text-soft select-none">
-      <span className="flex h-[1lh] flex-none items-center text-dim">
+      <span className="flex h-[1lh] flex-none items-center text-soft/70">
         <Brain size={12} strokeWidth={2} aria-hidden />
       </span>
       {live ? <ChatShimmer text={label} /> : <span className="line-clamp-4 min-w-0">{label}</span>}
