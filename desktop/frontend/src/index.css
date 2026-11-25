@@ -388,6 +388,18 @@
     margin-inline: auto;
   }
 
+  /* What sits over the chat keeps the chat's sides: the scroller's padding and the gutter its 6px scrollbar keeps on each
+     edge. Its message column then lines up with the chat's at every width. */
+  .chat-over {
+    padding-inline: calc(0.75rem + 6px);
+  }
+
+  @media (min-width: 640px) {
+    .chat-over {
+      padding-inline: calc(3rem + 6px);
+    }
+  }
+
   [data-column-settling] .chat-column {
     transition: max-width 0.2s cubic-bezier(0.2, 0, 0, 1);
   }

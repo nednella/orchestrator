@@ -149,7 +149,7 @@ export function ChatView({ session }: ChatViewProps) {
         />
       )}
       {/* The chat runs on under the composer; only the composer itself takes the pointer. */}
-      <div ref={composer} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pt-1.5 pb-4 sm:px-12 sm:pt-2 sm:pb-5">
+      <div ref={composer} className="chat-over pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-4 sm:pt-2 sm:pb-5">
         <div className="chat-column">
           <div className="pointer-events-auto relative">
             {!empty && <ChatEndPill shown={!following} queued={timeline.queued.length} onClick={() => end.current?.scrollToEnd()} />}
@@ -163,7 +163,7 @@ export function ChatView({ session }: ChatViewProps) {
         </div>
       </div>
       {room > COLUMN_DEFAULT_REM && (
-        <div className="pointer-events-none absolute inset-0 z-21 px-3 sm:px-12">
+        <div className="chat-over pointer-events-none absolute inset-0 z-21">
           <div className="chat-column relative h-full">
             <ChatColumnHandle side="left" pane={pane} room={room} column={column} onColumn={keepColumn} />
             <ChatColumnHandle side="right" pane={pane} room={room} column={column} onColumn={keepColumn} />
