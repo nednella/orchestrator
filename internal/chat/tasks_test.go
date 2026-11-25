@@ -66,6 +66,9 @@ func TestTasksNameTheSubagentThatStartedATask(t *testing.T) {
 		}
 		tasks.See(tasks.Named(tt.e))
 	}
+	if got := tasks.Named(Event{Kind: KindApproval, Parent: "toolu_w", Agent: "a1"}).Agent; got != "toolu_a" {
+		t.Errorf("approval of an open subagent: agent %q, want toolu_a", got)
+	}
 	if got := tasks.Named(Event{Kind: KindTaskEnd, Parent: "toolu_c"}).Agent; got != "toolu_a" {
 		t.Errorf("end of the subagent's shell: agent %q, want toolu_a", got)
 	}

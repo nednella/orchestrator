@@ -82,6 +82,8 @@ func Parse(data []byte) ([]Event, error) {
 		return parseControlResponse(l)
 	case "control_request":
 		return parseControlRequest(l)
+	case "control_cancel_request":
+		return []Event{{Kind: KindCancel, ID: l.RequestID}}, nil
 	case "result":
 		return []Event{{Kind: KindTurnEnd, Cost: l.TotalCost, Error: l.IsError, Text: strings.Join(l.Errors, "\n")}}, nil
 	}
@@ -243,6 +245,7 @@ func parseControlRequest(l line) ([]Event, error) {
 		ToolName  string          `json:"tool_name"`
 		Input     json.RawMessage `json:"input"`
 		ToolUseID string          `json:"tool_use_id"`
+		AgentID   string          `json:"agent_id"`
 	}
 	if err := json.Unmarshal(l.Request, &req); err != nil {
 		return nil, fmt.Errorf("parse control request: %w", err)
@@ -250,7 +253,8 @@ func parseControlRequest(l line) ([]Event, error) {
 	if req.Subtype != "can_use_tool" {
 		return nil, nil
 	}
-	return []Event{{Kind: KindApproval, ID: l.RequestID, Parent: req.ToolUseID, Tool: req.ToolName, Input: req.Input}}, nil
+	// A subagent's request names the subagent by its task id, which the host turns into its Agent call.
+	return []Event{{Kind: KindApproval, ID: l.RequestID, Parent: req.ToolUseID, Tool: req.ToolName, Input: req.Input, Agent: req.AgentID}}, nil
 }
 
 // parseControlResponse reads the reply to initialize, which lists the slash commands, the reply to an interrupt, which

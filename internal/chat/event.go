@@ -59,6 +59,9 @@ const (
 	// everything after it, up to the rewind.
 	KindRewind Kind = "rewind"
 	KindExit   Kind = "exit"
+	// KindCancel is Claude withdrawing the approval it asked for under ID, as it does at an interrupt: it no longer
+	// waits on an answer.
+	KindCancel Kind = "cancel"
 )
 
 // The ways the host stops Claude itself, which an exit's Stop names.

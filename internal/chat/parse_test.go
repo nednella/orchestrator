@@ -547,11 +547,12 @@ func TestParseBackgroundTasksEachEnd(t *testing.T) {
 	}
 }
 
-func TestParseASubagentsApprovalNamesItsCall(t *testing.T) {
+func TestParseASubagentsApprovalNamesItsCallAndItsTask(t *testing.T) {
 	events := parseFile(t, "subagent-approval.jsonl")
 	approval, ok := first(events, KindApproval)
-	if !ok || approval.Agent != "" {
-		t.Fatalf("approval = %+v, want one that names no subagent itself", approval)
+	task, started := first(events, KindTaskStart)
+	if !ok || !started || approval.Agent == "" || approval.Agent != task.ID {
+		t.Fatalf("approval = %+v, want one that names the subagent by its task id %q", approval, task.ID)
 	}
 	asked := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindApproval })
 	i := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindToolUse && e.ID == approval.Parent })
@@ -560,5 +561,27 @@ func TestParseASubagentsApprovalNamesItsCall(t *testing.T) {
 	}
 	if end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindTurnEnd }); end > asked {
 		t.Error("the approval came before the turn that started its subagent ended")
+	}
+}
+
+func TestParseAnInterruptWithdrawsTheApprovalThatWaits(t *testing.T) {
+	events := parseFile(t, "interrupt-approval.jsonl")
+	var waiting []Event
+	for _, e := range events {
+		waiting = Waiting(waiting, e)
+		if e.Kind == KindTurnEnd {
+			break
+		}
+		if e.Kind == KindCancel && len(waiting) != 0 {
+			t.Errorf("the cancel left %+v waiting", waiting)
+		}
+	}
+	asked, _ := first(events, KindApproval)
+	cancel, ok := first(events, KindCancel)
+	if !ok || cancel.ID != asked.ID {
+		t.Fatalf("cancel = %+v, want one for approval %s", cancel, asked.ID)
+	}
+	if len(waiting) != 0 {
+		t.Errorf("%+v still waiting at the turn's end", waiting)
 	}
 }

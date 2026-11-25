@@ -1060,7 +1060,8 @@ while IFS= read -r line; do
 		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"mode":"%s"}}}\n' "$id" "$mode"
 		printf '{"type":"system","subtype":"status","status":null,"permissionMode":"%s"}\n' "$mode" ;;
 	*'"subtype":"interrupt"'*)
-		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}'
+		printf '%s\n' '{"type":"control_cancel_request","request_id":"ask-1"}' '{"type":"control_cancel_request","request_id":"plan-1"}' \
+			'{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}'
 		working=
 		if [ -n "$held" ]; then
 			for u in $held; do

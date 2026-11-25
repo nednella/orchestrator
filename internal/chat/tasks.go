@@ -44,11 +44,12 @@ func (t *Tasks) See(e Event) (closed Task, ok bool) {
 	return Task{}, false
 }
 
-// Named gives e, a task's start or end, the Agent call of the subagent that started the task: Claude names it by its
-// own task id at the start, which stays when that subagent is not one of the open tasks, and not at all at the end.
+// Named gives e, a task's start or end or an approval, the Agent call of the subagent that started the task or asks:
+// Claude names it by its own task id at a start and in an approval, which stays when that subagent is not one of the
+// open tasks, and not at all at an end.
 func (t *Tasks) Named(e Event) Event {
 	switch e.Kind {
-	case KindTaskStart:
+	case KindTaskStart, KindApproval:
 		if e.Agent == "" {
 			break
 		}

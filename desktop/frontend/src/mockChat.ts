@@ -361,10 +361,19 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // fake claude of the Go tests, it no longer holds one whose text is "lost", and the host logs that one unsent.
   function stop(id: string) {
     const running = replying.get(id)
-    if (!running && !pending.has(id)) return
+    const waiting = pending.get(id)
+    const asked = waiting && logOf(id).find((e) => e.kind === 'approval' && e.id === waiting.request)
+    // A subagent's approval outlives the interrupt, as its subagent does.
+    const own = waiting !== undefined && !asked?.agent
+    if (!running && !own) return
     running?.()
     replying.delete(id)
-    setPending(id, null)
+    // Claude withdraws the approval that waits and rejects its call.
+    if (own) {
+      append(id, { kind: 'cancel', id: waiting.request })
+      append(id, { kind: 'tool_result', parent: asked?.parent, text: "The user doesn't want to proceed with this tool use.", error: true })
+      setPending(id, null)
+    }
     const held = queued.get(id) ?? []
     held.filter((m) => m.text === 'lost').forEach((m) => append(id, { kind: 'unsent', id: m.id, text: m.text }))
     queued.set(id, held.filter((m) => m.text !== 'lost'))
@@ -512,8 +521,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // change nor the thread's state, as when that event was missed: the row still offers Allow, and the chat's card
   // expires.
   function forget(id: string) {
+    const request = pending.get(id)?.request
     pending.delete(id)
     append(id, { kind: 'interrupt' })
+    if (request) append(id, { kind: 'cancel', id: request })
     append(id, { kind: 'turn_end', error: true, cost: 0.02 })
   }
 

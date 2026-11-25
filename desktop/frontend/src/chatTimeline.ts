@@ -141,9 +141,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const children = new Set<string>()
   // The calls each subagent makes, by call, to the Agent call of the subagent.
   const agentOfCall = new Map<string, string>()
-  // The approvals subagents ask for, oldest first: a subagent in the background asks after the turn that started it
-  // ended, and its approval waits until it is answered, its call has its result, the subagent ends or its Claude goes.
-  const agentApprovals: Approval[] = []
+  // Every approval, oldest first. One waits until it is answered, Claude withdraws it, its call has its result, the
+  // subagent that asks ends or its Claude goes, never only until its turn ends: a subagent in the background asks past
+  // the turn that started it.
+  const asked: Approval[] = []
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
@@ -178,31 +179,25 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     return t?.approvals.filter((a) => !a.answered) ?? []
   }
 
-  // expire marks what the turn left unanswered, and each delegate call that has no result: it can no longer be answered.
-  const expire = () => {
-    for (const a of turn?.approvals ?? []) {
-      if (a.answered) continue
+  // expire marks each approval that waits and matches as one that can no longer be answered.
+  const expire = (match: (a: Approval) => boolean) => {
+    for (const a of asked) {
+      if (a.answered || !match(a)) continue
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
+  }
+
+  // expireDelegations marks each delegate call that has no result as one that will get none: the turn that made it
+  // ended, or Claude stopped.
+  const expireDelegations = () => {
     for (const d of delegations.values()) if (d.call.result === null) d.item.expired = true
   }
 
-  // end closes the turn for good.
-  const end = (e: ChatEvent, notice: Notice | Restart | null, ended?: TurnEnd) => {
-    expire()
-    close(e.at, notice, ended)
-  }
-
-  // stopAgents stops each subagent still at work: its Claude is gone.
+  // stopAgents stops each subagent still at work: its Claude is gone, and nothing it asked can be answered.
   const stopAgents = (at: number) => {
     for (const a of agents.values()) if (a.state === 'running') Object.assign(a, { state: 'stopped', endedAt: at })
-    expireAgentApprovals(() => true)
-  }
-
-  // expireAgentApprovals marks each subagent's approval that waits and matches as one that can no longer be answered.
-  const expireAgentApprovals = (match: (a: Approval) => boolean) => {
-    for (const a of agentApprovals) if (!a.answered && a.item && match(a)) a.item.expired = true
+    expire(() => true)
   }
 
   // subagent adds what a subagent did to its Agent call's item, never to the turn: a subagent in the background goes on
@@ -247,7 +242,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     const a: Approval = { request: e.id ?? '', tool: e.tool ?? '', call: calls.get(e.parent ?? ''), answered: false, agent }
     a.item = { kind: 'approval', key: `approval-${a.request}`, at: e.at, request: a.request, tool: a.tool, input: e.input, expired: false }
     approvals.set(a.request, a)
-    agentApprovals.push(a)
+    asked.push(a)
   }
 
   events.forEach((e, i) => {
@@ -343,7 +338,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // subagent's end says the rest. A failed call started none.
         const a = agents.get(e.parent ?? '')
         if (a?.state === 'running' && e.error) Object.assign(a, { state: 'failed', endedAt: e.at, result: e.text ?? '' })
-        expireAgentApprovals((w) => w.call?.id === e.parent || w.agent === e.parent)
+        if (e.parent) expire((w) => w.call?.id === e.parent || w.ask?.id === e.parent || w.agent === e.parent)
         const call = calls.get(e.parent ?? '')
         if (call) Object.assign(call, { result: e.text ?? '', error: e.error ?? false })
         const ask = asks.get(e.parent ?? '')
@@ -364,9 +359,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
           t.parts.push(a.item)
         }
         approvals.set(a.request, a)
+        asked.push(a)
         t.approvals.push(a)
         return
       }
+      case 'cancel':
+        expire((w) => w.request === e.id)
+        return
       case 'answer': {
         const a = approvals.get(e.id ?? '')
         if (!a || a.answered) return
@@ -387,7 +386,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'task_end': {
         // Claude tells of the end of a task of its own that was not stopped in a turn it starts itself.
         if (tasks.delete(e.parent ?? '') && held !== null && tasks.size === 0 && (e.agent || e.stop === 'stopped')) close(held)
-        expireAgentApprovals((w) => w.agent === e.parent)
+        expire((w) => w.agent === e.parent)
         const a = agents.get(e.parent ?? '')
         if (a?.state !== 'running') return
         Object.assign(a, { state: e.stop === 'stopped' ? 'stopped' : e.error ? 'failed' : 'done', endedAt: e.at, result: e.text ?? '' })
@@ -397,19 +396,20 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
+        expireDelegations()
         if (!e.error && turn && tasks.size > 0) {
-          expire()
           held = e.at
           return
         }
-        end(e, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null, e.error ? (interrupted ? 'stopped' : 'failed') : undefined)
+        close(e.at, e.error ? noticeOf(e, interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', !interrupted) : null, e.error ? (interrupted ? 'stopped' : 'failed') : undefined)
         interrupted = false
         return
       case 'exit':
         interrupted = false
         tasks.clear()
         stopAgents(e.at)
-        end(e, exitItem(e), e.error ? 'failed' : 'stopped')
+        expireDelegations()
+        close(e.at, exitItem(e), e.error ? 'failed' : 'stopped')
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
@@ -420,7 +420,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         interrupted = false
         tasks.clear()
         stopAgents(e.at)
-        end(e, null, 'stopped')
+        expireDelegations()
+        close(e.at, null, 'stopped')
         return
       case 'commands':
         commands = Array.isArray(e.input) ? e.input.filter((c): c is Command => typeof c?.name === 'string') : []
@@ -444,12 +445,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const running = turn as Turn | null
   if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
   // A subagent's approval shows after its row until it is answered.
-  for (const a of agentApprovals.toReversed()) {
+  for (const a of asked.filter((w) => w.agent).toReversed()) {
     const at = items.findIndex((item) => item.kind === 'agent' && item.id === a.agent)
     if (!a.answered && a.item && at >= 0) items.splice(at + 1, 0, a.item)
   }
   const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
-  const waiting = running?.approvals.find(unanswered) ?? agentApprovals.find(unanswered)
+  const waiting = asked.find(unanswered)
   return {
     items,
     queued: [...queued.values()],

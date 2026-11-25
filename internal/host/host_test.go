@@ -272,6 +272,8 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				continue
 			}
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"still_queued": []string{}}}})
+			// Claude withdraws the approval that waits, as r1 may.
+			print(map[string]any{"type": "control_cancel_request", "request_id": "r1"})
 			result(true)
 		case "control_response":
 			switch l.Response.RequestID {

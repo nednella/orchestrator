@@ -197,19 +197,24 @@ test('claude started again without a flag it did not know goes on with the same 
   assert.equal(t.turnOpen, true)
 })
 
-test('unanswered approval expires at turn end', () => {
-  const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
+test('an unanswered approval expires when Claude withdraws it or rejects its call, not at the turn end', () => {
+  const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }, 't1'))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')
   assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install\nnpm test' }, inputTooLarge: false })
   assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
   assert.equal(only(waiting.items, 'approval')[0].expired, false)
 
-  const ended = buildTimeline(log(...events, turnEnd(true)), {})
-  assert.equal(ended.pending, null)
-  assert.equal(ended.turnOpen, false)
-  const [expired] = only(ended.items, 'approval')
-  assert.deepEqual([expired.request, expired.tool, expired.expired], ['r1', 'Bash', true])
-  assert.equal(only(ended.items, 'work')[0].calls[0].answer, undefined)
+  const after = (...drafts: Draft[]) => buildTimeline(log(...events, ...drafts), {}, 'shop/abcd2345')
+  assert.equal(after(turnEnd(true)).pending?.request, 'r1', 'a turn end alone ends no approval')
+  for (const [name, ended] of [
+    ['withdrawn at an interrupt', after({ kind: 'interrupt' }, { kind: 'cancel', id: 'r1' }, turnEnd(true))],
+    ['its call rejected', after(toolResult('t1', 'The user does not want to proceed', true), turnEnd(true))],
+  ] as const) {
+    assert.deepEqual([ended.pending, ended.turnOpen], [null, false], name)
+    const [expired] = only(ended.items, 'approval')
+    assert.deepEqual([expired.request, expired.tool, expired.expired], ['r1', 'Bash', true], name)
+    assert.equal(only(ended.items, 'work')[0].calls[0].answer, undefined, name)
+  }
 })
 
 test('a call that waits on its approval shows only as the card', () => {

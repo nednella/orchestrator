@@ -102,8 +102,9 @@ type host struct {
 	subs      map[*subscriber]struct{}
 	conns     map[net.Conn]struct{}
 	approvals []chat.Event // in the order Claude asked, as chat.Waiting keeps them
-	// subagentCalls are the calls of subagents that have no result yet, each to the Agent call of its subagent: Claude
-	// names no subagent in an approval it asks for, only the call.
+	// subagentCalls are the calls of subagents that have no result yet, each to the Agent call of its subagent: an
+	// approval names the subagent that asks by its task id, which only a task in the background has, so a subagent
+	// Claude waits on is found by the call.
 	subagentCalls map[string]string
 	// turnOpen is set from writing a user line, from Claude taking in a queued one, or from Claude starting a turn of
 	// its own, until the turn ends.
@@ -483,10 +484,11 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 
 // logLocked logs e and hands it on, as appendLocked does, whether or not Claude has exited.
 func (h *host) logLocked(e chat.Event) (chat.Event, error) {
-	if e.Kind == chat.KindApproval && e.Agent == "" {
-		e.Agent = h.subagentCalls[e.Parent]
+	named := h.tasks.Named(e)
+	if call, ok := h.subagentCalls[e.Parent]; ok && e.Kind == chat.KindApproval && named.Agent == e.Agent {
+		named.Agent = call
 	}
-	e, err := h.log.Append(h.tasks.Named(e))
+	e, err := h.log.Append(named)
 	if err != nil {
 		return chat.Event{}, err
 	}
