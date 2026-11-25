@@ -59,9 +59,10 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, writing }: MarkdownBlo
   return writing ? parse(text) : parseCached(text)
 })
 
-// A streaming reply renders block by block, so an update parses only its last block; once it ends it renders whole.
+// A reply renders block by block: a streaming update parses only its last block, and the finished reply takes its other
+// blocks from the cache, with the same markup a parse of the whole text gives.
 export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false }: ChatMarkdownProps) {
-  const blocks = streaming ? markdownBlocks(text) : [text]
+  const blocks = markdownBlocks(text)
   const last = blocks.length - 1
   return (
     <div className="markdown text-body">
