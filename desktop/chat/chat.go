@@ -26,6 +26,10 @@ const (
 	hostStartWait  = 10 * time.Second // for the host of a thread that is starting, before its log is read
 )
 
+// ErrThreadGone is a thread's follower stopping while a turn is awaited: the thread settled or was deleted, its host
+// died, or the app stops.
+var ErrThreadGone = errors.New("the thread no longer runs")
+
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
 // AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
 // FlagRefused says that a thread's Claude did not know flag, so its host started it without. FilesRewind says where a
@@ -188,6 +192,59 @@ func (c *Chats) isWatched(id string) bool {
 	return c.watched[id]
 }
 
+// AwaitTurn is the thread's next turn_end after the seq after, as its follower takes it, or the latest one when the
+// follower has taken one after it already. It is ErrThreadGone once the thread's Claude exits after after or its follower
+// stops, and ctx.Err() when ctx ends first. A live thread with no follower gets one.
+func (c *Chats) AwaitTurn(ctx context.Context, id string, after int64) (chatlog.Event, error) {
+	f, err := c.followerOf(ctx, id)
+	if err != nil {
+		return chatlog.Event{}, err
+	}
+	a := &await{after: after, got: make(chan chatlog.Event, 1)}
+	f.await(a)
+	defer f.forget(a)
+	select {
+	case e := <-a.got:
+		if e.Kind != chatlog.KindTurnEnd {
+			return chatlog.Event{}, ErrThreadGone
+		}
+		return e, nil
+	case <-ctx.Done():
+		return chatlog.Event{}, ctx.Err()
+	}
+}
+
+// followerOf is the thread's follower, started if the thread is live and has none.
+func (c *Chats) followerOf(ctx context.Context, id string) (*follower, error) {
+	select {
+	case <-c.started:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(startWait):
+		return nil, errors.New("The chat service has not started")
+	}
+	c.mu.Lock()
+	f := c.followers[id]
+	c.mu.Unlock()
+	if f != nil {
+		return f, nil
+	}
+	// ChatOf takes the sessions' lock, which reconcile never holds with mu, so it is read before mu.
+	ch, err := c.threads.ChatOf(id)
+	if err != nil || !ch.Live {
+		return nil, ErrThreadGone
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.ctx.Err() != nil {
+		return nil, ErrThreadGone
+	}
+	if f := c.followers[id]; f != nil {
+		return f, nil
+	}
+	return c.follow(ch), nil
+}
+
 // pending is what each live thread waits on: as its follower knows it, or from the log until the follower has read it.
 func (c *Chats) pending() []Pending {
 	out := []Pending{}
@@ -245,12 +302,25 @@ type follower struct {
 	batch     []chatlog.Event // for the next chat:<id> event
 	flushing  bool            // a flush of batch is due
 	sent      time.Time       // when the last chat:<id> event went out
+	// turnEnd and exit are the latest of each the follower has taken, and ended says its run has returned: an await
+	// that comes after one of them is answered from them.
+	turnEnd, exit chatlog.Event
+	ended         bool
+	awaits        []*await
+}
+
+// await is one AwaitTurn waiting for a turn_end or an exit after the seq after. got holds one event, so the follower
+// never blocks on it.
+type await struct {
+	after int64
+	got   chan chatlog.Event
 }
 
 // run reads the log once, for the approvals that wait and where it ends, then follows the host's stream from there,
 // subscribing again after the last event it had when the stream ends. It reads the log once the host listens, or has
 // had hostStartWait to: the host logs its run's start before it listens, so the log then holds the current run's start.
 func (f *follower) run(ctx context.Context) {
+	defer f.end()
 	ready, cancel := context.WithTimeout(ctx, hostStartWait)
 	if err := host.Ready(ready, f.chat.Socket); err != nil {
 		log.Printf("agentos: the host of thread %s does not listen; reading its chat log: %v", f.chat.ID, err)
@@ -261,7 +331,7 @@ func (f *follower) run(ctx context.Context) {
 		log.Printf("agentos: reading the chat log of %s: %v", f.chat.ID, err)
 	}
 	var last int64
-	var turnEnd, commands *chatlog.Event
+	var turnEnd, exit, commands *chatlog.Event
 	// mode is the latest mode Claude reported after the last run start: an earlier run's mode, also one whose host was
 	// killed before it logged its exit, is not this run's, and a log with no start has no run to follow.
 	var mode struct {
@@ -275,6 +345,8 @@ func (f *follower) run(ctx context.Context) {
 		switch e.Kind {
 		case chatlog.KindTurnEnd:
 			turnEnd = &e
+		case chatlog.KindExit:
+			exit = &e
 		case chatlog.KindCommands:
 			commands = &e
 		case chatlog.KindStart:
@@ -296,6 +368,10 @@ func (f *follower) run(ctx context.Context) {
 	// A turn interrupted while the app was closed ends now; the earlier turn_ends would change nothing after it.
 	if turnEnd != nil {
 		f.chats.threads.TurnEnded(f.chat.ID, *turnEnd)
+		f.reached(*turnEnd)
+	}
+	if exit != nil {
+		f.reached(*exit)
 	}
 	// A mode Claude reported while the app was closed is followed now, by the same rule as a live one.
 	if mode.text != "" {
@@ -340,7 +416,11 @@ func (f *follower) take(e chatlog.Event) {
 	}
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
+		// The sessions hear of the turn's end before an await does, so they see a wait on it still in flight.
 		f.chats.threads.TurnEnded(f.chat.ID, e)
+		f.reached(e)
+	case chatlog.KindExit:
+		f.reached(e)
 	case chatlog.KindMode:
 		f.chats.threads.AccessChanged(f.chat.ID, mode, approved)
 	case chatlog.KindCommands:
@@ -391,6 +471,58 @@ func (f *follower) hasRead() bool {
 	default:
 		return false
 	}
+}
+
+// reached answers each await before e, a turn_end or an exit, and keeps e for the awaits to come.
+func (f *follower) reached(e chatlog.Event) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if e.Kind == chatlog.KindTurnEnd {
+		f.turnEnd = e
+	} else {
+		f.exit = e
+	}
+	f.awaits = slices.DeleteFunc(f.awaits, func(a *await) bool {
+		if a.after >= e.Seq {
+			return false
+		}
+		a.got <- e
+		return true
+	})
+}
+
+// await adds a, answering it at once from what the follower has taken already; an exit after its seq wins over a
+// turn_end, since the thread no longer runs.
+func (f *follower) await(a *await) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch {
+	case f.ended:
+		a.got <- chatlog.Event{Kind: chatlog.KindExit}
+	case f.exit.Seq > a.after:
+		a.got <- f.exit
+	case f.turnEnd.Seq > a.after:
+		a.got <- f.turnEnd
+	default:
+		f.awaits = append(f.awaits, a)
+	}
+}
+
+func (f *follower) forget(a *await) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.awaits = slices.DeleteFunc(f.awaits, func(b *await) bool { return b == a })
+}
+
+// end answers every await with the thread gone once the follower stops.
+func (f *follower) end() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ended = true
+	for _, a := range f.awaits {
+		a.got <- chatlog.Event{Kind: chatlog.KindExit}
+	}
+	f.awaits = nil
 }
 
 func (f *follower) waiting() *Pending {

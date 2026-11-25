@@ -117,6 +117,24 @@ func TestMCPWaitStopsAtItsLimit(t *testing.T) {
 	}
 }
 
+func TestMCPWaitStopsAtItsTimeout(t *testing.T) {
+	var calls atomic.Int32
+	fakeApp(t, func(context.Context, control.Request) control.Response {
+		calls.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		return control.Response{OK: true, Out: `{"done":false,"text":"Thread demo/x1 still runs."}`}
+	})
+	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	begin := time.Now()
+	text, isErr := callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":2}`)
+	if took := time.Since(begin); took < 2*time.Second || took > 3*time.Second {
+		t.Errorf("the wait of 2 s took %v", took)
+	}
+	if text != "Thread demo/x1 still runs." || isErr || calls.Load() < 2 {
+		t.Errorf("result = %q, error %v, app calls %d; want the last answer's text after more than one slice", text, isErr, calls.Load())
+	}
+}
+
 func TestMCPIgnoresAgentosSession(t *testing.T) {
 	var got control.Request
 	fakeApp(t, func(_ context.Context, req control.Request) control.Response {

@@ -872,7 +872,7 @@ func CLIPath(t *testing.T) string {
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
-// once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
+// once answered, one that ends in "slow", such as a task delegated as "slow", replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
 // asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, "leave plan"
 // reports the mode default before its reply with no plan approved, "work" keeps its turn open until an interrupt: it
 // holds each message read meanwhile, and after the interrupt takes them in and replies to them in a turn of their own,
@@ -978,7 +978,7 @@ while IFS= read -r line; do
 	case "$line" in
 	*'"type":"user"'*'"text":"ask"'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"ask-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"touch made.txt"}}}' ;;
-	*'"type":"user"'*'"text":"slow"'*)
+	*'"type":"user"'*'slow"'*)
 		printf '%s\n' "$init"
 		sleep 1
 		reply ;;

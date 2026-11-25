@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -427,4 +428,189 @@ func TestALiveCommandListReplacesTheKeptOne(t *testing.T) {
 	commands := keptCommands(t, chatlog.Event{At: 2000, Kind: chatlog.KindCommands, Input: json.RawMessage(`[{"name":"compact","description":"Compact"}]`)})
 	want := []chat.Command{{Name: "compact", Description: "Compact"}}
 	apptest.Eventually(t, "the live list kept", func() bool { return reflect.DeepEqual(commands(), want) })
+}
+
+// pushed answers the follower's subscribe as a host that streams each event sent on events.
+func pushed(t *testing.T, ln net.Listener, events <-chan chatlog.Event) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		line, _ := bufio.NewReader(conn).ReadBytes('\n')
+		if len(line) == 0 {
+			conn.Close()
+			continue
+		}
+		t.Cleanup(func() { conn.Close() })
+		conn.Write([]byte(`{"ok":true}` + "\n"))
+		enc := json.NewEncoder(conn)
+		for e := range events {
+			if enc.Encode(e) != nil {
+				return
+			}
+		}
+	}
+}
+
+// switchedThread is oneThread that runs until live is false.
+type switchedThread struct {
+	oneThread
+	live *atomic.Bool
+}
+
+func (s switchedThread) ChatOf(string) (sessions.Chat, error) {
+	c := s.chat
+	c.Live = s.live.Load()
+	return c, nil
+}
+
+func (s switchedThread) Chats() []sessions.Chat {
+	if !s.live.Load() {
+		return nil
+	}
+	return []sessions.Chat{s.chat}
+}
+
+// awaitable starts the chats of a live thread whose log holds logged and whose host streams what is sent on the
+// channel it returns. Cancelling the context it returns stops the chats, as the app's quit does.
+func awaitable(t *testing.T, logged ...chatlog.Event) (*chat.Chats, switchedThread, chan<- chatlog.Event, context.CancelFunc) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "aos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket, logPath := filepath.Join(dir, "host.sock"), filepath.Join(dir, "chat.jsonl")
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range logged {
+		if _, err := chatLog.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	chatLog.Close()
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	events := make(chan chatlog.Event)
+	t.Cleanup(func() { close(events) })
+	go pushed(t, ln, events)
+
+	live := &atomic.Bool{}
+	live.Store(true)
+	thread := switchedThread{oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}, live}
+	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	chats.Start(ctx)
+	return chats, thread, events, cancel
+}
+
+type awaited struct {
+	e   chatlog.Event
+	err error
+}
+
+// awaitIn runs AwaitTurn in the background and gives its answer on the channel it returns.
+func awaitIn(ctx context.Context, chats *chat.Chats, id string, after int64) <-chan awaited {
+	got := make(chan awaited, 1)
+	go func() {
+		e, err := chats.AwaitTurn(ctx, id, after)
+		got <- awaited{e, err}
+	}()
+	return got
+}
+
+func answered(t *testing.T, got <-chan awaited) awaited {
+	t.Helper()
+	select {
+	case a := <-got:
+		return a
+	case <-time.After(5 * time.Second):
+		t.Fatal("AwaitTurn did not return within 5 s")
+		return awaited{}
+	}
+}
+
+func TestAwaitTurnGetsTheNextTurnEnd(t *testing.T) {
+	chats, thread, events, _ := awaitable(t,
+		chatlog.Event{Kind: chatlog.KindUser, Text: "first"},
+		chatlog.Event{Kind: chatlog.KindTurnEnd},
+		chatlog.Event{Kind: chatlog.KindUser, Text: "second"},
+	)
+	id := thread.chat.ID
+	short, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if _, err := chats.AwaitTurn(short, id, 3); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("AwaitTurn after 3 with no turn_end since = %v, want the deadline: the turn_end at 2 is before it", err)
+	}
+
+	gone, cancelGone := context.WithCancel(context.Background())
+	dropped := awaitIn(gone, chats, id, 3)
+	cancelGone()
+	if a := answered(t, dropped); !errors.Is(a.err, context.Canceled) {
+		t.Fatalf("a cancelled AwaitTurn = %+v, want context.Canceled", a)
+	}
+
+	next := awaitIn(context.Background(), chats, id, 3)
+	events <- chatlog.Event{Seq: 4, Kind: chatlog.KindMessage, Text: "done"}
+	events <- chatlog.Event{Seq: 5, Kind: chatlog.KindTurnEnd, Cost: 0.01}
+	if a := answered(t, next); a.err != nil || a.e.Seq != 5 || a.e.Kind != chatlog.KindTurnEnd {
+		t.Fatalf("AwaitTurn after 3 = %+v, want the turn_end at 5", a)
+	}
+	if a := answered(t, awaitIn(context.Background(), chats, id, 3)); a.err != nil || a.e.Seq != 5 {
+		t.Errorf("AwaitTurn after 3 once the follower took 5 = %+v, want 5 at once", a)
+	}
+	short, cancel = context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if _, err := chats.AwaitTurn(short, id, 5); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("AwaitTurn after 5 = %v, want the deadline", err)
+	}
+	// The cancelled await held nothing up: the follower takes the next turn too.
+	later := awaitIn(context.Background(), chats, id, 5)
+	events <- chatlog.Event{Seq: 6, Kind: chatlog.KindUser, Text: "third"}
+	events <- chatlog.Event{Seq: 7, Kind: chatlog.KindTurnEnd}
+	if a := answered(t, later); a.err != nil || a.e.Seq != 7 {
+		t.Errorf("AwaitTurn after 5 = %+v, want the turn_end at 7", a)
+	}
+}
+
+func TestAwaitTurnEndsWhenTheHostExits(t *testing.T) {
+	user := chatlog.Event{Kind: chatlog.KindUser, Text: "work"}
+	t.Run("claude exits", func(t *testing.T) {
+		chats, thread, events, _ := awaitable(t, user)
+		got := awaitIn(context.Background(), chats, thread.chat.ID, 1)
+		events <- chatlog.Event{Seq: 2, Kind: chatlog.KindExit, Error: true, Text: "signal: killed"}
+		if a := answered(t, got); !errors.Is(a.err, chat.ErrThreadGone) {
+			t.Fatalf("AwaitTurn = %+v, want ErrThreadGone", a)
+		}
+		if a := answered(t, awaitIn(context.Background(), chats, thread.chat.ID, 1)); !errors.Is(a.err, chat.ErrThreadGone) {
+			t.Errorf("AwaitTurn from before the exit = %+v, want ErrThreadGone at once", a)
+		}
+	})
+	t.Run("the thread no longer runs", func(t *testing.T) {
+		chats, thread, _, _ := awaitable(t, user)
+		got := awaitIn(context.Background(), chats, thread.chat.ID, 1)
+		thread.live.Store(false)
+		if a := answered(t, got); !errors.Is(a.err, chat.ErrThreadGone) {
+			t.Fatalf("AwaitTurn = %+v, want ErrThreadGone", a)
+		}
+		if a := answered(t, awaitIn(context.Background(), chats, thread.chat.ID, 1)); !errors.Is(a.err, chat.ErrThreadGone) {
+			t.Errorf("AwaitTurn on a thread that does not run = %+v, want ErrThreadGone at once", a)
+		}
+	})
+	t.Run("the app stops", func(t *testing.T) {
+		chats, thread, _, stop := awaitable(t, user)
+		got := awaitIn(context.Background(), chats, thread.chat.ID, 1)
+		time.Sleep(100 * time.Millisecond)
+		stop()
+		if a := answered(t, got); !errors.Is(a.err, chat.ErrThreadGone) {
+			t.Fatalf("AwaitTurn = %+v, want ErrThreadGone", a)
+		}
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/control"
@@ -24,6 +25,7 @@ type Threads interface {
 	Title(id string) string
 	Tell(id string, m sessions.Told) (string, error)
 	Descendants(id string) []string
+	ParentOf(id string) string
 	DropTold(id string) int
 }
 
@@ -36,11 +38,14 @@ type Commands struct {
 	chats   *chat.Chats
 	router  *control.Router
 	tools   map[string]tool
+
+	waitMu  sync.Mutex
+	waiting map[waitOn]int // the waits in flight, each counted once per call
 }
 
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router) *Commands {
-	c := &Commands{threads: s, chats: chats, router: r}
-	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "stop": c.stop}
+	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]int{}}
+	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	return c
 }
 
