@@ -121,7 +121,7 @@ func TestAccessFlags(t *testing.T) {
 		} else if got := without(argv); !slices.Equal(got, rest) {
 			t.Errorf("%s: argv besides the mode = %q, want %q", access, got, rest)
 		}
-		if env := (Claude{}).Env(l); !slices.Equal(env, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000"}) {
+		if env := (Claude{}).Env(l); !slices.Equal(env, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000", "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"}) {
 			t.Errorf("%s: env = %q", access, env)
 		}
 	}
@@ -156,7 +156,7 @@ func TestClaudeForkFlags(t *testing.T) {
 }
 
 func TestClaudeEnv(t *testing.T) {
-	if got := (Claude{}).Env(Launch{TmpDir: "/tmp/s"}); !slices.Equal(got, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000"}) {
+	if got := (Claude{}).Env(Launch{TmpDir: "/tmp/s"}); !slices.Equal(got, []string{"CLAUDE_CODE_TMPDIR=/tmp/s", "MCP_TOOL_TIMEOUT=3700000", "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"}) {
 		t.Errorf("env = %q", got)
 	}
 }

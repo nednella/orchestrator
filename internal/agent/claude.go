@@ -137,9 +137,10 @@ func AccessOfMode(mode string) (session.Access, bool) {
 	return "", false
 }
 
-// Env sets claude's temp folder to the session's own, and lets an agentos tool call run as long as a wait may.
+// Env sets claude's temp folder to the session's own, lets an agentos tool call run as long as a wait may, and keeps a
+// checkpoint of the files each message's turn edits, which claude records only while it runs with the setting.
 func (c Claude) Env(l Launch) []string {
-	return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir, "MCP_TOOL_TIMEOUT=" + toolTimeout}
+	return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir, "MCP_TOOL_TIMEOUT=" + toolTimeout, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"}
 }
 
 // claudeAliases are the names claude takes for its latest models besides their full ids.

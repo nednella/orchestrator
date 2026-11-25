@@ -410,3 +410,39 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryStartKeepsFileCheckpoints: Claude keeps the checkpoints a rewind of the files needs only when the process
+// that edits them runs with the setting, so every start has it: a new thread, a fork and a wake.
+func TestEveryStartKeepsFileCheckpoints(t *testing.T) {
+	h := apptest.New(t)
+	const setting = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
+	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := claudeEnv(t, h, src.ID)[setting]; got != "1" {
+		t.Errorf("new thread: %s = %q, want 1", setting, got)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := claudeEnv(t, h, fork.ID)[setting]; got != "1" {
+		t.Errorf("fork: %s = %q, want 1", setting, got)
+	}
+
+	settled := talkedThenSettled(t, h)
+	for _, ext := range []string{".args", ".env"} {
+		if err := os.Remove(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(settled.ID, "/", "_")+ext)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := h.WakeThread(settled.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := claudeEnv(t, h, settled.ID)[setting]; got != "1" {
+		t.Errorf("wake: %s = %q, want 1", setting, got)
+	}
+}
