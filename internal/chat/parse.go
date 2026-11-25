@@ -173,21 +173,27 @@ func parseControlRequest(l line) ([]Event, error) {
 	return []Event{{Kind: KindApproval, ID: l.RequestID, Tool: req.ToolName, Input: req.Input}}, nil
 }
 
-// parseControlResponse reads the reply to initialize, which lists the slash commands; other replies give none.
+// parseControlResponse reads the reply to initialize, which lists the slash commands, and the reply to an interrupt,
+// which lists the messages claude still holds; other replies give none.
 func parseControlResponse(l line) ([]Event, error) {
 	if len(l.Response) == 0 {
 		return nil, nil
 	}
 	var r struct {
-		Response struct {
-			Commands json.RawMessage `json:"commands"`
+		RequestID string `json:"request_id"`
+		Response  struct {
+			Commands    json.RawMessage `json:"commands"`
+			StillQueued json.RawMessage `json:"still_queued"`
 		} `json:"response"`
 	}
 	if err := json.Unmarshal(l.Response, &r); err != nil {
 		return nil, fmt.Errorf("parse control response: %w", err)
 	}
-	if !isArray(r.Response.Commands) {
-		return nil, nil
+	switch {
+	case isArray(r.Response.Commands):
+		return []Event{{Kind: KindCommands, Input: r.Response.Commands}}, nil
+	case isArray(r.Response.StillQueued):
+		return []Event{{Kind: KindStillQueued, ID: r.RequestID, Input: r.Response.StillQueued}}, nil
 	}
-	return []Event{{Kind: KindCommands, Input: r.Response.Commands}}, nil
+	return nil, nil
 }

@@ -81,7 +81,7 @@ func (l fakeLine) text() string {
 
 // fakeClaude acts as claude -p in stream-json mode with --replay-user-messages. "slow" waits up to 2 s for an
 // interrupt; a message read meanwhile joins it at its end, and one read before an interrupt runs as a turn of its own
-// after it. "late" ends its turn 300 ms after it starts and, a second later, runs the messages read meanwhile as a turn
+// after it, except "lost", which the interrupt drops. "late" ends its turn 300 ms after it starts and, a second later, runs the messages read meanwhile as a turn
 // of its own, as Claude does with a message written during a turn's last step.
 func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	logf, err := os.OpenFile(stdinLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
@@ -159,7 +159,8 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				case "user":
 					held = append(held, l)
 				case "control_request":
-					var still []string
+					still := []string{}
+					held = slices.DeleteFunc(held, func(h fakeLine) bool { return h.text() == "lost" })
 					for _, h := range held {
 						still = append(still, h.UUID)
 					}
@@ -177,10 +178,12 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	for l := range lines {
 		switch l.Type {
 		case "control_request":
-			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID}})
-			if l.Request.Subtype == "interrupt" {
-				result(true)
+			if l.Request.Subtype != "interrupt" {
+				print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID}})
+				continue
 			}
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"still_queued": []string{}}}})
+			result(true)
 		case "control_response":
 			if l.Response.RequestID == "r1" {
 				result(l.Response.Response.Behavior != "allow")
@@ -1456,5 +1459,27 @@ func TestImagesToAnOldHostAreAnError(t *testing.T) {
 	}
 	if err := Send(ctxT(t), socket, "hi"); err != nil {
 		t.Fatalf("send of text = %v, want it taken", err)
+	}
+}
+
+func TestInterruptDropsWhatClaudeNoLongerHolds(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	lost := sendMessage(t, h.socket, "lost")
+	if err := Interrupt(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	if err := SendNow(ctxT(t), h.socket, lost); err == nil {
+		t.Fatal("the message the interrupt dropped is still queued")
+	}
+	after := sendMessage(t, h.socket, "after")
+	if e := waitKind(t, events, chat.KindUser); e.ID != after {
+		t.Fatalf("event = %+v, want the next message logged as the user's at once", e)
 	}
 }

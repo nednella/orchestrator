@@ -203,3 +203,17 @@ func TestParseReplayedUserIsAnEcho(t *testing.T) {
 		t.Fatalf("want an echo of each message by its uuid, got %+v", echoes)
 	}
 }
+
+func TestParseInterruptReplyListsWhatIsStillQueued(t *testing.T) {
+	ev, ok := first(parseFile(t, "interrupt.jsonl"), KindStillQueued)
+	if !ok || ev.ID != "req_int" || string(ev.Input) != "[]" {
+		t.Fatalf("want the interrupt's reply with an empty list, got %+v", ev)
+	}
+	events, err := Parse([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"i2","response":{"still_queued":["2222"]}}}`))
+	if err != nil || len(events) != 1 || events[0].Kind != KindStillQueued || string(events[0].Input) != `["2222"]` {
+		t.Fatalf("got %+v, %v", events, err)
+	}
+	if events, _ := Parse([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"i3","response":{}}}`)); len(events) != 0 {
+		t.Fatalf("an older claude's empty reply gave %+v, want none", events)
+	}
+}

@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,6 +58,12 @@ type queuedMessage struct {
 	files []string
 }
 
+// interruptRequest is an interrupt written to Claude and the messages that were queued then.
+type interruptRequest struct {
+	id     string
+	queued []string
+}
+
 type subscriber struct {
 	ch   chan chat.Event
 	conn net.Conn
@@ -90,6 +98,8 @@ type host struct {
 	// queued holds the messages written during a turn that Claude has not taken in yet. Claude runs one written during
 	// a turn's last step as a turn of its own after that turn ends, so the host stays busy while any is left.
 	queued map[string]queuedMessage
+	// interrupted is the latest interrupt that Claude has not answered yet.
+	interrupted interruptRequest
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -239,8 +249,12 @@ func (h *host) handleLine(line []byte) {
 		return
 	}
 	for _, e := range events {
-		if e.Kind == chat.KindEcho {
+		switch e.Kind {
+		case chat.KindEcho:
 			h.echoed(e.ID)
+			continue
+		case chat.KindStillQueued:
+			h.stillQueued(e.ID, e.Input)
 			continue
 		}
 		if _, err := h.publish(e); err != nil {
@@ -543,12 +557,36 @@ func (h *host) interrupt(queued string) error {
 		return fmt.Errorf("no queued message %s", queued)
 	}
 	e, err := h.appendLocked(chat.Event{Kind: chat.KindInterrupt, ID: queued})
-	h.mu.Unlock()
 	if err != nil {
+		h.mu.Unlock()
 		return err
 	}
+	req := h.nextID()
+	h.interrupted = interruptRequest{id: req, queued: slices.Collect(maps.Keys(h.queued))}
+	h.mu.Unlock()
 	h.echoEvent(e)
-	return h.writeLocked(chat.Interrupt(h.nextID()))
+	return h.writeLocked(chat.Interrupt(req))
+}
+
+// stillQueued drops each message that was queued when the interrupt request was written and that Claude no longer
+// holds: an interrupted turn can end without taking one in, and then no echo comes to end its wait.
+func (h *host) stillQueued(request string, held json.RawMessage) {
+	var ids []string
+	if err := json.Unmarshal(held, &ids); err != nil {
+		fmt.Fprintf(h.echo, "host: interrupt reply: %v\n", err)
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.interrupted.id != request {
+		return
+	}
+	for _, id := range h.interrupted.queued {
+		if !slices.Contains(ids, id) {
+			delete(h.queued, id)
+		}
+	}
+	h.interrupted = interruptRequest{}
 }
 
 // answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own.

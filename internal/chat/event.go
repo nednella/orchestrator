@@ -20,7 +20,10 @@ const (
 	KindCommands   Kind = "commands"
 	// KindEcho is claude taking a user message in; the host consumes it and never logs it.
 	KindEcho Kind = "echo"
-	KindExit Kind = "exit"
+	// KindStillQueued is claude's reply to the interrupt request ID: Input lists the uuids of the user messages it
+	// still holds. The host consumes it and never logs it.
+	KindStillQueued Kind = "still_queued"
+	KindExit        Kind = "exit"
 )
 
 // Event is one entry of a chat's log. At is unix milliseconds.
