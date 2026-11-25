@@ -22,6 +22,32 @@ import (
 // noSessions is a session list with nothing in it, for tests that only read issues.
 type noSessions struct{ issues.Sessions }
 
+func TestAnIssueSaysTheAccessItsActionStartsWith(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{Queue: `    queue_sections:
+      - name: Ready
+        labels: [ready]
+        actions:
+          - {name: Ask, command: "/ask {n}", access: read}
+          - {name: Work, command: "/work {n}", access: full}
+      - name: Inbox
+        actions:
+          - {name: Work, command: "/work {n}"}
+`})
+	got, err := h.Issues(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, is := range got {
+		want := session.Supervised
+		if is.Section == "Ready" {
+			want = session.Read
+		}
+		if is.Access != want {
+			t.Errorf("issue %d in %q has access %q, want %q", is.Number, is.Section, is.Access, want)
+		}
+	}
+}
+
 func TestIssues(t *testing.T) {
 	h := newHarness(t)
 

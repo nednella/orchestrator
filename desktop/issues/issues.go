@@ -19,6 +19,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/util"
 )
 
@@ -32,20 +33,21 @@ type Sessions interface {
 
 // Issue is a GitHub issue placed in a section of the queue.
 type Issue struct {
-	Number    int      `json:"number"`
-	Title     string   `json:"title"`
-	Type      string   `json:"type"`
-	Section   string   `json:"section"`
-	Actions   []string `json:"actions"` // names of what can start a session for it, the default first
-	Moves     []string `json:"moves"`   // names of the sections it can be dropped into, in queue order
-	URL       string   `json:"url"`
-	SessionID string   `json:"sessionId"`
-	Author    string   `json:"author"`
-	Assignees []string `json:"assignees"`
-	Labels    []string `json:"labels"`
-	Ignored   []string `json:"ignored"` // why each model: and effort: label claude rejects is skipped
-	CreatedAt int64    `json:"createdAt"`
-	UpdatedAt int64    `json:"updatedAt"`
+	Number    int            `json:"number"`
+	Title     string         `json:"title"`
+	Type      string         `json:"type"`
+	Section   string         `json:"section"`
+	Actions   []string       `json:"actions"` // names of what can start a session for it, the default first
+	Access    session.Access `json:"access"`  // the access the default action starts its thread with
+	Moves     []string       `json:"moves"`   // names of the sections it can be dropped into, in queue order
+	URL       string         `json:"url"`
+	SessionID string         `json:"sessionId"`
+	Author    string         `json:"author"`
+	Assignees []string       `json:"assignees"`
+	Labels    []string       `json:"labels"`
+	Ignored   []string       `json:"ignored"` // why each model: and effort: label claude rejects is skipped
+	CreatedAt int64          `json:"createdAt"`
+	UpdatedAt int64          `json:"updatedAt"`
 }
 
 // Issues reads a project's open issues through the gh CLI and caches them per folder.
@@ -224,7 +226,7 @@ func (i *Issues) parseIssues(data []byte, proj project.Project) ([]Issue, error)
 			ignored = []string{}
 		}
 		list = append(list, placed{at, Issue{
-			Number: r.Number, Title: r.Title, URL: r.URL, Section: section.Name, Actions: actionNames(section), Moves: proj.Moves(labels), Type: typeOf(labels),
+			Number: r.Number, Title: r.Title, URL: r.URL, Section: section.Name, Actions: actionNames(section), Access: action.ThreadAccess(), Moves: proj.Moves(labels), Type: typeOf(labels),
 			Author: r.Author.Login, Assignees: assignees, Labels: labels, Ignored: ignored,
 			CreatedAt: util.Millis(r.CreatedAt), UpdatedAt: util.Millis(r.UpdatedAt),
 		}})

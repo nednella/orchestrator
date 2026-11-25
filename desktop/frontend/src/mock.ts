@@ -1,4 +1,4 @@
-import { buildIssueDetail, buildIssues, movesFrom, moveIssue, sortBySection } from './mockIssues'
+import { actionAccess, buildIssueDetail, buildIssues, movesFrom, moveIssue, sortBySection } from './mockIssues'
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
@@ -11,7 +11,7 @@ type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; iss
 const minute = 60_000
 
 // A project that is not set up has no queue sections, so every issue sits in the nameless group.
-const unsorted = (issues: Issue[]) => issues.map((issue) => ({ ...issue, section: '', actions: ['Start'], moves: [] }))
+const unsorted = (issues: Issue[]) => issues.map((issue) => ({ ...issue, section: '', actions: ['Start'], access: actionAccess('Start'), moves: [] }))
 const noteTexts = [
   'Retry banner when the websocket drops\nShow a thin bar under the header and retry with backoff. Maybe reuse the toast style so it does not feel like a third kind of notice.\nThe backoff should reset on the first successful frame, not on connect, because the proxy accepts and then drops.',
   'Ask Alex about the checkout button copy. They said something about "Buy now" vs "Pay" last week and I forgot which way it went.',
@@ -984,7 +984,7 @@ export function createMock(params: URLSearchParams) {
       return snap
     },
     SetUpProject: async () => {
-      if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], moves: movesFrom('Inbox') }))
+      if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], access: actionAccess('Work'), moves: movesFrom('Inbox') }))
       current.needsSetup = false
       emit('projects', data.map(projectView))
       return startSessionFor('agentos setup', 0, 'Set up this project for agentos with me.')
@@ -1050,6 +1050,7 @@ export function createMock(params: URLSearchParams) {
         type: '',
         section: 'Inbox',
         actions: ['Plan', 'Investigate', 'Work'],
+        access: actionAccess('Plan'),
         moves: movesFrom('Inbox'),
         url: `https://github.com/${current.repo}/issues/${number}`,
         sessionId: '',
@@ -1088,7 +1089,7 @@ export function createMock(params: URLSearchParams) {
         return view(settled)
       }
       const short = issue.title.split(' ').slice(0, 3).join(' ')
-      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, name === 'Plan' ? 'read' : 'supervised')
+      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, actionAccess(name))
       emit('issues', { project: current.name, items: currentIssues() })
       return session
     },

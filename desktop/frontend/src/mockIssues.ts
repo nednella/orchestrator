@@ -1,4 +1,4 @@
-import type { Issue, IssueDetail } from './types'
+import type { Access, Issue, IssueDetail } from './types'
 
 type Lane = 'ready' | 'plan' | 'you' | 'idea' | 'inbox'
 type Seed = [number, Lane, Issue['type'], string, string, string[], string[]?]
@@ -58,6 +58,9 @@ const sections: Record<Lane, { name: string; actions: string[] }> = {
 }
 const sectionOrder = ['Inbox', 'Ready', 'Needs plan', 'Ideas', '']
 
+// actionAccess is the access an action starts its thread with: Plan only reads, as an action with access: read.
+export const actionAccess = (action: string): Access => (action === 'Plan' ? 'read' : 'supervised')
+
 // Ready is refused both ways, as if the core only lets an issue out of the triage sections.
 const moveTargets: Record<string, string[]> = {
   Inbox: ['Needs plan', 'Ideas'],
@@ -75,7 +78,7 @@ export function moveIssue(issue: Issue, section: string): Issue {
   if (!movesFrom(issue.section).includes(section) || !lane) throw `issue #${issue.number} cannot move to ${section}`
   const laneLabels = Object.keys(sections).map((l) => labelFor(l as Lane))
   const labels = [...issue.labels.filter((l) => !laneLabels.includes(l)), labelFor(lane)].filter(Boolean)
-  return { ...issue, section, actions: sections[lane].actions, moves: movesFrom(section), labels }
+  return { ...issue, section, actions: sections[lane].actions, access: actionAccess(sections[lane].actions[0]), moves: movesFrom(section), labels }
 }
 
 const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -96,6 +99,7 @@ export function buildIssues(repo: string): Issue[] {
       type,
       section: sections[lane].name,
       actions: sections[lane].actions,
+      access: actionAccess(sections[lane].actions[0]),
       moves: movesFrom(sections[lane].name),
       url: `https://github.com/${repo}/issues/${number}`,
       sessionId: '',

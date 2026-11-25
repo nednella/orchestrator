@@ -177,7 +177,9 @@ export function HomeComposer() {
         right={
           !note && (
             <>
-              {!pickedIssue && <ComposerAccessChip access={a.composerAccess} onAccess={a.setComposerAccess} />}
+              {!live && (
+                <ComposerAccessChip access={pickedIssue?.access ?? a.composerAccess} disabled={pickedIssue && `The issue’s action, ${pickedIssue.actions[0]}, sets the access`} onAccess={a.setComposerAccess} />
+              )}
               {!live && <ComposerModelChip model={model} effort={effort} onModel={setModel} onEffort={setEffort} />}
             </>
           )

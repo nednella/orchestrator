@@ -106,6 +106,8 @@ export type Issue = {
   type: IssueType
   section: string
   actions: string[]
+  // access is the access the default action starts its thread with.
+  access: Access
   moves: string[]
   url: string
   sessionId: string
