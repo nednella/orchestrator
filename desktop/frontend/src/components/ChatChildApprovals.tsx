@@ -1,6 +1,8 @@
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { descendantsOf } from '../threads'
 import { ChatApprovalCard } from './ChatApprovalCard'
+import { ChatPlanCard } from './ChatPlanCard'
+import { ChatQuestionCard } from './ChatQuestionCard'
 
 type ChatChildApprovalsProps = { parent: string }
 
@@ -26,8 +28,9 @@ export function ChatChildApprovals({ parent }: ChatChildApprovalsProps) {
 
 type ChildApprovalProps = { id: string }
 
-// ChildApproval is the approval one descendant waits on, answered from here as the descendant's. One whose input is not
-// known offers no Allow, since the owner would not see what it lets run: it opens the descendant instead.
+// ChildApproval is the approval one descendant waits on, on the card its own chat shows for it, answered from here as
+// the descendant's. One whose input is not known offers no answer, since the owner would not see what it lets run: it
+// opens the descendant instead. A question's picks are kept by the request, as the pending names no tool call.
 function ChildApproval({ id }: ChildApprovalProps) {
   const { select } = useAgentos('select')
   const child = useAgentosSelector((a) => a.sessions.find((s) => s.id === id))
@@ -40,9 +43,10 @@ function ChildApproval({ id }: ChildApprovalProps) {
       <p className="px-1 text-small text-dim">
         <span className="font-medium text-ink">{child.title}</span> asks
       </p>
-      {pending.kind === 'tool' && known ? (
-        <ChatApprovalCard thread={id} request={pending.request} tool={pending.tool} input={pending.input} expired={false} folder={child.worktree || projectDir} />
-      ) : (
+      {known && pending.kind === 'tool' && <ChatApprovalCard thread={id} request={pending.request} tool={pending.tool} input={pending.input} expired={false} folder={child.worktree || projectDir} />}
+      {known && pending.kind === 'question' && <ChatQuestionCard thread={id} id={pending.request} request={pending.request} input={pending.input} answer={undefined} answers={null} expired={false} result={null} />}
+      {known && pending.kind === 'plan' && <ChatPlanCard thread={id} request={pending.request} input={pending.input} answer={undefined} expired={false} result={null} />}
+      {!known && (
         <div className="chat-card flex-row items-center gap-2 text-small" data-waiting="true">
           <span className="min-w-0 truncate text-ink">{pending.summary}</span>
           <button className="ml-auto flex-none text-dim hover:text-ink" onClick={() => select(id)}>

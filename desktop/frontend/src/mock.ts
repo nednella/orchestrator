@@ -195,7 +195,8 @@ export function createMock(params: URLSearchParams) {
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
     staleAnswer: params.has('stale'),
-    childAsk: params.has('childask'),
+    // childask=question or childask=plan has the child ask that; any other value a tool approval.
+    childAsk: params.get('childask'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: Session[] = []
@@ -508,9 +509,10 @@ export function createMock(params: URLSearchParams) {
     const lead = sessions.find((x) => x.title === 'checkout tests scratch')!
     const finder = seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read')
     finder.parent = lead.id
-    if (flags.childAsk) {
+    if (flags.childAsk !== null) {
       Object.assign(finder, { state: 'waiting', detail: 'Claude needs your permission to use Bash: npm install' })
-      chats.seed(finder.id)
+      if (flags.childAsk === 'question' || flags.childAsk === 'plan') chats.ask(finder.id, flags.childAsk)
+      else chats.seed(finder.id)
       setTimeout(() => emit('attention', { id: finder.id, state: 'waiting' }), 1500)
     }
     const notesCheck = seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read')
