@@ -59,8 +59,9 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
           at={item.at}
           afterUser={items[index - 1]?.kind === 'user'}
           beforeUser={items[index + 1]?.kind === 'user'}
-          editBlocked={edit?.blocked(item.uuid)}
-          onEditFrom={edit?.onOpen}
+          // A message another thread sent is not the owner's to edit.
+          editBlocked={item.from ? undefined : edit?.blocked(item.uuid)}
+          onEditFrom={item.from ? undefined : edit?.onOpen}
           onOpenImage={onOpenImage}
         />
       )
