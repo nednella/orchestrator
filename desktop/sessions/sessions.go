@@ -2774,6 +2774,9 @@ func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 		log.Printf("agentos: thread %s reports a permission mode agentos does not know: %q", id, mode)
 		return
 	}
+	// A delegation checks the parent's access under childMu and starts the child under it.
+	s.childMu.Lock()
+	defer s.childMu.Unlock()
 	s.mu.Lock()
 	i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name })
 	var have session.Access
