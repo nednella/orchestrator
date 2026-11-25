@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/browser"
+	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/control"
 	"github.com/nednella/agentos/desktop/digest"
 	"github.com/nednella/agentos/desktop/evidence"
@@ -39,6 +40,7 @@ import (
 	"github.com/nednella/agentos/desktop/terminal"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
+	chatlog "github.com/nednella/agentos/internal/chat"
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
@@ -171,6 +173,19 @@ func (r *Recorder) CountAttentionFor(id, state string) int {
 		}
 	}
 	return n
+}
+
+// All are the payloads of the events of that name, oldest first.
+func (r *Recorder) All(name string) []any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []any
+	for _, e := range r.events {
+		if e.name == name {
+			out = append(out, e.payload)
+		}
+	}
+	return out
 }
 
 // LastEvent is the name and payload of the latest event.
@@ -586,6 +601,7 @@ type Harness struct {
 
 	projects *projects.Service
 	sessions *sessions.Service
+	chat     *chat.Service
 	terminal *terminal.Service
 	issues   *issues.Service
 	notes    *notes.Service
@@ -699,6 +715,8 @@ func (h *Harness) build(t *testing.T) *app.App {
 			h.projects = s
 		case *sessions.Service:
 			h.sessions = s
+		case *chat.Service:
+			h.chat = s
 		case *terminal.Service:
 			h.terminal = s
 		case *issues.Service:
@@ -825,9 +843,10 @@ func CLIPath(t *testing.T) string {
 
 // ClaudeOnPath puts a stand-in `claude` and the built agentos command first on PATH, so the app runs its Claude
 // adapter and the session's host starts the stand-in. The stand-in writes its arguments to <dir>/<session id, "/" as
-// "_">.args, prints an init line, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin, answers
-// each user message with a reply and a result and an interrupt with a result that has an error, until its stdin ends.
-// Call it before New. It returns dir.
+// "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin until its stdin ends. It answers
+// each user message with an init line, a reply and a result, as Claude does each turn, and an interrupt with a result
+// that has an error. The message "ask" asks to run a Bash command instead and replies once answered, "slow" replies a
+// second later, and "stream" streams 200 deltas, "0 " to "199 ", before its reply. Call it before New. It returns dir.
 func ClaudeOnPath(t *testing.T) string {
 	claudeOnPath.Store(true)
 	t.Cleanup(func() { claudeOnPath.Store(false) })
@@ -839,12 +858,32 @@ func ClaudeOnPath(t *testing.T) string {
 var claudeOnPath atomic.Bool
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
-const fakeClaudeTurns = `printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-session"}'
+const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
+reply() {
+	printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
+}
 while IFS= read -r line; do
 	printf '%s\n' "$line" >> "$f.stdin"
 	case "$line" in
+	*'"type":"user"'*'"text":"ask"'*)
+		printf '%s\n' "$init" '{"type":"control_request","request_id":"ask-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"touch made.txt"}}}' ;;
+	*'"type":"user"'*'"text":"slow"'*)
+		printf '%s\n' "$init"
+		sleep 1
+		reply ;;
+	*'"type":"user"'*'"text":"stream"'*)
+		printf '%s\n' "$init"
+		i=0
+		while [ $i -lt 200 ]; do
+			printf '{"type":"stream_event","api_message_id":"msg_fake","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"%d "}}}\n' $i
+			i=$((i + 1))
+		done
+		reply ;;
 	*'"type":"user"'*)
-		printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}' ;;
+		printf '%s\n' "$init"
+		reply ;;
+	*'"type":"control_response"'*)
+		reply ;;
 	*'"subtype":"interrupt"'*)
 		printf '%s\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}' ;;
 	esac
@@ -950,7 +989,6 @@ func (h *Harness) KillSession(id string) error                     { return h.se
 func (h *Harness) DismissSession(id string) error                  { return h.sessions.DismissSession(id) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
-func (h *Harness) Interrupt(id string) error                       { return h.sessions.Interrupt(id) }
 func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }
 func (h *Harness) AckPR(id string) error                           { return h.sessions.AckPR(id) }
 func (h *Harness) Cleanup(id string, force bool) error             { return h.sessions.Cleanup(id, force) }
@@ -959,6 +997,26 @@ func (h *Harness) Cleanups() []sessions.Cleanup                    { return h.se
 func (h *Harness) ResumeSession(id string) (sessions.Session, error) {
 	return h.sessions.ResumeSession(id)
 }
+
+func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
+	return h.chat.ChatHistory(id, after)
+}
+func (h *Harness) ChatWatch(id string) error                { return h.chat.ChatWatch(id) }
+func (h *Harness) ChatUnwatch(id string)                    { h.chat.ChatUnwatch(id) }
+func (h *Harness) ChatSend(id, text string) (string, error) { return h.chat.ChatSend(id, text) }
+func (h *Harness) ChatDraft(id, text string) error          { return h.chat.ChatDraft(id, text) }
+func (h *Harness) ChatInterrupt(id string) error            { return h.chat.ChatInterrupt(id) }
+func (h *Harness) ChatSendNow(id, message string) error     { return h.chat.ChatSendNow(id, message) }
+func (h *Harness) ChatPending() []chat.Pending              { return h.chat.ChatPending() }
+func (h *Harness) ChatAnswerInput(id, request, input string) error {
+	return h.chat.ChatAnswerInput(id, request, input)
+}
+func (h *Harness) ChatAnswer(id, request string, allow bool, message string) error {
+	return h.chat.ChatAnswer(id, request, allow, message)
+}
+
+// Interrupt stops the thread's turn, as the front end does.
+func (h *Harness) Interrupt(id string) error { return h.ChatInterrupt(id) }
 
 func (h *Harness) TermOpen(id string, cols, rows int) error {
 	return h.terminal.TermOpen(id, cols, rows)

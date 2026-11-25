@@ -75,9 +75,6 @@ func (v *Service) RenameSession(id, title string) error { return v.s.Rename(id, 
 // TypeInto types text into the session's prompt, not sent; an agent under a host gets it sent.
 func (v *Service) TypeInto(id, text string) error { return v.s.TypeInto(id, text) }
 
-// Interrupt stops the turn of a session under a host.
-func (v *Service) Interrupt(id string) error { return v.s.Interrupt(id) }
-
 // RefreshPRs polls the pull requests of the issue sessions now.
 func (v *Service) RefreshPRs() { v.s.life.Poll(v.ctx()) }
 

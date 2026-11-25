@@ -29,6 +29,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     browser: false,
     evidence: 0,
     chat: false,
+    hosted: true,
     action: '',
     tokens: 0,
     cost: 0,

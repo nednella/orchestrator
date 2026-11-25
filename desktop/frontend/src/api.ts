@@ -1,5 +1,5 @@
 import { createMock } from './mock'
-import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { BrowserState, ChatEvent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Release, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -44,7 +44,16 @@ type Backend = {
   RefreshPRs(): Promise<void>
   AckPR(id: string): Promise<void>
   TypeInto(id: string, text: string): Promise<void>
-  Interrupt(id: string): Promise<void>
+  ChatHistory(id: string, after: number): Promise<ChatEvent[]>
+  ChatWatch(id: string): Promise<void>
+  ChatUnwatch(id: string): Promise<void>
+  ChatSend(id: string, text: string): Promise<string>
+  ChatDraft(id: string, text: string): Promise<void>
+  ChatInterrupt(id: string): Promise<void>
+  ChatSendNow(id: string, message: string): Promise<void>
+  ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
+  ChatAnswerInput(id: string, request: string, input: string): Promise<void>
+  ChatPending(): Promise<Pending[]>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
   Memory(): Promise<Memory>
@@ -97,7 +106,8 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'Interrupt', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -176,7 +186,17 @@ export const api = {
   refreshPRs: () => backend.RefreshPRs(),
   ackPR: (id: string) => backend.AckPR(id),
   typeInto: (id: string, text: string) => backend.TypeInto(id, text),
-  interrupt: (id: string) => backend.Interrupt(id),
+  // Watch first, then read the history, and merge the two by seq: an event logged in between comes in both.
+  chatHistory: (id: string, after = 0) => backend.ChatHistory(id, after),
+  chatWatch: (id: string) => backend.ChatWatch(id),
+  chatUnwatch: (id: string) => backend.ChatUnwatch(id),
+  chatSend: (id: string, text: string) => backend.ChatSend(id, text),
+  chatDraft: (id: string, text: string) => backend.ChatDraft(id, text),
+  chatInterrupt: (id: string) => backend.ChatInterrupt(id),
+  chatSendNow: (id: string, message: string) => backend.ChatSendNow(id, message),
+  chatAnswer: (id: string, request: string, allow: boolean, message = '') => backend.ChatAnswer(id, request, allow, message),
+  chatAnswerInput: (id: string, request: string, input: unknown) => backend.ChatAnswerInput(id, request, JSON.stringify(input)),
+  chatPending: () => backend.ChatPending(),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),
@@ -231,6 +251,9 @@ export function on<K extends keyof EventMap>(
   const off = window.runtime?.EventsOn(event, handler as (payload: never) => void)
   return off ?? (() => undefined)
 }
+
+// chatEvent is the name of the thread's chat:<id> event.
+export const chatEvent = (id: string) => `chat:${id}` as `chat:${string}/${string}`
 
 // What `Issues` rejects with when the repo has issues turned off (desktop/issues.ErrIssuesDisabled).
 export const ISSUES_DISABLED = 'issues are disabled for this repo'

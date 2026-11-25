@@ -50,7 +50,6 @@ const (
 	prefillWait   = 6 * time.Second
 	hostWait      = 10 * time.Second // for a new session's host to listen
 	hostStarting  = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
-	hostRetry     = time.Second      // before following a host again that could not be reached or broke off
 	promptSettles = 300 * time.Millisecond
 )
 
@@ -69,6 +68,7 @@ type Session struct {
 	BeganAt     int64            `json:"beganAt"` // when the conversation began: the start of the first session it continues, else CreatedAt
 	Issue       int              `json:"issue"`
 	Chat        bool             `json:"chat"`
+	Hosted      bool             `json:"hosted"` // the agent runs, or ran, under a host, whose chat log the chat service serves
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
@@ -160,7 +160,6 @@ type Sessions struct {
 	wakes      map[string][]string      // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
 	prefillFor time.Duration
 	readers    map[string]*reader      // each session's transcript reader
-	hosts      map[string]func()       // stops the following of each live session's host
 	spent      map[string]usage.Tokens // what each session's agent used
 	began      map[string]time.Time    // when the conversation of each session that continues one began
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -267,7 +266,6 @@ func newSessions(o Options) *Sessions {
 		resumed:    map[string]string{},
 		wakes:      map[string][]string{},
 		readers:    map[string]*reader{},
-		hosts:      map[string]func(){},
 		spent:      map[string]usage.Tokens{},
 		began:      map[string]time.Time{},
 		held:       map[string]int64{},
@@ -409,7 +407,7 @@ func (e *endedSession) record() session.Record {
 }
 
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Chat: in.Chat, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Path: in.Path}
+	id := session.Identity{Title: in.Title, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Path: in.Path}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -467,7 +465,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		s.drop(name)
 		return
 	}
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Agent: rec.Agent, Chat: rec.Chat, Action: rec.Action}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Agent: rec.Agent, Chat: rec.Chat, Hosted: rec.Hosted, Action: rec.Action}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -835,7 +833,6 @@ func (s *Sessions) sync() {
 	if waitsChanged {
 		s.emit("stats", nil)
 	}
-	s.followHosts(live)
 	s.deliverWakes()
 	s.holdAwake()
 
@@ -1021,7 +1018,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: in.Created.UnixMilli(), Issue: issue, Chat: in.Chat, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: in.Created.UnixMilli(), Issue: issue, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
 		if !ss.At.IsZero() {
@@ -1940,26 +1937,6 @@ func (s *Sessions) TypeInto(id, text string) error {
 	return s.tmux.Type(ctx, name, text)
 }
 
-// Interrupt stops the turn of a session under a host.
-func (s *Sessions) Interrupt(id string) error {
-	name, err := session.ParseName(id)
-	if err != nil {
-		return err
-	}
-	if err := s.refuseEnded(id); err != nil {
-		return err
-	}
-	socket := s.hostOf(name)
-	if socket == "" {
-		return fmt.Errorf("session %s cannot be interrupted: its agent runs in its terminal", id)
-	}
-	if err := host.Interrupt(s.context(), socket); err != nil {
-		log.Printf("agentos: session %s did not take an interrupt: %v", id, err)
-		return fmt.Errorf("session %s did not take the interrupt", id)
-	}
-	return nil
-}
-
 // refuseEnded is an error for a session that has ended. It takes mu.
 func (s *Sessions) refuseEnded(id string) error {
 	s.mu.Lock()
@@ -1971,52 +1948,13 @@ func (s *Sessions) refuseEnded(id string) error {
 	return nil
 }
 
-// followHosts follows the host of each live session that runs under one, and stops following the others. It needs
-// mu.
-func (s *Sessions) followHosts(live map[string]bool) {
-	for id, stop := range s.hosts {
-		if !live[id] {
-			stop()
-			delete(s.hosts, id)
-		}
-	}
-	for _, in := range s.info {
-		id := in.Name.String()
-		if !in.Hosted || s.hosts[id] != nil {
-			continue
-		}
-		ctx, stop := context.WithCancel(s.ctx)
-		s.hosts[id] = stop
-		go s.followHost(ctx, id, s.hostSocket(in.Name))
-	}
-}
-
-// followHost ends each turn the session's host reports over, until ctx ends. It reads the chat log from its start, so
-// a turn that ended while the app was closed ends too, and follows the host again after a break.
-func (s *Sessions) followHost(ctx context.Context, id, socket string) {
-	var after int64
-	for {
-		_ = host.Subscribe(ctx, socket, after, func(e chat.Event) {
-			after = max(after, e.Seq)
-			if e.Kind == chat.KindTurnEnd {
-				s.endTurn(id, e)
-			}
-		})
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(hostRetry):
-		}
-	}
-}
-
-// endTurn folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
+// TurnEnded folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
 // Claude Code runs none after an interrupt. A turn that ended in an error, an interrupt among them, is a TurnError,
 // which ends the turn as a Stop does but is no reply to alert the owner to. A turn_end older than the latest hook is an earlier turn's. The Stop hook
 // of a normal turn runs just before the host reports its end, so the state file is read under its lock, as the hook
-// writes it. A follower reads the log again from its start, so a turn_end older than the record the app holds is
-// passed over before the lock is taken.
-func (s *Sessions) endTurn(id string, e chat.Event) {
+// writes it. At each start of the app the chat service passes in the latest turn_end of the log, so one older than
+// the record the app holds is passed over before the lock is taken.
+func (s *Sessions) TurnEnded(id string, e chat.Event) {
 	s.mu.Lock()
 	rec, known := s.records[id]
 	s.mu.Unlock()
@@ -2046,6 +1984,52 @@ func (s *Sessions) endTurn(id string, e chat.Event) {
 	if err == nil {
 		s.observe(next)
 	}
+}
+
+// Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps and the socket it listens on.
+type Chat struct {
+	ID, Project, Log, Socket string
+	Live                     bool // the session runs; an ended one has only its log
+}
+
+// ChatOf is the chat of the session id, live or ended. A session whose agent runs in its terminal has none. It takes
+// mu.
+func (s *Sessions) ChatOf(id string) (Chat, error) {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return Chat{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in, live := term.Info{}, false
+	if e, ok := s.ended[id]; ok {
+		in = e.info
+	} else if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
+		in, live = s.info[i], true
+	} else {
+		return Chat{}, fmt.Errorf("No thread %s", id)
+	}
+	if !in.Hosted {
+		return Chat{}, fmt.Errorf("Thread %s has no chat: its agent runs in its terminal", id)
+	}
+	return s.chatOf(name, live), nil
+}
+
+// Chats are the chats of the live sessions under a host. It takes mu.
+func (s *Sessions) Chats() []Chat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Chat
+	for _, in := range s.info {
+		if in.Hosted {
+			out = append(out, s.chatOf(in.Name, true))
+		}
+	}
+	return out
+}
+
+func (s *Sessions) chatOf(name session.Name, live bool) Chat {
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Live: live}
 }
 
 // hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before

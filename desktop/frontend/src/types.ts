@@ -52,6 +52,7 @@ export type Session = {
   browser: boolean
   evidence: number
   chat: boolean
+  hosted: boolean
   action: string
   tokens: number
   cost: number
@@ -318,6 +319,50 @@ export type Release = {
   sections: ReleaseSection[]
 }
 
+// ChatKind is what a chat event is; a delta is never logged and has seq 0.
+export type ChatKind =
+  | 'init'
+  | 'user'
+  | 'delta'
+  | 'message'
+  | 'tool_use'
+  | 'tool_result'
+  | 'approval'
+  | 'answer'
+  | 'turn_end'
+  | 'draft'
+  | 'queued'
+  | 'interrupt'
+  | 'commands'
+  | 'exit'
+
+// ChatEvent is one event of a thread's chat; a field the event does not use is left out.
+export type ChatEvent = {
+  seq: number
+  at: number
+  kind: ChatKind
+  id?: string
+  uuid?: string
+  parent?: string
+  text?: string
+  tool?: string
+  input?: unknown
+  error?: boolean
+  cost?: number
+  files?: string[]
+}
+
+// Pending is the approval a thread waits on; id is the thread's and request the approval's.
+export type Pending = {
+  id: string
+  request: string
+  tool: string
+  summary: string
+  kind: 'tool' | 'question' | 'plan'
+}
+
+export type ChatUpdate = { id: string; events: ChatEvent[] }
+
 export type ProjectList<T> = { project: string; items: T[] }
 
 export type Warning = {
@@ -326,6 +371,9 @@ export type Warning = {
 }
 
 export type EventMap = {
+  // A thread's own events; its id holds a slash, which keeps 'chat:pending' out of the pattern.
+  [k: `chat:${string}/${string}`]: ChatUpdate
+  'chat:pending': { id: string; pending: Pending | null }
   sessions: ProjectList<Session>
   projects: Project[]
   notes: ProjectList<Note>

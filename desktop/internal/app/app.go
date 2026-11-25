@@ -10,6 +10,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/awake"
 	"github.com/nednella/agentos/desktop/browser"
+	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/control"
 	"github.com/nednella/agentos/desktop/digest"
 	"github.com/nednella/agentos/desktop/evidence"
@@ -45,6 +46,7 @@ type App struct {
 	ctx      atomic.Pointer[context.Context]
 	cancel   atomic.Pointer[context.CancelFunc]
 	sessions *sessions.Sessions
+	chats    *chat.Chats
 	terms    *terminal.Terms
 	notes    *notes.Notes
 	evidence *evidence.Store
@@ -84,11 +86,12 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Tally: waits, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake,
 	})
+	chats := chat.New(sess, h.Emit)
 	iss := issues.New(runner, sess, h.Emit)
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)
 	a.registry, a.issues, a.warn = c.Registry, iss, warn.New(h.Emit)
 	store := notes.New(c.DataDir)
-	a.sessions, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, terms, store, proofs, events, c.StateDir
+	a.sessions, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
 	a.browsers, a.awake = browsers, stayAwake
 	a.media = media.Handler(c.DataDir)
 	browsers.Hook(func(id string) string {
@@ -155,6 +158,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.services = []any{
 		proj,
 		sessSvc,
+		chat.NewService(chats, ctx),
 		terminal.NewService(terms),
 		issues.NewService(iss, ctx),
 		notes.NewService(store, sess, sess, iss, events, runner, h.Emit, ctx),
@@ -195,6 +199,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.sessions.Run(ctx); err != nil {
 		return err
 	}
+	go a.chats.Run(ctx)
 	a.router.Listen(a.stateDir)
 	go a.digests.Loop(ctx)
 	go a.updates.Loop(ctx)

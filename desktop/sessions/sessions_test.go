@@ -625,7 +625,7 @@ func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "session " + s.ID + " cannot be interrupted: its agent runs in its terminal"
+	want := "Thread " + s.ID + " has no chat: its agent runs in its terminal"
 	if err := h.Interrupt(s.ID); err == nil || err.Error() != want {
 		t.Errorf("Interrupt = %v, want %q", err, want)
 	}
@@ -642,10 +642,10 @@ func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the killed session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
-	want := "session " + s.ID + " has ended"
-	if err := h.Interrupt(s.ID); err == nil || err.Error() != want {
+	if err, want := h.Interrupt(s.ID), "Thread "+s.ID+" has ended"; err == nil || err.Error() != want {
 		t.Errorf("Interrupt = %v, want %q", err, want)
 	}
+	want := "session " + s.ID + " has ended"
 	if err := h.TypeInto(s.ID, "hello"); err == nil || err.Error() != want {
 		t.Errorf("TypeInto = %v, want %q", err, want)
 	}

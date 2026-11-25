@@ -42,6 +42,7 @@ type Identity struct {
 	Title   string `json:"title,omitempty"`
 	Issue   int    `json:"issue,omitempty"`
 	Chat    bool   `json:"chat,omitempty"`
+	Hosted  bool   `json:"hosted,omitempty"` // the agent ran under agentos host, which keeps its chat log
 	Action  string `json:"action,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`

@@ -1,0 +1,291 @@
+package chat_test
+
+import (
+	"context"
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nednella/agentos/desktop/chat"
+	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/internal/bus"
+	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/host"
+)
+
+func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
+
+var eventually = apptest.Eventually
+
+// newThread starts a hosted session on the stand-in claude.
+func newThread(t *testing.T) (*apptest.Harness, string) {
+	t.Helper()
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h, s.ID
+}
+
+func history(t *testing.T, h *apptest.Harness, id string, after int64) []chatlog.Event {
+	t.Helper()
+	events, err := h.ChatHistory(id, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return events
+}
+
+func kinds(events []chatlog.Event) []chatlog.Kind {
+	out := []chatlog.Kind{}
+	for _, e := range events {
+		out = append(out, e.Kind)
+	}
+	return out
+}
+
+func seqs(events []chatlog.Event) []int64 {
+	out := []int64{}
+	for _, e := range events {
+		out = append(out, e.Seq)
+	}
+	return out
+}
+
+func countTurnEnds(events []chatlog.Event) int {
+	return len(slices.DeleteFunc(slices.Clone(events), func(e chatlog.Event) bool { return e.Kind != chatlog.KindTurnEnd }))
+}
+
+// turnEnds counts the turn_ends of the thread's log.
+func turnEnds(t *testing.T, h *apptest.Harness, id string) int {
+	t.Helper()
+	return countTurnEnds(history(t, h, id, 0))
+}
+
+// emitted are the events of the thread's chat:<id> events, in the order they went out.
+func emitted(rec *apptest.Recorder, id string) []chatlog.Event {
+	var out []chatlog.Event
+	for _, p := range rec.All("chat:" + id) {
+		out = append(out, p.(chat.Update).Events...)
+	}
+	return out
+}
+
+func persisted(events []chatlog.Event) []chatlog.Event {
+	return slices.DeleteFunc(slices.Clone(events), func(e chatlog.Event) bool { return !e.Persisted() })
+}
+
+func emittedTurnEnds(rec *apptest.Recorder, id string) int { return countTurnEnds(emitted(rec, id)) }
+
+func send(t *testing.T, h *apptest.Harness, id, text string) string {
+	t.Helper()
+	msg, err := h.ChatSend(id, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msg
+}
+
+func TestHistoryReadsTheChatLog(t *testing.T) {
+	h, id := newThread(t)
+	msg := send(t, h, id, "hi")
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+
+	events := history(t, h, id, 0)
+	want := []chatlog.Kind{chatlog.KindUser, chatlog.KindInit, chatlog.KindMessage, chatlog.KindTurnEnd}
+	if !slices.Equal(kinds(events), want) {
+		t.Fatalf("history kinds = %v, want %v", kinds(events), want)
+	}
+	if user := events[0]; user.ID != msg || user.Text != "hi" {
+		t.Errorf("user event = %+v, want id %s", user, msg)
+	}
+	if after := history(t, h, id, events[0].Seq); !slices.Equal(kinds(after), want[1:]) {
+		t.Errorf("history after the user's seq = %v, want %v", kinds(after), want[1:])
+	}
+}
+
+func TestHistoryOfAnEndedThread(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "hi")
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	if err := h.KillSession(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+
+	if events := history(t, h, id, 0); len(events) < 4 || events[0].Kind != chatlog.KindUser {
+		t.Errorf("history of the ended thread = %v", kinds(events))
+	}
+	want := "Thread " + id + " has ended"
+	if _, err := h.ChatSend(id, "again"); err == nil || err.Error() != want {
+		t.Errorf("ChatSend = %v, want %q", err, want)
+	}
+	if err := h.ChatWatch(id); err == nil || err.Error() != want {
+		t.Errorf("ChatWatch = %v, want %q", err, want)
+	}
+}
+
+func TestWatchedThreadGetsLiveEvents(t *testing.T) {
+	h, id := newThread(t)
+	if err := h.ChatWatch(id); err != nil {
+		t.Fatal(err)
+	}
+	send(t, h, id, "hi")
+	eventually(t, "the turn's end in a chat event", func() bool { return emittedTurnEnds(h.Rec, id) == 1 })
+
+	got := seqs(persisted(emitted(h.Rec, id)))
+	for i := 1; i < len(got); i++ {
+		if got[i] <= got[i-1] {
+			t.Fatalf("emitted seqs %v do not strictly increase", got)
+		}
+	}
+	if want := seqs(history(t, h, id, 0)); !slices.Equal(got, want) {
+		t.Errorf("emitted seqs = %v, want the history's %v", got, want)
+	}
+}
+
+func TestUnwatchedThreadEmitsNoChatEvents(t *testing.T) {
+	h, id := newThread(t)
+	if err := h.ChatWatch(id); err != nil {
+		t.Fatal(err)
+	}
+	h.ChatUnwatch(id)
+	send(t, h, id, "stream")
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	time.Sleep(100 * time.Millisecond) // past a batch's wait
+	if n := h.Rec.Count("chat:" + id); n != 0 {
+		t.Errorf("%d chat events for an unwatched thread, want none", n)
+	}
+}
+
+func TestRestartResumesWithoutGapsOrDoubles(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "slow")
+
+	second := h.Restart(t)
+	if err := second.ChatWatch(id); err != nil {
+		t.Fatal(err)
+	}
+	before := history(t, second, id, 0)
+	eventually(t, "turn 1's end", func() bool { return turnEnds(t, second, id) == 1 })
+	send(t, second, id, "hi")
+	// Turn 1 may end before the watch or after it.
+	eventually(t, "turn 2's end in a chat event", func() bool {
+		logged, got := history(t, second, id, 0), persisted(emitted(second.Rec, id))
+		return countTurnEnds(logged) == 2 && len(got) > 0 && got[len(got)-1].Seq == logged[len(logged)-1].Seq
+	})
+
+	all := append(seqs(before), seqs(persisted(emitted(second.Rec, id)))...)
+	slices.Sort(all)
+	last := history(t, second, id, 0)
+	want := make([]int64, len(last))
+	for i := range want {
+		want[i] = int64(i + 1)
+	}
+	if !slices.Equal(all, want) {
+		t.Errorf("history before the watch and the chat events after it hold seqs %v, want 1 to %d each once", all, len(want))
+	}
+	if countTurnEnds(last) != 2 {
+		t.Errorf("log kinds = %v, want two turns", kinds(last))
+	}
+}
+
+func TestPendingApprovalIsReported(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "ask")
+	eventually(t, "the approval waiting", func() bool { return len(h.ChatPending()) == 1 })
+	p := h.ChatPending()[0]
+	if want := (chat.Pending{ID: id, Request: "ask-1", Tool: "Bash", Summary: "touch made.txt", Kind: "tool"}); p != want {
+		t.Errorf("pending = %+v, want %+v", p, want)
+	}
+	if u, ok := h.Rec.Last("chat:pending").(chat.PendingUpdate); !ok || u.ID != id || u.Pending == nil || *u.Pending != p {
+		t.Errorf("chat:pending = %+v, want %+v", h.Rec.Last("chat:pending"), p)
+	}
+
+	if err := h.ChatAnswer(id, p.Request, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "nothing waiting", func() bool { return len(h.ChatPending()) == 0 })
+	if u, ok := h.Rec.Last("chat:pending").(chat.PendingUpdate); !ok || u.ID != id || u.Pending != nil {
+		t.Errorf("chat:pending after the answer = %+v, want none waiting", h.Rec.Last("chat:pending"))
+	}
+	eventually(t, "the reply after the answer", func() bool { return turnEnds(t, h, id) == 1 })
+}
+
+func TestDeltasAreBatched(t *testing.T) {
+	h, id := newThread(t)
+	if err := h.ChatWatch(id); err != nil {
+		t.Fatal(err)
+	}
+	// Deltas are not logged, so only a follower that is already subscribed gets them: a first turn shows it is.
+	send(t, h, id, "hi")
+	eventually(t, "the first turn's end in a chat event", func() bool { return emittedTurnEnds(h.Rec, id) == 1 })
+	first := h.Rec.Count("chat:" + id)
+	send(t, h, id, "stream")
+	eventually(t, "the streamed turn's end in a chat event", func() bool { return emittedTurnEnds(h.Rec, id) == 2 })
+
+	if n := h.Rec.Count("chat:"+id) - first; n >= 40 {
+		t.Errorf("%d chat events for 200 deltas, want fewer than 40", n)
+	}
+	var text, want strings.Builder
+	for _, e := range emitted(h.Rec, id) {
+		if e.Kind == chatlog.KindDelta {
+			text.WriteString(e.Text)
+		}
+	}
+	for i := range 200 {
+		want.WriteString(strconv.Itoa(i) + " ")
+	}
+	if text.String() != want.String() {
+		t.Errorf("deltas = %q, want 0 to 199 in order", text.String())
+	}
+}
+
+func TestEndedHostedSessionKeepsItsHostedMark(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "hi")
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	if err := h.KillSession(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+	if s, _ := h.Session(id); !s.Hosted {
+		t.Errorf("ended row = %+v, want hosted", s)
+	}
+
+	second := h.Restart(t)
+	s, ok := second.Session(id)
+	if !ok || s.State != "ended" || !s.Hosted {
+		t.Fatalf("ended row after a restart = %+v (%v), want hosted", s, ok)
+	}
+	if events := history(t, second, id, 0); len(events) < 4 {
+		t.Errorf("history after a restart = %v", kinds(events))
+	}
+}
+
+func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
+	h, id := newThread(t)
+	h.Hook(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
+	eventually(t, "working", func() bool { s, _ := h.Session(id); return s.State == "working" })
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.App.Stop()
+	if err := host.Interrupt(context.Background(), ch.Socket); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the interrupted turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	time.Sleep(200 * time.Millisecond)
+	if rec, err := bus.ReadState(h.State, id); err != nil || rec.State != "working" {
+		t.Fatalf("state with the app closed = %+v, %v; want working", rec, err)
+	}
+
+	second := h.Restart(t)
+	eventually(t, "idle after the next start", func() bool { s, _ := second.Session(id); return s.State == "idle" })
+}

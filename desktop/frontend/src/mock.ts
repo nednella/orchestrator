@@ -2,6 +2,7 @@ import { buildIssueDetail, buildIssues, movesFrom, moveIssue, sortBySection } fr
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
 import * as term from './mockTerminal'
+import { mockChat } from './mockChat'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
@@ -246,6 +247,7 @@ export function createMock(params: URLSearchParams) {
       browser: s.browser,
       evidence: s.evidence,
       chat: s.chat,
+      hosted: s.hosted,
       action: s.action,
       tokens: s.tokens,
       cost: s.cost,
@@ -417,6 +419,7 @@ export function createMock(params: URLSearchParams) {
       browser: false,
       evidence: 0,
       chat,
+      hosted: true,
       action: issue ? 'Work' : '',
       ...usageFor(chat, createdAt),
       resumable: initial === 'ended',
@@ -436,6 +439,13 @@ export function createMock(params: URLSearchParams) {
     sessions.push(s)
     return s
   }
+
+  // Only one seeded thread runs under a host, so the rest keep their terminals; a thread started in the mock is hosted.
+  const chats = mockChat(emit, (id) => {
+    const s = find(id)
+    if (!s.hosted) throw `Thread ${id} has no chat: its agent runs in its terminal`
+    return { ended: s.state === 'ended', setState: (state) => setState(s, state) }
+  })
 
   function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], chat = false) {
     const now = Date.now()
@@ -485,6 +495,8 @@ export function createMock(params: URLSearchParams) {
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
+    sessions.forEach((s) => (s.hosted = s === byIssue(444)))
+    chats.seed(byIssue(444).id)
     sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!.detail = 'Should I keep the old cart hook or replace it?'
   }
 
@@ -549,7 +561,7 @@ export function createMock(params: URLSearchParams) {
   setInterval(() => {
     const now = Date.now()
     sessions.forEach((s) => {
-      if (s.state === 'ended' || (s.pr && (s.pr.state === 'merged' || s.pr.state === 'closed'))) return
+      if (s.hosted || s.state === 'ended' || (s.pr && (s.pr.state === 'merged' || s.pr.state === 'closed'))) return
       if (now >= s.nextChangeAt) {
         s.nextChangeAt = now + 12_000 + Math.random() * 28_000
         setState(s, nextState(s.state))
@@ -1178,11 +1190,7 @@ export function createMock(params: URLSearchParams) {
       if (s.state === 'ended') throw `session ${id} has ended`
       write(s, text)
     },
-    Interrupt: async (id: string) => {
-      const s = find(id)
-      if (s.state === 'ended') throw `session ${id} has ended`
-      if (s.agent !== 'claude') throw `session ${id} cannot be interrupted: its agent runs in its terminal`
-    },
+    ...chats.backend,
     Cleanup: async (id: string, force: boolean) => {
       const s = find(id)
       if (s.cleanup === 'blocked' && !force) throw `Not cleaned up: ${s.cleanupReason}`

@@ -83,11 +83,8 @@ func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	freshLog, _ := hostFiles(h, fresh.ID)
-	eventually(t, "the resumed session's host", func() bool {
-		data, _ := os.ReadFile(freshLog)
-		return strings.Count(string(data), `"kind":"init"`) == 2
-	})
+	freshLog, freshSocket := hostFiles(h, fresh.ID)
+	eventually(t, "the resumed session's host", func() bool { return exists(freshSocket) })
 	data, _ := os.ReadFile(freshLog)
 	if !loggedUser(freshLog, "the first ask") {
 		t.Errorf("the resumed session's chat log lacks the first ask:\n%s", data)
