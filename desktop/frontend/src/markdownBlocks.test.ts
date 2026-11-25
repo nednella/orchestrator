@@ -158,3 +158,17 @@ test('the block being written holds back a table until its delimiter row is whol
   assert.equal(steadyBlock('| a | b |\n| --- | --- |\n| 1 | **2'), '| a | b |\n| --- | --- |\n| 1 | **2**')
   assert.equal(steadyBlock('Intro\n| a | b |\n| -'), 'Intro\n')
 })
+
+test('a long line that matches no rule is read in linear time', () => {
+  const linear = (name: string, run: () => void) => {
+    const start = performance.now()
+    run()
+    const took = performance.now() - start
+    assert.equal(took < 50, true, `${name} took ${Math.round(took)} ms`)
+  }
+  const bad = 100_000
+  linear('footnote-like', () => markdownBlocks('[^'.repeat(bad / 2)))
+  linear('markers then a letter', () => steadyBlock(`${' '.repeat(bad)}x`))
+  linear('rule then a letter', () => markdownBlocks(`---${' '.repeat(bad)}x`))
+  linear('unclosed bold', () => steadyBlock('**a '.repeat(bad / 4)))
+})

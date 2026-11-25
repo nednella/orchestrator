@@ -5,11 +5,11 @@ const FENCE = /^( {0,3})(`{3,}|~{3,})([^\n]*)$/
 const LIST_ITEM = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:\s|$)/
 const MAY_BE_LIST_ITEM = /^(?:[-+*]|\d{1,9}[.)]?)\r?$/
 // A heading, a block quote, a thematic break or a code fence at the margin ends a list; plain text there continues it.
-const ENDS_LIST = /^(?:#{1,6}(?:\s|$)|>|(?:[-*_][ \t]*){3,}\s*$|`{3}|~{3})/
+const ENDS_LIST = /^(?:#{1,6}(?:\s|$)|>|(?:[-*_][ \t]*){3,}\r?$|`{3}|~{3})/
 // Link reference definitions (also in a quote or a list item), raw HTML and footnotes tie blocks together, so a text
 // with any of them is parsed whole.
-const TIES = /^(?:\s|>|[-+*]\s|\d{1,9}[.)]\s)*\[[^\]]+\]:|^\s*<[A-Za-z!?/]|\[\^[^\]\s]+\]/
-const MARKERS_ONLY = /^[\s#>*+\-_=~`|:]*(?:\d{1,9}[.)]?)?\s*$/
+const TIES = /^(?:\s|>|[-+*]\s|\d{1,9}[.)]\s)*\[[^\]]+\]:|^\s*<[A-Za-z!?/]|\[\^[^\]\s[]+\]/
+const MARKERS_ONLY = /^[\s#>*+\-_=~`|:]*(?:\d{1,9}[.)]?[ \t\r]*)?$/
 const FENCE_START = /^ {0,3}(?:`{3,}|~{3,})/
 const TABLE_ROW = /^ {0,3}\|/
 const DELIMITER_CELL = /^\s*:?-+:?\s*$/
@@ -132,10 +132,23 @@ function closeInline(line: string): string {
     }
     i += run.length
   }
-  for (const o of open.reverse()) {
-    text = isBlank(text.slice(o.at + o.n)) ? text.slice(0, o.at) : text.trimEnd() + '*'.repeat(o.n)
+  let kept = text.length
+  let last = lastContent(text, kept)
+  let left = open.length
+  while (left > 0 && last < open[left - 1].at + open[left - 1].n) {
+    kept = open[left - 1].at
+    last = lastContent(text, kept)
+    left--
   }
-  return text
+  if (left === 0) return text.slice(0, kept)
+  return text.slice(0, last + 1) + open.slice(0, left).reverse().map((o) => '*'.repeat(o.n)).join('')
+}
+
+// lastContent is the index of the last character before end that is not whitespace, or -1.
+function lastContent(text: string, end: number) {
+  let at = end - 1
+  while (at >= 0 && /\s/.test(text[at])) at--
+  return at
 }
 
 function closingRun(text: string, from: number, length: number) {
