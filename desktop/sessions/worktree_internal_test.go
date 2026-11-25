@@ -36,7 +36,7 @@ func TestWorktreeThreadIsToldItsBranchAndFolder(t *testing.T) {
 
 func TestProjectFolderThreadGetsNoWorktreeText(t *testing.T) {
 	got := systemPrompt(t, session.Supervised, workTree{})
-	if strings.Contains(got, "agentos made this thread's worktree") {
+	if strings.Contains(got, "This thread runs in the worktree") {
 		t.Errorf("system prompt holds the worktree text:\n%s", got)
 	}
 }

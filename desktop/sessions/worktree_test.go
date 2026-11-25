@@ -83,7 +83,7 @@ func systemPrompt(t *testing.T, h *apptest.Harness, id string) string {
 	return strings.Join(args[i+1:], "\n")
 }
 
-const worktreeText = "agentos made this thread's worktree"
+const worktreeText = "This thread runs in the worktree"
 
 func TestWriteThreadStartsInAWorktreeAgentosMade(t *testing.T) {
 	h := newHarness(t)
@@ -415,5 +415,54 @@ func TestWorktreeKeepsAfterARestart(t *testing.T) {
 	}
 	if rec, err := bus.ReadState(h.State, settled.ID); err != nil || rec.Branch != "settle-me" {
 		t.Errorf("the settled thread's state file has branch %q, %v", rec.Branch, err)
+	}
+}
+
+func TestWorktreesStayOutOfTheOwnersGitStatus(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	exclude := filepath.Join(h.Dir, ".git", "info", "exclude")
+	before, err := os.ReadFile(exclude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"One", "Two"} {
+		if _, err := h.NewThreadIn(title, "", "supervised", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := gitIn(t, h.Dir, "status", "--porcelain"); got != "" {
+		t.Errorf("git status in the project folder = %q", got)
+	}
+	data, err := os.ReadFile(exclude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := string(before) + "/trees/\n"; string(data) != want {
+		t.Errorf("exclude = %q, want %q", data, want)
+	}
+	if exists(filepath.Join(h.Dir, ".gitignore")) {
+		t.Error("agentos wrote a .gitignore")
+	}
+}
+
+func TestBranchPushedFromAnotherCloneIsFetched(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	other := filepath.Join(t.TempDir(), "other")
+	gitIn(t, filepath.Dir(other), "clone", "--quiet", origin, other)
+	gitIn(t, other, "switch", "--quiet", "-c", "issue-7")
+	pushWork(t, other)
+	head := gitIn(t, other, "rev-parse", "HEAD")
+
+	s, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, s.Worktree, "rev-parse", "HEAD"); got != head {
+		t.Errorf("the worktree is at %s, want the pushed commit %s", got, head)
+	}
+	if got := gitIn(t, s.Worktree, "rev-parse", "--abbrev-ref", "@{upstream}"); got != "origin/issue-7" {
+		t.Errorf("the branch tracks %q", got)
 	}
 }

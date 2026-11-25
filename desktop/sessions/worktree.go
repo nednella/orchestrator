@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/util"
@@ -104,7 +105,8 @@ type workPlace struct {
 // the project's session_worktree_command from the default branch on origin, fetched first, and the worktree is the one
 // git then lists on the branch, wherever the command put it.
 func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thread session.Name, branch string) (workPlace, error) {
-	if _, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel"); err != nil {
+	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
+	if err != nil {
 		return workPlace{dir: proj.Dir}, nil
 	}
 	if _, err := l.git(ctx, proj.Dir, "check-ref-format", "--branch", branch); err != nil {
@@ -131,12 +133,15 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
 		return workPlace{}, fmt.Errorf("%s is already there, so agentos cannot make the worktree of %s in it", dir, branch)
 	}
+	if err := l.excludeTrees(ctx, proj, strings.TrimSpace(string(top))); err != nil {
+		return workPlace{}, err
+	}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
 		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", dir, branch); err != nil {
 			return workPlace{}, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 		}
-	case l.hasRef(ctx, proj.Dir, "refs/remotes/origin/"+branch):
+	case l.onOrigin(ctx, proj.Dir, branch):
 		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/"+branch); err != nil {
 			return workPlace{}, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 		}
@@ -179,6 +184,53 @@ func (l *Lifecycle) base(ctx context.Context, dir string) (ref, oid string, err 
 		}
 	}
 	return "", "", fmt.Errorf("%s has no commit to start a worktree from", branch)
+}
+
+// onOrigin says whether origin has branch, fetching it when this clone has no copy yet: it may have been pushed from
+// another clone. A fetch that fails means origin has no such branch.
+func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) bool {
+	ref := "refs/remotes/origin/" + branch
+	if l.hasRef(ctx, dir, ref) {
+		return true
+	}
+	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
+		return false
+	}
+	return l.hasRef(ctx, dir, ref)
+}
+
+// excludeTrees keeps the folder of the worktrees agentos makes out of the owner's git status, so `git add -A` never
+// stages one as an embedded repository: the repository's own exclude file, which is never committed, gets the line once.
+// A tracked .gitignore is the owner's and is left alone.
+func (l *Lifecycle) excludeTrees(ctx context.Context, proj project.Project, top string) error {
+	_, common, err := l.gitDirs(ctx, proj.Dir)
+	if err != nil {
+		return err
+	}
+	line := "/trees/"
+	if rel, err := filepath.Rel(realPath(top), realPath(filepath.Join(proj.Dir, "trees"))); err == nil && !strings.HasPrefix(rel, "..") {
+		line = "/" + filepath.ToSlash(rel) + "/"
+	}
+	path := filepath.Join(common, "info", "exclude")
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	for have := range strings.Lines(string(data)) {
+		if strings.TrimSpace(have) == line {
+			return nil
+		}
+	}
+	if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+		data = append(data, '\n')
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("making %s: %w", filepath.Dir(path), err)
+	}
+	if err := atomicfile.Write(path, append(data, line+"\n"...), 0o644); err != nil {
+		return fmt.Errorf("adding %s to %s: %w", line, path, err)
+	}
+	return nil
 }
 
 func (l *Lifecycle) hasRef(ctx context.Context, dir, ref string) bool {

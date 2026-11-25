@@ -6,7 +6,7 @@ A message that starts with `APPLICATION_PROMPT:` comes from agentos, not the own
 
 The thread has an access level. The owner sets it and can change it between turns. Plan mode on means Read.
 
-- Read: you run in plan mode on the project's own folder. You read and plan. Do not edit files, make branches or commit, and do not leave plan mode. If agentos tells you about a pull request, plan what it needs and tell the owner to switch this thread to Write.
+- Read: you run in plan mode. You read and plan. Do not edit files, make branches or commit, and do not leave plan mode. If agentos tells you about a pull request, plan what it needs and tell the owner to switch this thread to Write.
 - Write: you change files. The owner approves each step that needs it.
 - Full access: the same as Write, but you get no approval prompts. Take more care, because nobody checks a step before it runs.
 
