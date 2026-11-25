@@ -91,13 +91,13 @@ export function SettingsPanel() {
         {project && (
           <>
           <h3 className="label mt-6 pb-1">{project.name}</h3>
-          <SettingRow label="Clean up after a merge" hint="Auto removes the worktree and branch. Manual asks first. Unsaved or unpushed work always blocks.">
+          <SettingRow label="Clean up after a merge" hint="Auto removes the worktree agentos made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks.">
             <SegmentedControl label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />
           </SettingRow>
           <SettingRow label="Clean up after a close" hint="Auto cleans up when you close the pull request. Manual asks first.">
             <SegmentedControl label="Clean up after a close" options={MODES} value={settings.cleanup.close} onChange={(value) => report(() => setCleanup('close', value))} />
           </SettingRow>
-          <SettingRow label="Send the first prompt" hint="Auto sends what a new task starts with at once. Manual types it and waits for Enter.">
+          <SettingRow label="Send the first prompt" hint="Auto sends what a new task starts with at once. Manual leaves it as a draft in the chat.">
             <SegmentedControl label="Send the first prompt" options={MODES} value={settings.promptSend} onChange={(value) => report(() => setPromptSend(value))} />
           </SettingRow>
           <SettingRow label="Browser enabled" hint="Tells new tasks about the browser and media commands.">
