@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { answeredLate, questionAnswer, questionsOf } from './chatQuestions.ts'
+import { answeredLate, approvalLine, questionAnswer, questionsOf } from './chatQuestions.ts'
 
 const colour = { question: 'Which colour do you like?', header: 'Colour', options: [{ label: 'Red', description: 'Warm' }, { label: 'Blue', description: 'Cool' }], multiSelect: false }
 const sizes = { question: 'Which sizes do you stock?', header: 'Sizes', options: [{ label: 'Small', description: '' }, { label: 'Medium', description: '' }, { label: 'Large', description: '' }], multiSelect: true }
@@ -35,4 +35,10 @@ test('questions read from the tool input', () => {
 test('a refused answer to an approval that ended', () => {
   assert.equal(answeredLate('No approval "req-1" is waiting'), true)
   assert.equal(answeredLate('Thread storefront/abcd2345 did not take the answer'), false)
+})
+
+test('a tool approval reads as its tool and summary', () => {
+  const p = { id: 'p/a', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool' as const }
+  assert.equal(approvalLine(p), 'Bash: npm install')
+  assert.equal(approvalLine({ ...p, tool: 'mcp__browser__click', summary: '' }), 'mcp__browser__click')
 })

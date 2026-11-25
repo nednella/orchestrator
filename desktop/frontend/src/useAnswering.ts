@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useAgentos } from './AgentosContext'
 
-// useAnswering sends an answer to an approval and holds busy until the host takes or refuses it, so a second click
-// cannot send another; a failure shows as a toast.
+// useAnswering sends an answer to an approval. busy holds from the send on, so a second click cannot send another; it
+// ends only when the answer fails, shown as a toast, since a taken answer replaces what asked for it.
 export function useAnswering(): { busy: boolean; send(answer: () => Promise<void>): void } {
   const { report } = useAgentos('report')
   const [busy, setBusy] = useState(false)
@@ -10,7 +10,14 @@ export function useAnswering(): { busy: boolean; send(answer: () => Promise<void
     busy,
     send(answer) {
       setBusy(true)
-      report(() => Promise.resolve().then(answer).finally(() => setBusy(false)))
+      report(() =>
+        Promise.resolve()
+          .then(answer)
+          .catch((err) => {
+            setBusy(false)
+            throw err
+          }),
+      )
     },
   }
 }

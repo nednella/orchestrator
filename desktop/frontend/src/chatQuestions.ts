@@ -1,3 +1,5 @@
+import type { Pending } from './types'
+
 export type QuestionOption = { label: string; description: string }
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }
 
@@ -36,3 +38,6 @@ export function questionAnswer(input: unknown, picks: Record<string, string[] | 
 // the request was answered elsewhere. The pattern is the host's sentence `no approval %q is waiting` (internal/host),
 // as the chat service passes it on; desktop/chat/chat_test.go checks that sentence, so change both together.
 export const answeredLate = (message: string) => /^No approval .* is waiting$/.test(message)
+
+// approvalLine is what a thread's card says a tool approval would allow, from the approval itself.
+export const approvalLine = (p: Pending): string => (p.summary ? `${p.tool}: ${p.summary}` : p.tool)

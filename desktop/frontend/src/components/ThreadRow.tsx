@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { approvalLine } from '../chatQuestions'
 import { currentTask } from '../threads'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
@@ -28,6 +29,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
   const pending = useAgentosSelector((s) => s.pending[session.id])
+  // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
+  const asking = pending?.kind === 'tool' ? approvalLine(pending) : session.detail
   const cleanup = useArmedConfirm()
   const card = useHoverCard(400)
   const cardId = useId()
@@ -166,10 +169,10 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             )}
           </div>
         )}
-        {session.state === 'waiting' && (session.detail || pending) && (
+        {session.state === 'waiting' && (asking || pending) && (
           <div className="thread-question col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5">
-            {session.detail && <p className="truncate">{session.detail}</p>}
-            {pending && <ThreadAnswer session={session} pending={pending} />}
+            {asking && <p className="truncate">{asking}</p>}
+            {pending && <ThreadAnswer key={pending.request} session={session} pending={pending} />}
           </div>
         )}
       </div>
