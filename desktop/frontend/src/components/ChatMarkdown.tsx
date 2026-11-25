@@ -26,6 +26,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ text }: ChatMarkdownPro
             e.preventDefault()
             report(() => api.openURL(href))
           }}
+          onAuxClick={(e) => e.preventDefault()}
         >
           {children}
         </a>

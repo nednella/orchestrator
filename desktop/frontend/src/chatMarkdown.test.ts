@@ -35,3 +35,10 @@ test('codeLanguage reads language-go', () => {
   assert.equal(codeLanguage(undefined), '')
   assert.equal(codeLanguage('other'), '')
 })
+
+test('other links render with no usable href', () => {
+  for (const url of ['JaVaScRiPt:alert(1)', 'data:text/html,hi', 'vbscript:x', '//evil.example', './file.md']) {
+    const html = render(`[x](${url})`)
+    assert.equal(/href="[^"]/.test(html), false, url)
+  }
+})

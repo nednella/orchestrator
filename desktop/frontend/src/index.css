@@ -911,6 +911,8 @@
   }
 
   .chat-code {
+    min-width: 0;
+    max-width: 100%;
     margin: 0 0 0.75rem;
     border-radius: var(--radius-md);
     background: var(--bg-code);
