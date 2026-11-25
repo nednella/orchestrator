@@ -13,6 +13,7 @@ type ComposerProps = {
   canSend: boolean
   sendLabel: string
   sendText?: string
+  sending?: boolean
   banner?: ReactNode
   drawer?: ReactNode
   attachments?: ReactNode
@@ -27,7 +28,7 @@ type ComposerProps = {
   onSend(): void
 }
 
-export function Composer({ inputRef, value, label, placeholder, canSend, sendLabel, sendText, banner, drawer, attachments, left, right, stop, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerProps) {
+export function Composer({ inputRef, value, label, placeholder, canSend, sendLabel, sendText, sending = false, banner, drawer, attachments, left, right, stop, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerProps) {
   const [dragging, setDragging] = useState(false)
 
   const dragOver = (e: DragEvent) => {
@@ -89,13 +90,19 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
             <button
               className="composer-send"
               data-text={Boolean(sendText)}
-              disabled={!canSend}
-              aria-label={sendLabel}
-              title={sendLabel}
+              disabled={!canSend || sending}
+              aria-label={sending ? 'Sending' : sendLabel}
+              title={sending ? 'Sending' : sendLabel}
               onMouseDown={(e) => e.preventDefault()}
               onClick={onSend}
             >
-              {sendText ?? <Icon name="arrow-up" size={14} />}
+              {sending ? (
+                <span className="flex animate-spin">
+                  <Icon name="loader" size={14} />
+                </span>
+              ) : (
+                (sendText ?? <Icon name="arrow-up" size={14} />)
+              )}
             </button>
           )}
         </div>

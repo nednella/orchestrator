@@ -13,6 +13,9 @@ import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
 
+// A send that gets no answer in this long lets the composer send again.
+const sendWait = 15_000
+
 // onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
 type ThreadComposerProps = {
   session: Session
@@ -32,7 +35,7 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
   const input = useRef<ComposerInput>(null)
-  const sending = useRef(false)
+  const [sending, setSending] = useState(false)
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -72,8 +75,9 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
 
   const send = () => {
     const text = sendText(latest.current.draft.text)
-    if (sending.current || text.trim() === '') return
-    sending.current = true
+    if (sending || text.trim() === '') return
+    setSending(true)
+    const release = setTimeout(() => setSending(false), sendWait)
     const sent = latest.current.draft
     update({ ...latest.current, draft: EMPTY_DRAFT })
     report(async () => {
@@ -84,7 +88,8 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
         update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, text) })
         throw err
       } finally {
-        sending.current = false
+        clearTimeout(release)
+        setSending(false)
       }
     })
   }
@@ -109,7 +114,8 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
           </span>
         )
       }
-      stop={action === 'stop' ? { stopping, onStop } : undefined}
+      sending={sending}
+      stop={action === 'stop' && !sending ? { stopping, onStop } : undefined}
       onChange={(next) => update({ ...latest.current, draft: next })}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && onEscape(false) === 'blur') input.current?.blur()
