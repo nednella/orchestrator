@@ -36,6 +36,8 @@ var (
 	chat string
 	//go:embed handover.md
 	handover string
+	//go:embed denied.md
+	denied string
 )
 
 // Digest is what the weekly digest run asks Claude to do, given the names the project depends on.
@@ -57,6 +59,9 @@ func Chat() string { return body(chat) }
 
 // Handover ends the system prompt of a task that another session asked for, with the context that session gave.
 func Handover(context string) string { return strings.Replace(body(handover), "{context}", context, 1) }
+
+// Denied is the reason a tool call is denied with when the user sends a message while it waits for their approval.
+func Denied(text string) string { return strings.Replace(body(denied), "{text}", text, 1) }
 
 // BrowserHelp is what agentos browser help prints.
 func BrowserHelp() string { return body(browserHelp) }

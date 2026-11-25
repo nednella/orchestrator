@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/prompts"
 )
 
 const fakeInit = `{"type":"system","subtype":"init","cwd":"/tmp/rec","session_id":"fake-session","model":"claude-haiku-5-5","permissionMode":"default"}`
@@ -1259,8 +1260,19 @@ func TestSendDuringApprovalDeniesWithTheText(t *testing.T) {
 			deny = l
 		}
 	}
-	if !strings.Contains(deny, `"behavior":"deny"`) || !strings.Contains(deny, `"message":"use ls instead"`) {
-		t.Fatalf("control_response = %s, want a deny with the text", deny)
+	var answer struct {
+		Response struct {
+			Response struct {
+				Behavior string `json:"behavior"`
+				Message  string `json:"message"`
+			} `json:"response"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal([]byte(deny), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if r := answer.Response.Response; r.Behavior != "deny" || r.Message != prompts.Denied("use ls instead") {
+		t.Fatalf("control_response = %s, want a deny with the text in its framing", deny)
 	}
 	if lines := userLines(t, h.stdin); len(lines) != 1 {
 		t.Fatalf("%d user lines on stdin, want only the first", len(lines))

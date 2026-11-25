@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/prompts"
 )
 
 type Config struct {
@@ -504,7 +505,7 @@ func (h *host) sendLocked(id, text string, files []string, images []chat.Image) 
 				return lines, logged, err
 			}
 			h.approvals = h.approvals[1:]
-			lines = append(lines, chat.Deny(a.id, text))
+			lines = append(lines, chat.Deny(a.id, prompts.Denied(text)))
 		}
 		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Parent: parent})
 	}

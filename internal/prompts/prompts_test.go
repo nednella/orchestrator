@@ -51,6 +51,12 @@ func TestBodyWithoutComment(t *testing.T) {
 	}
 }
 
+func TestDeniedEndsWithTheUsersText(t *testing.T) {
+	if got := Denied("use ls {text}"); !strings.HasSuffix(got, ":\n\nuse ls {text}") || !strings.HasPrefix(got, "The user declined this tool call.") {
+		t.Errorf("Denied = %q", got)
+	}
+}
+
 func TestHandoverEndsWithTheContext(t *testing.T) {
 	if got := Handover("line one\n{context}"); !strings.HasSuffix(got, ":\n\nline one\n{context}") || strings.Contains(got, "<!--") {
 		t.Errorf("Handover = %q", got)
