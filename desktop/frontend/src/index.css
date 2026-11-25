@@ -602,7 +602,7 @@
     color: var(--text-soft);
   }
 
-  /* The time gives way to the card's buttons while it is pointed at, holds the focus or has the list's cursor. */
+  /* The time gives way to the selected card's close button while it is pointed at, holds the focus or has the list's cursor. */
   .thread-actions {
     display: none;
   }
@@ -612,8 +612,8 @@
     display: flex;
   }
 
-  .thread-row:is(:hover, :focus-within, [data-menu-open='true']) .thread-age,
-  [data-panel][data-focused] .thread-row[data-cursor='true'] .thread-age {
+  .thread-row[data-selected='true']:is(:hover, :focus-within, [data-menu-open='true']) .thread-age,
+  [data-panel][data-focused] .thread-row[data-selected='true'][data-cursor='true'] .thread-age {
     display: none;
   }
 
@@ -622,7 +622,7 @@
       display: flex;
     }
 
-    .thread-age {
+    .thread-row[data-selected='true'] .thread-age {
       display: none;
     }
   }

@@ -123,26 +123,13 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
               <LastActive at={session.lastEventAt} />
             </span>
-            <span className="thread-actions relative z-[1] items-center gap-0.5 justify-self-end">
-              <button
-                className="btn btn-ghost h-5 w-6 justify-center px-0"
-                title="Thread actions"
-                aria-label={`Actions for ${session.title}`}
-                aria-haspopup="menu"
-                onClick={(e) => {
-                  const box = e.currentTarget.getBoundingClientRect()
-                  closeCard()
-                  setMenuAt({ x: box.left, y: box.bottom })
-                }}
-              >
-                <Icon name="more" size={14} />
-              </button>
-              {selected && (
+            {selected && (
+              <span className="thread-actions relative z-[1] items-center justify-self-end">
                 <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(session.project)}>
                   <Icon name="x" size={14} />
                 </button>
-              )}
-            </span>
+              </span>
+            )}
           </>
         )}
         {line2 && (
