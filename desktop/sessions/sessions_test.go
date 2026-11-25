@@ -268,6 +268,30 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 	}
 }
 
+func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	older := filepath.Join(t.TempDir(), "agentos")
+	if err := os.WriteFile(older, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", s.ID, "#{pane_start_command}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(out)), apptest.CLIPath(t)+" host "; !strings.HasPrefix(got, want) {
+		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
+	}
+	if args := strings.Join(claudeArgs(t, dir, s.ID), " "); !strings.Contains(args, older+"' hook Stop") {
+		t.Errorf("the hooks do not call the agentos on PATH: %q", args)
+	}
+}
+
 func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})

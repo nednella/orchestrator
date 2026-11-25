@@ -110,6 +110,7 @@ type Project struct {
 type Sessions struct {
 	tmux     *term.Tmux
 	agents   agent.Registry
+	binary   string
 	run      run.Runner
 	stateDir string
 	localDir string
@@ -208,6 +209,7 @@ type Awake interface {
 type Options struct {
 	Tmux          *term.Tmux
 	Agents        agent.Registry
+	Binary        string // this app's own binary, whose host command hosted agents run under
 	StateDir      string
 	LocalDir      string // pull-request tracking and the clean-up log: never synced
 	Projects      ProjectList
@@ -248,7 +250,7 @@ func (s *Sessions) Touch() { s.changed() }
 
 func newSessions(o Options) *Sessions {
 	return &Sessions{
-		tmux: o.Tmux, agents: o.Agents, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
+		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, dismissed: map[string]bool{},
@@ -1533,8 +1535,8 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, p.Can(agent.Hosted), action, p.Name())
 }
 
-// hosted is argv run under agentos host, with the session's chat log and socket. It makes the socket's folder
-// private, as the host asks; a folder an older run made may be wider, and it is the app's own.
+// hosted is argv run under this app's own host command, with the session's chat log and socket. It makes the socket's
+// folder private, as the host asks; a folder an older run made may be wider, and it is the app's own.
 func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 	socket := s.hostSocket(name)
 	if len(socket) > host.MaxSocketPath {
@@ -1547,7 +1549,7 @@ func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("making the session's socket folder private: %w", err)
 	}
-	return append([]string{s.agents.Exe, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
+	return append([]string{s.binary, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
 }
 
 // register adds the new session to the list and returns its row. continues is the session whose conversation it
