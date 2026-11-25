@@ -24,6 +24,7 @@ import (
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/agentos/internal/term"
 	"github.com/nednella/agentos/internal/util"
 )
 
@@ -1045,7 +1046,8 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 
 // removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
 // may have changed the worktree until it stopped, the worktree's removal, and the rest of the settle. A non-empty reason
-// means it stopped before the end. A step that finds the context cancelled stops with closedReason.
+// means it stopped before the end. A step that finds the context cancelled stops with closedReason, and one that finds
+// the thread woken stops and keeps what is left, as does the end.
 func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool) (removed []string, reason string) {
 	removed = []string{}
 	if _, reason := l.planFor(ctx, t, pr, force); reason != "" {
@@ -1068,13 +1070,16 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 		if ctx.Err() != nil {
 			return removed, closedReason
 		}
+		if reason := l.woke(t.id); reason != "" {
+			return removed, reason
+		}
 		done, reason := step(ctx, t, &plan)
 		removed = append(removed, done...)
 		if reason != "" {
 			return removed, reason
 		}
 	}
-	return removed, ""
+	return removed, l.woke(t.id)
 }
 
 // cleanupPlan is what a clean-up found out before it removes anything.
@@ -1148,8 +1153,8 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	if inside(dir, path) || trees.main != "" && inside(trees.main, path) {
 		return nil, fmt.Sprintf("%s holds the project's own checkout, which agentos never removes", path)
 	}
-	if l.live(t.id) {
-		return nil, fmt.Sprintf("Thread %d woke during the clean-up", l.sessions.Number(t.id))
+	if reason := l.woke(t.id); reason != "" {
+		return nil, reason
 	}
 	if !gone(path) {
 		if !l.ours(ctx, t.proj.Key(), path, t.id) {
@@ -1176,10 +1181,15 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	return []string{"worktree " + path}, ""
 }
 
-// live says whether the thread runs, as after a wake since the clean-up settled it.
-func (l *Lifecycle) live(id string) bool {
-	t, err := l.sessions.target(id)
-	return err == nil && !t.ended
+// woke is why a clean-up stops once the thread it settled runs again, as after a wake, or "" while it does not.
+func (l *Lifecycle) woke(id string) string {
+	l.sessions.mu.Lock()
+	live := slices.ContainsFunc(l.sessions.info, func(in term.Info) bool { return in.Name.String() == id })
+	l.sessions.mu.Unlock()
+	if !live {
+		return ""
+	}
+	return fmt.Sprintf("Thread %d woke during the clean-up", l.sessions.Number(id))
 }
 
 // CleaningUp says whether a clean-up of the thread runs now, so a wake can wait until it ends.

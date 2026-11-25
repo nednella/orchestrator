@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/agentos/internal/term"
 )
 
 func prJSON(state string, draft bool, rollup string, comments, reviews int) string {
@@ -229,6 +232,52 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(path, "README")); err != nil {
 				t.Errorf("the folder is not there: %v", err)
+			}
+		})
+	}
+}
+
+// openWindows is a browser with a window open for every thread; closed lists the windows it closed.
+type openWindows struct {
+	fakeBrowsers
+	closed *[]string
+}
+
+func (w openWindows) Has(string) bool                    { return true }
+func (w openWindows) Close(_ context.Context, id string) { *w.closed = append(*w.closed, id) }
+
+func TestThreadThatWakesDuringTheCleanupKeepsWhatIsLeft(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		removed bool
+	}{{"no worktree agentos made", false}, {"a worktree agentos removed", true}} {
+		t.Run(tt.name, func(t *testing.T) {
+			l, dir, _ := madeRepo(t)
+			name := session.Name{Project: "p", Token: "abcdefgh"}
+			id := name.String()
+			if tt.removed {
+				wt := madeTree(t, l, dir, "issue-7", id)
+				gitT(t, dir, "worktree", "remove", wt)
+				if err := l.sessions.made.Removed("p", wt, time.Now()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var closed []string
+			l.sessions.browsers = openWindows{closed: &closed}
+			tmp := l.sessions.tmpDir(name)
+			if err := os.MkdirAll(tmp, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			l.sessions.nums[id] = 3
+			// The clean-up read the thread as settled; it has woken since.
+			l.sessions.info = append(l.sessions.info, term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir})
+
+			removed, reason := l.removeAll(t.Context(), target{id: id, branch: "issue-7", proj: project.Project{Name: "p", Dir: dir}, ended: true}, nil, false)
+			if reason != "Thread 3 woke during the clean-up" || len(removed) != 0 {
+				t.Errorf("removed %q, reason %q", removed, reason)
+			}
+			if _, err := os.Stat(tmp); err != nil || len(closed) != 0 {
+				t.Errorf("temp folder: %v; windows closed %q", err, closed)
 			}
 		})
 	}

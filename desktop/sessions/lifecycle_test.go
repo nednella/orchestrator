@@ -1346,13 +1346,14 @@ func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 	ended(t, h, s)
-	time.Sleep(2 * time.Millisecond) // the merge must come after the start, and the wake after the merge, to the millisecond
-	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), time.Now()))
+	pastMilli(t, max(s.CreatedAt, s.WokeAt)) // the merge must come after the start, and the wake after the merge
+	merged := time.Now()
+	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))
 	h.RefreshPRs()
 	if got, _ := h.Session(s.ID); got.Cleanup != "ask" {
 		t.Fatalf("after the merge = %+v", got)
 	}
-	time.Sleep(2 * time.Millisecond)
+	pastMilli(t, merged.UnixMilli())
 	if _, err := h.WakeThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -1386,6 +1387,12 @@ func TestForkDoesNotSettleOnTheSourcesPR(t *testing.T) {
 	if got := stateOf(h, fork.ID); got == "settled" || got == "missing" {
 		t.Errorf("the fork is %s", got)
 	}
+}
+
+// pastMilli waits until the clock is past the millisecond ms.
+func pastMilli(t *testing.T, ms int64) {
+	t.Helper()
+	eventually(t, "the clock to pass a millisecond", func() bool { return time.Now().UnixMilli() > ms })
 }
 
 // slowOrigin makes each fetch from origin wait first, through an ssh command that sleeps and then runs git's own side
