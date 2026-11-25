@@ -103,6 +103,9 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("finding the app's own binary: %w", err)
 	}
+	if real, err := filepath.EvalSymlinks(binary); err == nil {
+		binary = real
+	}
 	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agents(slices.Compact([]string{dataDir, localDir})), Binary: binary}, nil
 }
 
