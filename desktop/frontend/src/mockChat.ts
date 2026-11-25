@@ -286,11 +286,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   }
 
   // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts and queued
-  // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block.
+  // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
+  // or the block is from before the last compaction.
   function fork(from: string, to: string, at: string) {
     const log = logOf(from)
     const cut = at ? log.findLastIndex((e) => e.uuid === at) : -1
     if (cut < 0) throw "That message is not in the thread's chat"
+    if (cut < log.findLastIndex((e) => e.kind === 'compact')) throw 'This message is from before the chat was compacted, so a fork cannot start there'
     log
       .slice(0, cut + 1)
       .filter((e) => e.kind !== 'draft' && e.kind !== 'queued' && e.kind !== 'unsent')
@@ -345,6 +347,12 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       if (text === 'exit') {
         end(id)
         t.setState('ended')
+        return { id: message }
+      }
+      if (text === '/compact') {
+        append(id, { kind: 'compact' })
+        append(id, { kind: 'init', id: 'mock-session' })
+        append(id, { kind: 'turn_end', cost: 0.01 })
         return { id: message }
       }
       append(id, { kind: 'init', id: 'mock-session' })

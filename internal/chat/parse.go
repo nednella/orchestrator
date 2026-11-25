@@ -42,8 +42,11 @@ func Parse(data []byte) ([]Event, error) {
 	}
 	switch l.Type {
 	case "system":
-		if l.Subtype == "init" {
+		switch l.Subtype {
+		case "init":
 			return []Event{{Kind: KindInit, ID: l.SessionID}}, nil
+		case "compact_boundary":
+			return []Event{{Kind: KindCompact}}, nil
 		}
 	case "stream_event":
 		return parseStreamEvent(l)

@@ -18,6 +18,8 @@ const (
 	KindQueued     Kind = "queued"
 	KindInterrupt  Kind = "interrupt"
 	KindCommands   Kind = "commands"
+	// KindCompact is Claude compacting the conversation: a resume cannot reach a message from before it.
+	KindCompact Kind = "compact"
 	// KindEcho is claude taking a user message in; the host consumes it and never logs it.
 	KindEcho Kind = "echo"
 	// KindStillQueued is claude's reply to the interrupt request ID: Input lists the uuids of the user messages it

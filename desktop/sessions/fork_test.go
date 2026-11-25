@@ -146,6 +146,40 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	}
 }
 
+func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
+	h := apptest.New(t)
+	src, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, append(slices.Clone(oneReply),
+		chat.Event{Kind: chat.KindUser, ID: "u2", Text: "/compact"},
+		chat.Event{Kind: chat.KindCompact},
+		chat.Event{Kind: chat.KindTurnEnd},
+		chat.Event{Kind: chat.KindUser, ID: "u3", Text: "second"},
+		chat.Event{Kind: chat.KindMessage, ID: "msg_2", UUID: "r2", Text: "three"},
+		chat.Event{Kind: chat.KindTurnEnd},
+	)...)
+
+	_, err = h.ForkSession(src.ID, "r1b")
+	if want := "This message is from before the chat was compacted, so a fork cannot start there"; err == nil || err.Error() != want {
+		t.Errorf("fork before the compaction: %v, want %q", err, want)
+	}
+	if n := len(h.Sessions().List()); n != 1 {
+		t.Errorf("%d threads after the refused fork, want only the source", n)
+	}
+
+	fork, err := h.ForkSession(src.ID, "r2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := claudeArgs(t, h, fork.ID)
+	if i := slices.Index(args, "--resume-session-at"); i < 0 || args[i+1] != "r2" {
+		t.Errorf("args = %q, want a fork at r2", args)
+	}
+}
+
 func TestForkKeepsFolderKindAndModel(t *testing.T) {
 	h := apptest.New(t)
 	for _, chatKind := range []bool{false, true} {

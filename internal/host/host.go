@@ -878,6 +878,8 @@ func echoLine(e chat.Event) string {
 		s = "not sent: " + e.Text
 	case chat.KindInterrupt:
 		s = "interrupted"
+	case chat.KindCompact:
+		s = "compacted"
 	case chat.KindExit:
 		s = "claude exited"
 		if e.Text != "" {

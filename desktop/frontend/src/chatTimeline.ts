@@ -13,9 +13,11 @@ export type ToolCall = { id: string; tool: string; input: unknown; result: strin
 export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
 export type TimelineItem =
-  // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none.
+  // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none or
+  // when the reply is from before the last compaction.
   | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[]; forkAt: string }
-  // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none.
+  // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none or when the reply
+  // is from before the last compaction.
   | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean }
   | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
@@ -69,6 +71,9 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
+  // Claude resumes a compacted conversation from its last compaction and cannot find a message before it, so no fork
+  // ends at one.
+  const compacted = events.findLastIndex((e) => e.kind === 'compact')
 
   const open = (e: ChatEvent): Turn => (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [], unsent: [] })
 
@@ -98,7 +103,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     close(e.at, notice && { kind: 'notice', key: `notice-${e.seq}`, at: e.at, ...notice })
   }
 
-  events.forEach((e) => {
+  events.forEach((e, i) => {
     switch (e.kind) {
       case 'user': {
         // A message Claude takes in while it works splits the turn there.
@@ -122,11 +127,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'message': {
         const t = open(e)
         const id = e.id || `seq-${e.seq}`
+        const uuid = i > compacted ? (e.uuid ?? '') : ''
         const reply = t.parts.find((p): p is Reply => p.kind === 'reply' && p.id === id)
         if (reply) {
           reply.blocks.push(e.text ?? '')
-          reply.uuid = e.uuid || reply.uuid
-        } else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, uuid: e.uuid ?? '', blocks: [e.text ?? ''] })
+          reply.uuid = uuid || reply.uuid
+        } else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, uuid, blocks: [e.text ?? ''] })
         return
       }
       case 'tool_use': {

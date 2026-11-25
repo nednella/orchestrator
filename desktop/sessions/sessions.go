@@ -1524,14 +1524,21 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 		log.Printf("agentos: reading the chat log of %s: %v", id, err)
 		return Session{}, errors.New("Could not read the thread's chat")
 	}
-	cut := -1
+	cut, compacted := -1, -1
 	for i, e := range events {
 		if e.UUID == at {
 			cut = i
 		}
+		if e.Kind == chat.KindCompact {
+			compacted = i
+		}
 	}
 	if at == "" || cut < 0 {
 		return Session{}, errors.New("That message is not in the thread's chat")
+	}
+	// Claude resumes a compacted conversation from its last compaction, so --resume-session-at cannot find an earlier message.
+	if cut < compacted {
+		return Session{}, errors.New("This message is from before the chat was compacted, so a fork cannot start there")
 	}
 	issue, _ := strconv.Atoi(in.Issue)
 	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}

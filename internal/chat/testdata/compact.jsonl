@@ -1,0 +1,3 @@
+{"type":"system","subtype":"compact_boundary","session_id":"4584df39-7963-46f8-84e9-f9c323877f8c","uuid":"6c3f1b8e-2d4a-4f0e-9b7c-1a2e3d4c5b6a","compact_metadata":{"trigger":"manual","pre_tokens":18342}}
+{"type":"system","subtype":"init","cwd":"/tmp/rec","session_id":"4584df39-7963-46f8-84e9-f9c323877f8c","tools":["Bash","Read"],"mcp_servers":[],"model":"claude-haiku-5-5","permissionMode":"default","slash_commands":["compact"],"apiKeySource":"none","output_style":"default","uuid":"0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":12807,"num_turns":0,"result":"","session_id":"4584df39-7963-46f8-84e9-f9c323877f8c","total_cost_usd":0.012862249999999999,"uuid":"3a2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"}

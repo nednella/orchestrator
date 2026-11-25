@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -203,6 +204,16 @@ func TestParseQuestionApproval(t *testing.T) {
 	}
 	if use, _ := first(events, KindToolUse); ev.Parent != use.ID {
 		t.Errorf("want the approval's parent to be its tool call %q, got %q", use.ID, ev.Parent)
+	}
+}
+
+func TestParseCompactBoundaryIsACompaction(t *testing.T) {
+	var kinds []Kind
+	for _, e := range parseFile(t, "compact.jsonl") {
+		kinds = append(kinds, e.Kind)
+	}
+	if want := []Kind{KindCompact, KindInit, KindTurnEnd}; !slices.Equal(kinds, want) {
+		t.Errorf("kinds = %v, want %v", kinds, want)
 	}
 }
 

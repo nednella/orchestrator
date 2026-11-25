@@ -267,6 +267,47 @@ test('a reply forks at its last block, and a message at the reply before it', ()
   assert.equal(only(streaming, 'reply')[0].uuid, '', 'a reply that only streamed has no uuid yet')
 })
 
+test('no fork ends at a message from before the last compaction', () => {
+  const events = log(
+    user('u1', 'First'),
+    { kind: 'message', id: 'msg_1', uuid: 'r1', text: 'One.' },
+    turnEnd(),
+    user('u2', '/compact'),
+    { kind: 'compact' },
+    turnEnd(),
+    user('u3', 'Second'),
+    { kind: 'message', id: 'msg_2', uuid: 'r2', text: 'Two.' },
+    turnEnd(),
+    user('u4', '/compact'),
+    { kind: 'compact' },
+    turnEnd(),
+    user('u5', 'Third'),
+    { kind: 'message', id: 'msg_3', uuid: 'r3', text: 'Three.' },
+    turnEnd(),
+    user('u6', 'Fourth'),
+  )
+  const items = buildTimeline(events, {}).items
+  assert.deepEqual(
+    only(items, 'reply').map((r) => [r.text, r.uuid]),
+    [
+      ['One.', ''],
+      ['Two.', ''],
+      ['Three.', 'r3'],
+    ],
+  )
+  assert.deepEqual(
+    only(items, 'user').map((u) => [u.text, u.forkAt]),
+    [
+      ['First', ''],
+      ['/compact', ''],
+      ['Second', ''],
+      ['/compact', ''],
+      ['Third', ''],
+      ['Fourth', 'r3'],
+    ],
+  )
+})
+
 test('queued until delivered', () => {
   const sent = log(user('u1', 'Slow job'), message('msg_1', 'Working.'), { kind: 'queued', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] })
   const waiting = buildTimeline(sent, {})
