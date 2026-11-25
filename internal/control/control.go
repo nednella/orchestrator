@@ -29,6 +29,7 @@ const (
 )
 
 // Request is one command. Session and Project say who asks; Opts carry the flags.
+// Token says which thread an orchestration call acts as; it replaces Session for that call.
 type Request struct {
 	Cmd       string            `json:"cmd"`
 	Session   string            `json:"session,omitempty"`
@@ -36,6 +37,7 @@ type Request struct {
 	Args      []string          `json:"args,omitempty"`
 	Opts      map[string]string `json:"opts,omitempty"`
 	TimeoutMs int               `json:"timeoutMs,omitempty"`
+	Token     string            `json:"token,omitempty"`
 }
 
 // Timeout is how long the command may run.

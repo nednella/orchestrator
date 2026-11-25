@@ -92,3 +92,15 @@ func TestDigestNamesTheDependencies(t *testing.T) {
 		t.Error("an empty list left the placeholder")
 	}
 }
+
+func TestEveryToolHasADescription(t *testing.T) {
+	for _, name := range []string{"delegate", "threads", "read", "send", "wait", "stop"} {
+		got := Tool(name)
+		if got == "" || strings.Contains(got, "<!--") || strings.HasSuffix(got, "\n") {
+			t.Errorf("Tool(%q) = %q", name, got)
+		}
+	}
+	if Tool("nope") != "" {
+		t.Error("an unknown tool has a description")
+	}
+}

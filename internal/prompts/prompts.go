@@ -40,6 +40,18 @@ var (
 	denied string
 	//go:embed denied-no-reason.md
 	deniedNoReason string
+	//go:embed tool-delegate.md
+	toolDelegate string
+	//go:embed tool-threads.md
+	toolThreads string
+	//go:embed tool-read.md
+	toolRead string
+	//go:embed tool-send.md
+	toolSend string
+	//go:embed tool-wait.md
+	toolWait string
+	//go:embed tool-stop.md
+	toolStop string
 )
 
 // Digest is what the weekly digest run asks Claude to do, given the names the project depends on.
@@ -72,6 +84,25 @@ func Denied(text string) string { return strings.Replace(body(denied), "{text}",
 
 // DeniedWithoutReason is the reason a tool call is denied with when the user gives none.
 func DeniedWithoutReason() string { return body(deniedNoReason) }
+
+// Tool is the description of an orchestration tool, by its name; empty for a name that is not one.
+func Tool(name string) string {
+	switch name {
+	case "delegate":
+		return body(toolDelegate)
+	case "threads":
+		return body(toolThreads)
+	case "read":
+		return body(toolRead)
+	case "send":
+		return body(toolSend)
+	case "wait":
+		return body(toolWait)
+	case "stop":
+		return body(toolStop)
+	}
+	return ""
+}
 
 // BrowserHelp is what agentos browser help prints.
 func BrowserHelp() string { return body(browserHelp) }
