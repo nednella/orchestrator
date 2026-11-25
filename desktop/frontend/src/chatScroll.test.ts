@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { followScroll, isAtBottom, keepScroll, keptScroll } from './chatScroll.ts'
+import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from './chatScroll.ts'
 
 test('at bottom within 48 px', () => {
   assert.equal(isAtBottom(1000, 500, 1500), true)
@@ -10,11 +10,16 @@ test('at bottom within 48 px', () => {
   assert.equal(isAtBottom(990, 500, 1500, 0), false)
 })
 
-test('follows only when at the bottom', () => {
-  assert.equal(followScroll({ atBottom: true, grew: true }), 'end')
-  assert.equal(followScroll({ atBottom: false, grew: true }), 'stay')
-  assert.equal(followScroll({ atBottom: true, grew: false }), 'stay')
-  assert.equal(followScroll({ atBottom: false, grew: false }), 'stay')
+test('a following chat scrolls to its end when the composer grows', () => {
+  assert.equal(followScroll({ following: true, grew: true, insetGrew: true, fromEnd: 0 }), 'end')
+  assert.equal(followScroll({ following: false, grew: true, insetGrew: true, fromEnd: 0 }), 'stay', 'a reader scrolled up stays')
+})
+
+test('a following chat the virtualizer does not anchor scrolls to its end as it grows', () => {
+  assert.equal(followScroll({ following: true, grew: true, insetGrew: false, fromEnd: ANCHOR_SLACK }), 'stay', 'anchored in the frame it grew')
+  assert.equal(followScroll({ following: true, grew: true, insetGrew: false, fromEnd: ANCHOR_SLACK + 1 }), 'end', 'inside the follow slack, past the anchor')
+  assert.equal(followScroll({ following: true, grew: false, insetGrew: false, fromEnd: END_SLACK }), 'stay', 'nothing grew')
+  assert.equal(followScroll({ following: false, grew: true, insetGrew: false, fromEnd: 500 }), 'stay', 'a reader scrolled up stays')
 })
 
 test('restores a kept position', () => {

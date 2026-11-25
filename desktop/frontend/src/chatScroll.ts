@@ -5,9 +5,19 @@ export function isAtBottom(top: number, client: number, height: number, slack = 
   return height - top - client <= slack
 }
 
-// followScroll says whether the chat scrolls to its end as it grows: only when the reader was at the end.
-export function followScroll({ atBottom, grew }: { atBottom: boolean; grew: boolean }): 'end' | 'stay' {
-  return atBottom && grew ? 'end' : 'stay'
+// The chat is at its end, and follows it, within END_SLACK px of it.
+export const END_SLACK = 40
+
+// Within ANCHOR_SLACK px of the end, the virtualizer keeps a growing chat that far from its end in the same frame. It is
+// smaller than END_SLACK so that the last line stays clear of the composer: the gap above the composer is 12px at its
+// narrowest and the last row ends in 20px of padding.
+export const ANCHOR_SLACK = 32
+
+// followScroll says whether a following chat scrolls to its end after it renders: when the composer over its end grew,
+// which is no row the virtualizer anchors, or when the chat grew while too far from its end to be anchored.
+export function followScroll({ following, grew, insetGrew, fromEnd }: { following: boolean; grew: boolean; insetGrew: boolean; fromEnd: number }): 'end' | 'stay' {
+  if (!following) return 'stay'
+  return insetGrew || (grew && fromEnd > ANCHOR_SLACK) ? 'end' : 'stay'
 }
 
 // KeptScroll is where a thread's chat was scrolled to and the sizes of the rows it measured, so that it opens there
