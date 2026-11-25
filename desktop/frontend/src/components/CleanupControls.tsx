@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { cleanupConfirmText, cleanupForced } from '../cleanupConfirm'
 import { readStored, writeStored } from '../storage'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { ArmedConfirm } from '../useArmedConfirm'
@@ -11,31 +12,26 @@ type CleanupControlsProps = { session: Session; remove?: ArmedConfirm<true> }
 
 const KEPT_KEY = 'agentos.keptCleanups'
 
-function tail(path: string): string {
-  return path.split('/').slice(-2).join('/')
-}
-
 export function CleanupControls({ session, remove: given }: CleanupControlsProps) {
   const { cleanupSession, report } = useAgentos('cleanupSession', 'report')
   const own = useArmedConfirm()
   const remove = given ?? own
   const [kept, setKept] = useState(() => readStored<string[]>(KEPT_KEY, []).includes(session.id))
-  const { cleanup, cleanupReason, worktree, branch } = session
+  const { cleanup, cleanupReason } = session
 
   if (cleanup === 'pending') return <span className="text-small text-dim">cleaning up…</span>
 
   if (remove.armed) {
-    const what = `${worktree ? `the worktree ${tail(worktree)}, ` : ''}${branch ? `the branch ${branch}, ` : ''}temp files and the task`
     return (
       <ConfirmRow
         danger
         stacked
-        message={`Remove ${what}?${cleanup === 'blocked' ? ' Uncommitted work is lost.' : ''}`}
+        message={cleanupConfirmText(session)}
         confirmLabel="Remove"
         onCancel={remove.disarm}
         onConfirm={() => {
           remove.disarm()
-          report(() => cleanupSession(session.id, true))
+          report(() => cleanupSession(session.id, cleanupForced(cleanup)))
         }}
       />
     )
