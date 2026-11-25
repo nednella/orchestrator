@@ -18,9 +18,9 @@ const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '',
 
 export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup }: ThreadMenuProps) {
   const a = useAgentos('select', 'settleThread', 'wakeThread', 'archiveThread', 'openPR', 'pushToast', 'report')
-  const { mode, mobilePanel, rightOpen, showPanel, toggleRight } = useLayout()
+  const { rightOpen, showPanel, toggleRight } = useLayout()
   const settled = session.state === 'settled'
-  const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'panel' : rightOpen)
+  const panelShown = selected && rightOpen
 
   const toggleOwnPanel = () => {
     if (panelShown) return a.report(toggleRight)

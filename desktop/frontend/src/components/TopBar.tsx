@@ -12,18 +12,16 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 export function TopBar() {
   const { selectedId, report, update, updating, applyUpdate, digestUnseenCount } = useAgentos('selectedId', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount')
   const layout = useLayout()
-  const { mode, mobilePanel, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
+  const { mode, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => {
     const shortcut = find(id).shortcut
     return shortcut ? `${label} (${formatShortcut(shortcut)})` : label
   }
-  const narrow = mode === 'narrow'
-  const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
-  // With the sidebar hidden the bar starts after the window buttons.
-  const left = sidebarOpen ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
+  // With no sidebar beside it the bar starts after the window buttons.
+  const left = sidebarOpen && mode !== 'narrow' ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
 
   return (
     <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: 'var(--corner-pad)' }}>
@@ -55,9 +53,9 @@ export function TopBar() {
         <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
         <TitleBarButton
-          label={named(rightShown ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
+          label={named(rightOpen ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
           icon="panel-right"
-          pressed={rightShown}
+          pressed={rightOpen}
           onClick={() => report(() => find('toggle-right').run([]))}
         />
       </div>

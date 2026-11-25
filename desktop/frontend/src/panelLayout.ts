@@ -1,4 +1,11 @@
 export type SidePanel = 'sidebar' | 'right'
+export type Band = 'compact' | 'medium' | 'wide'
+export type LayoutMode = 'narrow' | Band
+
+// Below this window width the side panels leave the row and open over the thread, one at a time.
+export const OVERLAY_BELOW = 640
+const COMPACT_BELOW = 900
+const MEDIUM_BELOW = 1250
 
 export const RAIL_REM = 3
 export const SIDEBAR_DEFAULT_REM = 18
@@ -25,4 +32,20 @@ export function fit(window: number, prefs: FitPrefs, root: number): Fitted {
   const room = (window - left - LINES_PX - TERMINAL_MIN_PX) / root
   if (room < MIN_REM.right) return { widths: { sidebar, right: 0 }, rightForcedClosed: true }
   return { widths: { sidebar, right: Math.min(right, room) }, rightForcedClosed: false }
+}
+
+export function modeFor(width: number): LayoutMode {
+  if (width < OVERLAY_BELOW) return 'narrow'
+  if (width < COMPACT_BELOW) return 'compact'
+  return width < MEDIUM_BELOW ? 'medium' : 'wide'
+}
+
+// What changes the side panel open over the thread: its trigger opens or closes it, and opening one closes the
+// other. Esc, a click on the thread beside it or a move to the thread, and opening a thread close it.
+export type OverlayEvent = { open: SidePanel } | { close: SidePanel } | 'escape' | 'thread-focused' | 'thread-opened'
+
+export function nextOverlay(open: SidePanel | null, event: OverlayEvent): SidePanel | null {
+  if (typeof event === 'string') return null
+  if ('open' in event) return event.open
+  return open === event.close ? null : open
 }

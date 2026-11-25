@@ -6,11 +6,11 @@ import { Home } from './components/Home'
 import { LeftSidebar } from './components/LeftSidebar'
 import { MobileTabs } from './components/MobileTabs'
 import { OfflineSplash } from './components/OfflineSplash'
+import { PanelOverlay } from './components/PanelOverlay'
 import { RightPanel } from './components/RightPanel'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
-import { ShellPanel } from './components/ShellPanel'
 import { ShellStrip } from './components/ShellStrip'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
@@ -40,10 +40,8 @@ export function App() {
   useFocusedPanel()
   const fullscreen = useFullscreen()
   const { selectedId } = useAgentos('selectedId')
-  const { mode, sidebarOpen, rightOpen, mobilePanel, statsOpen, digestOpen } = useLayout()
+  const { mode, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen } = useLayout()
   const narrow = mode === 'narrow'
-  const showCentre = !narrow || mobilePanel === 'thread'
-  const home = !selectedId && showCentre
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
   )
@@ -57,30 +55,22 @@ export function App() {
         {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
-          {sidebarOpen && <LeftSidebar />}
+          {!narrow && sidebarOpen && <LeftSidebar />}
           {!narrow && sidebarOpen && <Divider panel="sidebar" />}
-          <div className={`flex min-w-0 flex-1 flex-col ${narrow && sidebarOpen ? 'hidden' : ''}`}>
+          <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
             <main className="relative flex min-h-0 min-w-0 flex-1">
-              <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${showCentre ? '' : 'hidden'}`}>
-                <div className="min-h-0 flex-1">
-                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>
-                    {selectedId && (
-                      <div className={home ? 'hidden' : 'h-full'}>
-                        <Viewport />
-                      </div>
-                    )}
-                    {home && <Home />}
-                  </div>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div className="relative min-h-0 flex-1">
+                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>{selectedId ? <Viewport /> : <Home />}</div>
                   {statsOpen && <Stats />}
                   {digestOpen && <DigestView />}
+                  {overlay && <PanelOverlay panel={overlay} />}
                 </div>
-                {!narrow && <ShellStrip />}
+                <ShellStrip />
               </div>
-              {rightOpen && <Divider panel="right" />}
-              {rightOpen && <RightPanel />}
-              {narrow && mobilePanel === 'panel' && <RightPanel />}
-              {narrow && mobilePanel === 'shell' && <ShellPanel />}
+              {!narrow && rightOpen && <Divider panel="right" />}
+              {!narrow && rightOpen && <RightPanel />}
             </main>
           </div>
         </div>

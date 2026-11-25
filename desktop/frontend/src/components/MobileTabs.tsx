@@ -24,19 +24,19 @@ function Tab({ label, active, badge, urgent, onPick }: TabProps) {
 
 export function MobileTabs() {
   const { sessions } = useAgentos('sessions')
-  const { mobilePanel, setMobilePanel, panelView, showPanel } = useLayout()
+  const { overlay, shellOpen, closeOverlay, setSidebarOpen, setShellOpen, panelView, showPanel } = useLayout()
   const ctx = usePanelContext()
   const shown = panelViewFor(panelView, ctx)
   const needsYou = sessions.some((s) => s.state === 'waiting')
   return (
     <nav role="tablist" aria-label="Panels" className="flex flex-none border-t border-line bg-app">
-      <Tab label="Thread" active={mobilePanel === 'thread'} badge={ctx.session ? `#${ctx.session.n}` : '–'} onPick={() => setMobilePanel('thread')} />
+      <Tab label="Thread" active={overlay === null} badge={ctx.session ? `#${ctx.session.n}` : '–'} onPick={() => closeOverlay('thread-focused')} />
       {shownPanelViews(ctx).map((view) => {
         const count = view.count?.(ctx)
-        return <Tab key={view.id} label={view.label} active={mobilePanel === 'panel' && shown.id === view.id} badge={count === undefined ? undefined : String(count)} onPick={() => showPanel(view.id)} />
+        return <Tab key={view.id} label={view.label} active={overlay === 'right' && shown.id === view.id} badge={count === undefined ? undefined : String(count)} onPick={() => showPanel(view.id)} />
       })}
-      <Tab label="Threads" active={mobilePanel === 'threads'} badge={String(sessions.length)} urgent={needsYou} onPick={() => setMobilePanel('threads')} />
-      <Tab label="Shell" active={mobilePanel === 'shell'} badge="❯" onPick={() => setMobilePanel('shell')} />
+      <Tab label="Threads" active={overlay === 'sidebar'} badge={String(sessions.length)} urgent={needsYou} onPick={() => setSidebarOpen(true)} />
+      <Tab label="Shell" active={shellOpen} badge="❯" onPick={() => setShellOpen(!shellOpen)} />
     </nav>
   )
 }

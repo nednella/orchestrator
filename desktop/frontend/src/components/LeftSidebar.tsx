@@ -8,13 +8,16 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 export function LeftSidebar() {
   const { mode } = useLayout()
   return (
-    <div data-sidebar className={`flex min-h-0 flex-col ${mode === 'narrow' ? 'min-w-0 flex-1' : 'flex-none'}`}>
-      {/* Centred in the strip, but pushed right of the window buttons, then cut short, when the sidebar is too narrow. */}
-      <div className="flex flex-none items-center border-b border-line text-ink" style={{ ...drag, height: 'var(--topbar-h)' }}>
-        <span className="flex-1" style={{ minWidth: 'var(--title-inset)' }} />
-        <span className="min-w-0 truncate text-title font-semibold tracking-wide">agentos</span>
-        <span className="flex-1" />
-      </div>
+    <div data-sidebar className="flex min-h-0 flex-none flex-col">
+      {/* Centred in the strip, but pushed right of the window buttons, then cut short, when the sidebar is too narrow.
+          Over the thread the sidebar starts under the top bar, which has the window buttons. */}
+      {mode !== 'narrow' && (
+        <div className="flex flex-none items-center border-b border-line text-ink" style={{ ...drag, height: 'var(--topbar-h)' }}>
+          <span className="flex-1" style={{ minWidth: 'var(--title-inset)' }} />
+          <span className="min-w-0 truncate text-title font-semibold tracking-wide">agentos</span>
+          <span className="flex-1" />
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <ProjectRail />
         <ThreadSidebar />

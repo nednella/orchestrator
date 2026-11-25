@@ -14,13 +14,12 @@ export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
   const { projectSessions, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setComposerMode')
-  const { mode, widths, returnToTerminal, showHome } = useLayout()
+  const { widths, returnToTerminal, showHome } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [menuRequest, setMenuRequest] = useState<MenuRequest | null>(null)
-  const narrow = mode === 'narrow'
 
   useFocusRequest('sidebar', panel)
   useFocusRequest('thread-search', search)
@@ -80,8 +79,8 @@ export function ThreadSidebar() {
       ref={panel}
       data-panel="sidebar"
       tabIndex={-1}
-      className={`panel flex min-h-0 flex-col overflow-hidden ${narrow ? 'min-w-0 flex-1' : 'flex-none'}`}
-      style={narrow ? undefined : { width: `${widths.sidebar}rem` }}
+      className="panel flex min-h-0 flex-none flex-col overflow-hidden"
+      style={{ width: `${widths.sidebar}rem` }}
       onKeyDown={onKeyDown}
       onFocus={(e) => {
         if (e.target === e.currentTarget && selectedId) nav.setCursorKey(selectedId)

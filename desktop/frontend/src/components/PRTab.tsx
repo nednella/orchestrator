@@ -36,7 +36,7 @@ const PR_ACTION = {
 
 export function PRTab({ session }: PRTabProps) {
   const { report, focus, select, typeInto, ackPR, openPR } = useAgentos('report', 'focus', 'select', 'typeInto', 'ackPR', 'openPR')
-  const { mode, setMobilePanel } = useLayout()
+  const { closeOverlay } = useLayout()
   const { pr, git } = session
   const live = pr?.state === 'draft' || pr?.state === 'open'
   const action = pr && session.prAttention ? PR_ACTION[session.prAttention] : null
@@ -120,7 +120,7 @@ export function PRTab({ session }: PRTabProps) {
                 await ackPR(session.id)
               })
               select(session.id)
-              if (mode === 'narrow') setMobilePanel('thread')
+              closeOverlay('thread-focused')
               focus('composer')
             }}
           >

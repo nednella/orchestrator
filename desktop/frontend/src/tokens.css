@@ -108,6 +108,7 @@
   --text-note: #ebe5d8;
   --text-note-dim: #9a927f;
 
+  --z-panel-overlay: 25;
   --z-popup: 30;
   --z-overlay: 40;
   --z-toast: 50;

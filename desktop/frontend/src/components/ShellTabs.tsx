@@ -7,7 +7,7 @@ import { ShellTab, tabRowButton } from './ShellTab'
 export function ShellTabs() {
   const { shellIds, shellId, selectShell, newShell, closeShell, report } = useAgentos('shellIds', 'shellId', 'selectShell', 'newShell', 'closeShell', 'report')
   const projectName = useAgentosSelector((a) => a.project?.name ?? '')
-  const { mode, togglePanel, focusPanel } = useLayout()
+  const { togglePanel, focusPanel } = useLayout()
   const scroller = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ start: 0, end: 1 })
   const [projectShell = '', ...shells] = shellIds
@@ -45,7 +45,6 @@ export function ShellTabs() {
     selectShell(id)
     focusPanel('shell')
   }
-  const closable = mode !== 'narrow'
   const close = () => togglePanel('shell')
 
   return (
@@ -53,7 +52,7 @@ export function ShellTabs() {
       className="shell-tabs group/tabs flex h-10 flex-none items-stretch border-b border-line text-small"
       style={{ paddingRight: '0.5rem' }}
       onClick={(e) => {
-        if (closable && e.target === e.currentTarget) close()
+        if (e.target === e.currentTarget) close()
       }}
     >
       <div role="tablist" aria-label="Shells" className="flex min-w-0 items-stretch">
@@ -97,11 +96,9 @@ export function ShellTabs() {
       >
         <Icon name="add" size={14} />
       </button>
-      {closable && (
-        <button className={`${tabRowButton} ml-auto self-center`} title="Close the shell (⌘⇧S)" aria-label="Close the shell" onClick={close}>
-          <Icon name="chevron-down" size={14} />
-        </button>
-      )}
+      <button className={`${tabRowButton} ml-auto self-center`} title="Close the shell (⌘⇧S)" aria-label="Close the shell" onClick={close}>
+        <Icon name="chevron-down" size={14} />
+      </button>
     </div>
   )
 }

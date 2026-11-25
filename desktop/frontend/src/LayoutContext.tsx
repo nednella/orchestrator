@@ -3,18 +3,15 @@ import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
 import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
-import { fit, MAX_REM, MIN_REM, SIDEBAR_DEFAULT_REM } from './panelLayout'
-import type { FitPrefs, SidePanel } from './panelLayout'
+import { fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM } from './panelLayout'
+import type { Band, FitPrefs, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
 import type { ThemeName } from './types'
 
 type Appearance = 'dark' | 'light'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
-export type Band = 'compact' | 'medium' | 'wide'
-export type LayoutMode = 'narrow' | Band
 export type Panel = 'sidebar' | 'centre' | 'right' | 'shell'
-export type MobilePanel = 'thread' | 'panel' | 'threads' | 'shell'
 export { RAIL_REM, type SidePanel } from './panelLayout'
 export type TogglePanel = 'sidebar' | 'shell' | 'right'
 
@@ -22,9 +19,6 @@ export type TogglePanel = 'sidebar' | 'shell' | 'right'
 const PANEL_SELECTOR: Record<TogglePanel, string> = { sidebar: '[data-sidebar]', shell: '[data-panel="shell"]', right: '[data-panel="right"]' }
 const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shell: 'shell', right: 'right' }
 
-const TABS_BELOW = 640
-const COMPACT_BELOW = 900
-const MEDIUM_BELOW = 1250
 const LAYOUT_KEY = 'agentos.layout.v3'
 const SIDEBAR_WIDTH_KEY = 'agentos.sidebarWidth'
 const PANEL_VIEW_KEY = 'agentos.panelView'
@@ -48,13 +42,14 @@ export type Layout = {
   rightOpen: boolean
   shellOpen: boolean
   shellRem: number
-  mobilePanel: MobilePanel
+  // The side panel open over the thread on a narrow window.
+  overlay: SidePanel | null
   widths: Record<SidePanel, number>
   panelView: string
   statsOpen: boolean
   digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
-  setMobilePanel(panel: MobilePanel): void
+  closeOverlay(why: 'escape' | 'thread-focused'): void
   setWidth(panel: SidePanel, rem: number, commit: boolean): void
   resetWidth(panel: SidePanel): void
   setShellOpen(open: boolean): void
@@ -82,12 +77,6 @@ export function useLayout(): Layout {
   const value = useContext(LayoutContext)
   if (!value) throw new Error('useLayout must be used inside LayoutProvider')
   return value
-}
-
-function modeFor(width: number): LayoutMode {
-  if (width < TABS_BELOW) return 'narrow'
-  if (width < COMPACT_BELOW) return 'compact'
-  return width < MEDIUM_BELOW ? 'medium' : 'wide'
 }
 
 function useWindowSize(): { w: number; h: number } {
@@ -128,7 +117,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   const [sidebarRem, setSidebarRem] = useState(() => readStored<number | null>(SIDEBAR_WIDTH_KEY, null))
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('thread')
+  const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
@@ -144,13 +133,13 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   }, [theme])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
-  const fitPrefs: FitPrefs = { ...prefs, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM }
   const narrow = mode === 'narrow'
+  const fitPrefs: FitPrefs = { ...prefs, rightOpen: !narrow && prefs.rightOpen, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM }
   const { widths: fittedWidths, rightForcedClosed } = fit(width, fitPrefs, 16 * scale)
-  const sidebarOpen = narrow ? mobilePanel === 'threads' : prefs.sidebarOpen
-  const rightOpen = !narrow && prefs.rightOpen && !rightForcedClosed
-  const shellOpen = narrow ? mobilePanel === 'shell' : prefs.shellOpen
-  const rightShown = narrow ? mobilePanel === 'panel' : rightOpen
+  const overlay = narrow ? openOverlay : null
+  const sidebarOpen = narrow ? overlay === 'sidebar' : prefs.sidebarOpen
+  const rightOpen = narrow ? overlay === 'right' : prefs.rightOpen && !rightForcedClosed
+  const shellOpen = prefs.shellOpen
   const projectName = project?.name ?? ''
   const panelView = panelViews[projectName] ?? ''
 
@@ -164,53 +153,65 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     [band],
   )
 
+  const moveOverlay = useCallback((event: OverlayEvent) => setOpenOverlay((open) => nextOverlay(open, event)), [])
+
+  useEffect(() => {
+    if (!narrow) setOpenOverlay(null)
+  }, [narrow])
+
   const previousSelected = useRef(selectedId)
   useEffect(() => {
     if (previousSelected.current === selectedId) return
     const first = previousSelected.current === null
     previousSelected.current = selectedId
+    moveOverlay('thread-opened')
     if (first) return
     setStatsOpen(false)
     setDigestOpen(false)
-    if (narrow) setMobilePanel('thread')
-  }, [selectedId, narrow])
+  }, [selectedId, moveOverlay])
 
   const setSidebarOpen = useCallback(
     (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'threads' : 'thread')
+      if (narrow) moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
       else updatePrefs({ sidebarOpen: open })
     },
-    [narrow, updatePrefs],
+    [narrow, moveOverlay, updatePrefs],
   )
 
-  // A panel closed another way (its close button, a mobile tab) forgets where the focus was.
+  // A panel closed another way (its close button, the other overlay) forgets where the focus was.
   useEffect(() => {
-    const shown: Record<TogglePanel, boolean> = { sidebar: sidebarOpen, shell: shellOpen, right: rightShown }
+    const shown: Record<TogglePanel, boolean> = { sidebar: sidebarOpen, shell: shellOpen, right: rightOpen }
     for (const panel of Object.keys(shown) as TogglePanel[]) if (!shown[panel]) delete focusBefore.current[panel]
-  }, [sidebarOpen, shellOpen, rightShown])
+  }, [sidebarOpen, shellOpen, rightOpen])
 
-  const setShellOpen = useCallback(
-    (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'shell' : 'thread')
-      else updatePrefs({ shellOpen: open })
-    },
-    [narrow, updatePrefs],
-  )
+  // A closing panel that holds the focus gives it back to where it was before the panel opened, else to the thread.
+  const refocusOnClose = (panel: TogglePanel) => {
+    const active = document.activeElement
+    const before = focusBefore.current[panel]
+    delete focusBefore.current[panel]
+    if (!active?.closest(PANEL_SELECTOR[panel])) return
+    requestAnimationFrame(() => {
+      if (before instanceof HTMLElement && before.isConnected && !before.closest(PANEL_SELECTOR[panel])) before.focus()
+      if (document.activeElement !== before) focus('thread')
+    })
+  }
+
+  const setShellOpen = useCallback((open: boolean) => updatePrefs({ shellOpen: open }), [updatePrefs])
 
   const setRightOpen = useCallback(
     (open: boolean) => {
-      if (narrow) setMobilePanel(open ? 'panel' : 'thread')
+      if (narrow) moveOverlay(open ? { open: 'right' } : { close: 'right' })
       else updatePrefs({ rightOpen: open })
     },
-    [narrow, updatePrefs],
+    [narrow, moveOverlay, updatePrefs],
   )
 
   const showHome = useCallback(() => {
     setStatsOpen(false)
     setDigestOpen(false)
-    if (narrow) setMobilePanel('thread')
+    moveOverlay('thread-opened')
     if (project) selectHome(project.key)
-  }, [narrow, project, selectHome])
+  }, [moveOverlay, project, selectHome])
 
   const setPanelView = useCallback(
     (view: string) =>
@@ -224,25 +225,22 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const showPanel = useCallback(
     (view: string) => {
-      if (narrow) setMobilePanel('panel')
+      if (narrow) moveOverlay({ open: 'right' })
       else updatePrefs({ rightOpen: true })
       setPanelView(view)
     },
-    [narrow, updatePrefs, setPanelView],
+    [narrow, moveOverlay, updatePrefs, setPanelView],
   )
 
   const focusPanel = useCallback(
     (panel: Panel) => {
       if (panel === 'right') return
-      if (narrow) {
-        if (panel === 'sidebar') setMobilePanel('threads')
-        if (panel === 'centre') setMobilePanel('thread')
-        if (panel === 'shell') setMobilePanel('shell')
-      } else if (panel === 'sidebar') updatePrefs({ sidebarOpen: true })
-      else if (panel === 'shell') updatePrefs({ shellOpen: true })
+      if (panel === 'sidebar') setSidebarOpen(true)
+      if (panel === 'centre') moveOverlay('thread-focused')
+      if (panel === 'shell') updatePrefs({ shellOpen: true })
       focus(panel === 'centre' ? 'thread' : panel)
     },
-    [focus, narrow, updatePrefs],
+    [focus, moveOverlay, setSidebarOpen, updatePrefs],
   )
 
   const value = useMemo<Layout>(
@@ -255,7 +253,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       rightOpen,
       shellOpen,
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
-      mobilePanel,
+      overlay,
       widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
       panelView,
       statsOpen,
@@ -266,7 +264,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         if (zoomToast.current !== null) dismissToast(zoomToast.current)
         zoomToast.current = pushToast({ tone: 'info', text: `Text size ${Math.round(next * 100)}%` })
       },
-      setMobilePanel,
+      closeOverlay(why) {
+        if (!overlay) return
+        refocusOnClose(overlay)
+        moveOverlay(why)
+      },
       setWidth(panel, rem, commit) {
         const next = Math.min(Math.max(rem, MIN_REM[panel]), MAX_REM)
         if (panel === 'sidebar') {
@@ -283,33 +285,23 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setShellOpen,
       setRightOpen,
       toggleRight() {
-        if (narrow) {
-          setMobilePanel(mobilePanel === 'panel' ? 'thread' : 'panel')
-          return
-        }
         const open = !rightOpen
-        if (open) checkRightFits(width, fitPrefs, 16 * scale)
-        updatePrefs({ rightOpen: open })
+        if (open && !narrow) checkRightFits(width, fitPrefs, 16 * scale)
+        setRightOpen(open)
       },
       togglePanel(panel) {
         const setOpen = { sidebar: setSidebarOpen, shell: setShellOpen, right: setRightOpen }[panel]
-        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightShown }[panel]
-        const active = document.activeElement
+        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightOpen }[panel]
         if (!shown) {
+          const active = document.activeElement
           if (panel === 'right' && !narrow) checkRightFits(width, fitPrefs, 16 * scale)
           focusBefore.current[panel] = active && active !== document.body ? active : undefined
           setOpen(true)
           focus(PANEL_FOCUS[panel])
           return
         }
-        const before = focusBefore.current[panel]
-        delete focusBefore.current[panel]
+        refocusOnClose(panel)
         setOpen(false)
-        if (!active?.closest(PANEL_SELECTOR[panel])) return
-        requestAnimationFrame(() => {
-          if (before instanceof HTMLElement && before.isConnected && !before.closest(PANEL_SELECTOR[panel])) before.focus()
-          if (document.activeElement !== before) focus('thread')
-        })
       },
       setPanelView,
       showPanel,
@@ -328,17 +320,17 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       toggleStats() {
         setStatsOpen(!statsOpen)
         setDigestOpen(false)
-        if (!statsOpen && narrow) setMobilePanel('thread')
+        if (!statsOpen) moveOverlay('thread-opened')
       },
       toggleDigest() {
         setDigestOpen(!digestOpen)
         setStatsOpen(false)
-        if (!digestOpen && narrow) setMobilePanel('thread')
+        if (!digestOpen) moveOverlay('thread-opened')
       },
       openDigest() {
         setDigestOpen(true)
         setStatsOpen(false)
-        if (narrow) setMobilePanel('thread')
+        moveOverlay('thread-opened')
       },
       closeCentre() {
         setStatsOpen(false)
@@ -349,7 +341,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, rightShown, narrow, prefs, fitPrefs, prefs.rightOpen, prefs.shell, mobilePanel, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, narrow, prefs, fitPrefs, prefs.rightOpen, prefs.shell, overlay, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale, setSessionView],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

@@ -28,6 +28,10 @@ export function useShortcuts(enabled: boolean) {
         agentos.setOverlay(null)
         return
       }
+      if (lay.overlay) {
+        lay.closeOverlay('escape')
+        return
+      }
       if (lay.statsOpen || lay.digestOpen) {
         lay.closeCentre()
         agentos.focus('thread')

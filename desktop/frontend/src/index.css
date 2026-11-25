@@ -525,6 +525,15 @@
     background: var(--bg-app);
   }
 
+  .side-overlay,
+  .side-overlay .panel {
+    background: var(--bg-surface);
+  }
+
+  .side-overlay {
+    box-shadow: var(--shadow-popup);
+  }
+
   .row {
     position: relative;
     display: flex;
