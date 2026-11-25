@@ -999,6 +999,24 @@ func Main(m *testing.M) int {
 	return code
 }
 
+// LockedBuffer is a log the app's goroutines write to while the test reads it.
+type LockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *LockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *LockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // Exists says whether a path exists.
 func Exists(path string) bool {
 	_, err := os.Stat(path)

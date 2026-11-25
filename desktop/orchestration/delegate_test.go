@@ -1,7 +1,6 @@
 package orchestration_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
@@ -523,26 +521,8 @@ func otherProject(t *testing.T, h *apptest.Harness, dir string) (name, key strin
 	return snap.Project.Name, snap.Project.Key
 }
 
-// lockedBuffer is a log the app's goroutines may write to at once.
-type lockedBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *lockedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *lockedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
-}
-
 func TestDelegateToAnotherProject(t *testing.T) {
-	logged := &lockedBuffer{}
+	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
 	log.SetOutput(logged)
 	t.Cleanup(func() { log.SetOutput(before) })

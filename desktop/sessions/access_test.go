@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -88,26 +87,8 @@ func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
 	eventually(t, "the access back to read", accessIs(h, s.ID, session.Read))
 }
 
-// lockedBuffer is a log the app writes to while the test reads it.
-type lockedBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *lockedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *lockedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
-}
-
 func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
-	logged := &lockedBuffer{}
+	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
 	log.SetOutput(logged)
 	t.Cleanup(func() { log.SetOutput(before) })
