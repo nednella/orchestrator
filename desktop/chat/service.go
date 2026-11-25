@@ -150,6 +150,9 @@ func (v *Service) failed(id, what string, err error) error {
 }
 
 func sentence(s string) string {
+	if s == "" {
+		return s
+	}
 	r, n := utf8.DecodeRuneInString(s)
 	return string(unicode.ToUpper(r)) + s[n:]
 }

@@ -165,7 +165,6 @@ func (c *Chats) isWatched(id string) bool {
 	return c.watched[id]
 }
 
-// pending is what each followed thread waits on.
 // pending is what each live thread waits on: as its follower knows it, or from the log until the follower has read it.
 func (c *Chats) pending() []Pending {
 	out := []Pending{}
