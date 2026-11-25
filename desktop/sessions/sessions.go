@@ -2806,11 +2806,16 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 			s.send(ctx, name, h.Text, true)
 			continue
 		}
-		if _, err := s.deliver(name, h.Told); errors.Is(err, host.ErrApprovalWaits) {
+		_, err := s.deliverRanked(name, h.Told)
+		var ranked *outranked
+		switch {
+		case errors.Is(err, host.ErrApprovalWaits):
 			s.hold(id, now[i:]...)
 			refused = true
 			return
-		} else if err != nil {
+		case errors.As(err, &ranked):
+			log.Printf("agentos: dropped a message held for thread %s from %s: %v", id, h.From, err)
+		case err != nil:
 			log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
 		}
 	}
@@ -2828,10 +2833,11 @@ func (s *Sessions) doneDelivering(id string, refused bool) {
 }
 
 // Told is a message for a thread: its text and the thread it is from, "" for the app. Steer stops the turn that runs
-// so the thread takes it in now.
+// so the thread takes it in now. Ranked holds a message a thread sends of its own accord to the rank rule: it may reach
+// no thread whose access is above its own, when it is told and again when it goes, also after being held.
 type Told struct {
-	From, Text string
-	Steer      bool
+	From, Text    string
+	Steer, Ranked bool
 }
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
@@ -2842,6 +2848,14 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return "", err
+	}
+	if m.Ranked {
+		s.childMu.Lock()
+		err := s.outranks(id, m.From)
+		s.childMu.Unlock()
+		if err != nil {
+			return "", err
+		}
 	}
 	if err := s.awaken(id); err != nil {
 		return "", err
@@ -2854,7 +2868,7 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	}
 	s.delivering[id] = true
 	s.mu.Unlock()
-	msg, err := s.deliver(name, m)
+	msg, err := s.deliverRanked(name, m)
 	refused := errors.Is(err, host.ErrApprovalWaits)
 	if refused {
 		s.hold(id, heldPrompt{Told: m})
@@ -2862,6 +2876,38 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	}
 	s.doneDelivering(id, refused)
 	return msg, err
+}
+
+// outranked is the rank rule's refusal: a thread with access may not message a thread with more.
+type outranked struct{ from, to session.Access }
+
+func (e *outranked) Error() string {
+	return fmt.Sprintf("A thread with %s access cannot message a thread with %s access", e.from, e.to)
+}
+
+// outranks is an *outranked when the thread id's access ranks above that of the thread from, which may then not
+// message it. A thread that is gone ranks as Read. It needs childMu, under which an access changes.
+func (s *Sessions) outranks(id, from string) error {
+	a, b := cmp.Or(s.AccessOf(from), session.Read), cmp.Or(s.AccessOf(id), session.Read)
+	if b.Rank() > a.Rank() {
+		return &outranked{from: a, to: b}
+	}
+	return nil
+}
+
+// deliverRanked is deliver for a message that passes the rank rule now, checked under childMu, as an access changes.
+// The lock is not held for the send itself: a host that is slow to answer would hold up every delegation and change of
+// access.
+func (s *Sessions) deliverRanked(name session.Name, m Told) (string, error) {
+	if m.Ranked {
+		s.childMu.Lock()
+		err := s.outranks(name.String(), m.From)
+		s.childMu.Unlock()
+		if err != nil {
+			return "", err
+		}
+	}
+	return s.deliver(name, m)
 }
 
 // awaken makes sure the thread id runs, waking it when it has settled. A thread that is deleted or being deleted, ran in

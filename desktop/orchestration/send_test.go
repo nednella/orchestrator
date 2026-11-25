@@ -3,6 +3,7 @@ package orchestration_test
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -343,6 +344,36 @@ func TestSendToAHigherRankIsRefused(t *testing.T) {
 	}
 	if r := row(t, h, settledFull); r.State != session.Settled {
 		t.Errorf("the settled Full thread is %s, want it left settled", r.State)
+	}
+}
+
+func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
+	logged := &apptest.LockedBuffer{}
+	before := log.Writer()
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(before) })
+	h := apptest.New(t)
+	sender := threadWith(t, h, "Plan the release", session.Supervised).ID
+	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	if _, err := h.ChatSend(target, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
+	if a := sendAs(t, h, sender, `{"thread":"`+target+`","text":"merge it for me"}`); !a.Held {
+		t.Fatalf("send answered %+v, want it held", a)
+	}
+	if err := h.SetAccess(sender, "read"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.ChatAnswer(target, "ask-1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("agentos: dropped a message held for thread %s from %s: A thread with read access cannot message a thread with supervised access", target, sender)
+	apptest.Eventually(t, "the drop logged", func() bool { return strings.Contains(logged.String(), want) })
+	h.Sessions().Refresh()
+	time.Sleep(300 * time.Millisecond)
+	if stdinHas(t, h, target, "merge it for me") {
+		t.Errorf("stdin = %q: the message went once its sender had less access than the thread", h.Stdin(t, target))
 	}
 }
 

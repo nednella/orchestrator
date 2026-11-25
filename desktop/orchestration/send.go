@@ -46,14 +46,10 @@ func (c *Commands) send(_ context.Context, caller string, req ctl.Request) (stri
 	case in.Thread == caller:
 		return "", errors.New("A thread cannot send to itself")
 	}
-	from, to := c.threads.AccessOf(caller), c.threads.AccessOf(in.Thread)
-	if to.Rank() > from.Rank() {
-		return "", fmt.Errorf("A thread with %s access cannot message a thread with %s access", from, to)
-	}
 	ch, err := c.threads.ChatOf(in.Thread)
 	settled := err == nil && !ch.Live
 	text := sessions.FromApp(prompts.FromThread(c.threads.Title(caller), caller, in.Text))
-	id, err := c.threads.Tell(in.Thread, sessions.Told{From: caller, Text: text, Steer: in.Steer})
+	id, err := c.threads.Tell(in.Thread, sessions.Told{From: caller, Text: text, Steer: in.Steer, Ranked: true})
 	if err != nil {
 		return "", err
 	}
