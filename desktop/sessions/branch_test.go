@@ -237,3 +237,42 @@ func TestTrackRefusesAReadThread(t *testing.T) {
 		t.Errorf("the Read thread = %+v, tag %q", got, branchTag(t, h, read.ID))
 	}
 }
+
+func TestTrackRefusesABranchCheckedOutInAnotherThreadsWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	first := issueThread(h, t, 7)
+	if err := h.Sessions().Track(first.ID, "issue-7-fix"); err != nil {
+		t.Fatal(err)
+	}
+	second := issueThread(h, t, 8)
+	want := fmt.Sprintf("Thread %d works on issue-7", first.N)
+	if err := h.Sessions().Track(second.ID, "issue-7"); err == nil || err.Error() != want {
+		t.Errorf("track of the branch in the first thread's worktree = %v, want %q", err, want)
+	}
+	if got, _ := h.Session(second.ID); got.Branch != "issue-8" {
+		t.Errorf("the refused thread is on %q", got.Branch)
+	}
+}
+
+func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	gitIn(t, h.Dir, "branch", "side")
+	gitIn(t, h.Dir, "push", "origin", "side")
+	if err := h.Sessions().Track(s.ID, "side"); err != nil {
+		t.Fatal(err)
+	}
+	h.GH.SetPRFor("side", numberedPR(20, "OPEN"))
+	h.RefreshPRs()
+	h.GH.SetPRFor("side", numberedPR(20, "MERGED"))
+	h.RefreshPRs()
+	eventually(t, "the clean-up of side", cleanedUp(h, s.ID))
+	if !exists(s.Worktree) || gitIn(t, s.Worktree, "branch", "--show-current") != "issue-7" {
+		t.Error("the clean-up of a branch the worktree does not have removed the worktree")
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Branch != "issue-7" || records[0].Removed != 0 {
+		t.Errorf("records = %+v", records)
+	}
+}

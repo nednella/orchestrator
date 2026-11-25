@@ -825,9 +825,11 @@ func TestPRMergedWhileTheAppWasClosedIsCleanedUp(t *testing.T) {
 	wt := s.Worktree
 	pushWork(t, wt)
 	h.RefreshPRs()
+	time.Sleep(2 * time.Millisecond) // the merge must come after the start to the millisecond
+	merged := time.Now()
 
 	fresh := h.Restart(t)
-	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
+	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))
 	fresh.RefreshPRs()
 	eventually(t, "the clean-up at the next start", cleanedUp(fresh, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {

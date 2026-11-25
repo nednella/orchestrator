@@ -212,9 +212,9 @@ func (l *Lifecycle) stopCleanups() {
 
 // sessionFields is what a session row shows of its track.
 type sessionFields struct {
-	branch, worktree, attention, cleanup, reason string
-	pr                                           *PR
-	git                                          *BranchStatus
+	worktree, attention, cleanup, reason string
+	pr                                   *PR
+	git                                  *BranchStatus
 }
 
 func (l *Lifecycle) fields(id string) sessionFields {
@@ -227,7 +227,7 @@ func (l *Lifecycle) fields(id string) sessionFields {
 	if t == nil {
 		return sessionFields{}
 	}
-	f := sessionFields{branch: t.branch, worktree: t.worktree, attention: t.attention, cleanup: t.cleanup, reason: t.reason}
+	f := sessionFields{worktree: t.worktree, attention: t.attention, cleanup: t.cleanup, reason: t.reason}
 	if t.pr != nil {
 		pr := *t.pr
 		if a, seen := l.prs(session.ProjectKey(id)).Acks[strconv.Itoa(pr.Number)]; seen {
@@ -1401,9 +1401,17 @@ func (l *Lifecycle) Cleanups(key string) []Cleanup {
 	return out[:min(len(out), cleanupsKept)]
 }
 
-// track follows the thread on branch, afresh when the branch is new to it, and looks up the branch's PR.
+// track follows the thread on branch, afresh when the branch is new to it, and looks up the branch's PR. A call for a
+// branch the thread has left since, as a turn's end that comes after a track, does nothing.
 func (l *Lifecycle) track(ctx context.Context, id string, proj project.Project, branch string) {
+	if t, err := l.sessions.target(id); err != nil || t.branch != branch {
+		return
+	}
 	l.mu.Lock()
+	if l.gone[id] {
+		l.mu.Unlock()
+		return
+	}
 	if tr := l.tracks[id]; tr != nil && tr.branch != branch && tr.cleanup != "pending" {
 		*tr = track{}
 	}

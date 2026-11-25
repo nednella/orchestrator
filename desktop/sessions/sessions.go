@@ -1337,6 +1337,30 @@ func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
 	return 0, false
 }
 
+// threadIn is the number of a thread of the project other than except whose folder, or the worktree agentos made for
+// it, is dir, live or settled, and whether there is one. A fork runs in its thread's folder and is left out. It takes mu.
+func (s *Sessions) threadIn(key, dir, except string) (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	infos := slices.Clone(s.info)
+	for _, e := range s.ended {
+		infos = append(infos, e.info)
+	}
+	for _, in := range infos {
+		id := in.Name.String()
+		if in.Name.Project != key || in.Fork != "" || id == except {
+			continue
+		}
+		if in.Path != "" && samePath(in.Path, dir) {
+			return s.nums[id], true
+		}
+		if w, ok := s.made.Of(key, id); ok && w.Removed == 0 && samePath(w.Path, dir) {
+			return s.nums[id], true
+		}
+	}
+	return 0, false
+}
+
 // IssueSessions maps issue numbers to the live thread started for each, whatever its access, in the current project.
 func (s *Sessions) IssueSessions() map[int]string {
 	out := map[int]string{}
@@ -2440,7 +2464,7 @@ func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool
 	id := in.Name.String()
 	_, woke := s.startsOf(id, in)
 	t := target{id: id, title: cmp.Or(in.Title, defaultTitle), issue: issue, branch: in.Branch, dir: cmp.Or(in.Path, proj.Dir), proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke}
-	if w, ok := s.made.Of(proj.Key(), id); ok && w.Removed == 0 {
+	if w, ok := s.made.Of(proj.Key(), id); ok && w.Removed == 0 && w.Branch == in.Branch {
 		t.dir, t.made = w.Path, true
 	}
 	return t, true
@@ -2612,7 +2636,6 @@ func (s *Sessions) Run(ctx context.Context) error {
 	return nil
 }
 
-// Has says whether a session of that id is running, in any project.
 // Track makes branch the one the thread works on, and looks up its pull request.
 func (s *Sessions) Track(id, branch string) error {
 	proj, err := s.setBranch(id, branch)
@@ -2653,6 +2676,17 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 	if n, ok := s.threadOn(proj.Key(), branch, id); ok {
 		return proj, fmt.Errorf("Thread %d works on %s", n, branch)
 	}
+	trees, err := s.life.worktrees(ctx, proj.Dir)
+	if err != nil {
+		if _, gitErr := s.life.git(ctx, proj.Dir, "rev-parse", "--git-dir"); gitErr == nil { // a project that is no git repo has no worktree to share
+			return proj, fmt.Errorf("listing the worktrees: %w", err)
+		}
+	}
+	if dir, ok := trees.byBranch[branch]; ok {
+		if n, ok := s.threadIn(proj.Key(), dir, id); ok {
+			return proj, fmt.Errorf("Thread %d works on %s", n, branch)
+		}
+	}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.SetBranch(tctx, in.Name, branch); err != nil {
@@ -2689,6 +2723,7 @@ func (s *Sessions) forkIn(dir string) string {
 	return ""
 }
 
+// Has says whether a session of that id is running, in any project.
 func (s *Sessions) Has(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
