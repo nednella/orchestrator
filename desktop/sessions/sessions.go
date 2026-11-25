@@ -140,8 +140,8 @@ type Sessions struct {
 	shells     []session.Name           // every project's shell sessions
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until archived
-	nums       map[string]int           // the number each session shows, for this run of the app
-	lastNum    map[string]int           // the last number given in each project
+	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
+	lastNum    map[string]int           // the highest number given or recorded in each project
 	archived   map[string]bool          // the threads the owner archived, whose state files say so: nothing brings them back
 	records    map[string]session.Record
 	cwds       map[string]string // the working directory each session's last hook reported
@@ -347,6 +347,7 @@ func (s *Sessions) Refresh() {
 		}
 	}
 	for name, rec := range records {
+		s.holdNumber(name, rec)
 		switch {
 		case rec.State == session.Archived:
 			s.archived[name] = true
@@ -409,7 +410,7 @@ func (s *Sessions) woken(id string, in term.Info) session.Record {
 	rec := e.record()
 	at := in.Created
 	rec.State, rec.Event, rec.At, rec.Detail, rec.Notify, rec.Tool, rec.Command, rec.SettledAt = session.Idle, "", at, "", "", "", "", 0
-	rec.Identity = keptStarts(identityOf(in), rec)
+	rec.Identity = keptFrom(identityOf(in), rec)
 	rec.Woke = at.UnixMilli()
 	history := s.history[id]
 	if len(history) == 0 {
@@ -440,7 +441,7 @@ type endedSession struct {
 func (e *endedSession) record() session.Record {
 	rec := e.rec
 	rec.State, rec.SettledAt = session.Settled, e.at.UnixMilli()
-	rec.Identity = keptStarts(identityOf(e.info), e.rec)
+	rec.Identity = keptFrom(identityOf(e.info), e.rec)
 	return rec
 }
 
@@ -455,9 +456,10 @@ func identityOf(in term.Info) session.Identity {
 	return id
 }
 
-// keptStarts is id with the first and latest start rec holds: a wake leaves the first start where it was and sets the
-// latest itself, and tmux dates a session only to the second.
-func keptStarts(id session.Identity, rec session.Record) session.Identity {
+// keptFrom is id with the number and the first and latest start rec holds: tmux knows no number, a wake leaves the
+// first start where it was and sets the latest itself, and tmux dates a session only to the second.
+func keptFrom(id session.Identity, rec session.Record) session.Identity {
+	id.N = cmp.Or(rec.N, id.N)
 	id.Created, id.Woke = cmp.Or(rec.Created, id.Created), cmp.Or(rec.Woke, id.Woke)
 	return id
 }
@@ -492,7 +494,8 @@ func (s *Sessions) saveIdentity(in term.Info) {
 	if err != nil {
 		return
 	}
-	want := keptStarts(identityOf(in), rec)
+	want := keptFrom(identityOf(in), rec)
+	want.N = cmp.Or(want.N, s.nums[id])
 	if rec.Identity == want {
 		return
 	}
@@ -565,6 +568,7 @@ func (s *Sessions) endSession(id string, at time.Time) {
 	if rec.Session == "" {
 		rec = session.Record{Session: id, At: at}
 	}
+	rec.N = cmp.Or(rec.N, s.nums[id]) // no hook may have come since the number was saved
 	if rec.State == session.Settled && !rec.At.IsZero() {
 		at = rec.At
 	}
@@ -578,8 +582,8 @@ func (s *Sessions) endSession(id string, at time.Time) {
 	}
 }
 
-// number gives each session that has no number the next one of its project, oldest first.
-// It needs mu.
+// number gives each session that has no number the next one of its project, oldest first, and saves it in its state
+// file. An old terminal session with no state file gets one for this run of the app only. It needs mu.
 func (s *Sessions) number() {
 	var fresh []term.Info
 	for _, in := range slices.Concat(s.info, s.old) {
@@ -600,9 +604,74 @@ func (s *Sessions) number() {
 		return cmp.Or(first(a).Compare(first(b)), cmp.Compare(a.Name.String(), b.Name.String()))
 	})
 	for _, in := range fresh {
-		s.lastNum[in.Name.Project]++
-		s.nums[in.Name.String()] = s.lastNum[in.Name.Project]
+		id, key := in.Name.String(), in.Name.Project
+		if s.isOld(id) && !s.hasState(id) {
+			s.lastNum[key]++
+			s.nums[id] = s.lastNum[key]
+			continue
+		}
+		s.nums[id] = s.nextNumber(key)
+		s.saveNumber(id, s.nums[id])
 	}
+}
+
+// holdNumber takes the number a state file records as the thread's, and keeps the project from giving it again. It
+// needs mu.
+func (s *Sessions) holdNumber(id string, rec session.Record) {
+	if rec.N == 0 {
+		return
+	}
+	key := session.ProjectKey(id)
+	s.lastNum[key] = max(s.lastNum[key], rec.N)
+	if rec.State != session.Archived && !s.archived[id] && s.nums[id] == 0 {
+		s.nums[id] = rec.N
+	}
+}
+
+// nextNumber is the project's next thread number. It is saved as the project's last one before any thread holds it, so
+// no restart gives it again, also after the thread is archived. It needs mu.
+func (s *Sessions) nextNumber(key string) int {
+	path := filepath.Join(s.localDir, key, "last-thread-number")
+	data, _ := os.ReadFile(path)
+	saved, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+	n := max(s.lastNum[key], saved) + 1
+	if err := atomicfile.Write(path, []byte(strconv.Itoa(n)+"\n"), 0o600); err != nil {
+		log.Printf("agentos: saving the last thread number of %s: %v", key, err)
+	}
+	s.lastNum[key] = n
+	return n
+}
+
+// saveNumber writes the thread's number into its state file and the records the app holds of it. A new thread has no
+// state file yet; saveIdentity writes it with the number. It needs mu.
+func (s *Sessions) saveNumber(id string, n int) {
+	if rec, ok := s.records[id]; ok {
+		rec.N = n
+		s.records[id] = rec
+	}
+	if e, ok := s.ended[id]; ok {
+		e.rec.N = n
+	}
+	unlock, err := bus.LockState(s.stateDir, id)
+	if err != nil {
+		log.Printf("agentos: saving the number of thread %s: %v", id, err)
+		return
+	}
+	defer unlock()
+	rec, err := bus.ReadState(s.stateDir, id)
+	if err != nil || rec.Session == "" {
+		return
+	}
+	rec.N = n
+	if err := bus.WriteState(s.stateDir, rec); err != nil {
+		log.Printf("agentos: saving the number of thread %s: %v", id, err)
+	}
+}
+
+// hasState says whether the session has a state file.
+func (s *Sessions) hasState(id string) bool {
+	rec, err := bus.ReadState(s.stateDir, id)
+	return err == nil && rec.Session != ""
 }
 
 // tmpDir is the session's own TMPDIR, and Claude's scratchpad. It sits in a folder the agent may use

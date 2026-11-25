@@ -45,6 +45,7 @@ type Record struct {
 // session that ends while the app is closed comes back as itself. Model and Effort follow the agent: the start
 // choice until its first turn, then what its transcript or its hooks say it used last.
 type Identity struct {
+	N       int    `json:"n,omitempty"` // the thread's number in its project: given once, never changed or given again
 	Title   string `json:"title,omitempty"`
 	Issue   int    `json:"issue,omitempty"`
 	Access  Access `json:"access,omitempty"`
