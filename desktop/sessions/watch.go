@@ -33,7 +33,7 @@ type watcher struct {
 // ensureWatchers keeps a watcher running for every project with a session on a branch, and stops the rest.
 func (l *Lifecycle) ensureWatchers(ctx context.Context) {
 	want := map[string]project.Project{}
-	for _, g := range groups(l.sessions.workTargets()) {
+	for _, g := range groups(l.workTargets()) {
 		want[g.proj.Key()] = g.proj
 	}
 	l.mu.Lock()
@@ -175,7 +175,7 @@ func (l *Lifecycle) branchOfPR(targets []target, number int) (string, bool) {
 // targetsOf are the project's sessions on a branch.
 func (l *Lifecycle) targetsOf(proj project.Project) []target {
 	var out []target
-	for _, t := range l.sessions.workTargets() {
+	for _, t := range l.workTargets() {
 		if t.proj.Key() == proj.Key() {
 			out = append(out, t)
 		}

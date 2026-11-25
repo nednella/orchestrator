@@ -14,8 +14,10 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session {
@@ -161,7 +163,7 @@ func TestCleanupMerged(t *testing.T) {
 	}
 
 	openThenMerge(h)
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
@@ -170,7 +172,7 @@ func TestCleanupMerged(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 7 || log[0].PR != 12 || !log[0].Merged || log[0].SessionTitle != "#7 work" {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"clean-up command for issue-7", "temp files", "evidence", "session"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"clean-up command for issue-7", "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 	if got := h.Events(t, activity.Cleanup); len(got) != 1 || got[0].Label != "done" || got[0].Issue != 7 || got[0].PR != 12 || got[0].Session != s.ID {
@@ -242,7 +244,7 @@ func TestCleanupBlocked(t *testing.T) {
 			if err := h.Cleanup(s.ID, true); err != nil {
 				t.Fatal(err)
 			}
-			if _, ok := h.Session(s.ID); ok || exists(wt) || branches(t, h.Dir) != "" {
+			if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
 				t.Errorf("forced clean-up left things: wt %v branches %q", exists(wt), branches(t, h.Dir))
 			}
 			if log := h.Cleanups(); len(log) != 2 || log[0].Status != "done" {
@@ -270,15 +272,17 @@ func TestCleanupClosedAsksFirst(t *testing.T) {
 	if err := h.Cleanup(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := h.Session(s.ID); ok || exists(wt) || branches(t, h.Dir) != "" {
+	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
 		t.Error("the confirmed clean-up left things behind")
 	}
 }
 
+// closedAt is the pull request gh lists in pr, merged or closed at that time.
+func closedAt(pr string, at time.Time) string {
+	return strings.Replace(pr, `"updatedAt"`, fmt.Sprintf(`"closedAt":%q,"updatedAt"`, at.UTC().Format(time.RFC3339Nano)), 1)
+}
+
 func TestPRClosedBeforeTheSessionStartedIsNotItsPR(t *testing.T) {
-	closedAt := func(pr string, at time.Time) string {
-		return strings.Replace(pr, `"updatedAt"`, fmt.Sprintf(`"closedAt":%q,"updatedAt"`, at.UTC().Format(time.RFC3339)), 1)
-	}
 	tests := []struct {
 		name    string
 		state   string
@@ -316,7 +320,7 @@ func TestCleanupMergedWithRemoteBranchGone(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenMergeAt(h, gitIn(t, h.Dir, "rev-parse", "issue-7"))
-	eventually(t, "clean-up of a merged branch GitHub deleted", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "clean-up of a merged branch GitHub deleted", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Error("left things behind")
 	}
@@ -457,7 +461,7 @@ func TestCleanupCustomCommand(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenMerge(h)
-	eventually(t, "clean-up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "clean-up", cleanedUp(h, s.ID))
 	if exists(wt) || !exists(filepath.Join(h.Dir, "cleaned-issue-7")) {
 		t.Errorf("custom command: worktree exists %v, marker exists %v", exists(wt), exists(filepath.Join(h.Dir, "cleaned-issue-7")))
 	}
@@ -474,7 +478,7 @@ func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 	marker := filepath.Join(h.Dir, "force-issue-7")
 
 	openThenMerge(h)
-	eventually(t, "clean-up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "clean-up", cleanedUp(h, s.ID))
 	if got, _ := os.ReadFile(marker); string(got) != "[]" {
 		t.Errorf("unforced {force} = %q, want empty", got)
 	}
@@ -514,7 +518,7 @@ func TestSetupCleanupCommand(t *testing.T) {
 			s := issueSession(h, t, 7)
 
 			openThenMerge(h)
-			eventually(t, "clean-up", func() bool { _, ok := h.Session(s.ID); return !ok })
+			eventually(t, "clean-up", cleanedUp(h, s.ID))
 			if branches(t, h.Dir) != "" || (wt != "" && exists(wt)) {
 				t.Errorf("branches %q, worktree exists %v", branches(t, h.Dir), wt != "" && exists(wt))
 			}
@@ -530,7 +534,7 @@ func TestCleanupCommandMayWorkInTheMainTree(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenMerge(h)
-	eventually(t, "clean-up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "clean-up", cleanedUp(h, s.ID))
 	if branches(t, h.Dir) != "" || gitIn(t, h.Dir, "branch", "--show-current") != "main" {
 		t.Errorf("branches %q, folder on %q", branches(t, h.Dir), gitIn(t, h.Dir, "branch", "--show-current"))
 	}
@@ -592,12 +596,12 @@ func TestCleanupWithoutCommandRemovesOnlyTheSession(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenMerge(h)
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 	if !exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
 	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"temp files", "session"}) {
+	if len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
 		t.Errorf("log = %+v", log)
 	}
 }
@@ -622,7 +626,7 @@ func TestCleanupCommandFailureWithNothingLeftCleansUpTheSession(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenMerge(h)
-	eventually(t, "clean-up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "clean-up", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Errorf("worktree exists %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
@@ -665,6 +669,14 @@ func TestSessionWithoutIssueIsNeverCleanedUp(t *testing.T) {
 	}
 }
 
+// cleanedUp says whether the session's clean-up finished: its thread stays, settled, with no PR or clean-up left.
+func cleanedUp(h *apptest.Harness, id string) func() bool {
+	return func() bool {
+		got, ok := h.Session(id)
+		return ok && got.State == "settled" && got.PR == nil && got.Cleanup == ""
+	}
+}
+
 func openThenMerge(h *apptest.Harness) {
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -696,7 +708,7 @@ func TestMergedBeforeTheSessionAsksFirst(t *testing.T) {
 	if err := h.Cleanup(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := h.Session(s.ID); ok || exists(wt) || branches(t, h.Dir) != "" {
+	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
 		t.Error("the confirmed clean-up left things behind")
 	}
 }
@@ -712,14 +724,7 @@ func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
 	fresh := h.Restart(t)
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	fresh.RefreshPRs()
-	eventually(t, "the restarted app to clean up", func() bool {
-		for _, v := range fresh.Sessions().List() {
-			if v.ID == s.ID {
-				return false
-			}
-		}
-		return true
-	})
+	eventually(t, "the restarted app to clean up", cleanedUp(fresh, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Error("the clean-up left things behind")
 	}
@@ -828,7 +833,7 @@ func TestCleanupCloseAuto(t *testing.T) {
 	s := issueSession(h, t, 7)
 
 	openThenClose(h)
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
@@ -922,7 +927,7 @@ func TestCleanupOfABranchTheSessionMovedOnFrom(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
 	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Error("the issue branch is still there")
 	}
@@ -978,7 +983,7 @@ func mergeLeavesSide(t *testing.T, h *apptest.Harness, s, other sessions.Session
 	h.RefreshPRs()
 	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
 	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) {
 		t.Error("the issue worktree is still there")
 	}
@@ -1068,7 +1073,7 @@ func TestIssueSessionTakesItsBranchFromTheSessionThatMadeIt(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPRFor("issue-8", numberedPR(22, "MERGED"))
 	h.RefreshPRs()
-	eventually(t, "the other session to be cleaned up", func() bool { _, ok := h.Session(other.ID); return !ok })
+	eventually(t, "the other session to be cleaned up", cleanedUp(h, other.ID))
 	if got, ok := h.Session(s.ID); !ok || got.PR == nil || got.PR.Number != 21 {
 		t.Errorf("session = %+v, want it running on its own PR", got)
 	}
@@ -1145,7 +1150,7 @@ func TestSeenBranchWithNoPRIsNotCleanedUp(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPRFor("issue-7", numberedPR(21, "MERGED"))
 	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) || !exists(side) || gitIn(t, h.Dir, "branch", "--list", "side") == "" {
 		t.Errorf("issue-7 exists %v, side exists %v", exists(wt), exists(side))
 	}
@@ -1213,5 +1218,129 @@ func TestTrackTakesTheBranchFromASessionThatOnlySawIt(t *testing.T) {
 	eventually(t, "the other session on side", onBranch(h, other.ID, "side"))
 	if got, _ := h.Session(s.ID); got.Branch != "issue-7" {
 		t.Errorf("the session that only saw side is still on %q", got.Branch)
+	}
+}
+
+func TestMergedPRSettlesTheThread(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+
+	openThenMerge(h)
+	got, _ := h.Session(s.ID)
+	if got.State != "settled" || got.PR == nil || got.PR.State != "merged" || got.Cleanup != "ask" {
+		t.Fatalf("after the merge = %+v", got)
+	}
+	if out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions").CombinedOutput(); strings.Contains(string(out), s.ID) {
+		t.Errorf("tmux session still there: %s", out)
+	}
+	if !exists(wt) || len(h.Cleanups()) != 0 {
+		t.Errorf("settling cleaned up: worktree there %v, log %+v", exists(wt), h.Cleanups())
+	}
+}
+
+func TestClosedPRSettlesTheThread(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
+	repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+
+	openThenClose(h)
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.PR == nil || got.PR.State != "closed" || got.Cleanup != "ask" {
+		t.Fatalf("after the close = %+v", got)
+	}
+	if !exists(wt) || len(h.Cleanups()) != 0 {
+		t.Errorf("a manual close cleaned up: worktree there %v, log %+v", exists(wt), h.Cleanups())
+	}
+}
+
+func TestPRMergedBeforeTheLastWakeDoesNotSettle(t *testing.T) {
+	h := newHarness(t)
+	old := issueSession(h, t, 7)
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	ended(t, h, old)
+	merged := time.Now()
+	time.Sleep(2 * time.Millisecond) // the wake must come after the merge to the millisecond
+	woken, err := h.ResumeSession(old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))
+	h.RefreshPRs()
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(woken.ID); got.State == "settled" || got.PR != nil || got.Cleanup != "" || len(h.Cleanups()) != 0 {
+		t.Errorf("woken thread = %+v, log %+v", got, h.Cleanups())
+	}
+}
+
+func TestCleanupKeepsTheThread(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	if resp := h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
+		t.Fatalf("show = %+v", resp)
+	}
+	chatLog, _ := hostFiles(h, s.ID)
+	name, _ := session.ParseName(s.ID)
+	tmp := filepath.Join(h.State, "data", name.Project, "tmp", name.Token)
+	if !exists(chatLog) || !exists(tmp) {
+		t.Fatalf("before the merge: chat log there %v, temp folder there %v", exists(chatLog), exists(tmp))
+	}
+
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.Evidence != 1 {
+		t.Errorf("row = %+v", got)
+	}
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Session != s.ID || rec.State != "settled" {
+		t.Errorf("state file = %+v, %v", rec, err)
+	}
+	if !exists(chatLog) || exists(tmp) || exists(wt) {
+		t.Errorf("chat log there %v, temp folder there %v, worktree there %v", exists(chatLog), exists(tmp), exists(wt))
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Contains(log[0].Removed, "settled thread") || !slices.Contains(log[0].Removed, "temp folder") {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestCleanupRunsOnceForASettledThread(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	h.RefreshPRs()
+	if err := h.Cleanup(s.ID, true); err == nil {
+		t.Error("a second clean-up of the thread was accepted")
+	}
+
+	fresh := h.Restart(t)
+	fresh.RefreshPRs()
+	fresh.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if log := fresh.Cleanups(); len(log) != 1 {
+		t.Errorf("log = %+v", log)
+	}
+	if got, ok := fresh.Session(s.ID); !ok || !cleanedUp(fresh, s.ID)() {
+		t.Errorf("after a restart the row = %+v, there %v", got, ok)
+	}
+}
+
+func TestForkDoesNotSettleOnTheSourcesPR(t *testing.T) {
+	h, _, _, src, fork := forkHarness(t)
+	openThenMerge(h)
+	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
+	if got := stateOf(h, fork.ID); got == "settled" || got == "missing" {
+		t.Errorf("the fork is %s", got)
 	}
 }

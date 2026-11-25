@@ -20,7 +20,7 @@ projects:
     session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR wake (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`). The settings panel writes it
     session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
     session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
-    session_cleanup_mode:      # does the app clean up by itself? The settings panel writes it
+    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles the thread that saw the PR open, and a clean-up keeps the thread, settled. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged; auto needs the session to have seen it open
       close: manual            # auto or manual: after the pull request closed unmerged; auto needs the session to have seen it open
     browser_start_url: ""      # page a session's browser opens first
@@ -38,7 +38,7 @@ projects:
 
 `session_cleanup_command` runs through `sh -c` in the project folder, once per branch of the session that has a worktree or a local branch, after the safety checks. `{branch}`, `{worktree}` (the folder the branch is checked out in, `''` if none) and `{dir}` (the project folder) are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A branch with no worktree has `{worktree}` `''`, which `git worktree remove` rejects; the command that *Set up* writes skips that step then. A command that fails blocks the clean-up with its error, unless the branch is already gone.
 
-A session that works on more than one branch is cleaned up a branch at a time. When the PR of a branch it moved on from merges or closes, the command runs for that branch only and the session keeps working; `session_cleanup_mode` decides as for any PR. When the PR of its newest branch merges or closes, its other branches and the session go too, unless one of those branches still has an open PR.
+A session that works on more than one branch is cleaned up a branch at a time. When the PR of a branch it moved on from merges or closes, the command runs for that branch only and the session keeps working; `session_cleanup_mode` decides as for any PR. When the PR of its newest branch merges or closes, the thread settles, and the clean-up takes its other branches too and keeps the thread, unless one of those branches still has an open PR.
 
 The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
 

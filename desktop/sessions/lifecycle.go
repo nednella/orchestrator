@@ -22,7 +22,6 @@ import (
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/util"
@@ -286,12 +285,38 @@ func (l *Lifecycle) forget(id string) {
 	_, worked := f.Branches[id]
 	_, saw := f.SawOpen[id]
 	_, owns := f.Reported[id]
-	if worked || saw || owns {
+	cleaned := slices.Contains(f.Cleaned, id)
+	if worked || saw || owns || cleaned {
 		delete(f.Branches, id)
 		delete(f.SawOpen, id)
 		delete(f.Reported, id)
+		f.Cleaned = slices.DeleteFunc(f.Cleaned, func(c string) bool { return c == id })
 		l.savePRs(key)
 	}
+}
+
+// retire forgets a session whose clean-up finished, also after a restart, so no second one runs on its settled thread.
+func (l *Lifecycle) retire(id string) {
+	l.forget(id)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	key := session.ProjectKey(id)
+	f := l.prs(key)
+	f.Cleaned = append(f.Cleaned, id)
+	l.savePRs(key)
+}
+
+// retired says whether the lifecycle is done with the session: its row went or its clean-up finished. It needs mu.
+func (l *Lifecycle) retired(id string) bool {
+	return l.gone[id] || slices.Contains(l.prs(session.ProjectKey(id)).Cleaned, id)
+}
+
+// workTargets are the sessions on a branch that the lifecycle still follows.
+func (l *Lifecycle) workTargets() []target {
+	targets := l.sessions.workTargets()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.DeleteFunc(targets, func(t target) bool { return l.retired(t.id) })
 }
 
 // Run reconciles every pull request now and then, and keeps a watcher per project in between.
@@ -333,7 +358,7 @@ func (l *Lifecycle) Poll(ctx context.Context) {
 	l.pollMu.Lock()
 	defer l.pollMu.Unlock()
 	var treeFailure, prFailure string
-	for _, g := range groups(l.sessions.workTargets()) {
+	for _, g := range groups(l.workTargets()) {
 		treeErr, prErr := l.refresh(ctx, g.proj, g.targets, nil)
 		if treeErr != nil && treeFailure == "" {
 			treeFailure = util.FirstLine(treeErr.Error())
@@ -377,10 +402,13 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 	if treeErr == nil {
 		statuses = l.statuses(ctx, proj.Dir, trees, fetched)
 	}
-	var auto []string
+	var auto, settle []string
 	for _, f := range fetched {
 		o := l.update(f.target, f.branch, trees.byBranch[f.branch], f.pr, hearer(fetched, f.branch) == f.id)
 		l.setStatus(f.id, f.branch, statuses[f.branch])
+		if o.settle {
+			settle = append(settle, f.id)
+		}
 		if o.auto {
 			auto = append(auto, f.id)
 		}
@@ -391,6 +419,11 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 			wakes = append(wakes, wake{f.target, o.wake})
 		}
 		reload = reload || o.queue
+	}
+	for _, id := range settle {
+		if err := l.sessions.Settle(id); err != nil {
+			fmt.Fprintf(os.Stderr, "agentos: settling thread %s after its PR: %v\n", id, err)
+		}
 	}
 	for _, id := range auto {
 		l.autoCleanup(ctx, id)
@@ -569,10 +602,11 @@ func (l *Lifecycle) report(source, failure string) {
 
 // outcome is what a fetched pull request calls for.
 type outcome struct {
-	auto  bool   // clean up now
-	queue bool   // the PR merged or closed, so the issue leaves the queue
-	wake  string // a prompt to send the session, or ""
-	drop  bool   // the branch was never the session's work, so it leaves the session
+	auto   bool   // clean up now
+	queue  bool   // the PR merged or closed, so the issue leaves the queue
+	wake   string // a prompt to send the session, or ""
+	drop   bool   // the branch was never the session's work, so it leaves the session
+	settle bool   // the PR of the branch the thread works on now merged or closed since the thread saw it open
 }
 
 // update stores what a fetch found and says what it calls for. Only the session that hears the PR
@@ -580,7 +614,7 @@ type outcome struct {
 func (l *Lifecycle) update(t target, branch, worktree string, pr *PR, hears bool) outcome {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.gone[t.id] {
+	if l.retired(t.id) {
 		return outcome{}
 	}
 	key := t.proj.Key()
@@ -633,6 +667,8 @@ func (l *Lifecycle) update(t target, branch, worktree string, pr *PR, hears bool
 		tr.autoTried = true
 		o.auto = true
 	}
+	changed := prev == nil || prev.State != pr.State
+	o.settle = !live && changed && hears && !t.ended && branch == t.newest() && l.sawOpen(t, branch)
 	return o
 }
 
@@ -688,6 +724,7 @@ type prsFile struct {
 	Branches map[string][]string `json:"branches"` // session id -> the branches it worked on, oldest first
 	Reported map[string][]string `json:"reported"` // session id -> the branches it reported or started on as its issue's
 	SawOpen  map[string][]string `json:"sawOpen"`  // session id -> the branches whose PR it saw draft or open
+	Cleaned  []string            `json:"cleaned"`  // the sessions whose clean-up finished; their threads stay, settled
 }
 
 // prs needs mu.
@@ -1052,7 +1089,7 @@ func verdict(reviews []review) string {
 	return ""
 }
 
-// Cleanup removes a session's worktree, branch and temp files and ends the session.
+// Cleanup removes a session's worktree, branch and temp folder and settles its thread, which stays.
 // Without force it first checks that nothing would be lost. When the session's PR is on a branch
 // it moved on from, only that branch goes and the session keeps working.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
@@ -1061,6 +1098,10 @@ func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 		return err
 	}
 	l.mu.Lock()
+	if l.retired(id) {
+		l.mu.Unlock()
+		return errors.New("this thread was cleaned up already")
+	}
 	tr := l.tracks[id]
 	if tr == nil {
 		tr = &track{}
@@ -1101,7 +1142,10 @@ func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 	}
 	if movedOn {
 		l.refreshOnly(ctx, t.proj, l.targetsOf(t.proj), []string{t.newest()})
+		return nil
 	}
+	l.retire(id)
+	l.sessions.changed()
 	return nil
 }
 
@@ -1169,7 +1213,7 @@ func (l *Lifecycle) release(key, id, branch string) {
 // A step that finds the context cancelled stops with closedReason.
 func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, prBranch string, force bool) (removed []string, reason string) {
 	removed = []string{}
-	steps := []func(context.Context, target, *cleanupPlan) ([]string, string){l.runCleanupCommand, l.removeSession}
+	steps := []func(context.Context, target, *cleanupPlan) ([]string, string){l.runCleanupCommand, l.settleSession}
 	plan, reason := l.plan(ctx, t, pr, prBranch, force)
 	for _, step := range steps {
 		if reason != "" {
@@ -1282,31 +1326,31 @@ func (l *Lifecycle) leftBehind(ctx context.Context, dir, branch string) bool {
 	return !errors.As(err, &exit) || exit.ExitCode() != 1
 }
 
-// removeSession removes what agentos itself keeps for the session, then the session.
-func (l *Lifecycle) removeSession(ctx context.Context, t target, _ *cleanupPlan) (removed []string, reason string) {
-	// Only the state file is ours: Claude Code's own files and anything in /tmp stay.
-	if rec, _ := bus.ReadState(l.stateDir, t.id); rec.Session != "" {
-		if err := bus.RemoveState(l.stateDir, t.id); err != nil {
-			return removed, fmt.Sprintf("removing the state file failed: %v", err)
-		}
-		removed = append(removed, "temp files")
-	}
-	if l.sessions.browsers.Has(t.id) {
-		l.sessions.browsers.Close(ctx, t.id)
-		removed = append(removed, "browser tab")
-	}
-	if l.sessions.evidence.Purge(t.id) > 0 {
-		removed = append(removed, "evidence")
-	}
+// settleSession settles the session's thread, closes its browser window and removes its temp folder. The thread
+// keeps its row, state file, chat log, images and evidence.
+func (l *Lifecycle) settleSession(ctx context.Context, t target, _ *cleanupPlan) (removed []string, reason string) {
 	if !t.ended {
 		if err := l.sessions.Settle(t.id); err != nil {
-			return removed, fmt.Sprintf("settling the session failed: %v", err)
+			return removed, fmt.Sprintf("settling the thread failed: %v", err)
 		}
 	}
-	if err := l.sessions.Dismiss(t.id); err != nil {
-		return removed, fmt.Sprintf("removing the session failed: %v", err)
+	removed = append(removed, "settled thread")
+	if l.sessions.browsers.Has(t.id) {
+		l.sessions.browsers.Close(ctx, t.id)
+		removed = append(removed, "browser window")
 	}
-	return append(removed, "session"), ""
+	name, err := session.ParseName(t.id)
+	if err != nil {
+		return removed, err.Error()
+	}
+	tmp := l.sessions.tmpDir(name)
+	if _, err := os.Stat(tmp); err == nil {
+		if err := os.RemoveAll(tmp); err != nil {
+			return removed, fmt.Sprintf("removing the temp folder failed: %v", err)
+		}
+		removed = append(removed, "temp folder")
+	}
+	return removed, ""
 }
 
 // otherPR is the PR of a branch the clean-up is not for. One still open means the session has work

@@ -146,7 +146,7 @@ func TestSessionWithoutAnIssueCleanupCommandRunsInTheProjectFolder(t *testing.T)
 
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
 	if got := gitIn(t, h.Dir, "branch", "--show-current"); got != "main" {
 		t.Errorf("project folder is on %q", got)
@@ -158,7 +158,7 @@ func TestSessionWithoutAnIssueCleanupCommandRunsInTheProjectFolder(t *testing.T)
 	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 0 || log[0].PR != 12 {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"clean-up command for my-fix", "temp files", "session"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"clean-up command for my-fix", "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 }
@@ -200,7 +200,7 @@ func TestSessionWithoutAnIssueCleanupRemovesItsWorktree(t *testing.T) {
 
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	h.RefreshPRs()
-	eventually(t, "the session to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
 	if exists(wt) || gitIn(t, h.Dir, "branch", "--list", "my-fix") != "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), gitIn(t, h.Dir, "branch", "--list", "my-fix"))

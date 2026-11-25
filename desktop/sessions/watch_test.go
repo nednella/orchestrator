@@ -34,7 +34,7 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	h.RefreshPRs()
-	eventually(t, "the ended row to be cleaned up", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the ended row to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) != "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
@@ -42,7 +42,7 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 	if len(log) != 1 || log[0].Status != "done" || log[0].PR != 12 {
 		t.Fatalf("log = %+v", log)
 	}
-	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "session") || !strings.Contains(removed, "clean-up command for issue-7") {
+	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "settled thread") || !strings.Contains(removed, "clean-up command for issue-7") {
 		t.Errorf("removed = %q", log[0].Removed)
 	}
 }
@@ -402,7 +402,7 @@ func TestResumedSessionIsCleanedUpOnMerge(t *testing.T) {
 	// The new session knows the PR was open, as the ended one did, so the merge cleans up without asking.
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 1))
 	h.RefreshPRs()
-	eventually(t, "the new session to be cleaned up", func() bool { _, ok := h.Session(fresh); return !ok })
+	eventually(t, "the new session to be cleaned up", cleanedUp(h, fresh))
 	if exists(wt) {
 		t.Error("the worktree is still there")
 	}

@@ -363,7 +363,7 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 func TestMergeCleansUpTheSourceOnly(t *testing.T) {
 	h, wt, ran, src, fork := forkHarness(t)
 	openThenMerge(h)
-	eventually(t, "the source cleaned up", func() bool { _, ok := h.Session(src.ID); return !ok })
+	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
 	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
 		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
 	}
@@ -393,8 +393,8 @@ func TestLiveForkInTheWorktreeBlocksTheCleanup(t *testing.T) {
 	if err := h.Cleanup(src.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := h.Session(src.ID); ok || exists(wt) || !slices.Equal(cleanupRuns(ran), []string{"issue-7"}) {
-		t.Errorf("the forced clean-up: source row there %v, worktree there %v, runs %q", ok, exists(wt), cleanupRuns(ran))
+	if !cleanedUp(h, src.ID)() || exists(wt) || !slices.Equal(cleanupRuns(ran), []string{"issue-7"}) {
+		t.Errorf("the forced clean-up: source cleaned up %v, worktree there %v, runs %q", cleanedUp(h, src.ID)(), exists(wt), cleanupRuns(ran))
 	}
 }
 
@@ -408,7 +408,7 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
 
 	openThenMerge(h)
-	eventually(t, "the source cleaned up", func() bool { _, ok := h.Session(src.ID); return !ok })
+	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
 	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
 		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
 	}
