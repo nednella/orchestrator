@@ -1,6 +1,9 @@
 package chat
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"slices"
+)
 
 type Kind string
 
@@ -39,15 +42,18 @@ const (
 	// KindMode is Claude's permission mode, in Text, once it changes: at the owner's ask, or by Claude itself, as when
 	// the owner approves its plan.
 	KindMode Kind = "mode"
-	// KindReply is Claude's reply to a control request of the host's, by its request ID; Error and Text say that it
-	// failed and why. The host consumes it and never logs it.
+	// KindReply is Claude's reply to a control request of the host's, by its request ID: Input is what it answered, or
+	// Error and Text say that it failed and why. The host consumes it and never logs it.
 	KindReply Kind = "reply"
 	// KindTaskEnd is a task Claude ran beside its turn ending, as a subagent or a shell in the background: Parent is the
 	// tool call that started it, Text its report, Error set when it failed or was stopped, and Stop TaskStopped when it
 	// was stopped. A subagent in the background outlives its call's result and the turn that made it, so only this says
 	// that it is done.
 	KindTaskEnd Kind = "task_end"
-	KindExit    Kind = "exit"
+	// KindRewind is Claude's conversation taken back to before the user's message ID: the chat drops that message and
+	// everything after it, up to the rewind.
+	KindRewind Kind = "rewind"
+	KindExit   Kind = "exit"
 )
 
 // The ways the host stops Claude itself, which an exit's Stop names.
@@ -90,4 +96,21 @@ func (e Event) Persisted() bool {
 		return e.Text != ""
 	}
 	return true
+}
+
+// Prompts folds e into ids, the user's messages that Claude's conversation holds, oldest first. A message that only
+// denied a tool is not one of them, nor is one that a Claude that failed at its start never read; a rewind takes out
+// the message it names and every one after it.
+func Prompts(ids []string, e Event) []string {
+	switch {
+	case e.Kind == KindUser && e.Parent == "" && e.ID != "":
+		return append(ids, e.ID)
+	case e.Kind == KindUnsent && e.Error:
+		return slices.DeleteFunc(ids, func(id string) bool { return id == e.ID })
+	case e.Kind == KindRewind:
+		if i := slices.Index(ids, e.ID); i >= 0 {
+			return ids[:i]
+		}
+	}
+	return ids
 }

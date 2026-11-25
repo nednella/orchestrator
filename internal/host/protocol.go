@@ -15,6 +15,9 @@ const (
 	opRelease   = "release"
 	opStop      = "stop"
 	opSubscribe = "subscribe"
+	// opRewindPreview says what a rewind of the files to before a user message would change; opRewind rewinds.
+	opRewindPreview = "rewind_preview"
+	opRewind        = "rewind"
 )
 
 type request struct {
@@ -29,6 +32,8 @@ type request struct {
 	Mode    string          `json:"mode,omitempty"`
 	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
 	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
+	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are.
+	Within string `json:"within,omitempty"`
 }
 
 type reply struct {
@@ -36,6 +41,19 @@ type reply struct {
 	Error string `json:"error"`
 	ID    string `json:"id,omitempty"`
 	Busy  bool   `json:"busy,omitempty"` // the hold op's answer: the host was busy, so it is not held
+	// Unsupported says that the Claude Code the host runs does not know a control request the op needs.
+	Unsupported bool         `json:"unsupported,omitempty"`
+	Changes     *FileChanges `json:"changes,omitempty"` // the rewind_preview op's answer
+	Prefill     string       `json:"prefill,omitempty"` // the rewind op's answer: the text of the message rewound to
+}
+
+// FileChanges is what a rewind of the files would change: the files, by absolute path, and the lines it would add and
+// take out. Reason says why Claude cannot rewind them, "" when it can.
+type FileChanges struct {
+	Files      []string `json:"files"`
+	Insertions int      `json:"insertions"`
+	Deletions  int      `json:"deletions"`
+	Reason     string   `json:"reason,omitempty"`
 }
 
 const maxRequest = 1 << 20

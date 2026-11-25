@@ -139,6 +139,10 @@ func isArray(raw json.RawMessage) bool {
 	return len(raw) > 0 && raw[0] == '['
 }
 
+func isObject(raw json.RawMessage) bool {
+	return len(raw) > 0 && raw[0] == '{'
+}
+
 // blocks reads a message's content blocks; content that is a plain string has none.
 func blocks(raw json.RawMessage) (id string, content []block, err error) {
 	var m struct {
@@ -238,22 +242,32 @@ func parseControlResponse(l line) ([]Event, error) {
 		return nil, nil
 	}
 	var r struct {
-		Subtype   string `json:"subtype"`
-		RequestID string `json:"request_id"`
-		Error     string `json:"error"`
-		Response  struct {
-			Commands    json.RawMessage `json:"commands"`
-			StillQueued json.RawMessage `json:"still_queued"`
-		} `json:"response"`
+		Subtype   string          `json:"subtype"`
+		RequestID string          `json:"request_id"`
+		Error     string          `json:"error"`
+		Response  json.RawMessage `json:"response"`
 	}
 	if err := json.Unmarshal(l.Response, &r); err != nil {
 		return nil, fmt.Errorf("parse control response: %w", err)
 	}
-	switch {
-	case isArray(r.Response.Commands):
-		return []Event{{Kind: KindCommands, Input: r.Response.Commands}}, nil
-	case isArray(r.Response.StillQueued):
-		return []Event{{Kind: KindStillQueued, ID: r.RequestID, Input: r.Response.StillQueued}}, nil
+	var lists struct {
+		Commands    json.RawMessage `json:"commands"`
+		StillQueued json.RawMessage `json:"still_queued"`
 	}
-	return []Event{{Kind: KindReply, ID: r.RequestID, Error: r.Subtype == "error", Text: r.Error}}, nil
+	if len(r.Response) > 0 {
+		if err := json.Unmarshal(r.Response, &lists); err != nil {
+			return nil, fmt.Errorf("parse control response: %w", err)
+		}
+	}
+	switch {
+	case isArray(lists.Commands):
+		return []Event{{Kind: KindCommands, Input: lists.Commands}}, nil
+	case isArray(lists.StillQueued):
+		return []Event{{Kind: KindStillQueued, ID: r.RequestID, Input: lists.StillQueued}}, nil
+	}
+	reply := Event{Kind: KindReply, ID: r.RequestID, Error: r.Subtype == "error", Text: r.Error}
+	if isObject(r.Response) {
+		reply.Input = r.Response
+	}
+	return []Event{reply}, nil
 }

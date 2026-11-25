@@ -112,7 +112,7 @@ type host struct {
 	queued map[string]queuedMessage
 	// interrupted is the latest interrupt that Claude has not answered yet.
 	interrupted interruptRequest
-	// replies are the mode requests written to Claude that wait on its reply, by request ID.
+	// replies are the control requests written to Claude that wait on its reply, by request ID.
 	replies map[string]chan chat.Event
 	// mode is the permission mode the log holds last, "" until Claude reports one.
 	mode string
@@ -121,6 +121,10 @@ type host struct {
 	// plannedStop is why the app said it stops the host, chat.StopSettle or chat.StopRestart, "" until it says so; the
 	// exit is then logged as that stop and not as an error. restartAccess is the access a restart starts with.
 	plannedStop, restartAccess string
+	// prompts are the user's messages that Claude's conversation holds, oldest first, as chat.Prompts folds the log.
+	prompts []string
+	// rewinding is set while a rewind runs: the host then takes no message and no mode change.
+	rewinding bool
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -136,6 +140,15 @@ func Run(ctx context.Context, c Config) error {
 	if _, err := log.Append(chat.Event{Kind: chat.KindStart}); err != nil {
 		log.Close()
 		return err
+	}
+	logged, err := chat.ReadLog(c.Log, 0)
+	if err != nil {
+		log.Close()
+		return err
+	}
+	var prompts []string
+	for _, e := range logged {
+		prompts = chat.Prompts(prompts, e)
 	}
 	ln, err := listen(c.Socket)
 	if err != nil {
@@ -154,6 +167,7 @@ func Run(ctx context.Context, c Config) error {
 		conns:   map[net.Conn]struct{}{},
 		queued:  map[string]queuedMessage{},
 		replies: map[string]chan chat.Event{},
+		prompts: prompts,
 	}
 	defer h.shutdown(ln)
 
@@ -444,6 +458,7 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	if err != nil {
 		return chat.Event{}, err
 	}
+	h.prompts = chat.Prompts(h.prompts, e)
 	switch e.Kind {
 	case chat.KindApproval:
 		h.approvals = append(h.approvals, approval{id: e.ID, input: e.Input})
@@ -599,6 +614,14 @@ func (h *host) handle(conn net.Conn) {
 	case opHold:
 		writeJSON(conn, reply{OK: true, Busy: !h.hold()})
 		return
+	case opRewindPreview:
+		changes, err := h.previewRewind(req.ID)
+		writeAnswer(conn, reply{Changes: &changes}, err)
+		return
+	case opRewind:
+		prefill, err := h.rewind(req.ID, req.Within)
+		writeAnswer(conn, reply{Prefill: prefill}, err)
+		return
 	}
 	id, err := h.do(req)
 	writeReply(conn, id, err)
@@ -652,6 +675,10 @@ func (h *host) send(text string, files []string) (string, error) {
 	if h.holding {
 		h.mu.Unlock()
 		return "", errRestarting
+	}
+	if h.rewinding {
+		h.mu.Unlock()
+		return "", errRewinding
 	}
 	lines, logged, err := h.sendLocked(id, text, files, images)
 	h.mu.Unlock()
@@ -792,9 +819,21 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 }
 
 var (
-	errModeDuringTurn = errors.New("Change access when the turn ends")
-	errRestarting     = errors.New("This thread is restarting")
+	errModeDuringTurn    = errors.New("Change access when the turn ends")
+	errRestarting        = errors.New("This thread is restarting")
+	errRewinding         = errors.New("This thread is rewinding")
+	errEditDuringTurn    = errors.New("Edit when the turn ends")
+	errNotInConversation = errors.New("Claude's conversation no longer holds this message")
+	errNoCheckpoints     = errors.New("This thread started before file checkpoints")
+	errStaleRewind       = errors.New("A message arrived since; look at the chat and edit again")
+	errNoAnswer          = errors.New("Claude did not answer")
+	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
+	// or after the one agentos was built for may.
+	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
 )
+
+// unsupportedWords are what Claude says when it does not serve a control request.
+var unsupportedWords = []string{"Unsupported control request subtype", "does not handle control_request subtype", "is not supported in this context"}
 
 // hold says whether the host is idle and, when it is, holds it: every later send, answer and mode change is refused
 // until it exits. A restart holds the host before it stops it, so no message gets in between the check and the stop.
@@ -831,7 +870,7 @@ func (h *host) release() {
 
 // busyLocked needs h.mu.
 func (h *host) busyLocked() bool {
-	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0
+	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0 || h.rewinding
 }
 
 // setMode asks Claude to change its permission mode, plan or default, and logs the mode once Claude takes it. A change
@@ -869,20 +908,233 @@ func (h *host) setMode(mode string) error {
 		h.dropReply(id)
 		return err
 	}
-	select {
-	case r := <-got:
-		if r.Error {
-			return errors.New(cmp.Or(r.Text, "Claude did not change its mode"))
-		}
-	case <-time.After(requestTimeout):
-		h.dropReply(id)
+	r, ok := h.await(id, got)
+	if !ok {
 		return errors.New("Claude did not answer the mode change")
+	}
+	if r.Error {
+		return errors.New(cmp.Or(r.Text, "Claude did not change its mode"))
 	}
 	h.modeIs(mode)
 	return nil
 }
 
-// replied hands Claude's reply to the mode request that waits on it; a reply nothing waits on is dropped.
+// await waits up to requestTimeout for Claude's reply to the request id, and stops waiting for it after that.
+func (h *host) await(id string, got <-chan chat.Event) (chat.Event, bool) {
+	select {
+	case r := <-got:
+		return r, true
+	case <-time.After(requestTimeout):
+		h.dropReply(id)
+		return chat.Event{}, false
+	}
+}
+
+// ask writes the control request that line makes for a new request id and waits for Claude's reply to it. A reply that
+// says Claude does not know the request is errUnsupported.
+func (h *host) ask(line func(id string) []byte) (chat.Event, error) {
+	id := h.nextID()
+	got := make(chan chat.Event, 1)
+	h.mu.Lock()
+	if h.exited {
+		h.mu.Unlock()
+		return chat.Event{}, errExited
+	}
+	h.replies[id] = got
+	h.mu.Unlock()
+	if err := h.write(line(id)); err != nil {
+		h.dropReply(id)
+		return chat.Event{}, err
+	}
+	r, ok := h.await(id, got)
+	switch {
+	case !ok:
+		return chat.Event{}, errNoAnswer
+	case r.Error && slices.ContainsFunc(unsupportedWords, func(w string) bool { return strings.Contains(r.Text, w) }):
+		return chat.Event{}, errUnsupported
+	}
+	return r, nil
+}
+
+// rewindableLocked says why the host cannot rewind to before the user message id now, nil when it can. It needs h.mu.
+func (h *host) rewindableLocked(id string) error {
+	switch {
+	case h.exited:
+		return errExited
+	case h.holding:
+		return errRestarting
+	case h.rewinding:
+		return errRewinding
+	case h.busyLocked():
+		return errEditDuringTurn
+	case !slices.Contains(h.prompts, id):
+		return errNotInConversation
+	}
+	return nil
+}
+
+// previewRewind says what a rewind of the files to before the user message id would change, and changes nothing. That
+// Claude cannot rewind the files is the answer's reason, not an error: the conversation may still rewind.
+func (h *host) previewRewind(id string) (FileChanges, error) {
+	h.mu.Lock()
+	err := h.rewindableLocked(id)
+	h.mu.Unlock()
+	if err != nil {
+		return FileChanges{}, err
+	}
+	changes, err := h.rewindFiles(id, true)
+	if refused := (*filesRefusal)(nil); errors.As(err, &refused) {
+		return FileChanges{Files: []string{}, Reason: refused.Error()}, nil
+	}
+	return changes, err
+}
+
+// rewind takes Claude's conversation back to before the user message id, logs a rewind event and returns the message's
+// text. With within set it first puts back the files Claude's turns edited since, once a dry run shows that every one
+// is inside within. While it runs the host takes no message, so the newest message it names to Claude stays the newest.
+// The rewind is logged only once Claude says the conversation rewound.
+func (h *host) rewind(id, within string) (string, error) {
+	h.stdinMu.Lock()
+	h.mu.Lock()
+	err := h.rewindableLocked(id)
+	latest := ""
+	if err == nil {
+		h.rewinding, latest = true, h.prompts[len(h.prompts)-1]
+	}
+	h.mu.Unlock()
+	h.stdinMu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		h.mu.Lock()
+		h.rewinding = false
+		h.mu.Unlock()
+	}()
+	if within != "" {
+		changes, err := h.rewindFiles(id, true)
+		if err != nil {
+			return "", err
+		}
+		if out := outside(changes.Files, within); out != "" {
+			return "", fmt.Errorf("The rewind would change %s, which is outside %s, so no file was changed", out, within)
+		}
+		if _, err := h.rewindFiles(id, false); err != nil {
+			return "", err
+		}
+	}
+	prefill, err := h.rewindConversation(id, latest)
+	if err != nil && within != "" {
+		return "", fmt.Errorf("The files were put back, but the conversation was not: %w", err)
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, err := h.publish(chat.Event{Kind: chat.KindRewind, ID: id}); err != nil {
+		return "", err
+	}
+	return prefill, nil
+}
+
+// rewindFiles asks Claude to put back the files its turns edited since before the user message id, or with dryRun only
+// to say what that would change.
+func (h *host) rewindFiles(id string, dryRun bool) (FileChanges, error) {
+	r, err := h.ask(func(req string) []byte { return chat.RewindFiles(req, id, dryRun) })
+	if err != nil {
+		return FileChanges{}, err
+	}
+	var a struct {
+		CanRewind    bool     `json:"canRewind"`
+		Error        string   `json:"error"`
+		FilesChanged []string `json:"filesChanged"`
+		Insertions   int      `json:"insertions"`
+		Deletions    int      `json:"deletions"`
+	}
+	_ = json.Unmarshal(r.Input, &a)
+	if r.Error || !a.CanRewind {
+		return FileChanges{}, filesRefused(cmp.Or(r.Text, a.Error))
+	}
+	if a.FilesChanged == nil {
+		a.FilesChanged = []string{}
+	}
+	return FileChanges{Files: a.FilesChanged, Insertions: a.Insertions, Deletions: a.Deletions}, nil
+}
+
+// filesRefusal is Claude saying it cannot rewind the files, in words for the owner.
+type filesRefusal struct{ reason string }
+
+func (r *filesRefusal) Error() string { return r.reason }
+
+// filesRefused is why Claude did not rewind the files. Claude keeps no checkpoint for a thread started without them,
+// nor for a message sent before they were on.
+func filesRefused(reason string) error {
+	if strings.Contains(reason, "File rewinding is not enabled") || strings.Contains(reason, "No file checkpoint found") {
+		return &filesRefusal{errNoCheckpoints.Error()}
+	}
+	return &filesRefusal{cmp.Or(reason, "Claude did not rewind the files")}
+}
+
+// rewindConversation asks Claude to take its conversation back to before the user message id, naming latest as the
+// newest message the host knows of, and returns the message's text.
+func (h *host) rewindConversation(id, latest string) (string, error) {
+	r, err := h.ask(func(req string) []byte { return chat.RewindConversation(req, id, latest) })
+	if err != nil {
+		return "", err
+	}
+	if r.Error {
+		return "", errors.New(cmp.Or(r.Text, "Claude did not rewind the conversation"))
+	}
+	var a struct {
+		Rewound     bool   `json:"rewound"`
+		PrefillText string `json:"prefillText"`
+		Reason      string `json:"reason"`
+		Error       string `json:"error"`
+	}
+	_ = json.Unmarshal(r.Input, &a)
+	if a.Rewound {
+		return a.PrefillText, nil
+	}
+	switch a.Reason {
+	case "stale_target", "unseen_later_turn":
+		return "", errStaleRewind
+	case "turn_running":
+		return "", errEditDuringTurn
+	case "target_not_found":
+		return "", errNotInConversation
+	}
+	return "", errors.New(cmp.Or(a.Error, "Claude did not rewind the conversation"))
+}
+
+// outside is the first of files that is not inside dir, "" when every one is. Each path is compared with its links
+// resolved as far as it exists, since a rewind may bring back a file that is gone.
+func outside(files []string, dir string) string {
+	root := resolved(dir)
+	for _, f := range files {
+		rel, err := filepath.Rel(root, resolved(f))
+		if err != nil || !filepath.IsAbs(f) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return f
+		}
+	}
+	return ""
+}
+
+func resolved(path string) string {
+	path = filepath.Clean(path)
+	var gone []string
+	for {
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return filepath.Join(append([]string{real}, gone...)...)
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return filepath.Join(append([]string{path}, gone...)...)
+		}
+		gone = append([]string{filepath.Base(path)}, gone...)
+		path = parent
+	}
+}
+
+// replied hands Claude's reply to the control request that waits on it; a reply nothing waits on is dropped.
 func (h *host) replied(e chat.Event) {
 	h.mu.Lock()
 	ch, ok := h.replies[e.ID]
@@ -1089,11 +1341,16 @@ func (h *host) removeSubscriber(s *subscriber) {
 }
 
 func writeReply(conn net.Conn, id string, err error) error {
-	r := reply{OK: err == nil, ID: id}
+	return writeAnswer(conn, reply{ID: id}, err)
+}
+
+// writeAnswer writes rep, or in its place a refusal with err, which says so when Claude did not know a request.
+func writeAnswer(conn net.Conn, rep reply, err error) error {
 	if err != nil {
-		r.Error = err.Error()
+		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported)}
 	}
-	return writeJSON(conn, r)
+	rep.OK = err == nil
+	return writeJSON(conn, rep)
 }
 
 func writeJSON(conn net.Conn, r reply) error {

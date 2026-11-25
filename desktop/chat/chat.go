@@ -28,7 +28,8 @@ const (
 
 // Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
 // AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
-// FlagRefused says that a thread's Claude did not know flag, so its host started it without.
+// FlagRefused says that a thread's Claude did not know flag, so its host started it without. FilesRewind says where a
+// rewind may put a thread's files back, as Sessions.FilesRewind does.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
@@ -36,6 +37,7 @@ type Threads interface {
 	AccessChanged(id, mode string, planApproved bool)
 	FlagRefused(flag string)
 	Wake(id string) (sessions.Chat, error)
+	FilesRewind(id string) (dir string, inProject bool, reason string)
 }
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.

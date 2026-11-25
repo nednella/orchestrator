@@ -3,6 +3,7 @@ package host
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -71,8 +72,12 @@ type fakeLine struct {
 	} `json:"message"`
 	RequestID string `json:"request_id"`
 	Request   struct {
-		Subtype string `json:"subtype"`
-		Mode    string `json:"mode"`
+		Subtype       string `json:"subtype"`
+		Mode          string `json:"mode"`
+		UserMessageID string `json:"user_message_id"`
+		DryRun        bool   `json:"dry_run"`
+		Target        string `json:"target_message_uuid"`
+		LastSeen      string `json:"last_seen_user_message_uuid"`
 	} `json:"request"`
 	Response struct {
 		RequestID string `json:"request_id"`
@@ -109,7 +114,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 	result := func(isError bool) {
 		print(map[string]any{"type": "result", "subtype": "success", "is_error": isError, "total_cost_usd": 0.01})
 	}
+	// taken are the user messages the conversation holds, in order.
+	var taken []fakeLine
 	echo := func(l fakeLine) {
+		taken = append(taken, l)
 		if l.UUID != "" {
 			print(map[string]any{"type": "user", "uuid": l.UUID, "isReplay": true, "message": map[string]any{"role": "user", "content": l.Message.Content}})
 		}
@@ -148,6 +156,49 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		}
 		print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"mode": l.Request.Mode}}})
 		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": l.Request.Mode})
+	}
+	// rewind answers the rewind requests as Claude Code 2.1.332 does. Its files are the comma-separated paths in
+	// AOS_FAKE_REWIND_FILES, into each of which a rewind that is not a dry run writes "before"; without the checkpoint
+	// setting it kept no checkpoints. With AOS_FAKE_UNSUPPORTED set it knows neither request, with AOS_FAKE_HELD_ELSEWHERE
+	// it holds a later message than any the host names, and AOS_FAKE_REWIND_DELAY holds its answer to a conversation
+	// rewind.
+	rewind := func(l fakeLine) {
+		answer := func(body map[string]any) {
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": body}})
+		}
+		fail := func(text string) {
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID, "error": text}})
+		}
+		files := slices.DeleteFunc(strings.Split(os.Getenv("AOS_FAKE_REWIND_FILES"), ","), func(f string) bool { return f == "" })
+		at := slices.IndexFunc(taken, func(m fakeLine) bool { return m.UUID == cmp.Or(l.Request.Target, l.Request.UserMessageID) })
+		switch {
+		case os.Getenv("AOS_FAKE_UNSUPPORTED") == "1":
+			fail("Unsupported control request subtype: " + l.Request.Subtype)
+		case l.Request.Subtype == "rewind_files" && os.Getenv("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING") != "1" && l.Request.DryRun:
+			answer(map[string]any{"canRewind": false, "error": "File rewinding is not enabled."})
+		case l.Request.Subtype == "rewind_files" && os.Getenv("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING") != "1":
+			fail("File rewinding is not enabled.")
+		case l.Request.Subtype == "rewind_files" && at < 0:
+			fail("No file checkpoint found for this message.")
+		case l.Request.Subtype == "rewind_files" && l.Request.DryRun:
+			answer(map[string]any{"canRewind": true, "filesChanged": files, "insertions": 3, "deletions": 1})
+		case l.Request.Subtype == "rewind_files":
+			for _, f := range files {
+				os.WriteFile(f, []byte("before"), 0o600)
+			}
+			answer(map[string]any{"canRewind": true, "skippedLinks": 0})
+		case at < 0:
+			answer(map[string]any{"rewound": false, "error": "target not found", "reason": "target_not_found"})
+		case l.Request.LastSeen != taken[len(taken)-1].UUID || os.Getenv("AOS_FAKE_HELD_ELSEWHERE") == "1":
+			answer(map[string]any{"rewound": false, "error": "stale target", "reason": "stale_target"})
+		default:
+			if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_REWIND_DELAY")); err == nil {
+				time.Sleep(wait)
+			}
+			text := taken[at].text()
+			taken = taken[:at]
+			answer(map[string]any{"rewound": true, "targetMessageUuid": l.Request.Target, "prefillText": text, "precedingAssistantUuid": "umsg_0"})
+		}
 	}
 	fmt.Fprintln(out, fakeInit)
 	if mode := os.Getenv("AOS_FAKE_MODE"); mode != "" {
@@ -206,6 +257,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		case "control_request":
 			if l.Request.Subtype == "set_permission_mode" {
 				setMode(l)
+				continue
+			}
+			if strings.HasPrefix(l.Request.Subtype, "rewind_") {
+				rewind(l)
 				continue
 			}
 			if l.Request.Subtype != "interrupt" {
@@ -323,10 +378,23 @@ func startHost(t *testing.T, env ...string) *testHost {
 // startHostWith starts the host on the fake Claude with flags after its own.
 func startHostWith(t *testing.T, flags []string, env ...string) *testHost {
 	t.Helper()
+	return startHostAt(t, "", flags, env...)
+}
+
+// startHostOn starts the host on the fake Claude with the chat log of an earlier run.
+func startHostOn(t *testing.T, log string, env ...string) *testHost {
+	t.Helper()
+	return startHostAt(t, log, nil, env...)
+}
+
+// startHostAt starts the host on the fake Claude with flags after its own, keeping the chat log at log, a new one in a
+// temp folder when it is "".
+func startHostAt(t *testing.T, log string, flags []string, env ...string) *testHost {
+	t.Helper()
 	dir := t.TempDir()
 	h := &testHost{
 		socket: filepath.Join(socketDir(t), "h.sock"),
-		log:    filepath.Join(dir, "chat.jsonl"),
+		log:    cmp.Or(log, filepath.Join(dir, "chat.jsonl")),
 		stdin:  filepath.Join(dir, "stdin.jsonl"),
 		echo:   &syncBuffer{},
 		done:   make(chan error, 1),
@@ -2089,5 +2157,274 @@ func TestGoneWaitsForTheExitInTheLog(t *testing.T) {
 	}
 	if last := logged[len(logged)-1]; last.Kind != chat.KindExit {
 		t.Errorf("last event once the host is gone = %s, want exit", last.Kind)
+	}
+}
+
+const checkpoints = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"
+
+// turns sends each text as a turn of its own, waits for each turn's end, and returns the messages' ids.
+func turns(t *testing.T, h *testHost, events <-chan chat.Event, texts ...string) []string {
+	t.Helper()
+	var ids []string
+	for _, text := range texts {
+		ids = append(ids, sendMessage(t, h.socket, text))
+		waitKind(t, events, chat.KindTurnEnd)
+	}
+	return ids
+}
+
+// rewindRequests are claude's stdin control requests to rewind, in the order they came.
+func rewindRequests(t *testing.T, stdin string) []fakeLine {
+	t.Helper()
+	var out []fakeLine
+	for _, raw := range stdinLines(t, stdin) {
+		var l fakeLine
+		if json.Unmarshal([]byte(raw), &l) == nil && strings.HasPrefix(l.Request.Subtype, "rewind_") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func refusal(err error) string {
+	if refused := (*Refused)(nil); errors.As(err, &refused) {
+		return refused.Reason
+	}
+	return ""
+}
+
+func TestRewindTakesTheConversationBack(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one", "two", "three")
+
+	prefill, err := Rewind(ctxT(t), h.socket, ids[1], "")
+	if err != nil || prefill != "two" {
+		t.Fatalf("Rewind = %q, %v, want the message's text", prefill, err)
+	}
+	reqs := rewindRequests(t, h.stdin)
+	if len(reqs) != 1 || reqs[0].Request.Subtype != "rewind_conversation" || reqs[0].Request.Target != ids[1] || reqs[0].Request.LastSeen != ids[2] {
+		t.Fatalf("requests = %+v, want one conversation rewind to two, three the newest message", reqs)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 1 || got[0].ID != ids[1] {
+		t.Fatalf("logged rewinds = %+v, want one to two", got)
+	}
+	// Three went with two, and the newest message Claude holds is now one.
+	if _, err := Rewind(ctxT(t), h.socket, ids[2], ""); refusal(err) != "Claude's conversation no longer holds this message" {
+		t.Errorf("rewind to a rewound message: %v", err)
+	}
+	four := turns(t, h, events, "four")
+	if _, err := Rewind(ctxT(t), h.socket, ids[0], ""); err != nil {
+		t.Fatal(err)
+	}
+	if reqs := rewindRequests(t, h.stdin); len(reqs) != 2 || reqs[1].Request.Target != ids[0] || reqs[1].Request.LastSeen != four[0] {
+		t.Errorf("requests = %+v, want the second to name four the newest message", reqs)
+	}
+}
+
+func TestRewindPutsTheFilesBackFirst(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(file, []byte("after"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+file)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one", "two")
+
+	changes, err := PreviewRewind(ctxT(t), h.socket, ids[1])
+	if err != nil || !slices.Equal(changes.Files, []string{file}) || changes.Insertions != 3 || changes.Deletions != 1 {
+		t.Fatalf("PreviewRewind = %+v, %v", changes, err)
+	}
+	if data, _ := os.ReadFile(file); string(data) != "after" {
+		t.Fatalf("the dry run changed the file: %q", data)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Fatalf("the dry run logged %+v", got)
+	}
+
+	if _, err := Rewind(ctxT(t), h.socket, ids[1], dir); err != nil {
+		t.Fatal(err)
+	}
+	var steps []string
+	for _, l := range rewindRequests(t, h.stdin) {
+		steps = append(steps, fmt.Sprintf("%s dry=%v %s%s", l.Request.Subtype, l.Request.DryRun, l.Request.UserMessageID, l.Request.Target))
+	}
+	want := []string{"rewind_files dry=true " + ids[1], "rewind_files dry=true " + ids[1], "rewind_files dry=false " + ids[1], "rewind_conversation dry=false " + ids[1]}
+	if !slices.Equal(steps, want) {
+		t.Errorf("requests =\n%s\nwant the preview, then a dry run, the files and the conversation:\n%s", strings.Join(steps, "\n"), strings.Join(want, "\n"))
+	}
+	if data, _ := os.ReadFile(file); string(data) != "before" {
+		t.Errorf("file = %q, want it put back", data)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 1 || got[0].ID != ids[1] {
+		t.Errorf("logged rewinds = %+v", got)
+	}
+}
+
+func TestRewindLeavesFilesOutsideTheFolder(t *testing.T) {
+	t.Parallel()
+	dir, elsewhere := t.TempDir(), t.TempDir()
+	inside, outsider := filepath.Join(dir, "a.txt"), filepath.Join(elsewhere, "b.txt")
+	for _, f := range []string{inside, outsider} {
+		if err := os.WriteFile(f, []byte("after"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+inside+","+outsider)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	_, err := Rewind(ctxT(t), h.socket, ids[0], dir)
+	if !strings.Contains(refusal(err), outsider+", which is outside "+dir) {
+		t.Fatalf("err = %v, want the file outside named", err)
+	}
+	if reqs := rewindRequests(t, h.stdin); len(reqs) != 1 || !reqs[0].Request.DryRun {
+		t.Errorf("requests = %+v, want only the dry run", reqs)
+	}
+	for _, f := range []string{inside, outsider} {
+		if data, _ := os.ReadFile(f); string(data) != "after" {
+			t.Errorf("%s = %q, want it left", f, data)
+		}
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Errorf("logged rewinds = %+v, want none", got)
+	}
+}
+
+func TestRewindWithoutCheckpoints(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := startHost(t, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=", "AOS_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt"))
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	if changes, err := PreviewRewind(ctxT(t), h.socket, ids[0]); err != nil || changes.Reason != "This thread started before file checkpoints" || changes.Files == nil {
+		t.Errorf("preview = %+v, %v, want the reason the files cannot rewind", changes, err)
+	}
+	if _, err := Rewind(ctxT(t), h.socket, ids[0], dir); refusal(err) != "This thread started before file checkpoints" {
+		t.Errorf("rewind with the files: %v", err)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Fatalf("logged rewinds = %+v, want none", got)
+	}
+	// The conversation alone rewinds without checkpoints.
+	if prefill, err := Rewind(ctxT(t), h.socket, ids[0], ""); err != nil || prefill != "one" {
+		t.Errorf("rewind of the conversation = %q, %v", prefill, err)
+	}
+}
+
+func TestRewindToAStaleTarget(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints, "AOS_FAKE_HELD_ELSEWHERE=1")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one", "two")
+
+	_, err := Rewind(ctxT(t), h.socket, ids[0], "")
+	if refusal(err) != "A message arrived since; look at the chat and edit again" {
+		t.Fatalf("err = %v", err)
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Errorf("logged rewinds = %+v, want none", got)
+	}
+}
+
+func TestRewindClaudeDoesNotKnow(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints, "AOS_FAKE_UNSUPPORTED=1")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	for what, call := range map[string]func() error{
+		"preview": func() error { _, err := PreviewRewind(ctxT(t), h.socket, ids[0]); return err },
+		"rewind":  func() error { _, err := Rewind(ctxT(t), h.socket, ids[0], ""); return err },
+	} {
+		err := call()
+		if refused := (*Refused)(nil); !errors.As(err, &refused) || !refused.Unsupported || refused.Reason != "This version of Claude Code cannot rewind a thread" {
+			t.Errorf("%s: err = %#v, want a refusal that says Claude does not know the request", what, err)
+		}
+	}
+	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
+		t.Errorf("logged rewinds = %+v, want none", got)
+	}
+}
+
+func TestRewindIsRefusedDuringATurn(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	if _, err := PreviewRewind(ctxT(t), h.socket, ids[0]); refusal(err) != "Edit when the turn ends" {
+		t.Errorf("preview: %v", err)
+	}
+	if _, err := Rewind(ctxT(t), h.socket, ids[0], ""); refusal(err) != "Edit when the turn ends" {
+		t.Errorf("rewind: %v", err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	if reqs := rewindRequests(t, h.stdin); len(reqs) != 0 {
+		t.Errorf("requests = %+v, want none", reqs)
+	}
+}
+
+func TestMessageWaitsOutARewind(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_DELAY=500ms")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one", "two")
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := Rewind(context.Background(), h.socket, ids[1], "")
+		done <- err
+	}()
+	eventually(t, "the conversation rewind", func() bool { return len(rewindRequests(t, h.stdin)) == 1 })
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "three"}); refusal(err) != "This thread is rewinding" {
+		t.Errorf("send during the rewind: %v", err)
+	}
+	if idle, err := Hold(ctxT(t), h.socket); err != nil || idle {
+		t.Errorf("Hold = %v, %v: the host held for a restart during the rewind", idle, err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	sendMessage(t, h.socket, "three")
+	waitKind(t, events, chat.KindTurnEnd)
+}
+
+func TestRewindAfterTheHostStartsAgain(t *testing.T) {
+	t.Parallel()
+	first := startHost(t, checkpoints)
+	events := subscribe(t, first.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, first, events, "one", "two", "three")
+	if _, err := Rewind(ctxT(t), first.socket, ids[2], ""); err != nil {
+		t.Fatal(err)
+	}
+	first.cancel()
+	<-first.done
+	first.done <- nil // for the first host's own clean-up
+
+	again := startHostOn(t, first.log, checkpoints)
+	// The new run's Claude resumes a conversation it did not see the host log; the host names the newest message the
+	// log says it holds, two, and refuses three, which the rewind took out.
+	if _, err := Rewind(ctxT(t), again.socket, ids[2], ""); refusal(err) != "Claude's conversation no longer holds this message" {
+		t.Errorf("rewind to the rewound message: %v", err)
+	}
+	_, _ = Rewind(ctxT(t), again.socket, ids[0], "")
+	if reqs := rewindRequests(t, again.stdin); len(reqs) != 1 || reqs[0].Request.Target != ids[0] || reqs[0].Request.LastSeen != ids[1] {
+		t.Errorf("requests = %+v, want a rewind to one with two the newest message", reqs)
 	}
 }

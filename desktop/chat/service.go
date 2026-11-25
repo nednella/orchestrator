@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -25,6 +27,8 @@ type Service struct {
 	files      *files
 	projectDir func(project string) string
 	ctx        func() context.Context
+	// noRewind is why Edit from here is off for this run of the app, once Claude Code did not know a rewind request.
+	noRewind atomic.Pointer[string]
 }
 
 // NewService binds the chats; runner runs git, projectDir gives a project's folder, "" for none, and ctx gives the
@@ -185,6 +189,101 @@ func (v *Service) ProjectCommands(project string) ([]Command, error) {
 		return []Command{}, nil
 	}
 	return commands, nil
+}
+
+// FilesRewind is what Edit from here offers for a thread's files. Offered is false for a thread in the project folder,
+// whose files a rewind never touches. Reason says why they cannot be rewound, "" when they can; Files, Insertions and
+// Deletions are what a rewind of them would change.
+type FilesRewind struct {
+	Offered    bool     `json:"offered"`
+	Reason     string   `json:"reason"`
+	Files      []string `json:"files"`
+	Insertions int      `json:"insertions"`
+	Deletions  int      `json:"deletions"`
+}
+
+// RewindPreview is what a rewind of the thread to before its user message would do to the files, with nothing changed.
+// A settled thread whose files may be rewound is woken for it, as a message would wake it.
+func (v *Service) RewindPreview(id, message string) (FilesRewind, error) {
+	if off := v.RewindOff(); off != "" {
+		return FilesRewind{}, errors.New(off)
+	}
+	preview := FilesRewind{Files: []string{}}
+	if _, inProject, _ := v.c.threads.FilesRewind(id); inProject {
+		return preview, nil
+	}
+	ch, err := v.awake(id)
+	if err != nil {
+		return FilesRewind{}, err
+	}
+	preview.Offered = true
+	if _, _, reason := v.c.threads.FilesRewind(id); reason != "" {
+		preview.Reason = sentence(reason)
+		return preview, nil
+	}
+	changes, err := host.PreviewRewind(v.ctx(), ch.Socket, message)
+	if err != nil {
+		return FilesRewind{}, v.rewindFailed(id, "the rewind's dry run", err)
+	}
+	preview.Reason, preview.Insertions, preview.Deletions = changes.Reason, changes.Insertions, changes.Deletions
+	if changes.Files != nil {
+		preview.Files = changes.Files
+	}
+	return preview, nil
+}
+
+// RewindTo takes the thread's conversation back to before its user message and returns that message's text, for the
+// composer. With files it first puts back the files Claude's turns edited since, which it does only in the worktree
+// agentos made for the thread while nobody else works there. A settled thread is woken first, as a message would wake
+// it. When anything fails, the chat log and the files are left as they were, unless the files were put back and the
+// conversation then was not, which the error says.
+func (v *Service) RewindTo(id, message string, files bool) (string, error) {
+	if off := v.RewindOff(); off != "" {
+		return "", errors.New(off)
+	}
+	if _, inProject, _ := v.c.threads.FilesRewind(id); files && inProject {
+		return "", errors.New("The files of the project folder are never rewound")
+	}
+	ch, err := v.awake(id)
+	if err != nil {
+		return "", err
+	}
+	within := ""
+	if files {
+		dir, _, reason := v.c.threads.FilesRewind(id)
+		if reason != "" {
+			return "", errors.New(sentence(reason))
+		}
+		within = dir
+	}
+	prefill, err := host.Rewind(v.ctx(), ch.Socket, message, within)
+	return prefill, v.rewindFailed(id, "the rewind", err)
+}
+
+// RewindOff is why Edit from here is off for this run of the app, "" while it works.
+func (v *Service) RewindOff() string {
+	if off := v.noRewind.Load(); off != nil {
+		return *off
+	}
+	return ""
+}
+
+// rewindFailed is failed for a rewind op. When Claude Code does not know a rewind request, Edit from here is off for
+// the rest of the app's run; a host from before the rewind ops cannot rewind until the thread starts again.
+func (v *Service) rewindFailed(id, what string, err error) error {
+	refused := (*host.Refused)(nil)
+	switch {
+	case !errors.As(err, &refused):
+	case refused.Unsupported:
+		off := sentence(refused.Reason)
+		v.noRewind.CompareAndSwap(nil, &off)
+		log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+		return errors.New(off)
+	case strings.HasPrefix(refused.Reason, "unknown op"):
+		log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+		return fmt.Errorf("Thread %s runs under a host from before Edit from here; settle and wake it to edit", id)
+	}
+	return v.failed(id, what, err)
 }
 
 // ChatPending is the approval each live thread waits on.

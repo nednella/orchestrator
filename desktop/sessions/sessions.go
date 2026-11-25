@@ -3418,6 +3418,35 @@ func (s *Sessions) usersOf(dir, except string, asleep bool) string {
 	return ""
 }
 
+// FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
+// made for the thread, while no other live thread and no shell works there. inProject is set for a thread that runs in
+// the project folder, whose files a rewind never touches. reason says why the files cannot be rewound, "" when dir is
+// where they may be.
+func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason string) {
+	s.mu.Lock()
+	in, found := s.infoOf(id)
+	proj, known := s.projectOf(in)
+	s.mu.Unlock()
+	if !found || !known {
+		return "", false, fmt.Sprintf("No thread %s", id)
+	}
+	if samePath(in.Path, proj.Dir) {
+		return "", true, ""
+	}
+	ctx := s.context()
+	w, made := s.made.Of(proj.Key(), id)
+	if !made || w.Removed != 0 || !inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
+		return "", false, "Files are rewound only in a worktree agentos made for this thread"
+	}
+	if user := s.usersOf(w.Path, id, false); user != "" {
+		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
+	}
+	if shell := s.life.shellIn(ctx, proj.Key(), w.Path); shell != "" {
+		return "", false, shell
+	}
+	return w.Path, false, ""
+}
+
 // pending says why the thread is busy, or "" when it is not. Prompts are held while a turn runs, so they are named
 // first, or their reason would rarely show. It takes mu.
 func (s *Sessions) pending(id string) string {

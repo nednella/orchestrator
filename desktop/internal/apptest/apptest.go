@@ -864,8 +864,27 @@ func CLIPath(t *testing.T) string {
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
 // once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
 // asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, and "leave plan"
-// reports the mode default before its reply with no plan approved.
+// reports the mode default before its reply with no plan approved. It answers a rewind of the files with the files
+// RewindAs names, into each of which a rewind that is not a dry run writes "before", and a rewind of the conversation
+// with the text of the message rewound to, as Claude does; RewindAs can make it answer as another Claude would.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
+
+// RewindAs makes the session's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
+// message than any named, "nocheckpoint" as a Claude started without file checkpoints and "unsupported" as one that
+// knows neither request. A rewind of the files changes files.
+func (h *Harness) RewindAs(t *testing.T, id, mode string, files ...string) {
+	t.Helper()
+	list := ""
+	for _, f := range files {
+		list += f + "\n"
+	}
+	if err := os.WriteFile(h.standIn(id, ".rewind"), []byte(mode), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.standIn(id, ".rewind-files"), []byte(list), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // standIn is the path of the stand-in claude's file of the session with that extension.
 func (h *Harness) standIn(id, ext string) string {
@@ -954,6 +973,26 @@ while IFS= read -r line; do
 		reply ;;
 	*'"type":"control_response"'*)
 		reply ;;
+	*'"subtype":"rewind_files"'*|*'"subtype":"rewind_conversation"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+		answer() { printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":%s}}\n' "$id" "$1"; }
+		fail() { printf '{"type":"control_response","response":{"subtype":"error","request_id":"%s","error":"%s"}}\n' "$id" "$1"; }
+		case "$(cat "$f.rewind" 2>/dev/null):$line" in
+		unsupported:*) fail "Unsupported control request subtype: rewind" ;;
+		nocheckpoint:*'"dry_run":true'*) answer '{"canRewind":false,"error":"File rewinding is not enabled."}' ;;
+		nocheckpoint:*'"subtype":"rewind_files"'*) fail "File rewinding is not enabled." ;;
+		*'"subtype":"rewind_files"'*'"dry_run":true'*)
+			files=$(sed 's/.*/"&"/' "$f.rewind-files" 2>/dev/null | paste -sd , -)
+			answer "{\"canRewind\":true,\"filesChanged\":[$files],\"insertions\":2,\"deletions\":1}" ;;
+		*'"subtype":"rewind_files"'*)
+			cat "$f.rewind-files" 2>/dev/null | while IFS= read -r file; do printf before > "$file"; done
+			answer '{"canRewind":true,"skippedLinks":0}' ;;
+		stale:*) answer '{"rewound":false,"error":"stale target","reason":"stale_target"}' ;;
+		*)
+			target=$(printf '%s' "$line" | sed -n 's/.*"target_message_uuid":"\([^"]*\)".*/\1/p')
+			text=$(grep -F "\"uuid\":\"$target\"" "$f.stdin" | head -n 1 | sed -n 's/.*"text":"\([^"]*\)".*/\1/p')
+			answer "{\"rewound\":true,\"targetMessageUuid\":\"$target\",\"prefillText\":\"$text\",\"precedingAssistantUuid\":\"fake-reply\"}" ;;
+		esac ;;
 	*'"subtype":"set_permission_mode"'*)
 		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
 		mode=$(printf '%s' "$line" | sed -n 's/.*"mode":"\([^"]*\)".*/\1/p')
@@ -1097,6 +1136,13 @@ func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 }
 func (h *Harness) ChatWatch(id string) error { return h.chat.ChatWatch(id) }
 func (h *Harness) ChatUnwatch(id string)     { h.chat.ChatUnwatch(id) }
+func (h *Harness) RewindPreview(id, message string) (chat.FilesRewind, error) {
+	return h.chat.RewindPreview(id, message)
+}
+func (h *Harness) RewindTo(id, message string, files bool) (string, error) {
+	return h.chat.RewindTo(id, message, files)
+}
+func (h *Harness) RewindOff() string { return h.chat.RewindOff() }
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
 	return h.chat.ChatSend(id, text, images)
 }

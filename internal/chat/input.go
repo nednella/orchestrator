@@ -37,14 +37,26 @@ type userLine struct {
 }
 
 type controlRequest struct {
-	Type      string      `json:"type"`
-	RequestID string      `json:"request_id"`
-	Request   requestBody `json:"request"`
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+	Request   any    `json:"request"`
 }
 
 type requestBody struct {
 	Subtype string `json:"subtype"`
 	Mode    string `json:"mode,omitempty"`
+}
+
+type rewindFilesBody struct {
+	Subtype       string `json:"subtype"`
+	UserMessageID string `json:"user_message_id"`
+	DryRun        bool   `json:"dry_run"`
+}
+
+type rewindConversationBody struct {
+	Subtype           string `json:"subtype"`
+	TargetMessageUUID string `json:"target_message_uuid"`
+	LastSeenUserUUID  string `json:"last_seen_user_message_uuid"`
 }
 
 type controlResponse struct {
@@ -105,6 +117,18 @@ func Interrupt(id string) []byte {
 // SetPermissionMode asks claude to change its permission mode, such as plan or default, as it runs.
 func SetPermissionMode(id, mode string) []byte {
 	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "set_permission_mode", Mode: mode}})
+}
+
+// RewindFiles asks claude to put the files that its turns edited back as they were before the user message: with
+// dryRun it only says what that would change.
+func RewindFiles(id, message string, dryRun bool) []byte {
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: rewindFilesBody{Subtype: "rewind_files", UserMessageID: message, DryRun: dryRun}})
+}
+
+// RewindConversation asks claude to take its conversation back to before the user message target. latest is the
+// newest user message the asker knows of: claude refuses the rewind when it holds a later one.
+func RewindConversation(id, target, latest string) []byte {
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: rewindConversationBody{Subtype: "rewind_conversation", TargetMessageUUID: target, LastSeenUserUUID: latest}})
 }
 
 // Allow answers a can_use_tool request. Claude needs an object for updatedInput, so an absent input becomes {}.

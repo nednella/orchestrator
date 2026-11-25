@@ -13,12 +13,18 @@ import (
 
 const (
 	callTimeout = 10 * time.Second
-	readyPoll   = 50 * time.Millisecond
+	// rewindTimeout covers the control requests a rewind writes, each of which waits up to the host's requestTimeout.
+	rewindTimeout = 4 * requestTimeout
+	readyPoll     = 50 * time.Millisecond
 )
 
 // Refused is the host's own reason for not doing what it was asked, in words for the user. An error that wraps no
-// Refused is one of reaching the host.
-type Refused struct{ Reason string }
+// Refused is one of reaching the host. Unsupported says that the Claude Code the host runs does not know a control
+// request the op needs.
+type Refused struct {
+	Reason      string
+	Unsupported bool
+}
 
 func (r *Refused) Error() string { return r.Reason }
 
@@ -30,7 +36,7 @@ type Message struct {
 
 // ErrTooOldForImages is what SendMessage returns when a host from before message ids sent the text of a message and
 // dropped its images.
-var ErrTooOldForImages = &Refused{"this session's host is too old for images"}
+var ErrTooOldForImages = &Refused{Reason: "this session's host is too old for images"}
 
 // SendMessage gives m to Claude and returns the id the host logged it under. A host from before message ids sends the
 // text and drops the images, so a reply with no id is ErrTooOldForImages when m has images.
@@ -103,9 +109,25 @@ func Release(ctx context.Context, socket string) error {
 	return err
 }
 
+// PreviewRewind says what a rewind of the files to before the user message id would change, and changes nothing.
+func PreviewRewind(ctx context.Context, socket, id string) (FileChanges, error) {
+	rep, err := callWithin(ctx, socket, request{Op: opRewindPreview, ID: id}, rewindTimeout)
+	if err != nil || rep.Changes == nil {
+		return FileChanges{}, err
+	}
+	return *rep.Changes, nil
+}
+
+// Rewind takes Claude's conversation back to before the user message id and returns that message's text. With within
+// set, it first puts back the files Claude's turns edited since then, all of which must be inside within.
+func Rewind(ctx context.Context, socket, id, within string) (string, error) {
+	rep, err := callWithin(ctx, socket, request{Op: opRewind, ID: id, Within: within}, rewindTimeout)
+	return rep.Prefill, err
+}
+
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.
 func Subscribe(ctx context.Context, socket string, after int64, fn func(chat.Event)) error {
-	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after})
+	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after}, callTimeout)
 	if err != nil {
 		return err
 	}
@@ -166,7 +188,11 @@ func Gone(ctx context.Context, socket string) error {
 }
 
 func call(ctx context.Context, socket string, req request) (reply, error) {
-	conn, _, rep, err := dial(ctx, socket, req)
+	return callWithin(ctx, socket, req, callTimeout)
+}
+
+func callWithin(ctx context.Context, socket string, req request, timeout time.Duration) (reply, error) {
+	conn, _, rep, err := dial(ctx, socket, req, timeout)
 	if err != nil {
 		return reply{}, err
 	}
@@ -174,9 +200,9 @@ func call(ctx context.Context, socket string, req request) (reply, error) {
 	return rep, nil
 }
 
-// dial sends req to the host and reads its reply, within callTimeout. The connection stays open for a subscribe stream.
-func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Reader, reply, error) {
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+// dial sends req to the host and reads its reply, within timeout. The connection stays open for a subscribe stream.
+func dial(ctx context.Context, socket string, req request, timeout time.Duration) (net.Conn, *bufio.Reader, reply, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
@@ -212,7 +238,7 @@ func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Rea
 		return fail(err)
 	}
 	if !rep.OK {
-		return fail(&Refused{rep.Error})
+		return fail(&Refused{Reason: rep.Error, Unsupported: rep.Unsupported})
 	}
 	return conn, r, rep, nil
 }

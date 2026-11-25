@@ -476,3 +476,21 @@ func TestParseTaskEndSaysHowTheTaskEnded(t *testing.T) {
 		t.Errorf("a task no call started: got %+v", got)
 	}
 }
+
+// The answers are Claude Code 2.1.332's to the live rewind requests.
+func TestParseRewindRepliesKeepWhatClaudeAnswered(t *testing.T) {
+	for _, c := range []struct{ line, input, text string }{
+		{`{"type":"control_response","response":{"subtype":"success","request_id":"aos-4","response":{"canRewind":true,"filesChanged":["/abs/g1.txt"],"insertions":1,"deletions":1}}}`, `{"canRewind":true,"filesChanged":["/abs/g1.txt"],"insertions":1,"deletions":1}`, ""},
+		{`{"type":"control_response","response":{"subtype":"success","request_id":"aos-4","response":{"rewound":false,"error":"stale target","reason":"stale_target"}}}`, `{"rewound":false,"error":"stale target","reason":"stale_target"}`, ""},
+		{`{"type":"control_response","response":{"subtype":"error","request_id":"aos-4","error":"No file checkpoint found for this message."}}`, "", "No file checkpoint found for this message."},
+	} {
+		events, err := Parse([]byte(c.line))
+		if err != nil || len(events) != 1 {
+			t.Fatalf("%s: got %+v, %v", c.line, events, err)
+		}
+		e := events[0]
+		if e.Kind != KindReply || e.ID != "aos-4" || string(e.Input) != c.input || e.Text != c.text || e.Error != (c.text != "") {
+			t.Errorf("%s: got %+v", c.line, e)
+		}
+	}
+}

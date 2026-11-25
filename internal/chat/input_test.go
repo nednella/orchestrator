@@ -93,3 +93,12 @@ func TestUserMessageWithImages(t *testing.T) {
 	assertLine(t, UserMessageWith("abc", "", []Image{{Mime: "image/png", Data: "QUJD"}}),
 		`{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"QUJD"}}]},"parent_tool_use_id":null,"session_id":"default","uuid":"abc"}`)
 }
+
+func TestRewindRequestShapes(t *testing.T) {
+	assertLine(t, RewindFiles("aos-4", "5d0150ad", true),
+		`{"type":"control_request","request_id":"aos-4","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":true}}`)
+	assertLine(t, RewindFiles("aos-5", "5d0150ad", false),
+		`{"type":"control_request","request_id":"aos-5","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":false}}`)
+	assertLine(t, RewindConversation("aos-6", "5d0150ad", "9d957459"),
+		`{"type":"control_request","request_id":"aos-6","request":{"subtype":"rewind_conversation","target_message_uuid":"5d0150ad","last_seen_user_message_uuid":"9d957459"}}`)
+}
