@@ -3,8 +3,11 @@ package orchestration_test
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -217,6 +220,78 @@ func TestHeldMessageWakesAThreadSettledMeanwhile(t *testing.T) {
 	apptest.Eventually(t, "the thread woken for the held message", func() bool { return stdinHas(t, h, target, "Yes, go on") })
 	if r := row(t, h, target); r.State == session.Settled {
 		t.Errorf("the thread is %s, want it awake with the message", r.State)
+	}
+}
+
+// claudePID is the process id of the thread's stand-in claude, the child of its host, which runs in its tmux pane.
+func claudePID(t *testing.T, h *apptest.Harness, id string) int {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_pid}").Output()
+	if err != nil {
+		t.Fatalf("reading the pane of %s: %v", id, err)
+	}
+	children, _ := exec.Command("pgrep", "-P", strings.TrimSpace(string(out)), "-f", "claude").Output()
+	pid, err := strconv.Atoi(strings.TrimSpace(string(children)))
+	if err != nil {
+		t.Fatalf("the host of %s runs no one claude: %q", id, children)
+	}
+	return pid
+}
+
+func TestHeldMessagesKeepTheirOrder(t *testing.T) {
+	h := apptest.New(t)
+	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
+	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	h.Hook(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
+	if a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"first message"}`); !a.Held {
+		t.Fatalf("the first send answered %+v, want it held", a)
+	}
+
+	// A claude that reads nothing fills its stdin with a long message, and its host then sends nothing more until it
+	// reads again: the held message stays in flight.
+	pid := claudePID(t, h, target)
+	if err := syscall.Kill(pid, syscall.SIGSTOP); err != nil {
+		t.Fatal(err)
+	}
+	resumed := false
+	resume := func() {
+		if !resumed {
+			resumed = true
+			_ = syscall.Kill(pid, syscall.SIGCONT)
+		}
+	}
+	t.Cleanup(resume)
+	go func() { _, _ = h.ChatSend(target, strings.Repeat("x", 1<<18)) }()
+	apptest.Eventually(t, "the long message logged", func() bool {
+		return slices.ContainsFunc(logOf(t, h, target), func(e chat.Event) bool { return e.Kind == chat.KindUser && len(e.Text) == 1<<18 })
+	})
+	h.Hook(t, target, "Stop", `{}`)
+	apptest.Eventually(t, "the idle state", func() bool { return row(t, h, target).State == session.Idle })
+	time.Sleep(300 * time.Millisecond) // the held message is on its way to the host
+
+	done := make(chan sentAnswer, 1)
+	go func() {
+		var a sentAnswer
+		_ = useTool(t, h, caller, "send", `{"thread":"`+target+`","text":"second message"}`, &a)
+		done <- a
+	}()
+	select {
+	case a := <-done:
+		if !a.Held {
+			t.Errorf("the second send answered %+v while the first was in flight, want it held behind the first", a)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("the second send waited for the first, which was in flight, instead of being held behind it")
+		defer func() { <-done }()
+	}
+	resume()
+	apptest.Eventually(t, "both messages on stdin", func() bool { return stdinHas(t, h, target, "second message") })
+	lines := h.Stdin(t, target)
+	first := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "first message") })
+	second := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "second message") })
+	if first < 0 || second < first {
+		t.Errorf("stdin = %q, want the first message before the second", lines)
 	}
 }
 

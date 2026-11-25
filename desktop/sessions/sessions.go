@@ -172,6 +172,7 @@ type Sessions struct {
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
+	delivering map[string]bool         // the threads whose held prompts, or a message told to them, are being sent now
 	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
 	refused    map[string]bool         // the flags Claude did not know in this run of the app, which it now starts without
 	restarting map[string]bool         // the threads settled for a change of access until they wake again: they keep their servers
@@ -269,21 +270,22 @@ func newSessions(o Options) *Sessions {
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
-		records:   map[string]session.Record{},
-		cwds:      map[string]string{},
-		seen:      map[string]session.State{},
-		history:   map[string][]session.Change{},
-		wakes:     map[string][]heldPrompt{},
-		afterTurn: map[string][]func(){},
-		readers:   map[string]*reader{},
-		spent:     map[string]usage.Tokens{},
-		held:      map[string]int64{},
-		tokens:    map[string]string{},
-		refused:   map[string]bool{},
-		stateRead: map[string]fileStamp{},
-		made:      newMadeTrees(o.LocalDir),
-		procs:     procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
-		ctx:       context.Background(),
+		records:    map[string]session.Record{},
+		cwds:       map[string]string{},
+		seen:       map[string]session.State{},
+		history:    map[string][]session.Change{},
+		wakes:      map[string][]heldPrompt{},
+		delivering: map[string]bool{},
+		afterTurn:  map[string][]func(){},
+		readers:    map[string]*reader{},
+		spent:      map[string]usage.Tokens{},
+		held:       map[string]int64{},
+		tokens:     map[string]string{},
+		refused:    map[string]bool{},
+		stateRead:  map[string]fileStamp{},
+		made:       newMadeTrees(o.LocalDir),
+		procs:      procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
+		ctx:        context.Background(),
 	}
 }
 
@@ -2739,9 +2741,13 @@ func (s *Sessions) dropCommands(id string) {
 
 // deliverWakes sends what was held for each thread once it may take it, in order. A thread that settled meanwhile, by
 // itself or at the owner's ask, is woken for the messages threads told it, and one that stopped by itself is woken for
-// its commands too; Settle drops the commands of a thread the owner or a clean-up settled. It needs mu.
+// its commands too; Settle drops the commands of a thread the owner or a clean-up settled. A thread whose held prompts
+// are being sent is passed over until they are, so nothing held after them overtakes them. It needs mu.
 func (s *Sessions) deliverWakes() {
 	for id, all := range s.wakes {
+		if s.delivering[id] {
+			continue
+		}
 		_, live := s.seen[id]
 		rec := s.records[id]
 		var now, later []heldPrompt
@@ -2760,38 +2766,63 @@ func (s *Sessions) deliverWakes() {
 		} else {
 			s.wakes[id] = later
 		}
-		ctx := s.ctx
-		if !live {
-			go func() {
-				t, err := s.target(id)
-				for _, h := range now {
-					switch {
-					case !h.command:
-						if _, err := s.Tell(id, h.Told); err != nil {
-							log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
-						}
-					case err == nil:
-						s.wake(ctx, t, h.Text)
-					}
-				}
-			}()
+		s.delivering[id] = true
+		go s.deliverHeld(s.ctx, id, live, now)
+	}
+}
+
+// deliverHeld sends the prompts deliverWakes took for the thread, in order, waking it first when it is not live. A
+// message its host refuses while an approval waits goes back to be held, with every prompt after it.
+func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []heldPrompt) {
+	refused := false
+	defer func() { s.doneDelivering(id, refused) }()
+	name, err := session.ParseName(id)
+	if err != nil {
+		return
+	}
+	if !live {
+		t, err := s.target(id)
+		var told []heldPrompt
+		for _, h := range now {
+			switch {
+			case !h.command:
+				told = append(told, h)
+			case err == nil:
+				s.wake(ctx, t, h.Text)
+			}
+		}
+		if len(told) == 0 {
+			return
+		}
+		if err := s.awaken(id); err != nil {
+			log.Printf("agentos: thread %s did not get %d messages held for it: %v", id, len(told), err)
+			return
+		}
+		now = told
+	}
+	for i, h := range now {
+		if h.command {
+			s.send(ctx, name, h.Text, true)
 			continue
 		}
-		name := s.known[id].Name
-		go func() {
-			for i, h := range now {
-				if h.command {
-					s.send(ctx, name, h.Text, true)
-					continue
-				}
-				if _, err := s.deliver(name, h.Told); errors.Is(err, host.ErrApprovalWaits) {
-					s.hold(id, now[i:]...)
-					return
-				} else if err != nil {
-					log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
-				}
-			}
-		}()
+		if _, err := s.deliver(name, h.Told); errors.Is(err, host.ErrApprovalWaits) {
+			s.hold(id, now[i:]...)
+			refused = true
+			return
+		} else if err != nil {
+			log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
+		}
+	}
+}
+
+// doneDelivering ends the sending of the thread's held prompts. What was held meanwhile goes now, unless the host
+// refused a message, which then waits for the next change of the thread's state. It takes mu.
+func (s *Sessions) doneDelivering(id string, refused bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.delivering, id)
+	if !refused {
+		s.deliverWakes()
 	}
 }
 
@@ -2804,15 +2835,43 @@ type Told struct {
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
 // woken for it. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
-// the approval; one whose earlier messages are held holds it after them. A working thread's host queues it, for the
+// the approval; one with messages held, or being sent, holds it after them. A working thread's host queues it, for the
 // turn's next step or, with Steer, at once. A thread that is deleted, or being deleted, or ran in a terminal takes none.
 func (s *Sessions) Tell(id string, m Told) (string, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return "", err
 	}
+	if err := s.awaken(id); err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	if s.delivering[id] || awaitsOwner(s.records[id]) || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m})
+		s.mu.Unlock()
+		return "", nil
+	}
+	s.delivering[id] = true
+	s.mu.Unlock()
+	msg, err := s.deliver(name, m)
+	refused := errors.Is(err, host.ErrApprovalWaits)
+	if refused {
+		s.hold(id, heldPrompt{Told: m})
+		msg, err = "", nil
+	}
+	s.doneDelivering(id, refused)
+	return msg, err
+}
+
+// awaken makes sure the thread id runs, waking it when it has settled. A thread that is deleted or being deleted, ran in
+// a terminal or is unknown is an error.
+func (s *Sessions) awaken(id string) error {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return err
+	}
 	if name.IsShell() {
-		return "", errNotSession
+		return errNotSession
 	}
 	s.mu.Lock()
 	_, settled := s.ended[id]
@@ -2822,31 +2881,18 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	s.mu.Unlock()
 	switch {
 	case deleted:
-		return "", fmt.Errorf("Thread %s was deleted", id)
+		return fmt.Errorf("Thread %s was deleted", id)
 	case deleting:
-		return "", fmt.Errorf("Thread %d is being deleted", n)
+		return fmt.Errorf("Thread %d is being deleted", n)
 	case old:
-		return "", fmt.Errorf("Thread %s ran in a terminal, so it takes no messages", id)
+		return fmt.Errorf("Thread %s ran in a terminal, so it takes no messages", id)
 	case settled:
-		if _, err := s.wakeOrJoin(id, ""); err != nil {
-			return "", err
-		}
+		_, err := s.wakeOrJoin(id, "")
+		return err
 	case !live:
-		return "", fmt.Errorf("No thread %s", id)
+		return fmt.Errorf("No thread %s", id)
 	}
-	s.mu.Lock()
-	if awaitsOwner(s.records[id]) || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
-		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m})
-		s.mu.Unlock()
-		return "", nil
-	}
-	s.mu.Unlock()
-	msg, err := s.deliver(name, m)
-	if errors.Is(err, host.ErrApprovalWaits) {
-		s.hold(id, heldPrompt{Told: m})
-		return "", nil
-	}
-	return msg, err
+	return nil
 }
 
 // hold puts what a host refused while an approval waited back before what is held for the thread. It takes mu.
