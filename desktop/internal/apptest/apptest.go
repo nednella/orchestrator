@@ -1015,8 +1015,8 @@ func (h *Harness) AckPR(id string) error                           { return h.se
 func (h *Harness) Cleanup(id string, force bool) error             { return h.sessions.Cleanup(id, force) }
 func (h *Harness) Cleanups() []sessions.Cleanup                    { return h.sessions.Cleanups() }
 
-func (h *Harness) ResumeSession(id string) (sessions.Session, error) {
-	return h.sessions.ResumeSession(id)
+func (h *Harness) WakeThread(id string) (sessions.Session, error) {
+	return h.sessions.WakeThread(id)
 }
 
 func (h *Harness) ForkSession(id, at string) (sessions.Session, error) {

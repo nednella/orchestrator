@@ -17,7 +17,7 @@ projects:
     # everything below is optional; the values shown are the defaults
     queue_sections: []         # the groups of the queue, in order; see below
     note_session_command: ""   # typed into a session started from a note; {text} is the note; "" types the note itself
-    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR wake (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`). The settings panel writes it
+    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR command (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`) and the action's command to an issue's settled thread that a start wakes. A settled thread is woken under its own id before it gets either. The settings panel writes it
     session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
     session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
     session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles a thread that hears the PR, saw it open and works on its branch as its newest, and a clean-up keeps the thread, settled. The settings panel writes it
@@ -29,7 +29,7 @@ projects:
     keep_mac_awake: true       # this project's choice; unset follows the top-level one
     pr_watch_method: ""        # webhook or poll; "" tries gh webhook forward (needs the gh extension and admin rights on the repo) and polls when it does not work
     pr_poll_interval: 10s      # how often to poll the pull requests; at least 1s
-    pr_review_command: ""      # typed into a session whose PR got a review or comment, {n} the PR number, e.g. "/address-review {n}"; "" sends nothing. An approval and the gh user's own comments and replies are not counted; a session in the middle of a turn gets it when the turn ends
+    pr_review_command: ""      # typed into a session whose PR got a review or comment, {n} the PR number, e.g. "/address-review {n}"; "" sends nothing. An approval and the gh user's own comments and replies are not counted; a session in the middle of a turn gets it when the turn ends, and a settled issue thread is woken for it
     pr_review_drafts: false    # send pr_review_command while the PR is a draft too; when false, comments on a draft count as seen
     pr_checks_command: ""      # typed into a session whose PR has failing checks, {n} the PR number; "" sends nothing
     pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing

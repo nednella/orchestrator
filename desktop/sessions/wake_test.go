@@ -1,0 +1,450 @@
+package sessions_test
+
+import (
+	"fmt"
+	"os/exec"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/session"
+)
+
+// ended is a session that had the conversation abc and has settled.
+func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Session {
+	t.Helper()
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got sessions.Session
+	eventually(t, "the session settled", func() bool { got, _ = h.Session(s.ID); return got.State == "settled" })
+	return got
+}
+
+// talkedThenSettled is a thread that had one turn, "hi", in the conversation fake-session, the stand-in's, and has
+// settled.
+func talkedThenSettled(t *testing.T, h *apptest.Harness) sessions.Session {
+	t.Helper()
+	s, err := h.Sessions().Create("work", "", false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got sessions.Session
+	eventually(t, "the thread settled", func() bool { got, _ = h.Session(s.ID); return got.State == "settled" })
+	return got
+}
+
+func turnEnds(h *apptest.Harness, id string) int {
+	chatLog, _ := hostFiles(h, id)
+	events, _ := chat.ReadLog(chatLog, 0)
+	n := 0
+	for _, e := range events {
+		if e.Kind == chat.KindTurnEnd {
+			n++
+		}
+	}
+	return n
+}
+
+// resumes says whether the thread's claude was last started to resume the conversation.
+func resumes(t *testing.T, h *apptest.Harness, id, conversation string) func() bool {
+	return func() bool {
+		args := h.Args(t, id)
+		i := slices.Index(args, "--resume")
+		return i >= 0 && i+1 < len(args) && args[i+1] == conversation
+	}
+}
+
+// assertOneChat checks that the thread's history counts from seq 1 with no seq missing or twice, and that its user
+// messages are users, in order.
+func assertOneChat(t *testing.T, h *apptest.Harness, id string, users ...string) {
+	t.Helper()
+	events, err := h.ChatHistory(id, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var said []string
+	for i, e := range events {
+		if e.Seq != int64(i+1) {
+			t.Fatalf("seq %d at %d of the history, want %d: %+v", e.Seq, i, i+1, events)
+		}
+		if e.Kind == chat.KindUser {
+			said = append(said, e.Text)
+		}
+	}
+	if !slices.Equal(said, users) {
+		t.Errorf("user messages = %q, want %q", said, users)
+	}
+}
+
+func TestWakeKeepsTheThreadID(t *testing.T) {
+	h := apptest.New(t)
+	before := talkedThenSettled(t, h)
+
+	if _, err := h.ChatSend(before.ID, "again"); err != nil {
+		t.Fatal(err)
+	}
+	woken, ok := h.Session(before.ID)
+	if !ok || woken.State == "settled" || woken.N != before.N || woken.CreatedAt != before.CreatedAt || woken.WokeAt <= before.CreatedAt {
+		t.Fatalf("woken row = %+v (%v), from %+v", woken, ok, before)
+	}
+	if list := h.Sessions().List(); len(list) != 1 {
+		t.Errorf("rows = %+v, want the one thread", list)
+	}
+	eventually(t, "claude resuming the conversation", resumes(t, h, before.ID, "fake-session"))
+	eventually(t, "the second turn's end", func() bool { return turnEnds(h, before.ID) == 2 })
+	assertOneChat(t, h, before.ID, "hi", "again")
+}
+
+func TestWakeAfterTheAppRestarts(t *testing.T) {
+	h := apptest.New(t)
+	before := talkedThenSettled(t, h)
+	saved, err := bus.ReadState(h.State, before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.App.Stop()
+
+	second := h.Restart(t)
+	eventually(t, "the settled row", func() bool { got, _ := second.Session(before.ID); return got.State == "settled" })
+	if _, err := second.ChatSend(before.ID, "again"); err != nil {
+		t.Fatal(err)
+	}
+	if woken, _ := second.Session(before.ID); woken.State == "settled" || woken.N != before.N || woken.CreatedAt != before.CreatedAt {
+		t.Fatalf("woken row = %+v, from %+v", woken, before)
+	}
+	eventually(t, "claude resuming the conversation", resumes(t, second, before.ID, "fake-session"))
+	eventually(t, "the second turn's end", func() bool { return turnEnds(second, before.ID) == 2 })
+	assertOneChat(t, second, before.ID, "hi", "again")
+
+	rec, err := bus.ReadState(second.State, before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Session != before.ID || rec.Title != "work" || !rec.Hosted || rec.Created != saved.Created || rec.Woke <= rec.Created || rec.Conversation != "fake-session" {
+		t.Errorf("state file = %+v, before the wake %+v", rec, saved)
+	}
+	if n := len(saved.Changes); len(rec.Changes) <= n || !slices.Equal(rec.Changes[:n-1], saved.Changes[:n-1]) || rec.Changes[len(rec.Changes)-1].State != session.Idle {
+		t.Errorf("history = %+v, want the one before the wake %+v, then idle", rec.Changes, saved.Changes)
+	}
+}
+
+// settledWhileClosed quits the app, ends the session as a computer restart would, and opens the app again a minute later.
+func settledWhileClosed(t *testing.T, h *apptest.Harness, id string) *apptest.Harness {
+	t.Helper()
+	h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	h.App.Stop()
+	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+id).Run(); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := bus.ReadState(h.State, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.At = rec.At.Add(-time.Minute)
+	if err := bus.WriteState(h.State, rec); err != nil {
+		t.Fatal(err)
+	}
+	return h.Restart(t)
+}
+
+func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		start func(h *apptest.Harness) (sessions.Session, error)
+	}{
+		{"chat", func(h *apptest.Harness) (sessions.Session, error) { return h.NewChat("ask") }},
+		{"issue task", func(h *apptest.Harness) (sessions.Session, error) {
+			return h.Sessions().Create("#12 work", "", false, 12)
+		}},
+		{"renamed task", func(h *apptest.Harness) (sessions.Session, error) {
+			s, err := h.NewSession("work", "")
+			if err != nil {
+				return s, err
+			}
+			if err := h.RenameSession(s.ID, "better"); err != nil {
+				return s, err
+			}
+			s, _ = h.Session(s.ID)
+			return s, nil
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := apptest.New(t)
+			old, err := tt.start(h)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fresh := settledWhileClosed(t, h, old.ID)
+			var gone sessions.Session
+			eventually(t, "the settled row", func() bool { gone, _ = fresh.Session(old.ID); return gone.State == "settled" })
+			if gone.Title != old.Title || gone.Issue != old.Issue || gone.Chat != old.Chat {
+				t.Errorf("settled row %+v of %+v", gone, old)
+			}
+			woken, err := fresh.WakeThread(old.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if woken.ID != old.ID || woken.Title != old.Title || woken.Issue != old.Issue || woken.Chat != old.Chat || woken.State == "settled" {
+				t.Errorf("woken %+v from %+v", woken, old)
+			}
+			eventually(t, "claude resuming the conversation", resumes(t, fresh, old.ID, "abc"))
+			if args := fresh.Args(t, old.ID); old.Chat != slices.Contains(args, "--permission-mode") {
+				t.Errorf("args of a woken chat=%v: %q", old.Chat, args)
+			}
+		})
+	}
+}
+
+func TestWakeWithoutAConversationStartsAfresh(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claudeArgs(t, h, s.ID)
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond) // the stand-in writes its arguments just after the host listens
+	if args := claudeArgs(t, h, s.ID); slices.Contains(args, "--resume") {
+		t.Errorf("args = %q, want no conversation to resume", args)
+	}
+}
+
+func TestPRReviewWakesASettledThread(t *testing.T) {
+	for _, tt := range []struct {
+		name, extra string
+		draft       bool
+	}{
+		{"auto sends", "", false},
+		{"manual drafts", "    session_prompt_send: manual\n", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
+			s := issueSession(h, t, 12)
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+			h.RefreshPRs()
+			if err := h.SettleThread(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
+			h.RefreshPRs()
+			eventually(t, "the thread woken", func() bool { return stateOf(h, s.ID) == "idle" })
+			if list := h.Sessions().List(); len(list) != 1 {
+				t.Errorf("rows = %+v, want the one thread", list)
+			}
+			if tt.draft {
+				eventually(t, "the draft", func() bool { return chatLogHas(h, s.ID, "draft", "/address-review 12") })
+				time.Sleep(300 * time.Millisecond)
+				if users := userLines(t, h, s.ID); len(users) != 0 {
+					t.Errorf("user lines on stdin = %v, want none", users)
+				}
+				return
+			}
+			eventually(t, "the prompt on stdin", func() bool {
+				users := userLines(t, h, s.ID)
+				return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
+			})
+			if chatLogHas(h, s.ID, "draft", "/address-review 12") {
+				t.Error("an auto wake was left as a draft")
+			}
+		})
+	}
+}
+
+func TestIssueStartWakesTheSettledThread(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ships := func() int {
+		n := 0
+		for _, line := range userLines(t, h, s.ID) {
+			if strings.Contains(line, "/ship 7") {
+				n++
+			}
+		}
+		return n
+	}
+	eventually(t, "the action's command on stdin", func() bool { return ships() == 1 })
+	ended(t, h, s)
+
+	got, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != s.ID || got.State == "settled" {
+		t.Errorf("start of a settled thread's issue = %+v, want %s woken", got, s.ID)
+	}
+	eventually(t, "the action's command on the woken thread's stdin", func() bool { return ships() == 2 })
+	if list := h.Sessions().List(); len(list) != 1 {
+		t.Errorf("rows = %+v, want the one thread", list)
+	}
+}
+
+func TestPRBeforeTheLastWakeIsAnEarlierWakes(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	ended(t, h, s)
+	closed := time.Now()
+	time.Sleep(2 * time.Millisecond) // the wake must come after the close to the millisecond
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	h.GH.SetPR(closedAt(prJSON("CLOSED", false, "[]", 0, 0), closed))
+	h.RefreshPRs()
+	h.RefreshPRs()
+	if got, _ := h.Session(s.ID); got.Cleanup != "" || got.PR != nil || got.State == "settled" || !exists(wt) || len(h.Cleanups()) != 0 {
+		t.Errorf("woken thread = %+v, worktree there %v, log %+v", got, exists(wt), h.Cleanups())
+	}
+}
+
+func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	openThenMerge(h)
+	eventually(t, "the first clean-up", cleanedUp(h, s.ID))
+
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	h.GH.SetPR(strings.Replace(prJSON("OPEN", false, "[]", 0, 0), `"number":12`, `"number":13`, 1))
+	h.RefreshPRs()
+	if got, _ := h.Session(s.ID); got.PR == nil || got.PR.Number != 13 || got.State == "settled" {
+		t.Fatalf("woken thread with a new PR = %+v", got)
+	}
+	h.GH.SetPR(strings.Replace(prJSON("MERGED", false, "[]", 0, 0), `"number":12`, `"number":13`, 1))
+	h.RefreshPRs()
+	eventually(t, "the second clean-up", func() bool { return len(h.Cleanups()) == 2 && cleanedUp(h, s.ID)() })
+	if log := h.Cleanups(); log[0].PR != 13 || log[0].Status != "done" {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestWokenThreadKeepsItsCost(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.Sessions().Create("#4 work", "", false, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transcript := writtenTranscript(t)
+	stop := fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript)
+	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
+	h.Hook(t, s.ID, "Stop", stop)
+	eventually(t, "the first turn's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == 1 })
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { return stateOf(h, s.ID) == "settled" })
+
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	appendLines(t, transcript, assistantLine("msg_2", time.Now().Add(time.Second), 10, 1))
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
+	h.Hook(t, s.ID, "Stop", stop)
+	eventually(t, "both turns' tokens on the row", func() bool { row, _ := h.Session(s.ID); return row.Tokens == 1111 })
+	eventually(t, "the wake's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == 2 })
+	h.App.Stop()
+
+	second := h.Restart(t)
+	eventually(t, "both turns' tokens after a restart", func() bool { row, _ := second.Session(s.ID); return row.Tokens == 1111 })
+	led, err := second.Ledger(30, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if led.Usage.Totals.Tokens != 1111 || len(led.Work) != 1 || led.Work[0].Tokens != 1111 {
+		t.Errorf("usage = %+v, work = %+v: a turn was counted twice or lost", led.Usage.Totals, led.Work)
+	}
+}
+
+func TestOldTerminalSessionIsNotWoken(t *testing.T) {
+	h := apptest.New(t)
+	live := "main/aaaaaaaa"
+	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", live, "-c", h.Dir, "sleep", "600")
+	tmuxRun(t, h, "set-option", "-t", live, "@agentos-name", "#12 work")
+	gone := "main/bbbbbbbb"
+	old := time.Now().Add(-time.Hour)
+	if err := bus.WriteState(h.State, session.Record{Session: gone, State: session.Settled, At: old, SettledAt: old.UnixMilli(), Identity: session.Identity{Title: "old", Created: old.UnixMilli()}}); err != nil {
+		t.Fatal(err)
+	}
+	h.Sessions().Refresh()
+
+	for _, id := range []string{live, gone} {
+		want := "Thread " + id + " ran in a terminal and cannot be woken"
+		if _, err := h.WakeThread(id); err == nil || err.Error() != want {
+			t.Errorf("wake of %s = %v, want %q", id, err, want)
+		}
+		if _, err := h.ChatSend(id, "hi"); err == nil || err.Error() != oldChat {
+			t.Errorf("a message to %s = %v, want %q", id, err, oldChat)
+		}
+		if row, _ := h.Session(id); row.State != session.Settled || row.Hosted {
+			t.Errorf("row of %s after the wake = %+v", id, row)
+		}
+	}
+	if out, err := exec.Command("tmux", "-L", h.Socket, "list-panes", "-t", "="+live, "-F", "#{pane_current_command}").Output(); err != nil || strings.TrimSpace(string(out)) != "sleep" {
+		t.Errorf("the old session's pane runs %q, %v", out, err)
+	}
+	if out, _ := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", "="+gone).CombinedOutput(); !strings.Contains(string(out), "can't find") {
+		t.Errorf("a tmux session started for the settled old one: %s", out)
+	}
+}
+
+func TestWakeOfALiveThreadFails(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Thread " + s.ID + " is not settled"
+	if _, err := h.WakeThread(s.ID); err == nil || err.Error() != want {
+		t.Errorf("wake of a live thread = %v, want %q", err, want)
+	}
+	if list := h.Sessions().List(); len(list) != 1 || list[0].State == "settled" {
+		t.Errorf("rows = %+v", list)
+	}
+}
+
+func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.Sessions().Create("#12 work", "", false, 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	ended(t, h, s)
+	woken, err := h.WakeThread(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if woken.PR == nil || woken.PR.Number != 12 || woken.Branch != "issue-12" {
+		t.Errorf("woken row = %+v, want its PR", woken)
+	}
+}

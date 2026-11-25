@@ -1265,9 +1265,9 @@ func TestPRMergedBeforeTheLastWakeDoesNotSettle(t *testing.T) {
 	ended(t, h, old)
 	merged := time.Now()
 	time.Sleep(2 * time.Millisecond) // the wake must come after the merge to the millisecond
-	woken, err := h.ResumeSession(old.ID)
-	if err != nil {
-		t.Fatal(err)
+	woken, err := h.WakeThread(old.ID)
+	if err != nil || woken.ID != old.ID {
+		t.Fatalf("wake = %+v, %v", woken, err)
 	}
 
 	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))

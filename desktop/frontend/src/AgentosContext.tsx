@@ -83,7 +83,7 @@ type AgentosActions = {
   newChat(start: ThreadStart): Promise<Session>
   settleThread(id: string): Promise<void>
   dismissSession(id: string): Promise<void>
-  resumeSession(id: string): Promise<Session>
+  wakeThread(id: string): Promise<Session>
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
   forkSession(id: string, at: string, draft?: string): Promise<Session>
@@ -630,7 +630,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const addSession = useCallback(
     (created: Session, background = false) => {
-      setSessions((list) => (list.some((s) => s.id === created.id) ? list : [...list, created]))
+      setSessions((list) => (list.some((s) => s.id === created.id) ? list.map((s) => (s.id === created.id ? created : s)) : [...list, created]))
       if (!background) {
         selectId(created.id)
         focus('thread')
@@ -742,8 +742,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
       },
-      async resumeSession(id) {
-        return addSession(await api.resumeSession(id))
+      async wakeThread(id) {
+        return addSession(await api.wakeThread(id))
       },
       async forkSession(id, at, draft = '') {
         const fork = await api.forkSession(id, at)

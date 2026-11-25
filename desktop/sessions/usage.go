@@ -31,11 +31,13 @@ type reader struct {
 // what it used last. model is the one the agent reports, for a transcript that names none. With record, it also
 // records all that is not in the event log yet, one event for each model. The first count of a run of the app starts
 // after the latest usage the event log holds for the session, so a restart reads again what was not recorded, and
-// counts nothing twice. The row of a session that continues a conversation also shows what the sessions before it in
-// that conversation used; the event log keeps each session's own.
+// counts nothing twice. A woken thread's count goes on under its one id from its first start. The row of a session
+// that an older build started to continue a conversation also shows what the sessions before it in that conversation
+// used; the event log keeps each session's own.
 func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	s.mu.Lock()
 	in, ok := s.infoOf(id)
+	created, _ := s.startsOf(id, in)
 	live := slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name.String() == id })
 	ctx := s.ctx
 	r := s.readers[id]
@@ -54,15 +56,14 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var before usage.Tokens
-	var began time.Time
 	name, nameErr := session.ParseName(id)
 	if r.cursor == nil {
-		after, from := in.Created, ""
-		s.activity.Since(session.ProjectKey(id), in.Created.In(time.Local).Format(time.DateOnly), func(e activity.Event) {
+		after, from := created, ""
+		s.activity.Since(session.ProjectKey(id), created.In(time.Local).Format(time.DateOnly), func(e activity.Event) {
 			switch {
 			case e.Session != id:
 			case e.Kind == activity.SessionStart || e.Kind == activity.ChatStart:
-				from = e.From
+				from = cmp.Or(e.From, from)
 			case e.Kind == kind:
 				before.Add(e.Tokens)
 				if at := time.UnixMilli(e.At); at.After(after) {
@@ -71,9 +72,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 			}
 		})
 		if from != "" {
-			var used usage.Tokens
-			used, began = s.usedBefore(session.ProjectKey(id), from, kind)
-			before.Add(used)
+			before.Add(s.usedBefore(session.ProjectKey(id), from, kind))
 		}
 		mark := usage.Mark{After: after}
 		if nameErr == nil {
@@ -115,9 +114,6 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	}
 	if _, kept := s.readers[id]; kept { // a dismissed session has no row to show it
 		s.spent[id] = total
-		if !began.IsZero() {
-			s.began[id] = began
-		}
 		s.sync()
 		if record && nameErr == nil {
 			s.saveUsageMark(name, r.cursor.Mark())
@@ -154,17 +150,14 @@ func (s *Sessions) saveUsageMark(name session.Name, m usage.Mark) {
 	}
 }
 
-// usedBefore is what the session from and each session it continues used, as the event log of the project holds it,
-// and when the first of them started.
-func (s *Sessions) usedBefore(projectKey, from, kind string) (usage.Tokens, time.Time) {
+// usedBefore is what the session from and each session it continues used, as the event log of the project holds it.
+func (s *Sessions) usedBefore(projectKey, from, kind string) usage.Tokens {
 	used := map[string]usage.Tokens{}
 	continues := map[string]string{}
-	started := map[string]int64{}
 	s.activity.Since(projectKey, "", func(e activity.Event) {
 		switch e.Kind {
 		case activity.SessionStart, activity.ChatStart:
-			continues[e.Session] = e.From
-			started[e.Session] = e.At
+			continues[e.Session] = cmp.Or(e.From, continues[e.Session])
 		case kind:
 			t := used[e.Session]
 			t.Add(e.Tokens)
@@ -172,15 +165,11 @@ func (s *Sessions) usedBefore(projectKey, from, kind string) (usage.Tokens, time
 		}
 	})
 	var total usage.Tokens
-	var began time.Time
 	for seen := map[string]bool{}; from != "" && !seen[from]; from = continues[from] {
 		seen[from] = true
 		total.Add(used[from])
-		if at, ok := started[from]; ok {
-			began = time.UnixMilli(at)
-		}
 	}
-	return total, began
+	return total
 }
 
 // ran shows on the row the model and effort the agent used last, and keeps them where the start choice is kept, the

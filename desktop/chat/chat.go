@@ -25,11 +25,12 @@ const (
 	startWait      = 3 * time.Second // for a watch that comes before Start
 )
 
-// Threads are the sessions whose agents run under a host.
+// Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
 	TurnEnded(id string, e chatlog.Event)
+	Wake(id string) (sessions.Chat, error)
 }
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.

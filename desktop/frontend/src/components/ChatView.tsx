@@ -23,7 +23,7 @@ type ChatViewProps = { session: Session }
 export function ChatView({ session }: ChatViewProps) {
   const { project, report, forkSession } = useAgentos('project', 'report', 'forkSession')
   const latest = useLatestAgentos()
-  const { timeline, events, loading, error } = useChat(session.id)
+  const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.

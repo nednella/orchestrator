@@ -38,7 +38,7 @@ type Record struct {
 	SettledAt int64 `json:"endedAt,omitempty"` // unix ms, set by the desktop app when it sees the session end; the key is the one older builds wrote
 }
 
-// Identity is what the desktop app started a session as. The app writes it when the session starts, so a
+// Identity is what the desktop app started a session as. The app writes it when the session starts and wakes, so a
 // session that ends while the app is closed comes back as itself. Model and Effort follow the agent: the start
 // choice until its first turn, then what its transcript or its hooks say it used last.
 type Identity struct {
@@ -51,7 +51,8 @@ type Identity struct {
 	Effort  string `json:"effort,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
-	Created int64  `json:"created,omitempty"` // unix ms
+	Created int64  `json:"created,omitempty"` // unix ms of the first start
+	Woke    int64  `json:"woke,omitempty"`    // unix ms of the latest start: the first one or a wake
 }
 
 // Change is one entry of a session's state timeline.

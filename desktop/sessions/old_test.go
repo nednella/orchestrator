@@ -29,7 +29,7 @@ func TestOldTerminalSessionIsLeftAlone(t *testing.T) {
 	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
 	h.Sessions().Refresh()
 	row, ok := h.Session(id)
-	if !ok || row.State != session.Settled || row.Hosted || row.Detail != oldDetail || row.Title != "#12 work" || row.Resumable {
+	if !ok || row.State != session.Settled || row.Hosted || row.Detail != oldDetail || row.Title != "#12 work" {
 		t.Fatalf("old terminal session's row = %+v (%v), want settled, not hosted, %q", row, ok, oldDetail)
 	}
 

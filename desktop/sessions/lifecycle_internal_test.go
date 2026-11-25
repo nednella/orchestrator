@@ -193,24 +193,6 @@ func TestOnlyTheHearerGetsTheCommandsAndTheOpenedAlert(t *testing.T) {
 	}
 }
 
-func TestInheritPutsTheEndedSessionsBranchesFirst(t *testing.T) {
-	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
-	proj := project.Project{Name: "p"}
-	f := l.prs("p")
-	f.Branches["p/old"], f.Reported["p/old"], f.SawOpen["p/old"] = []string{"side", "issue-7"}, []string{"issue-7"}, []string{"issue-7"}
-	f.Reported["p/new"] = []string{"issue-7"}
-	l.inherit(proj, "p/old", "p/new")
-	if got := f.Branches["p/new"]; !slices.Equal(got, []string{"side", "issue-7"}) {
-		t.Errorf("branches = %v", got)
-	}
-	if got := f.Reported["p/new"]; !slices.Equal(got, []string{"issue-7"}) {
-		t.Errorf("reported = %v", got)
-	}
-	if got := f.SawOpen["p/new"]; !slices.Equal(got, []string{"issue-7"}) {
-		t.Errorf("saw open = %v", got)
-	}
-}
-
 func TestReviewAfterACommentIsDeletedWakesTheSession(t *testing.T) {
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p", OnReview: "/address-review {n}"}

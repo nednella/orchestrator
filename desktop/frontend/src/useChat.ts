@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLatestAgentos } from './AgentosContext'
 import { api, chatEvent, errorMessage, on } from './api'
 import { EMPTY_CHAT, chatFeed } from './chatEvents'
+import { watchAgain } from './chatLive'
 import type { ChatState } from './chatEvents'
 import { buildTimeline } from './chatTimeline'
 import type { Timeline } from './chatTimeline'
-import type { ChatEvent } from './types'
+import type { ChatEvent, State } from './types'
 
 const keptThreads = 20
 const kept = new Map<string, ChatState>()
@@ -52,10 +53,17 @@ function later(run: () => void): () => void {
 }
 
 // useChat is the thread's chat: its history, then its live events, as a timeline, and the logged events it is built
-// from.
-export function useChat(id: string): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
+// from. state is the thread's row state: a settled thread that wakes is watched again.
+export function useChat(id: string, state: State): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
   const latest = useLatestAgentos()
+  const seen = useRef<{ id: string; state: State }>({ id, state })
+  const [wakes, setWakes] = useState(0)
+  useEffect(() => {
+    const before = seen.current.id === id ? seen.current.state : undefined
+    seen.current = { id, state }
+    if (watchAgain(before, state)) setWakes((n) => n + 1)
+  }, [id, state])
   const shown = view.id === id ? view : startOf(id)
   const timeline = useMemo(() => buildTimeline(shown.state.events, shown.state.live, id), [shown.state, id])
 
@@ -90,7 +98,7 @@ export function useChat(id: string): { timeline: Timeline; events: ChatEvent[]; 
       off()
       inTurn(id, () => api.chatUnwatch(id)).catch(() => undefined)
     }
-  }, [id, latest])
+  }, [id, latest, wakes])
 
   return { timeline, events: shown.state.events, loading: shown.loading, error: shown.error }
 }

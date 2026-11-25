@@ -10,7 +10,6 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/project"
 )
 
 // pulls is what the repo's pull request list says of one branch.
@@ -348,34 +347,7 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	}
 }
 
-func TestReviewOnAnEndedSessionStartsANewOne(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
-	s := issueSession(h, t, 12)
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
-	h.RefreshPRs()
-	if err := h.SettleThread(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
-	h.RefreshPRs()
-	var fresh string
-	eventually(t, "a new session for the issue", func() bool {
-		for _, v := range h.Sessions().List() {
-			if v.Issue == 12 && v.State != "settled" {
-				fresh = v.ID
-				return true
-			}
-		}
-		return false
-	})
-	eventually(t, "the ended row to go", func() bool { _, ok := h.Session(s.ID); return !ok })
-	eventually(t, "the prompt in the new session", func() bool { return strings.Contains(sentTo(t, h, fresh), "/address-review 12") })
-	if got, _ := h.Session(fresh); got.Title != "#12 work" {
-		t.Errorf("the new session is titled %q", got.Title)
-	}
-}
-
-func TestResumedSessionIsCleanedUpOnMerge(t *testing.T) {
+func TestWokenThreadIsCleanedUpOnMerge(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	wt := issueWorktree(t, h)
@@ -387,28 +359,18 @@ func TestResumedSessionIsCleanedUpOnMerge(t *testing.T) {
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
 	h.RefreshPRs()
-	var fresh string
-	eventually(t, "a new session for the issue", func() bool {
-		for _, v := range h.Sessions().List() {
-			if v.Issue == 7 && v.State != "settled" {
-				fresh = v.ID
-				return true
-			}
-		}
-		return false
-	})
-	eventually(t, "the ended row to go", func() bool { _, ok := h.Session(s.ID); return !ok })
+	eventually(t, "the thread woken for the review", func() bool { return stateOf(h, s.ID) == "idle" })
 
-	// The new session knows the PR was open, as the ended one did, so the merge cleans up without asking.
+	// The thread saw the PR open before it settled, so the merge cleans up without asking.
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 1))
 	h.RefreshPRs()
-	eventually(t, "the new session to be cleaned up", cleanedUp(h, fresh))
+	eventually(t, "the woken thread to be cleaned up", cleanedUp(h, s.ID))
 	if exists(wt) {
 		t.Error("the worktree is still there")
 	}
 }
 
-func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
+func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	h.GH.SetPRFor("issue-12", "[]")
 	h.GH.SetPRFor("side", prJSON("OPEN", false, "[]", 0, 0))
@@ -420,7 +382,7 @@ func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", sessions.StartOptions{})
+	live, err := h.Sessions().Create("#12 again", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +396,10 @@ func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
 		}
 	}
 	if !slices.Equal(ids, []string{live.ID, s.ID}) && !slices.Equal(ids, []string{s.ID, live.ID}) {
-		t.Errorf("sessions of #12 = %v, want the live %s and the ended %s", ids, live.ID, s.ID)
+		t.Errorf("threads of #12 = %v, want the live %s and the settled %s", ids, live.ID, s.ID)
+	}
+	if got := stateOf(h, s.ID); got != "settled" {
+		t.Errorf("the settled thread is %s, want it left settled", got)
 	}
 }
 

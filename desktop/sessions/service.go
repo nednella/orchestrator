@@ -67,8 +67,13 @@ func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 // DismissSession removes the row of a settled session.
 func (v *Service) DismissSession(id string) error { return v.s.Dismiss(id) }
 
-// ResumeSession starts a session that continues a settled one's conversation, and removes the settled row.
-func (v *Service) ResumeSession(id string) (Session, error) { return v.s.Resume(id) }
+// WakeThread starts a settled thread again under its own id, with nothing sent to it.
+func (v *Service) WakeThread(id string) (Session, error) {
+	if _, err := v.s.Wake(id); err != nil {
+		return Session{}, err
+	}
+	return v.s.row(id)
+}
 
 // ForkSession starts a thread that continues the conversation of the thread id up to its reply at, the uuid of the
 // reply's last block, as a new conversation.

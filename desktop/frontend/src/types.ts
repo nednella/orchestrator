@@ -35,8 +35,8 @@ export type Session = {
   state: State
   detail: string
   lastEventAt: number
-  createdAt: number
-  beganAt: number
+  createdAt: number // the thread's first start
+  wokeAt: number // its latest start: the first one, or its latest wake
   issue: number
   model: string
   effort: string
@@ -56,7 +56,6 @@ export type Session = {
   forkOf: string // the thread this one was forked from, '' when none
   tokens: number
   cost: number
-  resumable: boolean
   memory: number
 }
 

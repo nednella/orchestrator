@@ -66,9 +66,10 @@ type Sent struct {
 }
 
 // ChatSend gives the message, its images saved in the thread's media folder, to Claude: as the user's at once when the
-// thread is idle, as queued while a turn runs, and as the reason to deny each approval that waits.
+// thread is idle, as queued while a turn runs, and as the reason to deny each approval that waits. A settled thread is
+// woken for it.
 func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
-	ch, err := v.live(id)
+	ch, err := v.awake(id)
 	if err != nil {
 		return Sent{}, err
 	}
@@ -90,9 +91,9 @@ func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
 	return Sent{ID: msg}, v.failed(id, "the message", err)
 }
 
-// ChatDraft leaves text in the thread's composer, unsent.
+// ChatDraft leaves text in the thread's composer, unsent. A settled thread is woken for it.
 func (v *Service) ChatDraft(id, text string) error {
-	ch, err := v.live(id)
+	ch, err := v.awake(id)
 	if err != nil {
 		return err
 	}
@@ -170,6 +171,15 @@ func (v *Service) live(id string) (sessions.Chat, error) {
 		return sessions.Chat{}, fmt.Errorf("Thread %s has settled", id)
 	}
 	return ch, nil
+}
+
+// awake is the chat of a thread that runs, woken first when it has settled.
+func (v *Service) awake(id string) (sessions.Chat, error) {
+	ch, err := v.c.threads.ChatOf(id)
+	if err != nil || ch.Live {
+		return ch, err
+	}
+	return v.c.threads.Wake(id)
 }
 
 // failed is the host's own reason when it refused, else why the thread did not take what, in plain words, with the

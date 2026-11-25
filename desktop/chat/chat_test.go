@@ -125,8 +125,8 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 		t.Errorf("history of the ended thread = %v", kinds(events))
 	}
 	want := "Thread " + id + " has settled"
-	if _, err := h.ChatSend(id, "again"); err == nil || err.Error() != want {
-		t.Errorf("ChatSend = %v, want %q", err, want)
+	if err := h.ChatInterrupt(id); err == nil || err.Error() != want {
+		t.Errorf("ChatInterrupt = %v, want %q", err, want)
 	}
 	if err := h.ChatWatch(id); err == nil || err.Error() != want {
 		t.Errorf("ChatWatch = %v, want %q", err, want)

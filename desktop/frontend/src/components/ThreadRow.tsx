@@ -24,7 +24,7 @@ type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; me
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'resumeSession', 'dismissSession', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'dismissSession', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -149,9 +149,9 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             {settled ? (
               <span className="relative z-[1] flex flex-none items-center gap-1.5">
                 <CleanupMark session={session} />
-                {session.resumable && (
-                  <button className="btn h-[1.375rem] px-2 text-label" title="Start a session that continues this conversation" onClick={() => a.report(() => a.resumeSession(session.id))}>
-                    Resume
+                {session.hosted && (
+                  <button className="btn h-[1.375rem] px-2 text-label" title="Start this thread again" onClick={() => a.report(() => a.wakeThread(session.id))}>
+                    Wake
                   </button>
                 )}
                 <button className="btn h-[1.375rem] px-2 text-label" onClick={() => a.report(() => a.dismissSession(session.id))}>

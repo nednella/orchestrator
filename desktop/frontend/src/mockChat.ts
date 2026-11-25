@@ -2,8 +2,9 @@ import type { ChatEvent, ChatImage, EventMap, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
-// What the mock knows of a thread: whether it has settled, and a way to move its row's state as hooks would.
-export type MockThread = { settled: boolean; setState(state: State): void }
+// What the mock knows of a thread: whether it has settled, a way to move its row's state as hooks would, and a way to
+// wake it when it has settled.
+export type MockThread = { settled: boolean; setState(state: State): void; wake(): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -171,6 +172,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     return t
   }
 
+  // awake is the thread, woken first when it has settled, as a message or a draft to a settled thread wakes it.
+  function awake(id: string): MockThread {
+    const t = thread(id)
+    if (t.settled) t.wake()
+    return t
+  }
+
   // reply streams a reply, then ends the turn, or runs the next queued message as its own turn.
   function reply(id: string, slow = false) {
     const t = thread(id)
@@ -323,7 +331,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       watched.delete(id)
     },
     ChatSend: async (id: string, text: string, images: ChatImage[]) => {
-      const t = live(id)
+      const t = awake(id)
       const files = save(id, images)
       const message = crypto.randomUUID()
       const waiting = pending.get(id)
@@ -361,7 +369,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       return { id: message }
     },
     ChatDraft: async (id: string, text: string) => {
-      live(id)
+      awake(id)
       append(id, { kind: 'draft', text })
     },
     ChatInterrupt: async (id: string) => {

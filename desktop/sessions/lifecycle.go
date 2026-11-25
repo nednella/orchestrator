@@ -84,13 +84,12 @@ type Cleanup struct {
 // project's branch pattern, when it sets one. It owns the branches it reported and its issue's branch.
 type target struct {
 	id, title string
-	action    string
 	issue     int
 	branches  []string
 	owned     []string
 	proj      project.Project
-	model     project.Model // what the session ran, so a replacement for an ended one runs the same
-	created   time.Time
+	model     project.Model
+	woke      time.Time // the thread's latest start: its first one, or its latest wake
 	ended     bool
 }
 
@@ -99,10 +98,10 @@ func (t target) newest() string { return t.branches[len(t.branches)-1] }
 
 func (t target) owns(branch string) bool { return slices.Contains(t.owned, branch) }
 
-// predates says whether the PR merged or closed before the session started: it belongs to an
-// earlier session on the same branch name.
+// predates says whether the PR merged or closed before the thread last started: it belongs to an
+// earlier thread on the same branch name, or to the thread before its latest wake.
 func (t target) predates(pr *PR) bool {
-	return pr.ClosedAt > 0 && !t.created.IsZero() && pr.ClosedAt < t.created.UnixMilli()
+	return pr.ClosedAt > 0 && !t.woke.IsZero() && pr.ClosedAt < t.woke.UnixMilli()
 }
 
 // track is what is known about the pull request and clean-up of one session.
@@ -304,6 +303,19 @@ func (l *Lifecycle) retire(id string) {
 	f := l.prs(key)
 	f.Cleaned = append(f.Cleaned, id)
 	l.savePRs(key)
+}
+
+// unretire follows a woken thread again, so its next PR settles it and is cleaned up.
+func (l *Lifecycle) unretire(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.gone, id)
+	key := session.ProjectKey(id)
+	f := l.prs(key)
+	if slices.Contains(f.Cleaned, id) {
+		f.Cleaned = slices.DeleteFunc(f.Cleaned, func(c string) bool { return c == id })
+		l.savePRs(key)
+	}
 }
 
 // retired says whether the lifecycle is done with the session: its row went or its clean-up finished. It needs mu.
@@ -1609,26 +1621,6 @@ func (f *prsFile) ownedByOther(id, branch string) bool {
 		}
 	}
 	return false
-}
-
-// inherit gives the session the branches another one worked on, reported and saw open, older than its own,
-// so a session that takes over an ended one knows its PR as the ended one did. A session with no track yet
-// also gets the ended one's branch, worktree and PR, so its row shows them before the next fetch.
-func (l *Lifecycle) inherit(proj project.Project, from, to string) {
-	key := proj.Key()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if old := l.tracks[from]; old != nil && l.tracks[to] == nil {
-		l.tracks[to] = &track{branch: old.branch, worktree: old.worktree, pr: old.pr, git: old.git}
-	}
-	f := l.prs(key)
-	for _, m := range []map[string][]string{f.Branches, f.Reported, f.SawOpen} {
-		older := slices.DeleteFunc(slices.Clone(m[from]), func(b string) bool { return slices.Contains(m[to], b) })
-		if len(older) > 0 {
-			m[to] = append(older, m[to]...)
-		}
-	}
-	l.savePRs(key)
 }
 
 // claim makes branch the session's own, and takes it from each session that only saw it. A session

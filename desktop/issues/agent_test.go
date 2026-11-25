@@ -21,7 +21,8 @@ func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 		{"number":7,"title":"No labels","url":"https://x/7","labels":[{"name":"ready"}]},
 		{"number":9,"title":"An old agent label","url":"https://x/9","labels":[{"name":"ready"},{"name":"agent:codex"}]},
 		{"number":10,"title":"Model claude takes","url":"https://x/10","labels":[{"name":"ready"},{"name":"model:sonnet"}]},
-		{"number":11,"title":"Model claude refuses","url":"https://x/11","labels":[{"name":"ready"},{"name":"model:other-model"}]}
+		{"number":11,"title":"Model claude refuses","url":"https://x/11","labels":[{"name":"ready"},{"name":"model:other-model"}]},
+		{"number":12,"title":"Model claude refuses, under another action","url":"https://x/12","labels":[{"name":"ready"},{"name":"model:other-model"}]}
 	]`)
 
 	tests := []struct {
@@ -34,7 +35,7 @@ func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 		{"an old agent label is ignored", 9, "", ""},
 		{"a model label claude takes", 10, "", "sonnet"},
 		{"a model label claude refuses is skipped", 11, "", ""},
-		{"another action's model", 11, "Opus", "opus"},
+		{"another action's model", 12, "Opus", "opus"},
 	}
 	for _, tt := range tests {
 		s, err := h.StartIssueWith(tt.issue, tt.action)

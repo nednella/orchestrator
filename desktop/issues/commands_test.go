@@ -1,6 +1,8 @@
 package issues_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,7 +55,7 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 	}
 }
 
-func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
+func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
@@ -65,20 +67,14 @@ func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
 	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Remove(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(old.ID, "/", "_")+".args")); err != nil {
+		t.Fatal(err)
+	}
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[{"id":"x"}],"updatedAt":"2026-10-01T12:00:00Z"}]`)
 	h.RefreshPRs()
-	var fresh string
-	eventually(t, "a new session for the issue", func() bool {
-		for _, v := range h.Sessions().List() {
-			if v.Issue == 7 && v.State != "settled" {
-				fresh = v.ID
-				return true
-			}
-		}
-		return false
-	})
-	if args := argsOf(t, h.ClaudeDir(), fresh); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
-		t.Errorf("the resumed session's system prompt lacks the handover:\n%s", args)
+	eventually(t, "the thread woken for the review", func() bool { got, _ := h.Session(old.ID); return got.State != "settled" })
+	if args := argsOf(t, h.ClaudeDir(), old.ID); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
+		t.Errorf("the woken thread's system prompt lacks the handover:\n%s", args)
 	}
 }
 

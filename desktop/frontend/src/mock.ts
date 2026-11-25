@@ -224,7 +224,7 @@ export function createMock(params: URLSearchParams) {
       detail: s.detail,
       lastEventAt: s.lastEventAt,
       createdAt: s.createdAt,
-      beganAt: s.beganAt,
+      wokeAt: s.wokeAt,
       issue: s.issue,
       model: s.model,
       effort: s.effort,
@@ -244,7 +244,6 @@ export function createMock(params: URLSearchParams) {
       forkOf: s.forkOf,
       tokens: s.tokens,
       cost: s.cost,
-      resumable: s.resumable,
       memory: s.state === 'settled' ? 0 : s.memory,
     }
   }
@@ -388,7 +387,7 @@ export function createMock(params: URLSearchParams) {
       detail: pick(details[initial]),
       lastEventAt: history.at(-1)?.at ?? 0,
       createdAt,
-      beganAt: createdAt,
+      wokeAt: createdAt,
       issue,
       ...modelFor(owner, issue),
       history,
@@ -406,7 +405,6 @@ export function createMock(params: URLSearchParams) {
       action: issue ? 'Work' : '',
       forkOf: '',
       ...usageFor(chat, createdAt),
-      resumable: initial === 'settled',
       memory: (chat ? 3 : 4 + (nextN % 5) * 3) * tenthGB,
       project: owner.name,
     }
@@ -420,8 +418,17 @@ export function createMock(params: URLSearchParams) {
   const chats = mockChat(emit, (id) => {
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
-    return { settled: s.state === 'settled', setState: (state) => setState(s, state) }
+    return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s) }
   })
+
+  // wake starts a settled thread again under its id, as the sessions do.
+  function wake(s: Session) {
+    if (!s.hosted) throw `Thread ${s.id} ran in a terminal and cannot be woken`
+    if (s.state !== 'settled') throw `Thread ${s.id} is not settled`
+    s.wokeAt = Date.now()
+    setState(s, 'idle')
+    chats.start(s.id)
+  }
 
   function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], chat = false) {
     const now = Date.now()
@@ -442,7 +449,7 @@ export function createMock(params: URLSearchParams) {
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
     seed('retry banner experiment', 0, 'settled', [['working', 400], ['idle', 380], ['settled', 300]])
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
-    Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { resumable: false, hosted: false, detail: 'Ran in a terminal before chats' })
+    Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { hosted: false, detail: 'Ran in a terminal before chats' })
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
@@ -525,7 +532,6 @@ export function createMock(params: URLSearchParams) {
     const at = Date.now()
     closeWait(s, at)
     s.state = state
-    s.resumable = state === 'settled'
     s.detail = pick(details[state])
     s.lastEventAt = at
     s.history = [...s.history, { state, at }].slice(-200)
@@ -873,25 +879,13 @@ export function createMock(params: URLSearchParams) {
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
     },
-    ResumeSession: async (id: string) => {
-      const old = find(id)
-      if (!old.resumable) throw `session ${id} has no conversation to resume`
-      const live = sessions.find((s) => s.project === current.name && s.issue > 0 && s.issue === old.issue && s.chat === old.chat && !s.forkOf && s.state !== 'settled')
-      if (live && !old.forkOf) return view(live)
-      const s = create(old.title, old.issue, 'idle', [], Date.now(), current, old.chat)
-      s.action = old.action
-      s.model = old.model
-      s.effort = old.effort
-      s.forkOf = old.forkOf
-      sessions.splice(sessions.indexOf(old), 1)
-      publish()
-      emit('issues', { project: current.name, items: currentIssues() })
-      return view(s)
+    WakeThread: async (id: string) => {
+      wake(find(id))
+      return view(find(id))
     },
     ForkSession: async (id: string, at: string) => {
       const from = find(id)
       if (!from.hosted) throw 'Only a thread with a chat can be forked'
-      if (from.state === 'settled' && !from.resumable) throw 'This thread has no conversation to fork yet'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
       Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, worktree: '' })
@@ -1054,11 +1048,18 @@ export function createMock(params: URLSearchParams) {
     StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string) => {
       const issue = current.issues.find((i) => i.number === number)
       if (!issue) throw 'No such issue'
-      const existing = sessions.find((s) => s.project === current.name && !s.chat && s.issue === number)
-      if (existing) return view(existing)
+      const mine = sessions.filter((s) => s.project === current.name && !s.chat && !s.forkOf && s.issue === number)
+      const live = mine.find((s) => s.state !== 'settled')
+      if (live) return view(live)
       if (action && !issue.actions.includes(action)) throw `issue #${number} has no action "${action}"`
       const name = action || issue.actions[0]
       const command = { Work: `/work ${number}`, Plan: `/plan ${number}`, Investigate: `/investigate ${number}` }[name] ?? `Work on issue #${number}: ${issue.title}`
+      const settled = mine.filter((s) => s.hosted).at(-1)
+      if (settled) {
+        wake(settled)
+        void chats.backend.ChatSend(settled.id, `${command} ${prompt}`.trim(), [])
+        return view(settled)
+      }
       const short = issue.title.split(' ').slice(0, 3).join(' ')
       const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort)
       emit('issues', { project: current.name, items: currentIssues() })

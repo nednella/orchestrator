@@ -302,13 +302,18 @@ func TestForkStaysAFork(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the fork settled", func() bool { got, _ := fresh.Session(fork.ID); return got.State == "settled" && got.ForkOf == src.ID })
-	resumed, err := fresh.ResumeSession(fork.ID)
+	woken, err := fresh.WakeThread(fork.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resumed.ID == src.ID || resumed.ForkOf != src.ID || resumed.Issue != 12 {
-		t.Errorf("resumed fork = %+v", resumed)
+	if woken.ID != fork.ID || woken.ForkOf != src.ID || woken.Issue != 12 {
+		t.Errorf("woken fork = %+v", woken)
 	}
+	eventually(t, "the woken fork resuming its own conversation", func() bool {
+		args := fresh.Args(t, fork.ID)
+		i := slices.Index(args, "--resume")
+		return i >= 0 && args[i+1] == "abc" && !slices.Contains(args, "--fork-session")
+	})
 	if got := fresh.Sessions().IssueSessions()[12]; got != src.ID {
 		t.Errorf("the issue's session is %s, want the source %s", got, src.ID)
 	}

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/usage"
@@ -162,64 +160,36 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 	})
 }
 
-func TestResumedSessionShowsTheWholeConversationsUsage(t *testing.T) {
+func TestSessionThatContinuedAnotherInAnOlderBuildShowsBothsUsage(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.Sessions().Create("#4 work", "", false, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// turn ends a turn of the session that used input and output tokens, and ends the session.
-	turn := func(h *apptest.Harness, id string, input, output int64) {
-		t.Helper()
-		transcript := filepath.Join(t.TempDir(), "conv.jsonl")
-		appendLines(t, transcript, assistantLine("msg_"+id, time.Now().Add(100*time.Millisecond), input, output))
-		h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
-		recorded := len(h.Events(t, activity.Usage)) + 1
-		eventually(t, "the turn's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == recorded })
-		if err := h.SettleThread(id); err != nil {
-			t.Fatal(err)
-		}
-		eventually(t, "the session settled", func() bool { row, _ := h.Session(id); return row.State == "settled" })
-	}
-	resume := func(h *apptest.Harness, id string) sessions.Session {
-		t.Helper()
-		fresh, err := h.ResumeSession(id)
+	h.App.Stop()
+	before := "main/aaaaaaaa"
+	at := time.Now().Add(-time.Minute).UnixMilli()
+	var lines []string
+	for _, e := range []activity.Event{
+		{At: at, Kind: activity.SessionStart, Session: before, Issue: 4},
+		{At: at, Kind: activity.Usage, Session: before, Issue: 4, Tokens: usage.Tokens{Input: 1000, Output: 100}},
+		{At: at, Kind: activity.SessionStart, Session: s.ID, Issue: 4, Label: activity.Resumed, From: before},
+	} {
+		line, err := json.Marshal(e)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return fresh
+		lines = append(lines, string(line)+"\n")
 	}
-	tokens := func(h *apptest.Harness, id string, want int64) {
-		t.Helper()
-		eventually(t, fmt.Sprintf("%d tokens on the row", want), func() bool { row, _ := h.Session(id); return row.Tokens == want })
-	}
+	appendLines(t, filepath.Join(h.State, "data", "main", "events", time.Now().Format(time.DateOnly)+".jsonl"), lines...)
 
-	turn(h, s.ID, 1000, 100)
-	second := resume(h, s.ID)
-	turn(h, second.ID, 10, 1)
-	tokens(h, second.ID, 1111)
-	third := resume(h, second.ID)
-	h.Hook(t, third.ID, "SessionStart", fmt.Sprintf(`{"transcript_path":%q}`, writtenTranscript(t)))
-	tokens(h, third.ID, 1111)
-
-	starts := h.Events(t, activity.SessionStart)
-	if len(starts) != 3 || starts[0].From != "" || starts[1].From != s.ID || starts[2].From != second.ID {
-		t.Errorf("session_start = %+v, want each resumed one to name the session it continues", starts)
-	}
-	began := func(h *apptest.Harness) {
-		t.Helper()
-		if row, _ := h.Session(s.ID); row.BeganAt != row.CreatedAt {
-			t.Errorf("first row began at %d, want its own start %d", row.BeganAt, row.CreatedAt)
-		}
-		if row, _ := h.Session(third.ID); row.BeganAt != starts[0].At {
-			t.Errorf("third row began at %d, want the first session's start %d", row.BeganAt, starts[0].At)
-		}
-	}
-	began(h)
-	restarted := h.Restart(t)
-	tokens(restarted, third.ID, 1111)
-	began(restarted)
-	led, err := restarted.Ledger(30, "")
+	second := h.Restart(t)
+	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
+	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 10, 1))
+	second.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
+	eventually(t, "both sessions' tokens on the row", func() bool { row, _ := second.Session(s.ID); return row.Tokens == 1111 })
+	eventually(t, "the turn's usage in the event log", func() bool { return len(second.Events(t, activity.Usage)) == 2 })
+	led, err := second.Ledger(30, "")
 	if err != nil {
 		t.Fatal(err)
 	}

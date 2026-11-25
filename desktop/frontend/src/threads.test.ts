@@ -14,7 +14,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     detail: '',
     lastEventAt,
     createdAt: 0,
-    beganAt: 0,
+    wokeAt: 0,
     issue: 0,
     model: '',
     effort: '',
@@ -34,7 +34,6 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     forkOf: '',
     tokens: 0,
     cost: 0,
-    resumable: false,
     memory: 0,
   }
 }
