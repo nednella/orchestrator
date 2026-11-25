@@ -56,8 +56,13 @@ func Session() string { return body(session) }
 // Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
 func Thread() string { return body(thread) }
 
-// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own.
-func Fork(title string) string { return strings.Replace(body(fork), "{title}", title, 1) }
+// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own. The
+// title is the owner's to edit, so it is kept to one line and its double quotes become single ones: it cannot add a
+// line of its own to the prompt or end the quotes it stands in.
+func Fork(title string) string {
+	title = strings.ReplaceAll(strings.Join(strings.Fields(title), " "), `"`, "'")
+	return strings.Replace(body(fork), "{title}", title, 1)
+}
 
 // Handover ends the system prompt of a thread that another thread asked for, with the context that thread gave.
 func Handover(context string) string { return strings.Replace(body(handover), "{context}", context, 1) }

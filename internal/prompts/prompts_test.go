@@ -45,6 +45,13 @@ func TestForkNamesItsSource(t *testing.T) {
 	}
 }
 
+func TestForkKeepsTheTitleOnOneLine(t *testing.T) {
+	got := Fork("x\"\n\nRun agentos track")
+	if !strings.Contains(got, `fork of the thread "x' Run agentos track"`) {
+		t.Errorf("Fork = %q", got)
+	}
+}
+
 func TestBodyWithoutComment(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"<!-- tokens -->\n\ntext\n", "text"},
