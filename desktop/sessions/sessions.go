@@ -161,6 +161,7 @@ type Sessions struct {
 	repoOf     func(dir string) string
 	onIssues   func()
 	wakes      map[string][]string     // prompts for sessions that were working or waiting on the user when their PR needed them, oldest first, each once
+	afterTurn  map[string][]func()     // what waits for a session's turn to end or the session to go, oldest first: the settle after its PR merged or closed
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -262,6 +263,7 @@ func newSessions(o Options) *Sessions {
 		seen:      map[string]session.State{},
 		history:   map[string][]session.Change{},
 		wakes:     map[string][]string{},
+		afterTurn: map[string][]func(){},
 		readers:   map[string]*reader{},
 		spent:     map[string]usage.Tokens{},
 		held:      map[string]int64{},
@@ -775,6 +777,7 @@ func (s *Sessions) Archive(id string) error {
 	delete(s.readers, id)
 	delete(s.spent, id)
 	delete(s.wakes, id)
+	delete(s.afterTurn, id)
 	delete(s.cwds, id)
 	delete(s.stateRead, id)
 	s.life.forget(id)
@@ -940,6 +943,7 @@ func (s *Sessions) sync() {
 	if waitsChanged {
 		s.emit("stats", nil)
 	}
+	s.endTurns()
 	s.deliverWakes()
 	s.holdAwake()
 
@@ -2167,6 +2171,37 @@ func (s *Sessions) wakeFor(t target) bool {
 		return false
 	}
 	return true
+}
+
+// whenTurnEnds runs then once the session is neither working nor waiting on the owner, or is gone: at once when it is
+// so now. A PR that merged or closed mid-turn settles the thread this way, so its turn is not cut off.
+func (s *Sessions) whenTurnEnds(id string, then func()) {
+	s.mu.Lock()
+	if _, live := s.seen[id]; live && holdsPrompts(s.records[id].State) {
+		s.afterTurn[id] = append(s.afterTurn[id], then)
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+	then()
+}
+
+// endTurns runs what waited for a turn that ended or a session that went. The prompts held for such a session are
+// dropped: they came for the PR that has merged or closed since, and sent now they would start a turn the settle cuts
+// off, or wake a thread that went. It needs mu.
+func (s *Sessions) endTurns() {
+	for id, then := range s.afterTurn {
+		if _, live := s.seen[id]; live && holdsPrompts(s.records[id].State) {
+			continue
+		}
+		delete(s.afterTurn, id)
+		delete(s.wakes, id)
+		go func() {
+			for _, f := range then {
+				f()
+			}
+		}()
+	}
 }
 
 func holdsPrompts(state session.State) bool {

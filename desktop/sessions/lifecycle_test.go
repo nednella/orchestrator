@@ -166,6 +166,7 @@ func TestCleanupMerged(t *testing.T) {
 	}
 
 	openThenMerge(h)
+	h.Hook(t, s.ID, "Stop", `{}`)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
 	if exists(wt) || branches(t, h.Dir) == "" {
@@ -1401,6 +1402,36 @@ func TestOpenShellInTheWorktreeKeepsIt(t *testing.T) {
 	}
 }
 
+func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	head := gitIn(t, wt, "rev-parse", "HEAD")
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+
+	openThenMerge(h)
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.State != "working" || got.PR == nil || got.PR.State != "merged" || got.Cleanup != "" {
+		t.Fatalf("the merge cut the turn off: %+v", got)
+	}
+	if !exists(wt) || len(h.Cleanups()) != 0 {
+		t.Fatalf("the clean-up ran during the turn: worktree there %v, log %+v", exists(wt), h.Cleanups())
+	}
+
+	h.Hook(t, s.ID, "Stop", `{}`)
+	eventually(t, "the clean-up once the turn ended", cleanedUp(h, s.ID))
+	if exists(wt) || gitIn(t, h.Dir, "rev-parse", "issue-7") != head {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" {
+		t.Errorf("log = %+v", log)
+	}
+}
+
 func TestMergedPRSettlesTheThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
@@ -1479,6 +1510,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	}
 
 	openThenMerge(h)
+	h.Hook(t, s.ID, "Stop", `{}`)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))
 	if got, _ := h.Session(s.ID); got.State != "settled" || got.Evidence != 1 {
 		t.Errorf("row = %+v", got)

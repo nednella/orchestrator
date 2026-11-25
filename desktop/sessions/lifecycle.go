@@ -401,28 +401,21 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 	if treeErr == nil {
 		statuses = l.statuses(ctx, proj.Dir, trees, fetched)
 	}
-	var auto, settle []string
+	var ends []fetch
+	var outcomes []outcome
 	for _, f := range fetched {
 		o := l.update(f.target, trees.byBranch[f.branch], f.pr)
 		l.setStatus(f.id, f.branch, statuses[f.branch])
-		if o.settle {
-			settle = append(settle, f.id)
-		}
-		if o.auto {
-			auto = append(auto, f.id)
+		if o.settle || o.auto {
+			ends, outcomes = append(ends, f), append(outcomes, o)
 		}
 		if o.wake != "" {
 			wakes = append(wakes, wake{f.target, o.wake})
 		}
 		reload = reload || o.queue
 	}
-	for _, id := range settle {
-		if err := l.sessions.Settle(id); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: settling thread %s after its PR: %v\n", id, err)
-		}
-	}
-	for _, id := range auto {
-		l.autoCleanup(ctx, id)
+	for i, f := range ends {
+		l.sessions.whenTurnEnds(f.id, func() { l.end(ctx, f.id, outcomes[i]) })
 	}
 	for _, w := range wakes {
 		go l.sessions.wake(ctx, w.target, fromApp(w.prompt))
@@ -432,6 +425,18 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 		l.repos.Reload(ctx, proj)
 	}
 	return treeErr, prErr
+}
+
+// end settles a thread whose PR merged or closed, unless it went meanwhile, and cleans up after it when o says so.
+func (l *Lifecycle) end(ctx context.Context, id string, o outcome) {
+	if o.settle && l.sessions.Has(id) {
+		if err := l.sessions.Settle(id); err != nil {
+			fmt.Fprintf(os.Stderr, "agentos: settling thread %s after its PR: %v\n", id, err)
+		}
+	}
+	if o.auto {
+		l.autoCleanup(ctx, id)
+	}
 }
 
 // sharing are the targets on a branch named in only. A nil only is all of them.
