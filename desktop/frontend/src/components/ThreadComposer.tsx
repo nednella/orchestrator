@@ -80,7 +80,8 @@ export function ThreadComposer({ session, timeline, events, stopping, onStop, on
       try {
         await api.chatSend(id, text)
       } catch (err) {
-        if (latest.current.draft.text.trim() === '') update({ ...latest.current, draft: sent })
+        const now = latest.current.draft
+        update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, text) })
         throw err
       } finally {
         sending.current = false
