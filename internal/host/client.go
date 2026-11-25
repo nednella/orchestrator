@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -22,9 +23,13 @@ type Message struct {
 	Files []string
 }
 
-// SendMessage gives m to Claude and returns the id the host logged it under.
+// SendMessage gives m to Claude and returns the id the host logged it under. A host from before message ids sends the
+// text and drops the images, so a reply with no id is an error when m has images.
 func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
 	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files})
+	if err == nil && rep.ID == "" && len(m.Files) > 0 {
+		return "", errors.New("this session's host is too old for images")
+	}
 	return rep.ID, err
 }
 

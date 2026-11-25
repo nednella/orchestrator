@@ -1431,3 +1431,30 @@ func readFile(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+func TestImagesToAnOldHostAreAnError(t *testing.T) {
+	t.Parallel()
+	socket := filepath.Join(socketDir(t), "old.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			bufio.NewReader(conn).ReadBytes('\n')
+			fmt.Fprintln(conn, `{"ok":true,"error":""}`)
+			conn.Close()
+		}
+	}()
+	if _, err := SendMessage(ctxT(t), socket, Message{Text: "see", Files: []string{"dot.png"}}); err == nil || err.Error() != "this session's host is too old for images" {
+		t.Fatalf("send of an image = %v, want the host named too old", err)
+	}
+	if err := Send(ctxT(t), socket, "hi"); err != nil {
+		t.Fatalf("send of text = %v, want it taken", err)
+	}
+}
