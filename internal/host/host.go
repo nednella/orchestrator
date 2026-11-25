@@ -27,6 +27,7 @@ import (
 
 	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/prompts"
 )
@@ -1105,33 +1106,15 @@ func (h *host) rewindConversation(id, latest string) (string, error) {
 	return "", errors.New(cmp.Or(a.Error, "Claude did not rewind the conversation"))
 }
 
-// outside is the first of files that is not inside dir, "" when every one is. Each path is compared with its links
-// resolved as far as it exists, since a rewind may bring back a file that is gone.
+// outside is the first of files that is not inside dir, "" when every one is. A rewind may bring back a file that is
+// gone, so the check holds for paths that do not exist.
 func outside(files []string, dir string) string {
-	root := resolved(dir)
 	for _, f := range files {
-		rel, err := filepath.Rel(root, resolved(f))
-		if err != nil || !filepath.IsAbs(f) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if !filepath.IsAbs(f) || !folder.Inside(f, dir) {
 			return f
 		}
 	}
 	return ""
-}
-
-func resolved(path string) string {
-	path = filepath.Clean(path)
-	var gone []string
-	for {
-		if real, err := filepath.EvalSymlinks(path); err == nil {
-			return filepath.Join(append([]string{real}, gone...)...)
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return filepath.Join(append([]string{path}, gone...)...)
-		}
-		gone = append([]string{filepath.Base(path)}, gone...)
-		path = parent
-	}
 }
 
 // replied hands Claude's reply to the control request that waits on it; a reply nothing waits on is dropped.

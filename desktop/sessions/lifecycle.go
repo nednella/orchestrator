@@ -22,6 +22,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/term"
@@ -820,12 +821,6 @@ func parseWorktrees(out string) worktrees {
 
 func samePath(a, b string) bool { return realPath(a) == realPath(b) }
 
-// inside says whether path is dir or a folder inside it, also when either is gone.
-func inside(path, dir string) bool {
-	rel, err := filepath.Rel(canonicalPath(dir), canonicalPath(path))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
 func realPath(p string) string {
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		return r
@@ -1168,7 +1163,7 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string) string {
 		switch {
 		case path == "":
 			unknown = unknown || name.Project == key
-		case inside(path, worktree):
+		case folder.Inside(path, worktree):
 			return "a shell is open in this worktree"
 		}
 	}
@@ -1195,7 +1190,7 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	if err != nil {
 		return nil, fmt.Sprintf("git could not list the worktrees: %v", err)
 	}
-	if inside(dir, path) || trees.main != "" && inside(trees.main, path) {
+	if folder.Inside(dir, path) || trees.main != "" && folder.Inside(trees.main, path) {
 		return nil, fmt.Sprintf("%s holds the project's own checkout, which agentos never removes", path)
 	}
 	if reason := l.woke(t.id); reason != "" {
@@ -1261,7 +1256,7 @@ func (l *Lifecycle) worktreeLeft(ctx context.Context, dir, path string) bool {
 		return true
 	}
 	trees, err := l.worktrees(ctx, dir)
-	return err != nil || slices.ContainsFunc(trees.paths, func(p string) bool { return canonicalPath(p) == canonicalPath(path) })
+	return err != nil || slices.ContainsFunc(trees.paths, func(p string) bool { return folder.Canonical(p) == folder.Canonical(path) })
 }
 
 // settleSession settles the session's thread, closes its browser window and removes its temp folder. The thread

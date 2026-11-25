@@ -32,6 +32,7 @@ import (
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/project"
@@ -3403,7 +3404,7 @@ func (s *Sessions) usersOf(dir, except string, asleep bool) string {
 		if id == except {
 			continue
 		}
-		if cwd := s.cwds[id]; in.Path != "" && inside(in.Path, dir) || cwd != "" && inside(cwd, dir) {
+		if cwd := s.cwds[id]; in.Path != "" && folder.Inside(in.Path, dir) || cwd != "" && folder.Inside(cwd, dir) {
 			return cmp.Or(in.Title, defaultTitle)
 		}
 	}
@@ -3435,7 +3436,7 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	}
 	ctx := s.context()
 	w, made := s.made.Of(proj.Key(), id)
-	if !made || w.Removed != 0 || !inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
+	if !made || w.Removed != 0 || !folder.Inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
 		return "", false, "Files are rewound only in a worktree agentos made for this thread"
 	}
 	if user := s.usersOf(w.Path, id, false); user != "" {

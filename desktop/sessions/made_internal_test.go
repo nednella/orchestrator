@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/run"
+	"github.com/nednella/agentos/internal/folder"
 )
 
 var isolatedGit = []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"}
@@ -100,47 +101,47 @@ func TestMadeTreesRecord(t *testing.T) {
 			name:    "the newest record of a thread",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}, {Path: filepath.Join(trees, "b"), Thread: "p/t1"}},
 			thread:  "p/t1", path: filepath.Join(trees, "b"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "b")), Thread: "p/t1"},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "b")), Thread: "p/t1"},
 		},
 		{
 			name:    "the newest record at a path agentos used twice",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1", Removed: 9}, {Path: filepath.Join(trees, "a"), Thread: "p/t2"}},
 			thread:  "p/t2", path: filepath.Join(trees, "a"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t2"},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t2"},
 		},
 		{
 			name:    "a path found through a link",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			thread:  "p/t1", path: filepath.Join(link, "a"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t1"},
 		},
 		{
 			name:    "branch set",
 			records: []Made{{Path: filepath.Join(trees, "a"), Branch: "issue-7", Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.SetBranch("p", filepath.Join(trees, "a"), "issue-8") },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Branch: "issue-8", Thread: "p/t1"},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Branch: "issue-8", Thread: "p/t1"},
 		},
 		{
 			name:    "removed",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.Removed("p", filepath.Join(trees, "a"), at) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1", Removed: 5000},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t1", Removed: 5000},
 		},
 		{
 			name:    "restored",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1", Removed: 5000}},
 			change:  func(m *madeTrees) error { return m.Restored("p", filepath.Join(trees, "a")) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t1"},
 		},
 		{
 			name:    "a change at a path agentos never used",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.Removed("p", filepath.Join(trees, "elsewhere"), at) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want:    Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want:    Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t1"},
 			wantErr: true,
 		},
 	}
@@ -266,7 +267,7 @@ func TestEmptyThreadIsRefused(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(local, "p"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	record := `[{"path":` + strconv.Quote(canonicalPath(wt)) + `,"thread":""}]`
+	record := `[{"path":` + strconv.Quote(folder.Canonical(wt)) + `,"thread":""}]`
 	if err := os.WriteFile(filepath.Join(local, "p", "worktrees.json"), []byte(record), 0o600); err != nil {
 		t.Fatal(err)
 	}

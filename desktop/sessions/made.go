@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/agentos/internal/folder"
 )
 
 // markerFile, in a worktree's own git folder, holds the id of the thread agentos made the worktree
@@ -90,7 +91,7 @@ func (m *madeTrees) Add(key string, w Made) error {
 	if err != nil {
 		return err
 	}
-	w.Path = canonicalPath(w.Path)
+	w.Path = folder.Canonical(w.Path)
 	return m.save(key, append(list, w))
 }
 
@@ -101,7 +102,7 @@ func (m *madeTrees) Of(key, thread string) (Made, bool) {
 
 // At is the newest record of a worktree at path.
 func (m *madeTrees) At(key, path string) (Made, bool) {
-	path = canonicalPath(path)
+	path = folder.Canonical(path)
 	return m.newest(key, func(w Made) bool { return w.Path == path })
 }
 
@@ -159,7 +160,7 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 	if err != nil {
 		return err
 	}
-	canonical := canonicalPath(path)
+	canonical := folder.Canonical(path)
 	for i := len(list) - 1; i >= 0; i-- {
 		if list[i].Path == canonical {
 			list = append([]Made(nil), list...)
@@ -168,24 +169,6 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 		}
 	}
 	return fmt.Errorf("no worktree agentos made at %s", path)
-}
-
-// canonicalPath is path with every link resolved, also when its last parts are gone, as they are
-// once a worktree is removed: `/var/x/trees/a` and `/private/var/x/trees/a` are one path.
-func canonicalPath(path string) string {
-	path = filepath.Clean(path)
-	var gone []string
-	for {
-		if real, err := filepath.EvalSymlinks(path); err == nil {
-			return filepath.Join(append([]string{real}, gone...)...)
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return filepath.Join(append([]string{path}, gone...)...)
-		}
-		gone = append([]string{filepath.Base(path)}, gone...)
-		path = parent
-	}
 }
 
 // linkedGitDir is the worktree's own git folder, `<repo>/.git/worktrees/<name>`. The project

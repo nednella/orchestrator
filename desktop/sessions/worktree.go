@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/util"
@@ -214,7 +215,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	if err != nil {
 		return fmt.Errorf("listing the worktrees: %w", err)
 	}
-	if dir, ok := trees.byBranch[w.Branch]; ok && canonicalPath(dir) != w.Path {
+	if dir, ok := trees.byBranch[w.Branch]; ok && folder.Canonical(dir) != w.Path {
 		if _, err := os.Stat(dir); err != nil {
 			return staleCheckout(w.Branch, dir)
 		}
@@ -244,7 +245,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 // branches. git refuses to drop a locked entry.
 func (l *Lifecycle) dropEntry(ctx context.Context, dir string, trees worktrees, path string) error {
 	for _, listed := range append(slices.Collect(maps.Values(trees.byBranch)), trees.detached...) {
-		if canonicalPath(listed) != path {
+		if folder.Canonical(listed) != path {
 			continue
 		}
 		if _, err := l.git(ctx, dir, "worktree", "remove", listed); err != nil {
