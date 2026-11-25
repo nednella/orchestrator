@@ -3,10 +3,12 @@ import type { SessionView } from '../AgentosContext'
 import { agentsTabShown, useAgentsRunning } from '../chatAgents'
 import { shownView } from '../detailsTabs'
 import type { PanelContext } from '../panelViews'
+import { useThreadServers } from '../useThreadServers'
 import { AgentsTab } from './AgentsTab'
 import { BrowserTab } from './BrowserTab'
 import { EvidenceTab } from './EvidenceTab'
 import { PRTab } from './PRTab'
+import { ServersTab } from './ServersTab'
 import { ThreadFacts } from './ThreadFacts'
 
 type ThreadDetailsViewProps = { ctx: PanelContext }
@@ -14,6 +16,7 @@ type ThreadDetailsViewProps = { ctx: PanelContext }
 export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) {
   const { viewOf, setSessionView, browserStates, sessions } = useAgentos('viewOf', 'setSessionView', 'browserStates', 'sessions')
   const agentsRunning = useAgentsRunning(session?.id ?? '')
+  const { servers, refresh } = useThreadServers(session?.id ?? '', session !== undefined && session.state !== 'settled')
   if (!session) return null
   const withAgents = agentsTabShown(session.id, sessions)
   const view = shownView(viewOf(session.id), withAgents)
@@ -25,6 +28,7 @@ export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) 
     { id: 'browser', label: 'Browser', live: browserOpen },
     ...(withAgents ? [{ id: 'agents' as const, label: 'Agents', count: running }] : []),
   ]
+  if (servers.length > 0 || view === 'servers') tabs.push({ id: 'servers', label: 'Servers', count: servers.length })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -53,6 +57,7 @@ export function ThreadDetailsView({ ctx: { session } }: ThreadDetailsViewProps) 
         {view === 'evidence' && <EvidenceTab key={session.id} session={session} />}
         {view === 'browser' && <BrowserTab key={session.id} session={session} />}
         {view === 'agents' && <AgentsTab key={session.id} sessionId={session.id} />}
+        {view === 'servers' && <ServersTab key={session.id} session={session} servers={servers} refresh={refresh} />}
       </div>
     </div>
   )

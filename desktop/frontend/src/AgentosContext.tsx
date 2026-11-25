@@ -4,6 +4,7 @@ import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { agentsTabShown } from './chatAgents'
 import { answeredLate } from './chatQuestions'
 import { nextView } from './detailsTabs'
+import { serversTabShown } from './useThreadServers'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
@@ -21,7 +22,7 @@ export type Toast = {
   action?: { label: string; run(): void }
 }
 
-export type SessionView = 'pr' | 'evidence' | 'browser' | 'agents'
+export type SessionView = 'pr' | 'evidence' | 'browser' | 'agents' | 'servers'
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
@@ -816,7 +817,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       cycleSessionView(delta) {
         const id = selectedRef.current
         if (!id) return
-        const next = nextView(viewsRef.current[id] ?? 'pr', delta, agentsTabShown(id, sessionsRef.current))
+        const next = nextView(viewsRef.current[id] ?? 'pr', delta, agentsTabShown(id, sessionsRef.current), serversTabShown(id))
         setViews((map) => ({ ...map, [id]: next }))
       },
       async openBrowser(id, url) {

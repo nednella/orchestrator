@@ -63,6 +63,13 @@ export type Session = {
   memory: number
 }
 
+// One port a server the thread started listens on.
+export type Server = {
+  port: number
+  pid: number
+  command: string
+}
+
 export type Memory = {
   app: number
   browsers: number

@@ -4,7 +4,7 @@ import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { defaultPlace } from './place'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -455,6 +455,9 @@ export function createMock(params: URLSearchParams) {
     return s
   }
 
+  // The servers each thread started, by its id. They stop when the thread settles or is deleted, as the real ones do.
+  const servers = new Map<string, Server[]>()
+
   if (!flags.empty) {
     seed('#454 product page split', 454, 'working', [['working', 74], ['waiting', 52], ['working', 47], ['idle', 31], ['working', 12]])
     seed('#444 checkout route', 444, 'waiting', [['working', 96], ['idle', 70], ['working', 38], ['waiting', 4]])
@@ -469,6 +472,10 @@ export function createMock(params: URLSearchParams) {
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
     Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { hosted: false, detail: 'Ran in a terminal before chats' })
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
+    servers.set(byIssue(454).id, [
+      { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173' },
+      { port: 8787, pid: 48230, command: 'node server/api.js --watch' },
+    ])
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
       pr: pr(452, 'open', 'failing', { title: 'Move checkout to its own route', review: 'changes', comments: 4, newComments: 2, failedChecks: ['unit-tests', 'lint / eslint'], passedChecks: 3 }),
@@ -954,11 +961,22 @@ export function createMock(params: URLSearchParams) {
         chats.end(id, 'settle')
       }
       deleted.add(id)
+      servers.delete(id)
       sessions.splice(sessions.indexOf(s), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
     },
     OwnWorktree: async (id: string) => ownWorktree(find(id)),
+    Servers: async (id: string) => [...(servers.get(find(id).id) ?? [])].sort((a, b) => a.port - b.port),
+    StopServer: async (id: string, pid: number) => {
+      const list = servers.get(find(id).id) ?? []
+      if (!list.some((server) => server.pid === pid)) throw 'That server is not running'
+      servers.set(id, list.filter((server) => server.pid !== pid))
+    },
+    OpenServer: async (port: number) => {
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw `${port} is not a port`
+      window.open(`http://localhost:${port}`, '_blank')
+    },
     WakeThread: async (id: string) => {
       wake(find(id))
       return view(find(id))
@@ -984,6 +1002,7 @@ export function createMock(params: URLSearchParams) {
       if (s.state === 'settled') throw `Thread ${id} is asleep`
       emit('term:exit', { id })
       chats.end(id, 'settle')
+      servers.delete(id)
       setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
     },
