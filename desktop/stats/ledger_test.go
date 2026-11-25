@@ -257,6 +257,7 @@ func TestLedgerPerDay(t *testing.T) {
 		{"alpha", 7, activity.Prompt, 0, 0},
 		{"alpha", 13, activity.Worked, 500, 0},
 		{"alpha", 14, activity.Prompt, 0, 0},
+		{"beta", -1, activity.Prompt, 0, 0},
 	} {
 		log.Record(r.key, activity.Event{At: at(r.ago), Kind: r.kind, Session: r.key + "/aaaaaaaa", Ms: r.ms, Tokens: usage.Tokens{Input: 1, Cost: r.cost}})
 	}
@@ -270,14 +271,21 @@ func TestLedgerPerDay(t *testing.T) {
 		return led
 	}
 
-	t.Run("a day each, every project summed", func(t *testing.T) {
+	t.Run("a day each, every project summed, a day after today in today", func(t *testing.T) {
 		led := build(7, "")
+		sum := 0
+		for _, f := range led.PerDay {
+			sum += f.Prompts
+		}
+		if sum != led.Totals.Prompts {
+			t.Errorf("the bars add up to %d prompts, the total is %d", sum, led.Totals.Prompts)
+		}
 		want := []DayFigures{
 			{Day: day(6), Prompts: 1, WorkMs: 3000},
 			{Day: day(5)}, {Day: day(4)}, {Day: day(3)},
 			{Day: day(2), Prompts: 1, Cost: 0.25},
 			{Day: day(1)},
-			{Day: day(0), Prompts: 2, WorkMs: 1000, Cost: 1.5},
+			{Day: day(0), Prompts: 3, WorkMs: 1000, Cost: 1.5},
 		}
 		if !slices.Equal(led.PerDay, want) {
 			t.Errorf("per day = %+v, want %+v", led.PerDay, want)
@@ -293,7 +301,7 @@ func TestLedgerPerDay(t *testing.T) {
 
 	t.Run("one project", func(t *testing.T) {
 		led := build(1, "beta")
-		if want := []DayFigures{{Day: day(0), Prompts: 1, Cost: 1.5}}; !slices.Equal(led.PerDay, want) {
+		if want := []DayFigures{{Day: day(0), Prompts: 2, Cost: 1.5}}; !slices.Equal(led.PerDay, want) {
 			t.Errorf("per day = %+v, want %+v", led.PerDay, want)
 		}
 		if led.Previous != (LedgerRow{}) {

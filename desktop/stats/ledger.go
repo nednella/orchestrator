@@ -111,7 +111,7 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 	days = max(days, 0)
 	y, m, d := now.Date()
 	date := func(day int) string { return time.Date(y, m, day, 0, 0, 0, 0, now.Location()).Format(time.DateOnly) }
-	from, before := "", ""
+	today, from, before := date(d), "", ""
 	if days > 0 {
 		from, before = date(d-(days-1)), date(d-(2*days-1))
 	}
@@ -134,10 +134,12 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 				for _, n := range v.ClosedIssues {
 					closed[n] = true
 				}
-				if figures[day] == nil {
-					figures[day] = &dayFigures{}
+				// A day after today, from a Mac whose clock runs ahead, counts in today's bar, so the bars add up.
+				bar := min(day, today)
+				if figures[bar] == nil {
+					figures[bar] = &dayFigures{}
 				}
-				figures[day].add(v)
+				figures[bar].add(v)
 			case day >= before:
 				prev.add(v)
 				for _, n := range v.ClosedIssues {
@@ -154,9 +156,9 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 		led.Projects = append(led.Projects, sum.row(p.Name))
 		led.Work = append(led.Work, sum.spending.work(p.Name)...)
 	}
-	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	last := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 	start, err := time.ParseInLocation(time.DateOnly, cmp.Or(from, led.Since), now.Location())
-	for t := start; err == nil && !t.After(today); t = t.AddDate(0, 0, 1) {
+	for t := start; err == nil && !t.After(last); t = t.AddDate(0, 0, 1) {
 		day := t.Format(time.DateOnly)
 		led.PerDay = append(led.PerDay, figures[day].of(day))
 	}
