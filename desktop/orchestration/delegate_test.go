@@ -1,6 +1,7 @@
 package orchestration_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -449,5 +450,57 @@ func TestParentLinkSurvivesARestart(t *testing.T) {
 	}
 	if got := fresh.Sessions().AccessOf(running.ID); got != session.Supervised {
 		t.Errorf("after a restart the child's access is %q", got)
+	}
+}
+
+func TestChildInTheParentsFolderLeavesTheParentsBranch(t *testing.T) {
+	h := apptest.New(t)
+	repoFixture(t, h)
+	parent := newThread(t, h, "Fix the login")
+	c := mustDelegate(t, h, parent.ID, `{"task":"read the login code","where":"folder","access":"supervised"}`)
+	gitIn(t, parent.Worktree, "checkout", "-b", "login-v2")
+	if err := h.Sessions().Track(parent.ID, "login-v2"); err != nil {
+		t.Fatalf("the parent tracks the branch its worktree is on: %v; a child in its folder must not hold it", err)
+	}
+	if r := row(t, h, parent.ID); r.Branch != "login-v2" {
+		t.Errorf("the parent's branch is %q, want login-v2", r.Branch)
+	}
+	if r := row(t, h, c.ID); r.Branch != "" {
+		t.Errorf("the child's branch is %q, want none", r.Branch)
+	}
+}
+
+func TestChildInTheParentsFolderTracksNoBranch(t *testing.T) {
+	h := apptest.New(t)
+	repoFixture(t, h)
+	parent := newThread(t, h, "Fix the login")
+	inFolder := mustDelegate(t, h, parent.ID, `{"task":"read the login code","where":"folder","access":"supervised"}`)
+	want := "session " + inFolder.ID + " is a child in its parent's folder, which works on no branch of its own"
+	for _, branch := range []string{"side-work", parent.Branch} {
+		if err := h.Sessions().Track(inFolder.ID, branch); err == nil || err.Error() != want {
+			t.Errorf("the child in its parent's folder tracks %s: %v, want %q", branch, err, want)
+		}
+	}
+	inTree := mustDelegate(t, h, parent.ID, `{"task":"test the login","title":"Test the login","where":"worktree"}`)
+	if err := h.Sessions().Track(inTree.ID, "test-the-login"); err != nil {
+		t.Errorf("a child in its own worktree tracks its branch: %v", err)
+	}
+}
+
+func TestCancelledDelegateStartsNoChild(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "parent")
+	before := tmuxSessions(t, h)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := h.Sessions().CreateChild(ctx, sessions.ChildOptions{Parent: parent.ID, Task: "too late", Access: session.Read, Where: sessions.WhereFolder})
+	if err == nil || !strings.Contains(err.Error(), "no child started") {
+		t.Errorf("a cancelled delegate: %v, want no child started", err)
+	}
+	if after := tmuxSessions(t, h); !slices.Equal(after, before) {
+		t.Errorf("tmux sessions = %q, want %q", after, before)
+	}
+	if got := h.Sessions().ChildrenOf(parent.ID); len(got) != 0 {
+		t.Errorf("ChildrenOf = %q, want none", got)
 	}
 }

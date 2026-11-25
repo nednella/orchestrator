@@ -38,7 +38,7 @@ type started struct {
 
 // delegate starts a child of the caller for the task the input gives. The child gets the caller's access unless the
 // input asks for less, and works in the caller's folder when it is Read, else in a worktree of its own.
-func (c *Commands) delegate(_ context.Context, caller string, req ctl.Request) (string, error) {
+func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request) (string, error) {
 	var in delegateInput
 	if err := decode(req.Opts["input"], &in); err != nil {
 		return "", err
@@ -57,7 +57,7 @@ func (c *Commands) delegate(_ context.Context, caller string, req ctl.Request) (
 	if in.Project != "" && !c.isOwnProject(caller, in.Project) {
 		return "", errors.New("Delegating to another project is not supported yet")
 	}
-	child, err := c.threads.CreateChild(sessions.ChildOptions{
+	child, err := c.threads.CreateChild(ctx, sessions.ChildOptions{
 		Parent: caller, Task: in.Task, Title: in.Title, Access: access,
 		Model: project.Model{Model: in.Model, Effort: in.Effort}, Where: where, Issue: in.Issue,
 	})

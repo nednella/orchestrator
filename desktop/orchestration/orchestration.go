@@ -16,7 +16,7 @@ import (
 
 // Threads is what the tools use of the threads.
 type Threads interface {
-	CreateChild(o sessions.ChildOptions) (sessions.Session, error)
+	CreateChild(ctx context.Context, o sessions.ChildOptions) (sessions.Session, error)
 	AccessOf(id string) session.Access
 	Projects() []sessions.Project
 	ChatOf(id string) (sessions.Chat, error)

@@ -1354,7 +1354,8 @@ func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
 }
 
 // threadIn is the number of a thread of the project other than except whose folder, or the worktree agentos made for
-// it, is dir, live or settled, and whether there is one. A fork runs in its thread's folder and is left out. It takes mu.
+// it, is dir, live or settled, and whether there is one. A fork and a child in its parent's folder run in another
+// thread's folder and are left out. It takes mu.
 func (s *Sessions) threadIn(key, dir, except string) (int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1364,7 +1365,7 @@ func (s *Sessions) threadIn(key, dir, except string) (int, bool) {
 	}
 	for _, in := range infos {
 		id := in.Name.String()
-		if in.Name.Project != key || in.Fork != "" || id == except {
+		if in.Name.Project != key || inOthersFolder(in) || id == except {
 			continue
 		}
 		if in.Path != "" && samePath(in.Path, dir) {
@@ -1649,12 +1650,12 @@ type ChildOptions struct {
 // message before it returns, so the child's chat holds the task once the parent has its id. A child never gets more
 // access than its parent has. A parent too many delegations deep, or with too many children running, starts none, and
 // so does a parent that asks for an issue that has a thread.
-func (s *Sessions) CreateChild(o ChildOptions) (Session, error) {
+func (s *Sessions) CreateChild(ctx context.Context, o ChildOptions) (Session, error) {
 	task := strings.TrimSpace(o.Task)
 	if task == "" {
 		return Session{}, errors.New("A child needs a task")
 	}
-	view, parentTitle, err := s.startChild(o)
+	view, parentTitle, err := s.startChild(ctx, o)
 	if err != nil {
 		return Session{}, err
 	}
@@ -1666,9 +1667,10 @@ func (s *Sessions) CreateChild(o ChildOptions) (Session, error) {
 	return view, nil
 }
 
-// startChild checks that the parent may start the child o asks for, then starts it, and returns it and its parent's
-// title. It holds childMu, so two delegations at once cannot both pass the limits.
-func (s *Sessions) startChild(o ChildOptions) (Session, string, error) {
+// startChild checks that the parent may start the child o asks for, then starts it unless ctx has ended, and returns it
+// and its parent's title. It holds childMu, so two delegations at once cannot both pass the limits, and the parent's
+// access cannot change between the check and the start.
+func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, string, error) {
 	p, err := s.Provider()
 	if err != nil {
 		return Session{}, "", err
@@ -1736,12 +1738,18 @@ func (s *Sessions) startChild(o ChildOptions) (Session, string, error) {
 	}
 	title := cmp.Or(strings.TrimSpace(o.Title), titleFromPrompt(o.Task))
 	parentTitle := cmp.Or(parent.Title, defaultTitle)
+	if err := ctx.Err(); err != nil {
+		return Session{}, "", fmt.Errorf("The call ended, so no child started: %w", err)
+	}
 	if o.Where != WhereIssue {
 		view, err := s.createIn(proj, title, "", false, 0, "", "", "", forkStart{}, start)
 		return view, parentTitle, err
 	}
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Session{}, "", fmt.Errorf("The call ended, so no child started: %w", err)
+	}
 	thread := s.liveIssueSession(proj.Key(), o.Issue)
 	if thread == "" {
 		thread, _ = s.settledIssueThread(proj.Key(), o.Issue)
@@ -1766,6 +1774,10 @@ func (s *Sessions) headOf(proj project.Project, dir string) (string, error) {
 	}
 	return head, nil
 }
+
+// inOthersFolder says whether the thread runs in another thread's folder with no branch of its own: a fork, or a child
+// that delegate started in its parent's folder.
+func inOthersFolder(in term.Info) bool { return in.Fork != "" || in.Parent != "" && in.Branch == "" }
 
 // liveInfo is the live thread id's info, and whether it runs under a host. It needs mu.
 func (s *Sessions) liveInfo(id string) (term.Info, bool) {
@@ -2610,6 +2622,9 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 	if err != nil {
 		return err
 	}
+	// A delegation checks the parent's access under childMu and starts the child under it.
+	s.childMu.Lock()
+	defer s.childMu.Unlock()
 	if name.IsShell() {
 		return errNotSession
 	}
@@ -3107,6 +3122,8 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 		return proj, fmt.Errorf("session %q is not running", id)
 	case in.Fork != "":
 		return proj, fmt.Errorf("session %s is a fork, which works on no branch of its own", id)
+	case inOthersFolder(in):
+		return proj, fmt.Errorf("session %s is a child in its parent's folder, which works on no branch of its own", id)
 	case in.Access == session.Read:
 		return proj, errors.New("A Read thread works on no branch")
 	}
