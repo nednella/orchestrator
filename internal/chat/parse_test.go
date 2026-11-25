@@ -140,9 +140,85 @@ func TestParseRejectsBrokenJSON(t *testing.T) {
 	}
 }
 
-func TestPersistedSkipsOnlyDeltas(t *testing.T) {
-	if (Event{Kind: KindDelta}).Persisted() || !(Event{Kind: KindMessage}).Persisted() {
-		t.Error("only a delta is not persisted")
+func TestPersistedSkipsWhatOnlyStreams(t *testing.T) {
+	for _, tt := range []struct {
+		e    Event
+		want bool
+	}{
+		{Event{Kind: KindDelta, Text: "a"}, false},
+		{Event{Kind: KindThinking, Text: "a"}, false},
+		{Event{Kind: KindThought}, false},
+		{Event{Kind: KindThought, Text: "a"}, true},
+		{Event{Kind: KindMessage, Text: "a"}, true},
+	} {
+		if got := tt.e.Persisted(); got != tt.want {
+			t.Errorf("%+v: Persisted() = %v, want %v", tt.e, got, tt.want)
+		}
+	}
+}
+
+func TestParseThinkingStreamsThenLogsTheThought(t *testing.T) {
+	events := parseFile(t, "thinking.jsonl")
+	var thoughts []Event
+	streamed := map[string]*strings.Builder{}
+	ended := map[string]bool{}
+	for _, e := range events {
+		switch e.Kind {
+		case KindThinking:
+			if ended[e.ID] {
+				t.Errorf("block %s streams after its thought", e.ID)
+			}
+			if streamed[e.ID] == nil {
+				if e.Text != "" {
+					t.Errorf("block %s streamed %q before its start", e.ID, e.Text)
+				}
+				streamed[e.ID] = &strings.Builder{}
+			}
+			streamed[e.ID].WriteString(e.Text)
+		case KindThought:
+			thoughts = append(thoughts, e)
+			ended[e.ID] = true
+		case KindDelta:
+			if !ended[e.ID] {
+				t.Errorf("message %s streams its reply before its thought", e.ID)
+			}
+		}
+	}
+	if len(thoughts) != 2 || thoughts[0].ID == thoughts[1].ID {
+		t.Fatalf("want a thought for each of the two messages, got %+v", thoughts)
+	}
+	for _, th := range thoughts {
+		if th.Text == "" || streamed[th.ID] == nil || th.Text != streamed[th.ID].String() {
+			t.Errorf("thought %s is %q, its stream %v", th.ID, th.Text, streamed[th.ID])
+		}
+		if !th.Persisted() {
+			t.Errorf("thought %s is not logged", th.ID)
+		}
+	}
+	if !strings.HasPrefix(thoughts[0].Text, "I need to read notes.txt") {
+		t.Errorf("first thought %q", thoughts[0].Text)
+	}
+}
+
+func TestParseHiddenThinkingOnlyStartsAndEnds(t *testing.T) {
+	var events []Event
+	for _, in := range []string{
+		`{"type":"stream_event","api_message_id":"m","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}}`,
+		`{"type":"stream_event","api_message_id":"m","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"","estimated_tokens":50}}}`,
+		`{"type":"stream_event","api_message_id":"m","event":{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"c2ln"}}}`,
+		`{"type":"assistant","uuid":"u","message":{"id":"m","content":[{"type":"thinking","thinking":"","signature":"c2ln"}]}}`,
+		`{"type":"stream_event","api_message_id":"m","event":{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}}`,
+		`{"type":"assistant","uuid":"u","message":{"id":"m","content":[{"type":"redacted_thinking","data":"x"}]}}`,
+	} {
+		evs, err := Parse([]byte(in))
+		if err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		events = append(events, evs...)
+	}
+	want := []Event{{Kind: KindThinking, ID: "m"}, {Kind: KindThought, ID: "m"}}
+	if !slices.EqualFunc(events, want, func(a, b Event) bool { return a.Kind == b.Kind && a.ID == b.ID && a.Text == b.Text }) {
+		t.Errorf("got %+v, want %+v", events, want)
 	}
 }
 

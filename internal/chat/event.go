@@ -23,6 +23,10 @@ const (
 	KindCommands   Kind = "commands"
 	// KindCompact is Claude compacting the conversation: a resume cannot reach a message from before it.
 	KindCompact Kind = "compact"
+	// KindThinking is a thinking block starting, with no Text, or a piece of its text as it streams; it is never logged.
+	KindThinking Kind = "thinking"
+	// KindThought is a thinking block that has ended, with its whole text.
+	KindThought Kind = "thought"
 	// KindEcho is claude taking a user message in; the host consumes it and never logs it.
 	KindEcho Kind = "echo"
 	// KindStillQueued is claude's reply to the interrupt request ID: Input lists the uuids of the user messages it
@@ -63,7 +67,14 @@ type Event struct {
 	Stop string `json:"stop,omitempty"`
 }
 
-// Persisted reports whether the event belongs in the log; a delta only feeds the live view.
+// Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and
+// so does a thought with no text, as Claude sends when it does not show its thinking: it only ends the live block.
 func (e Event) Persisted() bool {
-	return e.Kind != KindDelta
+	switch e.Kind {
+	case KindDelta, KindThinking:
+		return false
+	case KindThought:
+		return e.Text != ""
+	}
+	return true
 }

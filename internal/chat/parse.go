@@ -27,6 +27,7 @@ type line struct {
 type block struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
@@ -74,19 +75,31 @@ func parseStreamEvent(l line) ([]Event, error) {
 		return nil, nil
 	}
 	var ev struct {
-		Type  string `json:"type"`
-		Delta struct {
+		Type         string `json:"type"`
+		ContentBlock struct {
 			Type string `json:"type"`
-			Text string `json:"text"`
+		} `json:"content_block"`
+		Delta struct {
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			Thinking string `json:"thinking"`
 		} `json:"delta"`
 	}
 	if err := json.Unmarshal(l.Event, &ev); err != nil {
 		return nil, fmt.Errorf("parse stream event: %w", err)
 	}
-	if ev.Type != "content_block_delta" || ev.Delta.Type != "text_delta" {
+	switch {
+	case ev.Type == "content_block_start" && ev.ContentBlock.Type == "thinking":
+		return []Event{{Kind: KindThinking, ID: l.APIMessageID}}, nil
+	case ev.Type != "content_block_delta":
 		return nil, nil
+	case ev.Delta.Type == "text_delta":
+		return []Event{{Kind: KindDelta, ID: l.APIMessageID, Text: ev.Delta.Text}}, nil
+	// A thinking block Claude does not show streams deltas with no text, which say nothing.
+	case ev.Delta.Type == "thinking_delta" && ev.Delta.Thinking != "":
+		return []Event{{Kind: KindThinking, ID: l.APIMessageID, Text: ev.Delta.Thinking}}, nil
 	}
-	return []Event{{Kind: KindDelta, ID: l.APIMessageID, Text: ev.Delta.Text}}, nil
+	return nil, nil
 }
 
 func isArray(raw json.RawMessage) bool {
@@ -119,6 +132,8 @@ func parseAssistant(l line) ([]Event, error) {
 	var events []Event
 	for _, b := range content {
 		switch b.Type {
+		case "thinking":
+			events = append(events, Event{Kind: KindThought, ID: id, Text: b.Thinking})
 		case "text":
 			events = append(events, Event{Kind: KindMessage, ID: id, UUID: l.UUID, Text: b.Text})
 		case "tool_use":
