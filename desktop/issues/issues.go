@@ -27,8 +27,7 @@ type Sessions interface {
 	Current() project.Project
 	IssueSessions() map[int]string
 	List() []sessions.Session
-	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover, agent string, o sessions.StartOptions) (view sessions.Session, created bool, err error)
-	Provider(name string) agent.Provider
+	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, created bool, err error)
 }
 
 // Issue is a GitHub issue placed in a section of the queue.
@@ -44,7 +43,7 @@ type Issue struct {
 	Author    string   `json:"author"`
 	Assignees []string `json:"assignees"`
 	Labels    []string `json:"labels"`
-	Ignored   []string `json:"ignored"` // why each model: and effort: label the default action's provider rejects is skipped
+	Ignored   []string `json:"ignored"` // why each model: and effort: label claude rejects is skipped
 	CreatedAt int64    `json:"createdAt"`
 	UpdatedAt int64    `json:"updatedAt"`
 }
@@ -220,10 +219,7 @@ func (i *Issues) parseIssues(data []byte, proj project.Project) ([]Issue, error)
 		}
 		at, section := proj.Section(labels)
 		action, _ := pickAction(section, "", proj.Branch != "")
-		valid := func(model, effort string) error {
-			return i.sessions.Provider(project.PickAgent(action, labels)).ValidModel(model, effort)
-		}
-		_, ignored := project.Pick(action, labels, valid)
+		_, ignored := project.Pick(action, labels, agent.Claude{}.ValidModel)
 		if ignored == nil {
 			ignored = []string{}
 		}
@@ -290,10 +286,10 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 }
 
 // Start opens a session for the issue with the action of its section that has the name given, or the
-// section's default action when action is "", with the agent named, or the default for "". An issue that
-// already has a live session gets that session back instead of a second agent, and created is false. An
-// issue not in the cached list may be new: the list is read again once.
-func (i *Issues) Start(ctx context.Context, number int, action, handover, agent string, o sessions.StartOptions) (view sessions.Session, created bool, err error) {
+// section's default action when action is "". An issue that already has a live session gets that session back
+// instead of a second agent, and created is false. An issue not in the cached list may be new: the list is read
+// again once.
+func (i *Issues) Start(ctx context.Context, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, created bool, err error) {
 	proj := i.sessions.Current()
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)
@@ -313,7 +309,7 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover, agent 
 		if !ok {
 			return sessions.Session{}, false, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
-		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, agent, o)
+		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
 	}
 	return sessions.Session{}, false, fmt.Errorf("issue #%d is not open in this project", number)
 }

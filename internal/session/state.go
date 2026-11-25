@@ -46,7 +46,6 @@ type Identity struct {
 	Action  string `json:"action,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`
-	Agent   string `json:"agent,omitempty"` // the provider, or the plain command, the session was started with
 	Path    string `json:"path,omitempty"`
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
 	Created int64  `json:"created,omitempty"` // unix ms

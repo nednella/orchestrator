@@ -12,12 +12,11 @@ import { TypeMark } from './TypeMark'
 type IssueRowProps = { issue: Issue; drag: IssueDrag; onRead(): void }
 
 export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
-  const { settings, select } = useAgentos('settings', 'select')
+  const { select } = useAgentos('select')
   const session = useAgentosSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
   const chat = useAgentosSelector((a) => a.projectSessions.find((s) => s.chat && !s.forkOf && s.issue === issue.number))
   const [menuOpen, setMenuOpen] = useState(false)
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
-  const agent = labelled('agent')
 
   return (
     <div
@@ -44,7 +43,7 @@ export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
       </button>
       <div className="flex min-w-0 items-center gap-2.5 pl-11 text-small text-dim empty:hidden">
         {issue.type && <TypeMark type={issue.type} named />}
-        <ModelTag agent={agent === settings.agent ? '' : agent} model={labelled('model')} effort={labelled('effort')} problem={issue.ignored.join('\n')} className="min-w-0 truncate" />
+        <ModelTag model={labelled('model')} effort={labelled('effort')} problem={issue.ignored.join('\n')} className="min-w-0 truncate" />
         {chat && (
           <button className="flex flex-none items-center" title={`Open chat ${chat.n}`} onClick={() => select(chat.id)}>
             <SessionMark session={chat} />

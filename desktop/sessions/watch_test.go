@@ -420,7 +420,7 @@ func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
 	if err := h.KillSession(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", "", sessions.StartOptions{})
+	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", sessions.StartOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,7 +604,7 @@ func TestAClaudeSessionWithoutAHostGetsItsWakeTyped(t *testing.T) {
 	// A Claude session from a release before the host: its agent runs in its pane, and it has no hosted tag.
 	id := "main/aaaaaaaa"
 	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "bash", "--norc", "--noprofile")
-	tmuxRun(t, h, "set-option", "-t", id, "@agentos-agent", "claude", ";", "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
+	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
 	h.Sessions().Refresh()
 	eventually(t, "the shell's prompt", func() bool { return strings.HasSuffix(strings.TrimSpace(h.Pane(t, id)), "$") })
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))

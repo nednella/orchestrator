@@ -71,7 +71,7 @@ func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
 	}
 }
 
-func TestPlainSessionGetsNoModelFlags(t *testing.T) {
+func TestSessionWithoutAnIssueGetsNoModelFlags(t *testing.T) {
 	h := apptest.New(t)
 	s, err := h.NewSession("plain", "")
 	if err != nil {
@@ -97,7 +97,7 @@ func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 		start         func() (sessions.Session, error)
 		model, effort string
 	}{
-		{"a plain session", func() (sessions.Session, error) { return h.NewSession("plain", "") }, "sonnet", "low"},
+		{"a session with no issue", func() (sessions.Session, error) { return h.NewSession("plain", "") }, "sonnet", "low"},
 		{"the action's model wins", func() (sessions.Session, error) { return h.StartIssueWith(8, "") }, "opus", "low"},
 		{"labels win", func() (sessions.Session, error) { return h.StartIssueWith(12, "") }, "haiku", "high"},
 	}
@@ -137,17 +137,6 @@ func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
 		ended, ok := again.Session(s.ID)
 		return ok && ended.State == "ended" && ended.Model == "opus"
 	})
-}
-
-func TestAnotherAgentIsNotGivenAModel(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
-	s, err := h.StartIssue(8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.Model != "" || s.Effort != "" {
-		t.Errorf("a bash session claims %q %q", s.Model, s.Effort)
-	}
 }
 
 func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {

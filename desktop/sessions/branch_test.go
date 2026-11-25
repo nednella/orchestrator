@@ -13,9 +13,9 @@ import (
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
-func plainSession(h *apptest.Harness, t *testing.T) sessions.Session {
+func sessionWithoutIssue(h *apptest.Harness, t *testing.T) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("my work", "", false, 0, "")
+	s, err := h.Sessions().Create("my work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func hasPR(h *apptest.Harness, id string) func() bool {
 func TestPRIsFoundWhenTheTurnEnds(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	madeBranch(h, t, s)
 	worksIn(h, t, s, h.Dir)
 	eventually(t, "the branch", func() bool { got, _ := h.Session(s.ID); return got.Branch == "my-fix" })
@@ -77,7 +77,7 @@ func TestPRIsFoundWhenTheTurnEnds(t *testing.T) {
 func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	madeBranch(h, t, s)
 	worksIn(h, t, s, h.Dir)
 	eventually(t, "the lookup of the turn", func() bool { return h.GH.Calls("pr list") > 0 })
@@ -93,10 +93,10 @@ func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
 	}
 }
 
-func TestPlainSessionFindsItsPR(t *testing.T) {
+func TestSessionWithoutAnIssueFindsItsPR(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	madeBranch(h, t, s)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 
@@ -119,10 +119,10 @@ func TestPlainSessionFindsItsPR(t *testing.T) {
 	}
 }
 
-func TestPlainSessionOnMainHasNoPR(t *testing.T) {
+func TestSessionWithoutAnIssueOnMainHasNoPR(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 
 	worksIn(h, t, s, h.Dir)
@@ -135,10 +135,10 @@ func TestPlainSessionOnMainHasNoPR(t *testing.T) {
 	}
 }
 
-func TestPlainSessionCleanupCommandRunsInTheProjectFolder(t *testing.T) {
+func TestSessionWithoutAnIssueCleanupCommandRunsInTheProjectFolder(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git -C {dir} switch main && git branch -D {branch}"})
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	madeBranch(h, t, s)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	worksIn(h, t, s, h.Dir)
@@ -163,10 +163,10 @@ func TestPlainSessionCleanupCommandRunsInTheProjectFolder(t *testing.T) {
 	}
 }
 
-func TestPlainSessionCleanupBlockedByChangesInTheProjectFolder(t *testing.T) {
+func TestSessionWithoutAnIssueCleanupBlockedByChangesInTheProjectFolder(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	madeBranch(h, t, s)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	worksIn(h, t, s, h.Dir)
@@ -187,13 +187,13 @@ func TestPlainSessionCleanupBlockedByChangesInTheProjectFolder(t *testing.T) {
 	}
 }
 
-func TestPlainSessionCleanupRemovesItsWorktree(t *testing.T) {
+func TestSessionWithoutAnIssueCleanupRemovesItsWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	wt := filepath.Join(h.Dir, "trees", "my-fix")
 	gitIn(t, h.Dir, "worktree", "add", "-b", "my-fix", wt)
 	gitIn(t, wt, "push", "-u", "origin", "my-fix")
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	worksIn(h, t, s, wt)
 	eventually(t, "the PR", hasPR(h, s.ID))
@@ -215,7 +215,7 @@ func TestSessionReportsItsBranch(t *testing.T) {
 	repoFixture(t, h)
 	ownBranch(t, h.Dir)
 	gitIn(t, h.Dir, "checkout", "main")
-	s := plainSession(h, t)
+	s := sessionWithoutIssue(h, t)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 
 	if resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID}); resp.OK {
@@ -242,7 +242,7 @@ func TestIssueSessionWithoutBranchPatternFollowsItsFolder(t *testing.T) {
 	repoFixture(t, h)
 	ownBranch(t, h.Dir)
 	gitIn(t, h.Dir, "checkout", "main")
-	s, err := h.Sessions().Create("#5 work", "", false, 5, "")
+	s, err := h.Sessions().Create("#5 work", "", false, 5)
 	if err != nil {
 		t.Fatal(err)
 	}

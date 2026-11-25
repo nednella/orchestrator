@@ -6,7 +6,6 @@
 
 ```yaml
 data_dir: ~/Library/Mobile Documents/com~apple~CloudDocs/agentos   # optional; default ~/.local/share/agentos. The settings panel writes it; the app reads it when it starts
-agent_command: claude          # what a new session runs unless --agent names a provider: a provider's name (claude, the default, with hooks) or any command, which runs plain. The settings panel writes it; the next session uses it
 keep_mac_awake: true           # stop the Mac idle-sleeping while a session works; a project may set its own. The settings panel writes it
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
 app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
@@ -41,7 +40,7 @@ projects:
 
 A session that works on more than one branch is cleaned up a branch at a time. When the PR of a branch it moved on from merges or closes, the command runs for that branch only and the session keeps working; `session_cleanup_mode` decides as for any PR. When the PR of its newest branch merges or closes, its other branches and the session go too, unless one of those branches still has an open PR.
 
-The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A Claude session gets this text as a message through its host. Text the app puts on another agent's prompt without sending, such as a pull request action's sentence, is sent to a Claude session too.
+The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
 
 ### Queue sections and actions
 
@@ -78,7 +77,7 @@ queue_sections:
 - An issue goes in the first section it matches: it has any of the section's `labels`, or the section's `labels` is empty and the issue has none, or the section's `labels` holds `"*"`, which matches every issue.
 - So a `"*"` section placed last takes every issue the sections above it did not. A section after it would never be reached, so a config with one does not load.
 - An issue no section matches goes under one folded row below the last section, `<n> more issues match no section`, with the `Start` action. A last `"*"` section is only needed to give those issues a name or other actions.
-- In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`. The `Start` action names the branch when the project sets one. An empty `command` starts the agent with nothing typed. `agent`, `model` and `effort` are optional: `agent` is a provider's name, `claude`, and a config that names another does not load. An action's `model` and `effort` are checked by its provider, else by the one `agent_command` names, as below; a config with a value that provider would not take does not load.
+- In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`. The `Start` action names the branch when the project sets one. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
 - `kind` is `task` (the default) or `chat`. A chat action starts a read-only chat for the issue: it gets `AGENTOS_ISSUE`, but no branch, no pull request commands and no clean-up. An issue can have one live task and one live chat; starting an action of a kind that already runs on the issue opens that session. The queue row links to the task.
 - A session started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
 - The first action of a section is its default. A section needs a name, an action needs a name, and each is unique in its list; a config that breaks this does not load.
@@ -90,25 +89,25 @@ queue_sections:
 
 The old `lanes`, `commands`, `models`, `session_model` and `session_effort` keys are gone. They are not read, and the app removes `session_model` and `session_effort` from the file the next time it saves a setting.
 
+The old `agent_command`, an action's `agent` and an issue's `agent:` labels are ignored: a config or an issue that has them still loads, and every thread runs `claude`.
+
 ### How a session picks its model
 
-Only the `claude` provider gets `--model` and `--effort`; a plain command runs as configured. The choice comes from the first of these that sets a value, model and effort each on their own:
+claude gets `--model` and `--effort` from the first of these that sets a value, model and effort each on their own:
 
-1. the issue's `model:<x>` or `effort:<y>` label (a value the provider would not accept is ignored, and the queue row shows the label in red, with the reason when you point at it);
+1. the issue's `model:<x>` or `effort:<y>` label (a value claude would not accept is ignored, and the queue row shows the label in red, with the reason when you point at it);
 2. the action's `model` and `effort`;
 3. the agent's own settings, read when the session starts. For claude: `model`, and the effort in `modelSettings.<model>.effortLevel` for the model chosen, else `effortLevel`, from the project folder's `.claude/settings.local.json`, then its `.claude/settings.json`, then `settings.json` in `$CLAUDE_CONFIG_DIR` or `~/.claude`.
 
-Each provider says which models it takes and which efforts each model takes. claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` and `opusplan`, and any full id that starts with `claude-`, each with or without `[1m]`, at an effort of `low`, `medium`, `high`, `xhigh` or `max`. claude has no command that lists its models, so the aliases are fixed in the app and a full id is taken without a list. A plain command takes anything, and gets none of it.
+claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` and `opusplan`, and any full id that starts with `claude-`, each with or without `[1m]`, at an effort of `low`, `medium`, `high`, `xhigh` or `max`. claude has no command that lists its models, so the aliases are fixed in the app and a full id is taken without a list.
 
 A new session, or one started from a note, has no action and no labels. When nothing sets a value, no flag is passed and the agent uses its own default.
 
 The row shows that choice until the agent's first turn. From then on it shows what the agent used last: for claude, the model and effort on the newest line of its transcript, read at each Stop hook, so a `/model` change inside the session shows. The state file keeps them, so a restart of the app shows them without a new turn. The usage events keep the model each turn ran on.
 
-### How a session picks its agent
+### What a session runs
 
-`agentos new` and `agentos issue` take `--agent <name>`, a provider's name: `claude`. Any other name is refused. Without the flag, a session for an issue runs the first of these that names a provider: the issue's `agent:<name>` label (a name that is no provider's is ignored), the action's `agent`, then `agent_command`; the labels and the action then pick its model as above, and a `model:` or `effort:` label that this provider would not accept is ignored. The queue row names the provider a label picks when it is not `agent_command`. From the app's buttons, and for a session with no issue, a session runs `agent_command`. A session keeps its provider for its life: the app writes it into the session's identity in the state file, like the model and the effort, so a restart of the app, a resume and the hooks (`AGENTOS_AGENT`) use the same one, and a resumed session runs the provider of the one it continues. The row names the provider.
-
-The agent's command must be on PATH: `claude` for claude, else the first word of `agent_command`. A session whose command is missing does not start, and the error names the command. While the command of `agent_command` is missing, from the settings panel or the config file, the app shows a warning that names it, and clears it once the command is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh`, `agentos`, `claude` or the command of `agent_command`, the app takes the PATH of the login shell.
+Every thread runs `claude` under `agentos host`, with hooks that call the `agentos` command on PATH. Both must be on PATH: without `agentos` a thread does not start, with the error "The agentos command is not on PATH, so a thread's hooks cannot report its state", and without `claude` it does not start with "claude is not installed: it is not on PATH". While either is missing the app shows a warning that names it, and clears it once it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh`, `agentos` or `claude`, the app takes the PATH of the login shell.
 
 ### Keeping the Mac awake
 
@@ -131,8 +130,8 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 
 | Group | Command | Does |
 |---|---|---|
-| Work | `issue <n...> [--prompt <text>\|-] [--agent <name>]` | starts a session per issue; an issue with a live session is reported as already running. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new session's system prompt as a handover from the session that asked, and a running session does not get it. `--agent` names the provider the new sessions run, instead of `agent_command` |
-| Work | `new [title] [--chat] [--prompt <text>\|-] [--agent <name>]`, `kill <n>`, `open <n\|title>`, `next` | start, stop, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover. `--agent` names the provider, instead of `agent_command` |
+| Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new session's system prompt as a handover from the session that asked, and a running session does not get it |
+| Work | `new [title] [--chat] [--prompt <text>\|-]`, `kill <n>`, `open <n\|title>`, `next` | start, stop, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs, clean up or list what waits |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
 | Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |

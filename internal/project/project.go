@@ -47,8 +47,7 @@ func (p Project) Present() bool {
 
 // Config is the optional ~/.config/agentos/config.yaml.
 type Config struct {
-	DataDir    string    `yaml:"data_dir,omitempty"` // where notes, stats and digests live; may sit in a synced folder
-	Agent      string    `yaml:"agent_command,omitempty"`
+	DataDir    string    `yaml:"data_dir,omitempty"`        // where notes, stats and digests live; may sit in a synced folder
 	KeepAwake  *bool     `yaml:"keep_mac_awake,omitempty"`  // hold off idle sleep while a session works; on unless false
 	Theme      string    `yaml:"app_theme,omitempty"`       // light or dark; unset follows the system
 	ThemeDark  string    `yaml:"app_theme_dark,omitempty"`  // the dark theme: black (default) or violet
@@ -147,7 +146,7 @@ func Load(path string) (Config, error) {
 		if err := p.CleanupMode.validate(); err != nil {
 			return Config{}, fmt.Errorf("%s: project %s: %w", path, p.Name, err)
 		}
-		if err := p.validateQueue(cfg.Agent); err != nil {
+		if err := p.validateQueue(); err != nil {
 			return Config{}, fmt.Errorf("%s: project %s: %w", path, p.Name, err)
 		}
 		if _, err := p.PRPollEvery(); err != nil {
@@ -221,7 +220,6 @@ func encode(path string, c Config) ([]byte, error) {
 	}
 	root := doc.Content[0]
 	dropRetiredKeys(root)
-	syncScalar(root, "agent_command", c.Agent, nil)
 	syncScalar(root, "data_dir", c.DataDir, ExpandHome)
 	syncScalar(root, "app_theme", c.Theme, nil)
 	syncScalar(root, "app_theme_dark", c.ThemeDark, nil)

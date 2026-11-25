@@ -16,12 +16,11 @@ import (
 // DefaultPRPoll is how often pull requests are polled when pr_poll_interval is not set.
 const DefaultPRPoll = 10 * time.Second
 
-// Action is a way to start a session for an issue: a command to type, run by its own provider with its own model
-// and effort, in a task or a chat.
+// Action is a way to start a session for an issue: a command to send, run with its own model and effort, in a task
+// or a chat.
 type Action struct {
 	Name    string `yaml:"name"`
 	Command string `yaml:"command,omitempty"` // {n} is the issue number, {title} its title
-	Agent   string `yaml:"agent,omitempty"`   // a provider's name; the default unless set
 	Model   string `yaml:"model,omitempty"`
 	Effort  string `yaml:"effort,omitempty"`
 	Kind    string `yaml:"kind,omitempty"` // KindTask unless set
@@ -159,9 +158,8 @@ func (p Project) PromptSend() string {
 	return PromptManual
 }
 
-// validateQueue checks the queue settings. An action's model is checked by the action's provider, else by
-// defaultAgent's.
-func (p Project) validateQueue(defaultAgent string) error {
+// validateQueue checks the queue settings. An action's model and effort are checked by claude.
+func (p Project) validateQueue() error {
 	if p.SessionPromptSend != "" && p.SessionPromptSend != PromptAuto && p.SessionPromptSend != PromptManual {
 		return fmt.Errorf("session_prompt_send must be %s or %s, not %q", PromptAuto, PromptManual, p.SessionPromptSend)
 	}
@@ -189,10 +187,7 @@ func (p Project) validateQueue(defaultAgent string) error {
 				return fmt.Errorf("queue_sections.%s: two actions are named %q", s.Name, a.Name)
 			}
 			actions = append(actions, a.Name)
-			if err := agent.CheckName(a.Agent); err != nil {
-				return fmt.Errorf("queue_sections.%s.%s: %w", s.Name, a.Name, err)
-			}
-			if err := agent.New(cmp.Or(a.Agent, defaultAgent), "").ValidModel(a.Model, a.Effort); err != nil {
+			if err := (agent.Claude{}).ValidModel(a.Model, a.Effort); err != nil {
 				return fmt.Errorf("queue_sections.%s.%s: %w", s.Name, a.Name, err)
 			}
 			if a.Kind != "" && a.Kind != KindTask && a.Kind != KindChat {

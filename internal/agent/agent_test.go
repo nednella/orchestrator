@@ -65,8 +65,7 @@ func TestClaudeLaunch(t *testing.T) {
 		{"chat", Launch{Chat: true}, []string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"}},
 		{"browser", Launch{Browser: true}, []string{"--allowedTools", "Bash(agent-browser:*)"}},
 		{"prompt", Launch{Prompt: "where you run"}, []string{"--append-system-prompt", "where you run"}},
-		{"start, which goes to the host", Launch{Start: "-v is a flag"}, nil},
-		{"all, in order", Launch{Chat: true, Browser: true, Prompt: "p", Start: "s"},
+		{"all, in order", Launch{Chat: true, Browser: true, Prompt: "p"},
 			[]string{"--permission-mode", "plan", "--allowedTools", "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)", "--append-system-prompt", "p"}},
 	}
 	for _, tt := range tests {
@@ -91,67 +90,23 @@ func TestClaudeForkFlags(t *testing.T) {
 	}
 }
 
-func TestPlainIgnoresLaunch(t *testing.T) {
-	l := Launch{Model: "opus", Effort: "high", Resume: "abc", Chat: true, Prompt: "p", Start: "s", Browser: true, TmpDir: "/tmp/s"}
-	if argv := (Plain{Argv: []string{"bash"}}).Command(l); !slices.Equal(argv, []string{"bash"}) {
-		t.Errorf("argv = %q", argv)
-	}
-	if env := (Plain{Argv: []string{"bash"}}).Env(l); env != nil {
-		t.Errorf("env = %q", env)
-	}
-}
-
-func TestPlainCanNothing(t *testing.T) {
-	for _, c := range []Capability{Resume, StartArg, ModelEffort, Browser, Hosted} {
-		if (Plain{}).Can(c) {
-			t.Errorf("a plain agent can %d", c)
-		}
-		if (Claude{}).Can(c) == (c == StartArg) {
-			t.Errorf("claude can %d: %v", c, (Claude{}).Can(c))
-		}
-	}
-	if _, _, ok := (Plain{}).ParseEvent("Stop", strings.NewReader("{}")); ok {
-		t.Error("a plain agent's hook was recorded")
-	}
-}
-
 func TestClaudeEnv(t *testing.T) {
 	if got := (Claude{}).Env(Launch{TmpDir: "/tmp/s"}); !slices.Equal(got, []string{"CLAUDE_CODE_TMPDIR=/tmp/s"}) {
 		t.Errorf("env = %q", got)
 	}
 }
 
-func TestNames(t *testing.T) {
-	for _, name := range []string{"claude", "bash", "bash -l"} {
-		if got := New(name, "/x").Name(); got != name {
-			t.Errorf("New(%q).Name() = %q", name, got)
-		}
-	}
-}
-
 func TestCheckInstalled(t *testing.T) {
 	bin := t.TempDir()
-	for _, name := range []string{"claude", "fake-agent"} {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
 	t.Setenv("PATH", bin)
-	tests := []struct {
-		agent, missing string
-	}{
-		{"claude", ""},
-		{"fake-agent --flag", ""},
-		{"absent-agent --flag", "absent-agent"},
+	if err := CheckInstalled(Claude{Exe: "/x"}); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
+		t.Errorf("without claude: %v", err)
 	}
-	for _, tt := range tests {
-		err := CheckInstalled(New(tt.agent, "/x"))
-		if tt.missing == "" && err != nil {
-			t.Errorf("%q: %v", tt.agent, err)
-		}
-		if tt.missing != "" && (err == nil || !strings.HasPrefix(err.Error(), tt.missing+" ")) {
-			t.Errorf("%q: error %v, want one naming %s", tt.agent, err, tt.missing)
-		}
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckInstalled(Claude{Exe: "/x"}); err != nil {
+		t.Errorf("with claude: %v", err)
 	}
 }
 
@@ -193,47 +148,17 @@ func TestClaudeParseEvent(t *testing.T) {
 	}
 }
 
-func TestNew(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-	}{{"", "claude"}, {"claude", "claude"}, {"bash", "bash"}, {"bash -l", "bash"}}
-	for _, tt := range tests {
-		if got := New(tt.name, "/x").Command(Launch{})[0]; got != tt.want {
-			t.Errorf("New(%q) runs %q, want %q", tt.name, got, tt.want)
-		}
-	}
-}
-
 func TestRegistryProvider(t *testing.T) {
-	tests := []struct {
-		exe, command string
-		want         Provider
-	}{
-		{"/x", "", Claude{Exe: "/x", ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}},
-		{"/x", "claude", Claude{Exe: "/x", ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}},
-		{"/x", "bash -l", Plain{Argv: []string{"bash", "-l"}}},
-		{"", "", Plain{Argv: []string{"claude"}}},
-		{"", "claude", Plain{Argv: []string{"claude"}}},
-		{"", "bash", Plain{Argv: []string{"bash"}}},
-	}
-	for _, tt := range tests {
-		if got := (Registry{Exe: tt.exe, Dirs: []string{"/d"}}).Provider(tt.command); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("Registry{Exe: %q}.Provider(%q) = %#v, want %#v", tt.exe, tt.command, got, tt.want)
-		}
+	got, err := Registry{Exe: "/x", Dirs: []string{"/d"}}.Provider()
+	if want := (Claude{Exe: "/x", ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); err != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("Provider() = %#v, %v, want %#v", got, err, want)
 	}
 }
 
-func TestCheckName(t *testing.T) {
-	for _, name := range []string{"", "claude"} {
-		if err := CheckName(name); err != nil {
-			t.Errorf("CheckName(%q) = %v", name, err)
-		}
-	}
-	for _, name := range []string{"codex", "bash", "claude --resume"} {
-		if err := CheckName(name); err == nil || !strings.Contains(err.Error(), "the agents are claude") {
-			t.Errorf("CheckName(%q) = %v", name, err)
-		}
+func TestRegistryWithoutAgentosRefuses(t *testing.T) {
+	p, err := Registry{Dirs: []string{"/d"}}.Provider()
+	if p != nil || err == nil || err.Error() != "The agentos command is not on PATH, so a thread's hooks cannot report its state" {
+		t.Errorf("Provider() = %#v, %v", p, err)
 	}
 }
 
@@ -294,12 +219,6 @@ func TestClaudeFill(t *testing.T) {
 		if got := (Claude{ConfigDir: user}).Fill(dir, tt.l); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%s: Fill = %+v, want %+v", tt.name, got, tt.want)
 		}
-	}
-}
-
-func TestPlainFillsNothing(t *testing.T) {
-	if got := (Plain{}).Fill(t.TempDir(), Launch{Effort: "high"}); !reflect.DeepEqual(got, Launch{Effort: "high"}) {
-		t.Errorf("Fill = %+v", got)
 	}
 }
 

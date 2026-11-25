@@ -238,7 +238,6 @@ export function createMock(params: URLSearchParams) {
       issue: s.issue,
       model: s.model,
       effort: s.effort,
-      agent: s.agent,
       history: s.history.map((h) => ({ ...h })),
       branch: s.branch,
       worktree: s.worktree,
@@ -411,7 +410,6 @@ export function createMock(params: URLSearchParams) {
       beganAt: createdAt,
       issue,
       ...modelFor(owner, issue),
-      agent: 'claude',
       history,
       branch: issue ? `issue-${issue}` : '',
       worktree: issue ? `${owner.dir}/trees/issue-${issue}` : '',
@@ -923,7 +921,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
 
   const issueRefreshes = { count: 0 }
   Object.assign(window, { issueRefreshes })
@@ -958,7 +956,6 @@ export function createMock(params: URLSearchParams) {
       s.action = old.action
       s.model = old.model
       s.effort = old.effort
-      s.agent = old.agent
       s.forkOf = old.forkOf
       s.buffer = old.buffer + term.promptLine('')
       sessions.splice(sessions.indexOf(old), 1)
@@ -972,7 +969,7 @@ export function createMock(params: URLSearchParams) {
       if (from.state === 'ended' && !from.resumable) throw 'This thread has no conversation to fork yet'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
-      Object.assign(s, { model: from.model, effort: from.effort, agent: from.agent, action: '', forkOf: from.id, worktree: '' })
+      Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, worktree: '' })
       try {
         chats.fork(from.id, s.id, at)
       } catch (err) {
@@ -1325,11 +1322,6 @@ export function createMock(params: URLSearchParams) {
     },
     SetKeepAwake: async (keepAwake: boolean) => {
       settings = { ...settings, keepAwake }
-      return settings
-    },
-    SetAgent: async (agent: string) => {
-      if (!agent.trim()) throw "the agent must be a provider's name or a command"
-      settings = { ...settings, agent: agent.trim() }
       return settings
     },
     SetPromptSend: async (promptSend: PromptSend) => {

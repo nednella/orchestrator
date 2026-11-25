@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nednella/agentos/internal/agent"
 	ctl "github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
@@ -45,21 +44,18 @@ func (c *Commands) find(arg string) (Session, error) {
 
 func started(s Session) string { return fmt.Sprintf("started session %d: %s", s.N, s.Title) }
 
-// New starts a session, a chat with the chat option, titled with the words given, with the agent option's provider
-// or the default, and gives it the prompt, sent unless the project says manual. A prompt from a session is framed as
-// that session's handover, so the new one does not take it for the owner's.
+// New starts a session, a chat with the chat option, titled with the words given, and gives it the prompt, sent
+// unless the project says manual. A prompt from a session is framed as that session's handover, so the new one does
+// not take it for the owner's.
 func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
-	prompt, name := req.Opts["prompt"], req.Opts["agent"]
-	if err := agent.CheckName(name); err != nil {
-		return "", err
-	}
+	prompt := req.Opts["prompt"]
 	if _, err := session.ParseName(req.Session); err == nil && prompt != "" {
 		prompt = fromApp(prompts.Handover(prompt))
 	}
 	title, send := strings.Join(req.Args, " "), c.s.Current().SendsPrompt()
-	create := func() (Session, error) { return c.s.Create(title, prompt, send, 0, name) }
+	create := func() (Session, error) { return c.s.Create(title, prompt, send, 0) }
 	if req.Opts["chat"] == "true" {
-		create = func() (Session, error) { return c.s.CreateChat(title, prompt, send, name) }
+		create = func() (Session, error) { return c.s.CreateChat(title, prompt, send) }
 	}
 	s, err := create()
 	if err != nil {

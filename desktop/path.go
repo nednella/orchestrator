@@ -5,13 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 	"time"
-
-	"github.com/nednella/agentos/desktop/internal/app"
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/project"
 )
 
 const shellPathBudget = 3 * time.Second
@@ -20,7 +15,7 @@ const shellPathBudget = 3 * time.Second
 // started from Finder gets a minimal one.
 func fixPath() error {
 	missing := false
-	for _, tool := range append([]string{"tmux", "gh", "agentos"}, agentPrograms()...) {
+	for _, tool := range []string{"tmux", "gh", "agentos", "claude"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			missing = true
 		}
@@ -44,21 +39,6 @@ func fixPath() error {
 		return os.Setenv("PATH", path)
 	}
 	return nil
-}
-
-// agentPrograms are the commands of every provider and of the configured agent.
-func agentPrograms() []string {
-	names := slices.Clone(agent.Names)
-	if home, err := os.UserHomeDir(); err == nil {
-		if cfg, err := project.Load(app.ConfigPath(home)); err == nil {
-			names = append(names, cfg.Agent)
-		}
-	}
-	programs := make([]string, 0, len(names))
-	for _, name := range names {
-		programs = append(programs, agent.Program(agent.New(name, "")))
-	}
-	return programs
 }
 
 // fixLocale gives an app started from Finder a UTF-8 locale, so the agents' shells handle non-ASCII text.

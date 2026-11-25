@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
 import type { CleanupMode, DarkTheme, DigestSchedule, ThemeSetting } from '../types'
-import { AgentControl } from './AgentControl'
 import { DataDirRow } from './DataDirRow'
 import { Keycap } from './Keycap'
 import { Overlay } from './Overlay'
@@ -49,7 +48,7 @@ function SettingRow({ label, hint, children }: SettingRowProps) {
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setAgent, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setAgent', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
+  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
   const { scale, zoom } = useLayout()
   if (overlay !== 'settings') return null
 
@@ -88,9 +87,6 @@ export function SettingsPanel() {
         </SettingRow>
         <SettingRow label="Keep Mac awake" hint="Stops the Mac idle-sleeping while a session works. A project that sets its own in the config file keeps it.">
           <SegmentedControl label="Keep Mac awake" options={SWITCH} value={settings.keepAwake ? 'on' : 'off'} onChange={(value) => report(() => setKeepAwake(value === 'on'))} />
-        </SettingRow>
-        <SettingRow label="Default inference provider" hint="The command that launches the tool a new session runs.">
-          <AgentControl agents={settings.agents} value={settings.agent} onChange={(command) => report(() => setAgent(command))} />
         </SettingRow>
         {project && (
           <>

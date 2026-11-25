@@ -57,7 +57,7 @@ func reportHookAt(event string, stdin io.Reader, stdout io.Writer, at time.Time)
 		return
 	}
 	dir := bus.DirOf(socket)
-	ev, reply, ok := agent.New("claude", "").ParseEvent(event, stdin)
+	ev, reply, ok := agent.Claude{}.ParseEvent(event, stdin)
 	fmt.Fprint(stdout, reply)
 	if !ok {
 		return

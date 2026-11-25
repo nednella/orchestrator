@@ -10,13 +10,12 @@ export AGENTOS_TMUX_SOCKET=aos-test-$$      # never "agentos", the owner's socke
 export AGENTOS_STATE_DIR=$S                 # never ~/.local/state/agentos
 export AGENTOS_DEV_DATA_DIR=$S/data             # never ~/.local/share/agentos (also moves notes and the event log)
 export AGENTOS_CONFIG=$S/config.yaml        # never ~/.config/agentos/config.yaml
-unset AGENTOS_SOCKET AGENTOS_SESSION AGENTOS_ISSUE AGENTOS_AGENT  # an agentos session has them; AGENTOS_SOCKET sends every command to the live app
+unset AGENTOS_SOCKET AGENTOS_SESSION AGENTOS_ISSUE  # an agentos session has them; AGENTOS_SOCKET sends every command to the live app
 ```
 
-A throwaway config with a plain shell as the agent keeps Claude out of it:
+A throwaway config, with `{"model": "haiku"}` in the demo project's `.claude/settings.local.json` so its threads run `claude` on the cheapest model:
 
 ```yaml
-agent_command: bash
 projects:
   - {name: demo, directory: <$S>/demo}
 ```

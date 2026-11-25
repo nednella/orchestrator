@@ -91,7 +91,6 @@ type target struct {
 	owned     []string
 	proj      project.Project
 	model     project.Model // what the session ran, so a replacement for an ended one runs the same
-	agent     string        // the provider it ran, kept for the same reason
 	created   time.Time
 	ended     bool
 }

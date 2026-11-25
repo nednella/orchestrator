@@ -576,7 +576,7 @@ type Options struct {
 	Queue          string        // the project's queue_sections block, in place of the usual one
 	NoBranch       bool          // leave out the project's `session_branch_fallback: "issue-{n}"` pattern
 	CleanupCommand string        // the project's session_cleanup_command; none by default
-	Agent          string        // the config's agent; claude by default
+	NoAgentos      bool          // leave every folder that holds an agentos command off PATH, as an app that cannot find it
 	TopExtra       string        // yaml lines added at the top of the config
 	DigestFirst    time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick     time.Duration
@@ -646,11 +646,11 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if o.DataDirConfig {
 		top += "data_dir: " + filepath.Join(state, "data") + "\n"
 	}
-	conf := fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: main\n    directory: %s\n%s%s%s%s", cmp.Or(o.Agent, "claude"), top, dir, branch, cleanup, cmp.Or(o.Queue, queueSections), o.ProjectExtra)
+	conf := fmt.Sprintf("%sprojects:\n  - name: main\n    directory: %s\n%s%s%s%s", top, dir, branch, cleanup, cmp.Or(o.Queue, queueSections), o.ProjectExtra)
 	if o.NoProject {
-		conf = fmt.Sprintf("agent_command: %s\n%sprojects: []\n", cmp.Or(o.Agent, "claude"), top)
+		conf = fmt.Sprintf("%sprojects: []\n", top)
 		if o.AbsentProject != "" {
-			conf = fmt.Sprintf("agent_command: %s\n%sprojects:\n  - name: %s\n    directory: /nonexistent/%[3]s\n", cmp.Or(o.Agent, "claude"), top, o.AbsentProject)
+			conf = fmt.Sprintf("%sprojects:\n  - name: %s\n    directory: /nonexistent/%[2]s\n", top, o.AbsentProject)
 		}
 	}
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
@@ -671,8 +671,10 @@ func NewWith(t *testing.T, o Options) *Harness {
 
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	h.claudeDir = agentOnPath(t, "claude", standInEnv, fakeClaudeTurns)
+	if o.NoAgentos {
+		t.Setenv("PATH", PathWithout("agentos"))
+	}
 	h.App = h.build(t)
-	h.App.Sessions().SetPrefillWait(300 * time.Millisecond)
 	first, tick := o.DigestFirst, o.DigestTick
 	if first == 0 {
 		first, tick = time.Hour, time.Hour
@@ -769,13 +771,11 @@ func (h *Harness) Hook(t *testing.T, id, event, stdin string, env ...string) {
 	h.hook(t, id, event, stdin, env)
 }
 
-// hook runs the hook as the session's agent would: with the provider the session was started with, which the app
-// wrote into its state file, and env on top. It returns what the hook printed.
+// hook runs the hook as the session's agent would, with env on top. It returns what the hook printed.
 func (h *Harness) hook(t *testing.T, id, event, stdin string, env []string) string {
 	t.Helper()
-	rec, _ := bus.ReadState(h.State, id)
 	cmd := exec.Command(CLIPath(t), "hook", event)
-	cmd.Env = append(os.Environ(), "AGENTOS_SESSION="+id, "AGENTOS_SOCKET="+filepath.Join(h.State, "agentos.sock"), "AGENTOS_AGENT="+rec.Agent)
+	cmd.Env = append(os.Environ(), "AGENTOS_SESSION="+id, "AGENTOS_SOCKET="+filepath.Join(h.State, "agentos.sock"))
 	cmd.Env = append(cmd.Env, env...)
 	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.Output()
@@ -938,6 +938,12 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+filepath.Dir(CLIPath(t))+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return dir
+}
+
+// PathWithout is PATH without the folders that hold command.
+func PathWithout(command string) string {
+	dirs := slices.DeleteFunc(filepath.SplitList(os.Getenv("PATH")), func(dir string) bool { return Exists(filepath.Join(dir, command)) })
+	return strings.Join(dirs, string(os.PathListSeparator))
 }
 
 // Main runs a package's tests and removes the command they built.
@@ -1112,9 +1118,6 @@ func (h *Harness) SetKeepAwake(on bool) (settings.Settings, error) {
 	return h.settings.SetKeepAwake(on)
 }
 
-func (h *Harness) SetAgent(command string) (settings.Settings, error) {
-	return h.settings.SetAgent(command)
-}
 func (h *Harness) SetPromptSend(mode string) (settings.Settings, error) {
 	return h.settings.SetPromptSend(mode)
 }

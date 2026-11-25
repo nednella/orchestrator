@@ -30,7 +30,7 @@ const (
 
 func TestMain(m *testing.M) {
 	if file := os.Getenv(recordEnv); file != "" && len(os.Args) == 3 && os.Args[1] == "hook" {
-		recordHook(file, os.Getenv("AGENTOS_AGENT"), os.Args[2])
+		recordHook(file, os.Args[2])
 		return
 	}
 	os.Exit(m.Run())
@@ -43,7 +43,7 @@ type hook struct {
 }
 
 // recordHook appends the payload on stdin to file, and prints the reply the agent reads, as `agentos hook` does.
-func recordHook(file, agent, event string) {
+func recordHook(file, event string) {
 	payload, _ := io.ReadAll(os.Stdin)
 	var compact bytes.Buffer
 	if json.Compact(&compact, payload) != nil {
@@ -55,13 +55,14 @@ func recordHook(file, agent, event string) {
 		_, _ = f.Write(append(line, '\n'))
 		_ = f.Close()
 	}
-	_, reply, _ := New(agent, "").ParseEvent(event, bytes.NewReader(payload))
+	_, reply, _ := Claude{}.ParseEvent(event, bytes.NewReader(payload))
 	fmt.Print(reply)
 }
 
 // recorder runs one provider's agent for real, with the provider's own hooks calling this test binary.
 type recorder struct {
-	version []string
+	provider Provider
+	version  []string
 	// command is the agent's command line, on the conversation to resume or a new one.
 	command func(exe, resume string) []string
 	// trust are the keys that answer the agent's question whether it trusts a new folder.
@@ -74,7 +75,8 @@ type recorder struct {
 // recorders run cheap models with no settings, plugins or MCP servers of the owner's.
 var recorders = map[string]recorder{
 	"claude": {
-		version: []string{"claude", "--version"},
+		provider: Claude{},
+		version:  []string{"claude", "--version"},
 		command: func(exe, resume string) []string {
 			argv := Claude{Exe: exe}.Command(Launch{Model: "haiku", Resume: resume})
 			return append(argv, "--setting-sources", "project", "--strict-mcp-config", "--permission-mode", "default")
@@ -131,7 +133,7 @@ func (r recorder) record(t *testing.T, name, exe string, sc scenario, dir string
 		t.Fatal(err)
 	}
 	hooks := filepath.Join(t.TempDir(), "hooks.jsonl")
-	tm := newTmux(t, recordEnv+"="+hooks, "AGENTOS_AGENT="+name)
+	tm := newTmux(t, recordEnv+"="+hooks)
 	start := func(resume string) {
 		tm.start(work, r.command(exe, resume))
 		tm.waitFor(func(pane string) bool {
@@ -153,13 +155,13 @@ func (r recorder) record(t *testing.T, name, exe string, sc scenario, dir string
 			tm.typeLine("/exit")
 			waitUntil(t, "the agent to exit", func() bool { return !tm.running() })
 		case s.resume:
-			start(lastConversation(New(name, ""), readHooks(t, hooks)))
+			start(lastConversation(r.provider, readHooks(t, hooks)))
 		}
 	}
 	// The agent writes its transcript a moment after the hook, and a kill would add the hooks of an exit.
 	time.Sleep(2 * time.Second)
 	recorded := readHooks(t, hooks)
-	transcripts := transcriptsOf(New(name, ""), recorded)
+	transcripts := transcriptsOf(r.provider, recorded)
 	tm.kill()
 	save(t, dir, work, r.step, recorded, transcripts)
 }

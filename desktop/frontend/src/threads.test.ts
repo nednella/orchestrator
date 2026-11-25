@@ -17,7 +17,6 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     issue: 0,
     model: '',
     effort: '',
-    agent: 'claude',
     history: [],
     branch: '',
     worktree: '',

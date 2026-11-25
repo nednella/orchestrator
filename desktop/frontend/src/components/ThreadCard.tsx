@@ -19,7 +19,6 @@ export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
   const model = modelName(session.model)
   const effort = EFFORTS[session.effort] ?? session.effort
-  const claude = session.agent === 'claude'
 
   useLayoutEffect(() => {
     const el = card.current
@@ -47,7 +46,7 @@ export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
       <div className="flex flex-col gap-1.5 text-small text-soft">
         {machine && <ThreadCardLine icon="machine">{machine}</ThreadCardLine>}
         {(model || effort) && (
-          <ThreadCardLine icon={claude ? 'claude' : 'agent'} iconColor={claude ? 'var(--agent-claude)' : undefined}>
+          <ThreadCardLine icon="claude" iconColor="var(--agent-claude)">
             <span className="flex gap-1.5">
               {model && <span className="text-ink">{model}</span>}
               {effort && <span>{effort}</span>}

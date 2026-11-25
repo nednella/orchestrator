@@ -57,7 +57,7 @@ func kindsAndTexts(events []chat.Event) []string {
 
 func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, "")
+	src, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 			t.Errorf("fork at %q: %v", at, err)
 		}
 	}
-	fresh, err := h.Sessions().Create("fresh", "", false, 0, "")
+	fresh, err := h.Sessions().Create("fresh", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 
 func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, "")
+	src, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestForkKeepsFolderKindAndModel(t *testing.T) {
 
 func TestForkDoesNotTakeOverThePR(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
-	src, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	src, err := h.Sessions().Create("#12 work", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestForkDoesNotTakeOverThePR(t *testing.T) {
 
 func TestForkOfAnEndedThread(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, "")
+	src, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 
 func TestForkStaysAFork(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	src, err := h.Sessions().Create("#12 work", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork se
 	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + removeWorktreeAndBranch})
 	repoFixture(t, h)
 	wt = issueWorktree(t, h)
-	src, err := h.Sessions().Create("#7 work", "", false, 7, "")
+	src, err := h.Sessions().Create("#7 work", "", false, 7)
 	if err != nil {
 		t.Fatal(err)
 	}

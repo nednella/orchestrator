@@ -38,7 +38,7 @@ func TestProjects(t *testing.T) {
 	}
 
 	cfg, err := project.Load(h.Conf)
-	if err != nil || cfg.Agent != "claude" || len(cfg.Projects) != 3 || len(cfg.Projects[0].QueueSections) != 3 {
+	if err != nil || len(cfg.Projects) != 3 || len(cfg.Projects[0].QueueSections) != 3 {
 		t.Fatalf("saved config = %+v, %v", cfg, err)
 	}
 	if got := projects.ReadLast(h.State); got != "other-2" {

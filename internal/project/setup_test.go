@@ -35,8 +35,7 @@ func TestSetUpFillsOnlyEmptyKeys(t *testing.T) {
 
 func TestSaveSetUpKeepsTheEntry(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := `agent_command: claude
-projects:
+	original := `projects:
   # the main one
   - name: api
     directory: /srv/api # work
@@ -128,16 +127,5 @@ func TestSaveSetUpFillsAnEmptyQueueSections(t *testing.T) {
 				t.Errorf("reload = %+v, %v", reloaded.Projects, err)
 			}
 		})
-	}
-}
-
-func TestSaveLeavesOutAnEmptyAgentCommand(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := Save(path, Config{Projects: []Project{{Name: "api", Dir: "/srv/api"}}}); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := os.ReadFile(path)
-	if strings.Contains(string(got), "agent_command") {
-		t.Errorf("a fresh config holds an empty agent_command:\n%s", got)
 	}
 }

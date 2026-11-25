@@ -44,9 +44,9 @@ func TestLoad(t *testing.T) {
 	}{
 		{name: "missing file", path: filepath.Join(dir, "nope.yaml")},
 		{
-			name: "full",
+			name: "an old agent_command is ignored",
 			path: write("agent_command: bash\nprojects:\n  - {name: api, directory: /srv/api}\n"),
-			want: Config{Agent: "bash", Projects: []Project{{Name: "api", Dir: "/srv/api"}}},
+			want: Config{Projects: []Project{{Name: "api", Dir: "/srv/api"}}},
 		},
 		{name: "project without dir", path: write("projects:\n  - {name: api}\n"), wantErr: true},
 		{
@@ -88,7 +88,7 @@ func TestLoad(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
-			if got.Agent != tt.want.Agent || len(got.Projects) != len(tt.want.Projects) {
+			if len(got.Projects) != len(tt.want.Projects) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
 			for i := range got.Projects {
@@ -164,7 +164,7 @@ func TestLoadDataDir(t *testing.T) {
 
 func TestSaveRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "new", "config.yaml")
-	want := Config{Agent: "claude", Projects: []Project{
+	want := Config{Projects: []Project{
 		{Name: "a", Dir: "/srv/a", NoteSessionCommand: "/plan {text}", QueueSections: []Section{{Name: "Go", Labels: []string{"go"}, Actions: []Action{{Name: "Work", Command: "/x {n}"}}}}},
 		{Name: "b", Dir: "/srv/b"},
 	}}
@@ -188,7 +188,6 @@ func TestSaveKeepsCommentsAndTildePaths(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	original := `# my agentos setup
 data_dir: ~/Notes/agentos # synced
-agent_command: claude
 projects:
   # the main one
   - name: api
@@ -219,7 +218,7 @@ projects:
 			t.Errorf("a ~ path was written out in full:\n%s", got)
 		}
 		reloaded, err := Load(path)
-		if err != nil || !reflect.DeepEqual(reloaded, Config{DataDir: cfg.DataDir, Agent: "claude", Projects: cfg.Projects}) {
+		if err != nil || !reflect.DeepEqual(reloaded, Config{DataDir: cfg.DataDir, Projects: cfg.Projects}) {
 			t.Errorf("reload = %+v, %v", reloaded, err)
 		}
 	})
@@ -245,7 +244,7 @@ projects:
 			t.Fatal(err)
 		}
 		reloaded, err := Load(path)
-		if err != nil || len(reloaded.Projects) != 0 || reloaded.Agent != "claude" {
+		if err != nil || len(reloaded.Projects) != 0 {
 			t.Errorf("reload = %+v, %v", reloaded, err)
 		}
 	})
@@ -253,7 +252,7 @@ projects:
 
 func TestSaveDropsRetiredModelKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := "session_model: haiku\nsession_effort: low\n# keep\nagent_command: claude\nprojects:\n  - name: api\n    directory: /srv/api\n    session_model: opus\n    session_effort: high\n    note_session_command: x\n"
+	original := "session_model: haiku\nsession_effort: low\n# keep\nprojects:\n  - name: api\n    directory: /srv/api\n    session_model: opus\n    session_effort: high\n    note_session_command: x\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -283,14 +282,18 @@ func TestLoadRejectsAnUnknownCleanupMode(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsAnUnknownActionAgent(t *testing.T) {
+func TestLoadIgnoresAnOldActionAgent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	body := "projects:\n  - name: a\n    directory: /a\n    queue_sections:\n      - name: Inbox\n        actions:\n          - {name: Work, command: \"/work {n}\", agent: codex}\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), `queue_sections.Inbox.Work: no agent "codex"`) {
-		t.Errorf("Load = %v, want an error naming the action and the agent", err)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Projects[0].QueueSections[0].Actions; !reflect.DeepEqual(got, []Action{{Name: "Work", Command: "/work {n}"}}) {
+		t.Errorf("actions = %+v", got)
 	}
 }
 
@@ -334,13 +337,13 @@ func TestLoadDraggable(t *testing.T) {
 	}
 }
 
-func TestLoadChecksAnActionsModelWithItsAgent(t *testing.T) {
+func TestLoadChecksAnActionsModelWithClaude(t *testing.T) {
 	tests := []struct {
 		name, config, action, err string
 	}{
 		{"a claude model on claude", "", "{name: Work, model: opus, effort: max}", ""},
 		{"another provider's model on claude", "", "{name: Work, model: other-model}", `claude has no model "other-model"`},
-		{"a plain command takes any model", "agent_command: codex\n", "{name: Work, model: gpt-9}", ""},
+		{"an old agent_command changes nothing", "agent_command: codex\n", "{name: Work, model: gpt-9}", `claude has no model "gpt-9"`},
 	}
 	for _, tt := range tests {
 		path := filepath.Join(t.TempDir(), "config.yaml")

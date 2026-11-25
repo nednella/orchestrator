@@ -255,7 +255,7 @@ func userLines(t *testing.T, h *apptest.Harness, id string) []string {
 
 func TestClaudeRunsUnderTheHost(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	first.App.Stop()
 	h := first.Restart(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	if err := os.Chmod(folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 	if _, err := h.AddProjectDir(dir); err != nil {
 		t.Fatal(err)
 	}
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 
 func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("#7 work", "/work 7; and a ';' at the end;", true, 7, "")
+	s, err := h.Sessions().Create("#7 work", "/work 7; and a ';' at the end;", true, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 
 func TestDismissRemovesTheChatLog(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "hello", true, 0, "")
+	s, err := h.Sessions().Create("work", "hello", true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestDismissRemovesTheChatLog(t *testing.T) {
 
 func TestInterruptReachesTheHost(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
-			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			s, err := h.Sessions().Create("#12 work", "", false, 12)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -505,7 +505,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
-			s, err := h.Sessions().Create("work", "", false, 0, "")
+			s, err := h.Sessions().Create("work", "", false, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -534,7 +534,7 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
-			s, err := h.Sessions().Create("work", "", false, 0, "")
+			s, err := h.Sessions().Create("work", "", false, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -571,7 +571,7 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 
 func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -612,21 +612,22 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	}
 }
 
-func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
-	s, err := h.NewSession("work", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "Thread " + s.ID + " has no chat: its agent runs in its terminal"
-	if err := h.Interrupt(s.ID); err == nil || err.Error() != want {
+func TestASessionWithoutAHostTakesNoInterrupt(t *testing.T) {
+	h := newHarness(t)
+	// A Claude session from a release before the host: its agent runs in its pane, and it has no hosted tag.
+	id := "main/aaaaaaaa"
+	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "60")
+	h.Sessions().Refresh()
+	eventually(t, "the session listed", func() bool { _, ok := h.Session(id); return ok })
+	want := "Thread " + id + " has no chat: its agent runs in its terminal"
+	if err := h.Interrupt(id); err == nil || err.Error() != want {
 		t.Errorf("Interrupt = %v, want %q", err, want)
 	}
 }
 
 func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

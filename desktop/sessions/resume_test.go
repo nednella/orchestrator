@@ -36,7 +36,7 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 		name  string
 		start func() (sessions.Session, error)
 	}{
-		{"task", func() (sessions.Session, error) { return h.Sessions().Create("#12 work", "", false, 12, "") }},
+		{"task", func() (sessions.Session, error) { return h.Sessions().Create("#12 work", "", false, 12) }},
 		{"chat", func() (sessions.Session, error) { return h.NewChat("ask") }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 
 func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 	h := apptest.New(t)
-	old, err := h.Sessions().Create("#12 work", "the first ask", true, 12, "")
+	old, err := h.Sessions().Create("#12 work", "the first ask", true, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestResumedSessionKeepsTheChatLog(t *testing.T) {
 
 func TestResumedSessionKeepsItsImages(t *testing.T) {
 	h := apptest.New(t)
-	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	old, err := h.Sessions().Create("#12 work", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestResumedSessionKeepsItsImages(t *testing.T) {
 
 func TestResumedSessionShowsTheEndedOnesPRAtOnce(t *testing.T) {
 	h := apptest.New(t)
-	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	old, err := h.Sessions().Create("#12 work", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 	}{
 		{"chat", func(h *apptest.Harness) (sessions.Session, error) { return h.NewChat("ask") }},
 		{"issue task", func(h *apptest.Harness) (sessions.Session, error) {
-			return h.Sessions().Create("#12 work", "", false, 12, "")
+			return h.Sessions().Create("#12 work", "", false, 12)
 		}},
 		{"renamed task", func(h *apptest.Harness) (sessions.Session, error) {
 			s, err := h.NewSession("work", "")
@@ -228,12 +228,12 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 
 func TestResumeGivesBackTheIssuesLiveSession(t *testing.T) {
 	h := apptest.New(t)
-	old, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	old, err := h.Sessions().Create("#12 work", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ended(t, h, old)
-	live, err := h.Sessions().Create("#12 again", "", false, 12, "")
+	live, err := h.Sessions().Create("#12 again", "", false, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,15 +271,6 @@ func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 			t.Fatal(err)
 		}
 		eventually(t, "the session ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
-		assertNoResume(t, h, s.ID)
-	})
-	t.Run("plain agent", func(t *testing.T) {
-		h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
-		s, err := h.NewSession("work", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		ended(t, h, s)
 		assertNoResume(t, h, s.ID)
 	})
 }

@@ -15,15 +15,12 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
-	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
 // noSessions is a session list with nothing in it, for tests that only read issues.
 type noSessions struct{ issues.Sessions }
-
-func (noSessions) Provider(string) agent.Provider { return agent.Claude{} }
 
 func TestIssues(t *testing.T) {
 	h := newHarness(t)

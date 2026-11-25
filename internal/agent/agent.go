@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,43 +10,28 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/usage"
 )
 
 // Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.
-// Resume is a conversation to continue, which an agent that cannot resume ignores. ForkAt is the message of that
-// conversation a new conversation forks at: it continues the conversation up to there under a new id.
-// Chat starts the agent read-only, able to run only the commands that hand work off; an agent that cannot ignores it.
-// Prompt is the text agentos adds to the agent's system prompt. Start is the first prompt, for an agent that takes
-// it on its command line. Browser says the session drives its browser tab with agent-browser. TmpDir is the session's
-// own temp folder.
+// Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
+// continues the conversation up to there under a new id. Chat starts the agent read-only, able to run only the
+// commands that hand work off. Prompt is the text agentos adds to the agent's system prompt. Browser says the session
+// drives its browser tab with agent-browser. TmpDir is the session's own temp folder.
 type Launch struct {
 	Model, Effort, Resume string
 	ForkAt                string
 	Chat, Browser         bool
-	Prompt, Start         string
+	Prompt                string
 	TmpDir                string
 }
-
-// Capability is something a provider can do with a Launch.
-type Capability int
-
-const (
-	Resume      Capability = iota // continue a conversation
-	StartArg                      // take the first prompt on its command line and submit it once ready
-	ModelEffort                   // take a model and an effort
-	Browser                       // drive the session's browser tab with agent-browser
-	Hosted                        // run headless under agentos host, which takes its messages over a socket
-)
 
 // Provider is one agent CLI as agentos runs it: the command and environment a session starts with, and the way its
 // hooks and transcripts are read.
 type Provider interface {
 	Name() string
-	Can(Capability) bool
 	Command(l Launch) []string
 	// Env is what the agent needs in its environment besides what every session gets.
 	Env(l Launch) []string
@@ -64,42 +50,9 @@ type Provider interface {
 	Usage(from usage.Mark) usage.Reader
 }
 
-// New returns the provider for the configured agent. "claude" (or empty) gets hooks from exe and the use of dirs;
-// any other value runs as a plain command with no state reports.
-func New(name, exe string, dirs ...string) Provider {
-	switch name {
-	case "", "claude":
-		return Claude{Exe: exe, ConfigDir: claudeConfigDir(), Dirs: dirs}
-	}
-	return Plain{Argv: strings.Fields(name)}
-}
-
-// Names are the providers a session may be started with by name.
-var Names = []string{"claude"}
-
-// CheckName rejects a name that is no provider's. "" names the default and passes.
-func CheckName(name string) error {
-	if name != "" && !slices.Contains(Names, name) {
-		return fmt.Errorf("no agent %q: the agents are %s", name, strings.Join(Names, ", "))
-	}
-	return nil
-}
-
-// Program is the command p runs, "" when it runs none.
-func Program(p Provider) string {
-	argv := p.Command(Launch{})
-	if len(argv) == 0 {
-		return ""
-	}
-	return argv[0]
-}
-
 // CheckInstalled reports a provider whose command is not on PATH, naming the command.
 func CheckInstalled(p Provider) error {
-	program := Program(p)
-	if program == "" {
-		return nil
-	}
+	program := p.Command(Launch{})[0]
 	if _, err := exec.LookPath(program); err != nil {
 		return fmt.Errorf("%s is not installed: it is not on PATH", program)
 	}
@@ -147,46 +100,20 @@ func checkModel(agent string, models []Model, model, effort string) error {
 	return nil
 }
 
-// Registry makes the provider each session starts with. Exe is the agentos command the agents' hooks call, "" when
-// it is not on PATH: claude then runs plain, since nothing could report for it. Dirs are the app's folders the
-// agent may use.
+// Registry makes the provider each session starts with. Exe is the agentos command the agent's hooks call, "" when
+// it is not on PATH. Dirs are the app's folders the agent may use.
 type Registry struct {
 	Exe  string
 	Dirs []string
 }
 
-// Provider is the provider for command: a provider's name, "" for claude, or any other command, which runs plain.
-func (r Registry) Provider(command string) Provider {
-	if r.Exe == "" && (command == "" || command == "claude") {
-		return Plain{Argv: []string{"claude"}}
+// Provider is claude with hooks that call Exe. Without Exe nothing could report a thread's state, so there is none.
+func (r Registry) Provider() (Provider, error) {
+	if r.Exe == "" {
+		return nil, errors.New("The agentos command is not on PATH, so a thread's hooks cannot report its state")
 	}
-	return New(command, r.Exe, r.Dirs...)
+	return Claude{Exe: r.Exe, ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
 }
-
-// Plain runs a command as is. Its sessions stay idle because nothing reports for them.
-type Plain struct{ Argv []string }
-
-func (p Plain) Name() string                    { return strings.Join(p.Argv, " ") }
-func (p Plain) Can(Capability) bool             { return false }
-func (p Plain) Command(Launch) []string         { return p.Argv }
-func (p Plain) Env(Launch) []string             { return nil }
-func (p Plain) Fill(_ string, l Launch) Launch  { return l }
-func (p Plain) Models() []Model                 { return nil }
-func (p Plain) ValidModel(string, string) error { return nil }
-func (p Plain) Prepare(Launch) error            { return nil }
-func (p Plain) ParseEvent(string, io.Reader) (session.Event, string, bool) {
-	return session.Event{}, "", false
-}
-func (p Plain) Usage(from usage.Mark) usage.Reader { return noUsage{from} }
-
-// noUsage reads nothing: a plain agent has no transcript agentos knows.
-type noUsage struct{ mark usage.Mark }
-
-func (n noUsage) Read(string, string) ([]usage.Part, usage.Current, error) {
-	return nil, usage.Current{}, nil
-}
-func (n noUsage) After() time.Time { return n.mark.After }
-func (n noUsage) Mark() usage.Mark { return n.mark }
 
 // claudeConfigDir is where claude keeps the user's settings, "" when there is no home.
 func claudeConfigDir() string {

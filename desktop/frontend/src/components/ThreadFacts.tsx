@@ -22,7 +22,6 @@ export function ThreadFacts({ session }: ThreadFactsProps) {
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <ModelTag
           className="min-w-0 truncate"
-          agent={session.agent}
           model={session.model}
           effort={session.effort}
           spend={session.tokens > 0 ? `${tokenCount(session.tokens)} tokens · ~${dollars(session.cost)}` : ''}

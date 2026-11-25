@@ -49,9 +49,6 @@ type hookGroup struct {
 
 func (c Claude) Name() string { return "claude" }
 
-// Can is every capability but StartArg: claude runs under agentos host, which gives it the first prompt as a message.
-func (c Claude) Can(want Capability) bool { return want != StartArg }
-
 // headless makes claude read user messages as stream-json on stdin and write its turns as stream-json on stdout,
 // partial messages too, echo each user message back when claude takes it in, and ask for each permission with a control request on stdout.
 var headless = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--replay-user-messages"}

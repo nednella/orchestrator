@@ -207,8 +207,8 @@ func (a *App) Start(ctx context.Context) error {
 	return nil
 }
 
-// followConfig picks up hand edits to the config file while the app runs, and warns while the default agent is not
-// installed.
+// followConfig picks up hand edits to the config file while the app runs, and warns while no thread can start: claude
+// is not installed, or the agentos command is not on PATH.
 func (a *App) followConfig(ctx context.Context) {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
@@ -218,7 +218,11 @@ func (a *App) followConfig(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		if err := agent.CheckInstalled(a.sessions.Provider("")); err != nil {
+		p, err := a.sessions.Provider()
+		if err == nil {
+			err = agent.CheckInstalled(p)
+		}
+		if err != nil {
 			a.warn.Report("agent", err.Error())
 		} else {
 			a.warn.Clear("agent")

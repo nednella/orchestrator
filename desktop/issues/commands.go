@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/agent"
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
@@ -23,14 +22,10 @@ type Commands struct {
 
 func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs: prs} }
 
-// Issue starts a session for each issue number given, with the agent option's provider or the default, or finds the
-// one already running. A prompt is the asking session's handover; it reaches only a session that starts.
+// Issue starts a session for each issue number given, or finds the one already running. A prompt is the asking session's handover; it reaches only a session that starts.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("usage: agentos issue <number...>")
-	}
-	if err := agent.CheckName(req.Opts["agent"]); err != nil {
-		return "", err
 	}
 	var started, running, failed []string
 	for _, arg := range req.Args {
@@ -39,7 +34,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, created, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], req.Opts["agent"], sessions.StartOptions{})
+		s, created, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))

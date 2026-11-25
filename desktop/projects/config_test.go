@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
 	"github.com/nednella/agentos/desktop/projects"
@@ -119,23 +120,23 @@ func TestAppFollowsConfigEdits(t *testing.T) {
 	})
 }
 
-func TestAppWarnsWhileTheAgentIsNotInstalled(t *testing.T) {
+func TestAppWarnsWhileClaudeIsNotInstalled(t *testing.T) {
 	h := newHarness(t)
-	if _, err := h.SetAgent("absent-agent --flag"); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "a warning naming the command", func() bool {
-		return slices.ContainsFunc(h.Rec.Warnings(), func(w warn.Warning) bool {
-			return w.Source == "agent" && strings.HasPrefix(w.Message, "absent-agent ")
-		})
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", apptest.PathWithout("claude"))
+	eventually(t, "a warning naming claude", func() bool {
+		return slices.Contains(h.Rec.Warnings(), warn.Warning{Source: "agent", Message: "claude is not installed: it is not on PATH"})
 	})
-	data, err := os.ReadFile(h.Conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeConfig(t, h.Conf, strings.Replace(string(data), "agent_command: absent-agent --flag", "agent_command: bash", 1))
+	t.Setenv("PATH", path)
 	eventually(t, "the warning to clear", func() bool {
 		w := h.Rec.Warnings()
 		return len(w) > 0 && w[len(w)-1] == warn.Warning{Source: "agent"}
+	})
+}
+
+func TestAppWarnsWithoutTheAgentosCommand(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{NoAgentos: true})
+	eventually(t, "a warning naming the agentos command", func() bool {
+		return slices.Contains(h.Rec.Warnings(), warn.Warning{Source: "agent", Message: "The agentos command is not on PATH, so a thread's hooks cannot report its state"})
 	})
 }

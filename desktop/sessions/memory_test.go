@@ -8,7 +8,7 @@ import (
 
 func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {
 		t.Errorf("ended row memory = %d, want 0", row.Memory)
 	}
 
-	next, err := h.Sessions().Create("more work", "", false, 0, "")
+	next, err := h.Sessions().Create("more work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

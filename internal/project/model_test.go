@@ -47,24 +47,3 @@ func TestPick(t *testing.T) {
 		}
 	}
 }
-
-func TestPickAgent(t *testing.T) {
-	onClaude := Action{Name: "Work", Agent: "claude"}
-	tests := []struct {
-		name   string
-		action Action
-		labels []string
-		want   string
-	}{
-		{"nothing set leaves the default", Action{}, nil, ""},
-		{"the action's", onClaude, []string{"type:bug"}, "claude"},
-		{"first label wins", Action{}, []string{"agent:claude", "agent:codex"}, "claude"},
-		{"a label naming no provider is skipped", onClaude, []string{"agent:codex"}, "claude"},
-		{"a label naming no provider is skipped, so is the next", Action{}, []string{"agent:codex", "agent:claude"}, "claude"},
-	}
-	for _, tt := range tests {
-		if got := PickAgent(tt.action, tt.labels); got != tt.want {
-			t.Errorf("%s: PickAgent = %q, want %q", tt.name, got, tt.want)
-		}
-	}
-}

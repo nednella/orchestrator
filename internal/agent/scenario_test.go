@@ -46,7 +46,7 @@ var scenarios = []scenario{
 // transcripts, and checks the row each scenario must end with. After an update of an agent, record it again (see
 // TestRecord): the diff of testdata shows what the agent changed, and this test what that breaks.
 func TestScenarios(t *testing.T) {
-	for _, name := range Names {
+	for name, r := range recorders {
 		version, err := os.ReadFile(filepath.Join("testdata", name, "version"))
 		if err != nil {
 			t.Errorf("%s has no recordings: run go test ./internal/agent -run TestRecord -record %s", name, name)
@@ -55,7 +55,7 @@ func TestScenarios(t *testing.T) {
 		for _, sc := range scenarios {
 			t.Run(name+"/"+sc.name, func(t *testing.T) {
 				t.Logf("recorded with %s", strings.TrimSpace(string(version)))
-				row := replay(t, New(name, ""), filepath.Join("testdata", name, sc.name))
+				row := replay(t, r.provider, filepath.Join("testdata", name, sc.name))
 				sc.check(t, row)
 			})
 		}

@@ -183,7 +183,7 @@ func TestChatHasNoBranchOrPR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	work := plainSession(h, t)
+	work := sessionWithoutIssue(h, t)
 	madeBranch(h, t, work)
 	worksIn(h, t, chat, h.Dir)
 	worksIn(h, t, work, h.Dir)
@@ -212,7 +212,7 @@ func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
 
 func TestUnsentPromptIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "write the queue", false, 0, "")
+	s, err := h.Sessions().Create("work", "write the queue", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
 
 func TestTypeIntoIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, "")
+	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
-			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			s, err := h.Sessions().Create("#12 work", "", false, 12)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -305,7 +305,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 	}{{"live", false}, {"held while working", true}} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
-			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			s, err := h.Sessions().Create("#12 work", "", false, 12)
 			if err != nil {
 				t.Fatal(err)
 			}

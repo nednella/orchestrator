@@ -40,7 +40,6 @@ export type Session = {
   issue: number
   model: string
   effort: string
-  agent: string
   history: HistoryEntry[]
   branch: string
   worktree: string
@@ -163,8 +162,6 @@ export type Settings = {
   lightTheme: LightTheme
   textScale: number
   keepAwake: boolean
-  agent: string
-  agents: string[]
   cleanup: CleanupSettings
   promptSend: PromptSend
   browserEnabled: boolean

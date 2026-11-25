@@ -47,7 +47,7 @@ func TestLoadConfigPicksTheProject(t *testing.T) {
 	}
 
 	t.Run("Finder with no projects falls back to the home folder", func(t *testing.T) {
-		useConfig(t, "agent_command: claude\n")
+		useConfig(t, "projects: []\n")
 		t.Setenv("AGENTOS_DIR", "/")
 		cfg, err := Load()
 		if err != nil || cfg.Project.Dir != home {

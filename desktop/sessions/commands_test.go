@@ -240,7 +240,7 @@ func TestNumberedCommandsActInTheCallersProject(t *testing.T) {
 
 func TestIssueSessionsAreOfTheCurrentProject(t *testing.T) {
 	h, other := twoProjectsEachWithSessionOne(t)
-	if _, err := h.Sessions().Create("a", "", false, 5, ""); err != nil {
+	if _, err := h.Sessions().Create("a", "", false, 5); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.SwitchProject(other); err != nil {

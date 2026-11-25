@@ -78,7 +78,11 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		if nameErr == nil {
 			mark = s.loadUsageMark(name, after)
 		}
-		r.cursor = s.Provider(in.Agent).Usage(mark)
+		p, err := s.Provider()
+		if err != nil {
+			return
+		}
+		r.cursor = p.Usage(mark)
 	}
 	parts, cur, err := r.cursor.Read(transcript, model)
 	if err != nil {
