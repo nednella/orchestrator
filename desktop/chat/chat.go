@@ -312,8 +312,9 @@ func (f *follower) take(e chatlog.Event) {
 	}
 }
 
-// see keeps the approvals that wait: an answer takes one, and a turn's end or Claude's exit takes them all. For a mode
-// event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in the same turn.
+// see keeps the approvals that wait: an answer takes one, and a turn's end, Claude's exit or a new run's start takes them
+// all. For a mode event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in
+// the same turn.
 func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -338,7 +339,7 @@ func waitingAfter(approvals []chatlog.Event, e chatlog.Event) []chatlog.Event {
 		return append(approvals, e)
 	case chatlog.KindAnswer:
 		return slices.DeleteFunc(approvals, func(a chatlog.Event) bool { return a.ID == e.ID })
-	case chatlog.KindTurnEnd, chatlog.KindExit:
+	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindStart:
 		return nil
 	}
 	return approvals

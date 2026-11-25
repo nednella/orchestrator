@@ -135,6 +135,13 @@ test('approvals pair with their calls by id', () => {
   ], 'an older log with no parent pairs in order')
 })
 
+test('a killed run leaves nothing waiting once the next run starts', () => {
+  const t = buildTimeline(log({ kind: 'start' }, user('u1', 'Install it'), toolUse('t1', 'Bash'), approval('r1', 'Bash'), { kind: 'start' }), {}, 'shop/abcd2345')
+  assert.equal(t.pending, null)
+  assert.equal(t.turnOpen, false)
+  assert.equal(only(t.items, 'approval')[0].expired, true)
+})
+
 test('unanswered approval expires at turn end', () => {
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')

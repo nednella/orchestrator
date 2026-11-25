@@ -197,6 +197,11 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
         return
+      // A run whose host was killed logged no exit: its turn and what it waits on end where the next run starts.
+      case 'start':
+        interrupted = false
+        end(e, null)
+        return
       case 'commands':
         commands = Array.isArray(e.input) ? e.input.filter((c): c is Command => typeof c?.name === 'string') : []
         return

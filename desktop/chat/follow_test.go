@@ -226,6 +226,29 @@ func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 	}
 }
 
+func TestAKilledRunsApprovalDoesNotWaitOnceTheNextRunStarts(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []chatlog.Event{
+		{Kind: chatlog.KindStart},
+		{Kind: chatlog.KindApproval, ID: "req-1", Tool: "Bash", Input: json.RawMessage(`{"command":"make test"}`)},
+		{Kind: chatlog.KindStart},
+	} {
+		if _, err := chatLog.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	chatLog.Close()
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), nil, context.Background)
+	if got := svc.ChatPending(); len(got) != 0 {
+		t.Errorf("ChatPending = %+v, want nothing: the run that asked was killed", got)
+	}
+}
+
 func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
 	chatLog, err := chatlog.OpenLog(logPath)
