@@ -75,7 +75,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   },
   {
     id: 'view-previous',
-    label: 'Previous thread details tab (PR, evidence, browser)',
+    label: 'Previous thread details tab (PR, evidence, browser, agents)',
     group: 'Navigate',
     shortcut: { key: '[', code: 'BracketLeft', shift: true, label: '[' },
     run() {
@@ -86,7 +86,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   },
   {
     id: 'view-next',
-    label: 'Next thread details tab (PR, evidence, browser)',
+    label: 'Next thread details tab (PR, evidence, browser, agents)',
     group: 'Navigate',
     shortcut: { key: ']', code: 'BracketRight', shift: true, label: ']' },
     run() {

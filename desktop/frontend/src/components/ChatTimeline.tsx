@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
+import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
 import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
@@ -106,6 +107,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
   // The virtualizer's measurements cover every row, rendered or not; a row not yet measured counts at its estimate.
   const rows = useCallback(() => virtualizer.measurementsCache, [virtualizer])
   const scrollToItem = useCallback((index: number) => virtualizer.scrollToIndex(index, { align: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }), [virtualizer])
+  useShowAgents(id, items, scrollToItem)
 
   // No run-once guard: when the virtualizer lets go of its scroll element and takes it back, as in a strict-mode
   // remount, it writes the offset it last read, so the view must be put back again.
