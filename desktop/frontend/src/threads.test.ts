@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { currentTask, shortAgo, sortThreads } from './threads.ts'
+import { currentTask, goneThreads, shortAgo, sortThreads } from './threads.ts'
 import type { PR, Session, State } from './types.ts'
 
 function thread(id: string, state: State, lastEventAt = 0): Session {
@@ -98,4 +98,10 @@ test('the time since the last event is compact', () => {
   assert.equal(shortAgo(now - 6 * 24 * 60 * minute, now), '6d')
   assert.equal(shortAgo(now - 7 * 24 * 60 * minute, now), '1w')
   assert.equal(shortAgo(now - 23 * 24 * 60 * minute, now), '3w')
+})
+
+test('a thread is gone when its project\'s new list leaves it out', () => {
+  const other = { ...thread('other', 'idle'), project: 'blog' }
+  assert.deepEqual(goneThreads([thread('a', 'idle'), thread('b', 'ended'), other], 'shop', [thread('a', 'idle')]), ['b'])
+  assert.deepEqual(goneThreads([thread('a', 'idle')], 'shop', [thread('a', 'working'), thread('c', 'idle')]), [])
 })

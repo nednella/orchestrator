@@ -5,7 +5,7 @@ import { answeredLate } from './chatQuestions'
 import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
-import { liveThreads, sidebarThreads } from './threads'
+import { goneThreads, liveThreads, sidebarThreads } from './threads'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
@@ -215,6 +215,11 @@ const composerModeKey = (project: string) => `agentos.composerMode.${project}`
 const threadDraftKey = (id: string) => `agentos.thread.draft.${id}`
 const draftSeenKey = (id: string) => `agentos.thread.draftSeen.${id}`
 
+function forgetThreadDraft(id: string) {
+  removeStored(threadDraftKey(id))
+  removeStored(draftSeenKey(id))
+}
+
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // Keeps each item of prev that next holds unchanged, and prev itself when nothing changed, so the rows
@@ -357,6 +362,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const applySessions = useCallback(
     (projectKey: string, items: Session[]) => {
+      goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThreadDraft)
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
       if (projectKey === projectRef.current?.key) selectAmong(items)
     },
@@ -730,8 +736,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async dismissSession(id) {
         await api.dismissSession(id)
-        removeStored(threadDraftKey(id))
-        removeStored(draftSeenKey(id))
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
       },

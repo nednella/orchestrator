@@ -24,6 +24,12 @@ export function sidebarThreads(sessions: Session[], projectKey: string | undefin
   return sortThreads(sessions.filter((s) => s.project === projectKey))
 }
 
+// goneThreads is the ids of the project's threads in before that its new list, after, no longer holds.
+export function goneThreads(before: Session[], projectKey: string, after: Session[]): string[] {
+  const kept = new Set(after.map((s) => s.id))
+  return before.filter((s) => s.project === projectKey && !kept.has(s.id)).map((s) => s.id)
+}
+
 export function waitingByProject(sessions: Session[]): Map<string, number> {
   const counts = new Map<string, number>()
   for (const s of sessions) if (s.state === 'waiting') counts.set(s.project, (counts.get(s.project) ?? 0) + 1)
