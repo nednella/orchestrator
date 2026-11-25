@@ -24,6 +24,10 @@ test('Edit, MultiEdit and Write count their lines', () => {
   assert.deepEqual([write.title, write.detail], ['Write', 'a.ts +3 −0'])
 })
 
+test('an Edit that replaces every match says so', () => {
+  assert.equal(toolSummary('Edit', { file_path: 'a.ts', old_string: 'a', new_string: 'b', replace_all: true }, folder).detail, 'a.ts +1 −1 · all')
+})
+
 test('Grep and Glob show the pattern', () => {
   assert.deepEqual(toolSummary('Grep', { pattern: 'foo.*' }, folder), { icon: 'search', title: 'Grep', detail: 'foo.*' })
   assert.equal(toolSummary('Glob', { pattern: '**/*.ts' }, folder).detail, '**/*.ts')
@@ -90,6 +94,19 @@ test('an Edit opens as a diff and a Bash as its full command', () => {
   assert.deepEqual(toolBody('Bash', { command: 'a\nb' }), { text: 'a\nb' })
   assert.deepEqual(toolBody('Write', { file_path: 'a', content: 'q' }), { diff: [{ sign: '+', text: 'q' }] })
   assert.deepEqual(toolBody('Grep', { pattern: 'p' }), { text: '{\n  "pattern": "p"\n}' })
+})
+
+test('the edits of a MultiEdit are told apart', () => {
+  const body = toolBody('MultiEdit', { file_path: 'a', edits: [{ old_string: 'a', new_string: 'b' }, { old_string: 'c', new_string: 'd' }] })
+  assert.deepEqual(body, {
+    diff: [
+      { sign: '−', text: 'a' },
+      { sign: '+', text: 'b' },
+      { sign: ' ', text: '…' },
+      { sign: '−', text: 'c' },
+      { sign: '+', text: 'd' },
+    ],
+  })
 })
 
 test('a result shows its first 20 lines until all are asked for', () => {

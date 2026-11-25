@@ -1,9 +1,9 @@
 import type { IconName } from './components/Icon'
 
 export type ToolSummary = { icon: IconName; title: string; detail: string }
-export type DiffLine = { sign: '+' | '−'; text: string }
+export type DiffLine = { sign: '+' | '−' | ' '; text: string }
 
-const resultLimit = 20
+export const resultLimit = 20
 const detailLimit = 120
 
 type Input = Record<string, unknown>
@@ -43,7 +43,7 @@ export function toolSummary(tool: string, input: unknown, folder: string): ToolS
       const all = edits(tool, i)
       const added = all.reduce((n, e) => n + lines(e.next).length, 0)
       const removed = all.reduce((n, e) => n + lines(e.old).length, 0)
-      return { icon: 'compose', title: tool, detail: `${relative(str(i.file_path), folder)} +${added} −${removed}` }
+      return { icon: 'compose', title: tool, detail: `${relative(str(i.file_path), folder)} +${added} −${removed}${i.replace_all === true ? ' · all' : ''}` }
     }
     case 'Grep':
     case 'Glob':
@@ -69,7 +69,8 @@ export function toolSummary(tool: string, input: unknown, folder: string): ToolS
 export function toolBody(tool: string, input: unknown): { diff: DiffLine[] } | { text: string } {
   const i = asInput(input)
   if (tool === 'Edit' || tool === 'MultiEdit' || tool === 'Write') {
-    return { diff: edits(tool, i).flatMap((e) => [...lines(e.old).map((text) => ({ sign: '−' as const, text })), ...lines(e.next).map((text) => ({ sign: '+' as const, text }))]) }
+    const hunks = edits(tool, i).map((e): DiffLine[] => [...lines(e.old).map((text) => ({ sign: '−' as const, text })), ...lines(e.next).map((text) => ({ sign: '+' as const, text }))])
+    return { diff: hunks.flatMap((h, n) => (n === 0 ? h : [{ sign: ' ' as const, text: '…' }, ...h])) }
   }
   if (tool === 'Bash' && typeof i.command === 'string') return { text: i.command }
   return { text: JSON.stringify(input ?? {}, null, 2) }
