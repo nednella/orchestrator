@@ -438,8 +438,11 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
+  // busy says whether a turn runs, an approval waits or a message is queued, as the host's busy op does.
+  const busy = (id: string) => replying.has(id) || pending.has(id) || (queued.get(id)?.length ?? 0) > 0
+
   // mode logs Claude's new permission mode, as the host does once Claude changes it.
   const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
 
-  return { backend, seed, ask, fork, forget, end, start, mode, breakLog, mediaURL }
+  return { backend, seed, ask, fork, forget, end, start, busy, mode, breakLog, mediaURL }
 }

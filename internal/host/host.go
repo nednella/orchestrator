@@ -439,8 +439,12 @@ func (h *host) handle(conn net.Conn) {
 		writeReply(conn, "", fmt.Errorf("bad request: %w", err))
 		return
 	}
-	if req.Op == opSubscribe {
+	switch req.Op {
+	case opSubscribe:
 		h.subscribe(conn, req.After)
+		return
+	case opBusy:
+		writeJSON(conn, reply{OK: true, Busy: h.busy()})
 		return
 	}
 	id, err := h.do(req)
@@ -624,9 +628,21 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 
 var errModeDuringTurn = errors.New("Change access when the turn ends")
 
-// setMode asks Claude to change its permission mode and logs the mode once Claude takes it. It is refused while a turn
-// runs, an approval waits or a queued message is still to run: a turn keeps the mode it started with. The request is
-// written under stdinMu, as a send is, so no message gets in between the check and the write.
+// busy says whether a turn runs, an approval waits or a queued message is still to run.
+func (h *host) busy() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.busyLocked()
+}
+
+// busyLocked needs h.mu.
+func (h *host) busyLocked() bool {
+	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0
+}
+
+// setMode asks Claude to change its permission mode and logs the mode once Claude takes it. It is refused while the host
+// is busy: a turn keeps the mode it started with. The request is written under stdinMu, as a send is, so no message gets
+// in between the check and the write.
 func (h *host) setMode(mode string) error {
 	if mode == "" {
 		return errors.New("mode needs a permission mode")
@@ -640,7 +656,7 @@ func (h *host) setMode(mode string) error {
 		h.stdinMu.Unlock()
 		return errExited
 	}
-	if h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0 {
+	if h.busyLocked() {
 		h.mu.Unlock()
 		h.stdinMu.Unlock()
 		return errModeDuringTurn
@@ -873,9 +889,13 @@ func writeReply(conn net.Conn, id string, err error) error {
 	if err != nil {
 		r.Error = err.Error()
 	}
+	return writeJSON(conn, r)
+}
+
+func writeJSON(conn net.Conn, r reply) error {
 	b, _ := json.Marshal(r)
-	_, werr := conn.Write(append(b, '\n'))
-	return werr
+	_, err := conn.Write(append(b, '\n'))
+	return err
 }
 
 func listen(path string) (net.Listener, error) {

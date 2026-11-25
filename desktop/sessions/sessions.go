@@ -2045,8 +2045,10 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 	return nil
 }
 
-// checkAccess records the access of a settled thread, settles a live one that must start again for it, and refuses a
-// thread that is in a turn. It holds createMu, so neither a refresh nor a wake comes between the check and the settle.
+// checkAccess records the access of a settled thread, and settles a live one that must start again for it, recording
+// the access there. Its host says whether a turn is open: the hook state lags a message just written to Claude, and a reply that
+// ends in a question waits on the owner with no turn open. A live change is checked by the host as it makes it. It holds
+// createMu, so neither a refresh nor a wake comes between the check and the settle.
 func (s *Sessions) checkAccess(name session.Name, access session.Access) (accessChange, error) {
 	id := name.String()
 	s.createMu.Lock()
@@ -2057,7 +2059,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		in, live = s.info[i], true
 	}
 	e, settled := s.ended[id]
-	old, archived, state := s.isOld(id), s.archived[id], s.records[id].State
+	old, archived := s.isOld(id), s.archived[id]
 	s.mu.Unlock()
 	switch {
 	case archived:
@@ -2068,17 +2070,44 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		return accessDone, s.settledAccess(id, access)
 	case !live:
 		return accessDone, fmt.Errorf("No thread %s", id)
-	case holdsPrompts(state):
-		return accessDone, errAccessDuringTurn
 	case in.Access == access:
 		return accessDone, nil
 	case in.Access != session.Full && access != session.Full:
 		return accessLive, nil
 	}
+	socket, err := s.readyHost(name)
+	busy := false
+	if err == nil {
+		busy, err = host.Busy(s.context(), socket)
+	}
+	switch {
+	case err != nil:
+		return accessDone, accessFailed(name, access, err)
+	case busy:
+		return accessDone, errAccessDuringTurn
+	}
 	if err := s.Settle(id); err != nil {
 		return accessDone, err
 	}
 	return accessRestart, s.settledAccess(id, access)
+}
+
+// readyHost is the socket of the live thread's host once it listens, waiting for one that is still starting.
+func (s *Sessions) readyHost(name session.Name) (string, error) {
+	socket := s.hostSocket(name)
+	ready, cancel := context.WithTimeout(s.context(), hostStarting)
+	defer cancel()
+	return socket, host.Ready(ready, socket)
+}
+
+// accessFailed is the host's own reason for not changing the thread's access, or a plain sentence when the host could
+// not be reached, whose cause goes to the log.
+func accessFailed(name session.Name, access session.Access, err error) error {
+	log.Printf("agentos: thread %s did not change its access to %s: %v", name, access, err)
+	if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+		return errors.New(refused.Reason)
+	}
+	return fmt.Errorf("Thread %s did not change its access", name)
 }
 
 // settledAccess records the settled thread's access in its state file, where its next wake reads it. It takes mu.
@@ -2102,21 +2131,14 @@ func (s *Sessions) settledAccess(id string, access session.Access) error {
 	return nil
 }
 
-// changeMode changes the live thread's access as Claude runs, through its host, which refuses it during a turn.
+// changeMode changes the live thread's access as Claude runs, through its host, which refuses it while busy.
 func (s *Sessions) changeMode(name session.Name, access session.Access) error {
-	ctx, socket := s.context(), s.hostSocket(name)
-	ready, cancel := context.WithTimeout(ctx, hostStarting)
-	err := host.Ready(ready, socket)
-	cancel()
+	socket, err := s.readyHost(name)
 	if err == nil {
-		err = host.SetMode(ctx, socket, agent.PermissionMode(access))
+		err = host.SetMode(s.context(), socket, agent.PermissionMode(access))
 	}
 	if err != nil {
-		log.Printf("agentos: thread %s did not change its access to %s: %v", name, access, err)
-		if refused := (*host.Refused)(nil); errors.As(err, &refused) {
-			return errors.New(refused.Reason)
-		}
-		return fmt.Errorf("Thread %s did not change its access", name)
+		return accessFailed(name, access, err)
 	}
 	return s.liveAccess(name, access)
 }

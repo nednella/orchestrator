@@ -1622,3 +1622,35 @@ func TestModeReportsClaudesError(t *testing.T) {
 		t.Errorf("logged modes = %q, want none", got)
 	}
 }
+
+func TestBusyWhileATurnRunsOrAMessageWaits(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	busy := func() bool {
+		t.Helper()
+		b, err := Busy(ctxT(t), h.socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	if busy() {
+		t.Fatal("busy before any message")
+	}
+	sendMessage(t, h.socket, "slow")
+	if !busy() {
+		t.Error("not busy once a message is written, before Claude answers")
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	if busy() {
+		t.Error("busy after the turn ended")
+	}
+	sendMessage(t, h.socket, "ask")
+	waitKind(t, events, chat.KindApproval)
+	if !busy() {
+		t.Error("not busy while an approval waits")
+	}
+}

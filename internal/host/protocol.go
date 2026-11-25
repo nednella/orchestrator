@@ -11,6 +11,7 @@ const (
 	opInterrupt = "interrupt"
 	opAnswer    = "answer"
 	opMode      = "mode"
+	opBusy      = "busy"
 	opSubscribe = "subscribe"
 )
 
@@ -30,6 +31,7 @@ type reply struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error"`
 	ID    string `json:"id,omitempty"`
+	Busy  bool   `json:"busy,omitempty"` // the busy op's answer
 }
 
 const maxRequest = 1 << 20

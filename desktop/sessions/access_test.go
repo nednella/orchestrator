@@ -140,9 +140,8 @@ func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
 			if _, err := h.ChatSend(s.ID, "slow"); err != nil {
 				t.Fatal(err)
 			}
-			h.Hook(t, s.ID, "UserPromptSubmit", `{"session_id":"fake-session","prompt":"slow"}`)
-			eventually(t, "the thread working", func() bool { got, _ := h.Session(s.ID); return got.State == session.Working })
 
+			// No hook has said the thread works yet: its host knows the turn runs.
 			if err := h.SetAccess(s.ID, to); err == nil || err.Error() != "Change access when the turn ends" {
 				t.Fatalf("err = %v, want the turn's refusal", err)
 			}
@@ -159,23 +158,26 @@ func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
 	}
 }
 
-func TestSetAccessDuringAHostTurnIsRefused(t *testing.T) {
+func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
 		t.Fatal(err)
 	}
-	claudeArgs(t, h, s.ID)
-	if _, err := h.ChatSend(s.ID, "slow"); err != nil {
+	if _, err := h.ChatSend(s.ID, "hi"); err != nil {
 		t.Fatal(err)
 	}
-	// No hook has said the thread works yet; its host knows the turn runs.
-	if err := h.SetAccess(s.ID, "supervised"); err == nil || err.Error() != "Change access when the turn ends" {
-		t.Fatalf("err = %v, want the host's refusal", err)
+	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I change the file?"}`)
+	eventually(t, "the thread waiting on the owner", func() bool { got, _ := h.Session(s.ID); return got.State == session.Waiting })
+
+	if err := h.SetAccess(s.ID, "supervised"); err != nil {
+		t.Fatal(err)
 	}
-	if got := accessTag(t, h, s.ID); got != "read" {
-		t.Errorf("tagged %q, want read", got)
+	if got := modeRequests(t, h, s.ID); len(got) != 1 || !strings.Contains(got[0], `"mode":"default"`) {
+		t.Fatalf("stdin = %q, want one request for default", got)
 	}
+	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Supervised))
 }
 
 func TestSetAccessOfASettledThread(t *testing.T) {

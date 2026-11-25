@@ -918,12 +918,13 @@ export function createMock(params: URLSearchParams) {
       emit('issues', { project: current.name, items: currentIssues() })
     },
     // SetAccess acts as the sessions do: a settled thread wakes with it, Read and Supervised change as Claude runs, and
-    // a change to or from Full starts the thread again.
+    // a change to or from Full starts the thread again. The thread's chat, not its row, says whether a turn is open: a
+    // thread waiting on a reply that asks has none.
     SetAccess: async (id: string, access: Access) => {
       if (!['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       const s = find(id)
       if (!s.hosted) throw `Thread ${id} ran in a terminal; its access cannot change`
-      if (s.state === 'working' || s.state === 'waiting') throw 'Change access when the turn ends'
+      if (s.state !== 'settled' && chats.busy(id)) throw 'Change access when the turn ends'
       if (s.access === access) return
       if (s.state !== 'settled' && (s.access === 'full' || access === 'full')) {
         chats.end(id)

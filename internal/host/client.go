@@ -81,6 +81,12 @@ func SetMode(ctx context.Context, socket, mode string) error {
 	return err
 }
 
+// Busy says whether a turn runs on the host, an approval waits or a message it was given has still to run.
+func Busy(ctx context.Context, socket string) (bool, error) {
+	rep, err := call(ctx, socket, request{Op: opBusy})
+	return rep.Busy, err
+}
+
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.
 func Subscribe(ctx context.Context, socket string, after int64, fn func(chat.Event)) error {
 	conn, r, _, err := dial(ctx, socket, request{Op: opSubscribe, After: after})
