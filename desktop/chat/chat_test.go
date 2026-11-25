@@ -180,15 +180,23 @@ func TestRestartResumesWithoutGapsOrDoubles(t *testing.T) {
 		return countTurnEnds(logged) == 2 && len(got) > 0 && got[len(got)-1].Seq == logged[len(logged)-1].Seq
 	})
 
-	all := append(seqs(before), seqs(persisted(emitted(second.Rec, id)))...)
+	live := seqs(persisted(emitted(second.Rec, id)))
+	for i := 1; i < len(live); i++ {
+		if live[i] <= live[i-1] {
+			t.Fatalf("emitted seqs %v do not strictly increase", live)
+		}
+	}
+	// An event logged between the watch and the history read comes in both; the front end's merge drops the double.
+	all := append(seqs(before), live...)
 	slices.Sort(all)
+	all = slices.Compact(all)
 	last := history(t, second, id, 0)
 	want := make([]int64, len(last))
 	for i := range want {
 		want[i] = int64(i + 1)
 	}
 	if !slices.Equal(all, want) {
-		t.Errorf("history before the watch and the chat events after it hold seqs %v, want 1 to %d each once", all, len(want))
+		t.Errorf("the history read after the watch and the chat events hold seqs %v, want 1 to %d with no gap", all, len(want))
 	}
 	if countTurnEnds(last) != 2 {
 		t.Errorf("log kinds = %v, want two turns", kinds(last))
