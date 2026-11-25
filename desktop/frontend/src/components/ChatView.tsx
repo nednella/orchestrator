@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
 import { api } from '../api'
+import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
 import { fromMarkdown } from '../composerMarkdown'
+import { readStored, writeStored } from '../storage'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
+import { ChatColumnHandle } from './ChatColumnHandle'
 import { ChatEndPill } from './ChatEndPill'
 import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
@@ -52,18 +55,32 @@ export function ChatView({ session }: ChatViewProps) {
   }
   const input = useRef<ComposerInput>(null)
   const end = useRef<ChatTimelineEnd>(null)
+  const pane = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLDivElement>(null)
   const [inset, setInset] = useState(0)
   const [following, setFollowing] = useState(true)
+  const [column, setColumn] = useState(() => storedColumn(readStored(COLUMN_KEY, null)))
+  // Whether the pane is wider than the default column, so that the column can be dragged wider.
+  const [roomy, setRoomy] = useState(false)
 
   useLayoutEffect(() => {
+    const root = pane.current
     const el = composer.current
-    if (!el) return
-    const measure = () => setInset(el.offsetHeight + insetGap)
+    if (!root || !el) return
+    const measure = () => {
+      setInset(el.offsetHeight + insetGap)
+      setRoomy(root.clientWidth / rootRemPx() > COLUMN_DEFAULT_REM)
+    }
     measure()
     const observer = new ResizeObserver(measure)
+    observer.observe(root)
     observer.observe(el)
     return () => observer.disconnect()
+  }, [])
+
+  const keepColumn = useCallback((rem: number) => {
+    setColumn(rem)
+    writeStored(COLUMN_KEY, rem)
   }, [])
 
   // The message the next send answers.
@@ -112,7 +129,7 @@ export function ChatView({ session }: ChatViewProps) {
   }
 
   return (
-    <div data-chat className="relative flex h-full min-h-0 flex-col bg-app" onKeyDown={onKeyDown}>
+    <div ref={pane} data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties} onKeyDown={onKeyDown}>
       {empty && loading && <Loading />}
       {empty && !loading && error && !session.hosted && <p className="flex flex-1 items-center justify-center px-4 text-center text-small text-dim">{error}</p>}
       {empty && !loading && error && session.hosted && <Notice title="The chat did not load" hint={error} centered />}
@@ -132,7 +149,7 @@ export function ChatView({ session }: ChatViewProps) {
       )}
       {/* The chat runs on under the composer; only the composer itself takes the pointer. */}
       <div ref={composer} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 pb-4 sm:pt-2 sm:pb-5">
-        <div className="mx-auto w-full max-w-[46rem] px-4">
+        <div className="chat-column px-4">
           <div className="pointer-events-auto relative">
             {!empty && <ChatEndPill shown={!following} queued={timeline.queued.length} onClick={() => end.current?.scrollToEnd()} />}
             {!empty && error && (
@@ -144,6 +161,14 @@ export function ChatView({ session }: ChatViewProps) {
           </div>
         </div>
       </div>
+      {roomy && (
+        <div className="chat-column pointer-events-none absolute inset-0 z-21 px-4">
+          <div className="relative h-full">
+            <ChatColumnHandle side="left" pane={pane} column={column} onColumn={keepColumn} />
+            <ChatColumnHandle side="right" pane={pane} column={column} onColumn={keepColumn} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

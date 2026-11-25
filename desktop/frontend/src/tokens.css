@@ -116,6 +116,9 @@
   --radius-sm: 4px;
   --radius-md: 6px;
 
+  /* The message column's default width; a thread's chat sets the width the owner dragged it to. */
+  --chat-column: 46rem;
+
   /* px, not rem: the window buttons stay at 20pt down at every text size */
   --topbar-h: 40px;
   --traffic-light-zone: 112px;

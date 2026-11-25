@@ -42,7 +42,7 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
   }
 
   return (
-    <div className="mx-auto w-full max-w-[46rem]">
+    <div className="chat-column">
       {(banner || drawer) && (
         <div className="composer-attached fade-in">
           {banner}
