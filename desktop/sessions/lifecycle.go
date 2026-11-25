@@ -1115,6 +1115,81 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 	return reason
 }
 
+// childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
+// the worktree holds no commit the default branch on origin lacks, and planFor's checks pass, with a thread asleep in
+// it counting too. Its branch stays, and so does the thread, whose wake puts the worktree back. Anything else keeps the
+// worktree for the clean-up after its pull request, and the log says why. A child in its parent's folder, or in one
+// agentos did not make for it, has nothing to remove. A Delete of the child takes its worktree only when asked.
+func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
+	t, err := l.sessions.target(id)
+	if err != nil || !t.ended || !t.made {
+		return
+	}
+	key := t.proj.Key()
+	if !l.ours(ctx, key, t.dir, id) {
+		return
+	}
+	l.mu.Lock()
+	tr := l.tracks[id]
+	if tr == nil {
+		tr = &track{}
+		l.tracks[id] = tr
+	}
+	if l.retired(id) || tr.cleanup == "pending" {
+		l.mu.Unlock()
+		return
+	}
+	before := tr.cleanup
+	tr.cleanup = "pending"
+	l.mu.Unlock()
+	defer func() {
+		l.mu.Lock()
+		if tr.cleanup == "pending" {
+			tr.cleanup = before
+		}
+		l.mu.Unlock()
+		l.sessions.changed()
+	}()
+	l.sessions.mu.Lock()
+	deleting := l.sessions.deleting[id] || l.sessions.deleted[id]
+	l.sessions.mu.Unlock()
+	if deleting {
+		return
+	}
+
+	plan, reason := l.planFor(ctx, t, nil, false)
+	if reason == "" {
+		reason = l.aheadOfBase(ctx, t)
+	}
+	if user := l.sessions.usersOf(t.dir, true, id); reason == "" && user != "" {
+		reason = fmt.Sprintf("Thread %s also works in this worktree", user)
+	}
+	var removed []string
+	if reason == "" {
+		removed, reason = l.removeWorktree(ctx, t, &plan)
+	}
+	l.logCleanup(ctx, t, nil, removed, reason)
+}
+
+// aheadOfBase says why the worktree of t holds work the default branch on origin lacks, or "" when it holds none.
+func (l *Lifecycle) aheadOfBase(ctx context.Context, t target) string {
+	dir, base := t.proj.Dir, l.mainBranch(ctx, t.proj.Dir)
+	head, err := l.head(ctx, dir, t.dir, t.branch)
+	if err != nil {
+		return fmt.Sprintf("git could not read where %s stands: %v", t.branch, err)
+	}
+	n, err := l.commitsNotIn(ctx, dir, "origin/"+base, head)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("git could not compare %s with origin/%s: %v", t.branch, base, err)
+	case n == 1:
+		return fmt.Sprintf("%s has a commit that origin/%s lacks", t.branch, base)
+	case n > 1:
+		return fmt.Sprintf("%s has %d commits that origin/%s lacks", t.branch, n, base)
+	}
+	return ""
+}
+
 // removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
 // may have changed the worktree until it stopped, the worktree's removal, and the rest of the settle. A non-empty reason
 // means it stopped before the end. A step that finds the context cancelled stops with closedReason, and one that finds

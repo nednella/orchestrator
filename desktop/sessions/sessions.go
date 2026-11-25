@@ -1162,6 +1162,9 @@ func (s *Sessions) sync() {
 			go s.closeBrowser(id)
 			if !s.restarting[id] {
 				go s.stopServers(true, id)
+				if s.known[id].Parent != "" {
+					s.life.inBackground(s.ctx, func(ctx context.Context) { s.life.childAsleep(ctx, id) })
+				}
 			}
 			s.endSession(id, time.Now())
 			delete(s.seen, id)
