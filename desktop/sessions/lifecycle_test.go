@@ -325,47 +325,173 @@ func TestCleanupMergedWithRemoteBranchGone(t *testing.T) {
 	}
 }
 
-func TestCleanupMergedBlockedByCommitsAfterTheMergedHead(t *testing.T) {
-	tests := []struct {
-		name   string
-		head   func(t *testing.T, h *apptest.Harness, wt string) string
-		reason string
-	}{
-		{"a commit after the last push", func(t *testing.T, h *apptest.Harness, wt string) string {
-			head := gitIn(t, wt, "rev-parse", "HEAD")
-			if err := os.WriteFile(filepath.Join(wt, "later.txt"), []byte("x\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			gitIn(t, wt, "add", "later.txt")
-			gitIn(t, wt, "commit", "-m", "after the merge")
-			return head
-		}, "issue-7 has commits that are not in the merged pull request"},
-		{"a head git does not know", func(t *testing.T, h *apptest.Harness, wt string) string {
-			return strings.Repeat("0", 40)
-		}, "git could not compare issue-7 with the merged pull request"},
-		{"no head from GitHub", func(t *testing.T, h *apptest.Harness, wt string) string { return "" },
-			"GitHub did not say which commit the merged pull request ended on"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newHarness(t)
-			origin := repoFixture(t, h)
-			wt := issueWorktree(t, h)
-			head := tt.head(t, h, wt)
-			gitIn(t, origin, "branch", "-D", "issue-7")
-			gitIn(t, h.Dir, "fetch", "--prune")
-			s := issueSession(h, t, 7)
+// mergedAndPruned merges issue-7 on origin as how says, deletes origin's branch, and fetches as a
+// later fetch would, so the project's clone has no copy of the branch on origin. It returns the PR's head.
+func mergedAndPruned(t *testing.T, h *apptest.Harness, origin, how string) string {
+	t.Helper()
+	head := apptest.MergeAs(t, origin, "issue-7", how+"+delete")
+	gitIn(t, h.Dir, "fetch", "--prune")
+	return head
+}
 
-			openThenMergeAt(h, head)
-			eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
-			got, _ := h.Session(s.ID)
-			if !strings.HasPrefix(got.CleanupReason, tt.reason) {
-				t.Errorf("reason = %q, want %q", got.CleanupReason, tt.reason)
-			}
-			if !exists(wt) || branches(t, h.Dir) == "" {
-				t.Error("something was removed although the branch holds work the merged PR lacks")
-			}
-		})
+// onOrigin says whether a ref on origin, as the project's clone sees it, holds commit.
+func onOrigin(t *testing.T, h *apptest.Harness, commit string) bool {
+	t.Helper()
+	return gitIn(t, h.Dir, "branch", "--remotes", "--contains", commit) != ""
+}
+
+// keptFor waits for the session's clean-up to block, and checks the reason and that the worktree and branch are on disk.
+func keptFor(t *testing.T, h *apptest.Harness, id, wt, reason string) {
+	t.Helper()
+	eventually(t, "blocked", func() bool { got, _ := h.Session(id); return got.Cleanup == "blocked" })
+	if got, _ := h.Session(id); got.CleanupReason != reason {
+		t.Errorf("reason = %q, want %q", got.CleanupReason, reason)
+	}
+	if !exists(wt) || branches(t, h.Dir) == "" {
+		t.Error("the worktree or branch was removed although the clean-up was blocked")
+	}
+}
+
+func TestRebaseMergeAtThePRsLastCommitIsMerged(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	head := mergedAndPruned(t, h, origin, "rebase")
+	if head != gitIn(t, wt, "rev-parse", "HEAD") || onOrigin(t, h, head) {
+		t.Fatal("the rebase kept the branch's commit ids, so the test proves nothing")
+	}
+
+	openThenMergeAt(h, head)
+	eventually(t, "the clean-up of a rebase merge", cleanedUp(h, s.ID))
+	if exists(wt) {
+		t.Error("the worktree of a merged branch was kept")
+	}
+}
+
+func TestSquashMergeAtThePRsLastCommitIsMerged(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	commitIn(t, wt, "second.txt")
+	gitIn(t, wt, "push", "origin", "issue-7")
+	s := issueSession(h, t, 7)
+	head := mergedAndPruned(t, h, origin, "squash")
+	if onOrigin(t, h, head) {
+		t.Fatal("the squash kept the branch's commits on origin")
+	}
+
+	openThenMergeAt(h, head)
+	eventually(t, "the clean-up of a squash merge", cleanedUp(h, s.ID))
+	if exists(wt) {
+		t.Error("the worktree of a merged branch was kept")
+	}
+}
+
+func TestMergeCommitInTheDefaultBranchIsMerged(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	apptest.MergeAs(t, origin, "issue-7", "merge+delete")
+	// Only the branch's copy goes, so the app must fetch the default branch itself to see the merge.
+	gitIn(t, h.Dir, "update-ref", "-d", "refs/remotes/origin/issue-7")
+	if onOrigin(t, h, gitIn(t, wt, "rev-parse", "HEAD")) {
+		t.Fatal("the project's clone already holds the branch on origin")
+	}
+
+	openThenMerge(h)
+	eventually(t, "the clean-up of a merge commit", cleanedUp(h, s.ID))
+	if exists(wt) {
+		t.Error("the worktree of a merged branch was kept")
+	}
+}
+
+func TestWorktreePastTheMergedHeadIsKept(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	head := mergedAndPruned(t, h, origin, "rebase")
+	commitIn(t, wt, "after.txt")
+	after := gitIn(t, wt, "rev-parse", "HEAD")
+
+	openThenMergeAt(h, head)
+	keptFor(t, h, s.ID, wt, "issue-7 has commits that are not in the merged pull request")
+	if got := gitIn(t, h.Dir, "rev-parse", "issue-7"); got != after {
+		t.Errorf("issue-7 is at %s, want the commit after the merge %s", got, after)
+	}
+}
+
+func TestWorktreeThatMovedOnAfterTheMergeIsKept(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	head := apptest.MergeAs(t, origin, "issue-7", "rebase")
+	commitIn(t, wt, "after.txt")
+	gitIn(t, wt, "push", "origin", "issue-7")
+
+	openThenMergeAt(h, head)
+	keptFor(t, h, s.ID, wt, "issue-7 has commits that are not in the merged pull request")
+}
+
+func TestForcePushBeforeTheMergeKeepsTheOldWork(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	other := filepath.Join(t.TempDir(), "other")
+	gitIn(t, filepath.Dir(other), "clone", "--branch", "issue-7", origin, other)
+	gitIn(t, other, "reset", "--hard", "origin/main")
+	commitIn(t, other, "instead.txt")
+	gitIn(t, other, "push", "--force", "origin", "issue-7")
+	head := mergedAndPruned(t, h, origin, "rebase")
+
+	openThenMergeAt(h, head)
+	keptFor(t, h, s.ID, wt, "issue-7 has a commit that is not on origin")
+}
+
+func TestMergedPRWithoutAHeadAndNotInMainIsKept(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	mergedAndPruned(t, h, origin, "rebase")
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "issue-7 has a commit that is not on origin")
+}
+
+func TestMergedPRAtACommitGitDoesNotKnowIsKept(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	mergedAndPruned(t, h, origin, "rebase")
+
+	openThenMergeAt(h, strings.Repeat("0", 40))
+	keptFor(t, h, s.ID, wt, "issue-7 has a commit that is not on origin")
+}
+
+func TestClosedPRWithPushedWorkIsRemovedOnConfirm(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	h.GH.SetPR(prJSON("CLOSED", false, "[]", 0, 0))
+	h.RefreshPRs()
+	if got, _ := h.Session(s.ID); got.Cleanup != "ask" || !exists(wt) {
+		t.Fatalf("closed PR: cleanup %q, worktree %v", got.Cleanup, exists(wt))
+	}
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := h.Session(s.ID); !cleanedUp(h, s.ID)() || exists(wt) {
+		t.Errorf("the confirmed clean-up of pushed work: session %+v, worktree %v", got, exists(wt))
 	}
 }
 
@@ -450,6 +576,25 @@ func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
 	if got := gitStatus(t, h, s.ID); got.NotInMain != 1 || got.Unpushed != 0 {
 		t.Errorf("after the merge = %+v, want 1 commit not in main and none counted unpushed", got)
+	}
+}
+
+func TestBranchStatusAfterARebaseMerge(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	wt := issueWorktree(t, h)
+	s := issueSession(h, t, 7)
+	head := mergedAndPruned(t, h, origin, "rebase")
+
+	h.GH.SetPR(apptest.WithHead(prJSON("MERGED", false, "[]", 0, 0), head)) // never seen open, so the owner decides and the row stays
+	h.RefreshPRs()
+	if got := gitStatus(t, h, s.ID); got.NotInMain != 0 || got.Unpushed != 0 {
+		t.Errorf("at the merged head = %+v, want nothing left out", got)
+	}
+	commitIn(t, wt, "after.txt")
+	h.RefreshPRs()
+	if got := gitStatus(t, h, s.ID); got.NotInMain != 1 || got.Unpushed != 0 {
+		t.Errorf("one commit after the merged head = %+v, want 1 not in main", got)
 	}
 }
 

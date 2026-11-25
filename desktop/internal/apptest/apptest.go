@@ -1183,6 +1183,48 @@ func WithHead(prJSON, oid string) string {
 	return strings.Replace(prJSON, `"isDraft"`, fmt.Sprintf(`"headRefOid":%q,"isDraft"`, oid), 1)
 }
 
+// MergeAs merges branch into main on the bare repo origin as GitHub's merge button does, and returns
+// the commit the pull request ended on. how is "merge" (a merge commit), "squash" or "rebase", each
+// with "+delete" after it to delete origin's branch too. GitHub commits a squash or rebase under its
+// own name, so the commits on main get new ids even when the branch already sits on main.
+func MergeAs(t *testing.T, origin, branch, how string) string {
+	t.Helper()
+	how, drop := strings.CutSuffix(how, "+delete")
+	clone := filepath.Join(t.TempDir(), "merge")
+	gitIn(t, filepath.Dir(clone), "clone", "--quiet", origin, clone)
+	head := gitIn(t, clone, "rev-parse", "origin/"+branch)
+	switch how {
+	case "merge":
+		gitIn(t, clone, "merge", "--quiet", "--no-ff", "-m", "Merge "+branch, "origin/"+branch)
+	case "squash":
+		gitIn(t, clone, "merge", "--quiet", "--squash", "origin/"+branch)
+		gitIn(t, clone, "commit", "--quiet", "-m", "Squash "+branch)
+	case "rebase":
+		gitIn(t, clone, "checkout", "--quiet", "-B", "main", "origin/"+branch)
+		gitIn(t, clone, "rebase", "--quiet", "--force-rebase", "origin/main")
+	default:
+		t.Fatalf("MergeAs: no merge %q", how)
+	}
+	gitIn(t, clone, "push", "--quiet", "origin", "main")
+	if drop {
+		gitIn(t, clone, "push", "--quiet", "origin", "--delete", branch)
+	}
+	return head
+}
+
+// gitIn runs git in dir as GitHub's merge button, with no user or system config.
+func gitIn(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=GitHub", "-c", "user.email=noreply@github.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // WithMergeable adds whether the PR merges into its base, as GitHub says it, to what PRJSON printed.
 func WithMergeable(prJSON, mergeable string) string {
 	return strings.Replace(prJSON, `"isDraft"`, fmt.Sprintf(`"mergeable":%q,"isDraft"`, mergeable), 1)

@@ -1263,6 +1263,7 @@ func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string,
 		return cleanupPlan{}, fmt.Sprintf("git could not list the worktrees: %v", err)
 	}
 	p := cleanupPlan{force: force}
+	base := l.mainBranch(ctx, dir)
 	for _, branch := range t.branches {
 		l.mu.Lock()
 		saw := l.sawOpen(t, branch)
@@ -1287,7 +1288,10 @@ func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string,
 				return p, reason
 			}
 		}
-		if reason := l.unsafe(ctx, dir, b.worktree, branch, b.branchExists, branchPR); reason != "" {
+		if b.worktree == "" && !b.branchExists {
+			continue
+		}
+		if reason := l.unsafe(ctx, dir, b.worktree, branch, branchPR, base); reason != "" {
 			return p, reason
 		}
 		if b.worktree == "" {
@@ -1377,8 +1381,9 @@ func (l *Lifecycle) otherPR(ctx context.Context, dir, branch string) (*PR, strin
 	return pr, ""
 }
 
-// unsafe says why removing the worktree and branch could lose work, or "".
-func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, branchExists bool, pr *PR) string {
+// unsafe says why removing the worktree, or the branch when no worktree has it checked out, could
+// lose work, or "".
+func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, pr *PR, base string) string {
 	if worktree != "" {
 		out, err := l.worktreeStatus(ctx, dir, worktree)
 		switch {
@@ -1388,19 +1393,20 @@ func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, br
 			return fmt.Sprintf("the worktree of %s has uncommitted changes", branch)
 		}
 	}
-	if !branchExists {
+	head, err := l.head(ctx, dir, worktree, branch)
+	if err != nil {
+		return fmt.Sprintf("git could not read where %s stands: %v", branch, err)
+	}
+	if l.merged(ctx, dir, head, base, pr) {
 		return ""
 	}
-	merged := pr != nil && pr.State == "merged"
-	n, err := l.commitsNotIn(ctx, dir, "origin/"+branch, branch)
-	switch {
-	case err != nil && merged:
-		// GitHub deletes the remote branch on merge, so compare with what the PR merged instead.
-		return l.afterMergedHead(ctx, dir, branch, pr.HeadOid)
-	case err != nil:
-		return branch + " has no copy on origin to compare with"
+	if pr != nil && pr.State == "merged" && l.past(ctx, dir, pr.HeadOid, head) {
+		return branch + " has commits that are not in the merged pull request"
 	}
+	n, err := l.notOnOrigin(ctx, dir, head)
 	switch {
+	case err != nil:
+		return fmt.Sprintf("git could not compare %s with origin: %v", branch, err)
 	case n == 1:
 		return branch + " has a commit that is not on origin"
 	case n > 1:
@@ -1409,30 +1415,60 @@ func (l *Lifecycle) unsafe(ctx context.Context, dir, worktree, branch string, br
 	return ""
 }
 
-// afterMergedHead says why the branch holds commits the merged pull request does not, or "".
-func (l *Lifecycle) afterMergedHead(ctx context.Context, dir, branch, head string) string {
-	if head == "" {
-		return "GitHub did not say which commit the merged pull request ended on"
+// merged says whether pr merged the work at head. A squash or rebase merge copies the commits onto the
+// base with new ids, so the work is in only while head is the PR's last commit; a merge commit keeps
+// them, so head is in the base on origin. A failed fetch leaves only the first rule.
+func (l *Lifecycle) merged(ctx context.Context, dir, head, base string, pr *PR) bool {
+	if pr == nil || pr.State != "merged" {
+		return false
 	}
-	n, err := l.commitsNotIn(ctx, dir, head, branch)
-	switch {
-	case err != nil:
-		return fmt.Sprintf("git could not compare %s with the merged pull request: %v", branch, err)
-	case n > 0:
-		return branch + " has commits that are not in the merged pull request"
+	if head == pr.HeadOid {
+		return true
 	}
-	return ""
+	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", base); err != nil {
+		return false
+	}
+	_, err := l.git(ctx, dir, "merge-base", "--is-ancestor", head, "origin/"+base)
+	return err == nil
 }
 
-// worktreeStatus lists the worktree's changes. It takes no index lock, so the agent's own git
-// commands in the worktree never find one held by this read.
+// past says whether head holds commits after prHead, the commit a merged pull request ended on.
+func (l *Lifecycle) past(ctx context.Context, dir, prHead, head string) bool {
+	if prHead == "" || prHead == head {
+		return false
+	}
+	_, err := l.git(ctx, dir, "merge-base", "--is-ancestor", prHead, head)
+	return err == nil
+}
+
+// head is the commit the worktree stands at, or the branch's when no worktree has it checked out.
+func (l *Lifecycle) head(ctx context.Context, dir, worktree, branch string) (string, error) {
+	args := []string{"rev-parse", "--verify", "refs/heads/" + branch + "^{commit}"}
+	if worktree != "" {
+		args = []string{"-C", worktree, "rev-parse", "--verify", "HEAD^{commit}"}
+	}
+	out, err := l.git(ctx, dir, args...)
+	return strings.TrimSpace(string(out)), err
+}
+
+// notOnOrigin counts the commits at head that no ref on origin holds.
+func (l *Lifecycle) notOnOrigin(ctx context.Context, dir, head string) (int, error) {
+	out, err := l.git(ctx, dir, "rev-list", "--count", head, "--not", "--remotes=origin")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(out)))
+}
+
+// worktreeStatus lists the worktree's changes and new files. It takes no index lock, so the agent's own
+// git commands in the worktree never find one held by this read.
 func (l *Lifecycle) worktreeStatus(ctx context.Context, dir, worktree string) ([]byte, error) {
-	return l.git(ctx, dir, "--no-optional-locks", "-C", worktree, "status", "--porcelain")
+	return l.git(ctx, dir, "--no-optional-locks", "-C", worktree, "status", "--porcelain", "--untracked-files=normal")
 }
 
-// commitsNotIn counts the commits on branch that ref lacks.
-func (l *Lifecycle) commitsNotIn(ctx context.Context, dir, ref, branch string) (int, error) {
-	out, err := l.git(ctx, dir, "rev-list", "--count", ref+".."+branch)
+// commitsNotIn counts the commits at rev that ref lacks.
+func (l *Lifecycle) commitsNotIn(ctx context.Context, dir, ref, rev string) (int, error) {
+	out, err := l.git(ctx, dir, "rev-list", "--count", ref+".."+rev)
 	if err != nil {
 		return 0, err
 	}
@@ -1471,8 +1507,8 @@ func (l *Lifecycle) branchStatus(ctx context.Context, dir, base, branch, worktre
 			st.Unpushed = st.Ahead
 		}
 	}
-	if merged && pr.HeadOid != "" {
-		st.NotInMain, _ = l.commitsNotIn(ctx, dir, pr.HeadOid, branch)
+	if merged {
+		st.NotInMain = l.notInMerged(ctx, dir, base, worktree, branch, pr)
 	}
 	if worktree != "" {
 		if out, err := l.worktreeStatus(ctx, dir, worktree); err == nil {
@@ -1480,6 +1516,21 @@ func (l *Lifecycle) branchStatus(ctx context.Context, dir, base, branch, worktre
 		}
 	}
 	return st
+}
+
+// notInMerged counts the commits the merged pull request did not take, by the rules unsafe keeps a worktree by.
+func (l *Lifecycle) notInMerged(ctx context.Context, dir, base, worktree, branch string, pr *PR) int {
+	head, err := l.head(ctx, dir, worktree, branch)
+	if err != nil || l.merged(ctx, dir, head, base, pr) {
+		return 0
+	}
+	var n int
+	if l.past(ctx, dir, pr.HeadOid, head) {
+		n, _ = l.commitsNotIn(ctx, dir, pr.HeadOid, head)
+	} else {
+		n, _ = l.notOnOrigin(ctx, dir, head)
+	}
+	return n
 }
 
 // setStatus stores the git status read for the session's branch, unless the session moved on since.
