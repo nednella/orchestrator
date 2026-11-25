@@ -53,7 +53,7 @@ test('tables and block quotes are cut only after they end', () => {
 })
 
 test('a text with link reference definitions, footnotes or raw HTML is one block', () => {
-  for (const text of ['See [the docs][d].\n\n[d]: https://example.com', 'A claim.[^1]\n\nMore.\n\n[^1]: The source.', '<div>\n\nhi\n\n</div>\n\nAfter.']) {
+  for (const text of ['See [the docs][d].\n\n[d]: https://example.com', 'See [x][a].\n\n> [a]: https://example.com', 'See [x][a].\n\n- [a]: https://example.com', 'A claim.[^1]\n\nMore.\n\n[^1]: The source.', '<div>\n\nhi\n\n</div>\n\nAfter.']) {
     assert.deepEqual(markdownBlocks(text), [text])
   }
 })
@@ -62,11 +62,27 @@ test('markup inside a code fence does not tie blocks together', () => {
   assert.deepEqual(markdownBlocks('```html\n<div>\n[a]: b\n```\n\nAfter.'), ['```html\n<div>\n[a]: b\n```', 'After.'])
 })
 
+test('CRLF line ends are cut as LF ones', () => {
+  assert.deepEqual(markdownBlocks('Intro\r\n\r\n```ts\r\na\r\n\r\nb\r\n```\r\n\r\n- a\r\n\r\n- b\r\n\r\nEnd.'), ['Intro\r', '```ts\r\na\r\n\r\nb\r\n```\r', '- a\r\n\r\n- b\r', 'End.'])
+})
+
+test('a fence closes only at a line indented at most 3 spaces', () => {
+  assert.deepEqual(markdownBlocks('  ```\na\n     ```\n\nb\n  ```\n\nc'), ['  ```\na\n     ```\n\nb\n  ```', 'c'])
+})
+
+test('a heading ends a list, so a fence after it is not the list item\'s', () => {
+  assert.deepEqual(markdownBlocks('- a\n# h\n  ```\nx\n\ny\n  ```\n\nz'), ['- a\n# h\n  ```\nx\n\ny\n  ```', 'z'])
+  assert.deepEqual(markdownBlocks('- a\n# h\n\n- b'), ['- a\n# h', '- b'])
+})
+
 const texts = [
   '## Title\n\nSome **bold** and `code`.\n\n- a\n\n- b\n  - nested\n\n1. one\n2. two\n\nAfter.',
   '```ts\nconst a = 1\n\nconst b = 2\n```\n\n| a | b |\n| - | -: |\n| 1 | 2 |\n\n> quoted\n>\n> more\n\n---\n\nEnd.',
   '- a\n  ```\n  x\n\ny\n\n    indented\n\n    code\n\nLast.',
   'Para\nnext line\n\n* * *\n\n- [ ] todo\n- [x] done\n\n~~~\n~~~',
+  'Intro\r\n\r\n```ts\r\nconst a = 1\r\n\r\nconst b = 2\r\n```\r\n\r\n- a\r\n\r\n- b\r\n  more\r\n\r\n1. one\r\n2. two\r\n\r\nEnd.',
+  '  ```\na\n     ```\n\nb\n  ```\n\nc',
+  '- a\n# h\n  ```\nx\n\ny\n  ```\n\n- a\n# h\n\n- b',
 ]
 
 test('the blocks render as the whole text', () => {
@@ -98,6 +114,17 @@ test('the block being written drops markers with nothing after them yet', () => 
   assert.equal(steadyBlock('Some *'), 'Some ')
   assert.equal(steadyBlock('Run `'), 'Run ')
   assert.equal(steadyBlock('**`'), '')
+})
+
+test('the block being written leaves a star or underscore inside a word alone', () => {
+  assert.equal(steadyBlock('see src/*.ts and my_var'), 'see src/*.ts and my_var')
+  assert.equal(steadyBlock('Read src/*.ts **now'), 'Read src/*.ts **now**')
+})
+
+test('the block being written keeps CRLF line ends', () => {
+  assert.equal(steadyBlock('```ts\r\nconst a = 1\r\nconst b'), '```ts\r\nconst a = 1\r\n')
+  assert.equal(steadyBlock('| a | b |\r\n| --- | --- |\r\n'), '| a | b |\r\n| --- | --- |\r\n')
+  assert.equal(steadyBlock('Text\r\nSome **bo'), 'Text\r\nSome **bo**')
 })
 
 test('the block being written leaves plain stars alone', () => {

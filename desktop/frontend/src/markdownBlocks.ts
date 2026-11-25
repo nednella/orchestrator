@@ -1,11 +1,14 @@
 // A streaming reply is cut into its top-level blocks so that only the block still being written is parsed again on each
 // update, and that block is steadied so half-written markdown does not flip between shapes.
 
-const FENCE = /^( {0,3})(`{3,}|~{3,})(.*)$/
-const LIST_ITEM = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]|$)/
-const MAY_BE_LIST_ITEM = /^(?:[-+*]|\d{1,9}[.)]?)$/
-// Link reference definitions, raw HTML and footnotes tie blocks together, so a text with any of them is parsed whole.
-const TIES = /^\s*(?:\[[^\]]+\]:|<[A-Za-z!?/])|\[\^[^\]\s]+\]/
+const FENCE = /^( {0,3})(`{3,}|~{3,})([^\n]*)$/
+const LIST_ITEM = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:\s|$)/
+const MAY_BE_LIST_ITEM = /^(?:[-+*]|\d{1,9}[.)]?)\r?$/
+// A heading, a block quote, a thematic break or a code fence at the margin ends a list; plain text there continues it.
+const ENDS_LIST = /^(?:#{1,6}(?:\s|$)|>|(?:[-*_][ \t]*){3,}\s*$|`{3}|~{3})/
+// Link reference definitions (also in a quote or a list item), raw HTML and footnotes tie blocks together, so a text
+// with any of them is parsed whole.
+const TIES = /^(?:\s|>|[-+*]\s|\d{1,9}[.)]\s)*\[[^\]]+\]:|^\s*<[A-Za-z!?/]|\[\^[^\]\s]+\]/
 const MARKERS_ONLY = /^[\s#>*+\-_=~`|:]*(?:\d{1,9}[.)]?)?\s*$/
 const FENCE_START = /^ {0,3}(?:`{3,}|~{3,})/
 const TABLE_ROW = /^ {0,3}\|/
@@ -30,13 +33,18 @@ function scan(s: Scan, line: string) {
     if (s.fence.close.test(line)) s.fence = null
     return
   }
+  const ends = ENDS_LIST.test(line)
+  if (ends) s.list = false
   const open = FENCE.exec(line)
   if (open && !(open[2][0] === '`' && open[3].includes('`'))) {
     const [, indent, mark] = open
-    s.fence = { close: new RegExp(`^\\s{0,${indent.length + 3}}${mark[0]}{${mark.length},}\\s*$`), indent: indent.length, inList: s.list }
+    // A closing fence is indented at most 3 spaces past its container's margin: the page's, or for a fence in a list
+    // item, about the opening fence's own.
+    const margin = s.list ? indent.length : 0
+    s.fence = { close: new RegExp(`^ {0,${margin + 3}}${mark[0]}{${mark.length},}\\s*$`), indent: indent.length, inList: s.list }
     return
   }
-  if (LIST_ITEM.test(line)) s.list = true
+  if (!ends && LIST_ITEM.test(line)) s.list = true
 }
 
 // startsBlock says whether a line after a blank line starts a new top-level block: it starts at the margin, and is not
@@ -117,7 +125,7 @@ function closeInline(line: string): string {
     if (i > 0 && !/\s/.test(text[i - 1])) {
       while (open.length > 0 && open.at(-1)!.n <= n) n -= open.pop()!.n
     }
-    if (n > 0 && n <= 3 && i + run.length < text.length && !/\s/.test(text[i + run.length])) {
+    if (n > 0 && n <= 3 && (i === 0 || /[\s([{"']/.test(text[i - 1])) && i + run.length < text.length && !/\s/.test(text[i + run.length])) {
       const at = i + run.length - n
       if (n === 3) open.push({ at, n: 1 }, { at: at + 1, n: 2 })
       else open.push({ at, n })
