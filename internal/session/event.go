@@ -85,7 +85,7 @@ func Apply(name string, prev Record, ev Event, now time.Time) Record {
 	switch ev.Name {
 	case "PreToolUse", "PostToolUse":
 		rec.Tool, rec.Command = ev.Tool, ev.Command
-	case "Notification", "Stop":
+	case "Notification", "Stop", TurnError:
 		// The prompt that follows a tool call is about that tool.
 		rec.Tool, rec.Command = prev.Tool, prev.Command
 	}
