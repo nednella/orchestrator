@@ -3,10 +3,8 @@ package sessions_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -264,8 +262,7 @@ func TestIssueSessionWithoutBranchPatternFollowsItsFolder(t *testing.T) {
 func TestIssueSessionKnowsItsIssue(t *testing.T) {
 	h := newHarness(t)
 	s := issueSession(h, t, 9)
-	out, err := exec.Command("tmux", "-L", h.Socket, "show-environment", "-t", s.ID, "AGENTOS_ISSUE").CombinedOutput()
-	if err != nil || strings.TrimSpace(string(out)) != "AGENTOS_ISSUE=9" {
-		t.Errorf("the session's environment has %q, %v; want AGENTOS_ISSUE=9", out, err)
+	if env := claudeEnv(t, h, s.ID); env["AGENTOS_ISSUE"] != "9" || env["AGENTOS_SESSION"] != s.ID {
+		t.Errorf("claude was started with %v, want AGENTOS_ISSUE=9 and AGENTOS_SESSION=%s", env, s.ID)
 	}
 }

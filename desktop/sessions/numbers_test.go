@@ -2,7 +2,6 @@ package sessions_test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,9 +118,8 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 	if !exists(tmp) {
 		t.Fatalf("no temp folder at %s", tmp)
 	}
-	out, err := exec.Command("tmux", "-L", h.Socket, "show-environment", "-t", s.ID, "TMPDIR").CombinedOutput()
-	if err != nil || strings.TrimSpace(string(out)) != "TMPDIR="+tmp {
-		t.Errorf("the session's environment has %q, %v; want TMPDIR=%s", out, err, tmp)
+	if got := claudeEnv(t, h, s.ID)["TMPDIR"]; got != tmp {
+		t.Errorf("claude was started with TMPDIR=%s, want %s", got, tmp)
 	}
 
 	if err := h.KillSession(s.ID); err != nil {

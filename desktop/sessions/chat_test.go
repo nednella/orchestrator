@@ -24,6 +24,22 @@ func claudeArgs(t *testing.T, h *apptest.Harness, id string) []string {
 	return args
 }
 
+// claudeEnv is what of the session's environment the stand-in claude was started with, by name.
+func claudeEnv(t *testing.T, h *apptest.Harness, id string) map[string]string {
+	t.Helper()
+	claudeArgs(t, h, id) // the env file comes first
+	data, err := os.ReadFile(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(id, "/", "_")+".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		k, v, _ := strings.Cut(line, "=")
+		env[k] = v
+	}
+	return env
+}
+
 func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
 	h := apptest.New(t)
 

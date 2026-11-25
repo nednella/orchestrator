@@ -671,7 +671,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	t.Setenv("AGENTOS_AGY_CONFIG_DIR", filepath.Join(state, "agy")) // nor agy's own hooks and MCP servers
 
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
-	h.claudeDir = agentOnPath(t, "claude", "", fakeClaudeTurns)
+	h.claudeDir = agentOnPath(t, "claude", standInEnv, fakeClaudeTurns)
 	h.App = h.build(t)
 	h.App.Sessions().SetPrefillWait(300 * time.Millisecond)
 	first, tick := o.DigestFirst, o.DigestTick
@@ -848,7 +848,8 @@ func CLIPath(t *testing.T) string {
 }
 
 // ClaudeDir is the folder of the stand-in claude, which NewWith puts first on PATH beside the built agentos command,
-// so the app runs its Claude provider and each session's host starts the stand-in. The stand-in writes its arguments
+// so the app runs its Claude provider and each session's host starts the stand-in. The stand-in writes the
+// AGENTOS_ISSUE, AGENTOS_SESSION and TMPDIR it was started with to <dir>/<session id, "/" as "_">.env and its arguments
 // to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, and any other control request with a success. The message
@@ -884,6 +885,10 @@ func readLines(t *testing.T, path string) []string {
 	}
 	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 }
+
+// standInEnv writes what the stand-in claude was started with of the session's environment, before its arguments.
+const standInEnv = `printf 'AGENTOS_ISSUE=%s\nAGENTOS_SESSION=%s\nTMPDIR=%s\n' "$AGENTOS_ISSUE" "$AGENTOS_SESSION" "$TMPDIR" > "$f.env"
+`
 
 // fakeClaudeTurns is the stand-in claude's stream-json side.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
