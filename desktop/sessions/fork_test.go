@@ -283,3 +283,63 @@ func TestForkStaysAFork(t *testing.T) {
 		t.Errorf("the issue's session is %s, want the source %s", got, src.ID)
 	}
 }
+
+// forkHarness is a project whose issue 7 has a pushed worktree, worked on by a thread with a fork. Its clean-up
+// command notes each branch it is run for in the file ran names.
+func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork sessions.Session) {
+	t.Helper()
+	apptest.ClaudeOnPath(t)
+	ran = filepath.Join(t.TempDir(), "cleanups")
+	h = apptest.NewWith(t, apptest.Options{Agent: "claude", CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + removeWorktreeAndBranch})
+	repoFixture(t, h)
+	wt = issueWorktree(t, h)
+	src, err := h.Sessions().Create("#7 work", "", false, 7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	if fork, err = h.ForkSession(src.ID, "r1b"); err != nil {
+		t.Fatal(err)
+	}
+	return h, wt, ran, src, fork
+}
+
+// cleanupRuns are the branches the clean-up command ran for.
+func cleanupRuns(ran string) []string {
+	data, _ := os.ReadFile(ran)
+	return strings.Fields(string(data))
+}
+
+func TestForkIsNeverCleanedUp(t *testing.T) {
+	h, wt, ran, src, fork := forkHarness(t)
+	if err := h.Cleanup(fork.ID, true); err == nil {
+		t.Error("a forced clean-up of the fork did not fail")
+	}
+	if err := h.KillSession(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the fork ended", func() bool { return stateOf(h, fork.ID) == "ended" })
+	if err := h.DismissSession(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if runs := cleanupRuns(ran); len(runs) != 0 || !exists(wt) {
+		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
+	}
+	if got, ok := h.Session(src.ID); !ok || got.State == "ended" {
+		t.Errorf("the source = %+v, %v", got, ok)
+	}
+}
+
+func TestMergeCleansUpTheSourceOnly(t *testing.T) {
+	h, wt, ran, src, fork := forkHarness(t)
+	openThenMerge(h)
+	eventually(t, "the source cleaned up", func() bool { _, ok := h.Session(src.ID); return !ok })
+	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
+		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
+	}
+	if got, ok := h.Session(fork.ID); !ok || got.State == "ended" || got.Cleanup != "" {
+		t.Errorf("the fork = %+v, %v", got, ok)
+	}
+}
