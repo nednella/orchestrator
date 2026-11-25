@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -87,10 +88,29 @@ func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
 	eventually(t, "the access back to read", accessIs(h, s.ID, session.Read))
 }
 
+// lockedBuffer is a log the app writes to while the test reads it.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
-	var logged bytes.Buffer
-	log.SetOutput(&logged)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	logged := &lockedBuffer{}
+	before := log.Writer()
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(before) })
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -104,8 +124,14 @@ func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
 	if err := h.SetAccess(s.ID, "supervised"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the mode in the log", modeLogged(h, s.ID, "default"))
-	time.Sleep(300 * time.Millisecond) // the follower takes the mode in
+	eventually(t, "the follower to take the mode in", func() bool {
+		for _, p := range h.Rec.All("chat:" + s.ID) {
+			if slices.ContainsFunc(p.(chat.Update).Events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindMode && e.Text == "default" }) {
+				return true
+			}
+		}
+		return false
+	})
 	if strings.Contains(logged.String(), "gives more than its access") {
 		t.Errorf("the mode Claude reported met the old access:\n%s", logged.String())
 	}
