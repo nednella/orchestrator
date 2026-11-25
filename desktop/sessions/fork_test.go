@@ -194,7 +194,7 @@ func TestForkKeepsFolderKindAndModel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fork.Title != "ask (fork)" || fork.Chat != chatKind || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "ended" {
+			if fork.Title != "ask (fork)" || fork.Chat != chatKind || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "settled" {
 				t.Errorf("fork = %+v", fork)
 			}
 			srcChat, _ := h.Sessions().ChatOf(src.ID)
@@ -264,7 +264,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fork.State == "ended" || fork.ForkOf != src.ID {
+	if fork.State == "settled" || fork.ForkOf != src.ID {
 		t.Errorf("fork = %+v", fork)
 	}
 	if i := slices.Index(claudeArgs(t, h, fork.ID), "--resume-session-at"); i < 0 {
@@ -275,7 +275,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 	if got, want := kindsAndTexts(events), []string{"user:first", "message:one", "turn_end:"}; !slices.Equal(got, want) {
 		t.Errorf("fork's chat = %q, want %q", got, want)
 	}
-	if got, ok := h.Session(src.ID); !ok || got.State != "ended" {
+	if got, ok := h.Session(src.ID); !ok || got.State != "settled" {
 		t.Errorf("the source after the fork = %+v, %v", got, ok)
 	}
 }
@@ -297,10 +297,10 @@ func TestForkStaysAFork(t *testing.T) {
 
 	fresh := h.Restart(t)
 	eventually(t, "the fork after a restart", func() bool { got, ok := fresh.Session(fork.ID); return ok && got.ForkOf == src.ID })
-	if err := fresh.KillSession(fork.ID); err != nil {
+	if err := fresh.SettleThread(fork.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the fork ended", func() bool { got, _ := fresh.Session(fork.ID); return got.State == "ended" && got.ForkOf == src.ID })
+	eventually(t, "the fork settled", func() bool { got, _ := fresh.Session(fork.ID); return got.State == "settled" && got.ForkOf == src.ID })
 	resumed, err := fresh.ResumeSession(fork.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -344,10 +344,10 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 	if err := h.Cleanup(fork.ID, true); err == nil {
 		t.Error("a forced clean-up of the fork did not fail")
 	}
-	if err := h.KillSession(fork.ID); err != nil {
+	if err := h.SettleThread(fork.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the fork ended", func() bool { return stateOf(h, fork.ID) == "ended" })
+	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
 	if err := h.DismissSession(fork.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 	if runs := cleanupRuns(ran); len(runs) != 0 || !exists(wt) {
 		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
 	}
-	if got, ok := h.Session(src.ID); !ok || got.State == "ended" {
+	if got, ok := h.Session(src.ID); !ok || got.State == "settled" {
 		t.Errorf("the source = %+v, %v", got, ok)
 	}
 }
@@ -367,7 +367,7 @@ func TestMergeCleansUpTheSourceOnly(t *testing.T) {
 	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
 		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
 	}
-	if got, ok := h.Session(fork.ID); !ok || got.State == "ended" || got.Cleanup != "" {
+	if got, ok := h.Session(fork.ID); !ok || got.State == "settled" || got.Cleanup != "" {
 		t.Errorf("the fork = %+v, %v", got, ok)
 	}
 }
@@ -402,10 +402,10 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 	h, wt, ran, src, fork := forkHarness(t)
 	h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
 	eventually(t, "the fork at work", func() bool { return stateOf(h, fork.ID) == "working" })
-	if err := h.KillSession(fork.ID); err != nil {
+	if err := h.SettleThread(fork.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the fork ended", func() bool { return stateOf(h, fork.ID) == "ended" })
+	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
 
 	openThenMerge(h)
 	eventually(t, "the source cleaned up", func() bool { _, ok := h.Session(src.ID); return !ok })

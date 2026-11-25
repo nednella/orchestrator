@@ -15,18 +15,18 @@ import (
 	"github.com/nednella/agentos/internal/term"
 )
 
-// killSetup points the command at a private tmux socket, state dir and config,
+// settleSetup points the command at a private tmux socket, state dir and config,
 // starts three sessions in two projects, and works from the first project's folder.
-func killSetup(t *testing.T) (*term.Tmux, string) {
+func settleSetup(t *testing.T) (*term.Tmux, string) {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux is not installed")
 	}
-	state, err := os.MkdirTemp("", "aoskill")
+	state, err := os.MkdirTemp("", "aossettle")
 	if err != nil {
 		t.Fatal(err)
 	}
-	socket := fmt.Sprintf("aostest-kill-%d", os.Getpid())
+	socket := fmt.Sprintf("aostest-settle-%d", os.Getpid())
 	t.Cleanup(func() {
 		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
 		os.RemoveAll(state)
@@ -61,12 +61,12 @@ func killSetup(t *testing.T) (*term.Tmux, string) {
 	return tmux, state
 }
 
-func runKill(t *testing.T, args ...string) string {
+func runSettle(t *testing.T, args ...string) string {
 	t.Helper()
 	var out bytes.Buffer
 	root := newRootCmd()
 	root.SetOut(&out)
-	root.SetArgs(append([]string{"kill"}, args...))
+	root.SetArgs(append([]string{"settle"}, args...))
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -86,44 +86,44 @@ func names(t *testing.T, tmux *term.Tmux) string {
 	return strings.Join(out, " ")
 }
 
-func TestKillStopsOnlyThisProject(t *testing.T) {
-	tmux, state := killSetup(t)
-	out := runKill(t)
-	if !strings.Contains(out, "stopping demo/a1 (one)") || !strings.Contains(out, "stopping demo/b2 (two)") || strings.Contains(out, "other/a1") {
+func TestSettleWithoutNumberKeepsStateFiles(t *testing.T) {
+	tmux, state := settleSetup(t)
+	out := runSettle(t)
+	if !strings.Contains(out, "settling demo/a1 (one)") || !strings.Contains(out, "settling demo/b2 (two)") || strings.Contains(out, "other/a1") {
 		t.Errorf("output = %q", out)
 	}
 	if got := names(t, tmux); got != "other/a1" {
 		t.Errorf("sessions left: %q", got)
 	}
-	if left := bus.ReadAll(state, nil); len(left) != 1 || left["other/a1"].Session == "" {
+	if left := bus.ReadAll(state, nil); len(left) != 3 || left["demo/a1"].Session == "" || left["demo/b2"].Session == "" {
 		t.Errorf("state files left: %v", left)
 	}
-	if out := runKill(t); !strings.Contains(out, "no agents to stop") {
-		t.Errorf("a second kill printed %q", out)
+	if out := runSettle(t); !strings.Contains(out, "no threads to settle") {
+		t.Errorf("a second settle printed %q", out)
 	}
 }
 
-func TestKillAllStopsEveryProject(t *testing.T) {
-	tmux, state := killSetup(t)
-	runKill(t, "--all")
+func TestSettleAllSettlesEveryProject(t *testing.T) {
+	tmux, state := settleSetup(t)
+	runSettle(t, "--all")
 	if got := names(t, tmux); got != "" {
 		t.Errorf("sessions left: %q", got)
 	}
-	if left := bus.ReadAll(state, nil); len(left) != 0 {
+	if left := bus.ReadAll(state, nil); len(left) != 3 {
 		t.Errorf("state files left: %v", left)
 	}
 }
 
-func TestKillLeavesShellsUnlessAll(t *testing.T) {
-	tmux, _ := killSetup(t)
+func TestSettleLeavesShellsUnlessAll(t *testing.T) {
+	tmux, _ := settleSetup(t)
 	shell := session.Name{Project: "demo", Shell: 1}
 	if err := tmux.NewSession(context.Background(), shell, "shell", t.TempDir(), nil, []string{"sleep", "60"}, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	if out := runKill(t); strings.Contains(out, "shell") || !tmux.Has(context.Background(), shell) {
-		t.Errorf("kill touched the shell: %q", out)
+	if out := runSettle(t); strings.Contains(out, "shell") || !tmux.Has(context.Background(), shell) {
+		t.Errorf("settle touched the shell: %q", out)
 	}
-	if out := runKill(t, "--all"); !strings.Contains(out, "stopping demo/shell") || tmux.Has(context.Background(), shell) {
-		t.Errorf("kill --all left the shell: %q", out)
+	if out := runSettle(t, "--all"); !strings.Contains(out, "stopping demo/shell") || tmux.Has(context.Background(), shell) {
+		t.Errorf("settle --all left the shell: %q", out)
 	}
 }

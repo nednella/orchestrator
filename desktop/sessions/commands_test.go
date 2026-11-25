@@ -89,12 +89,12 @@ func TestSessionCommands(t *testing.T) {
 		return strings.Contains(pane, "APPLICATION_PROMPT: Another session asked") && strings.Contains(pane, "what the chat should look at")
 	})
 
-	if resp := h.Ask(t, ctl.Request{Cmd: "kill", Args: []string{"2"}}); !resp.OK || resp.Out != "killed session 2: fix logout" {
-		t.Errorf("kill = %+v", resp)
+	if resp := h.Ask(t, ctl.Request{Cmd: "settle", Args: []string{"2"}}); !resp.OK || resp.Out != "settled thread 2: fix logout" {
+		t.Errorf("settle = %+v", resp)
 	}
 	for _, bad := range [][]string{nil, {"x"}, {"9"}, {"2"}} {
-		if resp := h.Ask(t, ctl.Request{Cmd: "kill", Args: bad}); resp.OK {
-			t.Errorf("kill %v succeeded", bad)
+		if resp := h.Ask(t, ctl.Request{Cmd: "settle", Args: bad}); resp.OK {
+			t.Errorf("settle %v succeeded", bad)
 		}
 	}
 }
@@ -219,8 +219,8 @@ func twoProjectsEachWithSessionOne(t *testing.T) (h *apptest.Harness, other stri
 func TestNumberedCommandsActInTheCallersProject(t *testing.T) {
 	h, other := twoProjectsEachWithSessionOne(t)
 
-	if resp := h.Ask(t, ctl.Request{Cmd: "kill", Project: other, Args: []string{"1"}}); !resp.OK || !strings.Contains(resp.Out, "there") {
-		t.Fatalf("kill = %+v", resp)
+	if resp := h.Ask(t, ctl.Request{Cmd: "settle", Project: other, Args: []string{"1"}}); !resp.OK || !strings.Contains(resp.Out, "there") {
+		t.Fatalf("settle = %+v", resp)
 	}
 	if resp := h.Ask(t, ctl.Request{Cmd: "pr", Project: other, Args: []string{"1"}}); !resp.OK || strings.Contains(resp.Out, "mine") {
 		t.Errorf("pr = %+v", resp)
@@ -232,8 +232,8 @@ func TestNumberedCommandsActInTheCallersProject(t *testing.T) {
 		t.Errorf("open found a session of another project: %+v", resp)
 	}
 	for _, s := range h.Sessions().ListOf("main") {
-		if s.State == "ended" {
-			t.Errorf("the session of main was killed: %+v", s)
+		if s.State == "settled" {
+			t.Errorf("the session of main was settled: %+v", s)
 		}
 	}
 }

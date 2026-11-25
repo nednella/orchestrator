@@ -34,7 +34,7 @@ func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {
 		t.Errorf("a sample with the same figures sent the sessions %d more times", n-sent)
 	}
 
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.Sessions().Refresh()

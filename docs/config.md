@@ -126,18 +126,18 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 
 ## Command line
 
-`agentos` with no command opens the app. `agentos --help` lists the commands by group. Every command below except `kill` without a number, `browser help`, `version` and `update` talks to the running app, and exits 1 with "agentos is not running: open the app and try again" when there is none. The project is `AGENTOS_PROJECT` (set in the app's shell), else the asking session's, else the current one; the app switches to it.
+`agentos` with no command opens the app. `agentos --help` lists the commands by group. Every command below except `settle` without a number, `browser help`, `version` and `update` talks to the running app, and exits 1 with "agentos is not running: open the app and try again" when there is none. The project is `AGENTOS_PROJECT` (set in the app's shell), else the asking session's, else the current one; the app switches to it.
 
 | Group | Command | Does |
 |---|---|---|
 | Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new session's system prompt as a handover from the session that asked, and a running session does not get it |
-| Work | `new [title] [--chat] [--prompt <text>\|-]`, `kill <n>`, `open <n\|title>`, `next` | start, stop, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
+| Work | `new [title] [--chat] [--prompt <text>\|-]`, `settle <n>`, `open <n\|title>`, `next` | start, settle, show a session, or show the one that needs you most. `--chat` starts a chat instead of a task. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs, clean up or list what waits |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
 | Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |
 | From inside a session | `issue <n> --prompt -`, `new <title> [--chat] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (not the default branch) | `issue` and `new` hand work to a new task, or a chat with `--chat`, as under Work; `agentos browser help` explains the browser |
 
-`stats [--days N] [--json]` prints the interruption tally. `agentos kill` without a number stops this project's agents directly through tmux, with the app closed too; `--all` does it for every project and stops the shells. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
+`stats [--days N] [--json]` prints the interruption tally. `agentos settle` without a number settles this project's threads directly through tmux, with the app closed too, and keeps their state files, so the app shows them as settled; `--all` does it for every project and stops the shells. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
 
 ## Environment
 

@@ -17,9 +17,9 @@ type ThreadMenuProps = {
 const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
 
 export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup }: ThreadMenuProps) {
-  const a = useAgentos('select', 'killSession', 'resumeSession', 'dismissSession', 'openPR', 'pushToast', 'report')
+  const a = useAgentos('select', 'settleThread', 'resumeSession', 'dismissSession', 'openPR', 'pushToast', 'report')
   const { mode, mobilePanel, rightOpen, showPanel, toggleRight } = useLayout()
-  const ended = session.state === 'ended'
+  const settled = session.state === 'settled'
   const panelShown = selected && (mode === 'narrow' ? mobilePanel === 'panel' : rightOpen)
 
   const toggleOwnPanel = () => {
@@ -44,9 +44,9 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         session.branch !== '' && { label: 'Copy branch', run: () => a.report(copyBranch) },
         CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: onCleanup },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
-        ended && session.resumable && { label: 'Resume', separated: true, run: () => a.report(() => a.resumeSession(session.id)) },
-        ended && { label: 'Dismiss', separated: !session.resumable, run: () => a.report(() => a.dismissSession(session.id)) },
-        !ended && { label: 'Kill thread', danger: true, separated: true, run: () => a.report(() => a.killSession(session.id)) },
+        settled && session.resumable && { label: 'Resume', separated: true, run: () => a.report(() => a.resumeSession(session.id)) },
+        settled && { label: 'Dismiss', separated: !session.resumable, run: () => a.report(() => a.dismissSession(session.id)) },
+        !settled && { label: 'Settle', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
       ]}
     />
   )

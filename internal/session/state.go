@@ -12,8 +12,11 @@ const (
 	Idle    State = "idle"    // started, or a turn ended: the user's move
 	Working State = "working" // the agent is running
 	Waiting State = "waiting" // blocked on the user
-	Ended   State = "ended"   // the agent's session is gone
+	Settled State = "settled" // the agent's session is gone; the row stays until archived
 )
+
+// endedBefore is what older builds wrote for a settled session.
+const endedBefore State = "ended"
 
 // Record is what a hook leaves behind: in a state file and on the bus.
 type Record struct {
@@ -32,7 +35,7 @@ type Record struct {
 	Changes      []Change  `json:"changes,omitempty"`      // the latest state changes, oldest first, so the timeline outlives the app
 
 	Identity
-	EndedAt int64 `json:"endedAt,omitempty"` // unix ms, set by the desktop app when it sees the session end
+	SettledAt int64 `json:"endedAt,omitempty"` // unix ms, set by the desktop app when it sees the session end; the key is the one older builds wrote
 }
 
 // Identity is what the desktop app started a session as. The app writes it when the session starts, so a
@@ -59,6 +62,20 @@ type Change struct {
 
 // ChangesCap is how many changes a timeline keeps.
 const ChangesCap = 200
+
+// SettledChanges is changes with the ended state of an older build read as settled. It never writes into the array of changes.
+func SettledChanges(changes []Change) []Change {
+	if !slices.ContainsFunc(changes, func(c Change) bool { return c.State == endedBefore }) {
+		return changes
+	}
+	out := slices.Clone(changes)
+	for i := range out {
+		if out[i].State == endedBefore {
+			out[i].State = Settled
+		}
+	}
+	return out
+}
 
 // AddChange appends c to changes and keeps the latest ChangesCap of them. It never writes into the array of changes.
 func AddChange(changes []Change, c Change) []Change {
@@ -87,11 +104,13 @@ func (s State) rank() int {
 		return 1
 	case Working:
 		return 2
+	case Settled:
+		return 3
 	}
-	return 3
+	return 4
 }
 
-// Sort orders sessions by who needs the user most: waiting, idle, working, ended, then most recent event first.
+// Sort orders sessions by who needs the user most: waiting, idle, working, settled, then most recent event first.
 func Sort(ss []Session) {
 	sort.SliceStable(ss, func(i, j int) bool {
 		a, b := ss[i], ss[j]

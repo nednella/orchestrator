@@ -62,7 +62,7 @@ func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
 	argsOf(t, h.ClaudeDir(), old.ID)
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[],"updatedAt":"2026-10-01T12:00:00Z"}]`)
 	h.RefreshPRs()
-	if err := h.KillSession(old.ID); err != nil {
+	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[{"id":"x"}],"updatedAt":"2026-10-01T12:00:00Z"}]`)
@@ -70,7 +70,7 @@ func TestResumedSessionGetsTheHandoverAgain(t *testing.T) {
 	var fresh string
 	eventually(t, "a new session for the issue", func() bool {
 		for _, v := range h.Sessions().List() {
-			if v.Issue == 7 && v.State != "ended" {
+			if v.Issue == 7 && v.State != "settled" {
 				fresh = v.ID
 				return true
 			}

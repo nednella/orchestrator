@@ -25,13 +25,12 @@ func TestNext(t *testing.T) {
 		{"idle reminder by message stops a working session", Working, Event{Name: "Notification", Message: "Claude is waiting for your input"}, Idle},
 		{"idle reminder leaves waiting alone", Waiting, Event{Name: "Notification", NotificationType: "idle_prompt"}, Waiting},
 		{"idle reminder leaves idle alone", Idle, Event{Name: "Notification", NotificationType: "idle_prompt"}, Idle},
-		{"idle reminder leaves ended alone", Ended, Event{Name: "Notification", NotificationType: "idle_prompt"}, Ended},
+		{"idle reminder leaves settled alone", Settled, Event{Name: "Notification", NotificationType: "idle_prompt"}, Settled},
 		{"stop", Working, Event{Name: "Stop"}, Idle},
 		{"stop while waiting", Waiting, Event{Name: "Stop"}, Idle},
 		{"stop with a question", Working, Event{Name: "Stop", Asks: true}, Waiting},
 		{"turn error", Working, Event{Name: TurnError}, Idle},
 		{"turn error while waiting", Waiting, Event{Name: TurnError}, Idle},
-		{"end", Working, Event{Name: "SessionEnd"}, Ended},
 		{"unknown event", Working, Event{Name: "PreCompact"}, Working},
 	}
 	for _, tt := range tests {
@@ -40,6 +39,14 @@ func TestNext(t *testing.T) {
 				t.Errorf("Next(%s, %s) = %s, want %s", tt.cur, tt.ev.Name, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSessionEndHookSettles(t *testing.T) {
+	for _, cur := range []State{Idle, Working, Waiting} {
+		if got := Next(cur, Event{Name: "SessionEnd"}); got != Settled {
+			t.Errorf("Next(%s, SessionEnd) = %s, want settled", cur, got)
+		}
 	}
 }
 
@@ -128,7 +135,7 @@ func TestSort(t *testing.T) {
 		mk(5, Working, time.Second),
 		mk(6, Idle, time.Minute),
 		mk(7, Idle, 0),
-		mk(8, Ended, 0),
+		mk(8, Settled, 0),
 	}
 	Sort(ss)
 	var got []int

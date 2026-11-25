@@ -32,7 +32,7 @@ export function ThreadSidebar() {
     {
       onEnter(index) {
         const session = threads[index]
-        if (session.state === 'ended') return
+        if (session.state === 'settled') return
         select(session.id)
         focus('thread')
       },
@@ -71,7 +71,7 @@ export function ThreadSidebar() {
       return
     }
     if (e.key !== 'Enter') return
-    const first = threads.find((s) => s.state !== 'ended')
+    const first = threads.find((s) => s.state !== 'settled')
     if (!first) return
     select(first.id)
     focus('thread')

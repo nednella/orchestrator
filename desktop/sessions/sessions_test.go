@@ -85,20 +85,20 @@ func TestSessionLifecycle(t *testing.T) {
 			s := h.Rec.LastSessions()
 			return len(s) == 2 && s[1].Title == "renamed"
 		})
-		if err := h.KillSession(first.ID); err != nil {
+		if err := h.SettleThread(first.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the killed session to show as ended", func() bool {
+		eventually(t, "the killed session to show as settled", func() bool {
 			s := h.Rec.LastSessions()
-			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "ended" && s[1].EndedAt > 0
+			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "settled" && s[1].SettledAt > 0
 		})
-		if got := h.Snapshot().Sessions; len(got) != 2 || got[0].ID != second.ID || got[1].State != "ended" || got[1].Title != "first" {
+		if got := h.Snapshot().Sessions; len(got) != 2 || got[0].ID != second.ID || got[1].State != "settled" || got[1].Title != "first" {
 			t.Errorf("sessions after kill = %+v", got)
 		}
 		if out, err := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", first.ID).CombinedOutput(); err == nil {
 			t.Errorf("the killed tmux session is still there: %s", out)
 		}
-		if err := h.KillSession(first.ID); err == nil {
+		if err := h.SettleThread(first.ID); err == nil {
 			t.Error("killing an ended session succeeded")
 		}
 		if err := h.DismissSession(second.ID); err == nil {
@@ -120,7 +120,7 @@ func TestSessionLifecycle(t *testing.T) {
 		}
 		eventually(t, "the row to turn ended", func() bool {
 			s := h.Rec.LastSessions()
-			return len(s) == 1 && s[0].State == "ended" && s[0].EndedAt > 0 && s[0].Title == "renamed"
+			return len(s) == 1 && s[0].State == "settled" && s[0].SettledAt > 0 && s[0].Title == "renamed"
 		})
 		if h.Snapshot().Projects[0].Sessions != 0 {
 			t.Error("an ended session counts as a running one")
@@ -402,10 +402,10 @@ func TestDismissRemovesTheChatLog(t *testing.T) {
 		data, _ := os.ReadFile(chatLog)
 		return strings.Contains(string(data), `"kind":"user"`)
 	})
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the killed session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+	eventually(t, "the killed session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
 	if got, _ := h.Session(s.ID); got.Detail != "" {
 		t.Errorf("ended row = %+v, want no failure shown", got)
 	}
@@ -625,20 +625,20 @@ func TestASessionWithoutAHostTakesNoInterrupt(t *testing.T) {
 	}
 }
 
-func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
+func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the killed session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
-	if err, want := h.Interrupt(s.ID), "Thread "+s.ID+" has ended"; err == nil || err.Error() != want {
+	eventually(t, "the settled session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	if err, want := h.Interrupt(s.ID), "Thread "+s.ID+" has settled"; err == nil || err.Error() != want {
 		t.Errorf("Interrupt = %v, want %q", err, want)
 	}
-	want := "session " + s.ID + " has ended"
+	want := "Thread " + s.ID + " has settled"
 	if err := h.TypeInto(s.ID, "hello"); err == nil || err.Error() != want {
 		t.Errorf("TypeInto = %v, want %q", err, want)
 	}
@@ -729,18 +729,18 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 	}
 }
 
-func TestEndedSessionsSurviveARestart(t *testing.T) {
+func TestSettledSessionsSurviveARestart(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("keep me", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.Hook(t, s.ID, "SessionEnd", `{}`)
-	eventually(t, "ended by its hook", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
-	if err := h.KillSession(s.ID); err != nil && !strings.Contains(err.Error(), "ended") {
+	eventually(t, "settled by its hook", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	if err := h.SettleThread(s.ID); err != nil && !strings.Contains(err.Error(), "settled") {
 		t.Fatal(err)
 	}
-	eventually(t, "ended after the process is gone", func() bool { got, ok := h.Session(s.ID); return ok && got.State == "ended" && got.EndedAt > 0 })
+	eventually(t, "settled after the process is gone", func() bool { got, ok := h.Session(s.ID); return ok && got.State == "settled" && got.SettledAt > 0 })
 
 	fresh := h.Restart(t)
 	var got sessions.Session
@@ -749,7 +749,7 @@ func TestEndedSessionsSurviveARestart(t *testing.T) {
 			got = v
 		}
 	}
-	if got.State != "ended" || got.Title != "keep me" || got.EndedAt == 0 {
+	if got.State != "settled" || got.Title != "keep me" || got.SettledAt == 0 {
 		t.Errorf("after a restart = %+v", got)
 	}
 	if err := fresh.DismissSession(s.ID); err != nil {
@@ -757,6 +757,33 @@ func TestEndedSessionsSurviveARestart(t *testing.T) {
 	}
 	if exists(filepath.Join(h.State, "sessions", s.ID+".json")) {
 		t.Error("the state file of a dismissed session is still there")
+	}
+}
+
+func TestOldEndedStateShowsSettled(t *testing.T) {
+	h := newHarness(t)
+	long := time.Now().Add(-time.Hour)
+	ms := long.UnixMilli()
+	// What an older build wrote for a session that had ended.
+	old := fmt.Sprintf(`{"session":"main/old1","state":"ended","event":"SessionEnd","at":%q,"title":"old","endedAt":%d,"changes":[{"state":"working","at":%d},{"state":"ended","at":%d}]}`, long.Format(time.RFC3339Nano), ms, ms-1000, ms)
+	file := filepath.Join(h.State, "sessions", "main", "old1.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.Sessions().Refresh()
+	got, ok := h.Session("main/old1")
+	if !ok || got.State != session.Settled || got.Title != "old" || got.SettledAt != ms {
+		t.Fatalf("the old ended row = %+v, %v; want it settled", got, ok)
+	}
+	want := []session.Change{{State: session.Working, At: ms - 1000}, {State: session.Settled, At: ms}}
+	if !slices.Equal(got.History, want) {
+		t.Errorf("history = %+v, want %+v", got.History, want)
+	}
+	if rec, err := bus.ReadState(h.State, "main/old1"); err != nil || rec.State != session.Settled || !slices.Equal(rec.Changes, want) {
+		t.Errorf("the state file was written back as %+v, %v; want it settled", rec, err)
 	}
 }
 
@@ -789,7 +816,7 @@ func TestProjectCountsFollowTheSessions(t *testing.T) {
 		return got.NeedsYou == 1 && got.Working == 0
 	})
 	h.Hook(t, a.ID, "SessionEnd", `{}`)
-	eventually(t, "an ended session to leave the counts", func() bool { return counts().Sessions == 1 })
+	eventually(t, "a settled session to leave the counts", func() bool { return counts().Sessions == 1 })
 }
 
 func TestRefreshReadsAStateFileAgainOnlyOnceItChanges(t *testing.T) {

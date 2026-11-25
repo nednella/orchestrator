@@ -116,15 +116,15 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
-	if err := h.KillSession(id); err != nil {
+	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
 
 	if events := history(t, h, id, 0); len(events) < 4 || events[0].Kind != chatlog.KindUser {
 		t.Errorf("history of the ended thread = %v", kinds(events))
 	}
-	want := "Thread " + id + " has ended"
+	want := "Thread " + id + " has settled"
 	if _, err := h.ChatSend(id, "again"); err == nil || err.Error() != want {
 		t.Errorf("ChatSend = %v, want %q", err, want)
 	}
@@ -295,17 +295,17 @@ func TestEndedHostedSessionKeepsItsHostedMark(t *testing.T) {
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
-	if err := h.KillSession(id); err != nil {
+	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
 	if s, _ := h.Session(id); !s.Hosted {
 		t.Errorf("ended row = %+v, want hosted", s)
 	}
 
 	second := h.Restart(t)
 	s, ok := second.Session(id)
-	if !ok || s.State != "ended" || !s.Hosted {
+	if !ok || s.State != "settled" || !s.Hosted {
 		t.Fatalf("ended row after a restart = %+v (%v), want hosted", s, ok)
 	}
 	if events := history(t, second, id, 0); len(events) < 4 {
@@ -425,10 +425,10 @@ func TestDismissRemovesChatImages(t *testing.T) {
 	if !apptest.Exists(ch.Media) {
 		t.Fatalf("%s was not made", ch.Media)
 	}
-	if err := h.KillSession(id); err != nil {
+	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to end", func() bool { s, _ := h.Session(id); return s.State == "ended" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
 	if !apptest.Exists(ch.Media) {
 		t.Fatalf("%s went when the thread ended, want it kept until the row is dismissed", ch.Media)
 	}

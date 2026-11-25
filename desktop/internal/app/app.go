@@ -148,7 +148,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"refresh": ic.Refresh,
 		"new":     sc.New,
 		"open":    sc.Open,
-		"kill":    sc.Kill,
+		"settle":  sc.Settle,
 		"pr":      sc.PR,
 		"cleanup": sc.Cleanup,
 	})

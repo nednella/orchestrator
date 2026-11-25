@@ -5,7 +5,7 @@ import type { IconName } from './Icon'
 
 type StateIconProps = { state: State }
 
-const ICON: Record<State, IconName> = { waiting: 'needs-you', working: 'loader', idle: 'idle', ended: 'ended' }
+const ICON: Record<State, IconName> = { waiting: 'needs-you', working: 'loader', idle: 'idle', settled: 'settled' }
 
 export function StateIcon({ state }: StateIconProps) {
   return (

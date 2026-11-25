@@ -4,7 +4,7 @@ export type ThreadSections = { waiting: Session[]; working: Session[]; idle: Ses
 
 export function splitThreads(sessions: Session[]): ThreadSections {
   const of = (state: State) => sessions.filter((s) => s.state === state)
-  return { waiting: of('waiting'), working: of('working'), idle: of('idle'), settled: of('ended').sort((a, b) => b.lastEventAt - a.lastEventAt) }
+  return { waiting: of('waiting'), working: of('working'), idle: of('idle'), settled: of('settled').sort((a, b) => b.lastEventAt - a.lastEventAt) }
 }
 
 export function matchesThread(session: Session, query: string): boolean {
@@ -14,7 +14,7 @@ export function matchesThread(session: Session, query: string): boolean {
   return session.title.toLowerCase().includes(q) || session.branch.toLowerCase().includes(q) || (number !== '' && session.issue > 0 && String(session.issue).includes(number))
 }
 
-// The thread list's order: needs you, working, idle, then ended, newest first.
+// The thread list's order: attention, working, idle, then settled, newest first.
 export function sortThreads(sessions: Session[]): Session[] {
   const { waiting, working, idle, settled } = splitThreads(sessions)
   return [...waiting, ...working, ...idle, ...settled]

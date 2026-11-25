@@ -38,7 +38,7 @@ var scenarios = []scenario{
 	{name: "tool", steps: []step{{prompt: "Read the file note.txt and reply with its contents only."}}, state: session.Idle, reply: "kiwi", tool: true, usage: true},
 	{name: "question", steps: []step{{prompt: "Reply with this question and nothing else: Shall I go on?"}}, state: session.Waiting, reply: "go on?", usage: true},
 	{name: "permission", steps: []step{{prompt: "Run the shell command: touch made.txt"}}, state: session.Waiting, tool: true, usage: true},
-	{name: "exit", steps: []step{pong, {exit: true}}, state: session.Ended, usage: true},
+	{name: "exit", steps: []step{pong, {exit: true}}, state: session.Settled, usage: true},
 	{name: "resume", steps: []step{pong, {exit: true}, {resume: true}, {prompt: "Reply with the one word plum, in lower case, and nothing else."}}, state: session.Idle, reply: "plum", usage: true},
 }
 

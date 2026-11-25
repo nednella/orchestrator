@@ -45,7 +45,7 @@ func TestCallReportsProblems(t *testing.T) {
 		{"sessions.Service/NewSession", `["only one argument"]`},
 		{"sessions.Service/NewSession", `[1,2]`},
 		{"projects.Service/Snapshot", `not json`},
-		{"sessions.Service/KillSession", `["main/99"]`}, // the method itself fails
+		{"sessions.Service/SettleThread", `["main/99"]`}, // the method itself fails
 		{"nothing.Service/Snapshot", `[]`},
 	} {
 		svc, method, _ := strings.Cut(tt.method, "/")

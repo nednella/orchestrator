@@ -33,7 +33,7 @@ func TestWaitsAreRecorded(t *testing.T) {
 		st, _ := h.Stats(7, "")
 		return st.Total == 3
 	})
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	st, err := h.Stats(7, "")

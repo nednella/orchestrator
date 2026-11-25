@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { stateLabel } from './stateMeta.ts'
 import { currentTask, goneThreads, shortAgo, sortThreads } from './threads.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -38,11 +39,11 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
   }
 }
 
-test('threads sort by state: needs you, working, idle, then ended', () => {
-  const sorted = sortThreads([thread('idle', 'idle'), thread('ended', 'ended'), thread('working', 'working'), thread('waiting', 'waiting')])
+test('threads sort by state: attention, working, idle, then settled', () => {
+  const sorted = sortThreads([thread('idle', 'idle'), thread('settled', 'settled'), thread('working', 'working'), thread('waiting', 'waiting')])
   assert.deepEqual(
     sorted.map((s) => s.id),
-    ['waiting', 'working', 'idle', 'ended'],
+    ['waiting', 'working', 'idle', 'settled'],
   )
 })
 
@@ -54,12 +55,21 @@ test('threads keep their order inside a live state', () => {
   )
 })
 
-test('ended threads come newest first', () => {
-  const sorted = sortThreads([thread('old', 'ended', 1), thread('new', 'ended', 3), thread('mid', 'ended', 2)])
+test('settled threads go last, newest first', () => {
+  const sorted = sortThreads([thread('old', 'settled', 1), thread('live', 'idle', 0), thread('new', 'settled', 3), thread('mid', 'settled', 2)])
   assert.deepEqual(
     sorted.map((s) => s.id),
-    ['new', 'mid', 'old'],
+    ['live', 'new', 'mid', 'old'],
   )
+})
+
+test('stateLabel names attention', () => {
+  assert.equal(stateLabel('waiting', false), 'Attention')
+  assert.equal(stateLabel('waiting', true), 'Attention')
+  assert.equal(stateLabel('working', false), 'Working')
+  assert.equal(stateLabel('working', true), 'Thinking')
+  assert.equal(stateLabel('idle', false), 'Idle')
+  assert.equal(stateLabel('settled', false), 'Settled')
 })
 
 function pullRequest(state: PR['state'], checks: PR['checks']): PR {
@@ -102,6 +112,6 @@ test('the time since the last event is compact', () => {
 
 test('a thread is gone when its project\'s new list leaves it out', () => {
   const other = { ...thread('other', 'idle'), project: 'blog' }
-  assert.deepEqual(goneThreads([thread('a', 'idle'), thread('b', 'ended'), other], 'shop', [thread('a', 'idle')]), ['b'])
+  assert.deepEqual(goneThreads([thread('a', 'idle'), thread('b', 'settled'), other], 'shop', [thread('a', 'idle')]), ['b'])
   assert.deepEqual(goneThreads([thread('a', 'idle')], 'shop', [thread('a', 'working'), thread('c', 'idle')]), [])
 })

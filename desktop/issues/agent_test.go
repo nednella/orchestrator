@@ -47,7 +47,7 @@ func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != "" {
 			t.Errorf("%s: claude got --model %q --effort %q, want %q and none", tt.name, model, effort, tt.model)
 		}
-		if err := h.KillSession(s.ID); err != nil {
+		if err := h.SettleThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
 	}

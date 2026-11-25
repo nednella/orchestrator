@@ -63,7 +63,7 @@ export type IconName =
   | 'needs-you'
   | 'loader'
   | 'idle'
-  | 'ended'
+  | 'settled'
   | 'pull-request'
   | 'claude'
   | 'agent'
@@ -191,7 +191,7 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'needs-you') return <path d="M8 14.3A6.3 6.3 0 1 0 8 1.7a6.3 6.3 0 0 0 0 12.6ZM8 5v3.3M8 10.8h.01" />
   if (name === 'loader') return <path d="M14 8a6 6 0 1 1-4.1-5.7" />
   if (name === 'idle') return <circle cx="8" cy="8" r="6.3" strokeDasharray="2 2" />
-  if (name === 'ended') return <path d="M8 14.3A6.3 6.3 0 1 0 8 1.7a6.3 6.3 0 0 0 0 12.6ZM5.7 8l1.6 1.7 3-3.4" />
+  if (name === 'settled') return <path d="M8 14.3A6.3 6.3 0 1 0 8 1.7a6.3 6.3 0 0 0 0 12.6ZM5.7 8l1.6 1.7 3-3.4" />
   if (name === 'pull-request')
     return (
       <>

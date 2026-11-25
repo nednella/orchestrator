@@ -35,7 +35,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   const card = useHoverCard(400)
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
-  const ended = session.state === 'ended'
+  const settled = session.state === 'settled'
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -64,7 +64,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     }
   }, [cursor, showCard, closeCard])
 
-  const line2 = ended || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
+  const line2 = settled || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   return (
     <div
@@ -110,15 +110,15 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             <button
               className="thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] font-medium"
               aria-current={selected}
-              aria-disabled={ended}
+              aria-disabled={settled}
               aria-describedby={card.anchor ? cardId : undefined}
-              style={ended ? { cursor: 'default' } : undefined}
+              style={settled ? { cursor: 'default' } : undefined}
               onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
               onBlur={closeCard}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 if (selected) return a.showHome(session.project)
-                if (ended) return
+                if (settled) return
                 a.select(session.id)
                 a.focus('thread')
               }}
@@ -149,7 +149,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                 </>
               )}
             </span>
-            {ended ? (
+            {settled ? (
               <span className="relative z-[1] flex flex-none items-center gap-1.5">
                 <CleanupMark session={session} />
                 {session.resumable && (

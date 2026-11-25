@@ -40,7 +40,7 @@ func TestActivityIsCounted(t *testing.T) {
 		t.Errorf("after a restart, totals = %+v: a replayed record or a known session was counted", again.Totals)
 	}
 
-	if err := second.Sessions().Kill(s.ID); err != nil {
+	if err := second.Sessions().Settle(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the session's length", func() bool {

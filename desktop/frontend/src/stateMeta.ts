@@ -1,10 +1,10 @@
 import type { State } from './types'
 
 export const STATE_LABEL: Record<State, string> = {
-  waiting: 'Needs you',
+  waiting: 'Attention',
   working: 'Working',
   idle: 'Idle',
-  ended: 'Ended',
+  settled: 'Settled',
 }
 
 export function stateLabel(state: State, chat: boolean): string {

@@ -176,10 +176,10 @@ func TestResumedSessionShowsTheWholeConversationsUsage(t *testing.T) {
 		h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
 		recorded := len(h.Events(t, activity.Usage)) + 1
 		eventually(t, "the turn's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == recorded })
-		if err := h.KillSession(id); err != nil {
+		if err := h.SettleThread(id); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the session ended", func() bool { row, _ := h.Session(id); return row.State == "ended" })
+		eventually(t, "the session settled", func() bool { row, _ := h.Session(id); return row.State == "settled" })
 	}
 	resume := func(h *apptest.Harness, id string) sessions.Session {
 		t.Helper()
@@ -253,7 +253,7 @@ func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
 		return json.Unmarshal(data, &m) == nil && m.Offsets[transcript] == info.Size()
 	})
 
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.DismissSession(s.ID); err != nil {

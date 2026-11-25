@@ -264,15 +264,15 @@ func (r *Recorder) Warnings() []warn.Warning {
 	return out
 }
 
-// Ended are the ids of the sessions that any sessions event showed as ended.
-func (r *Recorder) Ended() []string {
+// Settled are the ids of the sessions that any sessions event showed as settled.
+func (r *Recorder) Settled() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
 	for _, e := range r.events {
 		if list, ok := e.payload.(scoped.List[sessions.Session]); ok && e.name == "sessions" {
 			for _, s := range list.Items {
-				if s.State == "ended" && !slices.Contains(out, s.ID) {
+				if s.State == "settled" && !slices.Contains(out, s.ID) {
 					out = append(out, s.ID)
 				}
 			}
@@ -1006,7 +1006,7 @@ func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.
 func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.sessions.ShellOpen(id) }
 func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }
 func (h *Harness) ShellClose(id string) error                      { return h.sessions.ShellClose(id) }
-func (h *Harness) KillSession(id string) error                     { return h.sessions.KillSession(id) }
+func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
 func (h *Harness) DismissSession(id string) error                  { return h.sessions.DismissSession(id) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }

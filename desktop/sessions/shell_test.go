@@ -60,8 +60,8 @@ func TestShellSession(t *testing.T) {
 	if records := bus.ReadAll(h.State, nil); len(records) != 1 || records[agent.ID].Title != "agent" {
 		t.Errorf("state = %v, want only the agent's", records)
 	}
-	if err := h.KillSession(shell.ID); err == nil {
-		t.Error("KillSession stopped the shell")
+	if err := h.SettleThread(shell.ID); err == nil {
+		t.Error("SettleThread stopped the shell")
 	}
 	if err := h.RenameSession(shell.ID, "x"); err == nil {
 		t.Error("RenameSession renamed the shell")

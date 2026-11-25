@@ -23,7 +23,7 @@ func TestAppCommandsSendTheirWords(t *testing.T) {
 		{[]string{"new", "fix", "login"}, "new", []string{"fix", "login"}, nil},
 		{[]string{"open", "3"}, "open", []string{"3"}, nil},
 		{[]string{"open", "the", "login"}, "open", []string{"the", "login"}, nil},
-		{[]string{"kill", "4"}, "kill", []string{"4"}, nil},
+		{[]string{"settle", "4"}, "settle", []string{"4"}, nil},
 		{[]string{"project"}, "project", nil, nil},
 		{[]string{"project", "other"}, "project", []string{"other"}, nil},
 		{[]string{"project", "add"}, "project", []string{"add", dir}, nil},
@@ -72,7 +72,7 @@ func TestAppCommandsRejectBadArguments(t *testing.T) {
 		return control.Response{OK: true}
 	})
 	for _, args := range [][]string{
-		{"issue"}, {"open"}, {"next", "x"}, {"queue", "x"}, {"pr", "1", "2"}, {"kill", "1", "2"},
+		{"issue"}, {"open"}, {"next", "x"}, {"queue", "x"}, {"pr", "1", "2"}, {"settle", "1", "2"},
 		{"project", "remove"}, {"project", "add", "a", "b"},
 		{"project", "add", "/no/such/folder"},
 	} {
@@ -84,7 +84,7 @@ func TestAppCommandsRejectBadArguments(t *testing.T) {
 
 func TestAppCommandsNeedTheApp(t *testing.T) {
 	t.Setenv("AGENTOS_SOCKET", "/nonexistent/agentos.sock")
-	for _, args := range [][]string{{"issue", "1"}, {"new"}, {"queue"}, {"project"}, {"kill", "1"}, {"browser"}} {
+	for _, args := range [][]string{{"issue", "1"}, {"new"}, {"queue"}, {"project"}, {"settle", "1"}, {"browser"}} {
 		if _, err := run(t, args...); err == nil || err.Error() != "agentos is not running: open the app and try again" {
 			t.Errorf("agentos %v: error = %v", args, err)
 		}
@@ -95,7 +95,7 @@ func TestAppCommandsAnswerWithTheAppsError(t *testing.T) {
 	fakeApp(t, func(context.Context, control.Request) control.Response {
 		return control.Response{Error: "no session 9 in this project"}
 	})
-	if _, err := run(t, "kill", "9"); err == nil || err.Error() != "no session 9 in this project" {
+	if _, err := run(t, "settle", "9"); err == nil || err.Error() != "no session 9 in this project" {
 		t.Errorf("error = %v", err)
 	}
 }

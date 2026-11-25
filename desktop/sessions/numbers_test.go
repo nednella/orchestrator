@@ -3,7 +3,6 @@ package sessions_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +28,7 @@ func TestNumbersAreNeverReused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(first.ID); err != nil {
+	if err := h.SettleThread(first.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.DismissSession(first.ID); err != nil {
@@ -58,7 +57,7 @@ func TestNumbersAfterARestartFollowCreationOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-2 * time.Hour)
-	rec := session.Record{Session: "main/old1", State: session.Ended, Event: "SessionEnd", At: old, Identity: session.Identity{Title: "old", Created: old.UnixMilli()}, EndedAt: old.Add(time.Hour).UnixMilli()}
+	rec := session.Record{Session: "main/old1", State: session.Settled, Event: "SessionEnd", At: old, Identity: session.Identity{Title: "old", Created: old.UnixMilli()}, SettledAt: old.Add(time.Hour).UnixMilli()}
 	if err := bus.WriteState(h.State, rec); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +86,7 @@ func TestNewSessionSeesNothingOfADismissedOne(t *testing.T) {
 	if _, err := store.AddText(old.ID, "proof", "", "agent"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(old.ID); err != nil {
+	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.DismissSession(old.ID); err != nil {
@@ -122,7 +121,7 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 		t.Errorf("claude was started with TMPDIR=%s, want %s", got, tmp)
 	}
 
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.DismissSession(s.ID); err != nil {
@@ -131,34 +130,42 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 	eventually(t, "the temp folder to go", func() bool { return !exists(tmp) })
 }
 
-func TestExpiredEndedRowGoesWithItsEvidenceAndPRs(t *testing.T) {
+func TestSettledThreadStays(t *testing.T) {
 	h := newHarness(t)
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the row to settle", func() bool {
+		got, ok := h.Session(s.ID)
+		return ok && got.State == session.Settled && got.SettledAt > 0
+	})
+	if err, want := h.SettleThread(s.ID), "Thread "+s.ID+" has settled"; err == nil || err.Error() != want {
+		t.Errorf("a second Settle = %v, want %q", err, want)
+	}
+
 	const id = "main/old1"
 	long := time.Now().Add(-8 * 24 * time.Hour)
-	rec := session.Record{Session: id, State: session.Ended, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, EndedAt: long.UnixMilli()}
+	rec := session.Record{Session: id, State: session.Settled, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, SettledAt: long.UnixMilli()}
 	if err := bus.WriteState(h.State, rec); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := evidence.New(filepath.Join(h.State, "data"), stats.NewLog(filepath.Join(h.State, "data"), "testtest")).AddText(id, "proof", "", "agent"); err != nil {
 		t.Fatal(err)
 	}
-	prs := filepath.Join(h.State, "data", "main", "prs.json")
-	if err := os.WriteFile(prs, []byte(`{"acks":{},"live":{"main/old1":true},"branches":{"main/old1":["issue-7"]}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
 	h.Sessions().Refresh()
-	eventually(t, "the evidence to go", func() bool { return !exists(evidenceDir(h, id)) })
-	data, err := os.ReadFile(prs)
-	if err != nil || strings.Contains(string(data), id) {
-		t.Errorf("prs.json = %s, %v", data, err)
+	if got, ok := h.Session(id); !ok || got.State != session.Settled || got.Title != "old" || got.SettledAt != long.UnixMilli() {
+		t.Errorf("a thread settled 8 days ago = %+v, %v; want its settled row", got, ok)
 	}
-	if exists(filepath.Join(h.State, "sessions", "main", "old1.json")) || len(h.Sessions().List()) != 0 {
-		t.Error("the expired row stayed")
+	if !exists(filepath.Join(h.State, "sessions", "main", "old1.json")) || !exists(evidenceDir(h, id)) {
+		t.Error("the state file or the evidence of a thread settled 8 days ago went")
 	}
 }
 
-func TestAnExpiredShellRowLeavesTheChatImages(t *testing.T) {
+func TestADismissedShellRowLeavesTheChatImages(t *testing.T) {
 	h := newHarness(t)
 	image := filepath.Join(h.State, "data", "main", "chat-media", "k3x9q0ab", "0123456789abcdef.png")
 	if err := os.MkdirAll(filepath.Dir(image), 0o700); err != nil {
@@ -169,13 +176,16 @@ func TestAnExpiredShellRowLeavesTheChatImages(t *testing.T) {
 	}
 	long := time.Now().Add(-8 * 24 * time.Hour)
 	// A shell's name has no token.
-	rec := session.Record{Session: "main/shell", State: session.Ended, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, EndedAt: long.UnixMilli()}
+	rec := session.Record{Session: "main/shell", State: session.Settled, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, SettledAt: long.UnixMilli()}
 	if err := bus.WriteState(h.State, rec); err != nil {
 		t.Fatal(err)
 	}
 
 	h.Sessions().Refresh()
-	eventually(t, "the expired row to go", func() bool { return !exists(filepath.Join(h.State, "sessions", "main", "shell.json")) })
+	if err := h.DismissSession("main/shell"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the dismissed row to go", func() bool { return !exists(filepath.Join(h.State, "sessions", "main", "shell.json")) })
 	time.Sleep(100 * time.Millisecond) // past the row's clean-up
 	if !exists(image) {
 		t.Error("the project's chat images went with a row that has no token")

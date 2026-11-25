@@ -61,13 +61,13 @@ func (v *Service) ShellNew(sessionID string) (ShellInfo, error) {
 // ShellClose stops one shell of the current project.
 func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 
-// KillSession stops the agent; its row stays as ended.
-func (v *Service) KillSession(id string) error { return v.s.Kill(id) }
+// SettleThread stops the agent; its row stays, settled.
+func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 
-// DismissSession removes the row of an ended session.
+// DismissSession removes the row of a settled session.
 func (v *Service) DismissSession(id string) error { return v.s.Dismiss(id) }
 
-// ResumeSession starts a session that continues an ended one's conversation, and removes the ended row.
+// ResumeSession starts a session that continues a settled one's conversation, and removes the settled row.
 func (v *Service) ResumeSession(id string) (Session, error) { return v.s.Resume(id) }
 
 // ForkSession starts a thread that continues the conversation of the thread id up to its reply at, the uuid of the

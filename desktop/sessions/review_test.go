@@ -114,7 +114,7 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 	}
 	tmuxRun(t, h, "kill-session", "-t", s.ID)
 	h.Sessions().Refresh()
-	if got := stateOf(h, s.ID); got != "ended" {
+	if got := stateOf(h, s.ID); got != "settled" {
 		t.Fatalf("a killed session is %s", got)
 	}
 	tmuxRun(t, h, "new-session", "-d", "-s", s.ID, "sleep", "60")
@@ -122,7 +122,7 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 	if got := stateOf(h, s.ID); got != "idle" {
 		t.Errorf("a session tmux lists again is %s, want idle", got)
 	}
-	if rec, _ := bus.ReadState(h.State, s.ID); rec.State == "ended" {
+	if rec, _ := bus.ReadState(h.State, s.ID); rec.State == "settled" {
 		t.Error("the saved ended record outlived the revival")
 	}
 }
@@ -139,8 +139,8 @@ func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 	wg.Wait()
-	if ended := h.Rec.Ended(); len(ended) != 0 {
-		t.Errorf("a list read before the creation ended %v", ended)
+	if settled := h.Rec.Settled(); len(settled) != 0 {
+		t.Errorf("a list read before the creation settled %v", settled)
 	}
 	if got := stateOf(h, s.ID); got != "idle" {
 		t.Errorf("the new session is %s", got)
@@ -153,7 +153,7 @@ func TestDismissedSessionStaysGoneAfterALateHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.DismissSession(s.ID); err != nil {
@@ -174,7 +174,7 @@ func TestRemovingAProjectWithLiveIssueSessionsIsRefused(t *testing.T) {
 	if _, err := h.RemoveProject("main"); err == nil || !strings.Contains(err.Error(), "session 1 for #12") {
 		t.Fatalf("RemoveProject = %v, want an error naming the session", err)
 	}
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.RemoveProject("main"); err != nil {
@@ -192,7 +192,7 @@ func TestRemovingAProjectEndsItsSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, v := range h.Sessions().List() {
-		if v.ID == s.ID && v.State != session.Ended {
+		if v.ID == s.ID && v.State != session.Settled {
 			t.Errorf("session %s survived forgetting its project: %+v", s.ID, v)
 		}
 	}
@@ -201,7 +201,7 @@ func TestRemovingAProjectEndsItsSessions(t *testing.T) {
 func TestNewSessionDoesNotInheritAnOlderOnesLiveFlag(t *testing.T) {
 	h := newHarness(t)
 	long := time.Now().Add(-time.Hour)
-	if err := bus.WriteState(h.State, session.Record{Session: "main/1", State: session.Ended, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old", Issue: 7}, EndedAt: long.UnixMilli()}); err != nil {
+	if err := bus.WriteState(h.State, session.Record{Session: "main/1", State: session.Settled, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old", Issue: 7}, SettledAt: long.UnixMilli()}); err != nil {
 		t.Fatal(err)
 	}
 	prs := filepath.Join(h.State, "data", "main", "prs.json")

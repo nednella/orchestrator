@@ -25,10 +25,10 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 	s := issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 	h.RefreshPRs()
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := h.Session(s.ID); got.State != "ended" || got.PR == nil || got.PR.State != "draft" {
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.PR == nil || got.PR.State != "draft" {
 		t.Fatalf("ended row = %+v, want its draft PR", got)
 	}
 
@@ -302,7 +302,7 @@ func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
 		name string
 		end  func(h *apptest.Harness, id string) error
 	}{
-		{"killed", func(h *apptest.Harness, id string) error { return h.KillSession(id) }},
+		{"killed", func(h *apptest.Harness, id string) error { return h.SettleThread(id) }},
 		{"cleaned up", func(h *apptest.Harness, id string) error { return h.Cleanup(id, true) }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,7 +326,7 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
@@ -334,7 +334,7 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	var fresh string
 	eventually(t, "a new session for the issue", func() bool {
 		for _, v := range h.Sessions().List() {
-			if v.Issue == 12 && v.State != "ended" {
+			if v.Issue == 12 && v.State != "settled" {
 				fresh = v.ID
 				return true
 			}
@@ -353,7 +353,7 @@ func TestReviewOnAnEndedSessionStartsANewOne(t *testing.T) {
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
@@ -361,7 +361,7 @@ func TestReviewOnAnEndedSessionStartsANewOne(t *testing.T) {
 	var fresh string
 	eventually(t, "a new session for the issue", func() bool {
 		for _, v := range h.Sessions().List() {
-			if v.Issue == 12 && v.State != "ended" {
+			if v.Issue == 12 && v.State != "settled" {
 				fresh = v.ID
 				return true
 			}
@@ -382,7 +382,7 @@ func TestResumedSessionIsCleanedUpOnMerge(t *testing.T) {
 	s := issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
@@ -390,7 +390,7 @@ func TestResumedSessionIsCleanedUpOnMerge(t *testing.T) {
 	var fresh string
 	eventually(t, "a new session for the issue", func() bool {
 		for _, v := range h.Sessions().List() {
-			if v.Issue == 7 && v.State != "ended" {
+			if v.Issue == 7 && v.State != "settled" {
 				fresh = v.ID
 				return true
 			}
@@ -417,7 +417,7 @@ func TestReviewOnAnEndedSessionLeavesTheIssuesLiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the PR of side", func() bool { got, _ := h.Session(s.ID); return got.PR != nil })
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	live, _, err := h.Sessions().CreateIssue("#12 work", "", 12, project.Action{}, nil, "", sessions.StartOptions{})

@@ -54,16 +54,16 @@ func loadEnv() (env, error) {
 	return env{project: cfg.Resolve(cwd), stateDir: stateDir, tmux: tmux}, nil
 }
 
-func newKillCmd() *cobra.Command {
+func newSettleCmd() *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
-		Use:     "kill [n]",
-		Short:   "Stop session n in the app, or without n this project's agents (--all: every project, shells too)",
+		Use:     "settle [n]",
+		Short:   "Settle thread n in the app, or without n this project's threads (--all: every project, shells too)",
 		GroupID: groupWork,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 {
-				return askApp(cmd, control.Request{Cmd: "kill", Args: args})
+				return askApp(cmd, control.Request{Cmd: "settle", Args: args})
 			}
 			e, err := loadEnv()
 			if err != nil {
@@ -71,7 +71,7 @@ func newKillCmd() *cobra.Command {
 			}
 			infos, shells, err := e.tmux.ListAll(cmd.Context())
 			if err != nil {
-				return fmt.Errorf("listing agents: %w", err)
+				return fmt.Errorf("listing threads: %w", err)
 			}
 			out := cmd.OutOrStdout()
 			stopped := 0
@@ -79,11 +79,9 @@ func newKillCmd() *cobra.Command {
 				if !all && in.Name.Project != e.project.Key() {
 					continue
 				}
-				fmt.Fprintf(out, "stopping %s (%s)\n", in.Name, in.Title)
+				// The state file stays: the app shows the thread as settled from it.
+				fmt.Fprintf(out, "settling %s (%s)\n", in.Name, in.Title)
 				if err := e.tmux.Kill(cmd.Context(), in.Name); err != nil {
-					return err
-				}
-				if err := bus.RemoveState(e.stateDir, in.Name.String()); err != nil {
 					return err
 				}
 				stopped++
@@ -98,11 +96,11 @@ func newKillCmd() *cobra.Command {
 				}
 			}
 			if stopped == 0 {
-				fmt.Fprintln(out, "no agents to stop")
+				fmt.Fprintln(out, "no threads to settle")
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&all, "all", false, "stop the agents of every project, and the shells")
+	cmd.Flags().BoolVar(&all, "all", false, "settle the threads of every project, and stop the shells")
 	return cmd
 }

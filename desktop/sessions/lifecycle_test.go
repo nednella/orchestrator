@@ -739,7 +739,7 @@ func TestLiveFlagGoesWithTheSession(t *testing.T) {
 	if !live() {
 		t.Fatal("a draft PR was not counted as live")
 	}
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if !live() {

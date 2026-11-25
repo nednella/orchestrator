@@ -109,22 +109,22 @@ func (c *Commands) Open(_ context.Context, req ctl.Request) (string, error) {
 	return "", fmt.Errorf("%d sessions match %q: use a number", hits, want)
 }
 
-// Kill stops the session with that number.
-func (c *Commands) Kill(_ context.Context, req ctl.Request) (string, error) {
+// Settle settles the thread with that number.
+func (c *Commands) Settle(_ context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
-		return "", errors.New("usage: agentos kill <n>")
+		return "", errors.New("usage: agentos settle <n>")
 	}
 	s, err := c.find(req.Args[0])
 	if err != nil {
 		return "", err
 	}
-	if s.State == session.Ended {
-		return "", fmt.Errorf("session %d has ended", s.N)
+	if s.State == session.Settled {
+		return "", fmt.Errorf("thread %d has settled", s.N)
 	}
-	if err := c.s.Kill(s.ID); err != nil {
+	if err := c.s.Settle(s.ID); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("killed session %d: %s", s.N, s.Title), nil
+	return fmt.Sprintf("settled thread %d: %s", s.N, s.Title), nil
 }
 
 // PR lists the pull requests of the sessions, or of one session.

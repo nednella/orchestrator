@@ -81,7 +81,7 @@ type AgentosActions = {
   stepSession(delta: number): void
   newSession(start: ThreadStart): Promise<Session>
   newChat(start: ThreadStart): Promise<Session>
-  killSession(id: string): Promise<void>
+  settleThread(id: string): Promise<void>
   dismissSession(id: string): Promise<void>
   resumeSession(id: string): Promise<Session>
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
@@ -730,10 +730,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async newChat({ prompt, model, effort }) {
         return addSession(await api.newChat('', prompt, model, effort))
       },
-      async killSession(id) {
-        await api.killSession(id)
+      async settleThread(id) {
+        await api.settleThread(id)
         if (selectedRef.current !== id) return
-        const next = sessionsRef.current.find((s) => s.project === projectRef.current?.key && s.id !== id && s.state !== 'ended')
+        const next = sessionsRef.current.find((s) => s.project === projectRef.current?.key && s.id !== id && s.state !== 'settled')
         if (next) selectId(next.id)
         else detach()
       },

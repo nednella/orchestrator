@@ -31,7 +31,7 @@ func NewService(c *Chats, runner run.Runner, ctx func() context.Context) *Servic
 	return &Service{c: c, files: newFiles(runner), ctx: ctx}
 }
 
-// ChatHistory is the thread's logged events with a seq above after, live or ended. Call ChatWatch first and merge the
+// ChatHistory is the thread's logged events with a seq above after, live or settled. Call ChatWatch first and merge the
 // two by seq: an event logged in between comes in both.
 func (v *Service) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 	ch, err := v.c.threads.ChatOf(id)
@@ -167,7 +167,7 @@ func (v *Service) live(id string) (sessions.Chat, error) {
 		return sessions.Chat{}, err
 	}
 	if !ch.Live {
-		return sessions.Chat{}, fmt.Errorf("Thread %s has ended", id)
+		return sessions.Chat{}, fmt.Errorf("Thread %s has settled", id)
 	}
 	return ch, nil
 }

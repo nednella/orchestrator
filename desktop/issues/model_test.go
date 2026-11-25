@@ -130,12 +130,12 @@ func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
 		t.Errorf("after a restart: %+v, found %v", got, ok)
 	}
 
-	if err := again.KillSession(s.ID); err != nil {
+	if err := again.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the ended row keeps its model", func() bool {
 		ended, ok := again.Session(s.ID)
-		return ok && ended.State == "ended" && ended.Model == "opus"
+		return ok && ended.State == "settled" && ended.Model == "opus"
 	})
 }
 

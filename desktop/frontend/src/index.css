@@ -32,7 +32,7 @@
   --color-finished: var(--finished);
   --color-working: var(--working);
   --color-idle: var(--idle);
-  --color-ended: var(--ended);
+  --color-settled: var(--settled);
   --color-accent: var(--accent);
   --color-danger: var(--danger);
   --font-sans: var(--font-ui);
@@ -104,7 +104,7 @@
   [data-state='waiting'] { --c: var(--waiting); }
   [data-state='working'] { --c: var(--working); }
   [data-state='idle'] { --c: var(--idle); }
-  [data-state='ended'] { --c: var(--ended); }
+  [data-state='settled'] { --c: var(--settled); }
 
   .label {
     font-size: var(--fs-label);
@@ -128,7 +128,7 @@
     background: var(--c);
   }
 
-  .dot[data-state='ended'] {
+  .dot[data-state='settled'] {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--c);
   }
@@ -571,7 +571,7 @@
     background: var(--bg-hover);
   }
 
-  .thread-row[data-state='ended'] .thread-dim {
+  .thread-row[data-state='settled'] .thread-dim {
     opacity: 0.55;
   }
 

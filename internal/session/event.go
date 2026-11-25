@@ -50,7 +50,7 @@ func Next(cur State, ev Event) State {
 		}
 		return Waiting
 	case "SessionEnd":
-		return Ended
+		return Settled
 	}
 	return cur
 }

@@ -98,10 +98,10 @@ func TestChatFlagSurvivesARestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(gone.ID); err != nil {
+	if err := h.SettleThread(gone.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the chat ended", func() bool { got, _ := h.Session(gone.ID); return got.State == "ended" })
+	eventually(t, "the chat settled", func() bool { got, _ := h.Session(gone.ID); return got.State == "settled" })
 
 	fresh := h.Restart(t)
 	for id, want := range map[string]bool{live.ID: true, gone.ID: true, plain.ID: false} {
@@ -110,7 +110,7 @@ func TestChatFlagSurvivesARestart(t *testing.T) {
 			return ok && got.Chat == want
 		})
 	}
-	if got, _ := fresh.Session(gone.ID); got.State != "ended" {
+	if got, _ := fresh.Session(gone.ID); got.State != "settled" {
 		t.Errorf("ended chat = %+v", got)
 	}
 }
@@ -165,10 +165,10 @@ func TestChatStaysOutOfTheStats(t *testing.T) {
 		t.Errorf("usage events = %+v, want the chat's under chat_usage only", got)
 	}
 
-	if err := h.KillSession(chat.ID); err != nil {
+	if err := h.SettleThread(chat.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the chat ended", func() bool { got, _ := h.Session(chat.ID); return got.State == "ended" })
+	eventually(t, "the chat settled", func() bool { got, _ := h.Session(chat.ID); return got.State == "settled" })
 	if got := h.Events(t, activity.SessionEnd); len(got) != 0 {
 		t.Errorf("session_end events = %+v", got)
 	}
@@ -267,7 +267,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 			}
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 			h.RefreshPRs()
-			if err := h.KillSession(s.ID); err != nil {
+			if err := h.SettleThread(s.ID); err != nil {
 				t.Fatal(err)
 			}
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
@@ -275,7 +275,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 			var fresh string
 			eventually(t, "a new session for the issue", func() bool {
 				for _, v := range h.Sessions().List() {
-					if v.Issue == 12 && v.State != "ended" {
+					if v.Issue == 12 && v.State != "settled" {
 						fresh = v.ID
 						return true
 					}

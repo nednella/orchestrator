@@ -2,8 +2,8 @@ import type { ChatEvent, ChatImage, EventMap, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
-// What the mock knows of a thread: whether it has ended, and a way to move its row's state as hooks would.
-export type MockThread = { ended: boolean; setState(state: State): void }
+// What the mock knows of a thread: whether it has settled, and a way to move its row's state as hooks would.
+export type MockThread = { settled: boolean; setState(state: State): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -167,7 +167,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
 
   function live(id: string): MockThread {
     const t = thread(id)
-    if (t.ended) throw `Thread ${id} has ended`
+    if (t.settled) throw `Thread ${id} has settled`
     return t
   }
 
@@ -346,7 +346,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       append(id, { kind: 'user', id: message, text, files })
       if (text === 'exit') {
         end(id)
-        t.setState('ended')
+        t.setState('settled')
         return { id: message }
       }
       if (text === '/compact') {

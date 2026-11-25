@@ -75,8 +75,8 @@ export function useChat(id: string): { timeline: Timeline; events: ChatEvent[]; 
     const off = on(chatEvent(id), ({ events }) => feed.push(events))
     inTurn(id, () => api.chatWatch(id))
       .catch((err) => {
-        // An ended thread cannot be watched, and its history is all there is.
-        if (gone || latest().sessions.find((s) => s.id === id)?.state === 'ended') return
+        // A settled thread cannot be watched, and its history is all there is.
+        if (gone || latest().sessions.find((s) => s.id === id)?.state === 'settled') return
         setView((v) => ({ ...v, error: errorMessage(err) }))
       })
       .then(() => feed.load())

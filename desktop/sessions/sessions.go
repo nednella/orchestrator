@@ -44,7 +44,6 @@ const (
 	tmuxTimeout   = 5 * time.Second
 	defaultTitle  = "agent"
 	chatTitle     = "chat"
-	endedKept     = 7 * 24 * time.Hour
 	endedSettle   = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
 	startCols     = 120
 	startRows     = 32
@@ -85,8 +84,8 @@ type Session struct {
 	Cleanup       string        `json:"cleanup"`
 	CleanupReason string        `json:"cleanupReason"`
 
-	EndedAt   int64 `json:"endedAt"`   // unix ms; 0 while the session runs
-	Resumable bool  `json:"resumable"` // the session has ended and its agent can continue its conversation
+	SettledAt int64 `json:"settledAt"` // unix ms; 0 while the session runs
+	Resumable bool  `json:"resumable"` // the session has settled and its agent can continue its conversation
 
 	Tokens int64   `json:"tokens"` // what the agent used in this run of the app, 0 when not known
 	Cost   float64 `json:"cost"`   // what those tokens cost at list prices, in US dollars
@@ -138,7 +137,7 @@ type Sessions struct {
 	info       []term.Info
 	shells     []session.Name           // every project's shell sessions
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
-	ended      map[string]*endedSession // sessions whose tmux session is gone, until dismissed
+	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until dismissed
 	nums       map[string]int           // the number each session shows, for this run of the app
 	lastNum    map[string]int           // the last number given in each project
 	dismissed  map[string]bool          // ended sessions the user dismissed: the poll must not bring them back
@@ -345,7 +344,6 @@ func (s *Sessions) Refresh() {
 			s.adoptEnded(name, rec)
 		}
 	}
-	s.expireEnded(time.Now())
 	s.markRead(records, stamps, infos)
 	s.number()
 	s.loaded = true
@@ -379,14 +377,14 @@ func (s *Sessions) markRead(records map[string]session.Record, stamps map[string
 	}
 }
 
-// revive takes back a session that tmux lists although it was marked ended. The saved
-// record says ended, so it goes: the next hook writes a true one. It needs mu.
+// revive takes back a session that tmux lists although it was marked settled. The saved
+// record says settled, so it goes: the next hook writes a true one. It needs mu.
 func (s *Sessions) revive(name string) {
 	delete(s.ended, name)
 	_ = bus.RemoveState(s.stateDir, name)
 }
 
-// endedSession is a session that is gone but whose row stays until dismissed.
+// endedSession is a session that is gone but whose row stays, settled, until dismissed.
 type endedSession struct {
 	info term.Info
 	rec  session.Record
@@ -396,7 +394,7 @@ type endedSession struct {
 // persist saves what the row needs to outlive the app. It needs mu.
 func (e *endedSession) record() session.Record {
 	rec := e.rec
-	rec.State, rec.EndedAt = session.Ended, e.at.UnixMilli()
+	rec.State, rec.SettledAt = session.Settled, e.at.UnixMilli()
 	rec.Identity = identityOf(e.info)
 	return rec
 }
@@ -433,7 +431,8 @@ func (s *Sessions) saveIdentity(in term.Info) {
 	}
 }
 
-// adoptEnded takes in a state file whose tmux session is gone. It needs mu.
+// adoptEnded takes in a state file whose tmux session is gone, as a settled row. One that says ended, an older
+// build's, is written back as settled. It needs mu.
 func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	n, err := session.ParseName(name)
 	if err != nil {
@@ -449,17 +448,15 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		}
 		return
 	}
-	at := time.UnixMilli(rec.EndedAt)
-	if rec.EndedAt == 0 {
+	at := time.UnixMilli(rec.SettledAt)
+	if rec.SettledAt == 0 {
 		at = rec.At
 	}
-	if time.Since(rec.At) < endedSettle && rec.EndedAt == 0 {
+	if time.Since(rec.At) < endedSettle && rec.SettledAt == 0 {
 		return
 	}
-	if time.Since(at) > endedKept {
-		s.drop(name)
-		return
-	}
+	stale := rec.SettledAt == 0 || rec.State != session.Settled
+	rec.Changes = session.SettledChanges(rec.Changes)
 	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Chat: rec.Chat, Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
@@ -469,18 +466,18 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	e := &endedSession{info: info, rec: rec, at: at}
 	s.ended[name] = e
-	if rec.EndedAt == 0 || rec.State != session.Ended {
+	if stale {
 		_ = bus.WriteState(s.stateDir, e.record())
 	}
 	if len(s.history[name]) == 0 {
 		s.history[name] = slices.Clone(rec.Changes)
 	}
-	if h := s.history[name]; len(h) == 0 || h[len(h)-1].State != session.Ended {
-		s.history[name] = append(h, session.Change{State: session.Ended, At: at.UnixMilli()})
+	if h := s.history[name]; len(h) == 0 || h[len(h)-1].State != session.Settled {
+		s.history[name] = append(h, session.Change{State: session.Settled, At: at.UnixMilli()})
 	}
 }
 
-// endSession turns a session that is gone into a row that stays, and saves it. It needs mu.
+// endSession turns a session that is gone into a settled row that stays, and saves it. It needs mu.
 func (s *Sessions) endSession(id string, at time.Time) {
 	if _, ok := s.ended[id]; ok || s.dismissed[id] {
 		return
@@ -497,25 +494,16 @@ func (s *Sessions) endSession(id string, at time.Time) {
 	if rec.Session == "" {
 		rec = session.Record{Session: id, At: at}
 	}
-	if rec.State == session.Ended && !rec.At.IsZero() {
+	if rec.State == session.Settled && !rec.At.IsZero() {
 		at = rec.At
 	}
 	e := &endedSession{info: info, rec: rec, at: at}
 	s.ended[id] = e
 	if err := bus.WriteState(s.stateDir, e.record()); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving an ended session: %v\n", err)
+		fmt.Fprintf(os.Stderr, "agentos: saving a settled session: %v\n", err)
 	}
-	if h := s.history[id]; len(h) == 0 || h[len(h)-1].State != session.Ended {
-		s.history[id] = append(h, session.Change{State: session.Ended, At: at.UnixMilli()})
-	}
-}
-
-// expireEnded drops ended sessions that stayed a week. It needs mu.
-func (s *Sessions) expireEnded(now time.Time) {
-	for id, e := range s.ended {
-		if now.Sub(e.at) > endedKept {
-			s.drop(id)
-		}
+	if h := s.history[id]; len(h) == 0 || h[len(h)-1].State != session.Settled {
+		s.history[id] = append(h, session.Change{State: session.Settled, At: at.UnixMilli()})
 	}
 }
 
@@ -542,7 +530,7 @@ func (s *Sessions) number() {
 	}
 }
 
-// drop forgets an ended session for good. It needs mu.
+// drop forgets a settled session for good. It needs mu.
 func (s *Sessions) drop(id string) {
 	delete(s.ended, id)
 	delete(s.history, id)
@@ -608,12 +596,12 @@ func (s *Sessions) handoverOf(id string) string {
 	return string(data)
 }
 
-// Dismiss removes an ended session's row.
+// Dismiss removes a settled session's row.
 func (s *Sessions) Dismiss(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.ended[id]; !ok {
-		return fmt.Errorf("session %s has not ended", id)
+		return fmt.Errorf("Thread %s has not settled", id)
 	}
 	s.drop(id)
 	s.sync()
@@ -904,7 +892,7 @@ func (s *Sessions) announceIssues(list []Session) {
 	var sig strings.Builder
 	sig.WriteString(s.project.Key())
 	for _, v := range list {
-		if v.Project == s.project.Key() && v.Issue > 0 && v.State != session.Ended && !v.Chat && v.ForkOf == "" {
+		if v.Project == s.project.Key() && v.Issue > 0 && v.State != session.Settled && !v.Chat && v.ForkOf == "" {
 			fmt.Fprintf(&sig, " %d=%s", v.Issue, v.ID)
 		}
 	}
@@ -932,7 +920,7 @@ func (s *Sessions) projectViews() []Project {
 				state = rec.State
 			}
 			switch state {
-			case session.Ended:
+			case session.Settled:
 				continue
 			case session.Waiting:
 				v.NeedsYou++
@@ -960,7 +948,7 @@ func (s *Sessions) list() []Session {
 	}
 	for _, e := range s.ended {
 		byName[e.info.Name] = e.info
-		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Ended, At: e.at})
+		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Settled, At: e.at})
 	}
 	session.Sort(rail)
 	projs := s.projects()
@@ -978,8 +966,8 @@ func (s *Sessions) list() []Session {
 		if !ss.At.IsZero() {
 			view.LastEventAt = ss.At.UnixMilli()
 		}
-		if ss.State == session.Ended {
-			view.EndedAt = ss.At.UnixMilli()
+		if ss.State == session.Settled {
+			view.SettledAt = ss.At.UnixMilli()
 			view.Resumable = s.conversationOf(id) != ""
 		}
 		f := s.life.fields(id)
@@ -1098,7 +1086,7 @@ func (s *Sessions) Forget(name string) (project.Project, error) {
 	if !removed && !current {
 		return project.Project{}, fmt.Errorf("%q is not in the config", name)
 	}
-	if err := s.killProject(project.Project{Name: name}.Key()); err != nil {
+	if err := s.settleProject(project.Project{Name: name}.Key()); err != nil {
 		return project.Project{}, err
 	}
 	s.mu.Lock()
@@ -1115,8 +1103,8 @@ func (s *Sessions) Forget(name string) (project.Project, error) {
 	return s.project, nil
 }
 
-// killProject ends every running session of the project. It takes mu.
-func (s *Sessions) killProject(key string) error {
+// settleProject settles every running session of the project. It takes mu.
+func (s *Sessions) settleProject(key string) error {
 	s.mu.Lock()
 	var ids []string
 	for _, in := range s.info {
@@ -1127,7 +1115,7 @@ func (s *Sessions) killProject(key string) error {
 	s.mu.Unlock()
 	var errs []error
 	for _, id := range ids {
-		errs = append(errs, s.Kill(id))
+		errs = append(errs, s.Settle(id))
 	}
 	return errors.Join(errs...)
 }
@@ -1162,7 +1150,7 @@ func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 func (s *Sessions) IssueSessions() map[int]string {
 	out := map[int]string{}
 	for _, v := range s.ListOf(s.Current().Key()) {
-		if v.Issue > 0 && v.State != session.Ended && !v.Chat && v.ForkOf == "" {
+		if v.Issue > 0 && v.State != session.Settled && !v.Chat && v.ForkOf == "" {
 			out[v.Issue] = v.ID
 		}
 	}
@@ -1279,7 +1267,7 @@ func (s *Sessions) Resume(id string) (Session, error) {
 	s.mu.Unlock()
 	switch {
 	case !ended:
-		return Session{}, fmt.Errorf("session %s has not ended", id)
+		return Session{}, fmt.Errorf("Thread %s has not settled", id)
 	case conversation == "":
 		return Session{}, fmt.Errorf("session %s has no conversation to resume", id)
 	case !known:
@@ -1794,7 +1782,8 @@ func (s *Sessions) deliverWakes() {
 	}
 }
 
-func (s *Sessions) Kill(id string) error {
+// Settle stops the session's tmux session, whose host stops Claude; its row stays, settled.
+func (s *Sessions) Settle(id string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return err
@@ -1806,7 +1795,7 @@ func (s *Sessions) Kill(id string) error {
 	_, ended := s.ended[id]
 	s.mu.Unlock()
 	if ended {
-		return fmt.Errorf("session %s has ended: dismiss it", id)
+		return fmt.Errorf("Thread %s has settled", id)
 	}
 	s.closeTerm(id)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
@@ -1816,7 +1805,7 @@ func (s *Sessions) Kill(id string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// The session is gone: sync turns it into an ended row.
+	// The session is gone: sync turns it into a settled row.
 	s.info = slices.DeleteFunc(s.info, func(i term.Info) bool { return i.Name == name })
 	s.sync()
 	return nil
@@ -1960,7 +1949,7 @@ func (s *Sessions) TypeInto(id, text string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.refuseEnded(id); err != nil {
+	if err := s.refuseSettled(id); err != nil {
 		return err
 	}
 	if socket := s.hostOf(name); socket != "" {
@@ -1975,13 +1964,13 @@ func (s *Sessions) TypeInto(id, text string) error {
 	return s.tmux.Type(ctx, name, text)
 }
 
-// refuseEnded is an error for a session that has ended. It takes mu.
-func (s *Sessions) refuseEnded(id string) error {
+// refuseSettled is an error for a session that has settled. It takes mu.
+func (s *Sessions) refuseSettled(id string) error {
 	s.mu.Lock()
 	_, ended := s.ended[id]
 	s.mu.Unlock()
 	if ended {
-		return fmt.Errorf("session %s has ended", id)
+		return fmt.Errorf("Thread %s has settled", id)
 	}
 	return nil
 }

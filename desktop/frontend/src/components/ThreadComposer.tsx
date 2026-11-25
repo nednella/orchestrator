@@ -107,10 +107,10 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
 
-  if (session.state === 'ended') {
+  if (session.state === 'settled') {
     return (
       <div className="flex items-center justify-center gap-3 py-2 text-small text-dim">
-        This thread has ended
+        This thread has settled
         {session.resumable && (
           <button className="btn" onClick={() => report(() => resumeSession(id))}>
             Resume

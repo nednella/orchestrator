@@ -1,4 +1,4 @@
-export type State = 'waiting' | 'working' | 'idle' | 'ended'
+export type State = 'waiting' | 'working' | 'idle' | 'settled'
 
 export type HistoryEntry = { state: State; at: number }
 

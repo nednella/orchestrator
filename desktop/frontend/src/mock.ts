@@ -125,10 +125,10 @@ const details: Record<State, string[]> = {
   ],
   waiting: ['Claude needs your permission to use Bash: npx tsc --noEmit', 'Should I keep the old cart hook or replace it?'],
   idle: ['Done: 4 files changed', 'Done: tests pass'],
-  ended: ['Session ended'],
+  settled: ['Thread settled'],
 }
 
-const order: Record<State, number> = { waiting: 0, idle: 1, working: 2, ended: 3 }
+const order: Record<State, number> = { waiting: 0, idle: 1, working: 2, settled: 3 }
 
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)]
 
@@ -255,14 +255,14 @@ export function createMock(params: URLSearchParams) {
       tokens: s.tokens,
       cost: s.cost,
       resumable: s.resumable,
-      memory: s.state === 'ended' ? 0 : s.memory,
+      memory: s.state === 'settled' ? 0 : s.memory,
     }
   }
 
   function memory(): Memory {
     const app = 2 * tenthGB
     const browsers = 11 * tenthGB
-    const live = sessions.filter((s) => s.state !== 'ended').reduce((sum, s) => sum + s.memory, 0)
+    const live = sessions.filter((s) => s.state !== 'settled').reduce((sum, s) => sum + s.memory, 0)
     return { app, browsers, sessions: live, total: app + browsers + live, machine: 16 * 2 ** 30 }
   }
 
@@ -425,7 +425,7 @@ export function createMock(params: URLSearchParams) {
       action: issue ? 'Work' : '',
       forkOf: '',
       ...usageFor(chat, createdAt),
-      resumable: initial === 'ended',
+      resumable: initial === 'settled',
       memory: (chat ? 3 : 4 + (nextN % 5) * 3) * tenthGB,
       project: owner.name,
       buffer: term.banner(owner.dir) + term.diffBlock('app-frontend/src/js/pages/[slug]/Index.tsx') + term.paragraphs[0] + '\r\n\r\n',
@@ -438,7 +438,7 @@ export function createMock(params: URLSearchParams) {
     if (initial === 'waiting') s.buffer += term.permissionPrompt('npx tsc --noEmit')
     if (initial === 'idle' && history.length > 0) s.buffer += term.finishedNote(134)
     if (initial === 'idle' && history.length === 0) s.buffer = term.banner(owner.dir) + term.promptLine('')
-    if (initial === 'ended') s.buffer += '\r\n\x1b[2m[session ended]\x1b[0m\r\n'
+    if (initial === 'settled') s.buffer += '\r\n\x1b[2m[session ended]\x1b[0m\r\n'
     sessions.push(s)
     return s
   }
@@ -450,7 +450,7 @@ export function createMock(params: URLSearchParams) {
   const chats = mockChat(emit, (id) => {
     const s = find(id)
     if (!s.hosted) throw `Thread ${id} has no chat: its agent runs in its terminal`
-    return { ended: s.state === 'ended', setState: (state) => setState(s, state) }
+    return { settled: s.state === 'settled', setState: (state) => setState(s, state) }
   })
 
   function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], chat = false) {
@@ -467,10 +467,10 @@ export function createMock(params: URLSearchParams) {
     seed('checkout tests scratch', 0, 'working', [['working', 22], ['waiting', 15], ['working', 13]])
     seed('#412 locale sweep', 412, 'idle', [['working', 50], ['idle', 20]])
     seed('#437 coupon strip', 437, 'idle', [['working', 80], ['idle', 25]])
-    seed('#430 thumbnail ratio', 430, 'ended', [['working', 60], ['ended', 18]])
-    seed('spike: websocket retry', 0, 'ended', [['working', 140], ['idle', 110], ['ended', 95]])
+    seed('#430 thumbnail ratio', 430, 'settled', [['working', 60], ['settled', 18]])
+    seed('spike: websocket retry', 0, 'settled', [['working', 140], ['idle', 110], ['settled', 95]])
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
-    seed('retry banner experiment', 0, 'ended', [['working', 400], ['idle', 380], ['ended', 300]])
+    seed('retry banner experiment', 0, 'settled', [['working', 400], ['idle', 380], ['settled', 300]])
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
     sessions.find((x) => x.title === 'spike: websocket retry')!.resumable = false
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
@@ -495,7 +495,7 @@ export function createMock(params: URLSearchParams) {
       cleanup: 'blocked',
       cleanupReason: 'the worktree of experiment/websocket-retry-banner-with-backoff has uncommitted changes',
     })
-    seed('#8 drop old flag', 8, 'ended', [['working', 300], ['ended', 240]], data[2])
+    seed('#8 drop old flag', 8, 'settled', [['working', 300], ['settled', 240]], data[2])
     seed('#12 session memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
@@ -557,7 +557,7 @@ export function createMock(params: URLSearchParams) {
     const at = Date.now()
     closeWait(s, at)
     s.state = state
-    s.resumable = state === 'ended'
+    s.resumable = state === 'settled'
     s.detail = pick(details[state])
     s.lastEventAt = at
     s.history = [...s.history, { state, at }].slice(-200)
@@ -580,7 +580,7 @@ export function createMock(params: URLSearchParams) {
   setInterval(() => {
     const now = Date.now()
     sessions.forEach((s) => {
-      if (s.hosted || s.state === 'ended' || (s.pr && (s.pr.state === 'merged' || s.pr.state === 'closed'))) return
+      if (s.hosted || s.state === 'settled' || (s.pr && (s.pr.state === 'merged' || s.pr.state === 'closed'))) return
       if (now >= s.nextChangeAt) {
         s.nextChangeAt = now + 12_000 + Math.random() * 28_000
         setState(s, nextState(s.state))
@@ -942,7 +942,7 @@ export function createMock(params: URLSearchParams) {
     },
     DismissSession: async (id: string) => {
       const s = find(id)
-      if (s.state !== 'ended') throw 'Only an ended session can be dismissed'
+      if (s.state !== 'settled') throw `Thread ${id} has not settled`
       sessions.splice(sessions.indexOf(s), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
@@ -950,7 +950,7 @@ export function createMock(params: URLSearchParams) {
     ResumeSession: async (id: string) => {
       const old = find(id)
       if (!old.resumable) throw `session ${id} has no conversation to resume`
-      const live = sessions.find((s) => s.project === current.name && s.issue > 0 && s.issue === old.issue && s.chat === old.chat && !s.forkOf && s.state !== 'ended')
+      const live = sessions.find((s) => s.project === current.name && s.issue > 0 && s.issue === old.issue && s.chat === old.chat && !s.forkOf && s.state !== 'settled')
       if (live && !old.forkOf) return view(live)
       const s = create(old.title, old.issue, 'idle', [], Date.now(), current, old.chat)
       s.action = old.action
@@ -966,7 +966,7 @@ export function createMock(params: URLSearchParams) {
     ForkSession: async (id: string, at: string) => {
       const from = find(id)
       if (!from.hosted) throw 'Only a thread with a chat can be forked'
-      if (from.state === 'ended' && !from.resumable) throw 'This thread has no conversation to fork yet'
+      if (from.state === 'settled' && !from.resumable) throw 'This thread has no conversation to fork yet'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
       Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, worktree: '' })
@@ -980,12 +980,12 @@ export function createMock(params: URLSearchParams) {
       publish()
       return view(s)
     },
-    KillSession: async (id: string) => {
+    SettleThread: async (id: string) => {
       const s = find(id)
-      if (s.state === 'ended') throw `session ${id} has ended: dismiss it`
+      if (s.state === 'settled') throw `Thread ${id} has settled`
       emit('term:exit', { id })
       chats.end(id)
-      setState(s, 'ended')
+      setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
     },
     RenameSession: async (id: string, title: string) => {
@@ -1226,7 +1226,7 @@ export function createMock(params: URLSearchParams) {
     },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
-      if (s.state === 'ended') throw `session ${id} has ended`
+      if (s.state === 'settled') throw `Thread ${id} has settled`
       if (s.hosted) return chats.backend.ChatDraft(id, text)
       write(s, text)
     },

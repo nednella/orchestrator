@@ -1299,8 +1299,8 @@ func (l *Lifecycle) removeSession(ctx context.Context, t target, _ *cleanupPlan)
 		removed = append(removed, "evidence")
 	}
 	if !t.ended {
-		if err := l.sessions.Kill(t.id); err != nil {
-			return removed, fmt.Sprintf("ending the session failed: %v", err)
+		if err := l.sessions.Settle(t.id); err != nil {
+			return removed, fmt.Sprintf("settling the session failed: %v", err)
 		}
 	}
 	if err := l.sessions.Dismiss(t.id); err != nil {

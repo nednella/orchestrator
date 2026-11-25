@@ -22,11 +22,11 @@ import (
 func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Session {
 	t.Helper()
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	var got sessions.Session
-	eventually(t, "the session ended", func() bool { got, _ = h.Session(s.ID); return got.State == "ended" })
+	eventually(t, "the session settled", func() bool { got, _ = h.Session(s.ID); return got.State == "settled" })
 	return got
 }
 
@@ -51,7 +51,7 @@ func TestResumeContinuesAnEndedSession(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fresh.ID == old.ID || fresh.State == "ended" || fresh.Title != old.Title || fresh.Issue != old.Issue || fresh.Chat != old.Chat {
+			if fresh.ID == old.ID || fresh.State == "settled" || fresh.Title != old.Title || fresh.Issue != old.Issue || fresh.Chat != old.Chat {
 				t.Errorf("resumed %+v from %+v", fresh, old)
 			}
 			args := claudeArgs(t, h, fresh.ID)
@@ -208,7 +208,7 @@ func TestSessionThatEndedWhileTheAppWasClosedResumesAsItself(t *testing.T) {
 			}
 			fresh := endedWhileClosed(t, h, old.ID)
 			var gone sessions.Session
-			eventually(t, "the ended row", func() bool { gone, _ = fresh.Session(old.ID); return gone.State == "ended" })
+			eventually(t, "the ended row", func() bool { gone, _ = fresh.Session(old.ID); return gone.State == "settled" })
 			if gone.Title != old.Title || gone.Issue != old.Issue || gone.Chat != old.Chat || !gone.Resumable {
 				t.Errorf("ended row %+v of %+v", gone, old)
 			}
@@ -253,10 +253,10 @@ func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := h.KillSession(s.ID); err != nil {
+		if err := h.SettleThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the session ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+		eventually(t, "the session settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
 		assertNoResume(t, h, s.ID)
 	})
 	t.Run("no prompt", func(t *testing.T) {
@@ -267,10 +267,10 @@ func TestOnlyAConversationOfClaudeResumes(t *testing.T) {
 		}
 		unwritten := filepath.Join(t.TempDir(), "abc.jsonl")
 		h.Hook(t, s.ID, "SessionStart", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, unwritten))
-		if err := h.KillSession(s.ID); err != nil {
+		if err := h.SettleThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the session ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+		eventually(t, "the session settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
 		assertNoResume(t, h, s.ID)
 	})
 }

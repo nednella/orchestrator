@@ -85,10 +85,10 @@ func TestShowFilesEvidence(t *testing.T) {
 		if err := h.DeleteEvidence(s.ID, items[0].ID); err != nil || len(h.Evidence(s.ID)) != 2 {
 			t.Errorf("DeleteEvidence: %v", err)
 		}
-		if err := h.KillSession(s.ID); err != nil {
+		if err := h.SettleThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+		eventually(t, "the session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
 		if len(h.Evidence(s.ID)) != 2 {
 			t.Error("evidence went with the ended session; it should stay until dismissed")
 		}

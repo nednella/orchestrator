@@ -91,7 +91,7 @@ func TestIssues(t *testing.T) {
 	if got := h.Rec.ProjectOf("issues"); got != "main" {
 		t.Errorf("issues event project = %q", got)
 	}
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "issues event after the session ends", func() bool { return issuesEvent(7) == "" })
@@ -214,12 +214,12 @@ func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.KillSession(plan.ID); err != nil {
+	if err := h.SettleThread(plan.ID); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "plan ended", func() bool {
 		s, ok := h.Session(plan.ID)
-		return ok && s.State == session.Ended
+		return ok && s.State == session.Settled
 	})
 	again := h.Restart(t)
 	for id, want := range map[string]string{work.ID: "Work", plan.ID: "Plan"} {

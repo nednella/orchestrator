@@ -123,7 +123,7 @@ func TestResumedSessionIsLabelled(t *testing.T) {
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	if err := h.KillSession(s.ID); err != nil {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
