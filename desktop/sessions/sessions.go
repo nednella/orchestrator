@@ -1559,6 +1559,9 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	if err := agent.CheckInstalled(p); err != nil {
 		return err
 	}
+	if err := s.life.restore(ctx, proj, id); err != nil {
+		return err
+	}
 	model := fill(p, proj.Dir, project.Model{Model: in.Model, Effort: in.Effort})
 	in.Created, in.Model, in.Effort = time.Now(), model.Model, model.Effort
 	s.mu.Lock()

@@ -136,16 +136,11 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	if err := l.excludeTrees(ctx, proj, strings.TrimSpace(string(top))); err != nil {
 		return workPlace{}, err
 	}
-	switch {
-	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
-		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", dir, branch); err != nil {
-			return workPlace{}, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
-		}
-	case l.onOrigin(ctx, proj.Dir, branch):
-		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/"+branch); err != nil {
-			return workPlace{}, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
-		}
-	default:
+	added, err := l.addWorktree(ctx, proj, dir, branch)
+	if err != nil {
+		return workPlace{}, err
+	}
+	if !added {
 		out, err := l.projectCommand(ctx, proj, proj.MakeWorktree(), "{branch}", util.ShellQuote(branch), "{worktree}", util.ShellQuote(dir), "{base}", util.ShellQuote(base))
 		if err != nil {
 			return workPlace{}, fmt.Errorf("session_worktree_command failed for %s: %w", branch, err)
@@ -169,6 +164,68 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 		return workPlace{}, err
 	}
 	return workPlace{dir: dir, branch: branch, made: true}, nil
+}
+
+// addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
+// clone has no copy. It says false, and adds nothing, when neither has the branch.
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string) (bool, error) {
+	args := []string{"worktree", "add", "--quiet", dir, branch}
+	switch {
+	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
+	case l.onOrigin(ctx, proj.Dir, branch):
+		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/" + branch}
+	default:
+		return false, nil
+	}
+	if _, err := l.git(ctx, proj.Dir, args...); err != nil {
+		return true, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
+	}
+	return true, nil
+}
+
+// restore puts back the worktree agentos made for the thread, at the same path on the same branch, when it is gone, so
+// a woken thread never moves folder. A thread with no record has nothing to restore. A folder at the path is left as it
+// is: it is the thread's own worktree only when its marker holds the thread's id, and anything else is an error. The
+// branch is checked out as it is, the local one else origin's, with plain git: session_worktree_command makes a new
+// branch, and this one exists.
+func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread string) error {
+	key := proj.Key()
+	w, ok := l.sessions.made.Of(key, thread)
+	if !ok {
+		return nil
+	}
+	if _, err := os.Lstat(w.Path); !errors.Is(err, fs.ErrNotExist) {
+		if !l.marked(ctx, w.Path, thread) {
+			return fmt.Errorf("%s exists and is not this thread's worktree", w.Path)
+		}
+		if w.Removed == 0 {
+			return nil
+		}
+		return l.sessions.made.Restored(key, w.Path)
+	}
+	if _, err := l.git(ctx, proj.Dir, "worktree", "prune"); err != nil {
+		return fmt.Errorf("pruning the worktrees git lists: %w", err)
+	}
+	trees, err := l.worktrees(ctx, proj.Dir)
+	if err != nil {
+		return fmt.Errorf("listing the worktrees: %w", err)
+	}
+	n := l.sessions.Number(thread)
+	if dir, ok := trees.byBranch[w.Branch]; ok {
+		return fmt.Errorf("%s is checked out in %s, so thread %d cannot get its worktree back", w.Branch, dir, n)
+	}
+	added, err := l.addWorktree(ctx, proj, w.Path, w.Branch)
+	if err != nil {
+		return err
+	}
+	if !added {
+		return fmt.Errorf("%s is gone, so thread %d cannot get its worktree back", w.Branch, n)
+	}
+	if err := l.mark(ctx, w.Path, thread); err != nil {
+		l.removeWorktree(ctx, proj, w.Path)
+		return err
+	}
+	return l.sessions.made.Restored(key, w.Path)
 }
 
 // base is what a new branch starts from, the default branch on origin, fetched first, else the local one when origin

@@ -466,3 +466,190 @@ func TestBranchPushedFromAnotherCloneIsFetched(t *testing.T) {
 		t.Errorf("the branch tracks %q", got)
 	}
 }
+
+// cleanedUpAfterAMerge pushes the thread's work, merges its PR and waits for the clean-up to remove its worktree.
+func cleanedUpAfterAMerge(t *testing.T, h *apptest.Harness, s sessions.Session) {
+	t.Helper()
+	pushWork(t, s.Worktree)
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(s.Worktree) {
+		t.Fatalf("the clean-up left the worktree %s", s.Worktree)
+	}
+}
+
+// assertNotWoken checks that the thread stayed settled with no tmux session.
+func assertNotWoken(t *testing.T, h *apptest.Harness, s sessions.Session) {
+	t.Helper()
+	if out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions").CombinedOutput(); strings.Contains(string(out), s.ID) {
+		t.Errorf("a tmux session runs:\n%s", out)
+	}
+	if got, _ := h.Session(s.ID); got.State != "settled" {
+		t.Errorf("the thread is %q, want settled", got.State)
+	}
+}
+
+func TestWakeRestoresTheWorktree(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree}"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	if _, err := h.ChatSend(s.ID, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	cleanedUpAfterAMerge(t, h, s)
+	head := gitIn(t, h.Dir, "rev-parse", "issue-7")
+
+	if _, err := h.ChatSend(s.ID, "again"); err != nil {
+		t.Fatal(err)
+	}
+	wt := s.Worktree
+	if !exists(wt) || realDir(t, wt) != wt {
+		t.Fatalf("the worktree is not back at %s", wt)
+	}
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "issue-7" {
+		t.Errorf("the worktree is on %q, want issue-7", got)
+	}
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != head || !exists(filepath.Join(wt, "work.txt")) {
+		t.Errorf("the worktree is at %s, want the pushed commit %s; work.txt there: %v", got, head, exists(filepath.Join(wt, "work.txt")))
+	}
+	if got := worktreesOf(t, h.Dir)["issue-7"]; got != wt {
+		t.Errorf("git lists issue-7 at %q, want %s", got, wt)
+	}
+	if got := realDir(t, panePath(t, h, s.ID)); got != wt {
+		t.Errorf("the woken thread runs in %s, want %s", got, wt)
+	}
+	eventually(t, "claude resuming the conversation", resumes(t, h, s.ID, "fake-session"))
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Path != wt || records[0].Branch != "issue-7" || records[0].Removed != 0 {
+		t.Errorf("records = %+v", records)
+	}
+	gitDir := gitIn(t, wt, "rev-parse", "--path-format=absolute", "--git-dir")
+	if marker, err := os.ReadFile(filepath.Join(gitDir, "agentos-thread")); err != nil || strings.TrimSpace(string(marker)) != s.ID {
+		t.Errorf("marker = %q, %v; want %s", marker, err, s.ID)
+	}
+	if got, _ := h.Session(s.ID); got.Worktree != wt || got.Branch != "issue-7" {
+		t.Errorf("row worktree %q, branch %q", got.Worktree, got.Branch)
+	}
+}
+
+func TestWakeRestoresFromOriginWhenTheLocalBranchIsGone(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	if branches(t, h.Dir) != "" {
+		t.Fatal("the clean-up left the local branch")
+	}
+	head := gitIn(t, h.Dir, "rev-parse", "origin/issue-7")
+
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	wt := s.Worktree
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "issue-7" {
+		t.Errorf("the worktree is on %q, want issue-7", got)
+	}
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != head {
+		t.Errorf("the worktree is at %s, want origin's %s", got, head)
+	}
+	if got := gitIn(t, wt, "rev-parse", "--abbrev-ref", "@{upstream}"); got != "origin/issue-7" {
+		t.Errorf("the branch tracks %q", got)
+	}
+	if got := realDir(t, panePath(t, h, s.ID)); got != wt {
+		t.Errorf("the woken thread runs in %s, want %s", got, wt)
+	}
+}
+
+func TestWakeFailsWhenTheBranchIsGone(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	gitIn(t, h.Dir, "push", "--quiet", "origin", "--delete", "issue-7")
+
+	_, err := h.WakeThread(s.ID)
+	if want := fmt.Sprintf("issue-7 is gone, so thread %d cannot get its worktree back", s.N); err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, s)
+	if exists(s.Worktree) {
+		t.Error("a folder is at the worktree's path")
+	}
+}
+
+func TestWakeFailsWhenTheBranchIsCheckedOutElsewhere(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	elsewhere := filepath.Join(t.TempDir(), "mine")
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "issue-7", elsewhere, "origin/issue-7")
+
+	_, err := h.WakeThread(s.ID)
+	if err == nil || !strings.Contains(err.Error(), realDir(t, elsewhere)) || !strings.Contains(err.Error(), "issue-7") {
+		t.Errorf("wake = %v, want an error naming issue-7 and %s", err, realDir(t, elsewhere))
+	}
+	assertNotWoken(t, h, s)
+	if exists(s.Worktree) {
+		t.Error("a folder is at the worktree's path")
+	}
+	if got := worktreesOf(t, h.Dir)["issue-7"]; got != realDir(t, elsewhere) || !exists(filepath.Join(elsewhere, "work.txt")) {
+		t.Errorf("git lists issue-7 at %q; the other worktree has work.txt: %v", got, exists(filepath.Join(elsewhere, "work.txt")))
+	}
+}
+
+func TestWakeNeverTakesOverAFolderAtThePath(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	if err := os.MkdirAll(s.Worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mine := filepath.Join(s.Worktree, "mine.txt")
+	if err := os.WriteFile(mine, []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := h.WakeThread(s.ID)
+	if want := s.Worktree + " exists and is not this thread's worktree"; err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, s)
+	if data, err := os.ReadFile(mine); err != nil || string(data) != "mine\n" {
+		t.Errorf("the folder lost its file: %q, %v", data, err)
+	}
+	if entries, _ := os.ReadDir(s.Worktree); len(entries) != 1 {
+		t.Errorf("the folder holds %v", entries)
+	}
+	if _, listed := worktreesOf(t, h.Dir)["issue-7"]; listed {
+		t.Error("git lists a worktree on issue-7")
+	}
+}
+
+func TestRestoredWorktreeIsCleanedUpAgain(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(s.Worktree) {
+		t.Fatal("the wake did not restore the worktree")
+	}
+
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
+		t.Errorf("the second clean-up: row %+v, worktree there %v", func() sessions.Session { got, _ := h.Session(s.ID); return got }(), exists(s.Worktree))
+	}
+	if log := h.Cleanups(); len(log) != 2 || log[0].Status != "done" || log[1].Status != "done" {
+		t.Errorf("log = %+v", log)
+	}
+	if gitIn(t, h.Dir, "rev-parse", "origin/issue-7") == "" {
+		t.Error("the branch is gone from origin")
+	}
+}

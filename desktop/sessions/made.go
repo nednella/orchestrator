@@ -210,6 +210,11 @@ func (l *Lifecycle) ours(ctx context.Context, key, worktree, thread string) bool
 	if !ok || w.Thread != thread || w.Removed != 0 {
 		return false
 	}
+	return l.marked(ctx, worktree, thread)
+}
+
+// marked says whether the worktree is a linked worktree whose marker holds the thread's id.
+func (l *Lifecycle) marked(ctx context.Context, worktree, thread string) bool {
 	gitDir, err := l.linkedGitDir(ctx, worktree)
 	if err != nil {
 		return false
