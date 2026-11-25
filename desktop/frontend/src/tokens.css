@@ -55,30 +55,20 @@
   --bg-thread-question: rgba(255, 255, 255, 0.04);
   --agent-claude: #e0875f;
   --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
-  --bg-ghost-hover: rgba(255, 255, 255, 0.04);
   --claude-mark: #d97757;
 
   --bg-card: var(--bg-raised);
   --bg-tile: var(--bg-segment);
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
-  --bg-ghost-hover: color-mix(in srgb, var(--text) 7%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);
-  --border-tip: color-mix(in srgb, var(--text) 10%, transparent);
-  --shadow-tip: 0 8px 10px -6px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+  --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.25);
   --chart-bar: color-mix(in srgb, var(--text) 24%, transparent);
   --chart-bar-on: color-mix(in srgb, var(--text) 75%, transparent);
 
-  --bg-card: var(--bg-raised);
-  --bg-tile: var(--bg-segment);
-  --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
-  --bg-ghost-hover: color-mix(in srgb, var(--text) 7%, transparent);
-  --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
   --text-chip: color-mix(in srgb, var(--text) 80%, transparent);
   --bg-danger: color-mix(in srgb, var(--danger) 6%, transparent);
   --border-danger: color-mix(in srgb, var(--danger) 35%, transparent);
-  --border-rule: color-mix(in srgb, var(--border) 60%, transparent);
-  --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.25);
 
   --pr-open: #238636;
   --pr-draft: #5a6270;
@@ -214,15 +204,11 @@
   --bg-thread-question: rgba(0, 0, 0, 0.04);
   --agent-claude: #c15f3c;
   --bg-user-message: color-mix(in srgb, #e4e4e7 55%, #f4f4f5);
-  --bg-ghost-hover: rgba(0, 0, 0, 0.045);
-
-  --bg-card: var(--bg-surface);
-  --bg-tile: var(--bg-raised);
-  --shadow-tip: 0 8px 10px -6px rgba(0, 0, 0, 0.08), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 
   --bg-card: var(--bg-surface);
   --bg-tile: var(--bg-raised);
   --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.08), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
 
   --pr-open: #238636;
   --pr-draft: #6e7781;
