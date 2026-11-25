@@ -297,3 +297,15 @@ func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
 	second := h.Restart(t)
 	eventually(t, "idle after the next start", func() bool { s, _ := second.Session(id); return s.State == "idle" })
 }
+
+func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "hi")
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	if err, want := h.ChatSendNow(id, "nope"), "No queued message nope"; err == nil || err.Error() != want {
+		t.Errorf("ChatSendNow = %v, want %q", err, want)
+	}
+	if err, want := h.ChatAnswer(id, "nope", true, ""), `No approval "nope" is waiting`; err == nil || err.Error() != want {
+		t.Errorf("ChatAnswer = %v, want %q", err, want)
+	}
+}

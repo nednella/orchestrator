@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -17,6 +16,12 @@ const (
 	readyPoll   = 50 * time.Millisecond
 )
 
+// Refused is the host's own reason for not doing what it was asked, in words for the user. An error that wraps no
+// Refused is one of reaching the host.
+type Refused struct{ Reason string }
+
+func (r *Refused) Error() string { return r.Reason }
+
 // Message is what the user sends: text and the paths of images to go before it.
 type Message struct {
 	Text  string
@@ -28,7 +33,7 @@ type Message struct {
 func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
 	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files})
 	if err == nil && rep.ID == "" && len(m.Files) > 0 {
-		return "", errors.New("this session's host is too old for images")
+		return "", &Refused{"this session's host is too old for images"}
 	}
 	return rep.ID, err
 }
@@ -154,7 +159,7 @@ func dial(ctx context.Context, socket string, req request) (net.Conn, *bufio.Rea
 		return fail(err)
 	}
 	if !rep.OK {
-		return fail(fmt.Errorf("%s", rep.Error))
+		return fail(&Refused{rep.Error})
 	}
 	return conn, r, rep, nil
 }

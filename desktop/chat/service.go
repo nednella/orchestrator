@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
@@ -134,11 +136,20 @@ func (v *Service) live(id string) (sessions.Chat, error) {
 	return ch, nil
 }
 
-// failed logs why the thread's host did not take what, and says so in plain words.
+// failed is the host's own reason when it refused, else why the thread did not take what, in plain words, with the
+// error that reaching the host gave in the log only.
 func (v *Service) failed(id, what string, err error) error {
 	if err == nil {
 		return nil
 	}
 	log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+	if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+		return errors.New(sentence(refused.Reason))
+	}
 	return fmt.Errorf("Thread %s did not take %s", id, what)
+}
+
+func sentence(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[n:]
 }

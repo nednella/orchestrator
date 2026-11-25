@@ -202,3 +202,12 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 		t.Errorf("history and chat events hold seqs %v, want 1 to 5 with no gap", all)
 	}
 }
+
+func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
+	dir := t.TempDir()
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), context.Background)
+	if err, want := svc.ChatInterrupt(thread.chat.ID), "Thread main/abcdefgh did not take the interrupt"; err == nil || err.Error() != want {
+		t.Errorf("ChatInterrupt = %v, want %q", err, want)
+	}
+}
