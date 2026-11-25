@@ -140,13 +140,13 @@ func TestWakeReplacesTheToken(t *testing.T) {
 
 func TestSettledThreadsTokenIsRefused(t *testing.T) {
 	h := apptest.New(t)
-	settled, archived := newThread(t, h, "settled"), newThread(t, h, "archived")
-	tokens := map[string]string{settled.ID: tokenOf(t, h, settled.ID), archived.ID: tokenOf(t, h, archived.ID)}
-	paths := map[string]string{settled.ID: configOf(t, h, settled.ID), archived.ID: configOf(t, h, archived.ID)}
+	settled, deleted := newThread(t, h, "settled"), newThread(t, h, "deleted")
+	tokens := map[string]string{settled.ID: tokenOf(t, h, settled.ID), deleted.ID: tokenOf(t, h, deleted.ID)}
+	paths := map[string]string{settled.ID: configOf(t, h, settled.ID), deleted.ID: configOf(t, h, deleted.ID)}
 	if err := h.SettleThread(settled.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(archived.ID); err != nil {
+	if err := h.DeleteThread(deleted.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	for id, token := range tokens {

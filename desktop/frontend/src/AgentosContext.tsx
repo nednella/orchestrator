@@ -81,8 +81,9 @@ type AgentosActions = {
   stepSession(delta: number): void
   newThread(start: ThreadStart, access: Access, place: Place): Promise<Session>
   settleThread(id: string): Promise<void>
-  // archiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
-  archiveThread(id: string): Promise<void>
+  // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree agentos made
+  // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays.
+  deleteThread(id: string, worktree: boolean): Promise<void>
   wakeThread(id: string): Promise<Session>
   // setAccess gives the thread the access between turns; the row shows it once the sessions say so.
   setAccess(id: string, access: Access): Promise<void>
@@ -736,8 +737,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (next) selectId(next.id)
         else detach()
       },
-      async archiveThread(id) {
-        await api.archiveThread(id)
+      async deleteThread(id, worktree) {
+        await api.deleteThread(id, worktree)
         forgetThreadDraft(id)
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))

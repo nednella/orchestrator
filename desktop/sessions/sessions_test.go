@@ -103,13 +103,13 @@ func TestSessionLifecycle(t *testing.T) {
 		if err := h.SettleThread(first.ID); err == nil {
 			t.Error("killing an ended session succeeded")
 		}
-		if err := h.ArchiveThread(first.ID); err != nil {
+		if err := h.DeleteThread(first.ID, false); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the archived row to go", func() bool { return len(h.Rec.LastSessions()) == 1 })
+		eventually(t, "the deleted row to go", func() bool { return len(h.Rec.LastSessions()) == 1 })
 		time.Sleep(2500 * time.Millisecond) // a poll must not bring it back
 		if got := h.Snapshot().Sessions; len(got) != 1 || got[0].ID != second.ID {
-			t.Errorf("sessions after archive and a poll = %+v", got)
+			t.Errorf("sessions after a delete and a poll = %+v", got)
 		}
 	})
 
@@ -130,7 +130,7 @@ func TestSessionLifecycle(t *testing.T) {
 		if err != nil || third.ID == second.ID {
 			t.Errorf("new session = %+v, %v", third, err)
 		}
-		if err := h.ArchiveThread(second.ID); err != nil {
+		if err := h.DeleteThread(second.ID, false); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -833,11 +833,11 @@ func TestSettledSessionsSurviveARestart(t *testing.T) {
 	if got.State != "settled" || got.Title != "keep me" || got.SettledAt == 0 {
 		t.Errorf("after a restart = %+v", got)
 	}
-	if err := fresh.ArchiveThread(s.ID); err != nil {
+	if err := fresh.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.State != session.Archived || rec.Title != "keep me" {
-		t.Errorf("the state file of an archived thread = %+v, %v; want it archived, with its title", rec, err)
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Session != "" {
+		t.Errorf("the state file of a deleted thread = %+v, %v; want it gone", rec, err)
 	}
 }
 

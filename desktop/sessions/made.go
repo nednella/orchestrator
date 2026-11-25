@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +32,7 @@ type Made struct {
 }
 
 // madeTrees is the record of the worktrees agentos made, one list per project, oldest first.
-// Records are never deleted, so a path agentos once used stays known.
+// A thread's records go only when the thread is deleted; until then a path agentos once used stays known.
 type madeTrees struct {
 	dir string
 
@@ -132,6 +133,22 @@ func (m *madeTrees) Removed(key, path string, at time.Time) error {
 // Restored records that the worktree at path is back.
 func (m *madeTrees) Restored(key, path string) error {
 	return m.change(key, path, func(w *Made) { w.Removed = 0 })
+}
+
+// Forget drops every record of the thread's worktrees: agentos no longer counts them as its own, so no clean-up
+// removes them.
+func (m *madeTrees) Forget(key, thread string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	list, err := m.list(key)
+	if err != nil {
+		return err
+	}
+	kept := slices.DeleteFunc(slices.Clone(list), func(w Made) bool { return w.Thread == thread })
+	if len(kept) == len(list) {
+		return nil
+	}
+	return m.save(key, kept)
 }
 
 // change edits the newest record at path.

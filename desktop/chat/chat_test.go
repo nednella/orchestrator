@@ -414,7 +414,7 @@ func TestTooManyImagesAreRefused(t *testing.T) {
 	}
 }
 
-func TestArchiveKeepsChatImages(t *testing.T) {
+func TestDeleteRemovesChatImages(t *testing.T) {
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {
@@ -434,11 +434,11 @@ func TestArchiveKeepsChatImages(t *testing.T) {
 	if !apptest.Exists(ch.Media) {
 		t.Fatalf("%s went when the thread ended", ch.Media)
 	}
-	if err := h.ArchiveThread(id); err != nil {
+	if err := h.DeleteThread(id, false); err != nil {
 		t.Fatal(err)
 	}
-	if !apptest.Exists(ch.Media) {
-		t.Errorf("%s went with the archived thread, want it kept", ch.Media)
+	if apptest.Exists(ch.Media) {
+		t.Errorf("%s is still there after the thread was deleted", ch.Media)
 	}
 }
 

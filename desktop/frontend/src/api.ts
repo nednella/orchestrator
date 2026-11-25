@@ -7,7 +7,8 @@ type Backend = {
   Snapshot(): Promise<Snapshot>
   NewThread(title: string, prompt: string, model: string, effort: string, access: Access, place: Place | ''): Promise<Session>
   SettleThread(id: string): Promise<void>
-  ArchiveThread(id: string): Promise<void>
+  DeleteThread(id: string, worktree: boolean): Promise<void>
+  OwnWorktree(id: string): Promise<string>
   WakeThread(id: string): Promise<Session>
   SetAccess(id: string, access: Access): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
@@ -111,7 +112,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewThread', 'SettleThread', 'ArchiveThread', 'WakeThread', 'SetAccess', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'OwnWorktree', 'WakeThread', 'SetAccess', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'ProjectFiles', 'ProjectCommands'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -150,7 +151,8 @@ export const api = {
   snapshot: () => backend.Snapshot(),
   newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised', place: Place | '' = '') => backend.NewThread(title, prompt, model, effort, access, place),
   settleThread: (id: string) => backend.SettleThread(id),
-  archiveThread: (id: string) => backend.ArchiveThread(id),
+  deleteThread: (id: string, worktree: boolean) => backend.DeleteThread(id, worktree),
+  ownWorktree: (id: string) => backend.OwnWorktree(id),
   wakeThread: (id: string) => backend.WakeThread(id),
   setAccess: (id: string, access: Access) => backend.SetAccess(id, access),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),

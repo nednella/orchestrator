@@ -127,7 +127,7 @@ The worktree is `<project>/trees/<branch>`. Before it makes the first one, agent
 
 A start that fails after agentos made the worktree removes that worktree with `git worktree remove`, never forced, so one with changes stays; the branch stays too. A fork runs in its thread's folder and has no branch of its own.
 
-A thread's branch is the one agentos made its worktree on, or the one it reported with `agentos track --branch <name>`; the folder the agent works in never changes it. A thread in the project folder has no branch, and so no pull request and no clean-up, until it runs `agentos track`. `track` refuses the default branch, a branch another thread that is not archived works on (`Thread <n> works on <branch>`), a fork and a Read thread (`A Read thread works on no branch`). When the thread's own worktree has the branch checked out, the record of the worktree follows it.
+A thread's branch is the one agentos made its worktree on, or the one it reported with `agentos track --branch <name>`; the folder the agent works in never changes it. A thread in the project folder has no branch, and so no pull request and no clean-up, until it runs `agentos track`. `track` refuses the default branch, a branch another thread works on (`Thread <n> works on <branch>`), a fork and a Read thread (`A Read thread works on no branch`). When the thread's own worktree has the branch checked out, the record of the worktree follows it.
 
 ### Keeping the Mac awake
 

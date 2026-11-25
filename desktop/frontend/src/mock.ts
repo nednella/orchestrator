@@ -422,9 +422,9 @@ export function createMock(params: URLSearchParams) {
   // Two seeded threads have a chat, one waiting on a tool and one on a question; the others start with an empty one,
   // and one ran in a terminal before agentos showed chats, so it has none. With chatcases, one chat log cannot be read
   // and one more thread waits on a plan. With stale, the tool's approval ends on the host's side and the app is not told.
-  const archived = new Set<string>()
+  const deleted = new Set<string>()
   const chats = mockChat(emit, (id) => {
-    if (archived.has(id)) throw `Thread ${id} is archived`
+    if (deleted.has(id)) throw `Thread ${id} was deleted`
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s), followMode: (mode) => followMode(s, mode) }
@@ -745,6 +745,13 @@ export function createMock(params: URLSearchParams) {
     emit('issues', { project: current.name, items: currentIssues() })
   }
 
+  // worktreeUser is another thread that works in the thread's worktree, as far as the mock can tell: a fork of it, or a
+  // child in its folder.
+  const worktreeUser = (s: Session) => sessions.find((x) => x.id !== s.id && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+
+  // ownWorktree is the thread's worktree when no other thread works in it, as the sessions say.
+  const ownWorktree = (s: Session) => (worktreeUser(s) ? '' : s.worktree)
+
   const merging = sessions.find((s) => s.cleanup === 'pending')
   if (merging) setTimeout(() => finishCleanup(merging), flags.done ? 1500 : 9000)
 
@@ -912,17 +919,35 @@ export function createMock(params: URLSearchParams) {
       const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
       return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` })
     },
-    ArchiveThread: async (id: string) => {
+    // DeleteThread acts as the sessions do: with worktree, the thread's own worktree goes first through a clean-up
+    // with the checks, and one they keep refuses the delete; the thread, its chat and its row then go.
+    DeleteThread: async (id: string, worktree: boolean) => {
+      if (deleted.has(id)) throw `Thread ${id} was deleted`
       const s = find(id)
+      if (s.cleanup === 'pending') throw `Thread ${s.n} is being cleaned up; delete it when that ends`
+      const user = worktree && s.worktree ? worktreeUser(s) : undefined
+      if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree, or clean it up first`
+      const own = worktree ? s.worktree : ''
+      if (own) {
+        const reason = keptFor(s)
+        if (reason) {
+          Object.assign(s, { cleanup: 'blocked', cleanupReason: reason })
+          logCleanup(s, [], reason)
+          publish()
+          throw `Thread ${s.n} keeps its worktree: ${reason}. Delete it without the worktree, or clean it up first`
+        }
+        logCleanup(s, [`worktree ${own}`, 'settled thread', ...(s.browser ? ['browser window'] : []), 'temp folder'], '')
+      }
       if (s.state !== 'settled') {
         emit('term:exit', { id })
         chats.end(id, 'settle')
       }
-      archived.add(id)
+      deleted.add(id)
       sessions.splice(sessions.indexOf(s), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
     },
+    OwnWorktree: async (id: string) => ownWorktree(find(id)),
     WakeThread: async (id: string) => {
       wake(find(id))
       return view(find(id))

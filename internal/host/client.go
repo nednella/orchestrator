@@ -145,6 +145,26 @@ func Ready(ctx context.Context, socket string) error {
 	}
 }
 
+// Gone waits until no host listens on socket: one that stops logs its last event before it closes the socket.
+func Gone(ctx context.Context, socket string) error {
+	var d net.Dialer
+	for {
+		conn, err := d.DialContext(ctx, "unix", socket)
+		if err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("host at %s still listens: %w", socket, ctx.Err())
+			}
+			return nil
+		}
+		conn.Close()
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("host at %s still listens: %w", socket, ctx.Err())
+		case <-time.After(readyPoll):
+		}
+	}
+}
+
 func call(ctx context.Context, socket string, req request) (reply, error) {
 	conn, _, rep, err := dial(ctx, socket, req)
 	if err != nil {

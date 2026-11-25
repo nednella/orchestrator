@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -163,6 +164,50 @@ func TestMadeTreesRecord(t *testing.T) {
 			}
 			if got, ok := reloaded.At("p", tt.path); !ok || got != tt.want {
 				t.Errorf("At = %+v, %v; want %+v", got, ok, tt.want)
+			}
+		})
+	}
+}
+
+func TestForgetDropsOnlyTheThreadsRecords(t *testing.T) {
+	trees := filepath.Join(t.TempDir(), "trees")
+	a, b := filepath.Join(trees, "a"), filepath.Join(trees, "b")
+	tests := []struct {
+		name     string
+		records  []Made
+		thread   string
+		wantKept []string // the threads whose records stay, oldest first
+	}{
+		{"every record of the thread", []Made{{Path: a, Thread: "p/t1", Removed: 9}, {Path: b, Thread: "p/t2"}, {Path: a, Thread: "p/t1"}}, "p/t1", []string{"p/t2"}},
+		{"a thread with no record", []Made{{Path: a, Thread: "p/t1"}}, "p/t3", []string{"p/t1"}},
+		{"the only record", []Made{{Path: a, Thread: "p/t1"}}, "p/t1", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			m := newMadeTrees(dir)
+			for _, w := range tt.records {
+				if err := m.Add("p", w); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := m.Forget("p", tt.thread); err != nil {
+				t.Fatal(err)
+			}
+			reloaded := newMadeTrees(dir)
+			list, err := reloaded.list("p")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var kept []string
+			for _, w := range list {
+				kept = append(kept, w.Thread)
+			}
+			if !slices.Equal(kept, tt.wantKept) {
+				t.Errorf("records of %v kept, want %v", kept, tt.wantKept)
+			}
+			if _, ok := reloaded.Of("p", tt.thread); ok {
+				t.Errorf("%s still has a record", tt.thread)
 			}
 		})
 	}

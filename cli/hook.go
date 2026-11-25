@@ -80,7 +80,7 @@ func saveHook(dir, name string, ev session.Event, at time.Time) (session.Record,
 	defer unlock()
 	prev, _ := bus.ReadState(dir, name)
 	if prev.Session == "" && ev.Name != "SessionStart" || prev.State == session.Archived {
-		return session.Record{}, false // a hook that fires after the thread was archived must not bring it back
+		return session.Record{}, false // a hook that fires after the thread was deleted, or archived by an older build, must not bring it back
 	}
 	if prev.At.After(at) {
 		return session.Record{}, false

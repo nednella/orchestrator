@@ -64,8 +64,13 @@ func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 // SettleThread stops the agent; its row stays, settled.
 func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 
-// ArchiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
-func (v *Service) ArchiveThread(id string) error { return v.s.Archive(id) }
+// DeleteThread stops the thread when it runs and removes it with its chat. With worktree, the worktree agentos made
+// for it goes too, unless a safety check keeps it, which refuses the delete; the branch always stays.
+func (v *Service) DeleteThread(id string, worktree bool) error { return v.s.Delete(id, worktree) }
+
+// OwnWorktree is the worktree agentos made for the thread that no other thread or shell uses, which DeleteThread may
+// remove with it; "" when there is none.
+func (v *Service) OwnWorktree(id string) string { return v.s.OwnWorktree(id) }
 
 // WakeThread starts a settled thread again under its own id, with nothing sent to it.
 func (v *Service) WakeThread(id string) (Session, error) {

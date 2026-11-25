@@ -145,10 +145,10 @@ type Sessions struct {
 	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []session.Name           // every project's shell sessions
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
-	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until archived
+	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until deleted
 	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
 	lastNum    map[string]int           // the highest number given or recorded in each project
-	archived   map[string]bool          // the threads the owner archived, whose state files say so: nothing brings them back
+	deleted    map[string]bool          // the threads the owner deleted in this run, and those whose state files say archived: nothing brings them back
 	records    map[string]session.Record
 	cwds       map[string]string // the working directory each session's last hook reported
 	seen       map[string]session.State
@@ -194,6 +194,7 @@ type Activity interface {
 // Evidence is what the sessions need of the evidence store.
 type Evidence interface {
 	Count(id string) int
+	Purge(id string) int
 }
 
 // Browsers is what the sessions need of the browsers.
@@ -259,7 +260,7 @@ func newSessions(o Options) *Sessions {
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
-		known: map[string]term.Info{}, ended: map[string]*endedSession{}, archived: map[string]bool{},
+		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{},
 		records:   map[string]session.Record{},
 		cwds:      map[string]string{},
@@ -360,7 +361,7 @@ func (s *Sessions) Refresh() {
 		s.holdNumber(name, rec)
 		switch {
 		case rec.State == session.Archived:
-			s.archived[name] = true
+			s.deleted[name] = true
 		case s.isOld(name): // its hooks are dropped; once it is gone, its file makes its settled row
 		case slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name.String() == name }):
 			s.take(rec)
@@ -385,11 +386,11 @@ type fileStamp struct {
 func stampOf(info fs.FileInfo) fileStamp { return fileStamp{info.ModTime(), info.Size()} }
 
 // markRead keeps the stamps the state files had when they were read, so the next refresh reads a file again only once
-// it changes. A file of a session that is neither live under a host, ended nor archived, such as one still settling or
+// it changes. A file of a session that is neither live under a host, ended nor deleted, such as one still settling or
 // an old terminal session's, is read each time. It needs createMu and mu.
 func (s *Sessions) markRead(records map[string]session.Record, stamps map[string]fileStamp, infos []term.Info) {
 	for name := range records {
-		if s.ended[name] != nil || s.archived[name] || slices.ContainsFunc(infos, func(i term.Info) bool { return i.Name.String() == name }) {
+		if s.ended[name] != nil || s.deleted[name] || slices.ContainsFunc(infos, func(i term.Info) bool { return i.Name.String() == name }) {
 			s.stateRead[name] = stamps[name]
 		} else {
 			delete(s.stateRead, name)
@@ -441,7 +442,7 @@ func (s *Sessions) writeState(rec session.Record) error {
 	return bus.WriteState(s.stateDir, rec)
 }
 
-// endedSession is a session that is gone but whose row stays, settled, until archived.
+// endedSession is a session that is gone but whose row stays, settled, until deleted.
 type endedSession struct {
 	info term.Info
 	rec  session.Record
@@ -521,10 +522,10 @@ func (s *Sessions) saveIdentity(in term.Info) {
 }
 
 // adoptEnded takes in a state file whose tmux session is gone, as a settled row. One that says ended, an older
-// build's, is written back as settled. An archived thread has no row. It needs mu.
+// build's, is written back as settled. A deleted thread has no row. It needs mu.
 func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	n, err := session.ParseName(name)
-	if err != nil || s.archived[name] {
+	if err != nil || s.deleted[name] {
 		return
 	}
 	if e, ok := s.ended[name]; ok {
@@ -564,7 +565,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 
 // endSession turns a session that is gone into a settled row that stays, and saves it. It needs mu.
 func (s *Sessions) endSession(id string, at time.Time) {
-	if _, ok := s.ended[id]; ok || s.archived[id] {
+	if _, ok := s.ended[id]; ok || s.deleted[id] {
 		return
 	}
 	n, err := session.ParseName(id)
@@ -617,7 +618,7 @@ func (s *Sessions) number() {
 	for _, in := range fresh {
 		id, key := in.Name.String(), in.Name.Project
 		if s.isOld(id) && !s.hasState(id) {
-			s.lastNum[key]++
+			s.lastNum[key] = max(s.lastNum[key], s.savedLastNumber(key)) + 1
 			s.nums[id] = s.lastNum[key]
 			continue
 		}
@@ -634,22 +635,31 @@ func (s *Sessions) holdNumber(id string, rec session.Record) {
 	}
 	key := session.ProjectKey(id)
 	s.lastNum[key] = max(s.lastNum[key], rec.N)
-	if rec.State != session.Archived && !s.archived[id] && s.nums[id] == 0 {
+	if rec.State != session.Archived && !s.deleted[id] && s.nums[id] == 0 {
 		s.nums[id] = rec.N
 	}
 }
 
 // nextNumber is the project's next thread number. It is saved as the project's last one before any thread holds it, so
-// no restart gives it again, also after the thread is archived. It needs mu.
+// no restart gives it again, also after the thread is deleted. It needs mu.
 func (s *Sessions) nextNumber(key string) int {
-	path := filepath.Join(s.localDir, key, "last-thread-number")
-	data, _ := os.ReadFile(path)
-	saved, _ := strconv.Atoi(strings.TrimSpace(string(data)))
-	n := max(s.lastNum[key], saved) + 1
-	if err := atomicfile.Write(path, []byte(strconv.Itoa(n)+"\n"), 0o600); err != nil {
+	n := max(s.lastNum[key], s.savedLastNumber(key)) + 1
+	if err := atomicfile.Write(s.lastNumberPath(key), []byte(strconv.Itoa(n)+"\n"), 0o600); err != nil {
 		log.Printf("agentos: saving the last thread number of %s: %v", key, err)
 	}
 	s.lastNum[key] = n
+	return n
+}
+
+func (s *Sessions) lastNumberPath(key string) string {
+	return filepath.Join(s.localDir, key, "last-thread-number")
+}
+
+// savedLastNumber is the project's last thread number as saved, which outlives the state file of a deleted thread; 0
+// when none is saved.
+func (s *Sessions) savedLastNumber(key string) int {
+	data, _ := os.ReadFile(s.lastNumberPath(key))
+	n, _ := strconv.Atoi(strings.TrimSpace(string(data)))
 	return n
 }
 
@@ -687,7 +697,7 @@ func (s *Sessions) hasState(id string) bool {
 
 // tmpDir is the session's own TMPDIR, and Claude's scratchpad. It sits in a folder the agent may use
 // without asking, so the screenshots and scratch files it makes there need no approval. It goes at the thread's
-// clean-up or archive. A shell's name has no token, and would name the folder of every thread's.
+// clean-up or delete. A shell's name has no token, and would name the folder of every thread's.
 func (s *Sessions) tmpDir(name session.Name) string {
 	return filepath.Join(s.localDir, name.Project, "tmp", name.Token)
 }
@@ -725,11 +735,14 @@ func (s *Sessions) handoverOf(id string) string {
 	return string(data)
 }
 
-// Archive takes the thread off the list for good and keeps its history. A live thread is settled first. Its state file
-// then says archived, and it keeps that, its chat log, images, handover and evidence; its temp folder, browser window
-// and host socket go. An old terminal session whose pane still runs is refused: the owner ends it there, and until then
-// it keeps its row, so no second thread claims its issue's branch.
-func (s *Sessions) Archive(id string) error {
+// Delete stops the thread when it runs, as a settle does, and removes it for good: its row, state file, chat log, chat
+// images, evidence, handover, usage mark, temp folder, browser window and host socket. Its clean-up log entries and
+// its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-up
+// with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
+// nothing goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the thread,
+// so no clean-up removes it later. An old terminal session whose pane still runs is refused: the owner ends it there,
+// and until then it keeps its row, so no second thread claims its issue's branch.
+func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return err
@@ -737,43 +750,53 @@ func (s *Sessions) Archive(id string) error {
 	if name.IsShell() {
 		return errNotSession
 	}
+	s.mu.Lock()
+	old, deleted, n := s.isOld(id), s.deleted[id], s.nums[id]
+	rec := s.records[id]
+	if e, ok := s.ended[id]; ok {
+		rec = e.rec
+	}
+	s.mu.Unlock()
+	switch {
+	case deleted:
+		return fmt.Errorf("Thread %s was deleted", id)
+	case old:
+		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
+	case s.life.CleaningUp(id):
+		return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", n)
+	}
+	if worktree {
+		if err := s.removeOwnWorktree(id, n); err != nil {
+			return err
+		}
+	}
+
 	s.createMu.Lock() // a refresh with a list read before the settle would take the thread back as live
 	defer s.createMu.Unlock()
 	s.mu.Lock()
-	old, archived := s.isOld(id), s.archived[id]
 	live := slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name == name })
-	rec := s.records[id]
 	s.mu.Unlock()
-	switch {
-	case archived:
-		return fmt.Errorf("Thread %s is archived", id)
-	case old:
-		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
-	case live:
+	if live {
 		if err := s.Settle(id); err != nil {
 			return err
 		}
-		// Counted here: the count sync starts when the session goes may run after the archive, and find no thread.
-		if rec.Transcript != "" {
-			s.countUsage(id, rec.Transcript, rec.AgentModel, true)
-		}
 	}
+	// Counted here: the count sync starts when the session goes, also at the settle of the clean-up, may run after the
+	// delete and find no thread.
+	if rec.Transcript != "" {
+		s.countUsage(id, rec.Transcript, rec.AgentModel, true)
+	}
+	s.awaitHostExit(name)
 	s.mu.Lock()
-	e, ok := s.ended[id]
-	if !ok {
+	if _, ok := s.ended[id]; !ok {
 		s.mu.Unlock()
 		return fmt.Errorf("No thread %s", id)
 	}
-	saved := e.record()
-	saved.State = session.Archived
-	if h := s.history[id]; len(h) > 0 {
-		saved.Changes = h
-	}
-	if err := s.writeState(saved); err != nil {
+	if err := s.removeState(id); err != nil {
 		s.mu.Unlock()
-		return fmt.Errorf("saving the archived thread: %w", err)
+		return fmt.Errorf("deleting the thread: %w", err)
 	}
-	s.archived[id] = true
+	s.deleted[id] = true
 	delete(s.ended, id)
 	delete(s.history, id)
 	delete(s.known, id)
@@ -785,22 +808,87 @@ func (s *Sessions) Archive(id string) error {
 	delete(s.cwds, id)
 	delete(s.stateRead, id)
 	s.life.forget(id)
+	s.forgetToken(name)
 	s.sync()
 	s.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	s.browsers.Forget(ctx, id)
-	if err := os.RemoveAll(s.tmpDir(name)); err != nil {
-		log.Printf("agentos: removing the temp folder of archived thread %s: %v", id, err)
+	s.evidence.Purge(id)
+	if err := s.made.Forget(name.Project, id); err != nil {
+		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
 	}
-	if err := os.Remove(s.hostSocket(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		log.Printf("agentos: removing the host socket of archived thread %s: %v", id, err)
+	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
+		if err := os.RemoveAll(path); err != nil {
+			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
+		}
 	}
-	s.mu.Lock()
-	s.forgetToken(name)
-	s.mu.Unlock()
 	return nil
+}
+
+// awaitHostExit waits, for at most hostWait, until the thread's host is gone: it logs Claude's exit as it stops, and
+// a chat log removed before that would be made again.
+func (s *Sessions) awaitHostExit(name session.Name) {
+	ctx, cancel := context.WithTimeout(s.context(), hostWait)
+	defer cancel()
+	if err := host.Gone(ctx, s.hostSocket(name)); err != nil {
+		log.Printf("agentos: deleting thread %s while its host runs: %v", name, err)
+	}
+}
+
+// removeState removes the thread's state file under the lock its hooks take, so a hook that comes later finds none
+// and writes nothing.
+func (s *Sessions) removeState(id string) error {
+	unlock, err := bus.LockState(s.stateDir, id)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return bus.RemoveState(s.stateDir, id)
+}
+
+// removeOwnWorktree removes the worktree agentos made for the thread id, numbered n, for a Delete that takes it with
+// the thread: by a clean-up with every check, and only when no other thread or shell works in it. A thread with no such
+// worktree has nothing to remove.
+func (s *Sessions) removeOwnWorktree(id string, n int) error {
+	ctx := s.context()
+	path, reason := s.ownWorktree(ctx, id)
+	if path != "" && reason == "" {
+		var err error
+		if reason, err = s.life.cleanupNow(ctx, id, false); err != nil {
+			return err
+		}
+	}
+	if reason != "" {
+		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+	}
+	return nil
+}
+
+// OwnWorktree is the worktree agentos made for the thread id that only it uses, which a Delete may take with it; ""
+// when there is none.
+func (s *Sessions) OwnWorktree(id string) string {
+	path, shared := s.ownWorktree(s.context(), id)
+	if shared != "" {
+		return ""
+	}
+	return path
+}
+
+// ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none, and why it is not
+// the thread's alone, "" when it is: another thread, running or asleep, works in it, as a fork or a child in the
+// thread's folder does, or a shell is open in it.
+func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
+	key := session.ProjectKey(id)
+	w, ok := s.made.Of(key, id)
+	if !ok || w.Removed != 0 || gone(w.Path) {
+		return "", ""
+	}
+	if user := s.usersOf(w.Path, id, true); user != "" {
+		return w.Path, fmt.Sprintf("Thread %s also works in this worktree", user)
+	}
+	return w.Path, s.life.shellIn(ctx, key, w.Path)
 }
 
 // observe folds in a hook's record. The hooks of an old terminal session are dropped before anything is recorded, so
@@ -820,7 +908,7 @@ func (s *Sessions) observe(rec session.Record) {
 
 // take folds a record in. It needs mu.
 func (s *Sessions) take(rec session.Record) {
-	if _, ended := s.ended[rec.Session]; ended || s.archived[rec.Session] {
+	if _, ended := s.ended[rec.Session]; ended || s.deleted[rec.Session] {
 		return
 	}
 	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
@@ -1339,7 +1427,7 @@ func (s *Sessions) liveIssueSession(key string, issue int) string {
 }
 
 // threadOn is the number of a thread of the project other than except that works on branch, live or settled, and
-// whether there is one. An archived thread has let its branch go. It takes mu.
+// whether there is one. A deleted thread has let its branch go. It takes mu.
 func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1558,7 +1646,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	if settled {
 		in = e.info
 	}
-	archived := s.archived[id]
+	deleted := s.deleted[id]
 	old := s.isOld(id) || settled && !in.Hosted
 	proj, known := s.projectOf(in)
 	conversation := s.conversationOf(id)
@@ -1567,8 +1655,8 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	ctx := s.ctx
 	s.mu.Unlock()
 	switch {
-	case archived:
-		return fmt.Errorf("Thread %s is archived", id)
+	case deleted:
+		return fmt.Errorf("Thread %s was deleted", id)
 	case old:
 		return fmt.Errorf("Thread %s ran in a terminal and cannot be woken", id)
 	case !settled:
@@ -1692,7 +1780,7 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	defer s.childMu.Unlock()
 	s.mu.Lock()
 	parent, live := s.liveInfo(o.Parent)
-	live = live && !s.archived[o.Parent]
+	live = live && !s.deleted[o.Parent]
 	depth, running := s.depthOf(o.Parent), 0
 	for _, in := range s.info {
 		if in.Parent == o.Parent {
@@ -1831,13 +1919,13 @@ func (s *Sessions) depthOf(id string) int {
 	return depth
 }
 
-// parentOf is the thread that delegated to the thread id, "" for one the owner started. An archived thread keeps its
-// parent in its state file. It needs mu.
+// parentOf is the thread that delegated to the thread id, "" for one the owner started. A thread whose state file says
+// archived keeps its parent there; a deleted one has no state file, and so no parent. It needs mu.
 func (s *Sessions) parentOf(id string) string {
 	if in, ok := s.infoOf(id); ok {
 		return in.Parent
 	}
-	if !s.archived[id] {
+	if !s.deleted[id] {
 		return ""
 	}
 	rec, _ := bus.ReadState(s.stateDir, id)
@@ -1851,8 +1939,8 @@ func (s *Sessions) ParentOf(id string) string {
 	return s.parentOf(id)
 }
 
-// ChildrenOf are the threads that the thread id delegated to, running or settled, by number. An archived child is
-// left out. It takes mu.
+// ChildrenOf are the threads that the thread id delegated to, running or settled, by number. A deleted child is left
+// out. It takes mu.
 func (s *Sessions) ChildrenOf(id string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1906,7 +1994,7 @@ func (s *Sessions) AccessOf(id string) session.Access {
 	return in.Access
 }
 
-// titleOf is the title of the thread id, also of an archived one. It takes mu.
+// titleOf is the title of the thread id, also of one whose row went, from its state file while it has one. It takes mu.
 func (s *Sessions) titleOf(id string) string {
 	s.mu.Lock()
 	in, ok := s.infoOf(id)
@@ -2325,7 +2413,7 @@ func tokenSum(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ThreadOfToken is the live thread, under a host and not archived, whose host the token was made for. A token from
+// ThreadOfToken is the live thread, under a host and not deleted, whose host the token was made for. A token from
 // before the thread's latest start, or of a thread that settled, names none.
 func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 	if token == "" {
@@ -2335,7 +2423,7 @@ func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, held := range s.tokens {
-		if held == sum && !s.archived[id] && slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
+		if held == sum && !s.deleted[id] && slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
 			return id, true
 		}
 	}
@@ -2582,11 +2670,11 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	}
 	s.mu.Lock()
 	_, ended := s.ended[id]
-	old, archived := s.isOld(id), s.archived[id]
+	old, deleted := s.isOld(id), s.deleted[id]
 	s.mu.Unlock()
 	switch {
-	case archived:
-		return fmt.Errorf("Thread %s is archived", id)
+	case deleted:
+		return fmt.Errorf("Thread %s was deleted", id)
 	case ended:
 		return fmt.Errorf("Thread %s has settled", id)
 	case old:
@@ -2689,11 +2777,11 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		in, live = s.info[i], true
 	}
 	e, settled := s.ended[id]
-	old, archived := s.isOld(id), s.archived[id]
+	old, deleted := s.isOld(id), s.deleted[id]
 	s.mu.Unlock()
 	switch {
-	case archived:
-		return accessDone, fmt.Errorf("Thread %s is archived", id)
+	case deleted:
+		return accessDone, fmt.Errorf("Thread %s was deleted", id)
 	case old || settled && !e.info.Hosted:
 		return accessDone, fmt.Errorf("Thread %s ran in a terminal; its access cannot change", id)
 	case settled:
@@ -3027,16 +3115,16 @@ func (s *Sessions) TypeInto(id, text string) error {
 	return nil
 }
 
-// refuseSettled is an error for a session that has settled or been archived, or that runs in an old terminal. It
+// refuseSettled is an error for a session that has settled or been deleted, or that runs in an old terminal. It
 // takes mu.
 func (s *Sessions) refuseSettled(id string) error {
 	s.mu.Lock()
 	_, ended := s.ended[id]
-	old, archived := s.isOld(id), s.archived[id]
+	old, deleted := s.isOld(id), s.deleted[id]
 	s.mu.Unlock()
 	switch {
-	case archived:
-		return fmt.Errorf("Thread %s is archived", id)
+	case deleted:
+		return fmt.Errorf("Thread %s was deleted", id)
 	case ended:
 		return fmt.Errorf("Thread %s has settled", id)
 	case old:
@@ -3090,7 +3178,7 @@ type Chat struct {
 	Live                                 bool // the session runs; an ended one has only its log
 }
 
-// ChatOf is the chat of the session id, live or ended. An old terminal session has none, and an archived thread gives
+// ChatOf is the chat of the session id, live or ended. An old terminal session has none, and a deleted thread gives
 // none. It takes mu.
 func (s *Sessions) ChatOf(id string) (Chat, error) {
 	name, err := session.ParseName(id)
@@ -3100,8 +3188,8 @@ func (s *Sessions) ChatOf(id string) (Chat, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	in, live := term.Info{}, false
-	if s.archived[id] {
-		return Chat{}, fmt.Errorf("Thread %s is archived", id)
+	if s.deleted[id] {
+		return Chat{}, fmt.Errorf("Thread %s was deleted", id)
 	}
 	if e, ok := s.ended[id]; ok {
 		in = e.info
@@ -3227,8 +3315,9 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 }
 
 // usersOf is the title of a live thread other than except that works in dir or a folder inside it, "" when none: one
-// that runs there, as a fork of a thread in its worktree does, or whose last hook came from there. It takes mu.
-func (s *Sessions) usersOf(dir, except string) string {
+// that runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a
+// settled thread that would wake there counts too. It takes mu.
+func (s *Sessions) usersOf(dir, except string, asleep bool) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range s.info {
@@ -3238,6 +3327,14 @@ func (s *Sessions) usersOf(dir, except string) string {
 		}
 		if cwd := s.cwds[id]; in.Path != "" && inside(in.Path, dir) || cwd != "" && inside(cwd, dir) {
 			return cmp.Or(in.Title, defaultTitle)
+		}
+	}
+	if !asleep {
+		return ""
+	}
+	for id, e := range s.ended {
+		if id != except && e.info.Hosted && e.info.Path != "" && inside(e.info.Path, dir) {
+			return cmp.Or(e.info.Title, defaultTitle)
 		}
 	}
 	return ""

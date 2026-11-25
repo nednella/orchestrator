@@ -361,11 +361,11 @@ func TestSetAccessOfASettledThread(t *testing.T) {
 func TestSetAccessRefusesWhatCannotChange(t *testing.T) {
 	h := apptest.New(t)
 	s := talkedThenSettled(t, h)
-	if err := h.ArchiveThread(s.ID); err != nil {
+	if err := h.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.SetAccess(s.ID, "read"); err == nil || !strings.Contains(err.Error(), "archived") {
-		t.Errorf("archived: err = %v", err)
+	if err := h.SetAccess(s.ID, "read"); err == nil || !strings.Contains(err.Error(), "deleted") {
+		t.Errorf("deleted: err = %v", err)
 	}
 	if err := h.SetAccess(s.ID, "write"); err == nil {
 		t.Error("an access agentos does not know was taken")

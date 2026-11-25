@@ -2029,3 +2029,65 @@ func TestEachRunStartsTheLog(t *testing.T) {
 		t.Fatalf("log = %+v, want the run's start first, written before the socket listens", logged)
 	}
 }
+
+func TestGone(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		listen   func(t *testing.T, socket string) (stop func())
+		wantGone bool
+	}{
+		{"no socket", func(*testing.T, string) func() { return func() {} }, true},
+		{"a socket nothing listens on", func(t *testing.T, socket string) func() {
+			ln, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ln.(*net.UnixListener).SetUnlinkOnClose(false)
+			ln.Close()
+			return func() {}
+		}, true},
+		{"a listener that closes", func(t *testing.T, socket string) func() {
+			ln, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			time.AfterFunc(200*time.Millisecond, func() { ln.Close() })
+			return func() { ln.Close() }
+		}, true},
+		{"a listener that stays", func(t *testing.T, socket string) func() {
+			ln, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return func() { ln.Close() }
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			socket := filepath.Join(socketDir(t), "s")
+			defer tt.listen(t, socket)()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := Gone(ctx, socket); (err == nil) != tt.wantGone {
+				t.Errorf("Gone = %v, want gone %v", err, tt.wantGone)
+			}
+		})
+	}
+}
+
+func TestGoneWaitsForTheExitInTheLog(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	h.cancel()
+	if err := Gone(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := logged[len(logged)-1]; last.Kind != chat.KindExit {
+		t.Errorf("last event once the host is gone = %s, want exit", last.Kind)
+	}
+}

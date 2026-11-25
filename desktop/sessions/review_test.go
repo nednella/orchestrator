@@ -150,7 +150,7 @@ func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 	}
 }
 
-func TestArchivedThreadStaysGoneAfterALateHook(t *testing.T) {
+func TestDeletedThreadStaysGoneAfterALateHook(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("done", "")
 	if err != nil {
@@ -159,15 +159,15 @@ func TestArchivedThreadStaysGoneAfterALateHook(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(s.ID); err != nil {
+	if err := h.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the archive
-	if rec, _ := bus.ReadState(h.State, s.ID); rec.State != session.Archived {
-		t.Errorf("the late hook wrote the state file of an archived thread: %+v", rec)
+	h.Hook(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the delete
+	if rec, _ := bus.ReadState(h.State, s.ID); rec.Session != "" {
+		t.Errorf("the late hook wrote a state file for a deleted thread: %+v", rec)
 	}
 	if got := h.Restart(t).Sessions().List(); len(got) != 0 {
-		t.Errorf("an archived thread came back after a restart: %+v", got)
+		t.Errorf("a deleted thread came back after a restart: %+v", got)
 	}
 }
 

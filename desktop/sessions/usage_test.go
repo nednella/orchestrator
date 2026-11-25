@@ -227,10 +227,10 @@ func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(s.ID); err != nil {
+	if err := h.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if !exists(path) {
-		t.Error("the mark went with the archived thread, want it kept with its history")
+	if exists(path) {
+		t.Error("the mark is still there after the thread was deleted")
 	}
 }

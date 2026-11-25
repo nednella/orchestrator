@@ -81,7 +81,7 @@ func TestShowFilesEvidence(t *testing.T) {
 		}
 	})
 
-	t.Run("deleting and archiving", func(t *testing.T) {
+	t.Run("deleting an item and the thread", func(t *testing.T) {
 		if err := h.DeleteEvidence(s.ID, items[0].ID); err != nil || len(h.Evidence(s.ID)) != 2 {
 			t.Errorf("DeleteEvidence: %v", err)
 		}
@@ -92,11 +92,11 @@ func TestShowFilesEvidence(t *testing.T) {
 		if len(h.Evidence(s.ID)) != 2 {
 			t.Error("evidence went with the ended session")
 		}
-		if err := h.ArchiveThread(s.ID); err != nil {
+		if err := h.DeleteThread(s.ID, false); err != nil {
 			t.Fatal(err)
 		}
-		if len(h.Evidence(s.ID)) != 2 {
-			t.Error("evidence went with the archived thread; it should stay on disk")
+		if len(h.Evidence(s.ID)) != 0 {
+			t.Error("evidence stayed after the thread was deleted")
 		}
 	})
 }

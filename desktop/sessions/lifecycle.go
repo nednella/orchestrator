@@ -976,14 +976,21 @@ func verdict(reviews []review) string {
 // Cleanup removes the worktree agentos made for a thread and its temp folder, and settles the thread, which stays with
 // its branch. Without force it first checks that nothing would be lost.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
+	_, err := l.cleanupNow(ctx, id, force)
+	return err
+}
+
+// cleanupNow is Cleanup, which it runs to the end before it returns the reason the clean-up stopped, "" when it went
+// through. A clean-up that cannot start is an error.
+func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool) (reason string, err error) {
 	t, err := l.sessions.target(id)
 	if err != nil {
-		return err
+		return "", err
 	}
 	l.mu.Lock()
 	if l.retired(id) {
 		l.mu.Unlock()
-		return errors.New("this thread was cleaned up already")
+		return "", errors.New("this thread was cleaned up already")
 	}
 	tr := l.tracks[id]
 	if tr == nil {
@@ -992,11 +999,11 @@ func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 	}
 	if tr.cleanup == "pending" {
 		l.mu.Unlock()
-		return errors.New("clean-up is already running")
+		return "", errors.New("clean-up is already running")
 	}
 	if tr.pr != nil && tr.branch != t.branch {
 		l.mu.Unlock()
-		return fmt.Errorf("%s is no longer the branch of this thread", tr.branch)
+		return "", fmt.Errorf("%s is no longer the branch of this thread", tr.branch)
 	}
 	tr.cleanup, tr.reason = "pending", ""
 	var pr *PR
@@ -1013,11 +1020,11 @@ func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 		tr.cleanup, tr.reason = "blocked", reason
 		l.mu.Unlock()
 		l.sessions.changed()
-		return nil
+		return reason, nil
 	}
 	l.retire(id)
 	l.sessions.changed()
-	return nil
+	return "", nil
 }
 
 // logCleanup adds a clean-up to the log and returns its reason, which says when the app closed during it.
@@ -1131,7 +1138,7 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (
 	if reason := l.sessions.pending(t.id); reason != "" {
 		return p, reason
 	}
-	if user := l.sessions.usersOf(w.Path, t.id); user != "" {
+	if user := l.sessions.usersOf(w.Path, t.id, false); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	return p, l.shellIn(ctx, t.proj.Key(), w.Path)

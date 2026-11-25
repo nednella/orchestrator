@@ -33,7 +33,7 @@ func TestNumbersAreNeverReused(t *testing.T) {
 	if err := h.SettleThread(first.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(first.ID); err != nil {
+	if err := h.DeleteThread(first.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	third, err := h.NewSession("third", "")
@@ -48,7 +48,7 @@ func TestNumbersAreNeverReused(t *testing.T) {
 	}
 }
 
-func TestNumbersSurviveARestartAndAnArchive(t *testing.T) {
+func TestNumbersSurviveARestartAndADelete(t *testing.T) {
 	h := newHarness(t)
 	a, err := h.NewSession("a", "")
 	if err != nil {
@@ -67,7 +67,7 @@ func TestNumbersSurviveARestartAndAnArchive(t *testing.T) {
 	if err := h.SettleThread(a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(a.ID); err != nil {
+	if err := h.DeleteThread(a.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]int{"b": 2, "old": 3}
@@ -91,7 +91,7 @@ func TestNumbersSurviveARestartAndAnArchive(t *testing.T) {
 	}
 }
 
-func TestAnArchivedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
+func TestADeletedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
 	h := newHarness(t)
 	var fifth sessions.Session
 	for i := range 5 {
@@ -107,7 +107,7 @@ func TestAnArchivedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
 	if err := h.SettleThread(fifth.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(fifth.ID); err != nil {
+	if err := h.DeleteThread(fifth.ID, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,7 +115,7 @@ func TestAnArchivedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
 	second := h.Restart(t)
 	next, err := second.NewSession("next", "")
 	if err != nil || next.N != 6 {
-		t.Errorf("the thread after an archived #5 and a restart = %+v, %v, want #6", next, err)
+		t.Errorf("the thread after a deleted #5 and a restart = %+v, %v, want #6", next, err)
 	}
 }
 
@@ -128,7 +128,7 @@ func TestAnOldTerminalSessionTakesNoRecordedNumber(t *testing.T) {
 	if err := h.SettleThread(a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(a.ID); err != nil {
+	if err := h.DeleteThread(a.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	h.App.Stop()
@@ -154,7 +154,7 @@ func numbers(h *apptest.Harness) map[string]int {
 	return got
 }
 
-func TestNewSessionSeesNothingOfAnArchivedOne(t *testing.T) {
+func TestNewSessionSeesNothingOfADeletedOne(t *testing.T) {
 	h := newHarness(t)
 	old, err := h.NewSession("old", "")
 	if err != nil {
@@ -167,11 +167,11 @@ func TestNewSessionSeesNothingOfAnArchivedOne(t *testing.T) {
 	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(old.ID); err != nil {
+	if err := h.DeleteThread(old.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if !exists(evidenceDir(h, old.ID)) {
-		t.Error("the archived thread's evidence went")
+	if exists(evidenceDir(h, old.ID)) {
+		t.Error("the deleted thread's evidence is still there")
 	}
 
 	fresh, err := h.NewSession("fresh", "")
@@ -204,11 +204,11 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.ArchiveThread(s.ID); err != nil {
+	if err := h.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if exists(tmp) {
-		t.Error("the temp folder is still there after the archive")
+		t.Error("the temp folder is still there after the delete")
 	}
 }
 

@@ -5,7 +5,7 @@ import type { Session } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
 
-// The row keeps what the menu starts in it: the rename field and the clean-up confirm.
+// The row keeps what the menu starts in it: the rename field, the clean-up confirm and the delete confirm.
 type ThreadMenuProps = {
   session: Session
   selected: boolean
@@ -13,12 +13,13 @@ type ThreadMenuProps = {
   onClose(): void
   onRename(): void
   onCleanup(): void
+  onDelete(): void
 }
 
 const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '', ask: 'Clean up', blocked: 'Clean up anyway' }
 
-export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup }: ThreadMenuProps) {
-  const a = useAgentos('select', 'settleThread', 'wakeThread', 'archiveThread', 'openPR', 'cleanupSession', 'pushToast', 'report')
+export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup, onDelete }: ThreadMenuProps) {
+  const a = useAgentos('select', 'settleThread', 'wakeThread', 'openPR', 'cleanupSession', 'pushToast', 'report')
   const { rightOpen, showPanel, toggleRight } = useLayout()
   const settled = session.state === 'settled'
   const panelShown = selected && rightOpen
@@ -48,7 +49,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },
         !settled && { label: 'Settle', danger: true, separated: true, run: () => a.report(() => a.settleThread(session.id)) },
-        { label: 'Archive', danger: true, separated: settled && !session.hosted, run: () => a.report(() => a.archiveThread(session.id)) },
+        { label: 'Delete', danger: true, separated: settled && !session.hosted, run: onDelete },
       ]}
     />
   )

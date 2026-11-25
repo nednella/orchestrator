@@ -109,7 +109,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		}
 		r.pending = nil
 	}
-	if _, kept := s.readers[id]; kept { // an archived thread has no row to show it
+	if _, kept := s.readers[id]; kept { // a deleted thread has no row to show it
 		s.spent[id] = total
 		s.sync()
 		if record && nameErr == nil {

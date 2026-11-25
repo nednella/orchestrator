@@ -11,6 +11,7 @@ import type { Point } from '../useFloatingAt'
 import { ClaudeMark } from './ClaudeMark'
 import { CleanupControls } from './CleanupControls'
 import { CleanupMark } from './CleanupMark'
+import { DeleteConfirm } from './DeleteConfirm'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
@@ -27,7 +28,7 @@ type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; me
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'archiveThread', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -35,6 +36,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : session.detail
   const cleanup = useArmedConfirm()
+  const remove = useArmedConfirm()
   const card = useHoverCard(400)
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
@@ -162,8 +164,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                     Wake
                   </button>
                 )}
-                <button className="btn h-[1.375rem] px-2 text-label" title="Take this thread off the list; its history stays" onClick={() => a.report(() => a.archiveThread(session.id))}>
-                  Archive
+                <button className="btn h-[1.375rem] px-2 text-label" title="Remove this thread and its chat" onClick={() => remove.arm()}>
+                  Delete
                 </button>
               </span>
             ) : (
@@ -186,6 +188,11 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           <CleanupControls session={session} remove={cleanup} />
         </div>
       )}
+      {remove.armed && (
+        <div className="flex w-full pr-3 pb-2 pl-9">
+          <DeleteConfirm session={session} onClose={remove.disarm} />
+        </div>
+      )}
       {menuAt && (
         <ThreadMenu
           session={session}
@@ -194,6 +201,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
           onClose={() => setMenuAt(null)}
           onRename={() => setRenaming(true)}
           onCleanup={() => cleanup.arm()}
+          onDelete={() => remove.arm()}
         />
       )}
       {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}
