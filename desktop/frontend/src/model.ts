@@ -1,5 +1,5 @@
 export function shortModel(model: string): string {
-  return model.replace(/^(claude|gemini)-/, '')
+  return model.replace(/^claude-/, '')
 }
 
 // The models the picker offers, strongest first, by alias, with the full id each stands for. Config and labels

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,24 +37,27 @@ func reportHook(event string, stdin io.Reader, stdout io.Writer) {
 	reportHookAt(event, stdin, stdout, time.Now())
 }
 
+// noSessionReply is what a hook prints outside a session: the owner's own agy still calls agentos from its global
+// hooks, and reads a JSON object from each, but takes an empty object on PreToolUse for a deny. Only no output
+// leaves that decision to it.
+func noSessionReply(event string) string {
+	if event == "PreToolUse" {
+		return ""
+	}
+	return "{}"
+}
+
 // reportHookAt records the event as of at, the moment the hook started: a hook that waited
-// for the lock must not undo a later event that got in first. The session's provider, AGENTOS_AGENT,
-// reads the payload and says what to print. A name that is not a provider's, or none, is read as claude:
-// sessions started before it was set have none, and a claude wrapper script's hooks are claude's.
+// for the lock must not undo a later event that got in first.
 func reportHookAt(event string, stdin io.Reader, stdout io.Writer, at time.Time) {
 	name := os.Getenv("AGENTOS_SESSION")
 	socket := os.Getenv("AGENTOS_SOCKET")
 	if _, err := session.ParseName(name); err != nil || socket == "" {
-		// Outside a session only agy's global hooks run, for the owner's own agy, which reads the reply.
-		fmt.Fprint(stdout, agent.AgyNoReply(event))
+		fmt.Fprint(stdout, noSessionReply(event))
 		return
 	}
 	dir := bus.DirOf(socket)
-	provider := os.Getenv("AGENTOS_AGENT")
-	if !slices.Contains(agent.Names, provider) {
-		provider = "claude"
-	}
-	ev, reply, ok := agent.New(provider, "").ParseEvent(event, stdin)
+	ev, reply, ok := agent.New("claude", "").ParseEvent(event, stdin)
 	fmt.Fprint(stdout, reply)
 	if !ok {
 		return

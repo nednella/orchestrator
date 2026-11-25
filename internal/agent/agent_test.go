@@ -109,9 +109,6 @@ func TestPlainCanNothing(t *testing.T) {
 		if (Claude{}).Can(c) == (c == StartArg) {
 			t.Errorf("claude can %d: %v", c, (Claude{}).Can(c))
 		}
-		if (Agy{}).Can(c) == (c == Hosted) {
-			t.Errorf("agy can %d: %v", c, (Agy{}).Can(c))
-		}
 	}
 	if _, _, ok := (Plain{}).ParseEvent("Stop", strings.NewReader("{}")); ok {
 		t.Error("a plain agent's hook was recorded")
@@ -145,7 +142,6 @@ func TestCheckInstalled(t *testing.T) {
 	}{
 		{"claude", ""},
 		{"fake-agent --flag", ""},
-		{"agy", "agy"},
 		{"absent-agent --flag", "absent-agent"},
 	}
 	for _, tt := range tests {
@@ -235,7 +231,7 @@ func TestCheckName(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"codex", "bash", "claude --resume"} {
-		if err := CheckName(name); err == nil || !strings.Contains(err.Error(), "the agents are claude, agy") {
+		if err := CheckName(name); err == nil || !strings.Contains(err.Error(), "the agents are claude") {
 			t.Errorf("CheckName(%q) = %v", name, err)
 		}
 	}
@@ -317,7 +313,7 @@ func TestClaudeValidModel(t *testing.T) {
 		{"an alias with the long context", "sonnet[1m]", "", true},
 		{"a full id claude has no list for", "claude-opus-5-5", "high", true},
 		{"a full id with the long context", "claude-opus-5-5[1m]", "", true},
-		{"a Google model", "gemini-4-argon", "", false},
+		{"another provider's model", "other-model", "", false},
 		{"an effort alone", "", "xhigh", true},
 		{"a misspelt effort", "", "hgih", false},
 		{"a flag", "--x", "", false},

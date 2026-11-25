@@ -15,15 +15,13 @@ import (
 )
 
 // scenario is something a session does, which every provider is recorded doing and must end with the same row for.
-// Cannot names each provider that cannot do it, and why: it is recorded and tested for the others only.
 type scenario struct {
-	name   string
-	steps  []step
-	state  session.State
-	reply  string // a word the row's last reply holds, "" when the scenario ends with no reply
-	tool   bool   // the row names a tool
-	usage  bool   // the row shows tokens and a cost
-	cannot map[string]string
+	name  string
+	steps []step
+	state session.State
+	reply string // a word the row's last reply holds, "" when the scenario ends with no reply
+	tool  bool   // the row names a tool
+	usage bool   // the row shows tokens and a cost
 }
 
 // step is what the recorder does to the agent: type a prompt and wait for the turn to end, exit, or start the agent
@@ -39,10 +37,8 @@ var scenarios = []scenario{
 	{name: "prompt", steps: []step{pong}, state: session.Idle, reply: "pong", usage: true},
 	{name: "tool", steps: []step{{prompt: "Read the file note.txt and reply with its contents only."}}, state: session.Idle, reply: "kiwi", tool: true, usage: true},
 	{name: "question", steps: []step{{prompt: "Reply with this question and nothing else: Shall I go on?"}}, state: session.Waiting, reply: "go on?", usage: true},
-	{name: "permission", steps: []step{{prompt: "Run the shell command: touch made.txt"}}, state: session.Waiting, tool: true, usage: true,
-		cannot: map[string]string{"agy": "agy fires no hook when it asks for a permission (#490)"}},
-	{name: "exit", steps: []step{pong, {exit: true}}, state: session.Ended, usage: true,
-		cannot: map[string]string{"agy": "agy fires no hook when it exits: the app sees its process end"}},
+	{name: "permission", steps: []step{{prompt: "Run the shell command: touch made.txt"}}, state: session.Waiting, tool: true, usage: true},
+	{name: "exit", steps: []step{pong, {exit: true}}, state: session.Ended, usage: true},
 	{name: "resume", steps: []step{pong, {exit: true}, {resume: true}, {prompt: "Reply with the one word plum, in lower case, and nothing else."}}, state: session.Idle, reply: "plum", usage: true},
 }
 
@@ -58,9 +54,6 @@ func TestScenarios(t *testing.T) {
 		}
 		for _, sc := range scenarios {
 			t.Run(name+"/"+sc.name, func(t *testing.T) {
-				if why := sc.cannot[name]; why != "" {
-					t.Skip(why)
-				}
 				t.Logf("recorded with %s", strings.TrimSpace(string(version)))
 				row := replay(t, New(name, ""), filepath.Join("testdata", name, sc.name))
 				sc.check(t, row)

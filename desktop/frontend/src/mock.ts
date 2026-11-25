@@ -923,7 +923,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude', 'agy'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, agent: 'claude', agents: ['claude'], cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
 
   const issueRefreshes = { count: 0 }
   Object.assign(window, { issueRefreshes })

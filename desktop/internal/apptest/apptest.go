@@ -667,8 +667,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	} else {
 		t.Setenv("AGENTOS_DEV_DATA_DIR", filepath.Join(state, "data"))
 	}
-	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(state, "claude"))   // never the user's own settings
-	t.Setenv("AGENTOS_AGY_CONFIG_DIR", filepath.Join(state, "agy")) // nor agy's own hooks and MCP servers
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(state, "claude")) // never the user's own settings
 
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	h.claudeDir = agentOnPath(t, "claude", standInEnv, fakeClaudeTurns)
@@ -925,27 +924,6 @@ while IFS= read -r line; do
 	esac
 done
 `
-
-// AgyModels is what the stand-in agy answers to agy models: each model's id and name.
-var AgyModels = [][2]string{{"gemini-4-argon-medium", "Gemini 4 Argon (Medium)"}, {"gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)"}}
-
-// AgyOnPath puts a stand-in `agy` first on PATH, as NewWith does the stand-in claude (see ClaudeDir). It writes its
-// arguments as the stand-in claude does, answers `agy models` with AgyModels and writes the AGENTOS_PROMPT and
-// AGENTOS_CHAT it was started with to <dir>/<session id, "/" as "_">.env. It returns dir.
-func AgyOnPath(t *testing.T) string { return agyOnPath(t, "") }
-
-// AgyAskingOnPath is AgyOnPath with a stand-in that shows agy's permission prompt in its pane.
-func AgyAskingOnPath(t *testing.T) string {
-	return agyOnPath(t, "────────\nRequesting permission for:\n   touch made.txt\nRun this command?\n> 1. Yes, run command\n  2. No, cancel\nesc to cancel\n")
-}
-
-func agyOnPath(t *testing.T, pane string) string {
-	models := ""
-	for _, m := range AgyModels {
-		models += m[0] + "\t" + m[1] + "\n"
-	}
-	return agentOnPath(t, "agy", "if [ \"$1\" = models ]; then printf '"+models+"'; exit 0; fi\nprintf 'AGENTOS_PROMPT=%s\\nAGENTOS_CHAT=%s\\n' \"$AGENTOS_PROMPT\" \"$AGENTOS_CHAT\" > \"$f.env\"\nprintf '%s' '"+pane+"'\n", "exec sleep 60\n")
-}
 
 // agentOnPath writes the stand-in named so, with first run before it records its arguments and then run after it,
 // and puts it first on PATH. Both may use f, the path of the args file without its extension.

@@ -10,7 +10,6 @@ export AGENTOS_TMUX_SOCKET=aos-test-$$      # never "agentos", the owner's socke
 export AGENTOS_STATE_DIR=$S                 # never ~/.local/state/agentos
 export AGENTOS_DEV_DATA_DIR=$S/data             # never ~/.local/share/agentos (also moves notes and the event log)
 export AGENTOS_CONFIG=$S/config.yaml        # never ~/.config/agentos/config.yaml
-export AGENTOS_AGY_CONFIG_DIR=$S/agy        # never ~/.gemini/config, the owner's own agy hooks
 unset AGENTOS_SOCKET AGENTOS_SESSION AGENTOS_ISSUE AGENTOS_AGENT  # an agentos session has them; AGENTOS_SOCKET sends every command to the live app
 ```
 
@@ -37,12 +36,12 @@ Each `desktop/<pkg>` service has its tests beside it. They build the whole app t
 
 ## Recorded agents
 
-`internal/agent/testdata/<provider>/` holds what the real agents sent: for each scenario in `scenario_test.go` (a prompt, a tool call, a question, a permission prompt, an exit, a resume) the hook payloads and the transcript lines with usage, and in `version` the agent's version. `TestScenarios` replays them through the provider as the app reads them and checks the state, reply and usage each row must end with. A scenario a provider cannot do is marked in the table with the reason and skipped for it.
+`internal/agent/testdata/<provider>/` holds what the real agents sent: for each scenario in `scenario_test.go` (a prompt, a tool call, a question, a permission prompt, an exit, a resume) the hook payloads and the transcript lines with usage, and in `version` the agent's version. `TestScenarios` replays them through the provider as the app reads them and checks the state, reply and usage each row must end with.
 
-After an update of `claude` or `agy`, record again with the isolation env above set:
+After an update of `claude`, record again with the isolation env above set:
 
 ```sh
-go test ./internal/agent -run TestRecord -record claude,agy -v
+go test ./internal/agent -run TestRecord -record claude -v
 git diff internal/agent/testdata
 go test ./internal/agent -run TestScenarios
 ```

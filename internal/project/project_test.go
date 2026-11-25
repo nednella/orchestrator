@@ -335,15 +335,11 @@ func TestLoadDraggable(t *testing.T) {
 }
 
 func TestLoadChecksAnActionsModelWithItsAgent(t *testing.T) {
-	t.Setenv("PATH", t.TempDir()) // no agy to list its models, so any Google model passes
 	tests := []struct {
 		name, config, action, err string
 	}{
 		{"a claude model on claude", "", "{name: Work, model: opus, effort: max}", ""},
-		{"a Google model on claude", "", "{name: Work, model: gemini-4-argon}", `claude has no model "gemini-4-argon"`},
-		{"a Google model on agy", "", "{name: Work, agent: agy, model: gemini-4-argon-high}", ""},
-		{"a claude model on agy", "", "{name: Work, agent: agy, model: opus}", `agy runs only Google models, not "opus"`},
-		{"the default agent checks an action that names none", "agent_command: agy\n", "{name: Work, model: opus}", `agy runs only Google models, not "opus"`},
+		{"another provider's model on claude", "", "{name: Work, model: other-model}", `claude has no model "other-model"`},
 		{"a plain command takes any model", "agent_command: codex\n", "{name: Work, model: gpt-9}", ""},
 	}
 	for _, tt := range tests {

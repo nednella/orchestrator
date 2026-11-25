@@ -13,7 +13,7 @@ func TestAgentProgramsHoldEveryProviderAndTheConfiguredAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("AGENTOS_CONFIG", conf)
-	if got := agentPrograms(); !slices.Equal(got, []string{"claude", "agy", "my-agent"}) {
+	if got := agentPrograms(); !slices.Equal(got, []string{"claude", "my-agent"}) {
 		t.Errorf("programs = %q", got)
 	}
 }

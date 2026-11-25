@@ -253,7 +253,7 @@ func (c *Cursor) count(b []byte, known, subagent bool, latest *time.Time, each f
 	u := *l.Message.Usage
 	t := Tokens{
 		Input: u.InputTokens, Output: u.OutputTokens, CacheRead: u.CacheReadInputTokens, CacheWrite: u.CacheCreationInputTokens,
-		Thinking: u.OutputTokensDetails.ThinkingTokens, Cost: cost(l.Message.Model, u, l.Timestamp),
+		Thinking: u.OutputTokensDetails.ThinkingTokens, Cost: cost(l.Message.Model, u),
 	}
 	if t.Total() == 0 {
 		return

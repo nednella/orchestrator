@@ -44,7 +44,7 @@ func TestNewAndIssueRefuseAnUnknownAgent(t *testing.T) {
 	h := newHarness(t)
 	for _, cmd := range []string{"new", "issue"} {
 		resp := h.Ask(t, ctl.Request{Cmd: cmd, Args: []string{"12"}, Opts: map[string]string{"agent": "codex"}})
-		if resp.OK || !strings.Contains(resp.Error, `no agent "codex": the agents are claude, agy`) {
+		if resp.OK || !strings.Contains(resp.Error, `no agent "codex": the agents are claude`) {
 			t.Errorf("%s --agent codex = %+v", cmd, resp)
 		}
 	}
@@ -55,7 +55,7 @@ func TestNewAndIssueRefuseAnUnknownAgent(t *testing.T) {
 
 func TestAgentSettingAppliesToTheNextSession(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{Agent: "bash"})
-	if got := h.Settings(); got.Agent != "bash" || !slices.Equal(got.Agents, []string{"claude", "agy"}) {
+	if got := h.Settings(); got.Agent != "bash" || !slices.Equal(got.Agents, []string{"claude"}) {
 		t.Fatalf("settings = %+v", got)
 	}
 	plain := plainSession(h, t)

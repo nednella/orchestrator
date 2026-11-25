@@ -148,22 +148,22 @@ func TestCost(t *testing.T) {
 	u.InputTokens, u.OutputTokens, u.CacheReadInputTokens = 1_000_000, 1_000_000, 1_000_000
 	u.CacheCreationInputTokens, u.CacheCreation.Ephemeral1h = 1_000_000, 1_000_000
 	// Claude Opus 5.5: $4 in, $20 out, $0.20 cache read, $8 for an hour-long cache write.
-	if got := cost("claude-opus-5-5", u, t0); got != 32_200_000 {
+	if got := cost("claude-opus-5-5", u); got != 32_200_000 {
 		t.Errorf("opus 5.5 cost = %d, want 32200000", got)
 	}
 	u.Speed = "fast"
-	if got := cost("claude-opus-5-5", u, t0); got != 64_400_000 {
+	if got := cost("claude-opus-5-5", u); got != 64_400_000 {
 		t.Errorf("fast cost = %d, want twice the standard", got)
 	}
 	u.Speed = ""
 	u.CacheCreation.Ephemeral1h = 0 // no split: a 5-minute write at 1.25 times input
-	if got := cost("claude-opus-5", u, t0); got != 5_000_000+25_000_000+500_000+6_250_000 {
+	if got := cost("claude-opus-5", u); got != 5_000_000+25_000_000+500_000+6_250_000 {
 		t.Errorf("opus 5 cost = %d", got)
 	}
-	if got := cost("claude-haiku-5-5", apiUsage{InputTokens: 200_000}, t0); got != 100_000 {
+	if got := cost("claude-haiku-5-5", apiUsage{InputTokens: 200_000}); got != 100_000 {
 		t.Errorf("long haiku prompt = %d, want 200000 tokens at $0.50", got)
 	}
-	if got := cost("<synthetic>", u, t0); got != 0 {
+	if got := cost("<synthetic>", u); got != 0 {
 		t.Errorf("unknown model cost = %d, want 0", got)
 	}
 }
@@ -175,24 +175,6 @@ func TestReadAfterARestartSkipsTheLatestCounted(t *testing.T) {
 	// The event log keeps the time of the latest message counted in milliseconds.
 	if parts, _, _ := NewCursor(Mark{After: time.UnixMilli(at.UnixMilli())}).Read(path, ""); len(parts) != 0 {
 		t.Errorf("the message counted before the restart was counted again: %+v", parts)
-	}
-}
-
-func TestCostOfAgyModels(t *testing.T) {
-	u := apiUsage{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadInputTokens: 1_000_000}
-	// Gemini 4 Argon: $2 in, $10 out, $0.10 cached until the end of November 2026, then twice that.
-	if got := cost("gemini-4-argon-medium", u, time.Date(2026, 11, 30, 23, 59, 59, 0, time.UTC)); got != 12_100_000 {
-		t.Errorf("argon cost = %d, want 12100000", got)
-	}
-	if got := cost("gemini-4-argon-high", u, argonRise); got != 24_200_000 {
-		t.Errorf("argon cost from December = %d, want 24200000", got)
-	}
-	if got := cost("gemini-3.8-flash-low", u, t0); got != 4_500_000 {
-		t.Errorf("flash cost = %d, want 4500000", got)
-	}
-	// A claude id from agy ends in its effort and still prices as that claude model.
-	if got := cost("claude-opus-5-5-low", apiUsage{InputTokens: 1_000_000}, t0); got != 4_000_000 {
-		t.Errorf("claude through agy cost = %d, want 4000000", got)
 	}
 }
 

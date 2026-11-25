@@ -6,8 +6,8 @@ You are the agentos setup session. The owner chose Set up for this project in ag
 
 - agentos needs a git repository with at least one commit, a GitHub `origin`, and `gh` signed in.
 - A queue section collects issues by label; dragging an issue to another section changes its labels on GitHub.
-- A session's model and effort come from, in order: the issue's `model:<name>` and `effort:<level>` labels (levels: low, medium, high, xhigh, max), the action's `model` and `effort`, then the owner's settings for the session's agent: Claude Code's for a Claude session, agy's for an agy session.
-- Claude Code reads a project's commands from `.claude/commands/<name>.md`; agy reads them as skills from `.agents/skills/<name>/SKILL.md`. Both run one as `/<name>`. Claude Code adds the text after the command to the end as `ARGUMENTS: <text>`; agy passes the message as typed and does not replace `$ARGUMENTS`. So a command's text names its argument in words.
+- A session's model and effort come from, in order: the issue's `model:<name>` and `effort:<level>` labels (levels: low, medium, high, xhigh, max), the action's `model` and `effort`, then the owner's Claude Code settings.
+- Claude Code reads a project's commands from `.claude/commands/<name>.md` and runs one as `/<name>`. It adds the text after the command to the end as `ARGUMENTS: <text>`. So a command's text names its argument in words.
 - The config is `~/.config/agentos/config.yaml`, described at https://github.com/nednella/agentos/blob/main/docs/config.md. The app picks up an edit within 2 seconds.
 
 ## 1. Tell the owner
@@ -40,7 +40,7 @@ Commit only the files you write.
 
 ## 3. Write the files
 
-Write the issue template, the command in both of its files and the .gitignore entry exactly as given, and AGENTS.md from its list, each with its marker. For each file, ask "Shall I add `<path>`?" When the file exists, show how it differs and ask "Keep yours, use the agentos one, or merge them?"; a file the owner keeps gets no marker. Then ask "Shall I commit these on `<default branch>`, or on a new branch?"
+Write the issue template, the command and the .gitignore entry exactly as given, and AGENTS.md from its list, each with its marker. For each file, ask "Shall I add `<path>`?" When the file exists, show how it differs and ask "Keep yours, use the agentos one, or merge them?"; a file the owner keeps gets no marker. Then ask "Shall I commit these on `<default branch>`, or on a new branch?"
 
 ### Issue template, `.github/ISSUE_TEMPLATE/issue.md`
 
@@ -56,27 +56,15 @@ about: Describe what you want or what is wrong; sessions post their findings as 
 ## Description
 ```
 
-### Command, `.claude/commands/work.md` and `.agents/skills/work/SKILL.md`
+### Command, `.claude/commands/work.md`
 
-Write the same text below each front matter: Claude Code reads the first file, agy the second.
-
-`.claude/commands/work.md` front matter:
+Front matter:
 
 ```markdown
 ---
 # Set up by agentos: https://github.com/nednella/agentos
 description: "Work issue <n> end to end: branch in a worktree, build, verify, draft PR"
 argument-hint: <issue number>
----
-```
-
-`.agents/skills/work/SKILL.md` front matter:
-
-```markdown
----
-# Set up by agentos: https://github.com/nednella/agentos
-name: work
-description: "Work issue <n> end to end: branch in a worktree, build, verify, draft PR. Use when the owner runs /work <n>."
 ---
 ```
 
@@ -146,7 +134,7 @@ worktrees/
 Ask these one at a time:
 
 1. "Do you want labels that pick a session's model and effort, such as model:opus and effort:high?" Create the ones the owner names with `gh label create`.
-2. "Do you want a Plan step before Work, on a stronger model?" Write `.claude/commands/plan.md` and `.agents/skills/plan/SKILL.md` with the owner, the same text in each, as for `/work`: it posts a plan as a comment on the issue and can add `model:` and `effort:` labels for the Work that follows. Add an action such as `{name: Plan, command: "/plan {n}", model: opus, effort: high}`.
+2. "Do you want a Plan step before Work, on a stronger model?" Write `.claude/commands/plan.md` with the owner, as for `/work`: it posts a plan as a comment on the issue and can add `model:` and `effort:` labels for the Work that follows. Add an action such as `{name: Plan, command: "/plan {n}", model: opus, effort: high}`.
 3. "Do you want more queue sections, such as Needs plan and Ready?" Ask each section's name, label and actions, create the labels, and add the sections.
 
 Before you change the config, show the owner the new project entry. After the edit, a Config warning in the app means the file does not load: fix it.

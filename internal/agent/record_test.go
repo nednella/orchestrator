@@ -64,12 +64,8 @@ type recorder struct {
 	version []string
 	// command is the agent's command line, on the conversation to resume or a new one.
 	command func(exe, resume string) []string
-	// prepare writes what the agent needs in its folder, work, before it starts; nil for nothing.
-	prepare func(exe, work string) error
-	// trust are the keys that answer the agent's question whether it trusts a new folder. retrust starts the agent
-	// again after it, for an agent that loads no hooks in a folder it did not trust when it started.
-	trust   []string
-	retrust bool
+	// trust are the keys that answer the agent's question whether it trusts a new folder.
+	trust []string
 	// step is the type of the transcript lines the recording keeps: the ones with what a model call used and replied.
 	// The others hold the owner's own instructions and account.
 	step string
@@ -86,22 +82,10 @@ var recorders = map[string]recorder{
 		trust: []string{"Down", "Enter"},
 		step:  "assistant",
 	},
-	"agy": {
-		version: []string{"agy", "--version"},
-		command: func(_, resume string) []string {
-			return Agy{}.Command(Launch{Model: "gemini-3.8-flash-low", Resume: resume})
-		},
-		prepare: func(exe, work string) error {
-			return Agy{ConfigDir: filepath.Join(work, ".agents"), Installed: exe}.installHooks()
-		},
-		trust:   []string{"Enter"},
-		retrust: true,
-		step:    "PLANNER_RESPONSE",
-	},
 }
 
 // TestRecord runs the real agents through every scenario and saves their hooks and transcripts in testdata. It spends
-// requests, so it runs only when asked: go test ./internal/agent -run TestRecord -record claude,agy. Each agent runs in
+// requests, so it runs only when asked: go test ./internal/agent -run TestRecord -record claude. Each agent runs in
 // a throwaway folder on a tmux server of its own, with no agentos session around it.
 func TestRecord(t *testing.T) {
 	if *record == "" {
@@ -132,9 +116,6 @@ func TestRecord(t *testing.T) {
 				if err := os.RemoveAll(dir); err != nil {
 					t.Fatal(err)
 				}
-				if why := sc.cannot[name]; why != "" {
-					t.Skip(why)
-				}
 				r.record(t, name, exe, sc, dir)
 			})
 		}
@@ -149,11 +130,6 @@ func (r recorder) record(t *testing.T, name, exe string, sc scenario, dir string
 	if err := os.WriteFile(filepath.Join(work, "note.txt"), []byte("kiwi\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if r.prepare != nil {
-		if err := r.prepare(exe, work); err != nil {
-			t.Fatal(err)
-		}
-	}
 	hooks := filepath.Join(t.TempDir(), "hooks.jsonl")
 	tm := newTmux(t, recordEnv+"="+hooks, "AGENTOS_AGENT="+name)
 	start := func(resume string) {
@@ -163,11 +139,6 @@ func (r recorder) record(t *testing.T, name, exe string, sc scenario, dir string
 				return strings.Contains(pane, "? for shortcuts")
 			}
 			tm.keys(r.trust...)
-			if r.retrust {
-				time.Sleep(2 * time.Second)
-				tm.kill()
-				tm.start(work, r.command(exe, resume))
-			}
 			return false
 		})
 	}

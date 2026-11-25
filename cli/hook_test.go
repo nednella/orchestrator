@@ -198,43 +198,7 @@ func TestHookKeepsTheStateChanges(t *testing.T) {
 	}
 }
 
-func TestHookReadsAnUnknownAgentAsClaude(t *testing.T) {
-	dir, _ := hookSetup(t)
-	seedStart(t, dir)
-	t.Setenv("AGENTOS_AGENT", "my-claude-wrapper")
-
-	reportHook("PreToolUse", strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"ls"}}`), io.Discard)
-	if rec, _ := bus.ReadState(dir, "demo/a1"); rec.State != session.Working || rec.Detail != "Bash ls" {
-		t.Errorf("state = %+v", rec)
-	}
-}
-
-func TestHookPrintsWhatAgyReads(t *testing.T) {
-	dir, _ := hookSetup(t)
-	seedStart(t, dir)
-	t.Setenv("AGENTOS_AGENT", "agy")
-	tests := []struct {
-		event, body, want string
-	}{
-		{"PreInvocation", `{"invocationNum":0}`, "{}"},
-		{"PreInvocation", `{"invocationNum":1}`, "{}"},
-		{"PreToolUse", `{"toolCall":{"name":"run_command","args":{"CommandLine":"ls"}}}`, ""}, // an empty object would deny the tool
-		{"PostToolUse", `{"toolCall":{"name":"run_command"}}`, "{}"},
-		{"Stop", `{}`, "{}"},
-	}
-	for _, tt := range tests {
-		var out bytes.Buffer
-		reportHook(tt.event, strings.NewReader(tt.body), &out)
-		if out.String() != tt.want {
-			t.Errorf("%s printed %q, want %q", tt.event, out.String(), tt.want)
-		}
-	}
-	if rec, _ := bus.ReadState(dir, "demo/a1"); rec.State != session.Idle || rec.Event != "Stop" {
-		t.Errorf("state = %+v", rec)
-	}
-}
-
-func TestHookOutsideASessionAnswersTheOwnersOwnAgy(t *testing.T) {
+func TestHookOutsideASessionAnswersAgy(t *testing.T) {
 	t.Setenv("AGENTOS_SESSION", "")
 	t.Setenv("AGENTOS_SOCKET", "")
 	for event, want := range map[string]string{"SessionStart": "{}", "PreToolUse": "", "Stop": "{}"} {

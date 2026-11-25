@@ -10,7 +10,7 @@ Every task row in the sessions panel; the header above the terminal of the selec
 
 ## How to drive it
 
-Make a throwaway repo with a bare origin and worktrees on `issue-<n>` branches, some pushed, some not, some with extra commits or files. Put a fake `gh` first on PATH that answers `pr list --head <branch>` with canned JSON (title, `statusCheckRollup` with names, `reviews` with `author.login`). The app replaces PATH with the login shell's when any agent program is missing, so stub `agy` and the other agent programs in the same folder. Start tasks with `sessions.Service/NewSession` and give each its branch with `agentos track --branch` under `AGENTOS_SESSION` and `AGENTOS_SOCKET`. A `PostToolUse` hook (`agentos hook PostToolUse` with `{"cwd": <worktree>}` on stdin) reads the git counts again without a PR fetch.
+Make a throwaway repo with a bare origin and worktrees on `issue-<n>` branches, some pushed, some not, some with extra commits or files. Put a fake `gh` first on PATH that answers `pr list --head <branch>` with canned JSON (title, `statusCheckRollup` with names, `reviews` with `author.login`). The app replaces PATH with the login shell's when any agent program is missing, so stub the other agent programs in the same folder. Start tasks with `sessions.Service/NewSession` and give each its branch with `agentos track --branch` under `AGENTOS_SESSION` and `AGENTOS_SOCKET`. A `PostToolUse` hook (`agentos hook PostToolUse` with `{"cwd": <worktree>}` on stdin) reads the git counts again without a PR fetch.
 
 ## What goes wrong
 
