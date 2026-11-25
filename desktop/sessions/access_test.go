@@ -517,7 +517,7 @@ func TestASendWhileTheThreadRestartsIsRefused(t *testing.T) {
 	if err := host.Ready(ctx, socket); err != nil {
 		t.Fatal(err)
 	}
-	if idle, err := host.Hold(ctx, socket, "full"); err != nil || !idle {
+	if idle, err := host.Hold(ctx, socket); err != nil || !idle {
 		t.Fatalf("Hold = %v, %v; want idle", idle, err)
 	}
 	if _, err := h.ChatSend(s.ID, "keep this"); err == nil || err.Error() != "This thread is restarting" {

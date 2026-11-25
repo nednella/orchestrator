@@ -2041,7 +2041,11 @@ func (s *Sessions) deliverWakes() {
 }
 
 // Settle stops the session's tmux session, whose host stops Claude; its row stays, settled.
-func (s *Sessions) Settle(id string) error {
+func (s *Sessions) Settle(id string) error { return s.settle(id, chat.StopSettle, "") }
+
+// settle stops the thread for reason, chat.StopSettle or chat.StopRestart with the access it starts again with. Its host
+// is told first, so it logs Claude's exit as that stop and not as a crash.
+func (s *Sessions) settle(id, reason string, access session.Access) error {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return err
@@ -2066,6 +2070,7 @@ func (s *Sessions) Settle(id string) error {
 	s.mu.Lock()
 	delete(s.wakes, id)
 	s.mu.Unlock()
+	s.planStop(name, reason, access)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Kill(ctx, name); err != nil {
@@ -2077,6 +2082,17 @@ func (s *Sessions) Settle(id string) error {
 	s.info = slices.DeleteFunc(s.info, func(i term.Info) bool { return i.Name == name })
 	s.sync()
 	return nil
+}
+
+// planStop tells the thread's host that the app stops it for reason. A host that did not hear logs the exit as it comes.
+func (s *Sessions) planStop(name session.Name, reason string, access session.Access) {
+	socket, err := s.readyHost(name)
+	if err == nil {
+		err = host.PlanStop(s.context(), socket, reason, string(access))
+	}
+	if err != nil {
+		log.Printf("agentos: thread %s stops without telling its host: %v", name, err)
+	}
 }
 
 var errAccessDuringTurn = errors.New("Change access when the turn ends")
@@ -2149,7 +2165,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	socket, err := s.readyHost(name)
 	idle := false
 	if err == nil {
-		idle, err = host.Hold(s.context(), socket, string(access))
+		idle, err = host.Hold(s.context(), socket)
 	}
 	switch {
 	case err != nil:
@@ -2160,7 +2176,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	if err := s.liveAccess(name, access); err != nil {
 		return accessDone, fmt.Errorf("saving the thread's access: %w", err)
 	}
-	if err := s.Settle(id); err != nil {
+	if err := s.settle(id, chat.StopRestart, access); err != nil {
 		if undo := s.liveAccess(name, in.Access); undo != nil {
 			log.Printf("agentos: putting back the access of thread %s: %v", id, undo)
 		}

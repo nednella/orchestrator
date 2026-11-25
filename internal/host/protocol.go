@@ -12,6 +12,7 @@ const (
 	opAnswer    = "answer"
 	opMode      = "mode"
 	opHold      = "hold"
+	opStop      = "stop"
 	opSubscribe = "subscribe"
 )
 
@@ -25,7 +26,8 @@ type request struct {
 	Input   json.RawMessage `json:"input,omitempty"`
 	After   int64           `json:"after,omitempty"`
 	Mode    string          `json:"mode,omitempty"`
-	Access  string          `json:"access,omitempty"` // the hold op's: the access the thread starts again with
+	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
+	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
 }
 
 type reply struct {

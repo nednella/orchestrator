@@ -27,8 +27,11 @@ function rowOf(item: TimelineItem, thread: string, folder: string, onReply: (tex
       return <ChatReplyRow uuid={item.uuid} text={item.text} streaming={item.streaming} onReply={onReply} onFork={onFork} />
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
-    case 'restart':
-      return <ChatNotice text={`Restarted with ${ACCESS_LABEL[item.access]}`} error={false} />
+    case 'restart': {
+      // The access comes from the log as text, so a value this build does not know has no label.
+      const label: string | undefined = ACCESS_LABEL[item.access]
+      return <ChatNotice text={label ? `Restarted with ${label}` : 'Restarted'} error={false} />
+    }
     case 'work':
       return <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
     case 'approval':

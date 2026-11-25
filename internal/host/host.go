@@ -109,8 +109,9 @@ type host struct {
 	mode string
 	// holding is set once the host answered a hold as idle, before a restart: it takes no more input.
 	holding bool
-	// restartAccess is the access the held thread starts again with.
-	restartAccess string
+	// plannedStop is why the app said it stops the host, chat.StopSettle or chat.StopRestart, "" until it says so; the
+	// exit is then logged as that stop and not as an error. restartAccess is the access a restart starts with.
+	plannedStop, restartAccess string
 }
 
 // Run starts Claude and serves the socket until Claude exits, then returns Claude's exit error. Cancelling ctx stops Claude and the processes it started: SIGTERM, then SIGKILL after 5 s.
@@ -162,7 +163,7 @@ func Run(ctx context.Context, c Config) error {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		h.publishExit(err, false)
+		h.publishExit(err)
 		return err
 	}
 	h.stdin = stdin
@@ -181,7 +182,7 @@ func Run(ctx context.Context, c Config) error {
 	h.mu.Unlock()
 	err = cmd.Wait()
 	close(waited)
-	h.publishExit(err, ctx.Err() != nil)
+	h.publishExit(err)
 	return err
 }
 
@@ -202,17 +203,18 @@ func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
 
 var errExited = errors.New("claude has exited")
 
-// publishExit logs Claude's exit. One the host made, stopped, is no error, though Claude exits on the signal it got.
-func (h *host) publishExit(err error, stopped bool) {
+// publishExit logs Claude's exit. One the app said it would make is that stop and no error, though Claude exits on the
+// signal it got; any other is logged as it came.
+func (h *host) publishExit(err error) {
 	e := chat.Event{Kind: chat.KindExit}
 	h.mu.Lock()
-	holding, access := h.holding, h.restartAccess
+	planned, access := h.plannedStop, h.restartAccess
 	h.mu.Unlock()
 	switch {
-	case stopped && holding:
-		e.Stop, e.Text = chat.StopRestart, access
-	case stopped:
-		e.Stop = chat.StopSettle
+	case planned == chat.StopRestart:
+		e.Stop, e.Text = planned, access
+	case planned != "":
+		e.Stop = planned
 	case err != nil:
 		e.Text = err.Error()
 		e.Error = true
@@ -462,7 +464,7 @@ func (h *host) handle(conn net.Conn) {
 		h.subscribe(conn, req.After)
 		return
 	case opHold:
-		writeJSON(conn, reply{OK: true, Busy: !h.hold(req.Access)})
+		writeJSON(conn, reply{OK: true, Busy: !h.hold()})
 		return
 	}
 	id, err := h.do(req)
@@ -488,6 +490,8 @@ func (h *host) do(req request) (string, error) {
 		return "", h.answer(req.ID, req.Allow, req.Message, req.Input)
 	case opMode:
 		return "", h.setMode(req.Mode)
+	case opStop:
+		return "", h.planStop(req.Reason, req.Access)
 	}
 	return "", fmt.Errorf("unknown op %q", req.Op)
 }
@@ -656,7 +660,7 @@ var (
 // hold says whether the host is idle and, when it is, holds it: every later send, answer and mode change is refused
 // until it exits. A restart holds the host before it stops it, so no message gets in between the check and the stop.
 // It takes stdinMu, as a send does, so a send that is being written is seen as the turn it opens.
-func (h *host) hold(access string) (idle bool) {
+func (h *host) hold() (idle bool) {
 	h.stdinMu.Lock()
 	defer h.stdinMu.Unlock()
 	h.mu.Lock()
@@ -664,8 +668,19 @@ func (h *host) hold(access string) (idle bool) {
 	if h.busyLocked() {
 		return false
 	}
-	h.holding, h.restartAccess = true, access
+	h.holding = true
 	return true
+}
+
+// planStop records that the app is about to stop the host for reason, with the access a restart starts with.
+func (h *host) planStop(reason, access string) error {
+	if reason != chat.StopSettle && reason != chat.StopRestart {
+		return fmt.Errorf("a stop's reason is %s or %s, not %q", chat.StopSettle, chat.StopRestart, reason)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.plannedStop, h.restartAccess = reason, access
+	return nil
 }
 
 // busyLocked needs h.mu.

@@ -83,10 +83,17 @@ func SetMode(ctx context.Context, socket, mode string) error {
 
 // Hold says whether the host is idle, with no turn running, no approval waiting and no message it was given still to
 // run, and when it is, holds it: the host then refuses every send, answer and mode change until it exits. A restart
-// holds the host before it stops it; access is the access the thread starts again with, which the host logs at its exit.
-func Hold(ctx context.Context, socket, access string) (idle bool, err error) {
-	rep, err := call(ctx, socket, request{Op: opHold, Access: access})
+// holds the host before it stops it.
+func Hold(ctx context.Context, socket string) (idle bool, err error) {
+	rep, err := call(ctx, socket, request{Op: opHold})
 	return err == nil && !rep.Busy, err
+}
+
+// PlanStop tells the host that it is about to be stopped on purpose, for reason: chat.StopSettle, or chat.StopRestart
+// with the access the thread starts again with. The host then logs its exit as that stop and not as an error.
+func PlanStop(ctx context.Context, socket, reason, access string) error {
+	_, err := call(ctx, socket, request{Op: opStop, Reason: reason, Access: access})
+	return err
 }
 
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.

@@ -1649,7 +1649,7 @@ func TestHoldIsRefusedWhileATurnRunsOrAMessageWaits(t *testing.T) {
 	waitKind(t, events, chat.KindInit)
 	idle := func() bool {
 		t.Helper()
-		ok, err := Hold(ctxT(t), h.socket, "full")
+		ok, err := Hold(ctxT(t), h.socket)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1681,7 +1681,7 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
-	idle, err := Hold(ctxT(t), h.socket, "full")
+	idle, err := Hold(ctxT(t), h.socket)
 	if err != nil || !idle {
 		t.Fatalf("Hold = %v, %v, want idle", idle, err)
 	}
@@ -1710,49 +1710,71 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 	}
 }
 
-func TestAStopTheHostMakesIsNoError(t *testing.T) {
+func TestOnlyAStopTheAppPlannedIsNoError(t *testing.T) {
 	t.Parallel()
-	settled := startHost(t)
-	waitKind(t, subscribe(t, settled.socket, 0), chat.KindInit)
-	restarted := startHost(t)
-	waitKind(t, subscribe(t, restarted.socket, 0), chat.KindInit)
-	if idle, err := Hold(ctxT(t), restarted.socket, "full"); err != nil || !idle {
-		t.Fatalf("Hold = %v, %v, want idle", idle, err)
+	planStop := func(reason, access string) func(*testing.T, *testHost) {
+		return func(t *testing.T, h *testHost) {
+			if err := PlanStop(ctxT(t), h.socket, reason, access); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	crashed := startHost(t)
-	events := subscribe(t, crashed.socket, 0)
-	waitKind(t, events, chat.KindInit)
-	if err := Send(ctxT(t), crashed.socket, "crash"); err != nil {
-		t.Fatal(err)
-	}
-
+	cancel := func(h *testHost) error { h.cancel(); return nil }
+	crash := func(h *testHost) error { return Send(context.Background(), h.socket, "crash") }
 	cases := []struct {
 		name string
-		h    *testHost
-		stop func()
-		want chat.Event
+		plan func(*testing.T, *testHost)
+		stop func(*testHost) error
+		want chat.Event // Text is checked only when set
 	}{
-		{"a settle", settled, settled.cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
-		{"a restart", restarted, restarted.cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopRestart, Text: "full"}},
-		{"a crash", crashed, func() {}, chat.Event{Kind: chat.KindExit, Text: "exit status 3", Error: true}},
+		{"a planned settle", planStop(chat.StopSettle, ""), cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
+		{"a planned restart", func(t *testing.T, h *testHost) {
+			if idle, err := Hold(ctxT(t), h.socket); err != nil || !idle {
+				t.Fatalf("Hold = %v, %v, want idle", idle, err)
+			}
+			planStop(chat.StopRestart, "full")(t, h)
+		}, cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopRestart, Text: "full"}},
+		{"a signal from outside", func(*testing.T, *testHost) {}, cancel, chat.Event{Kind: chat.KindExit, Error: true}},
+		{"a crash", func(*testing.T, *testHost) {}, crash, chat.Event{Kind: chat.KindExit, Text: "exit status 3", Error: true}},
+		// The host cannot tell a crash from the stop it was told of; the stop comes a moment after the op.
+		{"a crash after a planned stop", planStop(chat.StopSettle, ""), crash, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
 	}
 	for _, c := range cases {
-		c.stop()
-		select {
-		case <-c.h.done:
-			c.h.done <- nil
-		case <-time.After(10 * time.Second):
-			t.Fatalf("%s: Run did not return", c.name)
-		}
-		logged, err := chat.ReadLog(c.h.log, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		last := logged[len(logged)-1]
-		last.Seq, last.At = 0, 0
-		if !reflect.DeepEqual(last, c.want) {
-			t.Errorf("%s: the exit = %+v, want %+v", c.name, last, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			h := startHost(t)
+			waitKind(t, subscribe(t, h.socket, 0), chat.KindInit)
+			c.plan(t, h)
+			if err := c.stop(h); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-h.done:
+				h.done <- nil
+			case <-time.After(10 * time.Second):
+				t.Fatal("Run did not return")
+			}
+			logged, err := chat.ReadLog(h.log, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := logged[len(logged)-1]
+			got.Seq, got.At = 0, 0
+			if c.want.Text == "" && got.Stop == "" {
+				got.Text = ""
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Errorf("the exit = %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestAStopNeedsAReason(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	if err := PlanStop(ctxT(t), h.socket, "nap", ""); err == nil || !strings.Contains(err.Error(), `not "nap"`) {
+		t.Errorf("PlanStop = %v, want the reason refused", err)
 	}
 }
 
