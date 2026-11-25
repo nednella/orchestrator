@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { EMPTY_DRAFT } from '../composerMarkdown'
-import { pickListKey } from '../composerPick'
+import { pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
 import type { Issue } from '../types'
@@ -50,7 +50,7 @@ export function HomeComposer() {
   const token = note || dismissed ? null : TOKEN.exec(caret.before)
   const query = token?.[2].toLowerCase()
   const candidates = useMemo(() => (query === undefined ? [] : a.issues.filter((i) => matches(i, query)).slice(0, PICK_LIMIT)), [a.issues, query])
-  const highlighted = Math.min(cursor, candidates.length - 1)
+  const highlighted = pickCursor(cursor, candidates.length)
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   const chat = a.composerKind === 'chat'
   const live = Boolean(pickedIssue?.sessionId)

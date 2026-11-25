@@ -10,3 +10,7 @@ export function pickListKey(key: string, count: number, cursor: number): PickSte
   if (key === 'Enter' || key === 'Tab') return { pick: Math.max(cursor, 0) }
   return null
 }
+
+// pickCursor is the row a pick list of count rows shows highlighted: the cursor's, the first before the cursor moves,
+// -1 for an empty list.
+export const pickCursor = (cursor: number, count: number) => Math.min(Math.max(cursor, 0), count - 1)

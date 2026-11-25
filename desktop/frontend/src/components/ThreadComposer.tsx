@@ -7,7 +7,7 @@ import { commandMatches, commandToken, composerAction, mentionToken, replyLabel,
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Command, Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
-import { pickListKey } from '../composerPick'
+import { pickCursor, pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
@@ -178,7 +178,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
             pick: (i) => replaceToken(mention, `@${shownFiles.paths[i]} `),
           }
         : null
-  const highlighted = pickList ? Math.min(cursor, pickList.rows.length - 1) : -1
+  const highlighted = pickList ? pickCursor(cursor, pickList.rows.length) : -1
 
   const onKeyDown = (e: KeyboardEvent) => {
     const step = pickList && pickListKey(e.key, pickList.rows.length, highlighted)
