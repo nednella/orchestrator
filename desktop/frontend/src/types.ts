@@ -85,10 +85,10 @@ export type Project = {
 // ModelChoice is a model and an effort; '' where nothing sets one.
 export type ModelChoice = { model: string; effort: string }
 
-// ThreadStart is what the owner chose for a new thread; empty fields leave the choice to the defaults.
 // Place is where a new thread runs: its own worktree or the project folder.
 export type Place = 'worktree' | 'project'
 
+// ThreadStart is what the owner chose for a new thread; empty fields leave the choice to the defaults.
 export type ThreadStart = { prompt: string; model: string; effort: string }
 
 export type Note = {

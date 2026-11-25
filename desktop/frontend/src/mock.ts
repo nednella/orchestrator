@@ -2,6 +2,7 @@ import { actionAccess, buildIssueDetail, buildIssues, movesFrom, moveIssue, sort
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
+import { branchFromTitle, freeBranch } from './branch'
 import { defaultPlace } from './place'
 import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
@@ -570,8 +571,9 @@ export function createMock(params: URLSearchParams) {
   const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
 
   // The thread gets its first message through its chat, as the app gives it to the host.
-  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised'): Session {
+  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Session, 'branch' | 'worktree'> | null = null): Session {
     const s = create(title, issue, 'idle', [], Date.now(), current, access)
+    if (where) Object.assign(s, where)
     s.action = action
     if (model) s.model = model
     if (effort) s.effort = effort
@@ -878,12 +880,11 @@ export function createMock(params: URLSearchParams) {
     NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access, place: Place | '') => {
       if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
-      const s = startSessionFor(title.trim() || titleFromPrompt(prompt) || 'agent', 0, prompt, '', model, effort, access || 'supervised')
-      if ((place || defaultPlace(s.access, false)) === 'project') return s
-      const live = find(s.id)
-      Object.assign(live, { branch: `thread-${live.n}`, worktree: `${current.dir}/trees/thread-${live.n}` })
-      publish()
-      return view(live)
+      const name = title.trim() || titleFromPrompt(prompt) || 'agent'
+      const acc = access || 'supervised'
+      if ((place || defaultPlace(acc, false)) === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
+      const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
+      return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` })
     },
     ArchiveThread: async (id: string) => {
       const s = find(id)

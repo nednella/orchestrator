@@ -57,7 +57,7 @@ export function HomeComposer() {
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
   const read = a.composerAccess === 'read'
   // A place the owner has not picked follows the access.
-  const place = pickedIssue ? 'worktree' : (chosenPlace ?? defaultPlace(a.composerAccess, false))
+  const place = chosenPlace && !pickedIssue ? chosenPlace : defaultPlace(a.composerAccess, Boolean(pickedIssue))
   const live = Boolean(pickedIssue?.sessionId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
   // The top of the queue: the issues of its first section, which the core lists first.

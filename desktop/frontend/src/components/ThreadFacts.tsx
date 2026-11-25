@@ -1,4 +1,6 @@
+import { useAgentos } from '../AgentosContext'
 import { gigabytes } from '../memory'
+import { threadFolder } from '../threadFolder'
 import { dollars, tokenCount } from '../spend'
 import type { Session } from '../types'
 import { AccessTag } from './AccessTag'
@@ -9,6 +11,7 @@ import { StateBadge } from './StateBadge'
 type ThreadFactsProps = { session: Session }
 
 export function ThreadFacts({ session }: ThreadFactsProps) {
+  const { project } = useAgentos('project')
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-line px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -27,7 +30,7 @@ export function ThreadFacts({ session }: ThreadFactsProps) {
           spend={session.tokens > 0 ? `${tokenCount(session.tokens)} tokens · ~${dollars(session.cost)}` : ''}
         />
         <span className="mono min-w-0 truncate text-small text-dim" title={session.worktree ? `Worktree of ${session.branch}` : 'Where the thread runs'}>
-          {session.worktree || 'Project folder'}
+          {threadFolder(session.worktree, project?.dir ?? '')}
         </span>
         {session.memory > 0 && (
           <span className="mono text-small whitespace-nowrap text-dim" title="Memory this thread's processes use">
