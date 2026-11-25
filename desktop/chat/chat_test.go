@@ -553,3 +553,19 @@ func TestASubagentsApprovalWaitsPastTheTurnUntilItIsAnswered(t *testing.T) {
 	eventually(t, "nothing waiting", func() bool { return len(second.ChatPending()) == 0 })
 	eventually(t, "Claude's report of the subagent's end", func() bool { return turnEnds(t, second, id) == 2 })
 }
+
+func TestAThreadWhoseSubagentsEndWasMissedStopsWorkingWhenClaudeListsNoTask(t *testing.T) {
+	h, id := newThread(t)
+	state := func() (string, int) { s, _ := h.Session(id); return string(s.State), s.Subagents }
+	h.Hook(t, id, "UserPromptSubmit", `{"prompt":"background"}`)
+	send(t, h, id, "background")
+	eventually(t, "the turn that started the subagent to end", func() bool { return turnEnds(t, h, id) == 1 })
+	h.Hook(t, id, "Stop", `{}`)
+	eventually(t, "working with one subagent", func() bool { s, n := state(); return s == "working" && n == 1 })
+
+	h.Hook(t, id, "UserPromptSubmit", `{"prompt":"list none"}`)
+	send(t, h, id, "list none")
+	eventually(t, "the turn that listed no task to end", func() bool { return turnEnds(t, h, id) == 2 })
+	h.Hook(t, id, "Stop", `{}`)
+	eventually(t, "idle with no subagent", func() bool { s, n := state(); return s == "idle" && n == 0 })
+}

@@ -59,6 +59,9 @@ const (
 	// everything after it, up to the rewind.
 	KindRewind Kind = "rewind"
 	KindExit   Kind = "exit"
+	// KindTasks is the whole list of the tasks Claude runs in the background, which Claude sends at each change: Input
+	// is a list of ListedTask. It corrects the open tasks that the starts and ends say, should one of those be missed.
+	KindTasks Kind = "tasks"
 	// KindCancel is Claude withdrawing the approval it asked for under ID, as it does at an interrupt: it no longer
 	// waits on an answer.
 	KindCancel Kind = "cancel"
@@ -75,6 +78,14 @@ const TaskStopped = "stopped"
 
 // TaskShell is the kind of a shell Claude runs in the background.
 const TaskShell = "local_bash"
+
+// ListedTask is one task of a tasks event: Claude's id for it, its kind, and the task id of the subagent that started
+// it, "" for the thread's own Claude.
+type ListedTask struct {
+	ID    string `json:"id"`
+	Kind  string `json:"kind"`
+	Agent string `json:"agent,omitempty"`
+}
 
 // Event is one entry of a chat's log. At is unix milliseconds.
 type Event struct {

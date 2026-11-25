@@ -148,10 +148,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
-  // The tasks other than shells that Claude runs in the background, by the call that started each. While one runs, or
-  // until Claude has told of the end of the last one in a turn of its own, the turns are one piece of work: the turn
-  // rests at its end, from held, and Claude's next turn goes on with it. A shell may be a server that never ends.
-  const tasks = new Set<string>()
+  // The tasks Claude runs in the background: Claude's id for each, the call that started it, '' for one only Claude's
+  // list names so far, and whether it is work, which a shell is not: it may be a server that never ends. While a task
+  // that is work runs, or until Claude has told of the end of the last one in a turn of its own, the turns are one
+  // piece of work: the turn rests at its end, from held, and Claude's next turn goes on with it.
+  const tasks: { id: string; call: string; works: boolean }[] = []
+  const taskOf = (e: ChatEvent) => tasks.findIndex((t) => (t.call !== '' && t.call === e.parent) || (!!e.id && t.id === e.id))
+  const working = () => tasks.some((t) => t.works)
   let held: number | null = null
   // Claude resumes a compacted conversation from its last compaction and cannot find a message before it, so no fork
   // ends at one.
@@ -377,7 +380,9 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       }
       case 'task_start': {
-        if (e.tool !== 'local_bash') tasks.add(e.parent ?? '')
+        const at = taskOf(e)
+        if (at < 0) tasks.push({ id: e.id ?? '', call: e.parent ?? '', works: e.tool !== 'local_bash' })
+        else tasks[at].call ||= e.parent ?? ''
         // Claude wakes a subagent that ended again under its call.
         const a = agents.get(e.parent ?? '')
         if (a && a.state !== 'running') Object.assign(a, { state: 'running', endedAt: null, result: null })
@@ -385,11 +390,24 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       }
       case 'task_end': {
         // Claude tells of the end of a task of its own that was not stopped in a turn it starts itself.
-        if (tasks.delete(e.parent ?? '') && held !== null && tasks.size === 0 && (e.agent || e.stop === 'stopped')) close(held)
+        const at = taskOf(e)
+        if (at >= 0) tasks.splice(at, 1)
+        if (at >= 0 && held !== null && !working() && (e.agent || e.stop === 'stopped')) close(held)
         expire((w) => w.agent === e.parent)
         const a = agents.get(e.parent ?? '')
         if (a?.state !== 'running') return
         Object.assign(a, { state: e.stop === 'stopped' ? 'stopped' : e.error ? 'failed' : 'done', endedAt: e.at, result: e.text ?? '' })
+        return
+      }
+      // Claude's whole list of its tasks: one it no longer lists ended with no end the log has, which Claude tells of
+      // in no turn.
+      case 'tasks': {
+        const listed = Array.isArray(e.input) ? (e.input as { id?: unknown; kind?: unknown }[]) : []
+        const ids = new Set(listed.map((l) => l.id))
+        const wasWorking = working()
+        tasks.splice(0, tasks.length, ...tasks.filter((t) => t.id === '' || ids.has(t.id)))
+        for (const l of listed) if (typeof l.id === 'string' && !tasks.some((t) => t.id === l.id)) tasks.push({ id: l.id, call: '', works: l.kind !== 'local_bash' })
+        if (wasWorking && held !== null && !working()) close(held)
         return
       }
       case 'interrupt':
@@ -397,7 +415,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       case 'turn_end':
         expireDelegations()
-        if (!e.error && turn && tasks.size > 0) {
+        if (!e.error && turn && working()) {
           held = e.at
           return
         }
@@ -406,7 +424,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       case 'exit':
         interrupted = false
-        tasks.clear()
+        tasks.length = 0
         stopAgents(e.at)
         expireDelegations()
         close(e.at, exitItem(e), e.error ? 'failed' : 'stopped')
@@ -418,7 +436,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'start':
         if (e.text) return
         interrupted = false
-        tasks.clear()
+        tasks.length = 0
         stopAgents(e.at)
         expireDelegations()
         close(e.at, null, 'stopped')

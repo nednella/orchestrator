@@ -31,6 +31,12 @@ type line struct {
 	Summary   string `json:"summary"`
 	// TaskID, TaskType, Description, IsBackgrounded and ParentTaskID are a task's start: Claude's id for it, its kind,
 	// what it does, whether it runs beside the turn, and the id of the subagent's task that started it.
+	// Tasks is the list of a background_tasks_changed line.
+	Tasks []struct {
+		TaskID       string `json:"task_id"`
+		TaskType     string `json:"task_type"`
+		ParentTaskID string `json:"parent_task_id"`
+	} `json:"tasks"`
 	TaskID         string `json:"task_id"`
 	TaskType       string `json:"task_type"`
 	Description    string `json:"description"`
@@ -71,6 +77,8 @@ func Parse(data []byte) ([]Event, error) {
 			return parseTaskStart(l), nil
 		case "task_notification":
 			return parseTaskEnd(l), nil
+		case "background_tasks_changed":
+			return parseTasks(l)
 		}
 	case "stream_event", "assistant", "user":
 		events, err := parseTurn(l)
@@ -108,6 +116,19 @@ func parseTaskStart(l line) []Event {
 		return nil
 	}
 	return []Event{{Kind: KindTaskStart, ID: l.TaskID, Parent: l.ToolUseID, Tool: l.TaskType, Text: l.Description, Agent: l.ParentTaskID}}
+}
+
+// parseTasks reads the whole list of the tasks Claude runs in the background.
+func parseTasks(l line) ([]Event, error) {
+	listed := []ListedTask{}
+	for _, t := range l.Tasks {
+		listed = append(listed, ListedTask{ID: t.TaskID, Kind: t.TaskType, Agent: t.ParentTaskID})
+	}
+	input, err := json.Marshal(listed)
+	if err != nil {
+		return nil, fmt.Errorf("parse background tasks: %w", err)
+	}
+	return []Event{{Kind: KindTasks, Input: input}}, nil
 }
 
 // parseTaskEnd reads the end of a task Claude runs beside its turn. Only a task a tool call started can be shown at

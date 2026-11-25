@@ -585,3 +585,27 @@ func TestParseAnInterruptWithdrawsTheApprovalThatWaits(t *testing.T) {
 		t.Errorf("%+v still waiting at the turn's end", waiting)
 	}
 }
+
+func TestParseClaudesListOfItsTasksKeepsTheOpenTasksRight(t *testing.T) {
+	for _, file := range []string{"background.jsonl", "subagent-approval.jsonl", "interrupt-background.jsonl", "interrupt-spare.jsonl"} {
+		events := parseFile(t, file)
+		var lists int
+		var withList, alone Tasks
+		for _, e := range events {
+			if e.Kind == KindTasks {
+				lists++
+			}
+			withList.See(e)
+			if e.Kind != KindTasks {
+				alone.See(e)
+			}
+			// Claude lists a task just before its start, so the two agree from there.
+			if e.Kind == KindTaskStart && withList.Working() != alone.Working() {
+				t.Errorf("%s: at the start of %s the list says %d working, the starts and ends %d", file, e.Parent, withList.Working(), alone.Working())
+			}
+		}
+		if lists == 0 || len(withList.Open()) != 0 {
+			t.Errorf("%s: %d lists, %+v open at the end", file, lists, withList.Open())
+		}
+	}
+}

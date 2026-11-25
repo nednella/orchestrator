@@ -348,7 +348,8 @@ export type Release = {
 // text) and a thought with no text are never logged and have seq 0; a thought ends a thinking block, with its text. A
 // task_start and task_end are a task Claude runs in the background, beside its turns, starting and ending, a subagent
 // or a shell among them: parent is the call that started it, and a task_start's tool is its kind, local_bash for a
-// shell. A cancel is Claude withdrawing the approval id: it no longer waits on an answer.
+// shell. A tasks event is Claude's whole list of them, input a list of {id, kind, agent}. A cancel is Claude
+// withdrawing the approval id: it no longer waits on an answer.
 export type ChatKind =
   | 'init'
   | 'user'
@@ -374,6 +375,7 @@ export type ChatKind =
   | 'rewind'
   | 'exit'
   | 'cancel'
+  | 'tasks'
 
 // ChatEvent is one event of a thread's chat; a field the event does not use is left out.
 export type ChatEvent = {

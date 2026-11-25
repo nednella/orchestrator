@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -91,6 +92,40 @@ func TestATaskIsReportedAloneWhenItIsClaudesOwnAndNotStopped(t *testing.T) {
 	} {
 		if got := tt.task.ReportedAlone(tt.end); got != tt.want {
 			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestClaudesListOfItsTasksCorrectsTheOpenTasks(t *testing.T) {
+	list := func(tasks ...ListedTask) Event {
+		t.Helper()
+		input, err := json.Marshal(tasks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return Event{Kind: KindTasks, Input: input}
+	}
+	agent := Event{Kind: KindTaskStart, ID: "a1", Parent: "toolu_a", Tool: "local_agent"}
+	listedAgent := ListedTask{ID: "a1", Kind: "local_agent"}
+	for _, tt := range []struct {
+		name    string
+		events  []Event
+		open    []Task
+		working int
+	}{
+		{"listed just before its start", []Event{list(listedAgent), agent}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}}, 1},
+		{"an end that was missed", []Event{agent, list()}, nil, 0},
+		{"a task only the list names", []Event{list(ListedTask{ID: "b1", Kind: TaskShell}, ListedTask{ID: "a2", Kind: "local_agent"})}, []Task{{ID: "b1", Kind: TaskShell}, {ID: "a2", Kind: "local_agent"}}, 1},
+		{"a subagent's shell", []Event{agent, list(listedAgent, ListedTask{ID: "b2", Kind: TaskShell, Agent: "a1"})}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}, {ID: "b2", Kind: TaskShell, Agent: "toolu_a"}}, 1},
+		{"the end of a task only the list named", []Event{list(ListedTask{ID: "a2", Kind: "local_agent"}), {Kind: KindTaskEnd, ID: "a2", Parent: "toolu_x"}}, nil, 0},
+		{"a list that cannot be read", []Event{agent, {Kind: KindTasks, Input: json.RawMessage(`{}`)}}, []Task{{Call: "toolu_a", ID: "a1", Kind: "local_agent"}}, 1},
+	} {
+		var tasks Tasks
+		for _, e := range tt.events {
+			tasks.See(e)
+		}
+		if got := tasks.Open(); len(got)+len(tt.open) > 0 && !reflect.DeepEqual(got, tt.open) || tasks.Working() != tt.working {
+			t.Errorf("%s: open %+v, working %d; want %+v, %d", tt.name, got, tasks.Working(), tt.open, tt.working)
 		}
 	}
 }

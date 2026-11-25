@@ -299,6 +299,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     t.setState('working')
     for (const r of runs) {
       append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.description } })
+      // Claude lists its tasks again just before each start, and after each end.
+      append(id, { kind: 'tasks', input: runs.slice(0, runs.indexOf(r) + 1).map((x) => ({ id: `task-${x.call}`, kind: 'local_agent' })) })
       append(id, { kind: 'task_start', id: `task-${r.call}`, parent: r.call, tool: 'local_agent', text: r.description })
     }
     for (const r of runs) append(id, { kind: 'tool_result', parent: r.call, text: 'Async agent launched successfully.' })
@@ -338,6 +340,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
         append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, text: r.report, agent: r.call })
         append(id, { kind: 'task_end', parent: r.call, text: r.report })
         open.splice(open.indexOf(r.call), 1)
+        append(id, { kind: 'tasks', input: open.map((call) => ({ id: `task-${call}`, kind: 'local_agent' })) })
         t.setSubagents(open.length)
       }
       r.done++

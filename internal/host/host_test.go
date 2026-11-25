@@ -387,6 +387,17 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 					"subtype": "can_use_tool", "tool_name": "Write", "input": map[string]any{"file_path": "sub.txt", "content": "ok"}, "tool_use_id": "toolu_write", "agent_id": "a2",
 				}})
 				result(false)
+			case "missed end":
+				// A subagent whose end never comes: only Claude's list of its tasks says that it is gone.
+				print(map[string]any{"type": "assistant", "uuid": "ucall", "message": map[string]any{"id": "msg_call", "role": "assistant", "content": []any{
+					map[string]any{"type": "tool_use", "id": "toolu_lost", "name": "Agent", "input": map[string]any{"description": "Lost", "prompt": "ls"}},
+				}}})
+				print(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": []any{map[string]any{"task_id": "a3", "task_type": "local_agent"}}})
+				print(map[string]any{"type": "system", "subtype": "task_started", "task_id": "a3", "tool_use_id": "toolu_lost", "description": "Lost", "is_backgrounded": true, "task_type": "local_agent"})
+				print(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_lost", "content": "Async agent launched"}}}})
+				result(false)
+				during(time.After(300 * time.Millisecond))
+				print(map[string]any{"type": "system", "subtype": "background_tasks_changed", "tasks": []any{}})
 			case "big":
 				reply(strings.Repeat("x", 1<<20))
 				result(false)
@@ -854,6 +865,29 @@ func TestASubagentsApprovalWaitsUntilItIsAnswered(t *testing.T) {
 				t.Errorf("hold once all ended: %v, %v", idle, err)
 			}
 		})
+	}
+}
+
+func TestClaudesListOfItsTasksEndsATaskWhoseEndWasMissed(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	sendMessage(t, h.socket, "missed end")
+	waitKind(t, events, chat.KindTurnEnd)
+	if idle, err := Hold(ctxT(t), h.socket); err != nil || idle {
+		t.Fatalf("hold while the subagent runs: %v, %v", idle, err)
+	}
+	for {
+		if e := next(t, events); e.Kind == chat.KindTasks && string(e.Input) == "[]" {
+			break
+		}
+	}
+	if idle, err := Hold(ctxT(t), h.socket); err != nil || !idle {
+		t.Errorf("hold once Claude lists no task: %v, %v", idle, err)
+	}
+	if got := len(logged(t, h.log, chat.KindTasks)); got != 2 {
+		t.Errorf("%d lists logged, want 2", got)
 	}
 }
 
