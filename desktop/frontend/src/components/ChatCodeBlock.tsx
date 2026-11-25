@@ -2,6 +2,7 @@ import { useCopied } from '../useCopied'
 
 type ChatCodeBlockProps = { language: string; code: string }
 
+// Each line is its own text node, so a line a streaming reply adds is appended without touching the lines before it.
 export function ChatCodeBlock({ language, code }: ChatCodeBlockProps) {
   const [copied, copy] = useCopied(code)
 
@@ -14,7 +15,7 @@ export function ChatCodeBlock({ language, code }: ChatCodeBlockProps) {
         </button>
       </div>
       <pre>
-        <code>{code}</code>
+        <code>{code.split('\n').map((line, i, lines) => (i < lines.length - 1 ? `${line}\n` : line))}</code>
       </pre>
     </div>
   )
