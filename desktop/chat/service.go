@@ -217,11 +217,12 @@ func (v *Service) RewindPreview(id, message string) (FilesRewind, error) {
 		return FilesRewind{}, err
 	}
 	preview.Offered = true
-	if _, _, reason := v.c.threads.FilesRewind(id); reason != "" {
+	dir, _, reason := v.c.threads.FilesRewind(id)
+	if reason != "" {
 		preview.Reason = sentence(reason)
 		return preview, nil
 	}
-	changes, err := host.PreviewRewind(v.ctx(), ch.Socket, message)
+	changes, err := host.PreviewRewind(v.ctx(), ch.Socket, message, dir)
 	if err != nil {
 		return FilesRewind{}, v.rewindFailed(id, "the rewind's dry run", err)
 	}

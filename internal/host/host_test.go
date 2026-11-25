@@ -2239,7 +2239,7 @@ func TestRewindPutsTheFilesBackFirst(t *testing.T) {
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
 
-	changes, err := PreviewRewind(ctxT(t), h.socket, ids[1])
+	changes, err := PreviewRewind(ctxT(t), h.socket, ids[1], "")
 	if err != nil || !slices.Equal(changes.Files, []string{file}) || changes.Insertions != 3 || changes.Deletions != 1 {
 		t.Fatalf("PreviewRewind = %+v, %v", changes, err)
 	}
@@ -2308,7 +2308,7 @@ func TestRewindWithoutCheckpoints(t *testing.T) {
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
 
-	if changes, err := PreviewRewind(ctxT(t), h.socket, ids[0]); err != nil || changes.Reason != "This thread started before file checkpoints" || changes.Files == nil {
+	if changes, err := PreviewRewind(ctxT(t), h.socket, ids[0], ""); err != nil || changes.Reason != "This thread started before file checkpoints" || changes.Files == nil {
 		t.Errorf("preview = %+v, %v, want the reason the files cannot rewind", changes, err)
 	}
 	if _, err := Rewind(ctxT(t), h.socket, ids[0], dir); refusal(err) != "This thread started before file checkpoints" {
@@ -2347,7 +2347,7 @@ func TestRewindClaudeDoesNotKnow(t *testing.T) {
 	ids := turns(t, h, events, "one")
 
 	for what, call := range map[string]func() error{
-		"preview": func() error { _, err := PreviewRewind(ctxT(t), h.socket, ids[0]); return err },
+		"preview": func() error { _, err := PreviewRewind(ctxT(t), h.socket, ids[0], ""); return err },
 		"rewind":  func() error { _, err := Rewind(ctxT(t), h.socket, ids[0], ""); return err },
 	} {
 		err := call()
@@ -2369,7 +2369,7 @@ func TestRewindIsRefusedDuringATurn(t *testing.T) {
 
 	sendMessage(t, h.socket, "slow")
 	waitKind(t, events, chat.KindMessage)
-	if _, err := PreviewRewind(ctxT(t), h.socket, ids[0]); refusal(err) != "Edit when the turn ends" {
+	if _, err := PreviewRewind(ctxT(t), h.socket, ids[0], ""); refusal(err) != "Edit when the turn ends" {
 		t.Errorf("preview: %v", err)
 	}
 	if _, err := Rewind(ctxT(t), h.socket, ids[0], ""); refusal(err) != "Edit when the turn ends" {
@@ -2485,5 +2485,23 @@ func TestAFilesRewindClaudeDoesNotAnswerMayHaveChangedThem(t *testing.T) {
 	}
 	if got := logged(t, h.log, chat.KindRewind); len(got) != 0 {
 		t.Errorf("logged rewinds = %+v, want none", got)
+	}
+}
+
+func TestPreviewNamesAFileOutsideTheFolder(t *testing.T) {
+	t.Parallel()
+	dir, elsewhere := t.TempDir(), t.TempDir()
+	outsider := filepath.Join(elsewhere, "b.txt")
+	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt")+","+outsider)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	ids := turns(t, h, events, "one")
+
+	changes, err := PreviewRewind(ctxT(t), h.socket, ids[0], dir)
+	if err != nil || !strings.Contains(changes.Reason, outsider+", which is outside "+dir) {
+		t.Errorf("PreviewRewind = %+v, %v; want the file outside as the reason", changes, err)
+	}
+	if changes, err := PreviewRewind(ctxT(t), h.socket, ids[0], ""); err != nil || changes.Reason != "" || len(changes.Files) != 2 {
+		t.Errorf("PreviewRewind with no folder = %+v, %v", changes, err)
 	}
 }

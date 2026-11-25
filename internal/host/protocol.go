@@ -32,7 +32,8 @@ type request struct {
 	Mode    string          `json:"mode,omitempty"`
 	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
 	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
-	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are.
+	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are;
+	// the rewind_preview op's: the folder outside which a file is a reason not to rewind the files.
 	Within string `json:"within,omitempty"`
 }
 

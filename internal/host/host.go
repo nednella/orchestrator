@@ -616,7 +616,7 @@ func (h *host) handle(conn net.Conn) {
 		writeJSON(conn, reply{OK: true, Busy: !h.hold()})
 		return
 	case opRewindPreview:
-		changes, err := h.previewRewind(req.ID)
+		changes, err := h.previewRewind(req.ID, req.Within)
 		writeAnswer(conn, reply{Changes: &changes}, err)
 		return
 	case opRewind:
@@ -993,8 +993,9 @@ func (h *host) rewindableLocked(id string) error {
 }
 
 // previewRewind says what a rewind of the files to before the user message id would change, and changes nothing. That
-// Claude cannot rewind the files is the answer's reason, not an error: the conversation may still rewind.
-func (h *host) previewRewind(id string) (FileChanges, error) {
+// the files cannot be rewound, as Claude says or because one is outside within, is the answer's reason, not an error:
+// the conversation may still rewind.
+func (h *host) previewRewind(id, within string) (FileChanges, error) {
 	h.mu.Lock()
 	err := h.rewindableLocked(id)
 	h.mu.Unlock()
@@ -1004,6 +1005,11 @@ func (h *host) previewRewind(id string) (FileChanges, error) {
 	changes, err := h.rewindFiles(id, true)
 	if refused := (*filesRefusal)(nil); errors.As(err, &refused) {
 		return FileChanges{Files: []string{}, Reason: refused.Error()}, nil
+	}
+	if err == nil && within != "" {
+		if out := outside(changes.Files, within); out != "" {
+			changes.Reason = errOutside(out, within).Error()
+		}
 	}
 	return changes, err
 }

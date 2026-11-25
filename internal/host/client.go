@@ -109,9 +109,10 @@ func Release(ctx context.Context, socket string) error {
 	return err
 }
 
-// PreviewRewind says what a rewind of the files to before the user message id would change, and changes nothing.
-func PreviewRewind(ctx context.Context, socket, id string) (FileChanges, error) {
-	rep, err := callWithin(ctx, socket, request{Op: opRewindPreview, ID: id}, rewindTimeout)
+// PreviewRewind says what a rewind of the files to before the user message id would change, and changes nothing. A
+// file outside within is the answer's reason.
+func PreviewRewind(ctx context.Context, socket, id, within string) (FileChanges, error) {
+	rep, err := callWithin(ctx, socket, request{Op: opRewindPreview, ID: id, Within: within}, rewindTimeout)
 	if err != nil || rep.Changes == nil {
 		return FileChanges{}, err
 	}
