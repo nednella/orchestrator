@@ -1700,7 +1700,7 @@ func (s *Sessions) send(ctx context.Context, name session.Name, text string, sub
 
 // wake sends the prompt to the session once its turn is over and it is not waiting on the user:
 // typed into a permission prompt, the text could answer it. A prompt already held for the session
-// is not held again. A session that has ended gets a new one for
+// is not held again; a host-run session of a project that sends by hand gets it as a draft at once, with no holding. A session that has ended gets a new one for
 // its issue when the issue has no live session: it gets the prompt, sent unless the
 // project sends by hand, the new one takes over the old's branches and handover, and the old
 // row goes. The new one continues the old's conversation when the agent can.
@@ -1721,6 +1721,10 @@ func (s *Sessions) wake(ctx context.Context, t target, prompt string) {
 	}
 	name, err := session.ParseName(t.id)
 	if err != nil {
+		return
+	}
+	if !t.proj.SendsPrompt() && s.hostOf(name) != "" {
+		s.send(ctx, name, prompt, false)
 		return
 	}
 	s.mu.Lock()

@@ -287,3 +287,32 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 		})
 	}
 }
+
+func TestManualWakeIsADraft(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		work bool
+	}{{"live", false}, {"held while working", true}} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := apptest.ClaudeOnPath(t)
+			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+			h.RefreshPRs()
+			if tt.work {
+				h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+				eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+			}
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
+			h.RefreshPRs()
+			eventually(t, "the draft", func() bool { return chatLogHas(h, s.ID, "draft", "/address-review 12") })
+			time.Sleep(300 * time.Millisecond)
+			if users := userLines(t, dir, s.ID); len(users) != 0 {
+				t.Errorf("user lines on stdin = %v, want none", users)
+			}
+		})
+	}
+}
