@@ -4,15 +4,18 @@ import { changesLabel } from '../chatEdit'
 import { relative } from '../chatTools'
 import type { FilesRewind } from '../types'
 
+// The message's text goes in place of the composer's draft, after it, or in an empty composer.
+export type Prefill = 'replace' | 'append'
+
 // message is the uuid of the owner's message the thread goes back to before. worktree is the thread's own worktree,
 // '' for a thread in the project folder, whose files are never rewound. draftEmpty says whether the composer holds no
-// text; onRewound gets the message's text, and whether it replaces the composer's.
+// draft; onRewound gets the message's text and where it goes.
 type ChatEditConfirmProps = {
   thread: string
   message: string
   worktree: string
   draftEmpty(): boolean
-  onRewound(text: string, replace: boolean): void
+  onRewound(text: string, prefill: Prefill): void
   onClose(): void
 }
 
@@ -40,11 +43,11 @@ export function ChatEditConfirm({ thread, message, worktree, draftEmpty, onRewou
     api.rewindPreview(thread, message).then(setPreview, (err) => setPreview({ ...noFiles, offered: true, reason: errorMessage(err) }))
   }
 
-  const run = (files: boolean, replace: boolean) => {
+  const run = (files: boolean, prefill: Prefill) => {
     setRunning(true)
     setError('')
     api.rewindTo(thread, message, files).then(
-      (text) => onRewound(text, replace),
+      (text) => onRewound(text, prefill),
       (err) => {
         setRunning(false)
         setError(errorMessage(err))
@@ -52,7 +55,7 @@ export function ChatEditConfirm({ thread, message, worktree, draftEmpty, onRewou
       },
     )
   }
-  const choose = (files: boolean) => (draftEmpty() ? run(files, true) : setStep({ at: 'draft', files }))
+  const choose = (files: boolean) => (draftEmpty() ? run(files, 'replace') : setStep({ at: 'draft', files }))
 
   const filesOff = offer === null ? 'Checking the files' : offer.reason
   const previewOff = preview === null ? 'Checking the files' : preview.reason || (preview.files.length === 0 ? "Claude's turns changed no file since this message" : '')
@@ -117,15 +120,15 @@ export function ChatEditConfirm({ thread, message, worktree, draftEmpty, onRewou
       )}
       {step.at === 'draft' && (
         <>
-          <p className="text-soft">Replace your draft? The message's text goes in its place.</p>
+          <p className="text-soft">Replace your draft? The message's text goes in its place, or after it if you keep your draft.</p>
           <div className="flex flex-wrap justify-end gap-1.5">
             <button className="btn h-6 px-2" disabled={running} onClick={onClose}>
               Cancel
             </button>
-            <button className="btn h-6 px-2" disabled={running} onClick={() => run(step.files, false)}>
+            <button className="btn h-6 px-2" disabled={running} onClick={() => run(step.files, 'append')}>
               Keep my draft
             </button>
-            <button className="btn btn-accent h-6 px-2" autoFocus disabled={running} aria-busy={running || undefined} onClick={() => run(step.files, true)}>
+            <button className="btn btn-accent h-6 px-2" autoFocus disabled={running} aria-busy={running || undefined} onClick={() => run(step.files, 'replace')}>
               Replace it
             </button>
           </div>

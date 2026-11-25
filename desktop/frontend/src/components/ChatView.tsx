@@ -137,9 +137,10 @@ export function ChatView({ session }: ChatViewProps) {
             message={uuid}
             worktree={session.worktree}
             draftEmpty={() => draft.current?.empty() ?? true}
-            onRewound={(text, replace) => {
+            onRewound={(text, prefill) => {
               setEditing(null)
-              if (replace) draft.current?.replace(text)
+              if (prefill === 'replace') draft.current?.replace(text)
+              else draft.current?.append(text)
             }}
             onClose={closeEdit}
           />

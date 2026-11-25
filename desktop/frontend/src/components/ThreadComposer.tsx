@@ -26,8 +26,9 @@ import { NoteImages } from './NoteImages'
 // A send that gets no answer in this long lets the composer send again.
 const sendWait = 15_000
 
-// ThreadComposerDraft is the composer's draft for the chat: whether it holds no text, and a way to put text in its place.
-export type ThreadComposerDraft = { empty(): boolean; replace(text: string): void }
+// ThreadComposerDraft is the composer's draft for the chat: whether it holds no text and no image, and ways to put text
+// in its place or after it.
+export type ThreadComposerDraft = { empty(): boolean; replace(text: string): void; append(text: string): void }
 
 // onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
 type ThreadComposerProps = {
@@ -92,13 +93,17 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   useImperativeHandle(
     draftRef,
     () => ({
-      empty: () => latest.current.draft.text.trim() === '',
+      empty: () => latest.current.draft.text.trim() === '' && pending.images.length === 0,
       replace: (text: string) => {
         update({ ...latest.current, draft: draftOf(fromMarkdown(text)) })
         input.current?.focus()
       },
+      append: (text: string) => {
+        update({ ...latest.current, draft: appendText(latest.current.draft, text) })
+        input.current?.focus()
+      },
     }),
-    [update],
+    [update, pending.images.length],
   )
 
   // A settled thread with a chat keeps its composer, and a message wakes it; one that ran in a terminal cannot wake.
