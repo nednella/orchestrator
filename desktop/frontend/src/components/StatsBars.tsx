@@ -1,59 +1,62 @@
-import { duration } from '../time'
-import { KIND_COLOR, KIND_LABEL } from '../statsMeta'
-import type { Stats } from '../types'
+import { useState } from 'react'
+import { tipAlign, type Bar } from '../statsChart'
 
+type StatsBarsProps = { bars: Bar[]; label: string; caption: string; tip(value: number): string; axis(value: number): string }
 
-type StatsBarsProps = { stats: Stats }
+const TIP_ALIGN = {
+  start: 'left-0',
+  center: 'left-1/2 -translate-x-1/2',
+  end: 'right-0',
+}
 
-export function StatsBars({ stats }: StatsBarsProps) {
-  const top = Math.max(...stats.byCause.map((c) => c.count), 1)
-  const topDay = Math.max(...stats.byDay.map((d) => d.count), 1)
-  const labelEvery = Math.ceil(stats.byDay.length / 7)
+// Bars lose their gap as they get thin, so every one keeps some width.
+const gapFor = (count: number) => (count <= 31 ? 'gap-1' : count <= 60 ? 'gap-0.5' : 'gap-px')
 
+export function StatsBars({ bars, label, caption, tip, axis }: StatsBarsProps) {
+  const [hovered, setHovered] = useState<number | null>(null)
+  const top = Math.max(0, ...bars.map((b) => b.value))
+  const gap = gapFor(bars.length)
+  // Few bars reach their widest and sit in the middle of their column, so their ticks do too.
+  const few = bars.length <= 14
   return (
-    <>
-      <section>
-        <h3 className="label pb-2">Causes, most frequent first</h3>
-        <ul className="flex flex-col gap-2.5">
-          {stats.byCause.map((cause) => (
-            <li key={cause.label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
-              <span className="flex min-w-0 items-baseline gap-2">
-                <span className="mono truncate text-body">{cause.label}</span>
-                <span className="flex-none text-label" style={{ color: KIND_COLOR[cause.kind] }}>
-                  {KIND_LABEL[cause.kind]}
-                </span>
-              </span>
-              <span className="mono text-small text-soft">
-                {cause.count} · {Math.round((cause.count / stats.total) * 100)}% · {duration(cause.totalWaitMs)}
-              </span>
-              <span className="col-span-2 h-2 rounded-sm bg-raised" role="img" aria-label={`${cause.count} of ${stats.total}`}>
-                <span
-                  className="block h-full rounded-sm"
-                  style={{ width: `${(cause.count / top) * 100}%`, background: KIND_COLOR[cause.kind] }}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section>
-        <h3 className="label pb-2">Per day</h3>
-        <div className="flex h-28 items-end gap-1" role="img" aria-label="Interruptions per day">
-          {stats.byDay.map((d) => (
-            <div key={d.day} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${d.day}: ${d.count}`}>
-              <span className="mono pb-0.5 text-center text-label text-dim">{d.count || ''}</span>
-              <span className="block rounded-sm" style={{ height: `${(d.count / topDay) * 80}%`, minHeight: d.count ? 2 : 0, background: 'var(--accent)' }} />
-            </div>
-          ))}
-        </div>
-        <div className="mt-1 flex gap-1">
-          {stats.byDay.map((d, i) => (
-            <span key={d.day} className="mono min-w-0 flex-1 overflow-visible text-center text-label whitespace-nowrap text-dim">
-              {i % labelEvery === 0 ? d.day.slice(5) : ''}
+    <figure className="relative pt-10">
+      <div role="group" aria-label={label} className={`relative flex h-40 items-end border-b border-line-strong pr-8 ${gap}`} onMouseLeave={() => setHovered(null)}>
+        {top > 0 &&
+          [1, 0.5].map((at) => (
+            <span key={at} aria-hidden="true" className="pointer-events-none absolute inset-x-0 border-t border-dashed border-line" style={{ bottom: `${at * 100}%` }}>
+              <span className="absolute top-0 right-0 -translate-y-1/2 bg-(--bg-card) pl-1 text-label text-soft tabular-nums">{axis(at === 1 ? top : top / 2)}</span>
             </span>
           ))}
-        </div>
-      </section>
-    </>
+        {bars.map((bar, i) => {
+          const text = `${bar.label}: ${tip(bar.value)}`
+          const on = hovered === i
+          const current = i === bars.length - 1
+          return (
+            <div key={bar.day} role="img" aria-label={text} className="relative flex h-full min-w-0 flex-1 items-end" onMouseEnter={() => setHovered(i)}>
+              <span
+                className={`mx-auto block w-full max-w-10 rounded-t-[3px] transition-colors duration-100 ${on ? 'bg-(--chart-bar-on)' : current ? 'bg-[repeating-linear-gradient(135deg,var(--chart-bar)_0_2px,transparent_2px_5px)] shadow-[inset_0_0_0_1px_var(--chart-bar)]' : 'bg-(--chart-bar)'}`}
+                style={{ height: bar.value > 0 && top > 0 ? `${Math.max((bar.value / top) * 100, 2)}%` : 0 }}
+              />
+              {on && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute bottom-[calc(100%+0.25rem)] z-(--z-popup) rounded-md bg-(--bg-glass) px-2 py-1 text-small whitespace-nowrap shadow-[0_0_0_1px_color-mix(in_srgb,var(--text)_10%,transparent),var(--shadow-tip)] backdrop-blur-[16px] backdrop-saturate-[1.08] ${TIP_ALIGN[tipAlign(i, bars.length)]}`}
+                >
+                  {text}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div aria-hidden="true" className={`mt-1 flex pr-8 ${gap}`}>
+        {bars.map((bar) => (
+          <span key={bar.day} className={`min-w-0 flex-1 overflow-visible text-label whitespace-nowrap text-soft ${few ? 'text-center' : ''}`}>
+            {bar.tick}
+          </span>
+        ))}
+      </div>
+      <figcaption className="mt-2 text-small text-soft">{caption}</figcaption>
+    </figure>
   )
 }

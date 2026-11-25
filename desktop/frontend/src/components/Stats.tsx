@@ -1,44 +1,49 @@
 import { useEffect, useRef, useState } from 'react'
+import { Calendar, ChartColumn, Eraser } from 'lucide-react'
+import { api } from '../api'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
+import { rangeLabel } from '../statsChart'
+import { periodBefore } from '../statsFigures'
 import { readStored, writeStored } from '../storage'
+import { useMinimumLoading } from '../useMinimumLoading'
+import type { Ledger } from '../types'
 import { CleanupsList } from './CleanupsList'
-import { Icon } from './Icon'
-import { LedgerView } from './LedgerView'
+import { Loading } from './Loading'
 import { MemoryTotal } from './MemoryTotal'
 import { SegmentedControl } from './SegmentedControl'
+import { StatsCard } from './StatsCard'
+import { StatsFigures } from './StatsFigures'
 import { StatsInterruptions } from './StatsInterruptions'
+import { StatsModels } from './StatsModels'
+import { StatsPerDay } from './StatsPerDay'
+import { StatsProjectPicker } from './StatsProjectPicker'
+import { StatsProjects } from './StatsProjects'
+import { StatsWork } from './StatsWork'
 
-type Tab = 'interruptions' | 'work' | 'cleanups'
-
-const TABS = [
-  { value: 'work' as const, label: 'Stats' },
-  { value: 'interruptions' as const, label: 'Interruptions' },
-  { value: 'cleanups' as const, label: 'Cleaned up' },
+const RANGES = [
+  { value: '1', label: 'Today' },
+  { value: '7', label: '7d' },
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+  { value: '0', label: 'All' },
 ]
-const NAMES: Record<Tab, { label: string; heading: string }> = {
-  work: { label: 'Stats', heading: 'Stats' },
-  interruptions: { label: 'Interruption stats', heading: 'What interrupts you' },
-  cleanups: { label: 'Cleaned up tasks', heading: 'Cleaned up tasks' },
-}
-const lastDays = (days: number) => ({ value: days, label: `Last ${days} days` })
-const RANGES = [7, 14, 30].map(lastDays)
-const WORK_RANGES = [{ value: 1, label: 'Today' }, ...[7, 30, 90, 180, 365].map(lastDays), { value: 0, label: 'Lifetime' }]
-const TAB_KEY = 'agentos.statsTab'
-const RANGE_KEY = 'agentos.statsDays'
-const WORK_RANGE_KEY = 'agentos.statsWorkDays'
+const RANGE_KEY = 'agentos.statsWorkDays'
 const PROJECT_KEY = 'agentos.statsProject'
 
 export function Stats() {
-  const { focusRequest, projects } = useAgentos('focusRequest', 'projects')
+  const { focusRequest, projects, project: currentProject, report } = useAgentos('focusRequest', 'projects', 'project', 'report')
   const { closeCentre } = useLayout()
-  const [tab, setTab] = useState<Tab>(() => readStored(TAB_KEY, 'work'))
-  const [days, setDays] = useState(() => readStored(RANGE_KEY, 7))
-  const [workDays, setWorkDays] = useState(() => readStored(WORK_RANGE_KEY, 30))
+  const [days, setDays] = useState(() => {
+    const stored = readStored(RANGE_KEY, 30)
+    return RANGES.some((r) => r.value === String(stored)) ? stored : 30
+  })
   const [picked, setPicked] = useState(() => readStored(PROJECT_KEY, ''))
+  const [ledger, setLedger] = useState<Ledger | null>(null)
   const panel = useRef<HTMLElement>(null)
-  const work = tab === 'work'
   const project = projects.some((p) => p.key === picked) ? picked : ''
+  const loading = useMinimumLoading(ledger === null)
 
   useEffect(() => {
     if (focusRequest.target === 'thread') panel.current?.focus()
@@ -46,75 +51,78 @@ export function Stats() {
 
   useEffect(() => panel.current?.focus(), [])
 
-  const pickTab = (next: Tab) => {
-    setTab(next)
-    writeStored(TAB_KEY, next)
+  useEffect(() => {
+    let current = true
+    report(async () => {
+      const next = await api.ledger(days, project)
+      if (current) setLedger(next)
+    })
+    return () => {
+      current = false
+    }
+  }, [days, project, report])
+
+  const pickRange = (next: string) => {
+    setDays(Number(next))
+    writeStored(RANGE_KEY, Number(next))
   }
   const pickProject = (next: string) => {
     setPicked(next)
     writeStored(PROJECT_KEY, next)
   }
-  const pickRange = (next: number) => {
-    if (work) {
-      setWorkDays(next)
-      writeStored(WORK_RANGE_KEY, next)
-    } else {
-      setDays(next)
-      writeStored(RANGE_KEY, next)
-    }
-  }
+
+  const first = ledger?.perDay[0]?.day
+  const last = ledger?.perDay.at(-1)?.day
+  const period = periodBefore(ledger?.days ?? days)
 
   return (
     <section
       ref={panel}
       data-panel="thread"
       tabIndex={-1}
-      aria-label={NAMES[tab].label}
-      className="panel @container flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+      aria-labelledby="stats-title"
+      className="panel @container/page h-full min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]"
       onKeyDown={(e) => e.key === 'Escape' && closeCentre()}
     >
-      <header className="panel-head grid flex-none grid-cols-[minmax(0,1fr)_auto] items-center justify-items-start min-h-10 gap-x-3 gap-y-2 border-b border-line px-4 py-1 @xl:flex">
-        <h2 className="sr-only">{NAMES[tab].heading}</h2>
-        <SegmentedControl label="View" options={TABS} value={tab} onChange={pickTab} />
-        <button className="btn btn-ghost h-7 w-7 justify-center justify-self-end px-0 @xl:order-last" title="Back to the terminal (Esc)" aria-label="Back to the terminal" onClick={closeCentre}>
-          <Icon name="close" />
-        </button>
-        <div className="col-span-2 flex flex-wrap justify-self-stretch items-center justify-between gap-x-3 gap-y-2 @xl:contents">
-          {tab !== 'cleanups' && (
-            <>
-              <select aria-label="Project" className="btn btn-ghost h-7 px-2 [field-sizing:content]" value={project} onChange={(e) => pickProject(e.target.value)}>
-                <option value="">All projects</option>
-                {projects.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <select aria-label="Range" className="btn btn-ghost h-7 px-2 [field-sizing:content] @xl:ml-auto" value={work ? workDays : days} onChange={(e) => pickRange(Number(e.target.value))}>
-                {(work ? WORK_RANGES : RANGES).map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          <span className={tab === 'cleanups' ? 'ml-auto' : ''}>
+      <div className="mx-auto w-full max-w-[46rem] px-4 pt-6 pb-16 @max-[40rem]/page:pt-4">
+        <header className="flex flex-wrap items-center gap-3">
+          <span className="grid size-8 flex-none place-items-center rounded-lg bg-(--bg-tile) text-soft shadow-[inset_0_0_0_1px_var(--border)]">
+            <ChartColumn size={16} aria-hidden="true" />
+          </span>
+          <div className="flex min-w-48 flex-1 flex-col">
+            <h1 id="stats-title" className="text-title leading-[1.375] font-semibold">
+              Stats
+            </h1>
+            <p className="text-small text-soft">{project ? 'What the agents did in this project' : 'What the agents did in every project'}</p>
+          </div>
+          <SegmentedControl variant="track" label="Range" options={RANGES} value={String(days)} onChange={pickRange} />
+        </header>
+        <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2 border-b border-(--border-rule) px-1 pt-1 pb-2 text-body text-soft tabular-nums">
+          <Calendar size={16} aria-hidden="true" className="flex-none text-dim" />
+          {first && last && <span>{rangeLabel(first, last)}</span>}
+          {period && <span className="text-small whitespace-nowrap">compared with {period}</span>}
+          <span className="ml-auto flex items-center gap-2">
             <MemoryTotal />
+            <StatsProjectPicker projects={projects} value={project} onChange={pickProject} />
           </span>
         </div>
-      </header>
-      {/* The tabs stay mounted so a switch keeps their data. Hiding with visibility, not display, keeps each tab's scroll position. */}
-      <div className="grid min-h-0 flex-1 grid-rows-1">
-        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${work ? '' : 'invisible'}`}>
-          <LedgerView days={workDays} project={project} />
-        </div>
-        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${tab === 'interruptions' ? '' : 'invisible'}`}>
-          <StatsInterruptions days={days} project={project} />
-        </div>
-        <div data-scroll className={`col-start-1 row-start-1 overflow-y-auto p-4 @[39rem]:px-6 ${tab === 'cleanups' ? '' : 'invisible'}`}>
-          <CleanupsList />
-        </div>
+        {loading || ledger === null ? (
+          <Loading />
+        ) : ledger.since === '' ? (
+          <p className="mt-5 text-center text-small text-soft">Nothing recorded yet. Chats, tasks, prompts, worked time and tokens are counted from now on.</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-5">
+            <StatsFigures ledger={ledger} />
+            <StatsPerDay days={ledger.perDay} />
+            <StatsInterruptions days={days || ledger.perDay.length} project={project} />
+            <StatsWork work={ledger.work} showProject={!project} />
+            <StatsModels usage={ledger.usage} />
+            {!project && ledger.projects.length > 1 && <StatsProjects projects={ledger.projects} />}
+            <StatsCard icon={Eraser} title="Cleaned up" meta={currentProject ? `tasks cleaned up in ${currentProject.name}` : undefined}>
+              <CleanupsList />
+            </StatsCard>
+          </div>
+        )}
       </div>
     </section>
   )

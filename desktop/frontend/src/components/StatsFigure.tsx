@@ -1,27 +1,21 @@
-import { duration } from '../time'
-import type { Stats } from '../types'
+import type { LucideIcon } from 'lucide-react'
+import type { Change } from '../statsFigures'
+import { StatsChange } from './StatsChange'
 
-type StatsFigureProps = { stats: Stats }
+type StatsFigureProps = { icon: LucideIcon; label: string; value: string; sub: string; change?: Change | null; period?: string; title?: string }
 
-type FigureProps = { label: string; value: string; hint: string; title?: string }
-
-export function Figure({ label, value, hint, title }: FigureProps) {
+export function StatsFigure({ icon: FigureIcon, label, value, sub, change, period = '', title }: StatsFigureProps) {
   return (
-    <div title={title} className="flex min-w-0 flex-1 basis-36 flex-col gap-0.5 rounded-md border border-line bg-surface px-4 py-3">
-      <span className="label">{label}</span>
-      <span className="mono text-[1.75rem] leading-tight font-semibold">{value}</span>
-      <span className="text-small text-dim">{hint}</span>
-    </div>
-  )
-}
-
-export function StatsFigure({ stats }: StatsFigureProps) {
-  const perDay = (stats.total / stats.days).toFixed(1)
-  return (
-    <div className="flex flex-wrap gap-3">
-      <Figure label="Interruptions" value={String(stats.total)} hint={`${perDay} a day`} />
-      <Figure label="Time waiting on you" value={duration(stats.totalWaitMs)} hint="all tasks together" />
-      <Figure label="Median wait" value={duration(stats.medianWaitMs)} hint="before you answered" />
+    <div title={title} className="flex min-w-0 flex-col gap-1 rounded-xl bg-(--bg-card) px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+      <dt className="flex items-center gap-1.5 text-small text-soft">
+        <FigureIcon size={14} className="flex-none text-dim" aria-hidden="true" />
+        {label}
+      </dt>
+      <dd className="text-(length:--fs-display) leading-[1.3] font-semibold whitespace-nowrap tabular-nums">{value}</dd>
+      <dd className="flex flex-wrap items-center gap-x-2 text-small text-soft">
+        {change && <StatsChange change={change} period={period} />}
+        <span>{sub}</span>
+      </dd>
     </div>
   )
 }
