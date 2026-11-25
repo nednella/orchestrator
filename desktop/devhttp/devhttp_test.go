@@ -22,7 +22,7 @@ import (
 
 func TestCallRunsABoundMethod(t *testing.T) {
 	h := apptest.New(t)
-	got, err := call(h.App.Services(), "sessions.Service", "NewThread", []byte(`["via call","","","","supervised"]`))
+	got, err := call(h.App.Services(), "sessions.Service", "NewThread", []byte(`["via call","","","","supervised",""]`))
 	if err != nil {
 		t.Fatal(err)
 	}

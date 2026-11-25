@@ -26,6 +26,7 @@ const (
 	actionOption = "@agentos-action"
 	hostedOption = "@agentos-hosted"
 	forkOption   = "@agentos-fork"
+	branchOption = "@agentos-branch"
 )
 
 const conf = `
@@ -74,6 +75,7 @@ type Info struct {
 	Hosted  bool   // the agent runs under agentos host, which takes its messages over a socket
 	Action  string // the queue action the session was started with, or ""
 	Fork    string // the session a fork was forked from, or ""
+	Branch  string // the branch the thread works on, in the worktree it started in, or ""
 	Created time.Time
 	PID     int // the process the session's pane runs: the agent, or the shell that started it
 }
@@ -117,7 +119,7 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -129,7 +131,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	var shells []session.Name
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 13 {
+		if len(f) != 14 {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -140,7 +142,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 			shells = append(shells, name)
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10]}
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10], Branch: f[13]}
 		if secs, err := strconv.ParseInt(f[11], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
@@ -270,6 +272,14 @@ func (t *Tmux) SetHosted(ctx context.Context, name session.Name) error {
 func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), forkOption, from); err != nil {
 		return fmt.Errorf("tagging fork %s: %w", name, err)
+	}
+	return nil
+}
+
+// SetBranch records the branch a thread works on.
+func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) error {
+	if _, err := t.run(ctx, "set-option", "-t", target(name), branchOption, branch); err != nil {
+		return fmt.Errorf("recording the branch of session %s: %w", name, err)
 	}
 	return nil
 }

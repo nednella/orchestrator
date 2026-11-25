@@ -874,8 +874,9 @@ export function createMock(params: URLSearchParams) {
   const backend = {
     Snapshot: async () => snapshot(),
     Awake: async () => data.some((p) => projectView(p).working > 0),
-    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access) => {
+    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access, place: string) => {
       if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
+      if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
       return startSessionFor(title.trim() || titleFromPrompt(prompt) || 'agent', 0, prompt, '', model, effort, access || 'supervised')
     },
     ArchiveThread: async (id: string) => {

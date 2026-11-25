@@ -447,7 +447,7 @@ func (e *endedSession) record() session.Record {
 
 // identityOf is what the session was started as, with its tmux session's start as both its first and latest start.
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Access: in.Access, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork}
+	id := session.Identity{Title: in.Title, Access: in.Access, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -531,7 +531,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
 	rec.Changes = session.SettledChanges(rec.Changes)
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -1153,7 +1153,10 @@ func (s *Sessions) list() []Session {
 		}
 		if in.Hosted {
 			f := s.life.fields(id)
-			view.Branch, view.Worktree, view.PR, view.Git = f.branch, f.worktree, f.pr, f.git
+			view.Branch, view.PR, view.Git = cmp.Or(f.branch, in.Branch), f.pr, f.git
+			if w, ok := s.made.Of(ss.Name.Project, id); ok && w.Removed == 0 {
+				view.Worktree = w.Path
+			}
 			view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
 			if view.Branch == "" && issue > 0 {
 				if p, ok := projectIn(projs, in); ok {
@@ -1346,6 +1349,23 @@ func (s *Sessions) liveIssueSession(key string, issue int) string {
 	return ""
 }
 
+// threadOn is the number of a thread of the project other than except that works on branch, live or settled, and
+// whether there is one. An archived thread has let its branch go. It takes mu.
+func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	infos := slices.Clone(s.info)
+	for _, e := range s.ended {
+		infos = append(infos, e.info)
+	}
+	for _, in := range infos {
+		if id := in.Name.String(); in.Name.Project == key && in.Branch == branch && id != except {
+			return s.nums[id], true
+		}
+	}
+	return 0, false
+}
+
 // IssueSessions maps issue numbers to the live thread started for each, whatever its access, in the current project.
 func (s *Sessions) IssueSessions() map[int]string {
 	out := map[int]string{}
@@ -1360,16 +1380,18 @@ func (s *Sessions) IssueSessions() map[int]string {
 // Create starts the agent in the current project with the access given. A non-empty text is given to the agent through
 // its host: sent when send is set, else left as a draft in its chat.
 func (s *Sessions) Create(title, text string, send bool, issue int, access session.Access) (Session, error) {
-	return s.createIn(s.Current(), title, text, send, issue, project.Model{}, "", "", access, "", forkStart{})
+	return s.createIn(s.Current(), title, text, send, issue, project.Model{}, "", "", access, "", forkStart{}, placeFor(access, issue, ""))
 }
 
 // StartOptions is what the owner chose for a new thread: the first message, sent as it is, the model and effort,
-// which win over every other choice, and the access. Empty fields leave the choice to the defaults; an empty access is
-// Supervised. Asker is the thread that asks for this one, "" when the owner asks from the app, the shell or a terminal.
+// which win over every other choice, the access and where it runs. Empty fields leave the choice to the defaults; an
+// empty access is Supervised, and an empty place is placeFor's. Asker is the thread that asks for this one, "" when the
+// owner asks from the app, the shell or a terminal.
 type StartOptions struct {
 	Prompt string
 	Model  project.Model
 	Access session.Access
+	Place  Place
 	Asker  string
 }
 
@@ -1399,15 +1421,19 @@ func (s *Sessions) CreateThread(title string, o StartOptions) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	place, err := parsePlace(string(o.Place))
+	if err != nil {
+		return Session{}, err
+	}
 	title = cmp.Or(strings.TrimSpace(title), titleFromPrompt(o.Prompt))
-	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", access, "", forkStart{})
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", access, "", forkStart{}, placeFor(access, 0, place))
 }
 
-// CreateBriefed is Create for a Supervised session with a job of its own: brief is added to the agent's system
-// prompt, and the project says whether text is sent.
+// CreateBriefed is Create for a Supervised session with a job of its own, in the project folder: brief is added to the
+// agent's system prompt, and the project says whether text is sent.
 func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 	proj := s.Current()
-	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, brief, "", session.Supervised, "", forkStart{})
+	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, brief, "", session.Supervised, "", forkStart{}, InProject)
 }
 
 // IssueStart is what a start of an issue did.
@@ -1441,7 +1467,11 @@ func (s *Sessions) CreateIssue(title, text string, issue int, action project.Act
 	if extra := strings.TrimSpace(o.Prompt); extra != "" {
 		text = strings.TrimSpace(text + " " + extra)
 	}
-	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.ThreadAccess(), action.Name, o.Asker)
+	place, err := parsePlace(string(o.Place))
+	if err != nil {
+		return Session{}, Kept, err
+	}
+	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.ThreadAccess(), action.Name, o.Asker, place)
 	if err != nil || did == Created {
 		return view, did, err
 	}
@@ -1546,7 +1576,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
-	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, cmp.Or(in.Path, proj.Dir), issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork); err != nil {
+	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, cmp.Or(in.Path, proj.Dir), in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork); err != nil {
 		_ = s.writeState(before)
 		return err
 	}
@@ -1569,9 +1599,9 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 // Provider is the provider every session starts with.
 func (s *Sessions) Provider() (agent.Provider, error) { return s.agents.Provider() }
 
-// createForIssue starts a thread for the issue, unless the project has a live one for it, which it names, or a settled
-// one, which it wakes with the handover and gives text to, and names.
-func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access session.Access, action, asker string) (Session, IssueStart, error) {
+// createForIssue starts a thread for the issue, in place or where placeFor says, unless the project has a live one for
+// it, which it names, or a settled one, which it wakes with the handover and gives text to, and names.
+func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access session.Access, action, asker string, place Place) (Session, IssueStart, error) {
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
 	if live := s.liveIssueSession(proj.Key(), issue); live != "" {
@@ -1596,7 +1626,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 	if err := s.mayGive(asker, access); err != nil {
 		return Session{}, Kept, err
 	}
-	view, err := s.createIn(proj, title, text, send, issue, model, "", handover, access, action, forkStart{})
+	view, err := s.createIn(proj, title, text, send, issue, model, "", handover, access, action, forkStart{}, placeFor(access, issue, place))
 	return view, Created, err
 }
 
@@ -1625,8 +1655,9 @@ func fromApp(text string) string {
 }
 
 // createIn is Create in the project given, which need not be the current one, with the model given. A brief or a
-// handover is added to the agent's system prompt. A fork claims no branch.
-func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, brief, handover string, access session.Access, action string, fork forkStart) (Session, error) {
+// handover is added to the agent's system prompt. In a worktree the thread works on its issue's branch, or on a new one
+// named from its title; else it runs in the project folder, or a fork in its source's folder. A fork claims no branch.
+func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, brief, handover string, access session.Access, action string, fork forkStart, place Place) (Session, error) {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
@@ -1639,9 +1670,20 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	}
 	model = fill(p, proj.Dir, model)
 	name, ctx := s.reserve(proj)
+	work := workPlace{dir: cmp.Or(fork.dir, proj.Dir)}
+	if place == InWorktree {
+		branch := proj.BranchFor(issue)
+		if issue == 0 {
+			branch = s.life.freeBranch(ctx, proj.Dir, branchFromTitle(title))
+		}
+		if work, err = s.life.makeWorktree(ctx, proj, name, branch); err != nil {
+			return Session{}, err
+		}
+	}
 	restore := func() {}
 	if fork.at != "" {
 		if restore, err = s.copyChat(fork, name); err != nil {
+			s.life.undoWorktree(ctx, proj, name, work)
 			return Session{}, err
 		}
 	}
@@ -1649,11 +1691,12 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	if err := s.launch(tctx, p, name, title, proj, proj.Dir, issue, model, fork.conversation, brief, handover, access, action, fork); err != nil {
+	if err := s.launch(tctx, p, name, title, proj, work.dir, work.branch, issue, model, fork.conversation, brief, handover, access, action, fork); err != nil {
 		restore()
+		s.life.undoWorktree(ctx, proj, name, work)
 		return Session{}, err
 	}
-	view := s.register(name, title, proj, issue, model, created, access, action, fork.of)
+	view := s.register(name, title, work, issue, model, created, access, action, fork.of)
 	if branch := proj.BranchFor(issue); issue > 0 && branch != "" && fork.of == "" {
 		s.life.claim(proj, name.String(), branch)
 	}
@@ -1681,16 +1724,17 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 }
 
 // forkStart is what a fork starts from: the thread it forks and that thread's title, which a woken fork keeps, and for a
-// new fork that thread's conversation, the message it forks at and its chat up to that message.
+// new fork that thread's folder, its conversation, the message it forks at and its chat up to that message.
 type forkStart struct {
-	of, title, conversation, at string
-	events                      []chat.Event
+	of, title, dir, conversation, at string
+	events                           []chat.Event
 }
 
 // Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
 // ends at the message at: the uuid of a reply's last block. The fork has the same access, issue, model, effort and
-// handover, starts in the same folder, and its chat starts as the source's does up to that reply. The issue is
-// only shown: the fork claims no branch and hears no pull request.
+// handover, starts in the folder the thread runs in, its worktree too, since Claude finds a conversation by its folder,
+// and its chat starts as the source's does up to that reply. The issue is only shown: the fork has no branch, claims
+// none and hears no pull request.
 func (s *Sessions) Fork(id, at string) (Session, error) {
 	s.mu.Lock()
 	in, found := s.infoOf(id)
@@ -1730,7 +1774,7 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	}
 	issue, _ := strconv.Atoi(in.Issue)
 	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
-	return s.createIn(proj, title, "", false, issue, model, "", s.handoverOf(id), in.Access, "", forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: at, events: events[:cut+1]})
+	return s.createIn(proj, title, "", false, issue, model, "", s.handoverOf(id), in.Access, "", forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), dir: in.Path, conversation: conversation, at: at, events: events[:cut+1]}, InProject)
 }
 
 // copyChat writes the fork's chat log before the fork's host opens it: the source's events, with the turn they stop in
@@ -1808,8 +1852,8 @@ func (s *Sessions) reserve(proj project.Project) (session.Name, context.Context)
 	return session.Name{Project: proj.Key(), Token: session.NewToken()}, s.ctx
 }
 
-// launch starts the agent of the session under its host in tmux, in dir.
-func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart) error {
+// launch starts the agent of the session under its host in tmux, in dir, a worktree on branch when branch is set.
+func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart) error {
 	env := []string{
 		"AGENTOS_SESSION=" + name.String(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
@@ -1836,7 +1880,11 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		}
 		env = append(env, agentEnv...)
 	}
-	l := launchFor(model, conversation, brief, handover, access, browser, fork, workTree{})
+	tree := workTree{}
+	if branch != "" {
+		tree = workTree{branch: branch, dir: dir}
+	}
+	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree)
 	l.TmpDir, l.ForkAt = tmp, fork.at
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -1846,7 +1894,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if err != nil {
 		return err
 	}
-	return s.start(ctx, name, title, dir, env, argv, issue, model, access, action, fork.of)
+	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork.of)
 }
 
 // hosted is argv run under this app's own host command, with the session's chat log and socket. It makes the socket's
@@ -1866,12 +1914,12 @@ func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 	return append([]string{s.binary, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
 }
 
-// register adds the new session to the list and returns its row. forkOf is the thread it was forked from, if any. It
-// takes mu.
-func (s *Sessions) register(name session.Name, title string, proj project.Project, issue int, model project.Model, created time.Time, access session.Access, action, forkOf string) Session {
+// register adds the new session, which runs in work, to the list and returns its row. forkOf is the thread it was
+// forked from, if any. It takes mu.
+func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf string) Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	in := term.Info{Name: name, Title: title, Path: proj.Dir, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Created: created}
+	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
@@ -1888,7 +1936,7 @@ func (s *Sessions) register(name session.Name, title string, proj project.Projec
 	return Session{}
 }
 
-func (s *Sessions) start(ctx context.Context, name session.Name, title, dir string, env, argv []string, issue int, model project.Model, access session.Access, action, forkOf string) error {
+func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, branch string, env, argv []string, issue int, model project.Model, access session.Access, action, forkOf string) error {
 	if err := s.tmux.NewSession(ctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return err
 	}
@@ -1920,6 +1968,11 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir stri
 	}
 	if forkOf != "" {
 		if err := tag(s.tmux.SetFork(ctx, name, forkOf)); err != nil {
+			return err
+		}
+	}
+	if branch != "" {
+		if err := tag(s.tmux.SetBranch(ctx, name, branch)); err != nil {
 			return err
 		}
 	}

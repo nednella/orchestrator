@@ -20,7 +20,7 @@ projects:
     session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR command (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`) and the action's command to an issue's settled thread that a start wakes. A settled thread is woken under its own id before it gets either. The settings panel writes it
     session_branch_fallback: "" # branch agentos makes for an issue thread; {n} is the issue number; "" means issue-{n}
     session_cleanup_command: "" # shell command that removes the worktree agentos made, the branch stays; {worktree}, {branch}, {dir}, {force} (--force when forced, else empty); "" means git worktree remove {force} {worktree}
-    session_worktree_command: "" # shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir}, {base}; "" means git worktree add -b {branch} {worktree} {base}
+    session_worktree_command: "" # shell command that makes a thread's worktree on a new branch; {branch}, {worktree}, {dir}, {base}; "" means git worktree add -b {branch} {worktree} {base}
     session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles a thread that hears the PR, saw it open and works on its branch as its newest, and a clean-up keeps the thread, settled. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged; auto needs the session to have seen it open
       close: manual            # auto or manual: after the pull request closed unmerged; auto needs the session to have seen it open
@@ -37,7 +37,7 @@ projects:
     setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
 ```
 
-`session_worktree_command` runs through `sh -c` in the project folder when agentos starts a thread for an issue. `{branch}` (the branch from `session_branch_fallback`), `{worktree}` (the folder agentos picks, `<project>/trees/<branch>`), `{dir}` (the project folder) and `{base}` (`origin/<default branch>`) are shell-quoted.
+`session_worktree_command` runs through `sh -c` in the project folder when agentos starts a thread in a worktree on a branch that is not there yet (see [Where a thread runs](#where-a-thread-runs)). `{branch}` (the issue's branch from `session_branch_fallback`, or one named from the thread's title), `{worktree}` (the folder agentos picks, `<project>/trees/<branch>`), `{dir}` (the project folder) and `{base}` (`origin/<default branch>`, fetched just before, or the local default branch when origin has none) are shell-quoted. The command may put the worktree in another folder: the thread runs in the one git then lists on the branch. A command that fails, or that leaves no worktree on the branch, starts no thread, and the error gives its first line of output.
 
 `session_cleanup_command` runs through `sh -c` in the project folder after the safety checks and removes the worktree agentos made; the branch stays. `{worktree}`, `{branch}` and `{dir}` are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A command that fails blocks the clean-up with its error.
 
@@ -114,6 +114,19 @@ The row shows that choice until the agent's first turn. From then on it shows wh
 
 Every thread runs `claude` under `agentos host`, with hooks that call the `agentos` command on PATH. Both must be on PATH: without `agentos` a thread does not start, with the error "The agentos command is not on PATH, so a thread's hooks cannot report its state", and without `claude` it does not start with "claude is not installed: it is not on PATH". While either is missing the app shows a warning that names it, and clears it once it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh`, `agentos` or `claude`, the app takes the PATH of the login shell.
 
+### Where a thread runs
+
+A thread runs in one folder from its start, and a wake starts it there again.
+
+- An issue thread, at every access, runs in its own worktree on the issue's branch, `issue-<n>` unless `session_branch_fallback` names it otherwise.
+- A Write thread with no issue (Supervised or Full access) runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. This holds for `agentos new` and a thread started from a note too.
+- A Read thread with no issue runs in the project folder. The app can start a thread with no issue in either place.
+- The set-up session runs in the project folder.
+
+The worktree is `<project>/trees/<branch>`; add `trees/` to the project's `.gitignore`. A branch that exists, locally or on origin, is checked out there as it is and never reset; a new one comes from `session_worktree_command`. A branch that a worktree already has checked out, such as one you made by hand, runs the thread in that worktree, and agentos never removes it. A branch that another thread works on, live or settled, is refused with `Thread <n> works on <branch>`. A folder already at `<project>/trees/<branch>` that is no worktree of the branch stops the start, and agentos leaves it as it is. A project that is not a git repository runs every thread in its folder.
+
+A start that fails after agentos made the worktree removes that worktree with `git worktree remove`, never forced, so one with changes stays; the branch stays too. A fork runs in its thread's folder and has no branch of its own.
+
 ### Keeping the Mac awake
 
 While at least one session is working, in any project whose `keep_mac_awake` is on (the project's own setting, else the top-level one, else on), the app runs `caffeinate -i -w <app pid>`: the Mac does not idle-sleep and the display still may. It does not stop a closed lid from sleeping the Mac unless the Mac is in clamshell mode (external display and power connected), and it does not stop a manual sleep or a sleep from low battery.
@@ -126,7 +139,7 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 |---|---|
 | notes, note images, evidence, digest | `<data_dir>/<key>/` (`data_dir` defaults to `~/.local/share/agentos`) |
 | the event log, which holds all stats: one file of events per machine per day, gzipped from the day before yesterday | `<data_dir>/<key>/events/YYYY-MM-DD.<machine>.jsonl[.gz]` |
-| PR tracking, clean-up log, browser profile, session temp folders, chat logs (`chats/`) | `~/.local/share/agentos/<key>/` |
+| PR tracking, clean-up log, the worktrees agentos made (`worktrees.json`), browser profile, session temp folders, chat logs (`chats/`) | `~/.local/share/agentos/<key>/` |
 | state files, sockets (each Claude session's host under `hosts/<first 8 hex characters of the key's SHA-256>/`), tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/agentos` |
 
 ## Command line

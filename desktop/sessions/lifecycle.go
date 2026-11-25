@@ -1322,7 +1322,11 @@ func (l *Lifecycle) runCleanupCommand(ctx context.Context, t target, p *cleanupP
 		if b.worktree == "" && !b.branchExists {
 			continue
 		}
-		if err := l.runProjectCommand(ctx, t.proj, b, p.force); err != nil {
+		force := ""
+		if p.force {
+			force = "--force"
+		}
+		if _, err := l.projectCommand(ctx, t.proj, t.proj.CleanupCommand, "{branch}", util.ShellQuote(b.branch), "{worktree}", util.ShellQuote(b.worktree), "{force}", force); err != nil {
 			if !l.leftBehind(ctx, t.proj.Dir, b.branch) {
 				removed = append(removed, fmt.Sprintf("clean-up command for %s (failed with nothing left: %v)", b.branch, err))
 				continue
@@ -1602,21 +1606,14 @@ func (l *Lifecycle) restatus(ctx context.Context, id string, proj project.Projec
 	l.sessions.changed()
 }
 
-func (l *Lifecycle) runProjectCommand(ctx context.Context, proj project.Project, b branchPlan, force bool) error {
-	forceFlag := ""
-	if force {
-		forceFlag = "--force"
-	}
-	cmd := strings.NewReplacer(
-		"{branch}", util.ShellQuote(b.branch),
-		"{worktree}", util.ShellQuote(b.worktree),
-		"{dir}", util.ShellQuote(proj.Dir),
-		"{force}", forceFlag,
-	).Replace(proj.CleanupCommand)
+// projectCommand runs one of the project's commands through sh -c in the project folder, with {dir} filled in and
+// each placeholder of fill, given as pairs of a placeholder and the text that takes its place. It returns what the
+// command printed.
+func (l *Lifecycle) projectCommand(ctx context.Context, proj project.Project, command string, fill ...string) ([]byte, error) {
+	cmd := strings.NewReplacer(append([]string{"{dir}", util.ShellQuote(proj.Dir)}, fill...)...).Replace(command)
 	ctx, cancel := context.WithTimeout(ctx, 2*gitTimeout)
 	defer cancel()
-	_, err := l.run(ctx, proj.Dir, "sh", "-c", cmd)
-	return err
+	return l.run(ctx, proj.Dir, "sh", "-c", cmd)
 }
 
 func (l *Lifecycle) cleanupPath(key string) string {

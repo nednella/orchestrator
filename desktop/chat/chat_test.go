@@ -474,17 +474,16 @@ func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
 	}
 	gitIn(t, h.Dir, "add", "README")
 	gitIn(t, h.Dir, "commit", "-q", "-m", "first")
-	wt := filepath.Join(h.Dir, "trees", "issue-7")
-	gitIn(t, h.Dir, "worktree", "add", "-q", "-b", "issue-7", wt)
-	if err := os.WriteFile(filepath.Join(wt, "only-here.go"), []byte("package here\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	s, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.RefreshPRs()
-	eventually(t, "the thread's worktree", func() bool { got, _ := h.Session(s.ID); return got.Worktree != "" })
+	if s.Worktree == "" {
+		t.Fatalf("the thread has no worktree: %+v", s)
+	}
+	if err := os.WriteFile(filepath.Join(s.Worktree, "only-here.go"), []byte("package here\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := h.ChatFiles(s.ID, "")
 	if want := []string{"README", "only-here.go"}; err != nil || !slices.Equal(got, want) {

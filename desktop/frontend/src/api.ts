@@ -4,7 +4,7 @@ import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, Cle
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
-  NewThread(title: string, prompt: string, model: string, effort: string, access: Access): Promise<Session>
+  NewThread(title: string, prompt: string, model: string, effort: string, access: Access, place: string): Promise<Session>
   SettleThread(id: string): Promise<void>
   ArchiveThread(id: string): Promise<void>
   WakeThread(id: string): Promise<Session>
@@ -145,7 +145,7 @@ export const devFlags: DevFlags = mock?.flags ?? {}
 
 export const api = {
   snapshot: () => backend.Snapshot(),
-  newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised') => backend.NewThread(title, prompt, model, effort, access),
+  newThread: (title: string, prompt = '', model = '', effort = '', access: Access = 'supervised', place = '') => backend.NewThread(title, prompt, model, effort, access, place),
   settleThread: (id: string) => backend.SettleThread(id),
   archiveThread: (id: string) => backend.ArchiveThread(id),
   wakeThread: (id: string) => backend.WakeThread(id),

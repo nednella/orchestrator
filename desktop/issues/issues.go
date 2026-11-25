@@ -290,8 +290,9 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 // Start opens a session for the issue with the action of its section that has the name given, or the
 // section's default action when action is "". An issue that already has a live session gets that session back
 // instead of a second agent, and one whose thread settled gets it woken, as did says. An issue not in the cached list
-// may be new: the list is read again once.
+// may be new: the list is read again once. A new thread runs where an issue thread does, in its own worktree.
 func (i *Issues) Start(ctx context.Context, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error) {
+	o.Place = ""
 	proj := i.sessions.Current()
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)

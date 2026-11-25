@@ -55,6 +55,7 @@ type Identity struct {
 	Effort  string `json:"effort,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
+	Branch  string `json:"branch,omitempty"`  // the branch the thread works on, in the worktree it started in; "" in the project folder
 	Created int64  `json:"created,omitempty"` // unix ms of the first start
 	Woke    int64  `json:"woke,omitempty"`    // unix ms of the latest start: the first one or a wake
 }

@@ -572,20 +572,21 @@ const queueSections = `    queue_sections:
 
 // Options changes the harness's config.
 type Options struct {
-	ProjectExtra   string        // yaml lines added under the project "main"
-	Queue          string        // the project's queue_sections block, in place of the usual one
-	NoBranch       bool          // leave out the project's `session_branch_fallback`, so the default `issue-{n}` applies
-	CleanupCommand string        // the project's session_cleanup_command; none by default
-	NoAgentos      bool          // leave every folder that holds an agentos command off PATH, as an app that cannot find it
-	TopExtra       string        // yaml lines added at the top of the config
-	DigestFirst    time.Duration // wait before the first automatic digest check; an hour by default
-	DigestTick     time.Duration
-	UpdateTick     time.Duration // how often to check the releases; an hour by default, and an hour before the first check
-	Releases       string        // the latest release's tag; "" fails the check
-	Version        string        // the version the app believes it runs; "dev" by default
-	DataDirConfig  bool          // put the data folder in the config's data_dir, not AGENTOS_DEV_DATA_DIR, and home in the state dir
-	NoProject      bool          // leave the project out of the config, so the app starts in a folder it does not know
-	AbsentProject  string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
+	ProjectExtra    string        // yaml lines added under the project "main"
+	Queue           string        // the project's queue_sections block, in place of the usual one
+	NoBranch        bool          // leave out the project's `session_branch_fallback`, so the default `issue-{n}` applies
+	CleanupCommand  string        // the project's session_cleanup_command; none by default
+	WorktreeCommand string        // the project's session_worktree_command; the default by default
+	NoAgentos       bool          // leave every folder that holds an agentos command off PATH, as an app that cannot find it
+	TopExtra        string        // yaml lines added at the top of the config
+	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
+	DigestTick      time.Duration
+	UpdateTick      time.Duration // how often to check the releases; an hour by default, and an hour before the first check
+	Releases        string        // the latest release's tag; "" fails the check
+	Version         string        // the version the app believes it runs; "dev" by default
+	DataDirConfig   bool          // put the data folder in the config's data_dir, not AGENTOS_DEV_DATA_DIR, and home in the state dir
+	NoProject       bool          // leave the project out of the config, so the app starts in a folder it does not know
+	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 }
 
 // Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
@@ -641,6 +642,9 @@ func NewWith(t *testing.T, o Options) *Harness {
 	cleanup := ""
 	if o.CleanupCommand != "" {
 		cleanup = fmt.Sprintf("    session_cleanup_command: %q\n", o.CleanupCommand)
+	}
+	if o.WorktreeCommand != "" {
+		cleanup += fmt.Sprintf("    session_worktree_command: %q\n", o.WorktreeCommand)
 	}
 	top := o.TopExtra
 	if o.DataDirConfig {
@@ -1000,7 +1004,12 @@ func (h *Harness) SetUpProject() (sessions.Session, error)  { return h.projects.
 func (h *Harness) DismissSetup() (projects.Snapshot, error) { return h.projects.DismissSetup() }
 
 func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, access)
+	return h.sessions.NewThread(title, prompt, model, effort, access, "")
+}
+
+// NewThreadIn starts a thread with the access given in the place given: worktree, project, or "" for the default.
+func (h *Harness) NewThreadIn(title, prompt, access, place string) (sessions.Session, error) {
+	return h.sessions.NewThread(title, prompt, "", "", access, place)
 }
 
 func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
@@ -1009,12 +1018,12 @@ func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
 
 // NewSession starts a Supervised thread.
 func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, "", "", "supervised")
+	return h.sessions.NewThread(title, prompt, "", "", "supervised", "")
 }
 
 // NewSessionWith starts a Supervised thread with the model and effort given.
 func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, "supervised")
+	return h.sessions.NewThread(title, prompt, model, effort, "supervised", "")
 }
 func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.sessions.ShellOpen(id) }
 func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }

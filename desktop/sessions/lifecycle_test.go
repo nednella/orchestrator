@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -125,6 +126,39 @@ func repoFixture(t *testing.T, h *apptest.Harness) string {
 	gitIn(t, h.Dir, "remote", "add", "origin", origin)
 	gitIn(t, h.Dir, "push", "-u", "origin", "main")
 	return origin
+}
+
+// projectIssueSession starts the thread of issue n in the project folder, as threads ran before agentos made worktrees.
+func projectIssueSession(h *apptest.Harness, t *testing.T, n int) sessions.Session {
+	t.Helper()
+	s, _, err := h.Sessions().CreateIssue(fmt.Sprintf("#%d work", n), "", n, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{Place: sessions.InProject})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
+	return s
+}
+
+// issueThread starts the thread of issue n in the worktree agentos makes for it; repoFixture comes first.
+func issueThread(h *apptest.Harness, t *testing.T, n int) sessions.Session {
+	t.Helper()
+	s := issueSession(h, t, n)
+	if s.Worktree == "" {
+		t.Fatalf("the thread of #%d has no worktree: %+v", n, s)
+	}
+	return s
+}
+
+// pushWork commits a file in the worktree and pushes its branch to origin.
+func pushWork(t *testing.T, wt string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(wt, "work.txt"), []byte("work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, wt, "add", "work.txt")
+	gitIn(t, wt, "commit", "-m", "work")
+	gitIn(t, wt, "push", "-u", "origin", "HEAD")
 }
 
 // issueWorktree adds a worktree on issue-7 with one pushed commit.
@@ -698,7 +732,7 @@ func TestOwnersBranchInTheProjectFolderIsNotTheSessions(t *testing.T) {
 	ownBranch(t, h.Dir)
 	h.GH.SetPRFor("my-fix", numberedPR(20, "OPEN"))
 	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	s := issueSession(h, t, 7)
+	s := projectIssueSession(h, t, 7)
 
 	worksIn(h, t, s, h.Dir)
 	wt := issueWorktree(t, h)
@@ -727,7 +761,7 @@ func TestOwnersSwitchDuringSessionsWorkIsNotTheSessions(t *testing.T) {
 	repoFixture(t, h)
 	h.GH.SetPRFor("my-fix", numberedPR(20, "OPEN"))
 	h.GH.SetPRFor("issue-7", numberedPR(21, "OPEN"))
-	s := issueSession(h, t, 7)
+	s := projectIssueSession(h, t, 7)
 	wt := issueWorktree(t, h)
 
 	worksIn(h, t, s, wt)
@@ -804,7 +838,7 @@ func TestCleanupCommandFailureWithABranchLeftStillBlocks(t *testing.T) {
 func TestSessionWithoutIssueIsNeverCleanedUp(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s, err := h.NewSession("plain", "")
+	s, err := h.NewThreadIn("plain", "", "supervised", "project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1335,8 +1369,9 @@ func TestForcedCleanupOfABranchTheSessionLostIsRefused(t *testing.T) {
 func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	wt := issueWorktree(t, h)
-	s := issueSession(h, t, 7)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
 	cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "--exec", "false", "HEAD~1")
 	cmd.Dir = wt
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
