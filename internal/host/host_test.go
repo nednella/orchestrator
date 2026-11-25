@@ -1294,6 +1294,9 @@ func TestAnswerWithInputAllowsWithTheGivenInput(t *testing.T) {
 	if err := AnswerWith(ctxT(t), h.socket, "r1", json.RawMessage(given)); err != nil {
 		t.Fatal(err)
 	}
+	if e := waitKind(t, events, chat.KindAnswer); string(e.Input) != given {
+		t.Fatalf("logged answer input = %s, want %s", e.Input, given)
+	}
 	if e := waitKind(t, events, chat.KindTurnEnd); e.Error {
 		t.Fatal("turn ended with an error after allow")
 	}

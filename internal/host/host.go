@@ -603,7 +603,7 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 	}
 }
 
-// answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own.
+// answer takes the approval and logs the answer in one step under h.mu, so a turn that ends meanwhile cannot leave a stale answer to write, and a failed log keeps the approval open. An allow with input sends it in place of the tool's own and logs it, so the chat can show a question's answers.
 func (h *host) answer(id string, allow bool, message string, given json.RawMessage) error {
 	if len(given) > 0 && !isObject(given) {
 		return errors.New("an answer's input must be a JSON object")
@@ -633,7 +633,7 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 	if allow {
 		line, text = chat.Allow(id, input), "allow"
 	}
-	e, err := h.appendLocked(chat.Event{Kind: chat.KindAnswer, ID: id, Text: text})
+	e, err := h.appendLocked(chat.Event{Kind: chat.KindAnswer, ID: id, Text: text, Input: given})
 	if err != nil {
 		h.mu.Unlock()
 		return err
