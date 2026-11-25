@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
-import { api } from '../api'
+import { api, errorMessage } from '../api'
 import { commandMatches, commandToken, composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Command, Timeline } from '../chatTimeline'
@@ -97,7 +97,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     let current = true
     api.chatFiles(id, mention).then(
       (paths) => current && setFiles({ paths, error: '' }),
-      (err) => current && setFiles({ paths: [], error: String(err) }),
+      (err) => current && setFiles({ paths: [], error: errorMessage(err) }),
     )
     return () => {
       current = false
