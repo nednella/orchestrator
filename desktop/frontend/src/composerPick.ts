@@ -14,3 +14,6 @@ export function pickListKey(key: string, count: number, cursor: number): PickSte
 // pickCursor is the row a pick list of count rows shows highlighted: the cursor's, the first before the cursor moves,
 // -1 for an empty list.
 export const pickCursor = (cursor: number, count: number) => Math.min(Math.max(cursor, 0), count - 1)
+
+// doubledSpace says whether text that ends in a space, put right before text that starts with one, makes two.
+export const doubledSpace = (left: string, right: string) => left.endsWith(' ') && right.startsWith(' ')

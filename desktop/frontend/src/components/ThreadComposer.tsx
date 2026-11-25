@@ -7,7 +7,7 @@ import { commandMatches, commandToken, composerAction, mentionToken, replyLabel,
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Command, Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
-import { pickCursor, pickListKey } from '../composerPick'
+import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import { EFFORTS, modelName } from '../model'
 import type { ChatEvent, Pending, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
@@ -69,12 +69,12 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const [sending, setSending] = useState(false)
   const pending = usePendingImages()
   const picker = useRef<HTMLInputElement>(null)
-  const [caret, setCaret] = useState('')
+  const [caret, setCaret] = useState({ before: '', after: '' })
   const [cursor, setCursor] = useState(-1)
   const [dismissed, setDismissed] = useState(false)
   const [files, setFiles] = useState<Files | null>(null)
-  const command = dismissed ? null : commandToken(caret)
-  const mention = dismissed || command !== null ? null : mentionToken(caret)
+  const command = dismissed ? null : commandToken(caret.before)
+  const mention = dismissed || command !== null ? null : mentionToken(caret.before)
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -156,7 +156,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   // replaceToken puts text where the token typed so far is, with the @ or / before it.
   const replaceToken = (token: string, text: string) => {
     input.current?.deleteBefore(token.length + 1)
-    input.current?.insertLiteral(text)
+    input.current?.insertLiteral(doubledSpace(text, caret.after) ? text.slice(0, -1) : text)
     setCursor(-1)
   }
 
@@ -259,7 +259,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
         setCursor(-1)
         setDismissed(false)
       }}
-      onCaret={(before) => setCaret(before)}
+      onCaret={(before, after) => setCaret((caret) => (caret.before === before && caret.after === after ? caret : { before, after }))}
       onKeyDown={onKeyDown}
       onAttach={pending.attach}
       onSend={send}

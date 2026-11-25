@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pickCursor, pickListKey } from './composerPick.ts'
+import { doubledSpace, pickCursor, pickListKey } from './composerPick.ts'
 
 test('pickListKey: Up and Down move within the list', () => {
   assert.deepEqual(pickListKey('ArrowDown', 3, -1), { move: 0 })
@@ -25,4 +25,10 @@ test('pickCursor: the first row is highlighted until the cursor moves', () => {
   assert.equal(pickCursor(2, 3), 2)
   assert.equal(pickCursor(5, 3), 2)
   assert.equal(pickCursor(-1, 0), -1)
+})
+
+test('doubledSpace: a space on each side of the join', () => {
+  assert.equal(doubledSpace('@a.go ', ' then'), true)
+  assert.equal(doubledSpace('@a.go ', 'then'), false)
+  assert.equal(doubledSpace('', ' then'), false)
 })

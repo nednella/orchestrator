@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { EMPTY_DRAFT } from '../composerMarkdown'
-import { pickCursor, pickListKey } from '../composerPick'
+import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
 import type { Issue } from '../types'
@@ -70,8 +70,7 @@ export function HomeComposer() {
 
   const pick = (number: number) => {
     if (!token) return
-    const doubledSpace = token[1] === ' ' && caret.after.startsWith(' ')
-    input.current?.deleteBefore(token[2].length + 1 + (doubledSpace ? 1 : 0))
+    input.current?.deleteBefore(token[2].length + 1 + (doubledSpace(token[1], caret.after) ? 1 : 0))
     setPicked(number)
     setCursor(-1)
   }
