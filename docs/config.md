@@ -20,7 +20,7 @@ projects:
     session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual leaves it as a draft in the thread's chat, and so does each PR wake (`pr_review_command`, `pr_checks_command`, `pr_conflict_command`). The settings panel writes it
     session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
     session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
-    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles the thread that saw the PR open, and a clean-up keeps the thread, settled. The settings panel writes it
+    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close settles a thread that hears the PR, saw it open and works on its branch as its newest, and a clean-up keeps the thread, settled. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged; auto needs the session to have seen it open
       close: manual            # auto or manual: after the pull request closed unmerged; auto needs the session to have seen it open
     browser_start_url: ""      # page a session's browser opens first
