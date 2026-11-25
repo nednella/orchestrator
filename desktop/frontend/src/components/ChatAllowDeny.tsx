@@ -13,6 +13,7 @@ export function ChatAllowDeny({ allow, deny, reasonHint, busy, onAllow, onDeny }
         placeholder={reasonHint}
         blur="cancel"
         action={deny}
+        accent={false}
         onSubmit={(reason) => {
           setDenying(false)
           onDeny(reason.trim())

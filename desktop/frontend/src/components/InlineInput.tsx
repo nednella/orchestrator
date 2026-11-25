@@ -7,12 +7,14 @@ type InlineInputProps = {
   blur: 'submit' | 'cancel'
   className?: string
   action?: string
+  // accent false gives the action a plain button, for an action that is not the one to take by default.
+  accent?: boolean
   icon?: ReactNode
   onSubmit(value: string): void
   onCancel(): void
 }
 
-export function InlineInput({ initial = '', placeholder, blur, className = '', action, icon, onSubmit, onCancel }: InlineInputProps) {
+export function InlineInput({ initial = '', placeholder, blur, className = '', action, accent = true, icon, onSubmit, onCancel }: InlineInputProps) {
   const input = useRef<HTMLInputElement>(null)
   const done = useRef(false)
 
@@ -48,7 +50,7 @@ export function InlineInput({ initial = '', placeholder, blur, className = '', a
     <div className={`composer flex-row items-center gap-1.5 pr-1 pl-2.5 ${className}`}>
       {icon && <span className="flex flex-none text-dim">{icon}</span>}
       {field}
-      <button className="btn btn-accent h-6 flex-none px-2 text-label" onMouseDown={(e) => e.preventDefault()} onClick={() => finish(true)}>
+      <button className={`btn h-6 flex-none px-2 text-label ${accent ? 'btn-accent' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => finish(true)}>
         {action}
       </button>
     </div>
