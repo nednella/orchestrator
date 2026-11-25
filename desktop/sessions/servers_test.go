@@ -301,7 +301,7 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 
 // An app started on the same state folder with another tmux socket, as a check that sets only part of its isolation,
 // finds the threads of the first settled. A thread whose host answers runs, so it keeps its servers; one whose host was
-// killed while no app ran loses them.
+// killed while no app ran loses them. Deleting the one that runs leaves its servers too.
 func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	h := newHarness(t)
 	live, _, livePID := threadServing(t, h)
@@ -329,6 +329,14 @@ func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	eventually(t, "the killed thread's server stopped", func() bool { return !running(killedPID, killedStart) })
 	if !running(livePID, liveStart) {
 		t.Errorf("the second app stopped a server of thread %s, which runs under the first", live.ID)
+	}
+
+	if err := second.DeleteThread(live.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second) // a SIGTERM the delete sent would have ended the server by now
+	if !running(livePID, liveStart) {
+		t.Errorf("deleting thread %s in the second app stopped its server, which runs under the first", live.ID)
 	}
 }
 

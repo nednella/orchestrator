@@ -223,20 +223,23 @@ func clip(s string, width int) string {
 // marker; else, when the group holds neither the thread's host nor its agent, to each process of the group that carries
 // the marker, one by one, so a supervisor that would start the server again stops too; else to the server alone. Each
 // server is checked just before: one that is gone, no longer carries the marker or has another start time, as when its
-// pid was taken by a new process, is left alone. It logs one line per server it stops, then sends SIGKILL to each process
-// signalled still there after 5 s.
-func (t *Table) Stop(ctx context.Context, servers []Server) {
+// pid was taken by a new process, is left alone. It logs one line per server it stops and returns once the signals are
+// sent; the channel closes once each process signalled has exited, or after 5 s had SIGKILL.
+func (t *Table) Stop(ctx context.Context, servers []Server) <-chan struct{} {
+	done := make(chan struct{})
 	threads := map[string]bool{}
 	for _, s := range servers {
 		threads[s.Thread] = true
 	}
 	if len(threads) == 0 {
-		return
+		close(done)
+		return done
 	}
 	snap, err := t.scan(func(id string) bool { return threads[id] })
 	if err != nil {
 		t.logf("agentos: stopping the servers of a thread: %v", err)
-		return
+		close(done)
+		return done
 	}
 	sent := map[int]process{} // each process signalled, by pid
 	for _, s := range servers {
@@ -265,7 +268,11 @@ func (t *Table) Stop(ctx context.Context, servers []Server) {
 		}
 		t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s%s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, how)
 	}
-	t.killLeft(ctx, sent, snap.threads)
+	go func() {
+		defer close(done)
+		t.killLeft(ctx, sent, snap.threads)
+	}()
+	return done
 }
 
 // targets are what a stop of the server p sends SIGTERM to, a pid or a process group as -pgid, and the processes
@@ -347,8 +354,8 @@ func portList(ports []int) string {
 }
 
 // parseProcArgs reads kern.procargs2: the argument count as a 32-bit integer, the path the process was started from,
-// NUL padding, then the arguments and the environment, each string ending in a NUL. What follows the environment is
-// left out.
+// NUL padding, then the arguments and the environment, each string ending in a NUL. What follows the environment, and
+// a last string with no NUL to end it, are left out.
 func parseProcArgs(buf []byte) (argv, env []string) {
 	if len(buf) < 4 {
 		return nil, nil
@@ -363,10 +370,10 @@ func parseProcArgs(buf []byte) (argv, env []string) {
 	for len(rest) > 0 {
 		end := bytes.IndexByte(rest, 0)
 		if end < 0 {
-			end = len(rest)
+			break
 		}
 		s := string(rest[:end])
-		rest = rest[min(end+1, len(rest)):]
+		rest = rest[end+1:]
 		if len(argv) < argc {
 			argv = append(argv, s)
 			continue

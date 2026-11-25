@@ -43,7 +43,8 @@ func (s *Sessions) Servers(id string) ([]Server, error) {
 	return rows, nil
 }
 
-// StopServer stops the server pid of thread id, once it finds pid among the thread's servers again.
+// StopServer stops the server pid of thread id, once it finds pid among the thread's servers again, and returns once it
+// has exited.
 func (s *Sessions) StopServer(id string, pid int) error {
 	ctx := s.context()
 	list, err := s.serversOf(ctx, id)
@@ -54,7 +55,7 @@ func (s *Sessions) StopServer(id string, pid int) error {
 	if i < 0 {
 		return errors.New("That server is not running")
 	}
-	s.procs.Stop(ctx, list[i:i+1])
+	<-s.procs.Stop(ctx, list[i:i+1]) // so the list read after it no longer has the server
 	return nil
 }
 

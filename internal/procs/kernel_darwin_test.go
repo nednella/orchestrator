@@ -109,7 +109,7 @@ func TestServersAndStopOnThisMac(t *testing.T) {
 	if len(servers) != 1 || servers[0].PID != server.Process.Pid || !slices.Equal(servers[0].Ports, []int{mine}) || !strings.Contains(servers[0].Command, " -c import socket, sys, time s = socket.socket()") {
 		t.Fatalf("Servers = %+v, want only the thread's listener on %d", servers, mine)
 	}
-	table.Stop(context.Background(), servers)
+	<-table.Stop(context.Background(), servers)
 	// Stop returns once the kernel lists it no more, or lists it as a zombie, which this test reaps.
 	list, err := kernel{}.processes()
 	if err != nil {

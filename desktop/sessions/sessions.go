@@ -806,7 +806,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
 	}
 	s.awaitHostExit(name)
-	s.stopServers(false, id)
+	s.stopServers(true, id) // before its host socket goes, which says whether it runs elsewhere
 	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
 		if err := os.RemoveAll(path); err != nil {
 			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)

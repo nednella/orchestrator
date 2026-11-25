@@ -120,6 +120,7 @@ func TestParseProcArgs(t *testing.T) {
 		{"no environment", "\x01\x00\x00\x00/bin/sh\x00sh\x00", []string{"sh"}, nil},
 		{"too short", "\x01\x00", nil, nil},
 		{"no path end", "\x01\x00\x00\x00/bin/sh", nil, nil},
+		{"a last string with no NUL", "\x01\x00\x00\x00/bin/sh\x00sh\x00A=1\x00B=2", []string{"sh"}, []string{"A=1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -342,7 +343,7 @@ func TestStop(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sys := newFake(tt.procs...)
-			newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{tt.target})
+			<-newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{tt.target})
 			if got := sys.signals(); !slices.Equal(got, tt.want) {
 				t.Errorf("signals = %v, want %v", got, tt.want)
 			}
@@ -365,7 +366,7 @@ func TestStopSignalsAGroupOnce(t *testing.T) {
 		fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, env: marked("p/ab")},
 		fakeProc{process: process{pid: 201, ppid: 200, pgid: 200, start: 5}, env: marked("p/ab")},
 	)
-	newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, start: 5}, {Thread: "p/ab", PID: 201, start: 5}})
+	<-newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, start: 5}, {Thread: "p/ab", PID: 201, start: 5}})
 	if got, want := sys.signals(), []signalled{{-200, syscall.SIGTERM}}; !slices.Equal(got, want) {
 		t.Errorf("signals = %v, want %v", got, want)
 	}
@@ -376,8 +377,28 @@ func TestStopLogsEachServer(t *testing.T) {
 	sys := newFake(fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, env: marked("p/ab")})
 	table := newTable(t, sys, lsofSays(""))
 	table.logf = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
-	table.Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, Ports: []int{18080, 18081}, Command: "node server", start: 5}})
+	<-table.Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, Ports: []int{18080, 18081}, Command: "node server", start: 5}})
 	if len(lines) != 1 || !strings.Contains(lines[0], "node server (pid 200, ports 18080, 18081) of thread p/ab") {
 		t.Errorf("logged %q, want one line naming the server", lines)
+	}
+}
+
+func TestStopReturnsBeforeTheGrace(t *testing.T) {
+	sys := newFake(fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, env: marked("p/ab"), stubborn: true})
+	table := newTable(t, sys, lsofSays(""))
+	table.grace = time.Second
+	start := time.Now()
+	done := table.Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, start: 5}})
+	if waited := time.Since(start); waited >= table.grace {
+		t.Errorf("Stop returned after %s, want before the %s grace", waited, table.grace)
+	}
+	select {
+	case <-done:
+		t.Fatal("the kill pass ended before the grace")
+	default:
+	}
+	<-done
+	if sys.alive(200) {
+		t.Error("the process that ignored SIGTERM still runs after the kill pass")
 	}
 }
