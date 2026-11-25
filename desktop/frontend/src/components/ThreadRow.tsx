@@ -8,6 +8,7 @@ import { currentTask } from '../threads'
 import type { Session } from '../types'
 import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
+import { ClaudeMark } from './ClaudeMark'
 import { CleanupControls } from './CleanupControls'
 import { CleanupMark } from './CleanupMark'
 import { Icon } from './Icon'
@@ -136,6 +137,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                   </button>
                 </span>
               )}
+              {session.state === 'working' && <span className="thread-working"><ClaudeMark size={14} /></span>}
             </span>
           </>
         )}
