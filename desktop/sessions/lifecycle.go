@@ -460,13 +460,6 @@ func (l *Lifecycle) asked(id string, n int) bool {
 	return l.prs(session.ProjectKey(id)).Asked[id] == n
 }
 
-// hasWorktree says whether agentos made a worktree for the thread that it has not removed. It may be called with mu
-// held: the record has its own lock and never takes mu.
-func (l *Lifecycle) hasWorktree(t target) bool {
-	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
-	return ok && w.Removed == 0
-}
-
 func (l *Lifecycle) cachedPR(ctx context.Context, dir, branch string, found map[string]*PR) (*PR, error) {
 	if pr, ok := found[branch]; ok {
 		return pr, nil
@@ -547,7 +540,6 @@ func (l *Lifecycle) update(t target, worktree string, pr *PR) outcome {
 		}
 	}
 	o.queue = !live && (prev == nil || prev.State != pr.State)
-	// The owner is asked only when a worktree would go: with none, a clean-up loses nothing.
 	switch {
 	case live:
 		if tr.cleanup == "ask" {
@@ -555,7 +547,7 @@ func (l *Lifecycle) update(t target, worktree string, pr *PR) outcome {
 		}
 		l.setAsked(t.id, 0)
 	case tr.cleanup != "":
-	case l.prs(key).Asked[t.id] == pr.Number, !wantsAuto(t.proj.CleanupMode, pr.State) && l.hasWorktree(t):
+	case l.prs(key).Asked[t.id] == pr.Number, !wantsAuto(t.proj.CleanupMode, pr.State):
 		tr.cleanup = "ask"
 		l.setAsked(t.id, pr.Number)
 	case !tr.autoTried:

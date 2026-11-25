@@ -803,12 +803,12 @@ func TestCleanupNeverRemovesAWorktreeAHumanMade(t *testing.T) {
 	}
 }
 
-// projectFolderThread is a Write thread in the project folder that tracks my-fix, checked out and pushed there. Its
+// projectFolderThread is a Write thread in the project folder, in a project with projectExtra in its config, that tracks my-fix, checked out and pushed there. Its
 // clean-up command notes each folder it runs for in the file ran.
-func projectFolderThread(t *testing.T) (h *apptest.Harness, s sessions.Session, ran string) {
+func projectFolderThread(t *testing.T, projectExtra string) (h *apptest.Harness, s sessions.Session, ran string) {
 	t.Helper()
 	ran = filepath.Join(t.TempDir(), "ran")
-	h = apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
+	h = apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran), ProjectExtra: projectExtra})
 	repoFixture(t, h)
 	gitIn(t, h.Dir, "checkout", "-b", "my-fix")
 	gitIn(t, h.Dir, "push", "-u", "origin", "my-fix")
@@ -837,7 +837,7 @@ func projectFolderIntact(t *testing.T, h *apptest.Harness, file string) {
 }
 
 func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
-	h, s, ran := projectFolderThread(t)
+	h, s, ran := projectFolderThread(t, "")
 	openThenMerge(h)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))
 	projectFolderIntact(t, h, "README")
@@ -849,8 +849,30 @@ func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
 	}
 }
 
+func TestManualModeAsksAThreadWithNothingToRemove(t *testing.T) {
+	h, s, ran := projectFolderThread(t, "    session_cleanup_mode: {merge: manual}\n")
+	name, _ := session.ParseName(s.ID)
+	tmp := filepath.Join(h.State, "data", name.Project, "tmp", name.Token)
+	openThenMerge(h)
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.PR == nil || got.Cleanup != "ask" || !exists(tmp) || len(h.Cleanups()) != 0 {
+		t.Fatalf("after the merge: row %+v, temp folder there %v, log %+v", got, exists(tmp), h.Cleanups())
+	}
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(tmp) {
+		t.Errorf("the confirmed clean-up: row cleaned up %v, temp folder there %v", cleanedUp(h, s.ID)(), exists(tmp))
+	}
+	projectFolderIntact(t, h, "README")
+	if runs := cleanupRuns(ran); len(runs) != 0 {
+		t.Errorf("the clean-up command ran for %q", runs)
+	}
+}
+
 func TestForcedCleanupNeverRemovesTheProjectFolder(t *testing.T) {
-	h, s, ran := projectFolderThread(t)
+	h, s, ran := projectFolderThread(t, "")
 	if err := os.WriteFile(filepath.Join(h.Dir, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

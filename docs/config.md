@@ -21,7 +21,7 @@ projects:
     session_branch_fallback: "" # branch agentos makes for an issue thread; {n} is the issue number; "" means issue-{n}
     session_cleanup_command: "" # shell command that removes the worktree agentos made, the branch stays; {worktree}, {branch}, {dir}, {force} (--force when forced, else empty); "" means git worktree remove {force} {worktree}
     session_worktree_command: "" # shell command that makes a thread's worktree on a new branch; {branch}, {worktree}, {dir}, {base}; "" means git worktree add -b {branch} {worktree} {base}
-    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close of the PR of a thread's branch settles the thread, and a clean-up keeps the thread, settled, and its branch. manual asks first only when there is a worktree agentos made to remove. The settings panel writes it
+    session_cleanup_mode:      # does the app clean up by itself? Either way a merge or close of the PR of a thread's branch settles the thread, and a clean-up keeps the thread, settled, and its branch. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged, also while the app was closed
       close: manual            # auto or manual: after the pull request closed unmerged, also while the app was closed
     browser_start_url: ""      # page a session's browser opens first
