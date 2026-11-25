@@ -290,16 +290,6 @@ func TestTrailingSemicolonSurvives(t *testing.T) {
 	if len(infos) != 1 || infos[0].Title != "then b;" {
 		t.Fatalf("title = %+v", infos)
 	}
-	for _, text := range []string{"one line;", "two\nlines;"} {
-		if err := tmux.Type(ctx, name, text); err != nil {
-			t.Fatalf("Type(%q): %v", text, err)
-		}
-	}
-	time.Sleep(300 * time.Millisecond)
-	out, err := tmux.Capture(ctx, name)
-	if err != nil || !strings.Contains(out, "one line;") || !strings.Contains(out, "lines;") {
-		t.Errorf("pane = %q, %v", out, err)
-	}
 }
 
 func TestListFailureIsNotNoSessions(t *testing.T) {

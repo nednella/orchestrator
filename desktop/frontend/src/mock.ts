@@ -1,20 +1,10 @@
 import { buildIssueDetail, buildIssues, movesFrom, moveIssue, sortBySection } from './mockIssues'
 import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeText } from './mockBrowser'
 import type { PageModel } from './mockBrowser'
-import * as term from './mockTerminal'
 import { mockChat } from './mockChat'
 import type { BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, PR, Project, Release, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
-
-type MockSession = Session & {
-  buffer: string
-  opened: boolean
-  nextChangeAt: number
-  stream: number
-  cursor: number
-  tools: number
-}
 
 type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; waits: Wait[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
 
@@ -201,7 +191,7 @@ export function createMock(params: URLSearchParams) {
     staleAnswer: params.has('stale'),
   }
   const handlers = new Map<string, Set<Handler>>()
-  const sessions: MockSession[] = []
+  const sessions: Session[] = []
   const data: ProjectData[] = [
     { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree trees/issue-371', 'branch issue-371', 'temp files', 'session'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree trees/issue-366', 'branch issue-366', 'session'], reason: '' }] },
     { name: 'agentos', dir: '~/code/agentos', repo: 'nednella/agentos', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/agentos')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
@@ -224,7 +214,7 @@ export function createMock(params: URLSearchParams) {
 
   const tenthGB = 2 ** 30 / 10 // the app rounds figures up to this
 
-  function view(s: MockSession): Session {
+  function view(s: Session): Session {
     return {
       id: s.id,
       project: s.project,
@@ -342,10 +332,6 @@ export function createMock(params: URLSearchParams) {
     return shell
   }
 
-  function isShell(id: string) {
-    return id.startsWith('shell-')
-  }
-
   function snapshot(): Snapshot {
     return {
       project: projectView(current),
@@ -364,12 +350,7 @@ export function createMock(params: URLSearchParams) {
     emit('projects', data.map(projectView))
   }
 
-  function write(s: MockSession, text: string) {
-    s.buffer += text
-    if (s.opened) emit('term:data', { id: s.id, data: toBase64(text) })
-  }
-
-  function find(id: string): MockSession {
+  function find(id: string): Session {
     const found = sessions.find((s) => s.id === id)
     if (!found) throw 'No such session'
     return found
@@ -398,8 +379,8 @@ export function createMock(params: URLSearchParams) {
     createdAt = Date.now(),
     owner = current,
     chat = false,
-  ): MockSession {
-    const s: MockSession = {
+  ): Session {
+    const s: Session = {
       id: `${owner.name}/${Math.random().toString(36).slice(2, 10)}`,
       n: nextN++,
       title,
@@ -428,28 +409,17 @@ export function createMock(params: URLSearchParams) {
       resumable: initial === 'settled',
       memory: (chat ? 3 : 4 + (nextN % 5) * 3) * tenthGB,
       project: owner.name,
-      buffer: term.banner(owner.dir) + term.diffBlock('app-frontend/src/js/pages/[slug]/Index.tsx') + term.paragraphs[0] + '\r\n\r\n',
-      opened: false,
-      nextChangeAt: Date.now() + 8_000 + Math.random() * 25_000,
-      stream: 1,
-      cursor: 0,
-      tools: 0,
     }
-    if (initial === 'waiting') s.buffer += term.permissionPrompt('npx tsc --noEmit')
-    if (initial === 'idle' && history.length > 0) s.buffer += term.finishedNote(134)
-    if (initial === 'idle' && history.length === 0) s.buffer = term.banner(owner.dir) + term.promptLine('')
-    if (initial === 'settled') s.buffer += '\r\n\x1b[2m[session ended]\x1b[0m\r\n'
     sessions.push(s)
     return s
   }
 
-  // Only two seeded threads run under a host, one waiting on a tool and one on a question, so the rest keep their
-  // terminals; a thread started in the mock is hosted. With chatcases, three more do: one with an empty chat, one whose
-  // chat log cannot be read and one waiting on a plan. With stale, the tool's approval ends on the host's side and the
-  // app is not told.
+  // Two seeded threads have a chat, one waiting on a tool and one on a question; the others start with an empty one,
+  // and one ran in a terminal before agentos showed chats, so it has none. With chatcases, one chat log cannot be read
+  // and one more thread waits on a plan. With stale, the tool's approval ends on the host's side and the app is not told.
   const chats = mockChat(emit, (id) => {
     const s = find(id)
-    if (!s.hosted) throw `Thread ${id} has no chat: its agent runs in its terminal`
+    if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return { settled: s.state === 'settled', setState: (state) => setState(s, state) }
   })
 
@@ -472,7 +442,7 @@ export function createMock(params: URLSearchParams) {
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
     seed('retry banner experiment', 0, 'settled', [['working', 400], ['idle', 380], ['settled', 300]])
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
-    sessions.find((x) => x.title === 'spike: websocket retry')!.resumable = false
+    Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { resumable: false, hosted: false, detail: 'Ran in a terminal before chats' })
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
@@ -502,11 +472,9 @@ export function createMock(params: URLSearchParams) {
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
     if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], true)
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
-    const emptyChat = sessions.find((x) => x.title === 'Where do we set the cache headers?')!
     const brokenChat = byIssue(326)
     const questionChat = sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!
     const planChat = sessions.find((x) => x.title === 'Plan the checkout split')
-    sessions.forEach((s) => (s.hosted = s === byIssue(444) || s === questionChat || (flags.chatCases && (s === emptyChat || s === brokenChat || s === planChat))))
     if (flags.chatCases) chats.breakLog(brokenChat.id)
     chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
     // After the app's first read of what each thread waits on, so it still shows the approval.
@@ -537,23 +505,23 @@ export function createMock(params: URLSearchParams) {
     }, 2500)
   }
 
-  function owner(s: MockSession): ProjectData {
+  function owner(s: Session): ProjectData {
     return data.find((p) => p.name === s.project) ?? current
   }
 
-  function closeWait(s: MockSession, at: number) {
+  function closeWait(s: Session, at: number) {
     const open = owner(s).waits.find((w) => w.sessionTitle === s.title && w.waitedMs === 0)
     if (open) open.waitedMs = Math.max(at - open.startedAt, 1000)
   }
 
-  function openWait(s: MockSession, at: number) {
+  function openWait(s: Session, at: number) {
     const permission = s.detail.includes('permission')
     const kind: WaitKind = s.state === 'idle' ? 'idle' : permission ? 'permission' : 'question'
     const label = { permission: 'Bash: npx tsc --noEmit', question: 'Question', idle: 'Reply landed' }[kind]
     owner(s).waits.unshift({ sessionTitle: s.title, issue: s.issue, model: s.model, kind, label, startedAt: at, waitedMs: 0 })
   }
 
-  function setState(s: MockSession, state: State) {
+  function setState(s: Session, state: State) {
     const at = Date.now()
     closeWait(s, at)
     s.state = state
@@ -561,9 +529,6 @@ export function createMock(params: URLSearchParams) {
     s.detail = pick(details[state])
     s.lastEventAt = at
     s.history = [...s.history, { state, at }].slice(-200)
-    if (state === 'waiting') write(s, term.permissionPrompt('npx tsc --noEmit'))
-    if (state === 'idle') write(s, term.finishedNote(Math.round((at - s.createdAt) / 1000) % 600))
-    if (state === 'working') write(s, term.toolCall(s.tools++))
     publish()
     if (state === 'waiting' || state === 'idle') {
       openWait(s, at)
@@ -571,43 +536,6 @@ export function createMock(params: URLSearchParams) {
       if (s.project === current.name) emit('attention', { id: s.id, state: state === 'idle' ? 'replied' : 'waiting' })
     }
   }
-
-  function nextState(state: State): State {
-    if (state === 'working') return Math.random() < 0.6 ? 'waiting' : 'idle'
-    return 'working'
-  }
-
-  setInterval(() => {
-    const now = Date.now()
-    sessions.forEach((s) => {
-      if (s.hosted || s.state === 'settled' || (s.pr && (s.pr.state === 'merged' || s.pr.state === 'closed'))) return
-      if (now >= s.nextChangeAt) {
-        s.nextChangeAt = now + 12_000 + Math.random() * 28_000
-        setState(s, nextState(s.state))
-        return
-      }
-      if (s.state !== 'working') return
-      if (Math.random() < 0.35) {
-        s.detail = pick(details.working)
-        s.lastEventAt = now
-        publish()
-      }
-    })
-  }, 1000)
-
-  setInterval(() => {
-    sessions.forEach((s) => {
-      if (s.state !== 'working' || !s.opened) return
-      const text = term.paragraphs[s.stream % term.paragraphs.length]
-      const words = text.split(' ')
-      const take = 2 + Math.floor(Math.random() * 3)
-      const chunk = words.slice(s.cursor, s.cursor + take).join(' ')
-      const done = s.cursor + take >= words.length
-      s.cursor = done ? 0 : s.cursor + take
-      if (done) s.stream++
-      write(s, chunk + (done ? '\r\n\r\n' : ' '))
-    })
-  }, 140)
 
   function noteById(id: string): Note {
     const note = current.notes.find((n) => n.id === id)
@@ -621,13 +549,14 @@ export function createMock(params: URLSearchParams) {
 
   const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
 
-  function startSessionFor(title: string, issue: number, prefill: string, action = '', model = '', effort = ''): Session {
+  // The thread gets its first message through its chat, as the app gives it to the host.
+  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = ''): Session {
     const s = create(title, issue, 'idle')
     s.action = action
     if (model) s.model = model
     if (effort) s.effort = effort
-    s.buffer = term.banner(current.dir) + term.promptLine(prefill)
     chats.start(s.id)
+    if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
     publish()
     return view(s)
   }
@@ -750,7 +679,7 @@ export function createMock(params: URLSearchParams) {
     return { days, since: dayKey(120), totals, projects, heat, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
-  function finishCleanup(s: MockSession) {
+  function finishCleanup(s: Session) {
     const target = owner(s)
     target.cleanups.unshift({
       at: Date.now(),
@@ -825,7 +754,7 @@ export function createMock(params: URLSearchParams) {
     return renderPage(page, shotCanvas)
   }
 
-  function addEvidence(s: MockSession, item: Omit<Evidence, 'id' | 'at'>, at = Date.now()): Evidence {
+  function addEvidence(s: Session, item: Omit<Evidence, 'id' | 'at'>, at = Date.now()): Evidence {
     const entry: Evidence = { ...item, id: `ev-${++evidenceSeq}`, at }
     const items = [...(evidence.get(s.id) ?? []), entry]
     evidence.set(s.id, items)
@@ -836,7 +765,7 @@ export function createMock(params: URLSearchParams) {
     return entry
   }
 
-  function openPage(s: MockSession, url: string): PageModel {
+  function openPage(s: Session, url: string): PageModel {
     const page = newPage(url)
     pages.set(s.id, page)
     s.browser = true
@@ -878,9 +807,6 @@ export function createMock(params: URLSearchParams) {
   }
   const second = sessions.find((s) => s.issue === 326)
   if (second) addEvidence(second, { kind: 'text', url: '', text: 'Totals are summed in cents and formatted once. Rounding each line drifted by a cent on large carts.', caption: 'Why cents', source: 'agent' }, Date.now() - 30 * minute)
-  sessions.forEach((s) => {
-    if (s.evidence > 0) s.nextChangeAt = Number.MAX_SAFE_INTEGER
-  })
 
   const seedDigest = (): DigestItem[] => {
     const now = Date.now()
@@ -935,8 +861,8 @@ export function createMock(params: URLSearchParams) {
       const s = create(title.trim() || titleFromPrompt(prompt) || `chat ${nextN}`, 0, 'idle', [], Date.now(), current, true)
       if (model) s.model = model
       if (effort) s.effort = effort
-      s.buffer = term.banner(current.dir) + term.promptLine(prompt)
       chats.start(s.id)
+      if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
       publish()
       return view(s)
     },
@@ -957,7 +883,6 @@ export function createMock(params: URLSearchParams) {
       s.model = old.model
       s.effort = old.effort
       s.forkOf = old.forkOf
-      s.buffer = old.buffer + term.promptLine('')
       sessions.splice(sessions.indexOf(old), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
@@ -1172,48 +1097,35 @@ export function createMock(params: URLSearchParams) {
       if (at >= 0) shells.splice(at, 1)
     },
     TermOpen: async (id: string) => {
-      if (isShell(id)) {
-        const shell = findShell(id)
-        if (!shell) throw 'No such shell'
-        shell.opened = true
-        emit('term:data', { id, data: toBase64(`\x1bc${shell.buffer}`) })
-        return
-      }
-      const s = find(id)
-      s.opened = true
-      emit('term:data', { id, data: toBase64(`\x1bc${s.buffer}`) })
+      const shell = findShell(id)
+      if (!shell) throw 'No such shell'
+      shell.opened = true
+      emit('term:data', { id, data: toBase64(`\x1bc${shell.buffer}`) })
     },
     TermWrite: async (id: string, data: string) => {
-      if (isShell(id)) {
-        const shell = findShell(id)
-        if (!shell) return
-        for (const ch of data) {
-          if (ch === '\r') {
-            const line = shell.line
-            shell.line = ''
-            shellRun(shell, line)
-            shellWrite(shell, `\r\n${prompt(shell.project)}`)
-          } else if (ch === '\x7f') {
-            if (shell.line) {
-              shell.line = shell.line.slice(0, -1)
-              shellWrite(shell, '\b \b')
-            }
-          } else if (ch >= ' ') {
-            shell.line += ch
-            shellWrite(shell, ch)
+      const shell = findShell(id)
+      if (!shell) return
+      for (const ch of data) {
+        if (ch === '\r') {
+          const line = shell.line
+          shell.line = ''
+          shellRun(shell, line)
+          shellWrite(shell, `\r\n${prompt(shell.project)}`)
+        } else if (ch === '\x7f') {
+          if (shell.line) {
+            shell.line = shell.line.slice(0, -1)
+            shellWrite(shell, '\b \b')
           }
+        } else if (ch >= ' ') {
+          shell.line += ch
+          shellWrite(shell, ch)
         }
-        return
       }
-      const echo = data.replace(/\r/g, '\r\n').replace(/\x7f/g, '\b \b')
-      write(find(id), echo)
     },
     TermResize: async () => undefined,
     TermClose: async (id: string) => {
       const shell = findShell(id)
       if (shell) shell.opened = false
-      const s = sessions.find((x) => x.id === id)
-      if (s) s.opened = false
     },
     Stats: async (days: number, project: string) => delay(statsFor(days, project), 150),
     Ledger: async (days: number, project: string) => delay(ledgerFor(days, project), 300),
@@ -1226,9 +1138,9 @@ export function createMock(params: URLSearchParams) {
     },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
+      if (!s.hosted) throw `Thread ${id} runs in an old terminal`
       if (s.state === 'settled') throw `Thread ${id} has settled`
-      if (s.hosted) return chats.backend.ChatDraft(id, text)
-      write(s, text)
+      return chats.backend.ChatDraft(id, text)
     },
     ...chats.backend,
     Cleanup: async (id: string, force: boolean) => {

@@ -2,7 +2,7 @@
 
 ## What exists
 
-A thread whose session runs under a host (`session.hosted`) shows its chat in the centre instead of its terminal: a column of the user's messages (right, in a raised box), Claude's replies as markdown, and small centred lines for notices, work, approvals, questions and plans (the cards for these come later). The list is virtualised. A thread opens at the bottom, follows a streaming reply while the reader is at the bottom (within 48 px), and stops following when the reader scrolls up; a "Jump to latest" pill then shows once new items arrive below. Each thread keeps where it was left, in memory, for the latest 20 threads. Sessions not under a host keep their terminal.
+A thread whose session runs under a host (`session.hosted`) shows its chat in the centre instead of its terminal: a column of the user's messages (right, in a raised box), Claude's replies as markdown, and small centred lines for notices, work, approvals, questions and plans (the cards for these come later). The list is virtualised. A thread opens at the bottom, follows a streaming reply while the reader is at the bottom (within 48 px), and stops following when the reader scrolls up; a "Jump to latest" pill then shows once new items arrive below. Each thread keeps where it was left, in memory, for the latest 20 threads. A session without the mark, an old terminal session, has no chat: its thread view shows `This thread ran in a terminal before agentos showed chats` as its empty state.
 
 ## How a user reaches it
 

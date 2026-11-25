@@ -612,19 +612,6 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	}
 }
 
-func TestASessionWithoutAHostTakesNoInterrupt(t *testing.T) {
-	h := newHarness(t)
-	// A Claude session from a release before the host: its agent runs in its pane, and it has no hosted tag.
-	id := "main/aaaaaaaa"
-	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "60")
-	h.Sessions().Refresh()
-	eventually(t, "the session listed", func() bool { _, ok := h.Session(id); return ok })
-	want := "Thread " + id + " has no chat: its agent runs in its terminal"
-	if err := h.Interrupt(id); err == nil || err.Error() != want {
-		t.Errorf("Interrupt = %v, want %q", err, want)
-	}
-}
-
 func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 	h := apptest.New(t)
 	s, err := h.Sessions().Create("work", "", false, 0)

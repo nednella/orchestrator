@@ -39,20 +39,23 @@ import (
 )
 
 const (
-	pollEvery     = 2 * time.Second
-	stopSettle    = time.Second // Claude Code writes a turn's last reply just after the Stop hook
-	tmuxTimeout   = 5 * time.Second
-	defaultTitle  = "agent"
-	chatTitle     = "chat"
-	endedSettle   = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
-	startCols     = 120
-	startRows     = 32
-	hostWait      = 10 * time.Second // for a new session's host to listen
-	hostStarting  = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
-	promptSettles = 300 * time.Millisecond
+	pollEvery    = 2 * time.Second
+	stopSettle   = time.Second // Claude Code writes a turn's last reply just after the Stop hook
+	tmuxTimeout  = 5 * time.Second
+	defaultTitle = "agent"
+	chatTitle    = "chat"
+	endedSettle  = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
+	startCols    = 120
+	startRows    = 32
+	hostWait     = 10 * time.Second // for a new session's host to listen
+	hostStarting = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
+	oldDetail    = "Ran in a terminal before chats"
 )
 
-var errNotSession = errors.New("the shell is not a session")
+var (
+	errNotSession = errors.New("the shell is not a session")
+	errOldChat    = errors.New("This thread ran in a terminal before agentos showed chats")
+)
 
 // Session is one agent as the front end sees it.
 type Session struct {
@@ -134,7 +137,8 @@ type Sessions struct {
 	browsers   Browsers
 	awake      Awake
 	keepAwake  func(projectKey string) bool
-	info       []term.Info
+	info       []term.Info              // the live sessions under a host
+	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []session.Name           // every project's shell sessions
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until dismissed
@@ -329,22 +333,31 @@ func (s *Sessions) Refresh() {
 	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.info = infos
-	s.shells = shells
+	s.info, s.old = nil, nil
 	for _, in := range infos {
+		if in.Hosted {
+			s.info = append(s.info, in)
+		} else {
+			s.old = append(s.old, in)
+		}
+	}
+	s.shells = shells
+	for _, in := range s.info {
 		if name := in.Name.String(); s.ended[name] != nil {
 			s.revive(name)
 			delete(records, name)
 		}
 	}
 	for name, rec := range records {
-		if slices.ContainsFunc(infos, func(i term.Info) bool { return i.Name.String() == name }) {
+		switch {
+		case s.isOld(name): // its hooks are dropped; once it is gone, its file makes its settled row
+		case slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name.String() == name }):
 			s.take(rec)
-		} else {
+		default:
 			s.adoptEnded(name, rec)
 		}
 	}
-	s.markRead(records, stamps, infos)
+	s.markRead(records, stamps, s.info)
 	s.number()
 	s.loaded = true
 	s.sync()
@@ -360,8 +373,8 @@ type fileStamp struct {
 func stampOf(info fs.FileInfo) fileStamp { return fileStamp{info.ModTime(), info.Size()} }
 
 // markRead keeps the stamps the state files had when they were read, so the next refresh reads a file again only once
-// it changes. A file of a session that is neither live nor ended yet, such as one still settling, is read each time.
-// It needs createMu and mu.
+// it changes. A file of a session that is neither live under a host nor ended yet, such as one still settling or an
+// old terminal session's, is read each time. It needs createMu and mu.
 func (s *Sessions) markRead(records map[string]session.Record, stamps map[string]fileStamp, infos []term.Info) {
 	for name := range records {
 		if s.ended[name] != nil || slices.ContainsFunc(infos, func(i term.Info) bool { return i.Name.String() == name }) {
@@ -511,7 +524,7 @@ func (s *Sessions) endSession(id string, at time.Time) {
 // It needs mu.
 func (s *Sessions) number() {
 	var fresh []term.Info
-	for _, in := range s.info {
+	for _, in := range slices.Concat(s.info, s.old) {
 		if _, ok := s.nums[in.Name.String()]; !ok {
 			fresh = append(fresh, in)
 		}
@@ -596,10 +609,16 @@ func (s *Sessions) handoverOf(id string) string {
 	return string(data)
 }
 
-// Dismiss removes a settled session's row.
+// Dismiss removes a settled session's row. An old terminal session that still runs only leaves the list: what it
+// keeps is its own until it ends.
 func (s *Sessions) Dismiss(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.isOld(id) {
+		s.dismissed[id] = true
+		s.sync()
+		return nil
+	}
 	if _, ok := s.ended[id]; !ok {
 		return fmt.Errorf("Thread %s has not settled", id)
 	}
@@ -618,9 +637,9 @@ func (s *Sessions) observe(rec session.Record) {
 	s.sync()
 }
 
-// take folds a record in. It needs mu.
+// take folds a record in. The hooks of an old terminal session are dropped, so it raises nothing. It needs mu.
 func (s *Sessions) take(rec session.Record) {
-	if _, ended := s.ended[rec.Session]; ended || s.dismissed[rec.Session] {
+	if _, ended := s.ended[rec.Session]; ended || s.dismissed[rec.Session] || s.isOld(rec.Session) {
 		return
 	}
 	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
@@ -950,6 +969,13 @@ func (s *Sessions) list() []Session {
 		byName[e.info.Name] = e.info
 		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Settled, At: e.at})
 	}
+	for _, in := range s.old {
+		if s.dismissed[in.Name.String()] {
+			continue
+		}
+		byName[in.Name] = in
+		rail = append(rail, session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Settled, At: in.Created})
+	}
 	session.Sort(rail)
 	projs := s.projects()
 	out := make([]Session, 0, len(rail))
@@ -970,13 +996,17 @@ func (s *Sessions) list() []Session {
 			view.SettledAt = ss.At.UnixMilli()
 			view.Resumable = s.conversationOf(id) != ""
 		}
-		f := s.life.fields(id)
-		view.Branch, view.Worktree, view.PR, view.Git = f.branch, f.worktree, f.pr, f.git
-		view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
-		if view.Branch == "" && issue > 0 {
-			if p, ok := projectIn(projs, in); ok {
-				view.Branch = p.BranchFor(issue)
+		if in.Hosted {
+			f := s.life.fields(id)
+			view.Branch, view.Worktree, view.PR, view.Git = f.branch, f.worktree, f.pr, f.git
+			view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
+			if view.Branch == "" && issue > 0 {
+				if p, ok := projectIn(projs, in); ok {
+					view.Branch = p.BranchFor(issue)
+				}
 			}
+		} else {
+			view.Detail = oldDetail
 		}
 		if spent, ok := s.spent[id]; ok {
 			view.Tokens, view.Cost = spent.Total(), spent.Dollars()
@@ -1009,7 +1039,7 @@ func (s *Sessions) ListOf(key string) []Session {
 func (s *Sessions) Title(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, in := range s.info {
+	for _, in := range slices.Concat(s.info, s.old) {
 		if in.Name.String() == id {
 			return cmp.Or(in.Title, defaultTitle)
 		}
@@ -1047,7 +1077,7 @@ func (s *Sessions) projects() []project.Project {
 	if !slices.ContainsFunc(out, func(p project.Project) bool { return p.Key() == s.project.Key() }) {
 		out = append(out, s.project)
 	}
-	for _, in := range s.info {
+	for _, in := range slices.Concat(s.info, s.old) {
 		if !slices.ContainsFunc(out, func(p project.Project) bool { return p.Key() == in.Name.Project }) {
 			out = append(out, project.Project{Name: in.Name.Project, Dir: in.Path})
 		}
@@ -1694,32 +1724,16 @@ func toHost(ctx context.Context, socket, text string, submit bool, wait time.Dur
 	return host.Send(ctx, socket, text)
 }
 
-// send gives text to the session. A session under a host gets it sent through the host, or left as a draft in its chat
-// when submit is not set; another has it typed into its prompt, and Enter pressed when submit is set.
+// send gives text to the session through its host: sent when submit is set, else left as a draft in its chat.
 func (s *Sessions) send(ctx context.Context, name session.Name, text string, submit bool) {
-	if socket := s.hostOf(name); socket != "" {
-		if err := toHost(ctx, socket, text, submit, hostStarting); err != nil {
-			log.Printf("agentos: session %s did not get a prompt: %v", name, err)
-		}
-		return
+	if err := toHost(ctx, s.hostSocket(name), text, submit, hostStarting); err != nil {
+		log.Printf("agentos: session %s did not get a prompt: %v", name, err)
 	}
-	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
-	defer cancel()
-	if err := s.tmux.Type(tctx, name, text); err != nil || !submit {
-		return
-	}
-	// Enter right behind the text can reach the agent before the text has landed.
-	select {
-	case <-time.After(promptSettles):
-	case <-ctx.Done():
-		return
-	}
-	_ = s.tmux.Submit(tctx, name)
 }
 
 // wake sends the prompt to the session once its turn is over and it is not waiting on the user:
-// typed into a permission prompt, the text could answer it. A prompt already held for the session
-// is not held again; a host-run session of a project that sends by hand gets it as a draft at once, with no holding. A session that has ended gets a new one for
+// sent while an approval waits, the text would deny it. A prompt already held for the session
+// is not held again; a session of a project that sends by hand gets it as a draft at once, with no holding. A session that has ended gets a new one for
 // its issue when the issue has no live session: it gets the prompt, sent unless the
 // project sends by hand, the new one takes over the old's branches and handover, and the old
 // row goes. The new one continues the old's conversation when the agent can.
@@ -1742,7 +1756,7 @@ func (s *Sessions) wake(ctx context.Context, t target, prompt string) {
 	if err != nil {
 		return
 	}
-	if !t.proj.SendsPrompt() && s.hostOf(name) != "" {
+	if !t.proj.SendsPrompt() {
 		s.send(ctx, name, prompt, false)
 		return
 	}
@@ -1793,9 +1807,13 @@ func (s *Sessions) Settle(id string) error {
 	}
 	s.mu.Lock()
 	_, ended := s.ended[id]
+	old := s.isOld(id)
 	s.mu.Unlock()
-	if ended {
+	switch {
+	case ended:
 		return fmt.Errorf("Thread %s has settled", id)
+	case old:
+		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
 	s.closeTerm(id)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
@@ -1894,10 +1912,11 @@ func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 	return t, nil
 }
 
-// targetOf finds the session's project in projs. A chat or a fork has no branch or PR. It needs mu.
+// targetOf finds the session's project in projs. A chat, a fork or an old terminal session has no branch or PR. It
+// needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
-	if !ok || in.Chat || in.Fork != "" {
+	if !ok || in.Chat || in.Fork != "" || !in.Hosted {
 		return target{}, false
 	}
 	issue, _ := strconv.Atoi(in.Issue)
@@ -1943,7 +1962,7 @@ func projectIn(projs []project.Project, in term.Info) (project.Project, bool) {
 	return project.Project{}, false
 }
 
-// TypeInto puts text into the session's prompt without pressing Enter. A session under a host gets it as a draft in its chat.
+// TypeInto leaves text as a draft in the session's chat.
 func (s *Sessions) TypeInto(id, text string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -1952,25 +1971,24 @@ func (s *Sessions) TypeInto(id, text string) error {
 	if err := s.refuseSettled(id); err != nil {
 		return err
 	}
-	if socket := s.hostOf(name); socket != "" {
-		if err := toHost(s.context(), socket, text, false, hostStarting); err != nil {
-			log.Printf("agentos: session %s did not take a message: %v", id, err)
-			return fmt.Errorf("session %s did not take the text", id)
-		}
-		return nil
+	if err := toHost(s.context(), s.hostSocket(name), text, false, hostStarting); err != nil {
+		log.Printf("agentos: session %s did not take a message: %v", id, err)
+		return fmt.Errorf("session %s did not take the text", id)
 	}
-	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
-	defer cancel()
-	return s.tmux.Type(ctx, name, text)
+	return nil
 }
 
-// refuseSettled is an error for a session that has settled. It takes mu.
+// refuseSettled is an error for a session that has settled, or that runs in an old terminal. It takes mu.
 func (s *Sessions) refuseSettled(id string) error {
 	s.mu.Lock()
 	_, ended := s.ended[id]
+	old := s.isOld(id)
 	s.mu.Unlock()
-	if ended {
+	switch {
+	case ended:
 		return fmt.Errorf("Thread %s has settled", id)
+	case old:
+		return fmt.Errorf("Thread %s runs in an old terminal", id)
 	}
 	return nil
 }
@@ -2020,8 +2038,7 @@ type Chat struct {
 	Live                                 bool // the session runs; an ended one has only its log
 }
 
-// ChatOf is the chat of the session id, live or ended. A session whose agent runs in its terminal has none. It takes
-// mu.
+// ChatOf is the chat of the session id, live or ended. An old terminal session has none. It takes mu.
 func (s *Sessions) ChatOf(id string) (Chat, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -2034,24 +2051,22 @@ func (s *Sessions) ChatOf(id string) (Chat, error) {
 		in = e.info
 	} else if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
 		in, live = s.info[i], true
-	} else {
+	} else if !s.isOld(id) {
 		return Chat{}, fmt.Errorf("No thread %s", id)
 	}
 	if !in.Hosted {
-		return Chat{}, fmt.Errorf("Thread %s has no chat: its agent runs in its terminal", id)
+		return Chat{}, errOldChat
 	}
 	return s.chatOf(in, live), nil
 }
 
-// Chats are the chats of the live sessions under a host. It takes mu.
+// Chats are the chats of the live sessions. It takes mu.
 func (s *Sessions) Chats() []Chat {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []Chat
 	for _, in := range s.info {
-		if in.Hosted {
-			out = append(out, s.chatOf(in, true))
-		}
+		out = append(out, s.chatOf(in, true))
 	}
 	return out
 }
@@ -2063,16 +2078,10 @@ func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, Live: live}
 }
 
-// hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before
-// sessions ran under a host has no host. It takes mu.
-func (s *Sessions) hostOf(name session.Name) string {
-	s.mu.Lock()
-	hosted := s.known[name.String()].Hosted
-	s.mu.Unlock()
-	if !hosted {
-		return ""
-	}
-	return s.hostSocket(name)
+// isOld says whether the session runs in a terminal it was started in before sessions ran under a host. The app
+// shows it settled and leaves it alone: it takes no message, hook or PR, and the owner ends it there. It needs mu.
+func (s *Sessions) isOld(id string) bool {
+	return slices.ContainsFunc(s.old, func(in term.Info) bool { return in.Name.String() == id })
 }
 
 // Run follows tmux, the hook bus and the pull requests until ctx ends.
@@ -2126,7 +2135,7 @@ func (s *Sessions) forkIn(dir string) string {
 func (s *Sessions) Has(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id })
+	return s.isOld(id) || slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id })
 }
 
 func (s *Sessions) closeBrowser(id string) {

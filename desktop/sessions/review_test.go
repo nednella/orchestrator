@@ -117,7 +117,7 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 	if got := stateOf(h, s.ID); got != "settled" {
 		t.Fatalf("a killed session is %s", got)
 	}
-	tmuxRun(t, h, "new-session", "-d", "-s", s.ID, "sleep", "60")
+	tmuxRun(t, h, "new-session", "-d", "-s", s.ID, "sleep", "60", ";", "set-option", "-t", s.ID, "@agentos-hosted", "1")
 	h.Sessions().Refresh()
 	if got := stateOf(h, s.ID); got != "idle" {
 		t.Errorf("a session tmux lists again is %s, want idle", got)

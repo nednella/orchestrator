@@ -119,13 +119,9 @@ export function PRTab({ session }: PRTabProps) {
                 await typeInto(session.id, action.sentence(pr.number))
                 await ackPR(session.id)
               })
-              if (session.hosted) {
-                select(session.id)
-                if (mode === 'narrow') setMobilePanel('thread')
-                focus('composer')
-              } else {
-                focus('thread')
-              }
+              select(session.id)
+              if (mode === 'narrow') setMobilePanel('thread')
+              focus('composer')
             }}
           >
             {action.label}

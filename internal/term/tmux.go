@@ -289,38 +289,5 @@ func (t *Tmux) AttachArgv(name session.Name) []string {
 // Env is the environment for a process that attaches to the server.
 func (t *Tmux) Env() []string { return cleanEnv() }
 
-// Type puts text into the session's prompt without pressing Enter. Text with
-// line breaks goes in as a paste, so the breaks cannot submit it.
-func (t *Tmux) Type(ctx context.Context, name session.Name, text string) error {
-	if strings.Contains(text, "\n") {
-		const buf = "agentos-prefill"
-		if _, err := t.run(ctx, "set-buffer", "-b", buf, "--", arg(text), ";", "paste-buffer", "-p", "-r", "-d", "-b", buf, "-t", target(name)); err != nil {
-			return fmt.Errorf("pasting into session %s: %w", name, err)
-		}
-		return nil
-	}
-	if _, err := t.run(ctx, "send-keys", "-t", target(name), "-l", "--", arg(text)); err != nil {
-		return fmt.Errorf("typing into session %s: %w", name, err)
-	}
-	return nil
-}
-
-// Submit presses Enter in the session's prompt.
-func (t *Tmux) Submit(ctx context.Context, name session.Name) error {
-	if _, err := t.run(ctx, "send-keys", "-t", target(name), "Enter"); err != nil {
-		return fmt.Errorf("submitting in session %s: %w", name, err)
-	}
-	return nil
-}
-
-// Capture is the text the session's pane shows now.
-func (t *Tmux) Capture(ctx context.Context, name session.Name) (string, error) {
-	out, err := t.run(ctx, "capture-pane", "-p", "-t", target(name))
-	if err != nil {
-		return "", fmt.Errorf("reading session %s: %w", name, err)
-	}
-	return out, nil
-}
-
 // oneLine keeps a title from breaking the tab-separated list: tabs and line breaks become spaces.
 func oneLine(title string) string { return strings.Join(strings.Fields(title), " ") }

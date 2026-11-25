@@ -49,7 +49,7 @@ func (s *Sessions) SampleMemory() {
 	procs := readProcesses(out, footprint)
 	s.mu.Lock()
 	server, machine := s.serverPID, s.memory.Machine
-	running := len(s.info) > 0 || len(s.shells) > 0 // tmux ends its server when its last session goes
+	running := len(s.info) > 0 || len(s.old) > 0 || len(s.shells) > 0 // tmux ends its server when its last session goes
 	s.mu.Unlock()
 	if !procs.has(server) {
 		server = 0
