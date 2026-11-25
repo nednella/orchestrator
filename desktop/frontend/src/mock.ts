@@ -971,7 +971,8 @@ export function createMock(params: URLSearchParams) {
       if (!from.hosted) throw 'Only a thread with a chat can be forked'
       if (from.state === 'ended' && !from.resumable) throw 'This thread has no conversation to fork yet'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
-      Object.assign(s, { model: from.model, effort: from.effort, agent: from.agent, action: '', forkOf: from.id, branch: from.branch, worktree: from.worktree })
+      // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
+      Object.assign(s, { model: from.model, effort: from.effort, agent: from.agent, action: '', forkOf: from.id, worktree: '' })
       try {
         chats.fork(from.id, s.id, at)
       } catch (err) {
