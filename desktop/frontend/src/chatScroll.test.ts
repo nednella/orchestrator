@@ -57,6 +57,7 @@ test('marks scale to the bar', () => {
 test('close marks merge by priority', () => {
   const items = [user('a'), failure('b'), approval('c'), user('d')]
   assert.deepEqual(minimapMarks(items, [0, 10, 20, 50], 1000, 100), [{ top: 2, kind: 'approval', key: 'c' }, { top: 5, kind: 'user', key: 'd' }])
+  assert.deepEqual(minimapMarks([user('a'), user('b'), user('c'), user('d')], [0, 20, 40, 60], 1000, 100).map((m) => m.key), ['a', 'c'], 'a run of close marks does not drift')
   assert.deepEqual(minimapMarks([approval('a'), user('b')], [0, 10], 1000, 100), [{ top: 0, kind: 'approval', key: 'a' }])
 })
 

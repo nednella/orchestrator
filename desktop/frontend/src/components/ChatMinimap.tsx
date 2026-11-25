@@ -68,7 +68,10 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, items, starts, 
   }
 
   return (
-    <div ref={track} onPointerDown={jump} aria-hidden className={`absolute top-0 right-0 bottom-0 w-[10px] select-none ${hidden ? 'hidden' : ''}`}>
+    <div ref={track} onPointerDown={jump} onWheel={(e) => scroller.current?.scrollBy({ top: e.deltaY })} aria-hidden className={`absolute top-0 right-0 bottom-0 w-[10px] select-none ${hidden ? 'hidden' : ''}`}>
+      {marks.map((mark) => (
+        <div key={mark.key} title={mark.title} className="absolute right-0 h-[3px] w-1.5 rounded-sm" style={{ top: mark.top, background: markColor[mark.kind] }} />
+      ))}
       <div
         className="absolute inset-x-0 rounded-sm bg-[var(--bg-hover)] ring-1 ring-[var(--border-strong)]"
         style={{ top: handle.top, height: handle.size }}
@@ -77,9 +80,6 @@ export const ChatMinimap = memo(function ChatMinimap({ scroller, items, starts, 
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
       />
-      {marks.map((mark) => (
-        <div key={mark.key} title={mark.title} className="absolute right-0 h-[3px] w-1.5 rounded-sm" style={{ top: mark.top, background: markColor[mark.kind] }} />
-      ))}
     </div>
   )
 })

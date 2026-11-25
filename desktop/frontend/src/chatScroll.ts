@@ -50,12 +50,16 @@ const markKind = (item: TimelineItem): MinimapMark['kind'] | null => (item.kind 
 export function minimapMarks(items: TimelineItem[], starts: number[], total: number, height: number): MinimapMark[] {
   if (total <= 0) return []
   const marks: MinimapMark[] = []
+  let anchor = 0
   items.forEach((item, i) => {
     const kind = markKind(item)
     if (!kind || starts[i] === undefined) return
     const mark = { top: (starts[i] / total) * height, kind, key: item.key }
     const last = marks[marks.length - 1]
-    if (!last || mark.top - last.top >= markGap) marks.push(mark)
+    if (!last || mark.top - anchor >= markGap) {
+      marks.push(mark)
+      anchor = mark.top
+    }
     else if (markPriority[kind] > markPriority[last.kind]) marks[marks.length - 1] = mark
   })
   return marks
