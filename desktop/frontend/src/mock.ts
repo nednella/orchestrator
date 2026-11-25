@@ -937,7 +937,7 @@ export function createMock(params: URLSearchParams) {
       const child = runningDescendant(id)
       if (child) throw `Thread ${s.n} has a running child, ${child.title}; stop it first`
       const user = worktree && s.worktree ? worktreeUser(s) : undefined
-      if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree, or clean it up first`
+      if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree`
       const own = worktree ? s.worktree : ''
       if (own) {
         const reason = keptFor(s)

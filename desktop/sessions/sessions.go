@@ -900,20 +900,36 @@ func (s *Sessions) removeState(id string) error {
 
 // removeOwnWorktree removes the worktree agentos made for the thread id, numbered n, for a Delete that takes it with
 // the thread: by a clean-up with every check, and only when no other thread or shell works in it. A thread with no such
-// worktree has nothing to remove.
+// worktree has nothing to remove. A refusal says when the clean-up put the thread to sleep before a check kept the
+// worktree.
 func (s *Sessions) removeOwnWorktree(id string, n int) error {
 	ctx := s.context()
-	path, reason := s.ownWorktree(ctx, id)
-	if path != "" && reason == "" {
-		var err error
-		if reason, err = s.life.cleanupNow(ctx, id, false); err != nil {
-			return err
-		}
+	path, shared := s.ownWorktree(ctx, id)
+	switch {
+	case shared != "":
+		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", n, shared)
+	case path == "":
+		return nil
 	}
-	if reason != "" {
-		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+	wasLive := s.isLive(id)
+	reason, err := s.life.cleanupNow(ctx, id, false)
+	switch {
+	case err != nil:
+		return err
+	case reason == "":
+		return nil
+	case wasLive && !s.isLive(id):
+		return fmt.Errorf("Thread %d keeps its worktree: %s. It is asleep now; delete it without the worktree, or clean it up first", n, reason)
 	}
-	return nil
+	return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+}
+
+// isLive says whether the thread id runs under a host. It takes mu.
+func (s *Sessions) isLive(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, live := s.liveInfo(id)
+	return live
 }
 
 // OwnWorktree is the worktree agentos made for the thread id that only it uses, which a Delete may take with it; ""
@@ -926,13 +942,13 @@ func (s *Sessions) OwnWorktree(id string) string {
 	return path
 }
 
-// ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none, and why it is not
-// the thread's alone, "" when it is: another thread, running or asleep, works in it, as a fork or a child in the
-// thread's folder does, or a shell is open in it.
+// ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
+// clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
+// it, as a fork or a child in the thread's folder does, or a shell is open in it.
 func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
-	if !ok || w.Removed != 0 || gone(w.Path) {
+	if !ok || w.Removed != 0 || gone(w.Path) || s.life.cleanedUp(id) {
 		return "", ""
 	}
 	if user := s.usersOf(w.Path, id, true); user != "" {

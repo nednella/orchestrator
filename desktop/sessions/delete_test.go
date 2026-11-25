@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -372,7 +373,7 @@ func TestDeleteWithoutTheWorktreeLeavesItOnDisk(t *testing.T) {
 func TestSharedWorktreeIsNotOffered(t *testing.T) {
 	t.Run("a fork, running and asleep", func(t *testing.T) {
 		h, wt, ran, src, fork := forkHarness(t)
-		wantShared := fmt.Sprintf("Thread %d keeps its worktree: Thread #7 work (fork) also works in this worktree. Delete it without the worktree, or clean it up first", src.N)
+		wantShared := fmt.Sprintf("Thread %d keeps its worktree: Thread #7 work (fork) also works in this worktree. Delete it without the worktree", src.N)
 		for _, state := range []string{"running", "asleep"} {
 			if state == "asleep" {
 				if err := h.SettleThread(fork.ID); err != nil {
@@ -686,5 +687,63 @@ func TestThreadBeingDeletedIsNotWoken(t *testing.T) {
 	}
 	if _, ok := h.Session(s.ID); ok || tmuxHas(h, s.ID) || exists(s.Worktree) {
 		t.Errorf("after the delete: row there %v, running %v, worktree there %v", ok, tmuxHas(h, s.ID), exists(s.Worktree))
+	}
+}
+
+func TestDeleteKeptAfterItsSettleSaysTheThreadIsAsleep(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	late, fetched := filepath.Join(wt, "late.txt"), filepath.Join(t.TempDir(), "fetched")
+	// The second checks fetch origin after the settle, so a file written at that fetch is one the agent wrote as it stopped.
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("if [ -e %s ]; then echo late > %s; fi; touch %s; git-upload-pack", fetched, late, fetched))
+
+	err := h.DeleteThread(s.ID, true)
+	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now; delete it without the worktree, or clean it up first", s.N); err == nil || err.Error() != want {
+		t.Errorf("Delete = %v, want %q", err, want)
+	}
+	if got, ok := h.Session(s.ID); !ok || got.State != "settled" || got.Cleanup != "blocked" {
+		t.Errorf("the row = %+v, there %v; want it asleep, its clean-up kept", got, ok)
+	}
+	if !hasState(t, h, s.ID) || !exists(late) {
+		t.Errorf("state file there %v, the late file there %v", hasState(t, h, s.ID), exists(late))
+	}
+}
+
+func TestCleanedUpThreadIsNotOfferedAWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) {
+		t.Fatalf("the clean-up: done %v, worktree there %v", cleanedUp(h, s.ID)(), exists(wt))
+	}
+	// A record that lost its removal, with a worktree back at its path, as only a hand edit makes.
+	gitIn(t, h.Dir, "worktree", "add", wt, "issue-7")
+	records := madeRecords(t, h)
+	records[0].Removed = 0
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.State, "data", "main", "worktrees.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fresh := h.Restart(t)
+
+	if got := fresh.OwnWorktree(s.ID); got != "" {
+		t.Errorf("OwnWorktree = %q, want none", got)
+	}
+	if err := fresh.DeleteThread(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fresh.Session(s.ID); ok || !exists(wt) {
+		t.Errorf("row there %v, worktree there %v; want the row gone and the worktree left", ok, exists(wt))
 	}
 }

@@ -318,6 +318,16 @@ func (l *Lifecycle) retired(id string) bool {
 	return l.gone[id] || slices.Contains(l.prs(session.ProjectKey(id)).Cleaned, id)
 }
 
+// cleanedUp says whether the thread's clean-up finished, so no other one runs. It takes mu.
+func (l *Lifecycle) cleanedUp(id string) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.retired(id)
+}
+
 // workTargets are the sessions on a branch that the lifecycle still follows.
 func (l *Lifecycle) workTargets() []target {
 	targets := l.sessions.workTargets()
