@@ -199,7 +199,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.sessions.Run(ctx); err != nil {
 		return err
 	}
-	go a.chats.Run(ctx)
+	a.chats.Start(ctx)
 	a.router.Listen(a.stateDir)
 	go a.digests.Loop(ctx)
 	go a.updates.Loop(ctx)

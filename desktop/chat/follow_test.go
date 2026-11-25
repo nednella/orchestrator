@@ -90,7 +90,7 @@ func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
 	chats := chat.New(thread, rec.Emit)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go chats.Run(ctx)
+	chats.Start(ctx)
 	svc := chat.NewService(chats, context.Background)
 	if err := svc.ChatWatch(thread.chat.ID); err != nil {
 		t.Fatal(err)
@@ -117,4 +117,88 @@ func emittedSeqs(rec *apptest.Recorder, id string) []int64 {
 		}
 	}
 	return seqs
+}
+
+// serveUpTo answers each subscribe as a host whose log ends at seq last: every seq after the one asked for, then an
+// open stream.
+func serveUpTo(t *testing.T, ln net.Listener, last int64) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		var req struct {
+			After int64 `json:"after"`
+		}
+		line, _ := bufio.NewReader(conn).ReadBytes('\n')
+		if err := json.Unmarshal(line, &req); err != nil {
+			t.Errorf("request %q: %v", line, err)
+		}
+		conn.Write([]byte(`{"ok":true}` + "\n"))
+		enc := json.NewEncoder(conn)
+		for seq := req.After + 1; seq <= last; seq++ {
+			enc.Encode(chatlog.Event{Seq: seq, Kind: chatlog.KindMessage, Text: "x"})
+		}
+		t.Cleanup(func() { conn.Close() })
+	}
+}
+
+func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
+	dir, err := os.MkdirTemp("", "aos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket, logPath := filepath.Join(dir, "host.sock"), filepath.Join(dir, "chat.jsonl")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go serveUpTo(t, ln, 5)
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { chatLog.Close() })
+	appendMessage := func() {
+		if _, err := chatLog.Append(chatlog.Event{Kind: chatlog.KindMessage, Text: "x"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendMessage()
+	appendMessage()
+
+	rec := &apptest.Recorder{}
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	chats := chat.New(thread, rec.Emit)
+	svc := chat.NewService(chats, context.Background)
+	read := make(chan []chatlog.Event)
+	go func() {
+		if err := svc.ChatWatch(thread.chat.ID); err != nil {
+			t.Error(err)
+		}
+		history, err := svc.ChatHistory(thread.chat.ID, 0)
+		if err != nil {
+			t.Error(err)
+		}
+		appendMessage() // logged after the history read: only the stream can bring it
+		read <- history
+	}()
+	time.Sleep(100 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	chats.Start(ctx)
+	history := <-read
+
+	apptest.Eventually(t, "seq 5 in a chat event", func() bool { got := emittedSeqs(rec, thread.chat.ID); return len(got) > 0 && got[len(got)-1] == 5 })
+	var all []int64
+	for _, e := range history {
+		all = append(all, e.Seq)
+	}
+	all = append(all, emittedSeqs(rec, thread.chat.ID)...)
+	slices.Sort(all)
+	if all = slices.Compact(all); !slices.Equal(all, []int64{1, 2, 3, 4, 5}) {
+		t.Errorf("history and chat events hold seqs %v, want 1 to 5 with no gap", all)
+	}
 }

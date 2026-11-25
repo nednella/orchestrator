@@ -42,11 +42,11 @@ func (v *Service) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 
 // ChatWatch sends the thread's events from now on as chat:<id> events, deltas among them.
 func (v *Service) ChatWatch(id string) error {
-	if _, err := v.live(id); err != nil {
+	ch, err := v.live(id)
+	if err != nil {
 		return err
 	}
-	v.c.watch(id)
-	return nil
+	return v.c.watch(ch)
 }
 
 // ChatUnwatch stops the thread's chat:<id> events.

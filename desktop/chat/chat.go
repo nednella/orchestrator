@@ -5,6 +5,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ const (
 	batchEvery     = 33 * time.Millisecond // about one frame at 30 per second
 	retryFirst     = 100 * time.Millisecond
 	retryMost      = 2 * time.Second
+	startWait      = 3 * time.Second // for a watch that comes before Start
 )
 
 // Threads are the sessions whose agents run under a host.
@@ -56,31 +58,37 @@ type Chats struct {
 	threads Threads
 	emit    func(string, any)
 
+	started chan struct{} // closed by Start
+
 	mu        sync.Mutex
-	ctx       context.Context // Run's, nil until it runs
+	ctx       context.Context // Start's, nil until it starts
 	followers map[string]*follower
 	watched   map[string]bool
 }
 
 func New(t Threads, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, followers: map[string]*follower{}, watched: map[string]bool{}}
+	return &Chats{threads: t, emit: emit, started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
 }
 
-// Run follows the live threads' hosts until ctx ends.
-func (c *Chats) Run(ctx context.Context) {
+// Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
+func (c *Chats) Start(ctx context.Context) {
 	c.mu.Lock()
 	c.ctx = ctx
 	c.mu.Unlock()
-	tick := time.NewTicker(reconcileEvery)
-	defer tick.Stop()
-	for {
-		c.reconcile()
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
+	close(c.started)
+	c.reconcile()
+	go func() {
+		tick := time.NewTicker(reconcileEvery)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				c.reconcile()
+			}
 		}
-	}
+	}()
 }
 
 // reconcile follows each live thread that has no follower and stops the follower of each thread that is gone.
@@ -102,33 +110,46 @@ func (c *Chats) reconcile() {
 		}
 	}
 	for id, ch := range live {
-		if c.followers[id] != nil {
-			continue
+		if c.followers[id] == nil {
+			c.follow(ch)
 		}
-		ctx, stop := context.WithCancel(c.ctx)
-		f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{})}
-		c.followers[id] = f
-		go f.run(ctx)
 	}
 }
 
-// watch sends the thread's events from where its follower read the log to. It returns once the follower has read it,
-// so a history read after it misses nothing.
-func (c *Chats) watch(id string) {
-	c.mu.Lock()
-	c.watched[id] = true
-	c.mu.Unlock()
-	c.reconcile()
-	c.mu.Lock()
-	f, ctx := c.followers[id], c.ctx
-	c.mu.Unlock()
-	if f == nil {
-		return
+// follow starts the thread's follower. It needs mu, and Start to have run.
+func (c *Chats) follow(ch sessions.Chat) *follower {
+	ctx, stop := context.WithCancel(c.ctx)
+	f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{})}
+	c.followers[ch.ID] = f
+	go f.run(ctx)
+	return f
+}
+
+// watch sends the live thread's events from where its follower read the log to. It returns once the follower has
+// read it, starting the follower if it has none, so a history read after it misses nothing.
+func (c *Chats) watch(ch sessions.Chat) error {
+	select {
+	case <-c.started:
+	case <-time.After(startWait):
+		return errors.New("The chat service has not started")
 	}
+	c.mu.Lock()
+	ctx := c.ctx
+	if ctx.Err() != nil {
+		c.mu.Unlock()
+		return errors.New("The chat service has stopped")
+	}
+	c.watched[ch.ID] = true
+	f := c.followers[ch.ID]
+	if f == nil {
+		f = c.follow(ch)
+	}
+	c.mu.Unlock()
 	select {
 	case <-f.read:
 	case <-ctx.Done():
 	}
+	return nil
 }
 
 func (c *Chats) unwatch(id string) {
