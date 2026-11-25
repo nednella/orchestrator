@@ -248,6 +248,7 @@ export function createMock(params: URLSearchParams) {
       hosted: s.hosted,
       action: s.action,
       forkOf: s.forkOf,
+      parent: s.parent,
       tokens: s.tokens,
       cost: s.cost,
       memory: s.state === 'settled' ? 0 : s.memory,
@@ -409,6 +410,7 @@ export function createMock(params: URLSearchParams) {
       hosted: true,
       action: issue ? 'Work' : '',
       forkOf: '',
+      parent: '',
       ...usageFor(createdAt),
       memory: (4 + (nextN % 5) * 3) * tenthGB,
       project: owner.name,
@@ -450,6 +452,7 @@ export function createMock(params: URLSearchParams) {
     const history = trail.map(([st, minutesAgo]) => ({ state: st, at: now - minutesAgo * minute }))
     const s = create(title, issue, state, history, history[0] ? history[0].at - minute : now, owner, access)
     s.state = state
+    return s
   }
 
   if (!flags.empty) {
@@ -492,6 +495,10 @@ export function createMock(params: URLSearchParams) {
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], 'read')
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], 'read')
+    // A thread that delegated two tasks: one child in its own project, one in another.
+    const lead = sessions.find((x) => x.title === 'checkout tests scratch')!
+    seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read').parent = lead.id
+    seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read').parent = lead.id
     if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], 'read')
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     const brokenChat = byIssue(326)

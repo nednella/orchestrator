@@ -104,9 +104,9 @@ type workPlace struct {
 // makeWorktree gives the thread its worktree on branch. A project that is not a git repository runs the thread in its
 // folder. A branch checked out in a worktree already runs the thread there, unrecorded, so agentos never removes it;
 // one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is made by
-// the project's session_worktree_command from the default branch on origin, fetched first, and the worktree is the one
-// git then lists on the branch, wherever the command put it.
-func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thread session.Name, branch string) (workPlace, error) {
+// the project's session_worktree_command from base, a commit, or with no base from the default branch on origin,
+// fetched first, and the worktree is the one git then lists on the branch, wherever the command put it.
+func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thread session.Name, branch, base string) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return workPlace{dir: proj.Dir}, nil
@@ -127,7 +127,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 		}
 		return workPlace{dir: dir, branch: branch}, nil
 	}
-	base, baseOid, err := l.base(ctx, proj.Dir)
+	base, baseOid, err := l.startOf(ctx, proj.Dir, base)
 	if err != nil {
 		return workPlace{}, err
 	}
@@ -268,6 +268,18 @@ func (l *Lifecycle) base(ctx context.Context, dir string) (ref, oid string, err 
 		}
 	}
 	return "", "", fmt.Errorf("%s has no commit to start a worktree from", branch)
+}
+
+// startOf is what a new branch starts from, and the commit it is at: base when it is set, else what l.base gives.
+func (l *Lifecycle) startOf(ctx context.Context, dir, base string) (ref, oid string, err error) {
+	if base == "" {
+		return l.base(ctx, dir)
+	}
+	out, err := l.git(ctx, dir, "rev-parse", "--verify", "--quiet", base+"^{commit}")
+	if err != nil {
+		return "", "", fmt.Errorf("%s is no commit to start a worktree from", base)
+	}
+	return base, strings.TrimSpace(string(out)), nil
 }
 
 // onOrigin says whether origin has branch, fetching it when this clone has no copy yet: it may have been pushed from

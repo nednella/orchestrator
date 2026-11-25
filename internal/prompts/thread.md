@@ -21,6 +21,8 @@ When the part after this one names your worktree, work on its branch there. Neve
 
 When another thread hands you a branch, agentos checks it out in your own worktree. Work on it there.
 
+You can hand work to child threads with the agentos tools. `delegate` starts a child, and `threads`, `read`, `send`, `wait` and `stop` follow it. Use `delegate` for a part of the work that can run on its own, and go on with your own part meanwhile. When a child's turn ends, its result comes to you as a message, so you need not wait for it or poll.
+
 Stay on this thread's topic. When the owner asks for other work, show the title and text of an issue for it, and file it with `gh issue create` on a yes. Never do that work in this thread. If this thread already started it:
 
 1. Move that work to a new branch named for the new issue, as the project names issue branches, and push it.

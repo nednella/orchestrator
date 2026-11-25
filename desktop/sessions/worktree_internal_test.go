@@ -16,7 +16,7 @@ import (
 
 func systemPrompt(t *testing.T, access session.Access, tree workTree) string {
 	t.Helper()
-	argv := agent.Claude{Exe: "/x"}.Command(launchFor(project.Model{}, "", "", "", access, false, forkStart{}, tree))
+	argv := agent.Claude{Exe: "/x"}.Command(launchFor(project.Model{}, "", "", "", access, false, forkStart{}, tree, ""))
 	i := slices.Index(argv, "--append-system-prompt")
 	if i < 0 {
 		t.Fatalf("argv = %q", argv)

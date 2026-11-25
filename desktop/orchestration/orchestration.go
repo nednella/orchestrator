@@ -11,10 +11,16 @@ import (
 	"github.com/nednella/agentos/desktop/control"
 	"github.com/nednella/agentos/desktop/sessions"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // Threads is what the tools use of the threads.
-type Threads interface{}
+type Threads interface {
+	CreateChild(o sessions.ChildOptions) (sessions.Session, error)
+	AccessOf(id string) session.Access
+	Projects() []sessions.Project
+	ChatOf(id string) (sessions.Chat, error)
+}
 
 // tool runs one agentos tool as the caller, the thread the call's token names.
 type tool func(ctx context.Context, caller string, req ctl.Request) (string, error)
@@ -27,8 +33,10 @@ type Commands struct {
 	tools   map[string]tool
 }
 
-func NewCommands(s *sessions.Sessions, c *chat.Chats, r *control.Router) *Commands {
-	return &Commands{threads: s, chats: c, router: r, tools: map[string]tool{}}
+func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router) *Commands {
+	c := &Commands{threads: s, chats: chats, router: r}
+	c.tools = map[string]tool{"delegate": c.delegate}
+	return c
 }
 
 // Orchestrate runs the tool req.Args[0] as the thread the request's token names.

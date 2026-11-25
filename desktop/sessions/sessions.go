@@ -76,6 +76,7 @@ type Session struct {
 	Hosted      bool             `json:"hosted"` // the agent runs, or ran, under a host, whose chat log the chat service serves
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
 	ForkOf      string           `json:"forkOf"` // the thread the session was forked from, "" when none
+	Parent      string           `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
 	History     []session.Change `json:"history"`
@@ -127,6 +128,7 @@ type Sessions struct {
 	stateRead map[string]fileStamp // each state file as the last refresh read it, under createMu
 	shellMu   sync.Mutex           // one shell check-and-create at a time: two callers at once would both find no shell and start two
 	issueMu   sync.Mutex           // one issue check-and-create at a time: two starts at once would both find no session and start two
+	childMu   sync.Mutex           // one child check-and-create at a time: two delegations at once would both pass the limits
 
 	mu         sync.Mutex
 	ctx        context.Context
@@ -454,7 +456,7 @@ func (e *endedSession) record() session.Record {
 
 // identityOf is what the session was started as, with its tmux session's start as both its first and latest start.
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Access: in.Access, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch}
+	id := session.Identity{Title: in.Title, Access: in.Access, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch, Parent: in.Parent}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -538,7 +540,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
 	rec.Changes = session.SettledChanges(rec.Changes)
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch, Parent: rec.Parent}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -1132,7 +1134,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: in.Hosted, Action: in.Action, ForkOf: in.Fork, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: in.Hosted, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
 		if !ss.At.IsZero() {
@@ -1389,19 +1391,24 @@ func (s *Sessions) IssueSessions() map[int]string {
 // Create starts the agent in the current project with the access given. A non-empty text is given to the agent through
 // its host: sent when send is set, else left as a draft in its chat.
 func (s *Sessions) Create(title, text string, send bool, issue int, access session.Access) (Session, error) {
-	return s.createIn(s.Current(), title, text, send, issue, project.Model{}, "", "", access, "", forkStart{}, placeFor(access, issue, ""))
+	return s.createIn(s.Current(), title, text, send, issue, "", "", "", forkStart{}, StartOptions{Access: access, Place: placeFor(access, issue, "")})
 }
 
 // StartOptions is what the owner chose for a new thread: the first message, sent as it is, the model and effort,
 // which win over every other choice, the access and where it runs. Empty fields leave the choice to the defaults; an
 // empty access is Supervised, and an empty place is placeFor's. Asker is the thread that asks for this one, "" when the
-// owner asks from the app, the shell or a terminal.
+// owner asks from the app, the shell or a terminal. Parent is the thread that delegated to this one, "" for a thread
+// the owner started, and Base the commit a new branch in its worktree starts at, "" for the default branch on origin.
 type StartOptions struct {
 	Prompt string
 	Model  project.Model
 	Access session.Access
 	Place  Place
 	Asker  string
+	Parent string
+	Base   string
+
+	dir string // the folder a thread in the project place runs in, "" for the project folder
 }
 
 const titleLength = 60
@@ -1435,14 +1442,14 @@ func (s *Sessions) CreateThread(title string, o StartOptions) (Session, error) {
 		return Session{}, err
 	}
 	title = cmp.Or(strings.TrimSpace(title), titleFromPrompt(o.Prompt))
-	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", access, "", forkStart{}, placeFor(access, 0, place))
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, "", "", "", forkStart{}, StartOptions{Model: o.Model, Access: access, Place: placeFor(access, 0, place)})
 }
 
 // CreateBriefed is Create for a Supervised session with a job of its own, in the project folder: brief is added to the
 // agent's system prompt, and the project says whether text is sent.
 func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 	proj := s.Current()
-	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, brief, "", session.Supervised, "", forkStart{}, InProject)
+	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, brief, "", "", forkStart{}, StartOptions{Access: session.Supervised, Place: InProject})
 }
 
 // IssueStart is what a start of an issue did.
@@ -1595,7 +1602,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
-	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, dir, in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork); err != nil {
+	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, dir, in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork, in.Parent); err != nil {
 		_ = s.writeState(before)
 		return err
 	}
@@ -1610,6 +1617,260 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		s.life.ensureWatchers(ctx)
 	}
 	return nil
+}
+
+// Delegation stops here, so it cannot run away: a thread three delegations from one the owner started, a grandchild's
+// child, cannot delegate, and a thread has at most eight children running at once.
+const (
+	maxDepth        = 3
+	maxLiveChildren = 8
+)
+
+// Where a child works.
+const (
+	WhereFolder   = "folder"   // its parent's folder, on no branch of its own
+	WhereWorktree = "worktree" // a new worktree, on a new branch that starts at the commit its parent's folder is at
+	WhereIssue    = "issue"    // the worktree of an issue, on the issue's branch
+)
+
+// ChildOptions is what a thread asks for when it delegates a task: the child's title, "" for the task's first line,
+// its access, model and project, the project of the parent when unset, and where it works, with the issue's number for
+// WhereIssue.
+type ChildOptions struct {
+	Parent, Task, Title string
+	Access              session.Access
+	Model               project.Model
+	Project             project.Project
+	Where               string
+	Issue               int
+}
+
+// CreateChild starts a thread for the task the live thread o.Parent delegates, and gives it the task as its first
+// message before it returns, so the child's chat holds the task once the parent has its id. A child never gets more
+// access than its parent has. A parent too many delegations deep, or with too many children running, starts none, and
+// so does a parent that asks for an issue that has a thread.
+func (s *Sessions) CreateChild(o ChildOptions) (Session, error) {
+	task := strings.TrimSpace(o.Task)
+	if task == "" {
+		return Session{}, errors.New("A child needs a task")
+	}
+	view, parentTitle, err := s.startChild(o)
+	if err != nil {
+		return Session{}, err
+	}
+	name, _ := session.ParseName(view.ID)
+	if err := toHost(s.context(), s.hostSocket(name), fromApp(prompts.Delegated(parentTitle, task)), true, hostWait); err != nil {
+		log.Printf("agentos: child %s did not take its task: %v", view.ID, err)
+		return Session{}, fmt.Errorf("Thread %s started but did not take its task: send it again", view.ID)
+	}
+	return view, nil
+}
+
+// startChild checks that the parent may start the child o asks for, then starts it, and returns it and its parent's
+// title. It holds childMu, so two delegations at once cannot both pass the limits.
+func (s *Sessions) startChild(o ChildOptions) (Session, string, error) {
+	p, err := s.Provider()
+	if err != nil {
+		return Session{}, "", err
+	}
+	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
+		return Session{}, "", err
+	}
+	if o.Access == "" {
+		return Session{}, "", errors.New("A child needs an access")
+	}
+	if _, err := session.ParseAccess(string(o.Access)); err != nil {
+		return Session{}, "", err
+	}
+	s.childMu.Lock()
+	defer s.childMu.Unlock()
+	s.mu.Lock()
+	parent, live := s.liveInfo(o.Parent)
+	live = live && !s.archived[o.Parent]
+	depth, running := s.depthOf(o.Parent), 0
+	for _, in := range s.info {
+		if in.Parent == o.Parent {
+			running++
+		}
+	}
+	proj, known := s.projectOf(parent)
+	s.mu.Unlock()
+	switch {
+	case !live:
+		return Session{}, "", fmt.Errorf("Thread %s is not running, so it cannot delegate", o.Parent)
+	case o.Access.Rank() > parent.Access.Rank():
+		return Session{}, "", fmt.Errorf("A thread with %s access cannot start a child with %s access", parent.Access, o.Access)
+	case depth >= maxDepth:
+		return Session{}, "", fmt.Errorf("This thread is %d delegations from one the owner started, and a thread that deep cannot delegate", depth)
+	case running >= maxLiveChildren:
+		return Session{}, "", fmt.Errorf("This thread has %d children running, the most it may have: wait for one to finish or stop one", running)
+	case o.Where != WhereIssue && o.Issue != 0:
+		return Session{}, "", fmt.Errorf("An issue number goes with where %s", WhereIssue)
+	}
+	if o.Project.Name != "" {
+		proj, known = o.Project, true
+	}
+	if !known {
+		return Session{}, "", fmt.Errorf("The project of thread %s is gone", o.Parent)
+	}
+	own := proj.Key() == parent.Name.Project
+	start := StartOptions{Model: o.Model, Access: o.Access, Parent: o.Parent, Place: InWorktree}
+	switch o.Where {
+	case WhereFolder:
+		start.Place = InProject
+		if own {
+			start.dir = parent.Path
+		}
+	case WhereWorktree:
+		if own {
+			if start.Base, err = s.headOf(proj, parent.Path); err != nil {
+				return Session{}, "", err
+			}
+		}
+	case WhereIssue:
+		if o.Issue <= 0 {
+			return Session{}, "", fmt.Errorf("Where %s needs the issue's number", WhereIssue)
+		}
+	default:
+		return Session{}, "", fmt.Errorf("where must be %s, %s or %s, not %q", WhereFolder, WhereWorktree, WhereIssue, o.Where)
+	}
+	title := cmp.Or(strings.TrimSpace(o.Title), titleFromPrompt(o.Task))
+	parentTitle := cmp.Or(parent.Title, defaultTitle)
+	if o.Where != WhereIssue {
+		view, err := s.createIn(proj, title, "", false, 0, "", "", "", forkStart{}, start)
+		return view, parentTitle, err
+	}
+	s.issueMu.Lock()
+	defer s.issueMu.Unlock()
+	thread := s.liveIssueSession(proj.Key(), o.Issue)
+	if thread == "" {
+		thread, _ = s.settledIssueThread(proj.Key(), o.Issue)
+	}
+	if thread != "" {
+		return Session{}, "", fmt.Errorf("Issue #%d has thread %s: send to it instead", o.Issue, thread)
+	}
+	view, err := s.createIn(proj, title, "", false, o.Issue, "", "", "", forkStart{}, start)
+	return view, parentTitle, err
+}
+
+// headOf is the commit dir, a folder of the project, stands at; "" in a project that is not a git repository, whose
+// threads run in its folder.
+func (s *Sessions) headOf(proj project.Project, dir string) (string, error) {
+	ctx := s.context()
+	if _, err := s.life.git(ctx, proj.Dir, "rev-parse", "--git-dir"); err != nil {
+		return "", nil
+	}
+	head, err := s.life.head(ctx, proj.Dir, dir, "")
+	if err != nil {
+		return "", fmt.Errorf("reading the commit %s is at: %w", dir, err)
+	}
+	return head, nil
+}
+
+// liveInfo is the live thread id's info, and whether it runs under a host. It needs mu.
+func (s *Sessions) liveInfo(id string) (term.Info, bool) {
+	i := slices.IndexFunc(s.info, func(in term.Info) bool { return in.Name.String() == id })
+	if i < 0 {
+		return term.Info{}, false
+	}
+	return s.info[i], true
+}
+
+// depthOf is how many delegations the thread is from one the owner started, counted up to one past maxDepth. It needs
+// mu.
+func (s *Sessions) depthOf(id string) int {
+	depth := 0
+	for parent := s.parentOf(id); parent != "" && depth <= maxDepth; parent = s.parentOf(parent) {
+		depth++
+	}
+	return depth
+}
+
+// parentOf is the thread that delegated to the thread id, "" for one the owner started. An archived thread keeps its
+// parent in its state file. It needs mu.
+func (s *Sessions) parentOf(id string) string {
+	if in, ok := s.infoOf(id); ok {
+		return in.Parent
+	}
+	if !s.archived[id] {
+		return ""
+	}
+	rec, _ := bus.ReadState(s.stateDir, id)
+	return rec.Parent
+}
+
+// ParentOf is the thread that delegated to the thread id, "" for one the owner started. It takes mu.
+func (s *Sessions) ParentOf(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.parentOf(id)
+}
+
+// ChildrenOf are the threads that the thread id delegated to, running or settled, by number. An archived child is
+// left out. It takes mu.
+func (s *Sessions) ChildrenOf(id string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.childrenOf(id)
+}
+
+// childrenOf needs mu.
+func (s *Sessions) childrenOf(id string) []string {
+	var out []string
+	for _, in := range s.info {
+		if in.Parent == id {
+			out = append(out, in.Name.String())
+		}
+	}
+	for child, e := range s.ended {
+		if e.info.Parent == id {
+			out = append(out, child)
+		}
+	}
+	slices.SortFunc(out, func(a, b string) int { return cmp.Or(cmp.Compare(s.nums[a], s.nums[b]), cmp.Compare(a, b)) })
+	return out
+}
+
+// Descendants are the thread's children, their children and so on, each once, nearest first. It takes mu.
+func (s *Sessions) Descendants(id string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := map[string]bool{id: true}
+	var out []string
+	for next := []string{id}; len(next) > 0; {
+		var children []string
+		for _, n := range next {
+			for _, child := range s.childrenOf(n) {
+				if !seen[child] {
+					seen[child] = true
+					children = append(children, child)
+				}
+			}
+		}
+		out = append(out, children...)
+		next = children
+	}
+	return out
+}
+
+// AccessOf is the access of the thread id, running or settled; "" for none, which ranks as Read. It takes mu.
+func (s *Sessions) AccessOf(id string) session.Access {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in, _ := s.infoOf(id)
+	return in.Access
+}
+
+// titleOf is the title of the thread id, also of an archived one. It takes mu.
+func (s *Sessions) titleOf(id string) string {
+	s.mu.Lock()
+	in, ok := s.infoOf(id)
+	s.mu.Unlock()
+	if ok {
+		return cmp.Or(in.Title, defaultTitle)
+	}
+	rec, _ := bus.ReadState(s.stateDir, id)
+	return cmp.Or(rec.Title, defaultTitle)
 }
 
 // Provider is the provider every session starts with.
@@ -1642,7 +1903,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 	if err := s.mayGive(asker, access); err != nil {
 		return Session{}, Kept, err
 	}
-	view, err := s.createIn(proj, title, text, send, issue, model, "", handover, access, action, forkStart{}, placeFor(access, issue, place))
+	view, err := s.createIn(proj, title, text, send, issue, "", handover, action, forkStart{}, StartOptions{Model: model, Access: access, Place: placeFor(access, issue, place)})
 	return view, Created, err
 }
 
@@ -1670,10 +1931,11 @@ func fromApp(text string) string {
 	return "APPLICATION_PROMPT: " + text
 }
 
-// createIn is Create in the project given, which need not be the current one, with the model given. A brief or a
-// handover is added to the agent's system prompt. In a worktree the thread works on its issue's branch, or on a new one
-// named from its title; else it runs in the project folder, or a fork in its source's folder, on no branch.
-func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, brief, handover string, access session.Access, action string, fork forkStart, place Place) (Session, error) {
+// createIn is Create in the project given, which need not be the current one, with the model, access, place and parent
+// of o. A brief or a handover is added to the agent's system prompt. In a worktree the thread works on its issue's
+// branch, or on a new one named from its title that starts at o.Base; else it runs in the project folder, or in the
+// folder o names, on no branch.
+func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, brief, handover, action string, fork forkStart, o StartOptions) (Session, error) {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
@@ -1684,15 +1946,15 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	if err := agent.CheckInstalled(p); err != nil {
 		return Session{}, err
 	}
-	model = fill(p, proj.Dir, model)
+	model := fill(p, proj.Dir, o.Model)
 	name, ctx := s.reserve(proj)
-	work := workPlace{dir: cmp.Or(fork.dir, proj.Dir)}
-	if place == InWorktree {
-		branch := proj.BranchFor(issue)
+	work := workPlace{dir: cmp.Or(o.dir, proj.Dir)}
+	if o.Place == InWorktree {
+		branch, base := proj.BranchFor(issue), ""
 		if issue == 0 {
-			branch = s.life.freeBranch(ctx, proj.Dir, branchFromTitle(title))
+			branch, base = s.life.freeBranch(ctx, proj.Dir, branchFromTitle(title)), o.Base
 		}
-		if work, err = s.life.makeWorktree(ctx, proj, name, branch); err != nil {
+		if work, err = s.life.makeWorktree(ctx, proj, name, branch, base); err != nil {
 			return Session{}, err
 		}
 	}
@@ -1707,12 +1969,12 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	if err := s.launch(tctx, p, name, title, proj, work.dir, work.branch, issue, model, fork.conversation, brief, handover, access, action, fork); err != nil {
+	if err := s.launch(tctx, p, name, title, proj, work.dir, work.branch, issue, model, fork.conversation, brief, handover, o.Access, action, fork, o.Parent); err != nil {
 		restore()
 		s.life.undoWorktree(ctx, proj, name, work)
 		return Session{}, err
 	}
-	view := s.register(name, title, work, issue, model, created, access, action, fork.of)
+	view := s.register(name, title, work, issue, model, created, o.Access, action, fork.of, o.Parent)
 	if text != "" {
 		go s.giveHost(ctx, name, text, send)
 	}
@@ -1737,10 +1999,10 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 }
 
 // forkStart is what a fork starts from: the thread it forks and that thread's title, which a woken fork keeps, and for a
-// new fork that thread's folder, its conversation, the message it forks at and its chat up to that message.
+// new fork that thread's conversation, the message it forks at and its chat up to that message.
 type forkStart struct {
-	of, title, dir, conversation, at string
-	events                           []chat.Event
+	of, title, conversation, at string
+	events                      []chat.Event
 }
 
 // Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
@@ -1789,7 +2051,8 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	}
 	issue, _ := strconv.Atoi(in.Issue)
 	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
-	return s.createIn(proj, title, "", false, issue, model, "", s.handoverOf(id), in.Access, "", forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), dir: in.Path, conversation: conversation, at: at, events: events[:cut+1]}, InProject)
+	fork := forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: at, events: events[:cut+1]}
+	return s.createIn(proj, title, "", false, issue, "", s.handoverOf(id), "", fork, StartOptions{Model: model, Access: in.Access, Place: InProject, dir: in.Path})
 }
 
 // copyChat writes the fork's chat log before the fork's host opens it: the source's events, with the turn they stop in
@@ -1868,8 +2131,9 @@ func (s *Sessions) reserve(proj project.Project) (session.Name, context.Context)
 }
 
 // launch starts the agent of the session under its host in tmux, in dir, a worktree on branch when branch is set. The
-// host gets a new token, which the token it had before no longer matches.
-func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart) (err error) {
+// host gets a new token, which the token it had before no longer matches. A child, whose parent is set, learns which
+// thread it works for.
+func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart, parent string) (err error) {
 	env := []string{
 		"AGENTOS_SESSION=" + name.String(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
@@ -1900,7 +2164,11 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if branch != "" {
 		tree = workTree{branch: branch, dir: dir}
 	}
-	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree)
+	parentTitle := ""
+	if parent != "" {
+		parentTitle = s.titleOf(parent)
+	}
+	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree, parentTitle)
 	l.TmpDir, l.ForkAt, l.MCPConfig = tmp, fork.at, s.mcpConfigPath(name)
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -1920,7 +2188,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 			s.mu.Unlock()
 		}
 	}()
-	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork.of)
+	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork.of, parent)
 }
 
 // hosted is argv run under this app's own host command, with the session's chat log and socket. It makes the socket's
@@ -2030,11 +2298,11 @@ func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 }
 
 // register adds the new session, which runs in work, to the list and returns its row. forkOf is the thread it was
-// forked from, if any. It takes mu.
-func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf string) Session {
+// forked from and parent the thread that delegated to it, if any. It takes mu.
+func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf, parent string) Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Created: created}
+	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Parent: parent, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
@@ -2051,7 +2319,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 	return Session{}
 }
 
-func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, branch string, env, argv []string, issue int, model project.Model, access session.Access, action, forkOf string) error {
+func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, branch string, env, argv []string, issue int, model project.Model, access session.Access, action, forkOf, parent string) error {
 	if err := s.tmux.NewSession(ctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return err
 	}
@@ -2083,6 +2351,11 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, bra
 	}
 	if forkOf != "" {
 		if err := tag(s.tmux.SetFork(ctx, name, forkOf)); err != nil {
+			return err
+		}
+	}
+	if parent != "" {
+		if err := tag(s.tmux.SetParent(ctx, name, parent)); err != nil {
 			return err
 		}
 	}
@@ -3031,9 +3304,9 @@ func (s *Sessions) hasBrowser(proj project.Project, brief string) bool {
 type workTree struct{ branch, dir string }
 
 // launchFor is what the session's agent starts with. The agent learns where it runs and the commands that reach the
-// app, and about the browser when it has one; a session with a brief learns only the brief. A task started by another
-// session gets that session's handover last.
-func launchFor(model project.Model, conversation, brief, handover string, access session.Access, browser bool, fork forkStart, tree workTree) agent.Launch {
+// app, and about the browser when it has one; a session with a brief learns only the brief. A child learns the title
+// of its parent, the thread it works for. A task started by another session gets that session's handover last.
+func launchFor(model project.Model, conversation, brief, handover string, access session.Access, browser bool, fork forkStart, tree workTree, parent string) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Resume: conversation, Access: access}
 	if brief != "" {
 		l.Prompt = brief
@@ -3045,6 +3318,9 @@ func launchFor(model project.Model, conversation, brief, handover string, access
 	}
 	if fork.of != "" {
 		l.Prompt += "\n\n" + prompts.Fork(fork.title)
+	}
+	if parent != "" {
+		l.Prompt += "\n\n" + prompts.Child(parent)
 	}
 	if browser {
 		l.Browser = true

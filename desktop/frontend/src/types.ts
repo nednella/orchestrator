@@ -57,6 +57,7 @@ export type Session = {
   hosted: boolean
   action: string
   forkOf: string // the thread this one was forked from, '' when none
+  parent: string // the thread that delegated to this one, '' for a thread the owner started
   tokens: number
   cost: number
   memory: number

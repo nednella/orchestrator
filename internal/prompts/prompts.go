@@ -34,6 +34,10 @@ var (
 	worktree string
 	//go:embed fork.md
 	fork string
+	//go:embed child.md
+	child string
+	//go:embed delegated.md
+	delegated string
 	//go:embed handover.md
 	handover string
 	//go:embed denied.md
@@ -73,12 +77,25 @@ func Worktree(branch, dir string) string {
 	return strings.NewReplacer("{branch}", branch, "{worktree}", dir).Replace(body(worktree))
 }
 
-// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own. The
-// title is the owner's to edit, so it is kept to one line and its double quotes become single ones: it cannot add a
-// line of its own to the prompt or end the quotes it stands in.
-func Fork(title string) string {
-	title = strings.ReplaceAll(strings.Join(strings.Fields(title), " "), `"`, "'")
-	return strings.Replace(body(fork), "{title}", title, 1)
+// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own.
+func Fork(title string) string { return strings.Replace(body(fork), "{title}", quotable(title), 1) }
+
+// Child follows Thread, and Worktree when there is one, in the system prompt of a thread that the thread called parent
+// started with delegate: its first message is its task, and its last reply of each turn is its result.
+func Child(parent string) string {
+	return strings.Replace(body(child), "{parent}", quotable(parent), 1)
+}
+
+// Delegated is the first message of a child thread: the task that the thread called parent gave it.
+func Delegated(parent, task string) string {
+	return strings.NewReplacer("{parent}", quotable(parent), "{task}", task).Replace(body(delegated))
+}
+
+// quotable is a thread's title as a text may quote it. A title is the owner's to edit, and a thread may set its child's,
+// so it is kept to one line and its double quotes become single ones: it cannot add a line of its own to the prompt or
+// end the quotes it stands in.
+func quotable(title string) string {
+	return strings.ReplaceAll(strings.Join(strings.Fields(title), " "), `"`, "'")
 }
 
 // Handover ends the system prompt of a thread that another thread asked for, with the context that thread gave.

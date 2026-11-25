@@ -16,9 +16,11 @@ func TestPromptsKeepTheirText(t *testing.T) {
 	}{
 		{"browser", Browser(), "926e745d1d793d4cc18ced3cc6228d0f77e729f20bc7d3d3ac9c535546cf68ae"},
 		{"session", Session(), "d0accc938896a2e1edf107e9a72106f364830f4d5c978fcb22083666d4e4318a"},
-		{"thread", Thread(), "ca3066d9e41290fa276cef0c6a7d99bfe86da7473afecc393007ae01b8f84b0f"},
+		{"thread", Thread(), "f6704bff01616896a5f0c833891bf924a166a2a782c864610ba4ec93661862a0"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "7baaded65c2f3d475e2d43dc2c998d28e8c9feb839f55f0384b4fc249e0c9e76"},
 		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
+		{"child", Child("{parent}"), "3c69c5660bda43e9295b40772144ddf68e3d9f9af4deaf9ad650fa47feb41c30"},
+		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
 		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
 		{"setup brief", SetupBrief(), "3fd3fdfb3c5df412ad078a78f02d163e5ad0b5be8ee1c0e97c06cd3ae2dd81be"},
 		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
@@ -43,6 +45,20 @@ func TestForkNamesItsSource(t *testing.T) {
 	got := Fork("Fix the login")
 	if !strings.Contains(got, `fork of the thread "Fix the login"`) || strings.Contains(got, "{title}") || !strings.Contains(got, "never run `agentos track`") {
 		t.Errorf("Fork = %q", got)
+	}
+}
+
+func TestChildNamesItsParent(t *testing.T) {
+	got := Child("Plan \"the\"\nrelease")
+	if !strings.Contains(got, `Thread "Plan 'the' release" started this thread for one task`) || strings.Contains(got, "{parent}") {
+		t.Errorf("Child = %q", got)
+	}
+}
+
+func TestDelegatedEndsWithTheTask(t *testing.T) {
+	got := Delegated("Plan", "Count the files {parent}\nand list them")
+	if !strings.HasPrefix(got, `Thread "Plan" `) || !strings.HasSuffix(got, ":\n\nCount the files {parent}\nand list them") {
+		t.Errorf("Delegated = %q", got)
 	}
 }
 

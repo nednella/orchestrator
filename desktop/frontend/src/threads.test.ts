@@ -32,6 +32,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     hosted: true,
     action: '',
     forkOf: '',
+    parent: '',
     tokens: 0,
     cost: 0,
     memory: 0,
