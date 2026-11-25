@@ -313,6 +313,17 @@ func (l *Lifecycle) unretire(id string) {
 	}
 }
 
+// cleaningUp says whether a clean-up of the session runs now.
+func (l *Lifecycle) cleaningUp(id string) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tr := l.tracks[id]
+	return tr != nil && tr.cleanup == "pending"
+}
+
 // retired says whether the lifecycle is done with the session: its row went or its clean-up finished. It needs mu.
 func (l *Lifecycle) retired(id string) bool {
 	return l.gone[id] || slices.Contains(l.prs(session.ProjectKey(id)).Cleaned, id)

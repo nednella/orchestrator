@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -121,7 +123,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	}
 	if dir, ok := trees.byBranch[branch]; ok {
 		if _, err := os.Stat(dir); err != nil {
-			return workPlace{}, fmt.Errorf("%s is checked out in %s, which is gone: run git worktree prune", branch, dir)
+			return workPlace{}, staleCheckout(branch, dir)
 		}
 		return workPlace{dir: dir, branch: branch}, nil
 	}
@@ -136,11 +138,11 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	if err := l.excludeTrees(ctx, proj, strings.TrimSpace(string(top))); err != nil {
 		return workPlace{}, err
 	}
-	added, err := l.addWorktree(ctx, proj, dir, branch)
+	branchFound, err := l.addWorktree(ctx, proj, dir, branch)
 	if err != nil {
 		return workPlace{}, err
 	}
-	if !added {
+	if !branchFound {
 		out, err := l.projectCommand(ctx, proj, proj.MakeWorktree(), "{branch}", util.ShellQuote(branch), "{worktree}", util.ShellQuote(dir), "{base}", util.ShellQuote(base))
 		if err != nil {
 			return workPlace{}, fmt.Errorf("session_worktree_command failed for %s: %w", branch, err)
@@ -166,9 +168,14 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	return workPlace{dir: dir, branch: branch, made: true}, nil
 }
 
+// staleCheckout is the error for a branch that git lists as checked out in dir, a folder that is gone.
+func staleCheckout(branch, dir string) error {
+	return fmt.Errorf("%s is checked out in %s, which is gone: run git worktree prune", branch, dir)
+}
+
 // addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
-// clone has no copy. It says false, and adds nothing, when neither has the branch.
-func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string) (bool, error) {
+// clone has no copy. When neither has the branch it adds nothing and says branchFound false.
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string) (branchFound bool, err error) {
 	args := []string{"worktree", "add", "--quiet", dir, branch}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
@@ -187,7 +194,7 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 // a woken thread never moves folder. A thread with no record has nothing to restore. A folder at the path is left as it
 // is: it is the thread's own worktree only when its marker holds the thread's id, and anything else is an error. The
 // branch is checked out as it is, the local one else origin's, with plain git: session_worktree_command makes a new
-// branch, and this one exists.
+// branch, and this one exists. A restore that fails leaves the record as it was.
 func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread string) error {
 	key := proj.Key()
 	w, ok := l.sessions.made.Of(key, thread)
@@ -203,29 +210,49 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 		}
 		return l.sessions.made.Restored(key, w.Path)
 	}
-	if _, err := l.git(ctx, proj.Dir, "worktree", "prune"); err != nil {
-		return fmt.Errorf("pruning the worktrees git lists: %w", err)
-	}
 	trees, err := l.worktrees(ctx, proj.Dir)
 	if err != nil {
 		return fmt.Errorf("listing the worktrees: %w", err)
 	}
-	n := l.sessions.Number(thread)
-	if dir, ok := trees.byBranch[w.Branch]; ok {
-		return fmt.Errorf("%s is checked out in %s, so thread %d cannot get its worktree back", w.Branch, dir, n)
+	if dir, ok := trees.byBranch[w.Branch]; ok && canonicalPath(dir) != w.Path {
+		if _, err := os.Stat(dir); err != nil {
+			return staleCheckout(w.Branch, dir)
+		}
+		return fmt.Errorf("%s is checked out in %s, so thread %d cannot get its worktree back", w.Branch, dir, l.sessions.Number(thread))
 	}
-	added, err := l.addWorktree(ctx, proj, w.Path, w.Branch)
+	if err := l.dropEntry(ctx, proj.Dir, trees, w.Path); err != nil {
+		return err
+	}
+	branchFound, err := l.addWorktree(ctx, proj, w.Path, w.Branch)
 	if err != nil {
 		return err
 	}
-	if !added {
-		return fmt.Errorf("%s is gone, so thread %d cannot get its worktree back", w.Branch, n)
+	if !branchFound {
+		return fmt.Errorf("%s is gone, so thread %d cannot get its worktree back", w.Branch, l.sessions.Number(thread))
 	}
 	if err := l.mark(ctx, w.Path, thread); err != nil {
-		l.removeWorktree(ctx, proj, w.Path)
+		if _, rerr := l.git(ctx, proj.Dir, "worktree", "remove", w.Path); rerr != nil {
+			log.Printf("agentos: removing the worktree %s, which agentos could not mark: %v", w.Path, rerr)
+		}
 		return err
 	}
 	return l.sessions.made.Restored(key, w.Path)
+}
+
+// dropEntry removes git's entry for a worktree at path, whose folder is gone, and no other: a repository-wide prune
+// would also drop the entries of the owner's worktrees on a disk that is not mounted, and with them their hold on their
+// branches. git refuses to drop a locked entry.
+func (l *Lifecycle) dropEntry(ctx context.Context, dir string, trees worktrees, path string) error {
+	for _, listed := range append(slices.Collect(maps.Values(trees.byBranch)), trees.detached...) {
+		if canonicalPath(listed) != path {
+			continue
+		}
+		if _, err := l.git(ctx, dir, "worktree", "remove", listed); err != nil {
+			return fmt.Errorf("dropping git's entry for the missing worktree %s: %w", listed, err)
+		}
+		return nil
+	}
+	return nil
 }
 
 // base is what a new branch starts from, the default branch on origin, fetched first, else the local one when origin

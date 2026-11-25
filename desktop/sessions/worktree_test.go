@@ -478,9 +478,13 @@ func cleanedUpAfterAMerge(t *testing.T, h *apptest.Harness, s sessions.Session) 
 	}
 }
 
-// assertNotWoken checks that the thread stayed settled with no tmux session.
-func assertNotWoken(t *testing.T, h *apptest.Harness, s sessions.Session) {
+// assertNotWoken checks that the thread stayed settled with no tmux session, and that the worktree records are still
+// before.
+func assertNotWoken(t *testing.T, h *apptest.Harness, s sessions.Session, before []sessions.Made) {
 	t.Helper()
+	if after := madeRecords(t, h); !slices.Equal(after, before) {
+		t.Errorf("records = %+v, want them unchanged %+v", after, before)
+	}
 	if out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions").CombinedOutput(); strings.Contains(string(out), s.ID) {
 		t.Errorf("a tmux session runs:\n%s", out)
 	}
@@ -568,11 +572,12 @@ func TestWakeFailsWhenTheBranchIsGone(t *testing.T) {
 	cleanedUpAfterAMerge(t, h, s)
 	gitIn(t, h.Dir, "push", "--quiet", "origin", "--delete", "issue-7")
 
+	before := madeRecords(t, h)
 	_, err := h.WakeThread(s.ID)
 	if want := fmt.Sprintf("issue-7 is gone, so thread %d cannot get its worktree back", s.N); err == nil || err.Error() != want {
 		t.Errorf("wake = %v, want %q", err, want)
 	}
-	assertNotWoken(t, h, s)
+	assertNotWoken(t, h, s, before)
 	if exists(s.Worktree) {
 		t.Error("a folder is at the worktree's path")
 	}
@@ -586,11 +591,12 @@ func TestWakeFailsWhenTheBranchIsCheckedOutElsewhere(t *testing.T) {
 	elsewhere := filepath.Join(t.TempDir(), "mine")
 	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "issue-7", elsewhere, "origin/issue-7")
 
+	before := madeRecords(t, h)
 	_, err := h.WakeThread(s.ID)
 	if err == nil || !strings.Contains(err.Error(), realDir(t, elsewhere)) || !strings.Contains(err.Error(), "issue-7") {
 		t.Errorf("wake = %v, want an error naming issue-7 and %s", err, realDir(t, elsewhere))
 	}
-	assertNotWoken(t, h, s)
+	assertNotWoken(t, h, s, before)
 	if exists(s.Worktree) {
 		t.Error("a folder is at the worktree's path")
 	}
@@ -612,11 +618,12 @@ func TestWakeNeverTakesOverAFolderAtThePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	before := madeRecords(t, h)
 	_, err := h.WakeThread(s.ID)
 	if want := s.Worktree + " exists and is not this thread's worktree"; err == nil || err.Error() != want {
 		t.Errorf("wake = %v, want %q", err, want)
 	}
-	assertNotWoken(t, h, s)
+	assertNotWoken(t, h, s, before)
 	if data, err := os.ReadFile(mine); err != nil || string(data) != "mine\n" {
 		t.Errorf("the folder lost its file: %q, %v", data, err)
 	}
@@ -651,5 +658,179 @@ func TestRestoredWorktreeIsCleanedUpAgain(t *testing.T) {
 	}
 	if gitIn(t, h.Dir, "rev-parse", "origin/issue-7") == "" {
 		t.Error("the branch is gone from origin")
+	}
+}
+
+func TestWakeNeverTakesOverAnotherThreadsWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "other", s.Worktree, "origin/main")
+	marker := filepath.Join(gitIn(t, s.Worktree, "rev-parse", "--path-format=absolute", "--git-dir"), "agentos-thread")
+	if err := os.WriteFile(marker, []byte("main/aaaaaaaa\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := madeRecords(t, h)
+
+	_, err := h.WakeThread(s.ID)
+	if want := s.Worktree + " exists and is not this thread's worktree"; err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, s, before)
+	if data, err := os.ReadFile(marker); err != nil || string(data) != "main/aaaaaaaa\n" {
+		t.Errorf("marker = %q, %v", data, err)
+	}
+	if got := gitIn(t, s.Worktree, "branch", "--show-current"); got != "other" {
+		t.Errorf("the other worktree is on %q", got)
+	}
+}
+
+func TestRestoreLeavesAnotherStaleWorktreeEntry(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	unmounted := filepath.Join(t.TempDir(), "unmounted")
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "unmounted", unmounted)
+	if err := os.RemoveAll(unmounted); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, s.Worktree, "branch", "--show-current"); got != "issue-7" {
+		t.Errorf("the restored worktree is on %q, want issue-7", got)
+	}
+	list := gitIn(t, h.Dir, "worktree", "list", "--porcelain")
+	if !strings.Contains(list, "branch refs/heads/unmounted\nprunable") {
+		t.Errorf("the other stale entry is gone:\n%s", list)
+	}
+}
+
+func TestWakeRestoresAHandDeletedWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	head := gitIn(t, s.Worktree, "rev-parse", "HEAD")
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	if err := os.RemoveAll(s.Worktree); err != nil {
+		t.Fatal(err)
+	}
+	if list := gitIn(t, h.Dir, "worktree", "list", "--porcelain"); !strings.Contains(list, "branch refs/heads/issue-7\nprunable") {
+		t.Fatalf("git does not list the stale entry:\n%s", list)
+	}
+
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, s.Worktree, "rev-parse", "HEAD"); got != head || gitIn(t, s.Worktree, "branch", "--show-current") != "issue-7" {
+		t.Errorf("the worktree is at %s, want issue-7 at %s", got, head)
+	}
+	if got := worktreesOf(t, h.Dir)["issue-7"]; got != s.Worktree {
+		t.Errorf("git lists issue-7 at %q, want %s", got, s.Worktree)
+	}
+	if list := gitIn(t, h.Dir, "worktree", "list", "--porcelain"); strings.Contains(list, "prunable") {
+		t.Errorf("a stale entry is left:\n%s", list)
+	}
+	if got := realDir(t, panePath(t, h, s.ID)); got != s.Worktree {
+		t.Errorf("the woken thread runs in %s, want %s", got, s.Worktree)
+	}
+}
+
+func TestWakeFailsWhenAStaleEntryHoldsTheBranch(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	cleanedUpAfterAMerge(t, h, s)
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
+	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "issue-7", elsewhere, "origin/issue-7")
+	listed := realDir(t, elsewhere)
+	if err := os.RemoveAll(elsewhere); err != nil {
+		t.Fatal(err)
+	}
+	before := madeRecords(t, h)
+
+	_, err := h.WakeThread(s.ID)
+	if want := "issue-7 is checked out in " + listed + ", which is gone: run git worktree prune"; err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, s, before)
+	if exists(s.Worktree) {
+		t.Error("a folder is at the worktree's path")
+	}
+	if list := gitIn(t, h.Dir, "worktree", "list", "--porcelain"); !strings.Contains(list, "branch refs/heads/issue-7\nprunable") {
+		t.Errorf("the stale entry is gone:\n%s", list)
+	}
+}
+
+func TestWakeIsRefusedDuringACleanup(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	hold := t.TempDir()
+	reached, release := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
+	// The clean-up's plan fetches origin first; this fetch waits until the test lets it go.
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; git-upload-pack", reached, release))
+	done := make(chan error, 1)
+	go func() { done <- h.Cleanup(s.ID, false) }()
+	eventually(t, "the clean-up held in its plan", func() bool { return exists(reached) })
+	before := madeRecords(t, h)
+
+	_, err := h.WakeThread(s.ID)
+	if want := fmt.Sprintf("Thread %d is being cleaned up; wake it when that ends", s.N); err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, s, before)
+	if err := os.WriteFile(release, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
+		t.Errorf("the clean-up did not finish: worktree there %v", exists(s.Worktree))
+	}
+}
+
+func TestWokenForkFailsWhenItsFolderIsGone(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	src, err := h.NewThreadIn("Source", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{fork.ID, src.ID} {
+		if err := h.SettleThread(id); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, "the thread settled", func() bool { got, _ := h.Session(id); return got.State == "settled" })
+	}
+	gitIn(t, h.Dir, "worktree", "remove", src.Worktree)
+	before := madeRecords(t, h)
+
+	_, err = h.WakeThread(fork.ID)
+	if want := src.Worktree + " is gone, so this thread cannot start there"; err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	assertNotWoken(t, h, fork, before)
+	if exists(src.Worktree) {
+		t.Error("a folder is at the source's worktree path")
 	}
 }

@@ -1539,6 +1539,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	proj, known := s.projectOf(in)
 	conversation := s.conversationOf(id)
 	source, _ := s.infoOf(in.Fork)
+	n := s.nums[id]
 	ctx := s.ctx
 	s.mu.Unlock()
 	switch {
@@ -1550,6 +1551,8 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		return fmt.Errorf("Thread %s is not settled", id)
 	case !known:
 		return fmt.Errorf("The project of thread %s is gone", id)
+	case s.life.cleaningUp(id):
+		return fmt.Errorf("Thread %d is being cleaned up; wake it when that ends", n)
 	}
 
 	p, err := s.Provider()
@@ -1561,6 +1564,10 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	}
 	if err := s.life.restore(ctx, proj, id); err != nil {
 		return err
+	}
+	dir := cmp.Or(in.Path, proj.Dir)
+	if _, err := os.Stat(dir); err != nil {
+		return fmt.Errorf("%s is gone, so this thread cannot start there", dir)
 	}
 	model := fill(p, proj.Dir, project.Model{Model: in.Model, Effort: in.Effort})
 	in.Created, in.Model, in.Effort = time.Now(), model.Model, model.Effort
@@ -1574,7 +1581,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
-	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, cmp.Or(in.Path, proj.Dir), in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork); err != nil {
+	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, dir, in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork); err != nil {
 		_ = s.writeState(before)
 		return err
 	}
