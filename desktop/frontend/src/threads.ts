@@ -88,6 +88,16 @@ export function sidebarThreads(sessions: Session[], projectKey: string | undefin
   return sortThreads(sessions.filter((s) => s.project === projectKey), tree)
 }
 
+// The thread to open first among a project's list: its first top-level thread, in the list's order.
+export function firstThread(list: Session[], tree: ThreadTree): Session | undefined {
+  return list.find((s) => tree.top.get(s.id) === s)
+}
+
+// The thread to open when the one open, leaving, goes to sleep: the project's next live thread in sidebar order.
+export function nextThread(sessions: Session[], projectKey: string | undefined, leaving: string, tree = threadTreeOf(sessions)): Session | undefined {
+  return sidebarThreads(sessions, projectKey, tree).find((s) => s.id !== leaving && s.state !== 'settled')
+}
+
 // goneThreads is the ids of the project's threads in before that its new list, after, no longer holds.
 export function goneThreads(before: Session[], projectKey: string, after: Session[]): string[] {
   const kept = new Set(after.map((s) => s.id))

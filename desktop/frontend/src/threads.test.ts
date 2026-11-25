@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { currentTask, descendantsOf, goneThreads, isTopLevel, needsOwner, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -176,4 +176,17 @@ test('the next thread that needs the owner is the top thread of a waiting child'
     urgentThreads(projects, sessions).map((s) => s.id),
     ['lead', 'asks', 'replied'],
   )
+})
+
+test('the first thread opened is top-level, a lost child too', () => {
+  const sessions = [thread('child', 'working', 0, 'lead'), thread('lead', 'idle')]
+  assert.equal(firstThread(sessions, threadTreeOf(sessions))?.id, 'lead')
+  const lost = [thread('orphan', 'working', 0, 'deleted-lead'), thread('lead', 'idle')]
+  assert.equal(firstThread(lost, threadTreeOf(lost))?.id, 'orphan')
+})
+
+test('the thread opened after a sleep is the next live top-level thread in sidebar order', () => {
+  const sessions = [thread('child', 'working', 0, 'lead'), thread('asleep', 'settled'), thread('lead', 'idle'), thread('busy', 'working'), thread('leaving', 'working')]
+  assert.equal(nextThread(sessions, 'shop', 'leaving')?.id, 'busy')
+  assert.equal(nextThread([thread('leaving', 'idle'), thread('child', 'idle', 0, 'leaving')], 'shop', 'leaving'), undefined)
 })

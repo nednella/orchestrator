@@ -24,6 +24,8 @@ export function ThreadSidebar() {
   useFocusRequest('sidebar', panel)
   useFocusRequest('thread-search', search)
 
+  // A selected child is not in the list, so its top-level thread's row keeps the owner's place.
+  const selectedRow = threadTree.top.get(selectedId ?? '')?.id
   const threads = useMemo(() => sortThreads(projectSessions.filter((s) => matchesThread(s, query)), threadTree), [projectSessions, threadTree, query])
 
   const nav = useListNav(
@@ -83,7 +85,7 @@ export function ThreadSidebar() {
       style={{ width: `${widths.sidebar}rem` }}
       onKeyDown={onKeyDown}
       onFocus={(e) => {
-        if (e.target === e.currentTarget && selectedId) nav.setCursorKey(selectedId)
+        if (e.target === e.currentTarget && selectedRow) nav.setCursorKey(selectedRow)
       }}
     >
       <div className="flex flex-none items-center gap-1.5 px-1.5 pt-2 pb-2.5">
@@ -105,7 +107,7 @@ export function ThreadSidebar() {
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-1">
         {threads.map((s) => (
-          <ThreadRow key={s.id} session={s} needs={threadTree.attention.get(s.id)} selected={s.id === selectedId} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
+          <ThreadRow key={s.id} session={s} needs={threadTree.attention.get(s.id)} selected={s.id === selectedRow} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
         ))}
         {threads.length === 0 && <p className="px-4 py-4 text-small text-dim">{query.trim() ? 'No thread matches.' : 'No threads'}</p>}
       </div>

@@ -22,8 +22,9 @@ import { ThreadMenu } from './ThreadMenu'
 import { ThreadTask } from './ThreadTask'
 import { useHoverCard } from './useHoverCard'
 
-// needs is the thread the owner must answer for this one: itself, or the descendant of it that waits. menuRequest
-// changes when the list asks this row, from the keyboard, to open its menu.
+// needs is the thread the owner must answer for this one: itself, or the descendant of it that waits. selected marks
+// the row of the open thread, or of the open thread's top-level thread. menuRequest changes when the list asks this
+// row, from the keyboard, to open its menu.
 type ThreadRowProps = { session: Session; needs: Session | undefined; selected: boolean; cursor: boolean; menuRequest: number }
 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
@@ -35,6 +36,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
   const [renaming, setRenaming] = useState(false)
   const asker = needs ?? session
   const pending = useAgentosSelector((s) => s.pending[asker.id])
+  const open = useAgentosSelector((s) => s.selectedId === session.id)
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
   const cleanup = useArmedConfirm()
@@ -117,13 +119,13 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
           <>
             <button
               className="thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] font-medium"
-              aria-current={selected}
+              aria-current={open}
               aria-describedby={card.anchor ? cardId : undefined}
               onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
               onBlur={closeCard}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                if (selected) return a.showHome(session.project)
+                if (open) return a.showHome(session.project)
                 a.select(session.id)
                 a.focus('thread')
               }}
@@ -199,7 +201,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
       {menuAt && (
         <ThreadMenu
           session={session}
-          selected={selected}
+          selected={open}
           at={menuAt}
           onClose={() => setMenuAt(null)}
           onRename={() => setRenaming(true)}

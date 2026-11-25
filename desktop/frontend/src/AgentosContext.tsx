@@ -8,7 +8,7 @@ import { serversTabShown } from './useThreadServers'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
-import { goneThreads, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
+import { firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
@@ -361,7 +361,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   )
 
   const selectAmong = useCallback(
-    (list: Session[], homeUnlessRemembered = false) => {
+    // all is every project's sessions with list in them, from which a thread's family is read.
+    (list: Session[], all: Session[], homeUnlessRemembered = false) => {
       const current = selectedRef.current
       if (detached.current || (current && list.some((s) => s.id === current))) return
       const remembered = list.find((s) => s.id === lastSelected.current.get(projectRef.current?.name ?? ''))
@@ -369,8 +370,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         detached.current = true
         return
       }
-      // A child is not in the sidebar, so the first pick is a thread the owner started.
-      const next = remembered ?? list.find((s) => !s.parent) ?? list[0]
+      const next = remembered ?? firstThread(list, threadTreeOf(all))
       selectId(next ? next.id : null)
     },
     [selectId],
@@ -380,7 +380,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     (projectKey: string, items: Session[]) => {
       goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThreadDraft)
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
-      if (projectKey === projectRef.current?.key) selectAmong(items)
+      if (projectKey === projectRef.current?.key) selectAmong(items, [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items])
     },
     [selectAmong],
   )
@@ -436,6 +436,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
       selectAmong(
         snap.sessions.filter((s) => s.project === snap.project.key),
+        snap.sessions,
         homeUnlessRemembered,
       )
       report(() => loadIssues(false))
@@ -750,7 +751,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async settleThread(id) {
         await api.settleThread(id)
         if (selectedRef.current !== id) return
-        const next = sessionsRef.current.find((s) => s.project === projectRef.current?.key && s.id !== id && s.state !== 'settled')
+        const next = nextThread(sessionsRef.current, projectRef.current?.key, id, treeRef.current)
         if (next) selectId(next.id)
         else detach()
       },
