@@ -284,7 +284,7 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 }
 
 func TestClaudeThatDoesNotKnowTheThinkingFlagStillWorks(t *testing.T) {
-	logged := &lockedBuffer{}
+	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
 	log.SetOutput(logged)
 	t.Cleanup(func() { log.SetOutput(before) })
