@@ -72,7 +72,7 @@ func (v *Service) ResumeSession(id string) (Session, error) { return v.s.Resume(
 
 func (v *Service) RenameSession(id, title string) error { return v.s.Rename(id, title) }
 
-// TypeInto types text into the session's prompt, not sent; an agent under a host gets it sent.
+// TypeInto types text into the session's prompt, not sent; an agent under a host gets it as a draft in its chat.
 func (v *Service) TypeInto(id, text string) error { return v.s.TypeInto(id, text) }
 
 // RefreshPRs polls the pull requests of the issue sessions now.

@@ -1,6 +1,7 @@
 package sessions_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +19,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -221,6 +223,17 @@ func hostFiles(h *apptest.Harness, id string) (chatLog, socket string) {
 	return filepath.Join(h.State, "data", name.Project, "chats", name.Token+".jsonl"), filepath.Join(hostFolder(h, name.Project), name.Token+".sock")
 }
 
+// sendToHost sends text to the session's agent through its host, as the chat composer will.
+func sendToHost(h *apptest.Harness, id, text string) error {
+	_, socket := hostFiles(h, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := host.Ready(ctx, socket); err != nil {
+		return err
+	}
+	return host.Send(ctx, socket, text)
+}
+
 // userLines are the user messages the stand-in claude read on its stdin.
 func userLines(t *testing.T, dir, id string) []string {
 	t.Helper()
@@ -378,19 +391,6 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 	}
 }
 
-func TestManualPromptIsSentToAHostedSession(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    session_prompt_send: manual\n"})
-	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
-		t.Fatal(err)
-	}
-	id := h.Sessions().List()[0].ID
-	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, dir, id)) == 1 })
-	if users := userLines(t, dir, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
-		t.Errorf("user line = %s", users[0])
-	}
-}
-
 func TestDismissRemovesTheChatLog(t *testing.T) {
 	apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
@@ -504,7 +504,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 		end     func(h *apptest.Harness, id string) error
 		replied int
 	}{
-		{"a reply", func(h *apptest.Harness, id string) error { return h.TypeInto(id, "next") }, 1},
+		{"a reply", func(h *apptest.Harness, id string) error { return sendToHost(h, id, "next") }, 1},
 		{"an interrupt", func(h *apptest.Harness, id string) error { return h.Interrupt(id) }, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -553,7 +553,7 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 				t.Fatalf("state after Stop = %+v, %v", stopped, err)
 			}
 
-			if err := h.TypeInto(s.ID, "next"); err != nil {
+			if err := sendToHost(h, s.ID, "next"); err != nil {
 				t.Fatal(err)
 			}
 			chatLog, _ := hostFiles(h, s.ID)
@@ -589,7 +589,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 		h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"turn %d","transcript_path":%q}`, i, transcript))
 		appendLines(t, transcript, assistantLine(fmt.Sprintf("msg_%d", i), time.Now().Add(100*time.Millisecond), 100, 10))
 		h.Hook(t, s.ID, "Stop", "{}")
-		if err := h.TypeInto(s.ID, "next"); err != nil {
+		if err := sendToHost(h, s.ID, "next"); err != nil {
 			t.Fatal(err)
 		}
 		eventually(t, "the turn's end in the chat log", func() bool {
@@ -648,22 +648,6 @@ func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
 	want := "session " + s.ID + " has ended"
 	if err := h.TypeInto(s.ID, "hello"); err == nil || err.Error() != want {
 		t.Errorf("TypeInto = %v, want %q", err, want)
-	}
-}
-
-func TestTypeIntoAHostedSessionSendsIt(t *testing.T) {
-	dir := apptest.ClaudeOnPath(t)
-	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
-	s, err := h.Sessions().Create("work", "", false, 0, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.TypeInto(s.ID, "Address the review comments on PR #12."); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the text on claude's stdin", func() bool { return len(userLines(t, dir, s.ID)) == 1 })
-	if users := userLines(t, dir, s.ID); !strings.Contains(users[0], `"text":"Address the review comments on PR #12."`) {
-		t.Errorf("user line = %s", users[0])
 	}
 }
 

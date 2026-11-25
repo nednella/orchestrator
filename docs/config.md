@@ -18,7 +18,7 @@ projects:
     # everything below is optional; the values shown are the defaults
     queue_sections: []         # the groups of the queue, in order; see below
     note_session_command: ""   # typed into a session started from a note; {text} is the note; "" types the note itself
-    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual types it on the prompt for Enter, except that a Claude session gets it sent through its host all the same, until the app has a chat composer. The settings panel writes it
+    session_prompt_send: auto  # auto sends what a session starts with at once (Claude gets it as a message through its host); manual types it on the prompt for Enter; a Claude session under a host gets it as a draft in its chat instead. The settings panel writes it
     session_branch_fallback: "" # branch of an issue's work, for an issue session that reports none; {n} is the issue number; "" names none
     session_cleanup_command: "" # shell command that cleans up the git side of a session; {branch}, {worktree}, {dir}, {force} (--force when forced, else empty), e.g. "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"; "" leaves branches and folders alone
     session_cleanup_mode:      # does the app clean up by itself? The settings panel writes it

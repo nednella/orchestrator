@@ -184,3 +184,106 @@ func TestChatHasNoBranchOrPR(t *testing.T) {
 		t.Error("cleaning up a chat did not fail")
 	}
 }
+
+func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
+	chatLog, _ := hostFiles(h, id)
+	data, _ := os.ReadFile(chatLog)
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, `"kind":"`+kind+`"`) && strings.Contains(line, text) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestUnsentPromptIsADraft(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "write the queue", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the draft in the chat log", func() bool { return chatLogHas(h, s.ID, "draft", "write the queue") })
+	if users := userLines(t, dir, s.ID); len(users) != 0 {
+		t.Errorf("user lines on stdin = %v, want none", users)
+	}
+}
+
+func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    session_prompt_send: manual\n"})
+	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
+		t.Fatal(err)
+	}
+	id := h.Sessions().List()[0].ID
+	eventually(t, "the draft in the chat log", func() bool { return chatLogHas(h, id, "draft", "write the queue") })
+	if users := userLines(t, dir, id); len(users) != 0 {
+		t.Errorf("user lines on stdin = %v, want none", users)
+	}
+}
+
+func TestTypeIntoIsADraft(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.TypeInto(s.ID, "Address the review comments on PR #12."); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the draft in the chat log", func() bool {
+		return chatLogHas(h, s.ID, "draft", "Address the review comments on PR #12.")
+	})
+	if users := userLines(t, dir, s.ID); len(users) != 0 {
+		t.Errorf("user lines on stdin = %v, want none", users)
+	}
+}
+
+func TestWakeOfAnEndedHostedSession(t *testing.T) {
+	for _, tt := range []struct {
+		name, extra string
+		draft       bool
+	}{
+		{"auto sends", "", false},
+		{"manual drafts", "    session_prompt_send: manual\n", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := apptest.ClaudeOnPath(t)
+			h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
+			s, err := h.Sessions().Create("#12 work", "", false, 12, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+			h.RefreshPRs()
+			if err := h.KillSession(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
+			h.RefreshPRs()
+			var fresh string
+			eventually(t, "a new session for the issue", func() bool {
+				for _, v := range h.Sessions().List() {
+					if v.Issue == 12 && v.State != "ended" {
+						fresh = v.ID
+						return true
+					}
+				}
+				return false
+			})
+			if tt.draft {
+				eventually(t, "the draft", func() bool { return chatLogHas(h, fresh, "draft", "/address-review 12") })
+				time.Sleep(300 * time.Millisecond)
+				if users := userLines(t, dir, fresh); len(users) != 0 {
+					t.Errorf("user lines on stdin = %v, want none", users)
+				}
+				return
+			}
+			eventually(t, "the prompt on stdin", func() bool { return len(userLines(t, dir, fresh)) == 1 })
+			if chatLogHas(h, fresh, "draft", "/address-review 12") {
+				t.Error("an auto wake was left as a draft")
+			}
+		})
+	}
+}
