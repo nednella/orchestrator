@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLatestAgentos } from './AgentosContext'
 import { api, chatEvent, errorMessage, on } from './api'
 import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import type { ChatState } from './chatEvents'
@@ -52,6 +53,7 @@ function later(run: () => void): () => void {
 // useChat is the thread's chat: its history, then its live events, as a timeline.
 export function useChat(id: string): { timeline: Timeline; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
+  const latest = useLatestAgentos()
   const shown = view.id === id ? view : startOf(id)
   const timeline = useMemo(() => buildTimeline(shown.state.events, shown.state.live, id), [shown.state, id])
 
@@ -69,8 +71,12 @@ export function useChat(id: string): { timeline: Timeline; loading: boolean; err
       onError: (err) => setView((v) => ({ ...v, loading: false, error: errorMessage(err) })),
     })
     const off = on(chatEvent(id), ({ events }) => feed.push(events))
-    // An ended thread cannot be watched, and its history is all there is.
-    inTurn(id, () => api.chatWatch(id).catch(() => undefined))
+    inTurn(id, () => api.chatWatch(id))
+      .catch((err) => {
+        // An ended thread cannot be watched, and its history is all there is.
+        if (gone || latest().sessions.find((s) => s.id === id)?.state === 'ended') return
+        setView((v) => ({ ...v, error: errorMessage(err) }))
+      })
       .then(() => feed.load())
       .then(() => {
         if (!gone) setView((v) => ({ ...v, loading: false }))
@@ -82,7 +88,7 @@ export function useChat(id: string): { timeline: Timeline; loading: boolean; err
       off()
       inTurn(id, () => api.chatUnwatch(id)).catch(() => undefined)
     }
-  }, [id])
+  }, [id, latest])
 
   return { timeline, loading: shown.loading, error: shown.error }
 }
