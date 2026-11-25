@@ -105,6 +105,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatAgentRow thread={thread} id={item.id} description={item.description} type={item.type} state={item.state} startedAt={item.startedAt} endedAt={item.endedAt} tools={item.tools} steps={item.steps} result={item.result} folder={folder} />
     case 'child':
       if (item.error) return <ChatNotice text={`${item.title} did not start`} error />
+      if (item.expired) return <ChatNotice text={`${item.title}: the call ended before it said which thread it started`} error={false} />
       return <ChatChildCard id={item.child} title={item.title} />
     case 'childResult': {
       const title = items.find((i): i is ChildItem => i.kind === 'child' && i.child === item.child)?.title ?? 'Child thread'

@@ -604,7 +604,7 @@ test('delegate call becomes a child card', () => {
   const events = log(user('u1', 'Split it up'), toolUse('t1', 'Read', { file_path: 'a.ts' }), toolResult('t1', 'x'), delegate('d1'), message('msg_1', 'Started a child.'))
   const open = buildTimeline(events, {})
   assert.deepEqual(kinds(open.items), ['user', 'work', 'child', 'reply'], 'the card is not in the work row')
-  assert.deepEqual(only(open.items, 'child'), [{ kind: 'child', key: 'child-d1', at: 4000, call: 'd1', child: '', title: 'Flaky test', error: false }])
+  assert.deepEqual(only(open.items, 'child'), [{ kind: 'child', key: 'child-d1', at: 4000, call: 'd1', child: '', title: 'Flaky test', error: false, expired: false }])
   const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
   assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'reply'], 'a finished turn keeps the card outside the fold')
   assert.deepEqual(only(t.items, 'work')[0].calls.map((c) => c.tool), ['Read'])
@@ -645,4 +645,16 @@ test('message from another thread is headed with its sender', () => {
   assert.equal(theirs.from, 'shop/other234')
   assert.equal(theirs.text, 'Look at the cart too.')
   assert.equal(mine.from, undefined, "the owner's message names no sender")
+})
+
+test('a delegate call that gets no answer ends with its turn', () => {
+  const asked = [user('u1', 'Go'), delegate('d1')]
+  assert.equal(only(buildTimeline(log(...asked), {}).items, 'child')[0].expired, false, 'it waits while its turn runs')
+  for (const end of [{ kind: 'exit', error: true } as Draft, turnEnd(true), { kind: 'start' } as Draft]) {
+    assert.equal(only(buildTimeline(log(...asked, end), {}).items, 'child')[0].expired, true, `${end.kind} ends it`)
+  }
+  const answered = buildTimeline(log(...asked, started('d1', 'shop/abcd2345'), turnEnd()), {})
+  assert.equal(only(answered.items, 'child')[0].expired, false, 'one that got its answer stays')
+  const split = buildTimeline(log(...asked, user('u2', 'And this')), {})
+  assert.equal(only(split.items, 'child')[0].expired, false, 'a message that splits the turn does not end it')
 })

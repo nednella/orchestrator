@@ -22,8 +22,9 @@ export type AgentItem = { kind: 'agent'; key: string; id: string; turn: string; 
 export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
 // ChildItem is a delegate call of the thread's Claude: the child thread it started, by the id the call's result gives,
-// '' until the result comes. A failed call shows as a tool row; error marks one that failed after its turn ended.
-export type ChildItem = { kind: 'child'; key: string; at: number; call: string; child: string; title: string; error: boolean }
+// '' until the result comes. A failed call shows as a tool row; error marks one that failed after its turn ended, and
+// expired one that never got its result: Claude's turn ended, or Claude stopped, while the call ran.
+export type ChildItem = { kind: 'child'; key: string; at: number; call: string; child: string; title: string; error: boolean; expired: boolean }
 
 export type TimelineItem =
   // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none or
@@ -169,6 +170,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       if (a.ask) a.ask.expired = true
       if (a.item) a.item.expired = true
     }
+    for (const d of delegations.values()) if (d.call.result === null) d.item.expired = true
     close(e.at, notice, ended)
   }
 
@@ -200,12 +202,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   // delegated takes a delegate call's result: the child it started, or its error, which turns the card back into the
   // call's tool row while its turn runs.
   const delegated = (d: Delegation, e: ChatEvent) => {
+    d.call.result = e.text ?? ''
     if (!e.error) {
       d.item.child = childOf(e.text)
       if (d.item.child) children.add(d.item.child)
       return
     }
-    Object.assign(d.call, { result: e.text ?? '', error: true })
+    d.call.error = true
     const at = turn === d.turn ? d.turn.parts.indexOf(d.item) : -1
     if (at >= 0) d.turn.parts[at] = { kind: 'call', call: d.call }
     else d.item.error = true
@@ -271,7 +274,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
           return
         }
         if (e.tool === delegateTool) {
-          const item: ChildItem = { kind: 'child', key: `child-${id}`, at: e.at, call: id, child: '', title: childTitle(e.input), error: false }
+          const item: ChildItem = { kind: 'child', key: `child-${id}`, at: e.at, call: id, child: '', title: childTitle(e.input), error: false, expired: false }
           delegations.set(id, { item, call: { id, tool: delegateTool, input: e.input, result: null, error: false }, turn: t })
           t.parts.push(item)
           return
