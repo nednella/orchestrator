@@ -26,6 +26,8 @@ type Config struct {
 	Log, Socket, Dir string
 	Argv, Env        []string
 	Echo             io.Writer
+	// Interrupts interrupts Claude's turn at each signal, as the socket's interrupt op does.
+	Interrupts <-chan os.Signal
 }
 
 const (
@@ -118,6 +120,7 @@ func Run(ctx context.Context, c Config) error {
 	}
 	h.handlers.Add(1)
 	go h.serve(ln)
+	go h.interruptOn(c.Interrupts, waited)
 
 	h.read(stdout)
 	h.mu.Lock()
@@ -289,6 +292,20 @@ func (h *host) running() error {
 		return errExited
 	}
 	return nil
+}
+
+// interruptOn interrupts Claude's turn at each signal until done closes.
+func (h *host) interruptOn(signals <-chan os.Signal, done <-chan struct{}) {
+	for {
+		select {
+		case <-signals:
+			if err := h.do(request{Op: opInterrupt}); err != nil {
+				fmt.Fprintf(h.echo, "host: interrupt: %v\n", err)
+			}
+		case <-done:
+			return
+		}
+	}
 }
 
 func (h *host) nextID() string {

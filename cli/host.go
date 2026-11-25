@@ -11,8 +11,9 @@ import (
 )
 
 // newHostCmd is what each thread's tmux pane runs: it starts the agent headless, keeps the chat log and
-// serves the thread's socket. SIGINT and SIGTERM cancel the run, since Claude is in its own process group
-// and a Ctrl-C in the pane reaches only this process.
+// serves the thread's socket. Claude is in its own process group, so a Ctrl-C in the pane reaches only this process:
+// SIGINT interrupts Claude's turn. SIGTERM cancels the run, and so does SIGHUP, through the context main gives every
+// command.
 func newHostCmd() *cobra.Command {
 	var logPath, socket string
 	cmd := &cobra.Command{
@@ -25,15 +26,19 @@ func newHostCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGTERM)
 			defer stop()
+			interrupts := make(chan os.Signal, 1)
+			signal.Notify(interrupts, os.Interrupt)
+			defer signal.Stop(interrupts)
 			return host.Run(ctx, host.Config{
-				Log:    logPath,
-				Socket: socket,
-				Dir:    dir,
-				Argv:   args,
-				Env:    os.Environ(),
-				Echo:   cmd.OutOrStdout(),
+				Log:        logPath,
+				Socket:     socket,
+				Dir:        dir,
+				Argv:       args,
+				Env:        os.Environ(),
+				Echo:       cmd.OutOrStdout(),
+				Interrupts: interrupts,
 			})
 		},
 	}
