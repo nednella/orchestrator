@@ -223,6 +223,34 @@ func TestWaitGoesOnWhenTheAppStops(t *testing.T) {
 	}
 }
 
+func TestWaitWaitsForAHeldMessage(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release").ID
+	c := mustDelegate(t, h, parent, `{"task":"Count the files","access":"read"}`).ID
+	apptest.Eventually(t, "the task done", func() bool { return turnEnded(t, h, c) })
+	sibling := newThread(t, h, "Fix the login").ID
+	h.Hook(t, c, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, c).State == session.Waiting })
+	if a := sendAs(t, h, sibling, `{"thread":"`+c+`","text":"Count the tests too"}`); !a.Held {
+		t.Fatalf("send answered %+v, want it held", a)
+	}
+
+	got := waitInBackground(t, h, parent, c, 30*time.Second)
+	select {
+	case r := <-got:
+		t.Fatalf("wait answered %+v while a message was held for the thread", r)
+	case <-time.After(time.Second):
+	}
+	h.Hook(t, c, "Stop", `{}`)
+	r := waitResultOf(t, got, 10*time.Second)
+	if r.err != nil || !r.a.Done || r.a.Text != "done" {
+		t.Errorf("wait answered %+v, want the held message's turn done", r)
+	}
+	if !slices.ContainsFunc(logOf(t, h, c), func(e chat.Event) bool { return e.Kind == chat.KindUser && e.From == sibling }) {
+		t.Error("the wait returned before the held message was taken in")
+	}
+}
+
 func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 	h := apptest.New(t)
 	top := newThread(t, h, "Plan the release").ID

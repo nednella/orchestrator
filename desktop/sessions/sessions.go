@@ -2975,6 +2975,14 @@ func (s *Sessions) awaken(id string) error {
 	return nil
 }
 
+// HoldsTold says whether a message a thread told the thread id is held for it, or is being given to it now: it starts a
+// turn once it goes. It takes mu.
+func (s *Sessions) HoldsTold(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command })
+}
+
 // DropTold drops the messages threads told the thread id that are held for it, and says how many: a thread stopped
 // at another thread's ask must not start a new turn for them once its approval ends. It takes mu.
 func (s *Sessions) DropTold(id string) int {

@@ -27,6 +27,7 @@ type Threads interface {
 	Descendants(id string) []string
 	ParentOf(id string) string
 	DropTold(id string) int
+	HoldsTold(id string) bool
 }
 
 // tool runs one agentos tool as the caller, the thread the call's token names.

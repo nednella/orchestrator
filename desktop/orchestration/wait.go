@@ -153,14 +153,15 @@ func (c *Commands) stillRuns(id string) (turn, bool, error) {
 }
 
 // waitFor is the answer once the thread's turn ends, it no longer runs or ctx ends. Each turn_end its follower takes
-// has the log read again, since a message queued meanwhile starts a turn of its own.
+// has the log read again, since a message queued meanwhile, or held for it while it waited on the owner, starts a turn
+// of its own.
 func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 	for {
 		t := c.turnOf(ch)
 		switch {
 		case !ch.Live || t.ran:
 			return answer(ch.ID, t, outcomeSettled)
-		case t.ended:
+		case t.ended && !c.threads.HoldsTold(ch.ID):
 			return answer(ch.ID, t, t.outcome)
 		}
 		_, err := c.chats.AwaitTurn(ctx, ch.ID, t.newest)
