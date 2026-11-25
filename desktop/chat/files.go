@@ -14,34 +14,79 @@ import (
 )
 
 const (
-	filesFor  = 30 * time.Second // how long a folder's list is used before git lists it again
-	fileLimit = 30
+	filesFor   = 30 * time.Second // how long a folder's list is used before git lists it again
+	gitTimeout = 10 * time.Second
+	fileLimit  = 30
 )
 
 // files lists the files of a folder that git tracks or does not ignore, and keeps each folder's list a while: a
-// mention looks the list up at each key.
+// mention looks the list up at each key. Calls for a folder that is being listed wait for that listing.
 type files struct {
 	run run.Runner
 
 	mu    sync.Mutex
-	byDir map[string]listed
+	byDir map[string]*listing
 }
 
-type listed struct {
+// listing is one git listing of a folder; paths, err and at are set before done is closed.
+type listing struct {
+	done  chan struct{}
 	paths []string
+	err   error
 	at    time.Time
 }
 
-func newFiles(runner run.Runner) *files { return &files{run: runner, byDir: map[string]listed{}} }
+// stale says whether the listing is done and too old to use.
+func (l *listing) stale() bool {
+	select {
+	case <-l.done:
+		return time.Since(l.at) >= filesFor
+	default:
+		return false
+	}
+}
+
+func newFiles(runner run.Runner) *files { return &files{run: runner, byDir: map[string]*listing{}} }
 
 // list is the folder's files, relative to it. A folder outside git has none.
 func (f *files) list(ctx context.Context, dir string) ([]string, error) {
 	f.mu.Lock()
-	l, ok := f.byDir[dir]
-	f.mu.Unlock()
-	if ok && time.Since(l.at) < filesFor {
-		return l.paths, nil
+	l := f.byDir[dir]
+	if l != nil && !l.stale() {
+		f.mu.Unlock()
+		select {
+		case <-l.done:
+			return l.paths, l.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
+	for d, old := range f.byDir {
+		if old.stale() {
+			delete(f.byDir, d)
+		}
+	}
+	l = &listing{done: make(chan struct{})}
+	f.byDir[dir] = l
+	f.mu.Unlock()
+
+	l.paths, l.err = f.read(ctx, dir)
+	l.at = time.Now()
+	close(l.done)
+	if l.err != nil {
+		f.mu.Lock()
+		if f.byDir[dir] == l {
+			delete(f.byDir, dir)
+		}
+		f.mu.Unlock()
+	}
+	return l.paths, l.err
+}
+
+// read runs git for the folder's files.
+func (f *files) read(ctx context.Context, dir string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
 	out, err := f.run(ctx, dir, "git", "ls-files", "-z", "-co", "--exclude-standard")
 	if err != nil && !strings.Contains(err.Error(), "not a git repository") {
 		return nil, err
@@ -59,11 +104,7 @@ func (f *files) list(ctx context.Context, dir string) ([]string, error) {
 		}
 	}
 	slices.Sort(paths)
-	paths = slices.Compact(paths) // git lists a file with a merge conflict once per side
-	f.mu.Lock()
-	f.byDir[dir] = listed{paths: paths, at: time.Now()}
-	f.mu.Unlock()
-	return paths, nil
+	return slices.Compact(paths), nil // git lists a file with a merge conflict once per side
 }
 
 // rankFiles is at most limit of the paths that match query, ignoring case, best first: those whose file name starts
