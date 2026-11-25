@@ -9,6 +9,14 @@ export type WorkStep = { kind: 'call'; call: ToolCall } | { kind: 'note'; key: s
 
 export type ToolCall = { id: string; tool: string; input: unknown; result: string | null; error: boolean; answer?: 'allow' | 'deny' }
 
+// AgentState is where a subagent is: at work, done, failed, or stopped, by the owner or by its Claude's exit.
+export type AgentState = 'running' | 'done' | 'failed' | 'stopped'
+
+// AgentItem is an Agent call of the thread's own Claude and what its subagent did: its tool calls, thinking and text,
+// and its report once it ends. turn is the key of the turn that made the call; type is the subagent's type, '' for the
+// default one.
+export type AgentItem = { kind: 'agent'; key: string; id: string; turn: string; description: string; type: string; startedAt: number; endedAt: number | null; state: AgentState; tools: number; steps: WorkStep[]; result: string | null }
+
 // Ask is a question Claude puts to the user, or a plan it asks the user to approve. request is the approval that
 // answers it, '' until Claude asks for one. answers is what a question was answered with, by question, once known.
 export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
@@ -31,6 +39,7 @@ export type TimelineItem =
   | { kind: 'notice'; key: string; at: number; text: string; error: boolean }
   // restart is the thread starting again with a new access, which the owner asked for.
   | { kind: 'restart'; key: string; at: number; access: Access }
+  | AgentItem
 
 // TurnEnd is how a turn ended that did not finish: stopped by the owner or Claude's exit, or failed.
 export type TurnEnd = 'stopped' | 'failed'
@@ -47,7 +56,7 @@ type Reply = { kind: 'reply'; key: string; at: number; id: string; uuid: string;
 type ReplyItem = Extract<TimelineItem, { kind: 'reply' }>
 type Thought = { kind: 'thought'; key: string; id: string; text: string }
 // A part is one thing a turn holds, in the order it came.
-type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem
+type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem | AgentItem
 // An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
 type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean }
 // unsent holds the not-sent notices logged during the turn: the host drops a message before the turn ends, and the
@@ -61,6 +70,16 @@ const noFiles: string[] = []
 const turnError = (errors = '') => errors.split('\n').filter((line) => !line.startsWith('[ede_diagnostic]')).join('\n').trim()
 
 const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'question', ExitPlanMode: 'plan' }
+
+// Claude starts a subagent with its Agent tool, which older versions call Task.
+const agentTools = new Set(['Agent', 'Task'])
+// A subagent of the general type is not named by its type.
+const defaultAgentType = 'general-purpose'
+
+const agentOf = (input: unknown) => {
+  const { description, subagent_type: type } = (input ?? {}) as { description?: unknown; subagent_type?: unknown }
+  return { description: typeof description === 'string' && description !== '' ? description : 'Subagent', type: typeof type === 'string' && type !== defaultAgentType ? type : '' }
+}
 
 // approvalKind is what an approval for the tool asks of the user: to let a tool run, to answer a question or to
 // approve a plan.
@@ -80,6 +99,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const approvals = new Map<string, Approval>()
   const requested = new Set<ToolCall>()
   const queued = new Map<string, QueuedMessage>()
+  const agents = new Map<string, AgentItem>()
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
@@ -115,7 +135,38 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     close(e.at, notice, ended)
   }
 
+  // stopAgents stops each subagent still at work: its Claude is gone.
+  const stopAgents = (at: number) => {
+    for (const a of agents.values()) if (a.state === 'running') Object.assign(a, { state: 'stopped', endedAt: at })
+  }
+
+  // subagent adds what a subagent did to its Agent call's item, never to the turn: a subagent in the background goes on
+  // after the turn that started it ends. A subagent of a subagent shows as its parent's call.
+  const subagent = (e: ChatEvent, a: AgentItem) => {
+    switch (e.kind) {
+      case 'message':
+        a.steps.push({ kind: 'note', key: `note-${e.seq}`, text: e.text ?? '' })
+        return
+      case 'thought':
+        a.steps.push({ kind: 'thought', key: `thought-${e.seq}`, text: e.text ?? '', live: false })
+        return
+      case 'tool_use': {
+        const call: ToolCall = { id: e.id || `seq-${e.seq}`, tool: e.tool ?? '', input: e.input, result: null, error: false }
+        calls.set(call.id, call)
+        a.steps.push({ kind: 'call', call })
+        a.tools++
+        return
+      }
+    }
+  }
+
   events.forEach((e, i) => {
+    // A subagent's tool result finds its call as any other does.
+    if (e.agent && e.kind !== 'tool_result') {
+      const a = agents.get(e.agent)
+      if (a) subagent(e, a)
+      return
+    }
     switch (e.kind) {
       case 'user': {
         // A message Claude takes in while it works splits the turn there.
@@ -158,6 +209,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'tool_use': {
         const t = open(e)
         const id = e.id || `seq-${e.seq}`
+        if (agentTools.has(e.tool ?? '')) {
+          const a: AgentItem = { kind: 'agent', key: `agent-${id}`, id, turn: t.key, ...agentOf(e.input), startedAt: e.at, endedAt: null, state: 'running', tools: 0, steps: [], result: null }
+          agents.set(id, a)
+          t.parts.push(a)
+          return
+        }
         const kind = askKinds[e.tool ?? '']
         if (kind) {
           const ask: AskItem = { kind, key: `${kind}-${id}`, at: e.at, id, input: e.input, request: '', answers: null, expired: false, result: null }
@@ -171,6 +228,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       }
       case 'tool_result': {
+        // An Agent call's own result says only that its subagent started, or holds its report in a frame: the
+        // subagent's end says the rest. A failed call started none.
+        const a = agents.get(e.parent ?? '')
+        if (a?.state === 'running' && e.error) Object.assign(a, { state: 'failed', endedAt: e.at, result: e.text ?? '' })
         const call = calls.get(e.parent ?? '')
         if (call) Object.assign(call, { result: e.text ?? '', error: e.error ?? false })
         const ask = asks.get(e.parent ?? '')
@@ -204,6 +265,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn && a.item) turn.parts = turn.parts.filter((p) => p !== a.item)
         return
       }
+      case 'task_end': {
+        const a = agents.get(e.parent ?? '')
+        if (a?.state !== 'running') return
+        Object.assign(a, { state: e.stop === 'stopped' ? 'stopped' : e.error ? 'failed' : 'done', endedAt: e.at, result: e.text ?? '' })
+        return
+      }
       case 'interrupt':
         if (turn) interrupted = true
         return
@@ -213,6 +280,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       case 'exit':
         interrupted = false
+        stopAgents(e.at)
         end(e, exitItem(e), e.error ? 'failed' : 'stopped')
         // Claude is gone, so a queued message it did not take in will not be sent.
         for (const q of queued.values()) items.push(unsent(q.id, q.text, e.at))
@@ -222,6 +290,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'start':
         if (e.text) return
         interrupted = false
+        stopAgents(e.at)
         end(e, null, 'stopped')
         return
       case 'commands':
@@ -229,6 +298,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
     }
   })
+
+  // A subagent's report is most often its last text, which then shows once.
+  for (const a of agents.values()) {
+    const last = a.steps.at(-1)
+    if (a.result && last?.kind === 'note' && last.text.trim() === a.result.trim()) a.steps.pop()
+  }
 
   const running = turn as Turn | null
   if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
@@ -264,9 +339,9 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
   const work = (steps: WorkStep[]): TimelineItem => ({ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps })
   // A turn with nothing to fold keeps its heading in place, so the timeline does not move when it ends.
-  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem)))]
+  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem | AgentItem)))]
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
-  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
+  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem | AgentItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
   const last = replies.at(-1)
   const steps = turn.parts.flatMap((p): WorkStep[] => {
     if (p.kind === 'call') return [{ kind: 'call', call: p.call }]
@@ -322,6 +397,26 @@ function pendingOf(thread: string, a: Approval): Pending {
   else if (kind === 'plan') summary = firstLine(input.plan ?? '')
   else summary = firstLine([input.command, input.file_path, input.path, input.pattern, input.url].find((s) => typeof s === 'string' && s !== '') ?? '')
   return { id: thread, request: a.request, tool: a.tool, summary, kind }
+}
+
+// sameSteps is whether two builds of the timeline hold the same steps: it is built anew on every streamed delta, so its
+// steps are new objects holding the same values.
+export function sameSteps(a: WorkStep[], b: WorkStep[]): boolean {
+  return a.length === b.length && a.every((s, i) => sameStep(s, b[i]))
+}
+
+function sameStep(a: WorkStep, b: WorkStep): boolean {
+  if (a.kind === 'note') return b.kind === 'note' && a.text === b.text
+  if (a.kind === 'thought') return b.kind === 'thought' && a.key === b.key && a.text === b.text && a.live === b.live
+  return b.kind === 'call' && a.call.id === b.call.id && a.call.tool === b.call.tool && a.call.input === b.call.input && a.call.result === b.call.result && a.call.error === b.call.error && a.call.answer === b.call.answer
+}
+
+// agentList is the thread's subagents for its list, the newest turn's first and each turn's in the order Claude
+// started them.
+export function agentList(items: TimelineItem[]): AgentItem[] {
+  const turns = new Map<string, AgentItem[]>()
+  for (const item of items) if (item.kind === 'agent') turns.set(item.turn, [...(turns.get(item.turn) ?? []), item])
+  return [...turns.values()].reverse().flat()
 }
 
 export function firstLine(s: string): string {

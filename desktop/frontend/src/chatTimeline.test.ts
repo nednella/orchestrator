@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EMPTY_CHAT, mergeEvents } from './chatEvents.ts'
-import { approvalKind, buildTimeline } from './chatTimeline.ts'
+import { agentList, approvalKind, buildTimeline } from './chatTimeline.ts'
 import type { TimelineItem } from './chatTimeline.ts'
 import type { ChatEvent } from './types.ts'
 
@@ -448,4 +448,78 @@ test('the reply a turn stopped or failed on is marked, and no other', () => {
   assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), { kind: 'start' }), ['stopped'])
   assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), toolUse('t1', 'Bash'), { kind: 'interrupt' }, turnEnd(true)), [undefined], 'the turn stopped on the call, after the reply')
   assert.deepEqual(endedOf(user('u1', 'Go'), message('msg_1', 'On it.'), user('u2', 'And this'), message('msg_2', 'Sure.'), { kind: 'interrupt' }, turnEnd(true)), [undefined, 'stopped'])
+})
+
+const agentCall = (id: string, description: string, type = 'general-purpose'): Draft => ({ kind: 'tool_use', id, tool: 'Agent', input: { description, subagent_type: type, prompt: `Do: ${description}` } })
+const taskEnd = (parent: string, text: string, how: 'completed' | 'failed' | 'stopped' = 'completed'): Draft => ({ kind: 'task_end', parent, text, ...(how !== 'completed' ? { error: true } : {}), ...(how === 'stopped' ? { stop: 'stopped' as const } : {}) })
+const from = (agent: string, d: Draft): Draft => ({ ...d, agent })
+
+// Two subagents in the background, as Claude runs them by default: the calls' results come at once and the turn ends,
+// then the subagents work and end.
+const parallel = log(
+  user('u1', 'List the files and count the lines', 10_000),
+  agentCall('a1', 'List files', 'Explore'),
+  agentCall('a2', 'Count lines'),
+  toolResult('a1', 'Async agent launched successfully.'),
+  toolResult('a2', 'Async agent launched successfully.'),
+  message('msg_1', 'Both are running.'),
+  turnEnd(false, 15_000),
+  from('a2', toolUse('s2', 'Bash', { command: 'wc -l README.md' })),
+  from('a1', { kind: 'thought', id: 'msg_s1', text: 'I will list them.' }),
+  from('a1', toolUse('s1', 'Bash', { command: 'ls' })),
+  from('a1', toolResult('s1', 'a.go b.go')),
+  from('a1', message('msg_s1', 'a.go, b.go')),
+  { ...taskEnd('a1', 'a.go, b.go'), at: 21_000 },
+)
+
+test('parallel subagents are rows of their own beside the fold, holding their own events', () => {
+  const t = buildTimeline(parallel, {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'agent', 'reply'])
+  assert.equal(t.turnOpen, false, "a subagent's events after its turn opens no turn")
+  const [work] = only(t.items, 'work')
+  assert.deepEqual(work.steps, [], 'the Agent calls are not tool rows of the fold')
+  const [first, second] = only(t.items, 'agent')
+  assert.deepEqual([first.key, first.description, first.type, first.state, first.startedAt, first.endedAt, first.tools, first.result], ['agent-a1', 'List files', 'Explore', 'done', 2_000, 21_000, 1, 'a.go, b.go'])
+  assert.deepEqual(
+    first.steps.map((st) => (st.kind === 'call' ? [st.call.id, st.call.result] : [st.kind, st.text])),
+    [
+      ['thought', 'I will list them.'],
+      ['s1', 'a.go b.go'],
+    ],
+    'its last text is its report, which shows once',
+  )
+  assert.deepEqual([second.type, second.state, second.endedAt, second.tools, second.result], ['', 'running', null, 1, null], 'the general type is not named')
+  assert.equal(second.turn, first.turn)
+})
+
+test('subagents of the turn that runs split its work like a card', () => {
+  const t = buildTimeline(log(user('u1', 'Go'), toolUse('t1', 'Read'), agentCall('a1', 'Look'), from('a1', toolUse('s1', 'Grep')), toolUse('t2', 'Read')), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'work'])
+  assert.deepEqual(only(t.items, 'work').map((w) => w.steps.length), [1, 1], "the subagent's call is not one of the turn's")
+  assert.equal(only(t.items, 'agent')[0].tools, 1)
+})
+
+test('a subagent ends as its end says, and stops with its Claude', () => {
+  const ended = (how: 'completed' | 'failed' | 'stopped') => only(buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), taskEnd('a1', 'why', how)), {}).items, 'agent')[0]
+  assert.deepEqual([ended('failed').state, ended('failed').result], ['failed', 'why'])
+  assert.equal(ended('stopped').state, 'stopped')
+  const exited = only(buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), turnEnd(), { kind: 'exit', at: 9_000 }), {}).items, 'agent')[0]
+  assert.deepEqual([exited.state, exited.endedAt], ['stopped', 9_000])
+  const refused = only(buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), toolResult('a1', 'No such agent type', true)), {}).items, 'agent')[0]
+  assert.deepEqual([refused.state, refused.result], ['failed', 'No such agent type'])
+  const late = only(buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), taskEnd('a1', 'done'), taskEnd('a1', 'again', 'failed')), {}).items, 'agent')[0]
+  assert.deepEqual([late.state, late.result], ['done', 'done'], 'the first end holds')
+})
+
+test("an event of a subagent with no call shows nowhere, and a shell's end changes nothing", () => {
+  const t = buildTimeline(log(user('u1', 'Go'), message('msg_1', 'Hi'), turnEnd(), from('gone', message('msg_2', 'lost')), taskEnd('t9', 'shell done')), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
+})
+
+test('the agent list puts the newest turn first', () => {
+  const events = log(user('u1', 'One'), agentCall('a1', 'First'), agentCall('a2', 'Second'), turnEnd(), user('u2', 'Two'), agentCall('a3', 'Third'), turnEnd())
+  assert.deepEqual(
+    agentList(buildTimeline(events, {}).items).map((a) => a.id),
+    ['a3', 'a1', 'a2'],
+  )
 })

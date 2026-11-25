@@ -124,6 +124,27 @@ const longReply = Array.from({ length: 19 }, (_, i) => {
   ].join('\n\n')
 }).join('\n\n')
 
+// backgroundAgents are the two subagents a message that says "agents" starts: what each looks into, the tools it runs,
+// and the report it ends with.
+const backgroundAgents = [
+  {
+    description: 'List the checkout pages',
+    type: 'Explore',
+    steps: [{ tool: 'Glob', input: { pattern: 'app-frontend/src/js/pages/*.tsx' }, result: 'app-frontend/src/js/pages/Cart.tsx\napp-frontend/src/js/pages/Checkout.tsx\napp-frontend/src/js/pages/checkout_steps.tsx' }],
+    report: 'Three pages: `Cart.tsx`, `Checkout.tsx` and `checkout_steps.tsx`.',
+  },
+  {
+    description: 'Count the checkout tests',
+    type: 'general-purpose',
+    steps: [
+      { tool: 'Grep', input: { pattern: 'test\\(', path: 'app-frontend/test' }, result: 'app-frontend/test/checkout.test.ts' },
+      { tool: 'Bash', input: { command: "grep -c 'test(' app-frontend/test/checkout.test.ts", description: 'Count the tests' }, result: '12' },
+    ],
+    report: '`checkout.test.ts` holds 12 tests.',
+  },
+]
+const agentStepEvery = 1500
+
 const longMessage = Array.from({ length: 14 }, (_, i) => `${i + 1}. Check that step ${i + 1} of the checkout keeps the cart total, the coupon and the address the owner typed.`).join('\n')
 
 // olderTurns is finished turns that give a chat at least that many items: each a message and its reply, every fifth one
@@ -156,7 +177,8 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
-// another, or about 30 KB of markdown, as Claude streams it, to a message that says "long". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
+// another, or about 30 KB of markdown, as Claude streams it, to a message that says "long", or two subagents in the
+// background to a message that says "agents". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
 // would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
 // says whether a project key is configured.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
@@ -167,6 +189,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   const queued = new Map<string, { id: string; text: string; files: string[] }[]>()
   const media = new Map<string, string>() // a saved image's data URL, by its path
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
+  const background = new Map<string, () => void>() // stops the subagents each thread runs in the background
   const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
   // The command list a thread of each project reported last, as the service keeps it for Home.
   const projectCommands = new Map<string, { at: number; list: typeof commands }>()
@@ -257,6 +280,44 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       t.setState('idle')
     }, long ? longDeltaEvery : (/\bslow\b/i.test(asked) ? 8000 : 1000) / words.length)
     replying.set(id, () => clearInterval(timer))
+  }
+
+  // subagents runs a turn that starts two subagents in the background, as Claude does by default: the turn ends once
+  // both are launched, each then works and ends on its own, and Claude reports both in a turn of its own, with no
+  // message of the owner's.
+  function subagents(id: string) {
+    const t = thread(id)
+    const runs = backgroundAgents.map((a) => ({ ...a, call: `toolu_${Math.random().toString(36).slice(2, 10)}`, done: 0 }))
+    for (const r of runs) append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.description } })
+    for (const r of runs) append(id, { kind: 'tool_result', parent: r.call, text: 'Async agent launched successfully.' })
+    append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, uuid: crypto.randomUUID(), text: 'Both subagents are running. I will report what they find.' })
+    append(id, { kind: 'turn_end', cost: 0.02 })
+    t.setState('idle')
+    const timer = setInterval(() => {
+      const r = runs.find((r) => r.done <= r.steps.length)
+      if (!r) {
+        clearInterval(timer)
+        background.delete(id)
+        t.setState('working')
+        append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, uuid: crypto.randomUUID(), text: runs.map((r) => r.report).join(' ') })
+        append(id, { kind: 'turn_end', cost: 0.01 })
+        t.setState('idle')
+        return
+      }
+      const step = r.steps[r.done]
+      const tool = `toolu_${Math.random().toString(36).slice(2, 10)}`
+      if (step) {
+        append(id, { kind: 'tool_use', id: tool, tool: step.tool, input: step.input, agent: r.call })
+        append(id, { kind: 'tool_result', parent: tool, text: step.result, agent: r.call })
+      } else {
+        append(id, { kind: 'message', id: `msg_${Math.random().toString(36).slice(2, 10)}`, text: r.report, agent: r.call })
+        append(id, { kind: 'task_end', parent: r.call, text: r.report })
+      }
+      r.done++
+      // The subagents work side by side, so the next step is the other one's.
+      runs.push(...runs.splice(runs.indexOf(r), 1))
+    }, agentStepEvery)
+    background.set(id, () => clearInterval(timer))
   }
 
   // runQueued takes in every queued message and replies to them, as Claude does once it can.
@@ -431,6 +492,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
         return { id: message }
       }
       append(id, { kind: 'init', id: 'mock-session' })
+      if (/\bagents\b/i.test(text)) {
+        subagents(id)
+        return { id: message }
+      }
       t.setState('working')
       reply(id, text)
       return { id: message }
@@ -498,6 +563,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   function end(id: string, stop?: 'settle' | { restart: Access }) {
     replying.get(id)?.()
     replying.delete(id)
+    background.get(id)?.()
+    background.delete(id)
     queued.delete(id)
     setPending(id, null)
     if (!logs.has(id)) return

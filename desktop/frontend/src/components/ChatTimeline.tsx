@@ -5,6 +5,7 @@ import { ACCESS_LABEL } from '../access'
 import { jumpOffset } from '../chatMinimap'
 import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
 import type { TimelineItem } from '../chatTimeline'
+import { ChatAgentRow } from './ChatAgentRow'
 import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatMessageActions } from './ChatMessageActions'
 import { ChatMinimap } from './ChatMinimap'
@@ -69,6 +70,8 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatQuestionCard thread={thread} id={item.id} request={item.request} input={item.input} answer={item.answer} answers={item.answers} expired={item.expired} result={item.result} />
     case 'plan':
       return <ChatPlanCard thread={thread} request={item.request} input={item.input} answer={item.answer} expired={item.expired} result={item.result} />
+    case 'agent':
+      return <ChatAgentRow thread={thread} id={item.id} description={item.description} type={item.type} state={item.state} startedAt={item.startedAt} endedAt={item.endedAt} tools={item.tools} steps={item.steps} result={item.result} folder={folder} />
   }
 }
 
