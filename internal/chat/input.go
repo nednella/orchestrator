@@ -43,8 +43,9 @@ type controlRequest struct {
 }
 
 type requestBody struct {
-	Subtype string `json:"subtype"`
-	Mode    string `json:"mode,omitempty"`
+	Subtype              string `json:"subtype"`
+	Mode                 string `json:"mode,omitempty"`
+	SpareBackgroundTasks bool   `json:"spare_background_tasks,omitempty"`
 }
 
 type rewindFilesBody struct {
@@ -110,8 +111,10 @@ func Initialize(id string) []byte {
 	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "initialize"}})
 }
 
+// Interrupt stops Claude's turn and leaves the tasks it runs in the background going, as Esc does in Claude's terminal:
+// without spare_background_tasks, an interrupt in stream-json mode stops them too.
 func Interrupt(id string) []byte {
-	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "interrupt"}})
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "interrupt", SpareBackgroundTasks: true}})
 }
 
 // SetPermissionMode asks claude to change its permission mode, such as plan or default, as it runs.

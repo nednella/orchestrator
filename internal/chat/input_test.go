@@ -54,7 +54,7 @@ func TestControlRequestShapes(t *testing.T) {
 	assertLine(t, Initialize("req_1"),
 		`{"type":"control_request","request_id":"req_1","request":{"subtype":"initialize"}}`)
 	assertLine(t, Interrupt("req_2"),
-		`{"type":"control_request","request_id":"req_2","request":{"subtype":"interrupt"}}`)
+		`{"type":"control_request","request_id":"req_2","request":{"subtype":"interrupt","spare_background_tasks":true}}`)
 }
 
 func TestSetPermissionModeShape(t *testing.T) {

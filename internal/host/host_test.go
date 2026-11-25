@@ -937,14 +937,18 @@ func TestInterruptStopsTheTurn(t *testing.T) {
 	if e := waitKind(t, events, chat.KindTurnEnd); !e.Error {
 		t.Fatal("interrupted turn ended without an error")
 	}
-	var interrupts int
+	var interrupts []string
 	for _, l := range stdinLines(t, h.stdin) {
 		if strings.Contains(l, `"subtype":"interrupt"`) {
-			interrupts++
+			interrupts = append(interrupts, l)
 		}
 	}
-	if interrupts != 1 {
-		t.Fatalf("%d interrupt requests on stdin, want 1", interrupts)
+	if len(interrupts) != 1 {
+		t.Fatalf("%d interrupt requests on stdin, want 1", len(interrupts))
+	}
+	// As Esc in Claude's terminal, the interrupt stops the turn and leaves what runs in the background.
+	if !strings.Contains(interrupts[0], `"spare_background_tasks":true`) {
+		t.Errorf("interrupt %s does not spare the background tasks", interrupts[0])
 	}
 }
 
