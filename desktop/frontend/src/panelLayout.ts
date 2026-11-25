@@ -15,31 +15,27 @@ export const MAX_REM = 32
 export const THREAD_MIN_REM = 30
 // The rail's border and the line beside each side panel.
 const LINES_PX = 3
-const RIGHT_SHARE = 0.24
-const RIGHT_DEFAULT_RANGE: [number, number] = [9.5, 22]
+const RIGHT_DEFAULT_REM = 22
 
 export type FitPrefs = { sidebarOpen: boolean; sidebar: number; right: number | null }
 export type Fitted = { widths: Record<SidePanel, number>; docked: Record<SidePanel, boolean> }
 
-const clamp = (value: number, [min, max]: [number, number]) => Math.min(Math.max(value, min), max)
-
 // Where each side panel goes at a window width in px, and its width in rem. A panel docks beside the thread when the
-// thread keeps THREAD_MIN_REM beside it, else it opens over the thread. The sidebar keeps the width it was set to; the
-// right panel docks at its own width, and opens over the thread at its full width. An overlay is never wider than
-// the room under the top bar.
+// thread keeps THREAD_MIN_REM beside it, else it opens over the thread. Each panel keeps the width it was set to,
+// docked or not, but an overlay is never wider than the room under the top bar.
 export function fit(windowPx: number, prefs: FitPrefs, root: number): Fitted {
   const thread = THREAD_MIN_REM * root
   const wideEnough = windowPx >= OVERLAY_BELOW
   const sidebarPx = (RAIL_REM + prefs.sidebar) * root
   const sidebarDocks = wideEnough && windowPx - sidebarPx - LINES_PX >= thread
   const left = sidebarDocks && prefs.sidebarOpen ? sidebarPx + LINES_PX : 0
-  const dockedRight = prefs.right ?? clamp((RIGHT_SHARE * windowPx) / root, RIGHT_DEFAULT_RANGE)
-  const rightDocks = wideEnough && windowPx - left - LINES_PX - dockedRight * root >= thread
+  const right = prefs.right ?? RIGHT_DEFAULT_REM
+  const rightDocks = wideEnough && windowPx - left - LINES_PX - right * root >= thread
   const room = (windowPx - left) / root
   return {
     widths: {
       sidebar: sidebarDocks ? prefs.sidebar : Math.min(prefs.sidebar, windowPx / root - RAIL_REM),
-      right: rightDocks ? dockedRight : Math.min(prefs.right ?? RIGHT_DEFAULT_RANGE[1], room),
+      right: Math.min(right, room),
     },
     docked: { sidebar: sidebarDocks, right: rightDocks },
   }

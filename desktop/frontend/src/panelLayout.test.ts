@@ -30,9 +30,17 @@ test('below the breakpoint nothing docks, whatever the room', () => {
 test('the right panel docks only where it fits at its width beside the thread', () => {
   assert.deepEqual(fit(1512, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
   assert.deepEqual(fit(900, prefs(18), ROOT).docked, { sidebar: true, right: false })
-  assert.deepEqual(fit(900, prefs(18, null, false), ROOT), { widths: { sidebar: 18, right: 13.5 }, docked: { sidebar: true, right: true } })
+  assert.deepEqual(fit(900, prefs(18, null, false), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
   assert.equal(fit(1512, prefs(18, 32), ROOT).docked.right, true)
   assert.equal(fit(1200, prefs(18, 32), ROOT).docked.right, false)
+})
+
+test('the right panel has one width, docked or over the thread', () => {
+  assert.deepEqual(fit(1512, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
+  assert.deepEqual(fit(900, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: false } })
+  assert.deepEqual(fit(700, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: false, right: false } })
+  assert.equal(fit(1512, prefs(18, 15), ROOT).widths.right, 15)
+  assert.equal(fit(700, prefs(18, 15), ROOT).widths.right, 15)
 })
 
 test('a panel over the thread opens at its full width, capped by the room under the top bar', () => {
