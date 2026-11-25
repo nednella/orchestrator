@@ -506,6 +506,34 @@ func TestALargeReplayDoesNotBlockClaudesOutput(t *testing.T) {
 	})
 }
 
+func TestAMessageAFailedStartNeverReadIsNotSent(t *testing.T) {
+	t.Parallel()
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model", "AOS_FAKE_REJECT_AFTER=500ms")
+	if err := Send(ctxT(t), h.socket, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-h.done:
+		h.done <- err
+	case <-time.After(10 * time.Second):
+		t.Fatal("the host did not end with claude")
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []chat.Kind
+	for _, e := range logged {
+		kinds = append(kinds, e.Kind)
+	}
+	if want := []chat.Kind{chat.KindStart, chat.KindUser, chat.KindUnsent, chat.KindExit}; !slices.Equal(kinds, want) {
+		t.Fatalf("log kinds = %v, want %v", kinds, want)
+	}
+	if user, unsent := logged[1], logged[2]; unsent.ID != user.ID || unsent.Text != "hi" || !unsent.Error {
+		t.Errorf("unsent = %+v, want an error on the message %s", unsent, user.ID)
+	}
+}
+
 func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

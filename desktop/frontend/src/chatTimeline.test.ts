@@ -411,6 +411,14 @@ test('queued is not sent once the host drops it or Claude exits', () => {
   assert.deepEqual(only(exited.items, 'notice').map((n) => n.text), ['Claude stopped', 'Not sent: Run the tests'])
 })
 
+test('a message a failed start never read is not sent, as an error', () => {
+  const t = buildTimeline(log({ kind: 'start' }, user('u1', 'Hi\nthere'), { kind: 'unsent', id: 'u1', text: 'Hi\nthere', error: true }, { kind: 'exit', error: true, text: 'exit status 1' }), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'notice', 'notice'])
+  const notices = only(t.items, 'notice')
+  assert.deepEqual(notices.map((n) => [n.key, n.error]).at(-1), ['unsent-u1', true])
+  assert.equal(notices.at(-1)?.text, 'Not sent: Hi')
+})
+
 test('latest commands win', () => {
   const t = buildTimeline(
     log(

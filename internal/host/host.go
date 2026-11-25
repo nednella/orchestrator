@@ -88,8 +88,10 @@ type host struct {
 	stdinMu  sync.Mutex
 	stdin    io.Writer
 	stdinErr error
-	// unanswered is what the host wrote before Claude wrote its first line, for a Claude started again.
+	// unanswered is what the host wrote before Claude wrote its first line, for a Claude started again, and unreached
+	// the messages in it, which a Claude that fails then never read.
 	unanswered [][]byte
+	unreached  []chat.Event
 	// spoke is set once Claude has written its first line. The stdout reader sets it without stdinMu: a send holds
 	// stdinMu while Claude's stdin is full, which Claude empties only as the host reads its stdout.
 	spoke atomic.Bool
@@ -175,11 +177,29 @@ func Run(ctx context.Context, c Config) error {
 			err = run.wait(h)
 		}
 	}
+	if !h.spoke.Load() {
+		h.notReached()
+	}
 	h.mu.Lock()
 	h.exited = true
 	h.mu.Unlock()
 	h.publishExit(err)
 	return err
+}
+
+// notReached tells that the messages sent before Claude's first line did not reach it: Claude has ended without one.
+func (h *host) notReached() {
+	h.stdinMu.Lock()
+	unreached := h.unreached
+	h.stdinMu.Unlock()
+	for _, e := range unreached {
+		h.mu.Lock()
+		delete(h.queued, e.ID)
+		h.mu.Unlock()
+		if _, err := h.publish(chat.Event{Kind: chat.KindUnsent, ID: e.ID, Text: e.Text, Error: true}); err != nil {
+			fmt.Fprintf(h.echo, "host: %v\n", err)
+		}
+	}
 }
 
 // claudeRun is one start of Claude. stderr keeps the start of what Claude wrote there, which names a flag it does not
@@ -645,6 +665,9 @@ func (h *host) send(text string, files []string) (string, error) {
 	}
 	if err != nil {
 		return "", err
+	}
+	if !h.spoke.Load() {
+		h.unreached = append(h.unreached, chat.Event{ID: id, Text: text})
 	}
 	return id, nil
 }

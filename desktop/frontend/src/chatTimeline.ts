@@ -89,9 +89,9 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   const open = (e: ChatEvent): Turn => (turn ??= { key: (e.kind === 'user' && e.id) || `seq-${e.seq}`, startedAt: e.at, parts: [], approvals: [], unsent: [] })
 
-  const unsent = (id: string, text: string, at: number): Notice => {
+  const unsent = (id: string, text: string, at: number, error = false): Notice => {
     queued.delete(id)
-    return { kind: 'notice', key: `unsent-${id}`, at, text: `Not sent: ${firstLine(text)}`, error: false }
+    return { kind: 'notice', key: `unsent-${id}`, at, text: `Not sent: ${firstLine(text)}`, error }
   }
 
   // close folds the turn into the items, then its notice and its not-sent notices, and gives back the approvals it
@@ -129,9 +129,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'queued':
         if (e.id) queued.set(e.id, { id: e.id, text: e.text ?? '', files: e.files ?? [] })
         return
+      // An unsent error is a message a Claude that failed at its start never read, sent or queued.
       case 'unsent': {
-        if (!e.id || !queued.has(e.id)) return
-        const notice = unsent(e.id, queued.get(e.id)?.text ?? '', e.at)
+        if (!e.id || (!queued.has(e.id) && !e.error)) return
+        const notice = unsent(e.id, queued.get(e.id)?.text ?? e.text ?? '', e.at, e.error)
         if (turn) turn.unsent.push(notice)
         else items.push(notice)
         return

@@ -33,7 +33,8 @@ const (
 	// KindStillQueued is claude's reply to the interrupt request ID: Input lists the uuids of the user messages it
 	// still holds. The host consumes it and never logs it.
 	KindStillQueued Kind = "still_queued"
-	// KindUnsent is a queued message the host dropped because Claude no longer holds it: it will not be sent.
+	// KindUnsent is a message that will not reach Claude: a queued one the host dropped because Claude no longer holds it,
+	// or, with Error, one sent before Claude's first line to a Claude that then failed and was not started again.
 	KindUnsent Kind = "unsent"
 	// KindMode is Claude's permission mode, in Text, once it changes: at the owner's ask, or by Claude itself, as when
 	// the owner approves its plan.
