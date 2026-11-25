@@ -943,3 +943,24 @@ func TestSocketFolderWiderThan0700Fails(t *testing.T) {
 		}
 	}
 }
+
+func TestEchoShowsEachTurnsOwnCostAndANewSessionOnce(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	h := &host{echo: &out}
+	for _, e := range []chat.Event{
+		{Kind: chat.KindInit, ID: "s1"},
+		{Kind: chat.KindTurnEnd, Cost: 0.0061},
+		{Kind: chat.KindInit, ID: "s1"},
+		{Kind: chat.KindTurnEnd, Cost: 0.0091},
+		{Kind: chat.KindInit, ID: "s2"},
+		{Kind: chat.KindTurnEnd, Cost: 0.0104, Error: true},
+		{Kind: chat.KindTurnEnd, Cost: 0.002},
+	} {
+		h.echoEvent(e)
+	}
+	want := "session s1\nturn ended, $0.0061\nturn ended, $0.0030\nsession s2\nturn ended, $0.0013, with an error\nturn ended, $0.0020\n"
+	if got := out.String(); got != want {
+		t.Errorf("echo =\n%s\nwant\n%s", got, want)
+	}
+}

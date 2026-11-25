@@ -51,6 +51,10 @@ type host struct {
 	log     *chat.Log
 	echo    io.Writer
 
+	echoMu      sync.Mutex
+	echoSession string  // the session id the echo showed last
+	echoTotal   float64 // Claude's running cost at the last turn's end
+
 	stdinMu  sync.Mutex
 	stdin    io.Writer
 	stdinErr error
@@ -261,10 +265,29 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	return e, nil
 }
 
+// echoEvent shows e in the pane. Claude sends its session id at every turn and its running cost at every turn's end,
+// so the echo shows the id only when it changes and the cost as the turn's own; a total below the last starts a new
+// count.
 func (h *host) echoEvent(e chat.Event) {
-	if e.Persisted() {
-		fmt.Fprintln(h.echo, echoLine(e))
+	if !e.Persisted() {
+		return
 	}
+	h.echoMu.Lock()
+	defer h.echoMu.Unlock()
+	switch e.Kind {
+	case chat.KindInit:
+		if e.ID == h.echoSession {
+			return
+		}
+		h.echoSession = e.ID
+	case chat.KindTurnEnd:
+		total := e.Cost
+		if total >= h.echoTotal {
+			e.Cost -= h.echoTotal
+		}
+		h.echoTotal = total
+	}
+	fmt.Fprintln(h.echo, echoLine(e))
 }
 
 func (h *host) write(line []byte) error {
