@@ -104,7 +104,8 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 		if err := json.Unmarshal([]byte(out), &answer); err != nil {
 			return "", errors.New("the app's answer to wait was not understood")
 		}
-		if answer.Done || !time.Now().Before(deadline) {
+		// The app is given whole milliseconds, so a slice can end just short of the deadline.
+		if answer.Done || time.Until(deadline) < time.Millisecond {
 			return answer.Text, nil
 		}
 	}
