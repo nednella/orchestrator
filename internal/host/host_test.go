@@ -141,6 +141,9 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": l.Request.Mode})
 	}
 	fmt.Fprintln(out, fakeInit)
+	if mode := os.Getenv("AOS_FAKE_MODE"); mode != "" {
+		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": mode})
+	}
 
 	lines := make(chan fakeLine)
 	go func() {
@@ -213,6 +216,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 			case "ask":
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
 					"subtype": "can_use_tool", "tool_name": "Bash", "input": map[string]any{"command": "ls"},
+				}})
+			case "delegate":
+				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
+					"subtype": "can_use_tool", "tool_name": "mcp__agentos__delegate", "input": map[string]any{"task": "fix it"},
 				}})
 			case "slow":
 				reply("slow")
@@ -450,6 +457,35 @@ func TestApprovalRoundTrip(t *testing.T) {
 	}
 	if err := Answer(ctxT(t), h.socket, "r1", true, ""); err == nil {
 		t.Fatal("a second answer to r1 was accepted")
+	}
+}
+
+func TestAgentosToolRunsWithoutAnApproval(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_MODE=plan")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := Send(ctxT(t), h.socket, "delegate"); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindTurnEnd); e.Error {
+		t.Fatal("turn ended with an error: the agentos tool was not allowed")
+	}
+	if got := modes(t, h.log); !slices.Equal(got, []string{"plan"}) {
+		t.Fatalf("modes = %q, want the stand-in in plan mode", got)
+	}
+	if asked := logged(t, h.log, chat.KindApproval, chat.KindAnswer); len(asked) > 0 {
+		t.Errorf("logged %+v, want no approval for the owner", asked)
+	}
+	var allow string
+	for _, l := range stdinLines(t, h.stdin) {
+		if strings.Contains(l, `"control_response"`) {
+			allow = l
+		}
+	}
+	if !strings.Contains(allow, `"request_id":"r1"`) || !strings.Contains(allow, `"behavior":"allow"`) || !strings.Contains(allow, `"updatedInput":{"task":"fix it"}`) {
+		t.Fatalf("control_response = %s, want allow with the tool's input", allow)
 	}
 }
 

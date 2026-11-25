@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/prompts"
 )
 
@@ -290,10 +291,23 @@ func (h *host) handleLine(line []byte) {
 		case chat.KindMode:
 			h.modeIs(e.Text)
 			continue
+		case chat.KindApproval:
+			if strings.HasPrefix(e.Tool, mcp.ToolPrefix) {
+				h.allowAgentosTool(e)
+				continue
+			}
 		}
 		if _, err := h.publish(e); err != nil {
 			fmt.Fprintf(h.echo, "host: %v\n", err)
 		}
+	}
+}
+
+// allowAgentosTool answers Claude's ask to run an agentos tool with yes, and logs nothing: every thread may run them,
+// and in plan mode Claude asks for a tool that changes things even when it is allowed.
+func (h *host) allowAgentosTool(e chat.Event) {
+	if err := h.write(chat.Allow(e.ID, e.Input)); err != nil {
+		fmt.Fprintf(h.echo, "host: allowing %s: %v\n", e.Tool, err)
 	}
 }
 
