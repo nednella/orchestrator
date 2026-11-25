@@ -642,7 +642,7 @@ func (s *Sessions) take(rec session.Record) {
 	// Each hook moves the row's cost. The event log gets a turn's usage once the turn is over, and the
 	// first refresh's usage at once: it catches up on turns while the app was closed.
 	if rec.Transcript != "" {
-		if rec.Event == "Stop" {
+		if endsTurn(rec.Event) {
 			time.AfterFunc(stopSettle, func() { s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, true) })
 		} else {
 			go s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, rec.Event == "SessionEnd" || !s.loaded)
@@ -654,6 +654,9 @@ func (s *Sessions) take(rec session.Record) {
 	}
 }
 
+// endsTurn says whether a record's event ends the agent's turn: its Stop hook, or the app's TurnError.
+func endsTurn(event string) bool { return event == "Stop" || event == session.TurnError }
+
 // followBranch has the lifecycle look at the branch of a session, when the agent moved,
 // finished a turn or switched the branch of the project folder, and read its git status again after
 // each tool call. It needs mu.
@@ -661,7 +664,7 @@ func (s *Sessions) followBranch(rec session.Record) {
 	if s.isChat(rec.Session) || rec.Cwd == "" {
 		return
 	}
-	moved := rec.Cwd != s.cwds[rec.Session] || rec.Event == "Stop"
+	moved := rec.Cwd != s.cwds[rec.Session] || endsTurn(rec.Event)
 	s.cwds[rec.Session] = rec.Cwd
 	for _, in := range s.info {
 		if in.Name.String() != rec.Session {
@@ -672,7 +675,7 @@ func (s *Sessions) followBranch(rec session.Record) {
 			continue
 		}
 		if switched := s.switched(rec, proj.Dir); moved || switched {
-			go s.life.learn(s.ctx, rec.Session, proj, rec.Cwd, rec.Event == "Stop", switched)
+			go s.life.learn(s.ctx, rec.Session, proj, rec.Cwd, endsTurn(rec.Event), switched)
 		}
 		if rec.Event == "PostToolUse" {
 			go s.life.restatus(s.ctx, rec.Session, proj)
@@ -2008,7 +2011,8 @@ func (s *Sessions) followHost(ctx context.Context, id, socket string) {
 }
 
 // endTurn folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
-// Claude Code runs none after an interrupt. A turn_end older than the latest hook is an earlier turn's. The Stop hook
+// Claude Code runs none after an interrupt. A turn that ended in an error, an interrupt among them, is a TurnError,
+// which ends the turn as a Stop does but is no reply to alert the owner to. A turn_end older than the latest hook is an earlier turn's. The Stop hook
 // of a normal turn runs just before the host reports its end, so the state file is read under its lock, as the hook
 // writes it. A follower reads the log again from its start, so a turn_end older than the record the app holds is
 // passed over before the lock is taken.
@@ -2032,7 +2036,11 @@ func (s *Sessions) endTurn(id string, e chat.Event) {
 	if !at.After(cur.At) { // e.At has only milliseconds, and take drops a record no later than the one before
 		at = cur.At.Add(time.Millisecond)
 	}
-	next := session.Apply(id, cur, session.Event{Name: "Stop"}, at)
+	ev := session.Event{Name: "Stop"}
+	if e.Error {
+		ev.Name = session.TurnError
+	}
+	next := session.Apply(id, cur, ev, at)
 	err = bus.WriteState(s.stateDir, next)
 	unlock()
 	if err == nil {

@@ -29,6 +29,8 @@ func TestNext(t *testing.T) {
 		{"stop", Working, Event{Name: "Stop"}, Idle},
 		{"stop while waiting", Waiting, Event{Name: "Stop"}, Idle},
 		{"stop with a question", Working, Event{Name: "Stop", Asks: true}, Waiting},
+		{"turn error", Working, Event{Name: TurnError}, Idle},
+		{"turn error while waiting", Waiting, Event{Name: TurnError}, Idle},
 		{"end", Working, Event{Name: "SessionEnd"}, Ended},
 		{"unknown event", Working, Event{Name: "PreCompact"}, Working},
 	}

@@ -21,6 +21,10 @@ type Event struct {
 	Asks             bool   // a Stop whose reply ends in a question to the owner
 }
 
+// TurnError is the event of a turn that its agent's host reported over with an error, an interrupt among them: Claude
+// Code runs no Stop hook for it, so the app folds it in.
+const TurnError = "TurnError"
+
 // Next is the state reducer: the state after ev, given the state before it.
 func Next(cur State, ev Event) State {
 	switch ev.Name {
@@ -31,6 +35,8 @@ func Next(cur State, ev Event) State {
 		if ev.Asks {
 			return Waiting
 		}
+		return Idle
+	case TurnError:
 		return Idle
 	case "UserPromptSubmit", "PreToolUse", "PostToolUse":
 		return Working

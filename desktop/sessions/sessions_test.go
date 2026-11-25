@@ -472,6 +472,9 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 				t.Fatal(err)
 			}
 			eventually(t, "idle after the interrupt", func() bool { return stateOf(h, s.ID) == "idle" })
+			if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Event != session.TurnError {
+				t.Errorf("state after the interrupt = %+v, %v; want a %s", rec, err, session.TurnError)
+			}
 			eventually(t, "the held prompt once the turn ends", func() bool {
 				users := userLines(t, dir, s.ID)
 				return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
@@ -480,6 +483,38 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 				events := h.Events(t, "usage")
 				return len(events) == 1 && events[0].Tokens.Input == 1000 && events[0].Tokens.Output == 100
 			})
+		})
+	}
+}
+
+func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		end     func(h *apptest.Harness, id string) error
+		replied int
+	}{
+		{"a reply", func(h *apptest.Harness, id string) error { return h.TypeInto(id, "next") }, 1},
+		{"an interrupt", func(h *apptest.Harness, id string) error { return h.Interrupt(id) }, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			apptest.ClaudeOnPath(t)
+			h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+			s, err := h.Sessions().Create("work", "", false, 0, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, socket := hostFiles(h, s.ID)
+			eventually(t, "the host's socket", func() bool { return exists(socket) })
+			h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+			eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
+			if err := tt.end(h, s.ID); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "idle after the host's turn_end", func() bool { return stateOf(h, s.ID) == "idle" })
+			time.Sleep(200 * time.Millisecond)
+			if n := h.Rec.CountAttentionFor(s.ID, "replied"); n != tt.replied {
+				t.Errorf("replied %d times, want %d", n, tt.replied)
+			}
 		})
 	}
 }
