@@ -777,13 +777,7 @@ func TestWakeIsRefusedDuringACleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
-	hold := t.TempDir()
-	reached, release := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
-	// The clean-up's plan fetches origin first; this fetch waits until the test lets it go.
-	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; git-upload-pack", reached, release))
-	done := make(chan error, 1)
-	go func() { done <- h.Cleanup(s.ID, false) }()
-	eventually(t, "the clean-up held in its plan", func() bool { return exists(reached) })
+	release, done := heldCleanup(t, h, s.ID)
 	before := madeRecords(t, h)
 
 	_, err := h.WakeThread(s.ID)
@@ -791,15 +785,30 @@ func TestWakeIsRefusedDuringACleanup(t *testing.T) {
 		t.Errorf("wake = %v, want %q", err, want)
 	}
 	assertNotWoken(t, h, s, before)
-	if err := os.WriteFile(release, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	release()
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
 	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
 		t.Errorf("the clean-up did not finish: worktree there %v", exists(s.Worktree))
 	}
+}
+
+// heldCleanup starts the thread's clean-up and holds it in its plan's first fetch of origin until release is called;
+// done gives the clean-up's error once it ends.
+func heldCleanup(t *testing.T, h *apptest.Harness, id string) (release func(), done <-chan error) {
+	t.Helper()
+	hold := t.TempDir()
+	reached, released := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; git-upload-pack", reached, released))
+	result := make(chan error, 1)
+	go func() { result <- h.Cleanup(id, false) }()
+	eventually(t, "the clean-up held in its plan", func() bool { return exists(reached) })
+	return func() {
+		if err := os.WriteFile(released, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}, result
 }
 
 func TestWokenForkFailsWhenItsFolderIsGone(t *testing.T) {

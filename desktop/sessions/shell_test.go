@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -214,5 +215,30 @@ func TestShellStartsInTheSessionsFolder(t *testing.T) {
 	got, _ := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", project.ID, "#{pane_current_path}").Output()
 	if want, _ := filepath.EvalSymlinks(h.Dir); strings.TrimSpace(string(got)) != want {
 		t.Errorf("a shell with no session starts in %q, want the project folder %q", got, want)
+	}
+}
+
+func TestShellIsRefusedDuringACleanup(t *testing.T) {
+	h := shellHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+	release, done := heldCleanup(t, h, s.ID)
+
+	_, err := h.ShellOpen(s.ID)
+	if want := fmt.Sprintf("Thread %d is being cleaned up; open a shell when that ends", s.N); err == nil || err.Error() != want {
+		t.Errorf("shell = %v, want %q", err, want)
+	}
+	release()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
+		t.Errorf("the clean-up did not finish: worktree there %v", exists(s.Worktree))
+	}
+	if got := h.Snapshot().Shells; len(got) != 0 {
+		t.Errorf("a shell started: %q", got)
 	}
 }

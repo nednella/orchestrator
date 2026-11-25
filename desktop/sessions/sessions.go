@@ -1743,7 +1743,7 @@ type forkStart struct {
 // ends at the message at: the uuid of a reply's last block. The fork has the same access, issue, model, effort and
 // handover, starts in the folder the thread runs in, its worktree too, since Claude finds a conversation by its folder,
 // and its chat starts as the source's does up to that reply. The issue is only shown: the fork has no branch and hears
-// no pull request.
+// no pull request. It is refused while a clean-up of the thread runs, which may be removing that worktree.
 func (s *Sessions) Fork(id, at string) (Session, error) {
 	s.mu.Lock()
 	in, found := s.infoOf(id)
@@ -1759,6 +1759,8 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 		return Session{}, errors.New("This thread has no conversation to fork yet")
 	case !known:
 		return Session{}, fmt.Errorf("The project of thread %s is gone", id)
+	case s.life.CleaningUp(id):
+		return Session{}, fmt.Errorf("Thread %d is being cleaned up; fork it when that ends", s.Number(id))
 	}
 	events, err := chat.ReadLog(s.chatLogPath(in.Name), 0)
 	if err != nil {
@@ -2898,7 +2900,8 @@ func (s *Sessions) ShellIDs() []string {
 // OpenShell makes sure the current project has a shell session and returns the
 // first one's id. A shell is a login shell in the folder its session works in, or
 // the project folder when sessionID is empty or its folder is gone; it reports
-// nothing: it is not an agent, so it gets no hooks and no session number.
+// nothing: it is not an agent, so it gets no hooks and no session number. A new
+// shell is refused while a clean-up of that session runs, which may be removing its folder.
 func (s *Sessions) OpenShell(sessionID string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
@@ -2916,6 +2919,9 @@ func (s *Sessions) NewShell(sessionID string) (string, error) {
 }
 
 func (s *Sessions) startShell(sessionID string) (string, error) {
+	if sessionID != "" && s.life.CleaningUp(sessionID) {
+		return "", fmt.Errorf("Thread %d is being cleaned up; open a shell when that ends", s.Number(sessionID))
+	}
 	s.mu.Lock()
 	ctx, proj := s.ctx, s.project
 	dir := proj.Dir

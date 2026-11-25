@@ -369,6 +369,31 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 	}
 }
 
+func TestForkIsRefusedDuringACleanup(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	src := issueThread(h, t, 7)
+	pushWork(t, src.Worktree)
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	release, done := heldCleanup(t, h, src.ID)
+
+	_, err := h.ForkSession(src.ID, "r1b")
+	if want := fmt.Sprintf("Thread %d is being cleaned up; fork it when that ends", src.N); err == nil || err.Error() != want {
+		t.Errorf("fork = %v, want %q", err, want)
+	}
+	release()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, src.ID)() || exists(src.Worktree) {
+		t.Errorf("the clean-up did not finish: worktree there %v", exists(src.Worktree))
+	}
+	if list := h.Sessions().List(); len(list) != 1 {
+		t.Errorf("a fork started: %+v", list)
+	}
+}
+
 func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 	h, wt, ran, src, fork := forkHarness(t)
 	h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
