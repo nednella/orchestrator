@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cleanupConfirmText, cleanupForced, passingReason } from './cleanupConfirm.ts'
+import { cleanupConfirmText, cleanupForced, cleanupNowShown, passingReason } from './cleanupConfirm.ts'
 
 test('only a kept clean-up is forced', () => {
   assert.equal(cleanupForced('blocked'), true)
@@ -34,4 +34,16 @@ test('work only the worktree holds is no passing reason', () => {
   for (const reason of ['the worktree of issue-7 has uncommitted changes', 'issue-7 has a commit that is not on origin', 'the worktree of issue-7 is in the middle of a rebase', 'Thread 3 woke during the clean-up', '']) {
     assert.equal(passingReason(reason), false, reason)
   }
+})
+
+test('every kept clean-up offers Clean up now, whatever kept it', () => {
+  assert.equal(cleanupNowShown({ cleanup: 'blocked', worktree: '/repo/trees/issue-7' }), true)
+  assert.equal(cleanupNowShown({ cleanup: 'blocked', worktree: '' }), true)
+})
+
+test('Clean up now waits while a clean-up runs or asks, and needs a worktree agentos made otherwise', () => {
+  assert.equal(cleanupNowShown({ cleanup: '', worktree: '/repo/trees/issue-7' }), true)
+  assert.equal(cleanupNowShown({ cleanup: '', worktree: '' }), false)
+  assert.equal(cleanupNowShown({ cleanup: 'pending', worktree: '/repo/trees/issue-7' }), false)
+  assert.equal(cleanupNowShown({ cleanup: 'ask', worktree: '/repo/trees/issue-7' }), false)
 })

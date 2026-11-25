@@ -1,6 +1,6 @@
 import { sessionActions } from '../actions/sessions'
 import { useAgentos } from '../AgentosContext'
-import { passingReason } from '../cleanupConfirm'
+import { cleanupNowShown } from '../cleanupConfirm'
 import { useLayout } from '../LayoutContext'
 import type { Session } from '../types'
 import type { Point } from '../useFloatingAt'
@@ -47,9 +47,8 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         { label: 'Rename', run: onRename },
         session.pr !== null && { label: `Open PR #${session.pr.number}`, run: () => a.report(() => a.openPR(session)) },
         session.branch !== '' && { label: 'Copy branch', run: () => a.report(copyBranch) },
-        session.cleanup === 'blocked' && passingReason(session.cleanupReason) && { label: 'Clean up', run: () => a.report(() => a.cleanupSession(session.id, false)) },
+        cleanupNowShown(session) && { label: 'Clean up now', run: () => a.report(() => a.cleanupSession(session.id, false)) },
         CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: onCleanup },
-        session.worktree !== '' && session.cleanup === '' && { label: 'Clean up now', run: () => a.report(() => a.cleanupSession(session.id, false)) },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run([])) },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },

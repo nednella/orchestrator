@@ -8,6 +8,12 @@ export function cleanupForced(cleanup: Session['cleanup']): boolean {
   return cleanup === 'blocked'
 }
 
+// cleanupNowShown says whether the thread menu offers Clean up now, a clean-up with every check: for every kept one,
+// whatever kept it, and for a thread whose worktree agentos made when no clean-up runs or asks.
+export function cleanupNowShown({ cleanup, worktree }: Pick<Session, 'cleanup' | 'worktree'>): boolean {
+  return cleanup === 'blocked' || (cleanup === '' && worktree !== '')
+}
+
 const PASSING = ['a turn is running', 'messages wait for this thread', 'a shell is open in this worktree', 'a shell whose folder is unknown is open']
 
 // passingReason says whether the clean-up was kept for a use of the worktree that ends by itself, a turn, held
