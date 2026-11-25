@@ -206,8 +206,12 @@ func TestRestartResumesWithoutGapsOrDoubles(t *testing.T) {
 func TestPendingApprovalIsReported(t *testing.T) {
 	h, id := newThread(t)
 	send(t, h, id, "ask")
-	eventually(t, "the approval waiting", func() bool { return len(h.ChatPending()) == 1 })
-	p := h.ChatPending()[0]
+	eventually(t, "chat:pending", func() bool { return h.Rec.Count("chat:pending") > 0 })
+	pending := h.ChatPending()
+	if len(pending) != 1 {
+		t.Fatalf("ChatPending = %+v, want one", pending)
+	}
+	p := pending[0]
 	if want := (chat.Pending{ID: id, Request: "ask-1", Tool: "Bash", Summary: "touch made.txt", Kind: "tool"}); p != want {
 		t.Errorf("pending = %+v, want %+v", p, want)
 	}

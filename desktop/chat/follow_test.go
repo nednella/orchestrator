@@ -211,3 +211,27 @@ func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 		t.Errorf("ChatInterrupt = %v, want %q", err, want)
 	}
 }
+
+func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
+	chatLog, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []chatlog.Event{
+		{Kind: chatlog.KindApproval, ID: "req-1", Tool: "Edit", Input: json.RawMessage(`{"file_path":"a.go"}`)},
+		{Kind: chatlog.KindAnswer, ID: "req-1", Text: "allow"},
+		{Kind: chatlog.KindApproval, ID: "req-2", Tool: "Bash", Input: json.RawMessage(`{"command":"make test"}`)},
+	} {
+		if _, err := chatLog.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	chatLog.Close()
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	svc := chat.NewService(chat.New(thread, (&apptest.Recorder{}).Emit), context.Background)
+	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool"}}
+	if got := svc.ChatPending(); !slices.Equal(got, want) {
+		t.Errorf("ChatPending before any follower = %+v, want %+v", got, want)
+	}
+}

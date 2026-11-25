@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -165,20 +166,42 @@ func (c *Chats) isWatched(id string) bool {
 }
 
 // pending is what each followed thread waits on.
+// pending is what each live thread waits on: as its follower knows it, or from the log until the follower has read it.
 func (c *Chats) pending() []Pending {
-	c.mu.Lock()
-	followers := make([]*follower, 0, len(c.followers))
-	for _, f := range c.followers {
-		followers = append(followers, f)
-	}
-	c.mu.Unlock()
 	out := []Pending{}
-	for _, f := range followers {
-		if p := f.waiting(); p != nil {
+	for _, ch := range c.threads.Chats() {
+		c.mu.Lock()
+		f := c.followers[ch.ID]
+		c.mu.Unlock()
+		var p *Pending
+		if f != nil && f.hasRead() {
+			p = f.waiting()
+		} else {
+			p = waitingIn(ch)
+		}
+		if p != nil {
 			out = append(out, *p)
 		}
 	}
 	return out
+}
+
+// waitingIn reads what the thread waits on from its log.
+func waitingIn(ch sessions.Chat) *Pending {
+	logged, err := chatlog.ReadLog(ch.Log, 0)
+	if err != nil {
+		log.Printf("agentos: reading the chat log of %s: %v", ch.ID, err)
+		return nil
+	}
+	var approvals []chatlog.Event
+	for _, e := range logged {
+		approvals = waitingAfter(approvals, e)
+	}
+	if len(approvals) == 0 {
+		return nil
+	}
+	p := pendingOf(ch.ID, approvals[0])
+	return &p
 }
 
 // follower follows one thread's host.
@@ -261,18 +284,28 @@ func (f *follower) take(e chatlog.Event) {
 func (f *follower) track(e chatlog.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.approvals = waitingAfter(f.approvals, e)
+}
+
+// waitingAfter is the approvals that wait, oldest first, once e has happened.
+func waitingAfter(approvals []chatlog.Event, e chatlog.Event) []chatlog.Event {
 	switch e.Kind {
 	case chatlog.KindApproval:
-		f.approvals = append(f.approvals, e)
+		return append(approvals, e)
 	case chatlog.KindAnswer:
-		for i, a := range f.approvals {
-			if a.ID == e.ID {
-				f.approvals = append(f.approvals[:i], f.approvals[i+1:]...)
-				break
-			}
-		}
+		return slices.DeleteFunc(approvals, func(a chatlog.Event) bool { return a.ID == e.ID })
 	case chatlog.KindTurnEnd, chatlog.KindExit:
-		f.approvals = nil
+		return nil
+	}
+	return approvals
+}
+
+func (f *follower) hasRead() bool {
+	select {
+	case <-f.read:
+		return true
+	default:
+		return false
 	}
 }
 
