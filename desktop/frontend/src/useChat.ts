@@ -33,10 +33,20 @@ function inTurn<T>(id: string, call: () => Promise<T>): Promise<T> {
 
 type View = { id: string; state: ChatState; loading: boolean; error: string }
 
-// later runs on the next frame.
+// later runs on the next frame, or after 250 ms if no frame comes, as in a hidden window.
 function later(run: () => void): () => void {
-  const frame = requestAnimationFrame(run)
-  return () => cancelAnimationFrame(frame)
+  const timer = setTimeout(() => {
+    cancelAnimationFrame(frame)
+    run()
+  }, 250)
+  const frame = requestAnimationFrame(() => {
+    clearTimeout(timer)
+    run()
+  })
+  return () => {
+    clearTimeout(timer)
+    cancelAnimationFrame(frame)
+  }
 }
 
 // useChat is the thread's chat: its history, then its live events, as a timeline.

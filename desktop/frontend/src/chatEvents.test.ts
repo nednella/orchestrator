@@ -95,3 +95,27 @@ test('a gap seen while a fill runs is filled after it', async () => {
   await settle()
   assert.deepEqual(seqs(seen.state.events), [1, 2, 3, 4, 5, 6])
 })
+
+test('events held past the limit are read again', async () => {
+  const { f, reads, seen } = feed()
+  f.push([logged(2)])
+  f.push(Array.from({ length: 2001 }, () => delta('msg_1', 'x')))
+  const loading = f.load()
+  reads[0].answer(range(1, 1))
+  await loading
+  assert.deepEqual(reads.map((r) => r.after), [0, 1], 'the history after the first read brings what was dropped')
+  reads[1].answer(range(2, 2))
+  await settle()
+  assert.deepEqual(seqs(seen.state.events), [1, 2])
+})
+
+test('a failed first read stops the feed', async () => {
+  const { f, reads, runs, seen } = feed()
+  const loading = f.load()
+  reads[0].fail('Could not read the chat')
+  await loading
+  assert.deepEqual(seen.errors, ['Could not read the chat'])
+  f.push([logged(1)])
+  assert.equal(runs.length, 0)
+  assert.equal(seen.state, EMPTY_CHAT)
+})

@@ -44,6 +44,9 @@ export function mergeEvents(s: ChatState, incoming: ChatEvent[]): { state: ChatS
   return { state: changed ? { events, last, live } : s, gapAfter }
 }
 
+// Events that come before the first history read are held for it; past this many, they are dropped and read again.
+const heldBeforeLoad = 2000
+
 export type ChatFeedDeps = {
   history(after: number): Promise<ChatEvent[]>
   // later runs run soon, once, and gives back a way to cancel it.
@@ -59,6 +62,7 @@ export function chatFeed(start: ChatState, deps: ChatFeedDeps) {
   let state = start
   let held: ChatEvent[] = []
   let loaded = false
+  let dropped = false
   let stopped = false
   let filling = false
   let gapWhileFilling = false
@@ -107,9 +111,15 @@ export function chatFeed(start: ChatState, deps: ChatFeedDeps) {
     push(events: ChatEvent[]) {
       if (stopped) return
       held.push(...events)
-      if (loaded) cancel ??= deps.later(flush)
+      if (loaded) {
+        cancel ??= deps.later(flush)
+        return
+      }
+      if (held.length <= heldBeforeLoad) return
+      held = []
+      dropped = true
     },
-    // load reads the history after the state's last seq.
+    // load reads the history after the state's last seq. When it fails, the feed stops.
     load(): Promise<void> {
       return deps.history(state.last).then(
         (events) => {
@@ -117,9 +127,13 @@ export function chatFeed(start: ChatState, deps: ChatFeedDeps) {
           loaded = true
           held = [...events, ...held]
           flush()
+          if (dropped) fill(state.last)
         },
         (err) => {
-          if (!stopped) deps.onError(err)
+          if (stopped) return
+          stopped = true
+          held = []
+          deps.onError(err)
         },
       )
     },
