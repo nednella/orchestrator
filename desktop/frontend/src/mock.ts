@@ -641,12 +641,11 @@ export function createMock(params: URLSearchParams) {
     })
     const all = [row('storefront', 3104), row('agentos', 1209), row('scratch', 38)]
     const projects = all.filter((r) => !project || r.project === project)
-    const share = projects.reduce((a, r) => a + r.prompts, 0) / all.reduce((a, r) => a + r.prompts, 0)
-    const heat = Array.from({ length: 364 }, (_, i) => {
-      const weekday = (i + 3) % 7
-      const wave = Math.sin(i / 9) + 1.2
-      const count = weekday > 4 || i % 11 === 0 ? 0 : Math.round(wave * ((i * 37) % 23))
-      return { day: dayKey(363 - i), count: Math.round(count * share) }
+    const span = days === 0 ? 121 : days
+    const shape = Array.from({ length: span }, (_, i) => {
+      const ago = span - 1 - i
+      const quiet = ago % 7 === 2 || ago % 7 === 3 || ago % 11 === 0
+      return { day: dayKey(ago), weight: quiet ? 0 : Math.round((Math.sin(ago / 9) + 1.2) * ((ago * 37) % 23)) }
     })
     const totals: LedgerRow = {
       project: '',
@@ -698,15 +697,14 @@ export function createMock(params: URLSearchParams) {
       { project: 'agentos', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
     const usage = { totals: usageRow('', '', 1, totals.sessions + totals.chats), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
-    const span = heat.slice(-(days === 0 ? 121 : Math.min(days, heat.length)))
-    const weight = span.reduce((a, d) => a + d.count, 0) || 1
-    const perDay = span.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.count) / weight), workMs: Math.round((totals.workMs * d.count) / weight), cost: (totals.cost * d.count) / weight }))
+    const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
+    const perDay = shape.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.weight) / weight), workMs: Math.round((totals.workMs * d.weight) / weight), cost: (totals.cost * d.weight) / weight }))
     const before = (n: number) => Math.round(n * 0.88)
     const previous: LedgerRow =
       days === 0
         ? row('', 0)
         : { ...totals, prompts: before(totals.prompts), sessions: before(totals.sessions * 1.1), workMs: before(totals.workMs * 0.9), cost: totals.cost * 0.85, prsMerged: before(totals.prsMerged) }
-    return { days, since: dayKey(120), totals, projects, previous, perDay, heat, usage, work: work.filter((w) => !project || w.project === project) }
+    return { days, since: dayKey(120), totals, projects, previous, perDay, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
   function finishCleanup(s: Session) {

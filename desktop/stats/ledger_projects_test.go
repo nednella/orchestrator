@@ -30,7 +30,7 @@ func TestLedgerLeavesOutProjectsNotOnThisMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(led.Projects) != 1 || led.Projects[0].Project != "main" || led.Totals.Prompts != 1 || led.Heat[len(led.Heat)-1].Count != 1 {
+	if len(led.Projects) != 1 || led.Projects[0].Project != "main" || led.Totals.Prompts != 1 || led.PerDay[len(led.PerDay)-1].Prompts != 1 {
 		t.Errorf("projects = %+v, totals = %+v: only main is on this machine", led.Projects, led.Totals)
 	}
 }

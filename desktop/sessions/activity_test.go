@@ -28,8 +28,8 @@ func TestActivityIsCounted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if led.Totals.Sessions != 1 || led.Totals.IssueSessions != 1 || led.Projects[0].Project != "main" || led.Heat[363].Count != 2 {
-		t.Errorf("totals = %+v, heat today = %+v", led.Totals, led.Heat[363])
+	if led.Totals.Sessions != 1 || led.Totals.IssueSessions != 1 || led.Projects[0].Project != "main" || led.PerDay[29].Prompts != 2 {
+		t.Errorf("totals = %+v, today = %+v", led.Totals, led.PerDay[29])
 	}
 
 	second := h.Restart(t)

@@ -107,29 +107,6 @@ func TestLedger(t *testing.T) {
 		if len(led.Projects) != 1 || led.Projects[0].Project != "Beta" || led.Totals.Prompts != 3 || led.Since != day(400).Format(time.DateOnly) {
 			t.Errorf("projects %+v, totals %+v, since %s", led.Projects, led.Totals, led.Since)
 		}
-		sum := 0
-		for _, d := range led.Heat {
-			sum += d.Count
-		}
-		if sum != 3 {
-			t.Errorf("heat sum = %d, want beta's 3", sum)
-		}
-	})
-
-	t.Run("heat", func(t *testing.T) {
-		led := build(30)
-		if len(led.Heat) != 364 || led.Heat[363].Day != "2026-10-09" || led.Heat[0].Day != day(363).Format(time.DateOnly) {
-			t.Fatalf("heat = %d days, %v .. %v", len(led.Heat), led.Heat[0], led.Heat[len(led.Heat)-1])
-		}
-		counts := map[string]int{}
-		sum := 0
-		for _, d := range led.Heat {
-			counts[d.Day] = d.Count
-			sum += d.Count
-		}
-		if counts["2026-10-09"] != 2 || counts[day(3).Format(time.DateOnly)] != 6 || counts[day(100).Format(time.DateOnly)] != 5 || sum != 14 {
-			t.Errorf("counts = %v, sum %d", counts, sum)
-		}
 	})
 }
 
@@ -140,8 +117,8 @@ func TestLedgerWithoutRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if led.Since != "" || len(led.Heat) != 364 || len(led.Projects) != 1 || led.Totals.Prompts != 0 {
-		t.Errorf("since %q, heat %d, projects %d, totals %+v", led.Since, len(led.Heat), len(led.Projects), led.Totals)
+	if led.Since != "" || len(led.Projects) != 1 || led.Totals.Prompts != 0 {
+		t.Errorf("since %q, projects %d, totals %+v", led.Since, len(led.Projects), led.Totals)
 	}
 }
 

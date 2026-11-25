@@ -10,9 +10,6 @@ import (
 	"github.com/nednella/agentos/internal/usage"
 )
 
-// heatDays is how many days the heat map covers: 52 weeks.
-const heatDays = 364
-
 // Ledger is what the agents did in one project or across every project, from the event log.
 type Ledger struct {
 	Days     int          `json:"days"`     // 0 for lifetime
@@ -21,7 +18,6 @@ type Ledger struct {
 	Projects []LedgerRow  `json:"projects"` // most prompts first, then by name
 	Previous LedgerRow    `json:"previous"` // every project summed over the days days before these; zero for lifetime
 	PerDay   []DayFigures `json:"perDay"`   // each of the ledger's days, oldest first; for lifetime from Since to today
-	Heat     []DayCount   `json:"heat"`     // prompts per day, the 364 days ending today, oldest first
 	Usage    Usage        `json:"usage"`
 	Work     []WorkRow    `json:"work"` // latest first
 }
@@ -119,8 +115,7 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 	if days > 0 {
 		from, before = date(d-(days-1)), date(d-(2*days-1))
 	}
-	led := Ledger{Days: days, Projects: []LedgerRow{}, PerDay: []DayFigures{}, Heat: make([]DayCount, heatDays), Work: []WorkRow{}}
-	heat := map[string]int{}
+	led := Ledger{Days: days, Projects: []LedgerRow{}, PerDay: []DayFigures{}, Work: []WorkRow{}}
 	figures := map[string]*dayFigures{}
 	var totals, previous total
 	for _, p := range b.projects.List() {
@@ -133,7 +128,6 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 			if led.Since == "" || day < led.Since {
 				led.Since = day
 			}
-			heat[day] += v.Prompts
 			switch {
 			case day >= from:
 				sum.add(v)
@@ -165,10 +159,6 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 	for t := start; err == nil && !t.After(today); t = t.AddDate(0, 0, 1) {
 		day := t.Format(time.DateOnly)
 		led.PerDay = append(led.PerDay, figures[day].of(day))
-	}
-	for i := range led.Heat {
-		day := time.Date(y, m, d-(heatDays-1-i), 0, 0, 0, 0, now.Location()).Format(time.DateOnly)
-		led.Heat[i] = DayCount{Day: day, Count: heat[day]}
 	}
 
 	slices.SortFunc(led.Projects, func(a, b LedgerRow) int {
