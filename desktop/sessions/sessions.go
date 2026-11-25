@@ -1232,19 +1232,22 @@ func (s *Sessions) settleProject(key string) error {
 	return errors.Join(errs...)
 }
 
-// accessOf is the access of the thread id, live, settled or in an old terminal, "" when there is none. It takes mu.
-func (s *Sessions) accessOf(id string) session.Access {
+var errFullFromThread = errors.New("A thread that is not Full access cannot start one that is")
+
+// mayGive refuses a thread the asker starts or wakes Full access unless the asker is a live Full thread, so a thread
+// cannot give itself every tool without the owner. An asker that names no live thread is not Full. It takes mu.
+func (s *Sessions) mayGive(asker string, access session.Access) error {
+	if asker == "" || access != session.Full {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if in, ok := s.infoOf(id); ok {
-		return in.Access
-	}
-	for _, in := range s.old {
-		if in.Name.String() == id {
-			return in.Access
+	for _, in := range s.info {
+		if in.Name.String() == asker && in.Access == session.Full {
+			return nil
 		}
 	}
-	return ""
+	return errFullFromThread
 }
 
 // liveIssueSessions names the running sessions of the project that work on an issue. It takes mu.
@@ -1293,11 +1296,12 @@ func (s *Sessions) Create(title, text string, send bool, issue int, access sessi
 
 // StartOptions is what the owner chose for a new thread: the first message, sent as it is, the model and effort,
 // which win over every other choice, and the access. Empty fields leave the choice to the defaults; an empty access is
-// Supervised.
+// Supervised. Asker is the thread that asks for this one, "" when the owner asks from the app, the shell or a terminal.
 type StartOptions struct {
 	Prompt string
 	Model  project.Model
 	Access session.Access
+	Asker  string
 }
 
 const titleLength = 60
@@ -1368,7 +1372,7 @@ func (s *Sessions) CreateIssue(title, text string, issue int, action project.Act
 	if extra := strings.TrimSpace(o.Prompt); extra != "" {
 		text = strings.TrimSpace(text + " " + extra)
 	}
-	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.ThreadAccess(), action.Name)
+	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.ThreadAccess(), action.Name, o.Asker)
 	if err != nil || did == Created {
 		return view, did, err
 	}
@@ -1498,13 +1502,16 @@ func (s *Sessions) Provider() (agent.Provider, error) { return s.agents.Provider
 
 // createForIssue starts a thread for the issue, unless the project has a live one for it, which it names, or a settled
 // one, which it wakes with the handover and gives text to, and names.
-func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access session.Access, action string) (Session, IssueStart, error) {
+func (s *Sessions) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access session.Access, action, asker string) (Session, IssueStart, error) {
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
 	if live := s.liveIssueSession(proj.Key(), issue); live != "" {
 		return Session{ID: live}, Kept, nil
 	}
-	if settled := s.settledIssueThread(proj.Key(), issue); settled != "" {
+	if settled, was := s.settledIssueThread(proj.Key(), issue); settled != "" {
+		if err := s.mayGive(asker, was); err != nil {
+			return Session{}, Kept, err
+		}
 		ch, err := s.wakeOrJoin(settled, handover)
 		if err != nil {
 			return Session{}, Kept, err
@@ -1517,23 +1524,26 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 		}
 		return Session{ID: settled}, Woken, nil
 	}
+	if err := s.mayGive(asker, access); err != nil {
+		return Session{}, Kept, err
+	}
 	view, err := s.createIn(proj, title, text, send, issue, model, "", handover, access, action, forkStart{})
 	return view, Created, err
 }
 
-// settledIssueThread is the id of the settled thread of the project for the issue that ran under a host, the one that
-// settled last, "" when none. A fork only shows its source's issue. It takes mu.
-func (s *Sessions) settledIssueThread(key string, issue int) string {
+// settledIssueThread is the id and access of the settled thread of the project for the issue that ran under a host,
+// the one that settled last, "" when none. A fork only shows its source's issue. It takes mu.
+func (s *Sessions) settledIssueThread(key string, issue int) (string, session.Access) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id, at := "", time.Time{}
+	id, access, at := "", session.Access(""), time.Time{}
 	for name, e := range s.ended {
 		in := e.info
 		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Fork == "" && in.Hosted && (id == "" || e.at.After(at)) {
-			id, at = name, e.at
+			id, access, at = name, in.Access, e.at
 		}
 	}
-	return id
+	return id, access
 }
 
 // fromApp marks text the app writes to the agent, so the agent does not take it for the owner's. A slash command

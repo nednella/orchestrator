@@ -46,21 +46,18 @@ func started(s Session) string { return fmt.Sprintf("started session %d: %s", s.
 
 // New starts a thread with the access option, Supervised unless set, titled with the words given, and gives it the
 // prompt, sent unless the project says manual. A prompt from a thread is framed as that thread's handover, so the new
-// one does not take it for the owner's. A thread that is not Full access cannot start one that is: it would give itself
-// every tool without the owner.
+// one does not take it for the owner's. A thread that is not Full access cannot start one that is.
 func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
 	access, err := session.ParseAccess(req.Opts["access"])
 	if err != nil {
 		return "", err
 	}
+	if err := c.s.mayGive(req.Session, access); err != nil {
+		return "", err
+	}
 	prompt := req.Opts["prompt"]
-	if _, err := session.ParseName(req.Session); err == nil {
-		if access == session.Full && c.s.accessOf(req.Session) != session.Full {
-			return "", errors.New("A thread that is not Full access cannot start one that is")
-		}
-		if prompt != "" {
-			prompt = fromApp(prompts.Handover(prompt))
-		}
+	if _, err := session.ParseName(req.Session); err == nil && prompt != "" {
+		prompt = fromApp(prompts.Handover(prompt))
 	}
 	s, err := c.s.Create(strings.Join(req.Args, " "), prompt, c.s.Current().SendsPrompt(), 0, access)
 	if err != nil {

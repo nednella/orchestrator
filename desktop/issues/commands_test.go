@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/sessions"
 	ctl "github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/agentos/internal/session"
 )
 
 func TestIssueCommand(t *testing.T) {
@@ -133,5 +135,72 @@ func TestRefreshCommand(t *testing.T) {
 	resp := h.Ask(t, ctl.Request{Cmd: "refresh"})
 	if !resp.OK || resp.Out != "refreshed 6 issues and the pull requests" || h.GH.IssueCalls() != 2 {
 		t.Errorf("refresh = %+v, gh issue list ran %d times", resp, h.GH.IssueCalls())
+	}
+}
+
+func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{Queue: `    queue_sections:
+      - name: Ready
+        labels: [ready]
+        actions:
+          - {name: Work, command: "/ship {n}", access: full}
+      - name: Inbox
+        actions:
+          - {name: Investigate, command: "/investigate {n}"}
+`})
+	supervised, err := h.NewSession("supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := h.NewThread("read", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	askers := map[string]string{"a Supervised thread": supervised.ID, "a Read thread": read.ID, "a session that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"}
+	refused := func(what string) {
+		t.Helper()
+		for from, asker := range askers {
+			resp := h.Ask(t, ctl.Request{Cmd: "issue", Session: asker, Args: []string{"7"}})
+			if resp.OK || !strings.Contains(resp.Error, "A thread that is not Full access cannot start one that is") {
+				t.Errorf("issue 7 %s from %s = %+v", what, from, resp)
+			}
+		}
+	}
+	issueThread := func() (sessions.Session, bool) {
+		for _, s := range h.Sessions().List() {
+			if s.Issue == 7 {
+				return s, true
+			}
+		}
+		return sessions.Session{}, false
+	}
+
+	refused("with a Full action")
+	if s, ok := issueThread(); ok {
+		t.Fatalf("a thread that is not Full started %+v", s)
+	}
+
+	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Session: read.ID, Args: []string{"11"}}); !resp.OK {
+		t.Errorf("issue 11, a Supervised action, from a Read thread = %+v", resp)
+	}
+
+	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK {
+		t.Fatalf("issue 7 from the shell = %+v", resp)
+	}
+	full, ok := issueThread()
+	if !ok || full.Access != session.Full {
+		t.Fatalf("issue 7 from the shell started %+v", full)
+	}
+	if err := h.SettleThread(full.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the Full thread settled", func() bool { s, _ := h.Session(full.ID); return s.State == session.Settled })
+
+	refused("with a settled Full thread")
+	if s, _ := h.Session(full.ID); s.State != session.Settled {
+		t.Errorf("a thread that is not Full woke the Full thread: %+v", s)
+	}
+	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the settled: #7") {
+		t.Errorf("issue 7 from the shell on the settled Full thread = %+v", resp)
 	}
 }

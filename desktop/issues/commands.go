@@ -23,7 +23,8 @@ type Commands struct {
 func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs: prs} }
 
 // Issue starts a session for each issue number given, wakes its settled one, or finds the one already running. A
-// prompt is the asking session's handover; it reaches a session that starts or wakes, not one already running.
+// prompt is the asking session's handover; it reaches a session that starts or wakes, not one already running. A thread
+// that is not Full access cannot start or wake one that is.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("usage: agentos issue <number...>")
@@ -35,7 +36,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, did, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{})
+		s, did, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{Asker: req.Session})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))

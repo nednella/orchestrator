@@ -265,10 +265,10 @@ func TestThreadCannotStartFullAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, from := range []sessions.Session{supervised, read} {
-		resp := h.Ask(t, ctl.Request{Cmd: "new", Session: from.ID, Args: []string{"more"}, Opts: map[string]string{"access": "full"}})
+	for _, asker := range []string{supervised.ID, read.ID, "garbage", "main/abcdefgh"} {
+		resp := h.Ask(t, ctl.Request{Cmd: "new", Session: asker, Args: []string{"more"}, Opts: map[string]string{"access": "full"}})
 		if resp.OK || resp.Error != "A thread that is not Full access cannot start one that is" {
-			t.Errorf("new --access full from a %s thread = %+v", from.Access, resp)
+			t.Errorf("new --access full from %s = %+v", asker, resp)
 		}
 	}
 	if got := len(h.Sessions().List()); got != 2 {
