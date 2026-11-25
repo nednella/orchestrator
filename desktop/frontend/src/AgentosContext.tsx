@@ -488,13 +488,19 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   useEffect(() => on('evidence', ({ id, items }) => setEvidence((map) => ({ ...map, [id]: items }))), [])
   useEffect(() => on('browser:state', (state) => setBrowserStates((map) => ({ ...map, [state.id]: state }))), [])
   useEffect(() => {
-    const off = on('chat:pending', ({ id, pending: p }) =>
+    // A thread's event that comes before the first read is newer than what the read gives for it.
+    const heard = new Set<string>()
+    const off = on('chat:pending', ({ id, pending: p }) => {
+      heard.add(id)
       setPending((map) => {
         const { [id]: _, ...rest } = map
         return p ? { ...rest, [id]: p } : rest
-      }),
-    )
-    report(async () => setPending(Object.fromEntries((await api.chatPending()).map((p) => [p.id, p]))))
+      })
+    })
+    report(async () => {
+      const read = (await api.chatPending()).filter((p) => !heard.has(p.id))
+      setPending((map) => ({ ...Object.fromEntries(read.map((p) => [p.id, p])), ...map }))
+    })
     return off
   }, [report])
   useEffect(
