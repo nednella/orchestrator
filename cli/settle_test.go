@@ -16,7 +16,7 @@ import (
 )
 
 // settleSetup points the command at a private tmux socket, state dir and config,
-// starts three sessions in two projects, and works from the first project's folder.
+// starts three sessions under a host in two projects, and works from the first project's folder.
 func settleSetup(t *testing.T) (*term.Tmux, string) {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
@@ -51,6 +51,9 @@ func settleSetup(t *testing.T) (*term.Tmux, string) {
 		dir   string
 	}{{session.Name{Project: "demo", Token: "a1"}, "one", demo}, {session.Name{Project: "demo", Token: "b2"}, "two", demo}, {session.Name{Project: "other", Token: "a1"}, "three", other}} {
 		if err := tmux.NewSession(context.Background(), s.name, s.title, s.dir, nil, []string{"sleep", "60"}, 80, 24); err != nil {
+			t.Fatal(err)
+		}
+		if err := tmux.SetHosted(context.Background(), s.name); err != nil {
 			t.Fatal(err)
 		}
 		if err := bus.WriteState(state, session.Record{Session: s.name.String(), State: session.Idle}); err != nil {
@@ -125,5 +128,23 @@ func TestSettleLeavesShellsUnlessAll(t *testing.T) {
 	}
 	if out := runSettle(t, "--all"); !strings.Contains(out, "stopping demo/shell") || tmux.Has(context.Background(), shell) {
 		t.Errorf("settle --all left the shell: %q", out)
+	}
+}
+
+func TestSettleLeavesTerminalSessions(t *testing.T) {
+	tmux, _ := settleSetup(t)
+	// A session from a release before the host: it has no hosted tag.
+	old := session.Name{Project: "demo", Token: "c3"}
+	if err := tmux.NewSession(context.Background(), old, "old", t.TempDir(), nil, []string{"sleep", "60"}, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if out := runSettle(t); !strings.Contains(out, "left 1 session that ran in a terminal") || strings.Contains(out, "demo/c3") {
+		t.Errorf("settle printed %q", out)
+	}
+	if out := runSettle(t, "--all"); !strings.Contains(out, "settling other/a1") || !strings.Contains(out, "left 1 session that ran in a terminal") {
+		t.Errorf("settle --all printed %q", out)
+	}
+	if got := names(t, tmux); got != "demo/c3" {
+		t.Errorf("sessions left: %q, want only the terminal session", got)
 	}
 }

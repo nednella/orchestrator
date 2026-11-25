@@ -1,14 +1,18 @@
 package sessions_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -38,6 +42,9 @@ func TestOldTerminalSessionIsLeftAlone(t *testing.T) {
 	h.Sessions().Refresh()
 	if got, _ := h.Session(id); got.State != session.Settled || got.Detail != oldDetail || got.Branch != "" {
 		t.Errorf("row after its hooks = %+v, want it unchanged", got)
+	}
+	if prompts := h.Events(t, "prompt"); len(prompts) != 0 {
+		t.Errorf("its hooks recorded prompts: %+v", prompts)
 	}
 	for _, state := range []string{"waiting", "replied", "opened", "pr"} {
 		if n := h.Rec.CountAttentionFor(id, state); n != 0 {
@@ -69,6 +76,9 @@ func TestOldTerminalSessionIsLeftAlone(t *testing.T) {
 	if err, want := h.SettleThread(id), "Thread "+id+" runs in an old terminal; end it there"; err == nil || err.Error() != want {
 		t.Errorf("Settle = %v, want %q", err, want)
 	}
+	if err, want := h.RenameSession(id, "new title"), "Thread "+id+" runs in an old terminal; it keeps its title"; err == nil || err.Error() != want {
+		t.Errorf("Rename = %v, want %q", err, want)
+	}
 	if err := h.Interrupt(id); err == nil || err.Error() != oldChat {
 		t.Errorf("Interrupt = %v, want %q", err, oldChat)
 	}
@@ -82,10 +92,42 @@ func TestOldTerminalSessionIsLeftAlone(t *testing.T) {
 	if _, ok := h.Session(id); ok {
 		t.Error("a dismissed old session still has a row")
 	}
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}").Output()
-	if err != nil || strings.TrimSpace(string(out)) != "sleep" {
-		t.Errorf("old session's pane runs %q (%v), want sleep", out, err)
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}#{@agentos-name}").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "sleep#12 work" {
+		t.Errorf("old session's pane runs and is named %q (%v), want sleep#12 work", out, err)
 	}
+}
+
+func TestAnIssueWithAnOldSessionOpensIt(t *testing.T) {
+	h := newHarness(t)
+	id := "main/cccccccc"
+	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "600")
+	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "7", ";", "set-option", "-t", id, "@agentos-name", "#7 work")
+	h.Sessions().Refresh()
+
+	got, created, err := h.Sessions().CreateIssue("#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{})
+	if err != nil || created || got.ID != id {
+		t.Fatalf("CreateIssue = %+v, %v, %v; want the old session %s, not created", got, created, err, id)
+	}
+	if names := tmuxNames(t, h); names != id {
+		t.Errorf("tmux sessions = %q, want only the old one", names)
+	}
+	if data, _ := os.ReadFile(filepath.Join(h.State, "data", "main", "prs.json")); strings.Contains(string(data), "issue-7") {
+		t.Errorf("the issue's branch was claimed: %s", data)
+	}
+	if pane := h.Pane(t, id); strings.Contains(pane, "ship") {
+		t.Errorf("the action was typed into the old session's pane:\n%s", pane)
+	}
+}
+
+// tmuxNames are the sessions the harness's tmux server runs.
+func tmuxNames(t *testing.T, h *apptest.Harness) string {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "list-sessions", "-F", "#{session_name}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func TestEndedOldSessionIsSettled(t *testing.T) {

@@ -627,9 +627,14 @@ func (s *Sessions) Dismiss(id string) error {
 	return nil
 }
 
+// observe folds in a hook's record. The hooks of an old terminal session are dropped before anything is recorded, so
+// it raises nothing.
 func (s *Sessions) observe(rec session.Record) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.isOld(rec.Session) {
+		return
+	}
 	if rec.Event == "UserPromptSubmit" {
 		s.record(rec.Session, activity.Event{At: rec.At.UnixMilli(), Kind: activity.Prompt})
 	}
@@ -637,9 +642,9 @@ func (s *Sessions) observe(rec session.Record) {
 	s.sync()
 }
 
-// take folds a record in. The hooks of an old terminal session are dropped, so it raises nothing. It needs mu.
+// take folds a record in. It needs mu.
 func (s *Sessions) take(rec session.Record) {
-	if _, ended := s.ended[rec.Session]; ended || s.dismissed[rec.Session] || s.isOld(rec.Session) {
+	if _, ended := s.ended[rec.Session]; ended || s.dismissed[rec.Session] {
 		return
 	}
 	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
@@ -1164,11 +1169,12 @@ func (s *Sessions) liveIssueSessions(key string) []string {
 }
 
 // liveIssueSession is the id of the running task, or chat, of the project for the issue, "" when none. A fork only
-// shows its source's issue. It takes mu.
+// shows its source's issue. An old terminal session counts: a second session would claim the branch it works on, and
+// clean it up under it. It takes mu.
 func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, in := range s.info {
+	for _, in := range slices.Concat(s.info, s.old) {
 		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Chat == chat && in.Fork == "" {
 			return in.Name.String()
 		}
@@ -1836,6 +1842,12 @@ func (s *Sessions) Rename(id, title string) error {
 	}
 	if name.IsShell() {
 		return errNotSession
+	}
+	s.mu.Lock()
+	old := s.isOld(id)
+	s.mu.Unlock()
+	if old {
+		return fmt.Errorf("Thread %s runs in an old terminal; it keeps its title", id)
 	}
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)

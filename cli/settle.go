@@ -74,9 +74,14 @@ func newSettleCmd() *cobra.Command {
 				return fmt.Errorf("listing threads: %w", err)
 			}
 			out := cmd.OutOrStdout()
-			stopped := 0
+			stopped, left := 0, 0
 			for _, in := range infos {
 				if !all && in.Name.Project != e.project.Key() {
+					continue
+				}
+				// A session that ran in a terminal before the host is the owner's to end there.
+				if !in.Hosted {
+					left++
 					continue
 				}
 				// The state file stays: the app shows the thread as settled from it.
@@ -97,6 +102,12 @@ func newSettleCmd() *cobra.Command {
 			}
 			if stopped == 0 {
 				fmt.Fprintln(out, "no threads to settle")
+			}
+			switch {
+			case left == 1:
+				fmt.Fprintln(out, "left 1 session that ran in a terminal")
+			case left > 1:
+				fmt.Fprintf(out, "left %d sessions that ran in a terminal\n", left)
 			}
 			return nil
 		},
