@@ -328,10 +328,24 @@ type FakeGH struct {
 	pulls         string            // the body gh api prints for the repo's pull request list
 	etag          string            // its ETag: a request carrying it gets a 304
 	hooks         []*io.PipeWriter
-	hooked        bool // gh webhook forward works
+	hooked        bool                                  // gh webhook forward works
+	before        func(dir, name string, args []string) // runs before each command, in the command's goroutine
+}
+
+// SetBefore has before run ahead of each command the app runs, gh or not, so a test can hold one at a point it picks.
+func (f *FakeGH) SetBefore(before func(dir, name string, args []string)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.before = before
 }
 
 func (f *FakeGH) Run(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+	f.mu.Lock()
+	before := f.before
+	f.mu.Unlock()
+	if before != nil {
+		before(dir, name, args)
+	}
 	if name == "curl" {
 		return f.curl(args)
 	}

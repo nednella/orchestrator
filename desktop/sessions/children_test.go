@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/project"
 )
 
 // childOf starts a child of the live thread parent, with parent's access, working where says.
@@ -313,5 +315,94 @@ func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
 	}
 	if log := h.Cleanups(); len(log) != 0 {
 		t.Errorf("log = %+v, want none", log)
+	}
+}
+
+// holdGitDirs holds the app's reads of the git folders of the worktree wt, the nth at holds[n-1]: each signals its
+// reached channel and waits until its release channel closes. Reads past the last hold run at once.
+func holdGitDirs(t *testing.T, h *apptest.Harness, wt string, holds int) (reached, release []chan struct{}) {
+	t.Helper()
+	for range holds {
+		reached, release = append(reached, make(chan struct{})), append(release, make(chan struct{}))
+	}
+	want := realDir(t, wt)
+	var mu sync.Mutex
+	n := 0
+	h.GH.SetBefore(func(dir, name string, args []string) {
+		if name != "git" || !slices.Contains(args, "--git-common-dir") {
+			return
+		}
+		if real, err := filepath.EvalSymlinks(dir); err != nil || real != want {
+			return
+		}
+		mu.Lock()
+		i := n
+		n++
+		mu.Unlock()
+		if i < holds {
+			close(reached[i])
+			<-release[i]
+		}
+	})
+	t.Cleanup(func() { h.GH.SetBefore(nil) })
+	return reached, release
+}
+
+func TestWakeDuringAChildsSleepKeepsItsWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	wt := child.Worktree
+	// The first read is the clean-up's, as it starts; the second the wake's, as it puts the worktree back.
+	reached, release := holdGitDirs(t, h, wt, 2)
+
+	putToSleep(t, h, child.ID)
+	<-reached[0]
+	woke := make(chan error, 1)
+	go func() { _, err := h.WakeThread(child.ID); woke <- err }()
+	<-reached[1]
+	close(release[0])
+	time.Sleep(500 * time.Millisecond) // a clean-up that does not wait for the wake removes the worktree here
+	close(release[1])
+
+	if err := <-woke; err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if !exists(wt) || stateOf(h, child.ID) == "settled" || realDir(t, panePath(t, h, child.ID)) != realDir(t, wt) {
+		t.Errorf("the woken child: worktree there %v, state %s, runs in %s", exists(wt), stateOf(h, child.ID), panePath(t, h, child.ID))
+	}
+	if log := h.Cleanups(); len(log) != 0 {
+		t.Errorf("log = %+v, want no clean-up of a woken child", log)
+	}
+}
+
+func TestWakeWaitsForAChildsSleepCleanup(t *testing.T) {
+	hold := t.TempDir()
+	reached, released := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; %s", reached, released, project.DefaultCleanupCommand)})
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	wt := child.Worktree
+
+	putToSleep(t, h, child.ID)
+	eventually(t, "the clean-up held in its command", func() bool { return exists(reached) })
+	_, err := h.WakeThread(child.ID)
+	if want := fmt.Sprintf("Thread %d is being cleaned up; wake it when that ends", child.N); err == nil || err.Error() != want {
+		t.Errorf("wake = %v, want %q", err, want)
+	}
+	if err := os.WriteFile(released, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if entry := cleanupOf(t, h, child); entry.Status != "done" || exists(wt) {
+		t.Fatalf("the clean-up = %+v, worktree there %v", entry, exists(wt))
+	}
+	if _, err := h.WakeThread(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(wt) {
+		t.Error("the wake did not put the worktree back")
 	}
 }

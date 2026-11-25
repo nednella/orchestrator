@@ -1125,23 +1125,13 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if err != nil || !t.ended || !t.made {
 		return
 	}
-	key := t.proj.Key()
-	if !l.ours(ctx, key, t.dir, id) {
+	if !l.ours(ctx, t.proj.Key(), t.dir, id) {
 		return
 	}
-	l.mu.Lock()
-	tr := l.tracks[id]
-	if tr == nil {
-		tr = &track{}
-		l.tracks[id] = tr
-	}
-	if l.retired(id) || tr.cleanup == "pending" {
-		l.mu.Unlock()
+	tr, before, ok := l.startChildCleanup(id)
+	if !ok {
 		return
 	}
-	before := tr.cleanup
-	tr.cleanup = "pending"
-	l.mu.Unlock()
 	defer func() {
 		l.mu.Lock()
 		if tr.cleanup == "pending" {
@@ -1150,12 +1140,6 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 		l.mu.Unlock()
 		l.sessions.changed()
 	}()
-	l.sessions.mu.Lock()
-	deleting := l.sessions.deleting[id] || l.sessions.deleted[id]
-	l.sessions.mu.Unlock()
-	if deleting {
-		return
-	}
 
 	plan, reason := l.planFor(ctx, t, nil, false)
 	if reason == "" {
@@ -1169,6 +1153,36 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 		removed, reason = l.removeWorktree(ctx, t, &plan)
 	}
 	l.logCleanup(ctx, t, nil, removed, reason)
+}
+
+// startChildCleanup marks the clean-up of the asleep child id as running and returns its track and the clean-up state
+// it had, unless the child runs again, a delete of it runs or it went, or another clean-up of it runs or finished. It
+// holds createMu, which a wake holds from its check that no clean-up runs until the thread is live, so a wake either
+// comes first and the child is found running, or waits for the clean-up.
+func (l *Lifecycle) startChildCleanup(id string) (tr *track, before string, ok bool) {
+	s := l.sessions
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	s.mu.Lock()
+	_, live := s.liveInfo(id)
+	gone := live || s.deleting[id] || s.deleted[id]
+	s.mu.Unlock()
+	if gone {
+		return nil, "", false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tr = l.tracks[id]
+	if tr == nil {
+		tr = &track{}
+		l.tracks[id] = tr
+	}
+	if l.retired(id) || tr.cleanup == "pending" {
+		return nil, "", false
+	}
+	before = tr.cleanup
+	tr.cleanup = "pending"
+	return tr, before, true
 }
 
 // aheadOfBase says why the worktree of t holds work the default branch on origin lacks, or "" when it holds none.
