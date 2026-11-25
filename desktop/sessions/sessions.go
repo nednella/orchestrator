@@ -2177,7 +2177,7 @@ func (s *Sessions) wakeFor(t target) bool {
 // so now. A PR that merged or closed mid-turn settles the thread this way, so its turn is not cut off.
 func (s *Sessions) whenTurnEnds(id string, then func()) {
 	s.mu.Lock()
-	if _, live := s.seen[id]; live && holdsPrompts(s.records[id].State) {
+	if s.turnRuns(id) {
 		s.afterTurn[id] = append(s.afterTurn[id], then)
 		s.mu.Unlock()
 		return
@@ -2191,7 +2191,7 @@ func (s *Sessions) whenTurnEnds(id string, then func()) {
 // off, or wake a thread that went. It needs mu.
 func (s *Sessions) endTurns() {
 	for id, then := range s.afterTurn {
-		if _, live := s.seen[id]; live && holdsPrompts(s.records[id].State) {
+		if s.turnRuns(id) {
 			continue
 		}
 		delete(s.afterTurn, id)
@@ -2202,6 +2202,16 @@ func (s *Sessions) endTurns() {
 			}
 		}()
 	}
+}
+
+// turnRuns says whether the live session's turn runs: it works, or it waits on the owner in the middle of the turn, for
+// a permission or a question tool. A reply that ends in a question waits too, but its turn is over. It needs mu.
+func (s *Sessions) turnRuns(id string) bool {
+	if _, live := s.seen[id]; !live {
+		return false
+	}
+	rec := s.records[id]
+	return rec.State == session.Working || rec.State == session.Waiting && !endsTurn(rec.Event)
 }
 
 func holdsPrompts(state session.State) bool {
@@ -2886,15 +2896,15 @@ func (s *Sessions) usersOf(dir, except string) string {
 	return ""
 }
 
-// pending says why the thread is busy, or "" when it is not. Prompts are held only while a turn runs, so they are
-// named first, or their reason would never show. It takes mu.
+// pending says why the thread is busy, or "" when it is not. Prompts are held while a turn runs, so they are named
+// first, or their reason would rarely show. It takes mu.
 func (s *Sessions) pending(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
 	case len(s.wakes[id]) > 0:
 		return "messages wait for this thread"
-	case slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) && holdsPrompts(s.records[id].State):
+	case s.turnRuns(id):
 		return "a turn is running"
 	}
 	return ""

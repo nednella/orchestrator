@@ -1436,6 +1436,65 @@ func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
 	}
 }
 
+func TestMergeWhileAQuestionWaitsCleansUpAtOnce(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
+	eventually(t, "waiting on the owner's answer", func() bool { return stateOf(h, s.ID) == "waiting" })
+
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
+	}
+}
+
+func TestMergeDuringAPermissionPromptWaitsForTheTurn(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	eventually(t, "waiting on a permission", func() bool { return stateOf(h, s.ID) == "waiting" })
+
+	openThenMerge(h)
+	h.RefreshPRs()
+	time.Sleep(300 * time.Millisecond)
+	if got, _ := h.Session(s.ID); got.State != "waiting" || got.Cleanup != "" || !exists(wt) || len(h.Cleanups()) != 0 {
+		t.Fatalf("the merge cut the turn off: row %+v, worktree there %v, log %+v", got, exists(wt), h.Cleanups())
+	}
+
+	h.Hook(t, s.ID, "PostToolUse", `{}`)
+	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Done."}`)
+	eventually(t, "the clean-up once the turn ended", cleanedUp(h, s.ID))
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
+	}
+}
+
+func TestQuestionReplyDoesNotKeepTheWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
+	eventually(t, "waiting on the owner's answer", func() bool { return stateOf(h, s.ID) == "waiting" })
+
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(wt) {
+		t.Errorf("the clean-up of a thread that asked in its reply: row %+v, worktree there %v", func() sessions.Session { got, _ := h.Session(s.ID); return got }(), exists(wt))
+	}
+}
+
 func TestMergedPRSettlesTheThread(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
