@@ -41,6 +41,10 @@ projects:
 
 `session_cleanup_command` runs through `sh -c` in the project folder after the safety checks and removes the worktree agentos made; the branch stays. `{worktree}`, `{branch}` and `{dir}` are shell-quoted. `{force}` is `--force` only when you force a clean-up, so `git worktree remove {force} {worktree}` removes a worktree with changes only then. A command that fails blocks the clean-up with its error.
 
+A `session_cleanup_command` that still holds `git branch -D {branch}` deletes the branch, so remove that part from your configs: the branch now stays.
+
+With `session_branch_fallback` unset, issue threads now work on `issue-<n>`.
+
 The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
 
 ### Queue sections and actions

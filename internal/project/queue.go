@@ -116,16 +116,15 @@ func (s Section) takes(labels []string) bool {
 }
 
 // StartAction is the only action of an issue whose section lists none: it types a line that names the issue, and
-// its branch when the project names one.
-func StartAction(onBranch bool) Action {
-	return Action{Name: "Start", Command: prompts.StartIssue(onBranch)}
+// its branch.
+func StartAction() Action {
+	return Action{Name: "Start", Command: prompts.StartIssue()}
 }
 
-// ActionList is what can be done with an issue of the section, the default first. onBranch says whether the
-// project names the issue's branch.
-func (s Section) ActionList(onBranch bool) []Action {
+// ActionList is what can be done with an issue of the section, the default first.
+func (s Section) ActionList() []Action {
 	if len(s.Actions) == 0 {
-		return []Action{StartAction(onBranch)}
+		return []Action{StartAction()}
 	}
 	return s.Actions
 }

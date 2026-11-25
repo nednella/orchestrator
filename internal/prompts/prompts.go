@@ -24,8 +24,6 @@ var (
 	setupChecks string
 	//go:embed setup-conflict.md
 	setupConflict string
-	//go:embed start-issue.md
-	startIssue string
 	//go:embed start-issue-branch.md
 	startIssueBranch string
 	//go:embed session.md
@@ -123,13 +121,8 @@ func SetupChecks() string { return body(setupChecks) }
 func SetupConflict() string { return body(setupConflict) }
 
 // StartIssue is what a session for an issue is started with when the project defines no action for it.
-// {n} is the issue number and {title} its title; onBranch adds {branch}, the branch the project names for the issue.
-func StartIssue(onBranch bool) string {
-	if onBranch {
-		return body(startIssueBranch)
-	}
-	return body(startIssue)
-}
+// {n} is the issue number, {title} its title and {branch} the branch agentos makes for it.
+func StartIssue() string { return body(startIssueBranch) }
 
 // body drops the leading comment and the final newline of a file.
 func body(file string) string {

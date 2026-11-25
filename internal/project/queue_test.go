@@ -39,16 +39,12 @@ func TestSection(t *testing.T) {
 
 func TestActionList(t *testing.T) {
 	own := Section{Actions: []Action{{Name: "Plan"}, {Name: "Work"}}}
-	if got := own.ActionList(true); len(got) != 2 || got[0].Name != "Plan" {
+	if got := own.ActionList(); len(got) != 2 || got[0].Name != "Plan" {
 		t.Errorf("a section's own actions = %+v", got)
 	}
-	got := Section{}.ActionList(false)
-	if len(got) != 1 || got[0].Name != "Start" || got[0].Render(7, "Fix it", "") != "Work on issue #7: Fix it" {
-		t.Errorf("without actions: %+v", got)
-	}
-	got = Section{}.ActionList(true)
-	if want := "Work on issue #7 on branch `issue-7`: Fix it"; len(got) != 1 || got[0].Render(7, "Fix it", "issue-7") != want {
-		t.Errorf("without actions, on a branch: %+v, want %q", got, want)
+	got := Section{}.ActionList()
+	if want := "Work on issue #7 on branch `issue-7`: Fix it"; len(got) != 1 || got[0].Name != "Start" || got[0].Render(7, "Fix it", "issue-7") != want {
+		t.Errorf("without actions: %+v, want %q", got, want)
 	}
 }
 

@@ -218,7 +218,7 @@ func (i *Issues) parseIssues(data []byte, proj project.Project) ([]Issue, error)
 			assignees[k] = a.Login
 		}
 		at, section := proj.Section(labels)
-		action, _ := pickAction(section, "", proj.Branch != "")
+		action, _ := pickAction(section, "")
 		_, ignored := project.Pick(action, labels, agent.Claude{}.ValidModel)
 		if ignored == nil {
 			ignored = []string{}
@@ -239,7 +239,7 @@ func (i *Issues) parseIssues(data []byte, proj project.Project) ([]Issue, error)
 
 func actionNames(s project.Section) []string {
 	var names []string
-	for _, a := range s.ActionList(false) {
+	for _, a := range s.ActionList() {
 		names = append(names, a.Name)
 	}
 	return names
@@ -305,7 +305,7 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover string,
 		}
 		is := list[at]
 		_, section := proj.Section(is.Labels)
-		act, ok := pickAction(section, action, proj.Branch != "")
+		act, ok := pickAction(section, action)
 		if !ok {
 			return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
@@ -375,8 +375,8 @@ func (i *Issues) editLabels(ctx context.Context, dir string, number int, add, re
 }
 
 // pickAction is the action of the section with the name given, or its default for "".
-func pickAction(s project.Section, name string, onBranch bool) (project.Action, bool) {
-	actions := s.ActionList(onBranch)
+func pickAction(s project.Section, name string) (project.Action, bool) {
+	actions := s.ActionList()
 	if name == "" {
 		return actions[0], true
 	}

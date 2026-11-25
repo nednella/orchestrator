@@ -240,13 +240,15 @@ func TestIssueOfNoSectionSendsTheStartLine(t *testing.T) {
 	})
 }
 
-func TestStartLineLeavesOutBranchProjectDoesNotName(t *testing.T) {
+func TestStartLineNamesTheDefaultBranchWhenProjectNamesNone(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{NoBranch: true})
 	s, err := h.StartIssue(10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "start line sent", func() bool { return sent(t, h, s.ID, "APPLICATION_PROMPT: Work on issue #10: Maybe") })
+	eventually(t, "start line sent", func() bool {
+		return sent(t, h, s.ID, "APPLICATION_PROMPT: Work on issue #10 on branch `issue-10`: Maybe")
+	})
 }
 
 func TestManualPromptSendDraftsWithoutSending(t *testing.T) {

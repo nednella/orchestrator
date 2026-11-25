@@ -112,7 +112,7 @@ Make a worktree on branch `issue-<n>` from the default branch on origin, where a
 
 `/work` runs alone only when AGENTS.md says:
 
-- that worktrees go in `worktrees/` at the repository root, and the set-up a new one needs (dependencies, env files, a build)
+- that worktrees go in `trees/` at the repository root, and the set-up a new one needs (dependencies, env files, a build)
 - the exact commands for the tests, the linters and the build, or that there are none
 - how to check a change by hand, when tests are not enough
 - the commit message style, and any hard rules, such as what a session must never touch
@@ -126,7 +126,7 @@ Add these lines; create the file when there is none.
 
 ```gitignore
 # Set up by agentos: https://github.com/nednella/agentos
-worktrees/
+trees/
 ```
 
 ## 4. Offer customisation

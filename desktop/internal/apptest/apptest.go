@@ -574,7 +574,7 @@ const queueSections = `    queue_sections:
 type Options struct {
 	ProjectExtra   string        // yaml lines added under the project "main"
 	Queue          string        // the project's queue_sections block, in place of the usual one
-	NoBranch       bool          // leave out the project's `session_branch_fallback: "issue-{n}"` pattern
+	NoBranch       bool          // leave out the project's `session_branch_fallback`, so the default `issue-{n}` applies
 	CleanupCommand string        // the project's session_cleanup_command; none by default
 	NoAgentos      bool          // leave every folder that holds an agentos command off PATH, as an app that cannot find it
 	TopExtra       string        // yaml lines added at the top of the config
