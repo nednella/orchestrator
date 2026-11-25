@@ -13,8 +13,10 @@ export type ToolCall = { id: string; tool: string; input: unknown; result: strin
 export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
 export type TimelineItem =
-  | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[] }
-  | { kind: 'reply'; key: string; at: number; id: string; text: string; streaming: boolean }
+  // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none.
+  | { kind: 'user'; key: string; at: number; id: string; text: string; files: string[]; forkAt: string }
+  // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none.
+  | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean }
   | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
@@ -28,7 +30,8 @@ export type Timeline = { items: TimelineItem[]; queued: QueuedMessage[]; turnOpe
 type Notice = Extract<TimelineItem, { kind: 'notice' }>
 type ApprovalItem = Extract<TimelineItem, { kind: 'approval' }>
 type AskItem = Extract<TimelineItem, { kind: 'question' | 'plan' }>
-type Reply = { kind: 'reply'; key: string; at: number; id: string; blocks: string[] }
+type Reply = { kind: 'reply'; key: string; at: number; id: string; uuid: string; blocks: string[] }
+type ReplyItem = Extract<TimelineItem, { kind: 'reply' }>
 // A part is one thing a turn holds, in the order it came.
 type Part = Reply | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem
 // An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
@@ -98,7 +101,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // A message Claude takes in while it works splits the turn there.
         const left = close(e.at)
         if (e.id) queued.delete(e.id)
-        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', text: e.text ?? '', files: e.files ?? noFiles })
+        const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
+        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', text: e.text ?? '', files: e.files ?? noFiles, forkAt })
         open(e).approvals.push(...left)
         return
       }
@@ -116,8 +120,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const t = open(e)
         const id = e.id || `seq-${e.seq}`
         const reply = t.parts.find((p): p is Reply => p.kind === 'reply' && p.id === id)
-        if (reply) reply.blocks.push(e.text ?? '')
-        else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, blocks: [e.text ?? ''] })
+        if (reply) {
+          reply.blocks.push(e.text ?? '')
+          reply.uuid = e.uuid || reply.uuid
+        } else t.parts.push({ kind: 'reply', key: `reply-${id}`, at: e.at, id, uuid: e.uuid ?? '', blocks: [e.text ?? ''] })
         return
       }
       case 'tool_use': {
@@ -233,13 +239,13 @@ function unfolded(turn: Turn, live: Record<string, string>, now: number): Timeli
     } else out.push({ kind: 'work', key: `work-${p.call.id}`, startedAt: turn.startedAt, endedAt: null, calls: [p.call], steps: [{ kind: 'call', call: p.call }] })
   }
   for (const [id, text] of Object.entries(live)) {
-    if (!turn.parts.some((p) => p.kind === 'reply' && p.id === id)) out.push({ kind: 'reply', key: `reply-${id}`, at: now, id, text, streaming: true })
+    if (!turn.parts.some((p) => p.kind === 'reply' && p.id === id)) out.push({ kind: 'reply', key: `reply-${id}`, at: now, id, uuid: '', text, streaming: true })
   }
   return [...out, ...turn.unsent]
 }
 
 function replyItem(r: Reply, streamed: string): TimelineItem {
-  return { kind: 'reply', key: r.key, at: r.at, id: r.id, text: [...r.blocks, ...(streamed ? [streamed] : [])].join('\n\n'), streaming: streamed !== '' }
+  return { kind: 'reply', key: r.key, at: r.at, id: r.id, uuid: r.uuid, text: [...r.blocks, ...(streamed ? [streamed] : [])].join('\n\n'), streaming: streamed !== '' }
 }
 
 // pendingOf describes the approval a thread waits on, as the chat service does.

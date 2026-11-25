@@ -31,6 +31,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     chat: false,
     hosted: true,
     action: '',
+    forkOf: '',
     tokens: 0,
     cost: 0,
     resumable: false,

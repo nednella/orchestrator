@@ -25,7 +25,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
   const loading = useMinimumLoading(!detail && !error)
   const issue = issues.find((i) => i.number === number)
   const session = sessions.find((s) => s.id === issue?.sessionId)
-  const chat = sessions.find((s) => s.chat && s.issue === number)
+  const chat = sessions.find((s) => s.chat && !s.forkOf && s.issue === number)
 
   useEffect(() => {
     api.issueDetail(number).then(setDetail, (err) => setError(errorMessage(err)))

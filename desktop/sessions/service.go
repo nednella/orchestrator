@@ -70,6 +70,10 @@ func (v *Service) DismissSession(id string) error { return v.s.Dismiss(id) }
 // ResumeSession starts a session that continues an ended one's conversation, and removes the ended row.
 func (v *Service) ResumeSession(id string) (Session, error) { return v.s.Resume(id) }
 
+// ForkSession starts a thread that continues the conversation of the thread id up to its reply at, the uuid of the
+// reply's last block, as a new conversation.
+func (v *Service) ForkSession(id, at string) (Session, error) { return v.s.Fork(id, at) }
+
 func (v *Service) RenameSession(id, title string) error { return v.s.Rename(id, title) }
 
 // TypeInto types text into the session's prompt, not sent; an agent under a host gets it as a draft in its chat.

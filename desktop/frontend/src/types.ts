@@ -54,6 +54,7 @@ export type Session = {
   chat: boolean
   hosted: boolean
   action: string
+  forkOf: string // the thread this one was forked from, '' when none
   tokens: number
   cost: number
   resumable: boolean

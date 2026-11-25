@@ -80,6 +80,17 @@ func TestClaudeLaunch(t *testing.T) {
 	}
 }
 
+func TestClaudeForkFlags(t *testing.T) {
+	argv := Claude{Exe: "/x"}.Command(Launch{Resume: "abc", ForkAt: "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", Prompt: "p"})
+	want := []string{"--resume", "abc", "--fork-session", "--resume-session-at", "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", "--append-system-prompt", "p"}
+	if got := argv[3+len(headlessFlags):]; !slices.Equal(got, want) {
+		t.Errorf("flags = %q, want %q", got, want)
+	}
+	if argv := (Claude{Exe: "/x"}).Command(Launch{ForkAt: "1203a261"}); slices.Contains(argv, "--fork-session") {
+		t.Errorf("a fork with no conversation to resume: argv = %q", argv)
+	}
+}
+
 func TestPlainIgnoresLaunch(t *testing.T) {
 	l := Launch{Model: "opus", Effort: "high", Resume: "abc", Chat: true, Prompt: "p", Start: "s", Browser: true, TmpDir: "/tmp/s"}
 	if argv := (Plain{Argv: []string{"bash"}}).Command(l); !slices.Equal(argv, []string{"bash"}) {

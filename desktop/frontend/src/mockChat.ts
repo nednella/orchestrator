@@ -113,7 +113,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
       turns.push({ kind: 'tool_result', parent: `old-t-${n}`, text: 'export const cart = {}', at })
       count++
     }
-    turns.push({ kind: 'message', id: `old-m-${n}`, text: olderReplies[n % olderReplies.length], at })
+    turns.push({ kind: 'message', id: `old-m-${n}`, uuid: `old-r-${n}`, text: olderReplies[n % olderReplies.length], at })
     turns.push({ kind: 'turn_end', cost: 0.01, at })
     count += 2
   }
@@ -185,7 +185,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       }
       clearInterval(timer)
       replying.delete(id)
-      append(id, { kind: 'message', id: message, text })
+      append(id, { kind: 'message', id: message, uuid: crypto.randomUUID(), text })
       if (runQueued(id)) return
       append(id, { kind: 'turn_end', cost: 0.04 })
       t.setState('idle')
@@ -228,23 +228,23 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       ...olderTurns(earlier, ago),
       { kind: 'user', id: 'u-1', text: 'Move checkout to its own route, and keep the cart page as it is.', at: ago(38) },
       { kind: 'init', id: 'mock-session', at: ago(38) },
-      { kind: 'message', id: 'msg_1', text: "I'll read the router first.", at: ago(37) },
+      { kind: 'message', id: 'msg_1', uuid: 'r-1', text: "I'll read the router first.", at: ago(37) },
       { kind: 'tool_use', id: 'toolu_1', tool: 'Read', input: { file_path: '~/code/acme/storefront/trees/issue-444/app-frontend/src/js/routes.tsx' }, at: ago(37) },
       { kind: 'tool_result', parent: 'toolu_1', text: "export const routes = [\n  { path: '/', page: Home },\n  { path: '/cart', page: Cart },\n]", at: ago(37) },
       { kind: 'tool_use', id: 'toolu_2', tool: 'Edit', input: { file_path: '~/code/acme/storefront/trees/issue-444/app-frontend/src/js/routes.tsx', old_string: "  { path: '/cart', page: Cart },", new_string: "  { path: '/cart', page: Cart },\n  { path: '/checkout', page: Checkout }," }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2', text: 'The file was updated.', at: ago(36) },
-      { kind: 'message', id: 'msg_1b', text: 'The route is in. Now I will **lint** and typecheck it.', at: ago(36) },
+      { kind: 'message', id: 'msg_1b', uuid: 'r-1b', text: 'The route is in. Now I will **lint** and typecheck it.', at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2a', tool: 'Bash', input: { command: 'npm run lint\nnpm run typecheck', description: 'Check the new route' }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2a', text: Array.from({ length: 26 }, (_, i) => `src/js/file-${i + 1}.tsx  ok`).join('\n'), at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2b', tool: 'Bash', input: { command: 'cat src/js/missing.tsx' }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2b', text: 'cat: src/js/missing.tsx: No such file or directory', error: true, at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2c', tool: 'Grep', input: { pattern: 'Checkout' }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2c', text: 'app-frontend/src/js/routes.tsx', at: ago(36) },
-      { kind: 'message', id: 'msg_2', text: 'Checkout now has its own route at `/checkout`. The cart page is unchanged.', at: ago(35) },
+      { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Checkout now has its own route at `/checkout`. The cart page is unchanged.', at: ago(35) },
       { kind: 'turn_end', cost: 0.21, at: ago(35) },
       { kind: 'user', id: 'u-2', text: 'Run the tests, and install whatever they need.', at: ago(5) },
       { kind: 'init', id: 'mock-session', at: ago(5) },
-      { kind: 'message', id: 'msg_3', text: 'The tests need a package that is not installed yet.', at: ago(4) },
+      { kind: 'message', id: 'msg_3', uuid: 'r-3', text: 'The tests need a package that is not installed yet.', at: ago(4) },
       { kind: 'tool_use', id: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
       { kind: 'approval', id: 'req-1', parent: 'toolu_3', tool: 'Bash', input: { command: 'npm install', description: 'Install the missing packages' }, at: ago(4) },
     ]
@@ -277,13 +277,26 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       { kind: 'commands', input: commands, at },
       { kind: 'user', id: 'u-1', text: kind === 'question' ? 'Why does checkout call the cart API twice?' : 'Plan how to split the checkout page.', at },
       { kind: 'init', id: 'mock-session', at },
-      { kind: 'message', id: 'msg_1', text: kind === 'question' ? 'Checkout mounts the old cart hook and the new one, and each fetches the cart.' : 'I read the checkout page and its tests.', at },
+      { kind: 'message', id: 'msg_1', uuid: 'r-ask', text: kind === 'question' ? 'Checkout mounts the old cart hook and the new one, and each fetches the cart.' : 'I read the checkout page and its tests.', at },
       { kind: 'tool_use', id: 'toolu_ask', tool, input, at },
       { kind: 'approval', id: 'req-ask', parent: 'toolu_ask', tool, input, at },
     ]
     turn.forEach((e) => append(id, e))
     const summary = kind === 'question' ? askedQuestions[0].question : 'Split checkout into three steps'
     setPending(id, { id, request: 'req-ask', tool, summary, kind })
+  }
+
+  // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts and queued
+  // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block.
+  function fork(from: string, to: string, at: string) {
+    const log = logOf(from)
+    const cut = at ? log.findLastIndex((e) => e.uuid === at) : -1
+    if (cut < 0) throw "That message is not in the thread's chat"
+    log
+      .slice(0, cut + 1)
+      .filter((e) => e.kind !== 'draft' && e.kind !== 'queued' && e.kind !== 'unsent')
+      .forEach(({ seq: _, ...e }) => append(to, e))
+    append(to, { kind: 'turn_end', at: log[cut].at })
   }
 
   // forget stops the turn that waits, as an interrupt from elsewhere does, but the app hears of neither the pending
@@ -405,5 +418,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
   const breakLog = (id: string) => unreadable.add(id)
 
-  return { backend, seed, ask, forget, end, start, breakLog, mediaURL }
+  return { backend, seed, ask, fork, forget, end, start, breakLog, mediaURL }
 }

@@ -14,7 +14,7 @@ type IssueRowProps = { issue: Issue; drag: IssueDrag; onRead(): void }
 export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
   const { settings, select } = useAgentos('settings', 'select')
   const session = useAgentosSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
-  const chat = useAgentosSelector((a) => a.projectSessions.find((s) => s.chat && s.issue === issue.number))
+  const chat = useAgentosSelector((a) => a.projectSessions.find((s) => s.chat && !s.forkOf && s.issue === issue.number))
   const [menuOpen, setMenuOpen] = useState(false)
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
   const agent = labelled('agent')

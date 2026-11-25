@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
-import { EMPTY_DRAFT, readDraft, saveDraft } from './composerMarkdown'
+import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { goneThreads, liveThreads, sidebarThreads } from './threads'
@@ -84,6 +84,9 @@ type AgentosActions = {
   killSession(id: string): Promise<void>
   dismissSession(id: string): Promise<void>
   resumeSession(id: string): Promise<Session>
+  // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
+  // thread's composer, and selects it.
+  forkSession(id: string, at: string, draft?: string): Promise<Session>
   renameSession(id: string, title: string): Promise<void>
   startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
   switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
@@ -621,7 +624,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const projectSessions = useMemo(() => sessions.filter((s) => s.project === project?.key), [sessions, project?.key])
 
   const issues = useMemo(() => {
-    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.chat && s.issue === issue.number)?.id ?? '' }))
+    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.chat && !s.forkOf && s.issue === issue.number)?.id ?? '' }))
     issuesRef.current = keepUnchanged(issuesRef.current, next, (issue) => issue.number)
     return issuesRef.current
   }, [rawIssues, projectSessions])
@@ -742,6 +745,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async resumeSession(id) {
         return addSession(await api.resumeSession(id))
+      },
+      async forkSession(id, at, draft = '') {
+        const fork = await api.forkSession(id, at)
+        if (draft.trim()) writeStored(threadDraftKey(fork.id), saveDraft(draftOf(fromMarkdown(draft))))
+        return addSession(fork)
       },
       async renameSession(id, title) {
         const trimmed = title.trim()

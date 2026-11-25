@@ -1,0 +1,285 @@
+package sessions_test
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/project"
+)
+
+// withConversation tells the app, as Claude's hook does, that the thread's conversation is abc.
+func withConversation(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	eventually(t, "the thread's conversation", func() bool { got, _ := h.Session(id); return got.State == "idle" })
+}
+
+// writeChat adds the events to the thread's chat log once its host has opened it.
+func writeChat(t *testing.T, h *apptest.Harness, id string, events ...chat.Event) {
+	t.Helper()
+	path, socket := hostFiles(h, id)
+	eventually(t, "the thread's host", func() bool { return exists(socket) })
+	l, err := chat.OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	for _, e := range events {
+		if _, err := l.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// oneReply is a chat of one turn, whose reply has two blocks: the second's uuid is r1b.
+var oneReply = []chat.Event{
+	{Kind: chat.KindUser, ID: "u1", Text: "first"},
+	{Kind: chat.KindMessage, ID: "msg_1", UUID: "r1a", Text: "one"},
+	{Kind: chat.KindMessage, ID: "msg_1", UUID: "r1b", Text: "two"},
+	{Kind: chat.KindTurnEnd},
+}
+
+func kindsAndTexts(events []chat.Event) []string {
+	var out []string
+	for _, e := range events {
+		out = append(out, string(e.Kind)+":"+e.Text)
+	}
+	return out
+}
+
+func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	src, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	srcChat, err := h.Sessions().ChatOf(src.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A resumed thread's log names the folder of the thread that sent the image; the image is in its own.
+	shown, later := filepath.Join(filepath.Dir(srcChat.Media), "zz22yy33", "0123456789abcdef.png"), filepath.Join(srcChat.Media, "fedcba9876543210.png")
+	for _, file := range []string{filepath.Join(srcChat.Media, filepath.Base(shown)), later} {
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, []byte("image "+filepath.Base(file)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeChat(t, h, src.ID,
+		chat.Event{Kind: chat.KindInit, ID: "abc"},
+		chat.Event{Kind: chat.KindUser, ID: "u1", Text: "first", Files: []string{shown}},
+		chat.Event{Kind: chat.KindQueued, ID: "u2", Text: "also"},
+		chat.Event{Kind: chat.KindDraft, Text: "half typed"},
+		chat.Event{Kind: chat.KindMessage, ID: "msg_1", UUID: "r1a", Text: "one"},
+		chat.Event{Kind: chat.KindMessage, ID: "msg_1", UUID: "r1b", Text: "two", At: 5000},
+		chat.Event{Kind: chat.KindUser, ID: "u2", Text: "also"},
+		chat.Event{Kind: chat.KindMessage, ID: "msg_2", UUID: "r2", Text: "three"},
+		chat.Event{Kind: chat.KindTurnEnd},
+		chat.Event{Kind: chat.KindUser, ID: "u3", Text: "second", Files: []string{later}},
+	)
+
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := claudeArgs(t, dir, fork.ID)
+	if i := slices.Index(args, "--resume"); i < 0 || !slices.Equal(args[i:i+5], []string{"--resume", "abc", "--fork-session", "--resume-session-at", "r1b"}) {
+		t.Errorf("args = %q", args)
+	}
+	forkLog, _ := hostFiles(h, fork.ID)
+	events, err := chat.ReadLog(forkLog, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"init:", "user:first", "message:one", "message:two", "turn_end:"}
+	if got := kindsAndTexts(events); !slices.Equal(got, want) {
+		t.Errorf("fork's chat = %q, want %q", got, want)
+	}
+	for i, e := range events {
+		if e.Seq != int64(i+1) {
+			t.Errorf("event %d has seq %d", i, e.Seq)
+		}
+	}
+	if end := events[len(events)-1]; end.At != 5000 {
+		t.Errorf("the fork's turn ends at %d, not at its last block", end.At)
+	}
+
+	forkChat, err := h.Sessions().ChatOf(fork.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(forkChat.Media, filepath.Base(shown))); string(data) != "image 0123456789abcdef.png" {
+		t.Errorf("the fork's copy of the image = %q", data)
+	}
+	if exists(filepath.Join(forkChat.Media, filepath.Base(later))) {
+		t.Error("the fork has an image sent after the message")
+	}
+	if !exists(filepath.Join(srcChat.Media, filepath.Base(shown))) {
+		t.Error("the source lost its image")
+	}
+	if srcEvents, _ := chat.ReadLog(srcChat.Log, 0); len(srcEvents) != 10 {
+		t.Errorf("the source's chat changed: %q", kindsAndTexts(srcEvents))
+	}
+
+	for _, at := range []string{"nope", ""} {
+		if _, err := h.ForkSession(src.ID, at); err == nil || err.Error() != "That message is not in the thread's chat" {
+			t.Errorf("fork at %q: %v", at, err)
+		}
+	}
+	fresh, err := h.Sessions().Create("fresh", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ForkSession(fresh.ID, "r1b"); err == nil || err.Error() != "This thread has no conversation to fork yet" {
+		t.Errorf("fork of a thread with no conversation: %v", err)
+	}
+}
+
+func TestForkKeepsFolderKindAndModel(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	for _, chatKind := range []bool{false, true} {
+		t.Run(fmt.Sprintf("chat=%v", chatKind), func(t *testing.T) {
+			src, err := h.Sessions().CreateWith("ask", chatKind, sessions.StartOptions{Model: project.Model{Model: "haiku", Effort: "low"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			withConversation(t, h, src.ID)
+			writeChat(t, h, src.ID, oneReply...)
+			fork, err := h.ForkSession(src.ID, "r1b")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fork.Title != "ask (fork)" || fork.Chat != chatKind || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "ended" {
+				t.Errorf("fork = %+v", fork)
+			}
+			srcChat, _ := h.Sessions().ChatOf(src.ID)
+			forkChat, _ := h.Sessions().ChatOf(fork.ID)
+			if forkChat.Dir != srcChat.Dir || forkChat.Dir == "" {
+				t.Errorf("fork works in %q, its source in %q", forkChat.Dir, srcChat.Dir)
+			}
+			args := strings.Join(claudeArgs(t, dir, fork.ID), " ")
+			if !strings.Contains(args, "--model haiku --effort low") || strings.Contains(args, "--permission-mode plan") != chatKind {
+				t.Errorf("args = %s", args)
+			}
+		})
+	}
+}
+
+func TestForkDoesNotTakeOverThePR(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude", ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	src, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	eventually(t, "the source's PR", hasPR(h, src.ID))
+
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fork.Issue != 12 || fork.Title != "#12 work (fork)" {
+		t.Errorf("fork = %+v", fork)
+	}
+	if got := h.Sessions().IssueSessions()[12]; got != src.ID {
+		t.Errorf("the issue's session is %s, want the source %s", got, src.ID)
+	}
+	if err := h.Sessions().Track(fork.ID, "issue-12"); err == nil {
+		t.Error("the fork tracked the branch")
+	}
+
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
+	h.RefreshPRs()
+	eventually(t, "the review on the source's stdin", func() bool {
+		users := userLines(t, dir, src.ID)
+		return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
+	})
+	time.Sleep(300 * time.Millisecond)
+	if users := userLines(t, dir, fork.ID); len(users) != 0 {
+		t.Errorf("the fork got %q", users)
+	}
+	if got, _ := h.Session(fork.ID); got.PR != nil || got.PRAttention != "" {
+		t.Errorf("fork = %+v", got)
+	}
+}
+
+func TestForkOfAnEndedThread(t *testing.T) {
+	dir := apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	src, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeChat(t, h, src.ID, oneReply...)
+	ended(t, h, src)
+
+	fork, err := h.ForkSession(src.ID, "r1a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fork.State == "ended" || fork.ForkOf != src.ID {
+		t.Errorf("fork = %+v", fork)
+	}
+	if i := slices.Index(claudeArgs(t, dir, fork.ID), "--resume-session-at"); i < 0 {
+		t.Error("the fork did not fork")
+	}
+	forkLog, _ := hostFiles(h, fork.ID)
+	events, _ := chat.ReadLog(forkLog, 0)
+	if got, want := kindsAndTexts(events), []string{"user:first", "message:one", "turn_end:"}; !slices.Equal(got, want) {
+		t.Errorf("fork's chat = %q, want %q", got, want)
+	}
+	if got, ok := h.Session(src.ID); !ok || got.State != "ended" {
+		t.Errorf("the source after the fork = %+v, %v", got, ok)
+	}
+}
+
+func TestForkStaysAFork(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	src, err := h.Sessions().Create("#12 work", "", false, 12, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	withConversation(t, h, fork.ID)
+
+	fresh := h.Restart(t)
+	eventually(t, "the fork after a restart", func() bool { got, ok := fresh.Session(fork.ID); return ok && got.ForkOf == src.ID })
+	if err := fresh.KillSession(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the fork ended", func() bool { got, _ := fresh.Session(fork.ID); return got.State == "ended" && got.ForkOf == src.ID })
+	resumed, err := fresh.ResumeSession(fork.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.ID == src.ID || resumed.ForkOf != src.ID || resumed.Issue != 12 {
+		t.Errorf("resumed fork = %+v", resumed)
+	}
+	if got := fresh.Sessions().IssueSessions()[12]; got != src.ID {
+		t.Errorf("the issue's session is %s, want the source %s", got, src.ID)
+	}
+}

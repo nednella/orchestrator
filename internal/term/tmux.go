@@ -25,6 +25,7 @@ const (
 	actionOption = "@agentos-action"
 	agentOption  = "@agentos-agent"
 	hostedOption = "@agentos-hosted"
+	forkOption   = "@agentos-fork"
 )
 
 const conf = `
@@ -73,6 +74,7 @@ type Info struct {
 	Chat    bool   // a chat: a read-only session for questions, not work
 	Hosted  bool   // the agent runs under agentos host, which takes its messages over a socket
 	Action  string // the queue action the session was started with, or ""
+	Fork    string // the session a fork was forked from, or ""
 	Created time.Time
 	PID     int // the process the session's pane runs: the agent, or the shell that started it
 }
@@ -116,7 +118,7 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+agentOption+"}\t#{"+hostedOption+"}\t#{session_created}\t#{pane_pid}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+agentOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -128,7 +130,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 	var shells []session.Name
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 12 {
+		if len(f) != 13 {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -139,11 +141,11 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 			shells = append(shells, name)
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Chat: f[6] != "", Action: f[7], Agent: f[8], Hosted: f[9] != ""}
-		if secs, err := strconv.ParseInt(f[10], 10, 64); err == nil {
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Chat: f[6] != "", Action: f[7], Agent: f[8], Hosted: f[9] != "", Fork: f[10]}
+		if secs, err := strconv.ParseInt(f[11], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
-		info.PID, _ = strconv.Atoi(f[11])
+		info.PID, _ = strconv.Atoi(f[12])
 		infos = append(infos, info)
 	}
 	return infos, shells, nil
@@ -253,6 +255,14 @@ func (t *Tmux) SetChat(ctx context.Context, name session.Name) error {
 func (t *Tmux) SetHosted(ctx context.Context, name session.Name) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), hostedOption, "1"); err != nil {
 		return fmt.Errorf("tagging hosted session %s: %w", name, err)
+	}
+	return nil
+}
+
+// SetFork records the session a fork was forked from.
+func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) error {
+	if _, err := t.run(ctx, "set-option", "-t", target(name), forkOption, from); err != nil {
+		return fmt.Errorf("tagging fork %s: %w", name, err)
 	}
 	return nil
 }

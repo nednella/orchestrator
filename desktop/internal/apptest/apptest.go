@@ -998,6 +998,10 @@ func (h *Harness) ResumeSession(id string) (sessions.Session, error) {
 	return h.sessions.ResumeSession(id)
 }
 
+func (h *Harness) ForkSession(id, at string) (sessions.Session, error) {
+	return h.sessions.ForkSession(id, at)
+}
+
 func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 	return h.chat.ChatHistory(id, after)
 }

@@ -40,7 +40,7 @@ test('items past the count last seen are unseen', () => {
   assert.equal(hasUnseen(null, 14), false, 'a thread that opens at the bottom shows its newest items')
 })
 
-const user = (key: string): TimelineItem => ({ kind: 'user', key, at: 0, id: key, text: key, files: [] })
+const user = (key: string): TimelineItem => ({ kind: 'user', key, at: 0, id: key, text: key, files: [], forkAt: '' })
 const approval = (key: string): TimelineItem => ({ kind: 'approval', key, at: 0, request: key, tool: 'Bash', input: {}, expired: false })
 const failure = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: true })
 const note = (key: string): TimelineItem => ({ kind: 'notice', key, at: 0, text: key, error: false })

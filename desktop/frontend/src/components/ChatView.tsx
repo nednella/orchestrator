@@ -21,7 +21,7 @@ const stopWait = 10_000
 type ChatViewProps = { session: Session }
 
 export function ChatView({ session }: ChatViewProps) {
-  const { project, report } = useAgentos('project', 'report')
+  const { project, report, forkSession } = useAgentos('project', 'report', 'forkSession')
   const latest = useLatestAgentos()
   const { timeline, events, loading, error } = useChat(session.id)
   const empty = timeline.items.length === 0
@@ -60,6 +60,8 @@ export function ChatView({ session }: ChatViewProps) {
     input.current?.focus()
   }, [])
 
+  const fork = useCallback((at: string, draft: string) => report(() => forkSession(session.id, at, draft)), [session.id, report, forkSession])
+
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
 
@@ -80,7 +82,7 @@ export function ChatView({ session }: ChatViewProps) {
       {empty && loading && <Loading />}
       {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && !loading && !error && <div className="flex-1" />}
-      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onReply={replyTo} onQuote={quote} />}
+      {!empty && <ChatTimeline id={session.id} items={timeline.items} folder={session.worktree || project?.dir || ''} onReply={replyTo} onQuote={quote} onFork={fork} />}
       <div className="mx-auto w-full max-w-[46rem] px-4 pb-4">
         {!empty && error && (
           <div className="pb-2">

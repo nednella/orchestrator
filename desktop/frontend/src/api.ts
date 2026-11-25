@@ -9,6 +9,7 @@ type Backend = {
   KillSession(id: string): Promise<void>
   DismissSession(id: string): Promise<void>
   ResumeSession(id: string): Promise<Session>
+  ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
   AddProject(): Promise<Snapshot>
@@ -108,7 +109,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -150,6 +151,7 @@ export const api = {
   killSession: (id: string) => backend.KillSession(id),
   dismissSession: (id: string) => backend.DismissSession(id),
   resumeSession: (id: string) => backend.ResumeSession(id),
+  forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
   addProject: () => backend.AddProject(),

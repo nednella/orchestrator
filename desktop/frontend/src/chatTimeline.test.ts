@@ -226,6 +226,44 @@ test('a failed turn says why when Claude does', () => {
   assert.deepEqual(notices.map((n) => [n.text, n.error]), [['No message found with message.uuid of: r9', true]])
 })
 
+test('a reply forks at its last block, and a message at the reply before it', () => {
+  const events = log(
+    user('u1', 'First'),
+    { kind: 'message', id: 'msg_1', uuid: 'r1a', text: 'One.' },
+    { kind: 'message', id: 'msg_1', uuid: 'r1b', text: 'Two.' },
+    turnEnd(),
+    user('u2', 'Second'),
+    toolUse('t1', 'Read'),
+    toolResult('t1', 'a'),
+    { kind: 'message', id: 'msg_2', uuid: 'r2', text: 'Three.' },
+    turnEnd(),
+    user('u3', 'Third'),
+    message('msg_3', 'From an older log.'),
+    turnEnd(),
+    user('u4', 'Fourth'),
+  )
+  const items = buildTimeline(events, {}).items
+  assert.deepEqual(
+    only(items, 'reply').map((r) => [r.text, r.uuid]),
+    [
+      ['One.\n\nTwo.', 'r1b'],
+      ['Three.', 'r2'],
+      ['From an older log.', ''],
+    ],
+  )
+  assert.deepEqual(
+    only(items, 'user').map((u) => [u.text, u.forkAt]),
+    [
+      ['First', ''],
+      ['Second', 'r1b'],
+      ['Third', 'r2'],
+      ['Fourth', ''],
+    ],
+  )
+  const streaming = buildTimeline(log(user('u1', 'Go')), { msg_1: 'Wor' }).items
+  assert.equal(only(streaming, 'reply')[0].uuid, '', 'a reply that only streamed has no uuid yet')
+})
+
 test('queued until delivered', () => {
   const sent = log(user('u1', 'Slow job'), message('msg_1', 'Working.'), { kind: 'queued', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] })
   const waiting = buildTimeline(sent, {})

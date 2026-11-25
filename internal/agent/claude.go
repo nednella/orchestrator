@@ -78,6 +78,9 @@ func (c Claude) Command(l Launch) []string {
 	}
 	if l.Resume != "" {
 		argv = append(argv, "--resume", l.Resume)
+		if l.ForkAt != "" {
+			argv = append(argv, "--fork-session", "--resume-session-at", l.ForkAt)
+		}
 	}
 	var allowed []string
 	if l.Chat {

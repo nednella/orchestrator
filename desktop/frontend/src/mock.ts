@@ -252,6 +252,7 @@ export function createMock(params: URLSearchParams) {
       chat: s.chat,
       hosted: s.hosted,
       action: s.action,
+      forkOf: s.forkOf,
       tokens: s.tokens,
       cost: s.cost,
       resumable: s.resumable,
@@ -299,7 +300,7 @@ export function createMock(params: URLSearchParams) {
   function currentIssues(): Issue[] {
     return current.issues.map((issue) => ({
       ...issue,
-      sessionId: sessions.find((s) => s.project === current.name && !s.chat && s.issue === issue.number)?.id ?? '',
+      sessionId: sessions.find((s) => s.project === current.name && !s.chat && !s.forkOf && s.issue === issue.number)?.id ?? '',
     }))
   }
 
@@ -424,6 +425,7 @@ export function createMock(params: URLSearchParams) {
       chat,
       hosted: true,
       action: issue ? 'Work' : '',
+      forkOf: '',
       ...usageFor(chat, createdAt),
       resumable: initial === 'ended',
       memory: (chat ? 3 : 4 + (nextN % 5) * 3) * tenthGB,
@@ -950,17 +952,34 @@ export function createMock(params: URLSearchParams) {
     ResumeSession: async (id: string) => {
       const old = find(id)
       if (!old.resumable) throw `session ${id} has no conversation to resume`
-      const live = sessions.find((s) => s.project === current.name && s.issue > 0 && s.issue === old.issue && s.chat === old.chat && s.state !== 'ended')
-      if (live) return view(live)
+      const live = sessions.find((s) => s.project === current.name && s.issue > 0 && s.issue === old.issue && s.chat === old.chat && !s.forkOf && s.state !== 'ended')
+      if (live && !old.forkOf) return view(live)
       const s = create(old.title, old.issue, 'idle', [], Date.now(), current, old.chat)
       s.action = old.action
       s.model = old.model
       s.effort = old.effort
       s.agent = old.agent
+      s.forkOf = old.forkOf
       s.buffer = old.buffer + term.promptLine('')
       sessions.splice(sessions.indexOf(old), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
+      return view(s)
+    },
+    ForkSession: async (id: string, at: string) => {
+      const from = find(id)
+      if (!from.hosted) throw 'Only a thread with a chat can be forked'
+      if (from.state === 'ended' && !from.resumable) throw 'This thread has no conversation to fork yet'
+      const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.chat)
+      Object.assign(s, { model: from.model, effort: from.effort, agent: from.agent, action: '', forkOf: from.id, branch: from.branch, worktree: from.worktree })
+      try {
+        chats.fork(from.id, s.id, at)
+      } catch (err) {
+        sessions.splice(sessions.indexOf(s), 1)
+        throw err
+      }
+      chats.start(s.id)
+      publish()
       return view(s)
     },
     KillSession: async (id: string) => {

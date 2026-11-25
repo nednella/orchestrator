@@ -71,6 +71,7 @@ type Session struct {
 	Chat        bool             `json:"chat"`
 	Hosted      bool             `json:"hosted"` // the agent runs, or ran, under a host, whose chat log the chat service serves
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
+	ForkOf      string           `json:"forkOf"` // the thread the session was forked from, "" when none
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
 	Agent       string           `json:"agent"`  // the provider, or the plain command, the session was started with
@@ -408,7 +409,7 @@ func (e *endedSession) record() session.Record {
 }
 
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Path: in.Path}
+	id := session.Identity{Title: in.Title, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Path: in.Path, Fork: in.Fork}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -466,7 +467,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		s.drop(name)
 		return
 	}
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Agent: rec.Agent, Chat: rec.Chat, Hosted: rec.Hosted, Action: rec.Action}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Agent: rec.Agent, Chat: rec.Chat, Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -675,7 +676,7 @@ func (s *Sessions) followBranch(rec session.Record) {
 	moved := rec.Cwd != s.cwds[rec.Session] || endsTurn(rec.Event)
 	s.cwds[rec.Session] = rec.Cwd
 	for _, in := range s.info {
-		if in.Name.String() != rec.Session {
+		if in.Name.String() != rec.Session || in.Fork != "" {
 			continue
 		}
 		proj, ok := s.projectOf(in)
@@ -960,7 +961,7 @@ func (s *Sessions) announceIssues(list []Session) {
 	var sig strings.Builder
 	sig.WriteString(s.project.Key())
 	for _, v := range list {
-		if v.Project == s.project.Key() && v.Issue > 0 && v.State != session.Ended && !v.Chat {
+		if v.Project == s.project.Key() && v.Issue > 0 && v.State != session.Ended && !v.Chat && v.ForkOf == "" {
 			fmt.Fprintf(&sig, " %d=%s", v.Issue, v.ID)
 		}
 	}
@@ -1028,7 +1029,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: in.Created.UnixMilli(), Issue: issue, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: in.Created.UnixMilli(), Issue: issue, Chat: in.Chat, Hosted: in.Hosted, Action: in.Action, ForkOf: in.Fork, Model: in.Model, Effort: in.Effort, Agent: in.Agent, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
 		if !ss.At.IsZero() {
@@ -1201,12 +1202,13 @@ func (s *Sessions) liveIssueSessions(key string) []string {
 	return out
 }
 
-// liveIssueSession is the id of the running task, or chat, of the project for the issue, "" when none. It takes mu.
+// liveIssueSession is the id of the running task, or chat, of the project for the issue, "" when none. A fork only
+// shows its source's issue. It takes mu.
 func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range s.info {
-		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Chat == chat {
+		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Chat == chat && in.Fork == "" {
 			return in.Name.String()
 		}
 	}
@@ -1217,7 +1219,7 @@ func (s *Sessions) liveIssueSession(key string, issue int, chat bool) string {
 func (s *Sessions) IssueSessions() map[int]string {
 	out := map[int]string{}
 	for _, v := range s.ListOf(s.Current().Key()) {
-		if v.Issue > 0 && v.State != session.Ended && !v.Chat {
+		if v.Issue > 0 && v.State != session.Ended && !v.Chat && v.ForkOf == "" {
 			out[v.Issue] = v.ID
 		}
 	}
@@ -1227,13 +1229,13 @@ func (s *Sessions) IssueSessions() map[int]string {
 // Create starts the agent in the current project. A non-empty text is given to the agent: sent when send is set,
 // else typed into its prompt once the agent is ready. The agent is the provider named, or the default for "".
 func (s *Sessions) Create(title, text string, send bool, issue int, agentName string) (Session, error) {
-	return s.createIn(s.Current(), title, text, send, issue, project.Model{}, "", "", "", false, "", agentName)
+	return s.createIn(s.Current(), title, text, send, issue, project.Model{}, "", "", "", false, "", agentName, forkStart{})
 }
 
 // CreateChat starts a chat in the current project: an agent that only reads, for questions about the project. A
 // non-empty text is given to it as Create gives it, and the agent is chosen as Create chooses it.
 func (s *Sessions) CreateChat(title, text string, send bool, agentName string) (Session, error) {
-	return s.createIn(s.Current(), cmp.Or(strings.TrimSpace(title), chatTitle), text, send, 0, project.Model{}, "", "", "", true, "", agentName)
+	return s.createIn(s.Current(), cmp.Or(strings.TrimSpace(title), chatTitle), text, send, 0, project.Model{}, "", "", "", true, "", agentName, forkStart{})
 }
 
 // StartOptions is what the owner chose for a new thread: the first message, sent as it is, and the model and effort,
@@ -1265,14 +1267,14 @@ func (s *Sessions) CreateWith(title string, chat bool, o StartOptions) (Session,
 	if chat {
 		title = cmp.Or(title, chatTitle)
 	}
-	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", "", chat, "", "")
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, o.Model, "", "", "", chat, "", "", forkStart{})
 }
 
 // CreateBriefed is Create for a session with a job of its own: brief is added to the agent's system prompt, and the
 // project says whether text is sent.
 func (s *Sessions) CreateBriefed(title, text, brief string) (Session, error) {
 	proj := s.Current()
-	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, "", brief, "", false, "", "")
+	return s.createIn(proj, title, fromApp(text), proj.SendsPrompt(), 0, project.Model{}, "", brief, "", false, "", "", forkStart{})
 }
 
 // CreateIssue starts the agent for an issue, in a task or a chat as the action says, and types text into it once it
@@ -1315,7 +1317,7 @@ func (s *Sessions) liveRow(live string, issue int) (Session, error) {
 // Resume starts a session that continues the conversation of an ended one, and types nothing into it. The new one
 // keeps the old one's kind, issue, title, model, queue action and handover, and takes over its branches; the old row
 // goes once the new one runs. An issue that has a live session of that kind gets that session back, and the old row
-// stays.
+// stays. A fork stays a fork of the same thread.
 func (s *Sessions) Resume(id string) (Session, error) {
 	s.mu.Lock()
 	e, ended := s.ended[id]
@@ -1338,14 +1340,14 @@ func (s *Sessions) Resume(id string) (Session, error) {
 	title, model, handover := cmp.Or(in.Title, defaultTitle), project.Model{Model: in.Model, Effort: in.Effort}, s.handoverOf(id)
 	var view Session
 	var err error
-	if issue > 0 {
+	if issue > 0 && in.Fork == "" {
 		var live string
 		view, live, err = s.createForIssue(proj, title, "", false, issue, model, id, handover, in.Chat, in.Action, in.Agent)
 		if live != "" {
 			return s.liveRow(live, issue)
 		}
 	} else {
-		view, err = s.createIn(proj, title, "", false, 0, model, id, "", handover, in.Chat, in.Action, in.Agent)
+		view, err = s.createIn(proj, title, "", false, issue, model, id, "", handover, in.Chat, in.Action, in.Agent, forkStart{of: in.Fork})
 	}
 	if err != nil {
 		return Session{}, err
@@ -1367,7 +1369,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 	if live := s.liveIssueSession(proj.Key(), issue, chat); live != "" {
 		return Session{}, live, nil
 	}
-	view, err = s.createIn(proj, title, text, send, issue, model, from, "", handover, chat, action, agentName)
+	view, err = s.createIn(proj, title, text, send, issue, model, from, "", handover, chat, action, agentName, forkStart{})
 	return view, "", err
 }
 
@@ -1382,13 +1384,13 @@ func fromApp(text string) string {
 
 // createIn is Create in the project given, which need not be the current one, with the model given and the agent
 // named. A session from an earlier one continues its conversation and takes over its branches; a brief or a handover
-// is added to the agent's system prompt.
-func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, from, brief, handover string, chat bool, action, agentName string) (Session, error) {
+// is added to the agent's system prompt. A fork claims no branch.
+func (s *Sessions) createIn(proj project.Project, title, text string, send bool, issue int, model project.Model, from, brief, handover string, chat bool, action, agentName string, fork forkStart) (Session, error) {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
 	s.mu.Lock()
-	conversation := s.conversationOf(from)
+	conversation := cmp.Or(fork.conversation, s.conversationOf(from))
 	s.mu.Unlock()
 
 	p := s.Provider(agentName)
@@ -1408,17 +1410,21 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	}
 	name, ctx, ready := s.reserve(proj, typed)
 	restore := func() {}
-	if conversation != "" && p.Can(agent.Hosted) {
-		var err error
-		if restore, err = s.carryChat(from, name); err != nil {
-			return Session{}, err
-		}
+	var err error
+	switch {
+	case fork.at != "":
+		restore, err = s.copyChat(fork, name)
+	case conversation != "" && p.Can(agent.Hosted):
+		restore, err = s.carryChat(from, name)
+	}
+	if err != nil {
+		return Session{}, err
 	}
 	created := time.Now()
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	if err := s.launch(tctx, p, name, title, proj, issue, model, conversation, brief, handover, start, chat, action); err != nil {
+	if err := s.launch(tctx, p, name, title, proj, issue, model, conversation, brief, handover, start, chat, action, fork); err != nil {
 		s.mu.Lock()
 		delete(s.ready, name.String())
 		s.mu.Unlock()
@@ -1432,8 +1438,8 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	if conversation != "" {
 		continues = from
 	}
-	view := s.register(p, name, title, proj, issue, model, created, continues, chat, action)
-	if branch := proj.BranchFor(issue); issue > 0 && branch != "" && !chat {
+	view := s.register(p, name, title, proj, issue, model, created, continues, chat, action, fork.of)
+	if branch := proj.BranchFor(issue); issue > 0 && branch != "" && !chat && fork.of == "" {
 		s.life.claim(proj, name.String(), branch)
 	}
 	if ready != nil {
@@ -1486,6 +1492,108 @@ func (s *Sessions) carryChat(from string, to session.Name) (restore func(), err 
 	return restore, nil
 }
 
+// forkStart is what a fork starts from: the thread it forks, which a resumed fork keeps, and for a new fork that
+// thread's conversation, the message it forks at and its chat up to that message.
+type forkStart struct {
+	of, conversation, at string
+	events               []chat.Event
+}
+
+// Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
+// ends at the message at: the uuid of a reply's last block. The fork has the same kind, issue, model, effort and
+// handover, starts in the same folder, and its chat starts as the source's does up to that reply. The issue is
+// only shown: the fork claims no branch and hears no pull request.
+func (s *Sessions) Fork(id, at string) (Session, error) {
+	s.mu.Lock()
+	in, found := s.infoOf(id)
+	conversation := s.conversationOf(id)
+	proj, known := s.projectOf(in)
+	s.mu.Unlock()
+	switch {
+	case !found:
+		return Session{}, fmt.Errorf("No thread %s", id)
+	case !in.Hosted || !s.Provider(in.Agent).Can(agent.Resume):
+		return Session{}, errors.New("Only a thread with a chat can be forked")
+	case conversation == "":
+		return Session{}, errors.New("This thread has no conversation to fork yet")
+	case !known:
+		return Session{}, fmt.Errorf("The project of thread %s is gone", id)
+	}
+	events, err := chat.ReadLog(s.chatLogPath(in.Name), 0)
+	if err != nil {
+		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		return Session{}, errors.New("Could not read the thread's chat")
+	}
+	cut := -1
+	for i, e := range events {
+		if e.UUID == at {
+			cut = i
+		}
+	}
+	if at == "" || cut < 0 {
+		return Session{}, errors.New("That message is not in the thread's chat")
+	}
+	issue, _ := strconv.Atoi(in.Issue)
+	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
+	return s.createIn(proj, title, "", false, issue, model, "", "", s.handoverOf(id), in.Chat, "", in.Agent, forkStart{of: id, conversation: conversation, at: at, events: events[:cut+1]})
+}
+
+// copyChat writes the fork's chat log before the fork's host opens it: the source's events, with the turn they stop in
+// ended at the last of them, and copies the images they show into the fork's folder. Drafts are left out, and so are
+// queued messages and those not sent, which only the source's host held: a message Claude took in is logged again as
+// a user event. restore removes what it wrote, for a fork that did not start.
+func (s *Sessions) copyChat(fork forkStart, to session.Name) (restore func(), err error) {
+	from, err := session.ParseName(fork.of)
+	if err != nil {
+		return nil, err
+	}
+	restore = func() {
+		_ = os.Remove(s.chatLogPath(to))
+		_ = os.RemoveAll(s.chatMediaDir(to))
+	}
+	chatLog, err := chat.OpenLog(s.chatLogPath(to))
+	if err != nil {
+		return nil, fmt.Errorf("copying the chat: %w", err)
+	}
+	err = s.copyEvents(chatLog, fork.events, from, to)
+	if closeErr := chatLog.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		restore()
+		return nil, fmt.Errorf("copying the chat: %w", err)
+	}
+	return restore, nil
+}
+
+// copyEvents appends the events and a turn's end to the fork's log, and copies each image they show from the source's
+// folder, by its name: a log's paths may name the folder of the thread that sent it, before a resume moved it.
+func (s *Sessions) copyEvents(chatLog *chat.Log, events []chat.Event, from, to session.Name) error {
+	for _, e := range events {
+		switch e.Kind {
+		case chat.KindDraft, chat.KindQueued, chat.KindUnsent:
+			continue
+		}
+		for _, file := range e.Files {
+			data, err := os.ReadFile(filepath.Join(s.chatMediaDir(from), filepath.Base(file)))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err := atomicfile.Write(filepath.Join(s.chatMediaDir(to), filepath.Base(file)), data, 0o600); err != nil {
+				return err
+			}
+		}
+		if _, err := chatLog.Append(e); err != nil {
+			return err
+		}
+	}
+	_, err := chatLog.Append(chat.Event{Kind: chat.KindTurnEnd, At: events[len(events)-1].At})
+	return err
+}
+
 // fill sets what model leaves unset from the agent's own settings, skipping a value the agent would not accept.
 func fill(p agent.Provider, dir string, model project.Model) project.Model {
 	l := p.Fill(dir, agent.Launch{Model: model.Model, Effort: model.Effort})
@@ -1513,7 +1621,7 @@ func (s *Sessions) reserve(proj project.Project, prefill string) (name session.N
 }
 
 // launch starts the agent of the session in tmux.
-func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, issue int, model project.Model, conversation, brief, handover, start string, chat bool, action string) error {
+func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, issue int, model project.Model, conversation, brief, handover, start string, chat bool, action string, fork forkStart) error {
 	env := []string{
 		"AGENTOS_SESSION=" + name.String(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
@@ -1542,7 +1650,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		env = append(env, agentEnv...)
 	}
 	l := launchFor(model, conversation, brief, handover, start, chat, browser)
-	l.TmpDir = tmp
+	l.TmpDir, l.ForkAt = tmp, fork.at
 	if err := p.Prepare(l); err != nil {
 		return err
 	}
@@ -1557,7 +1665,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 			return err
 		}
 	}
-	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, p.Can(agent.Hosted), action, p.Name())
+	return s.start(ctx, name, title, proj.Dir, env, argv, issue, model, chat, p.Can(agent.Hosted), action, p.Name(), fork.of)
 }
 
 // hosted is argv run under this app's own host command, with the session's chat log and socket. It makes the socket's
@@ -1578,14 +1686,14 @@ func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 }
 
 // register adds the new session to the list and returns its row. continues is the session whose conversation it
-// continues, if any. It takes mu.
-func (s *Sessions) register(p agent.Provider, name session.Name, title string, proj project.Project, issue int, model project.Model, created time.Time, continues string, chat bool, action string) Session {
+// continues, if any, and forkOf the one it was forked from. It takes mu.
+func (s *Sessions) register(p agent.Provider, name session.Name, title string, proj project.Project, issue int, model project.Model, created time.Time, continues string, chat bool, action, forkOf string) Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if continues != "" {
 		s.resumed[name.String()] = continues
 	}
-	in := term.Info{Name: name, Title: title, Path: proj.Dir, Chat: chat, Hosted: p.Can(agent.Hosted), Action: action, Agent: p.Name(), Created: created}
+	in := term.Info{Name: name, Title: title, Path: proj.Dir, Chat: chat, Hosted: p.Can(agent.Hosted), Action: action, Agent: p.Name(), Fork: forkOf, Created: created}
 	if p.Can(agent.ModelEffort) {
 		in.Model, in.Effort = model.Model, model.Effort
 	}
@@ -1605,7 +1713,7 @@ func (s *Sessions) register(p agent.Provider, name session.Name, title string, p
 	return Session{}
 }
 
-func (s *Sessions) start(ctx context.Context, name session.Name, title, dir string, env, argv []string, issue int, model project.Model, chat, hosted bool, action, agentName string) error {
+func (s *Sessions) start(ctx context.Context, name session.Name, title, dir string, env, argv []string, issue int, model project.Model, chat, hosted bool, action, agentName, forkOf string) error {
 	if err := s.tmux.NewSession(ctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return err
 	}
@@ -1636,6 +1744,11 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir stri
 	}
 	if action != "" {
 		if err := tag(s.tmux.SetAction(ctx, name, action)); err != nil {
+			return err
+		}
+	}
+	if forkOf != "" {
+		if err := tag(s.tmux.SetFork(ctx, name, forkOf)); err != nil {
 			return err
 		}
 	}
@@ -1894,10 +2007,10 @@ func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 	return t, nil
 }
 
-// targetOf finds the session's project in projs. It needs mu.
+// targetOf finds the session's project in projs. A chat or a fork has no branch or PR. It needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
-	if !ok || in.Chat {
+	if !ok || in.Chat || in.Fork != "" {
 		return target{}, false
 	}
 	issue, _ := strconv.Atoi(in.Issue)
@@ -2096,16 +2209,20 @@ func (s *Sessions) SetPrefillWait(d time.Duration) {
 func (s *Sessions) Track(id, branch string) error {
 	s.mu.Lock()
 	var proj project.Project
-	var found bool
+	var found, fork bool
 	for _, in := range s.info {
 		if in.Name.String() == id {
 			proj, found = s.projectOf(in)
+			fork = in.Fork != ""
 			break
 		}
 	}
 	s.mu.Unlock()
 	if !found {
 		return fmt.Errorf("session %q is not running", id)
+	}
+	if fork {
+		return fmt.Errorf("session %s is a fork, which works on no branch of its own", id)
 	}
 	if branch == s.life.mainBranch(s.ctx, proj.Dir) {
 		return fmt.Errorf("%s is the project's default branch; track the branch your work is on", branch)
