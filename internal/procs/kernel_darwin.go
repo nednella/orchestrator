@@ -1,6 +1,10 @@
 package procs
 
-import "golang.org/x/sys/unix"
+import (
+	"syscall"
+
+	"golang.org/x/sys/unix"
+)
 
 // zombie is SZOMB in <sys/proc.h>: a process that has exited and waits for its parent to read its status.
 const zombie = 5
@@ -33,3 +37,5 @@ func (kernel) args(pid int) (argv, env []string, err error) {
 	argv, env = parseProcArgs(buf)
 	return argv, env, nil
 }
+
+func (kernel) signal(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) }

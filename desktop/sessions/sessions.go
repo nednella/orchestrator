@@ -297,6 +297,7 @@ func (s *Sessions) Start(ctx context.Context) error {
 		return fmt.Errorf("listening for hooks: %w", err)
 	}
 	s.Refresh()
+	go s.sweepServers()
 	go func() {
 		if ln != nil {
 			defer ln.Close()
@@ -804,6 +805,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
 	}
 	s.awaitHostExit(name)
+	s.stopServers(id)
 	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
 		if err := os.RemoveAll(path); err != nil {
 			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
@@ -2737,8 +2739,15 @@ func (s *Sessions) deliverWakes() {
 	}
 }
 
-// Settle stops the session's tmux session, whose host stops Claude; its row stays, settled.
-func (s *Sessions) Settle(id string) error { return s.settle(id, chat.StopSettle, "") }
+// Settle stops the session's tmux session, whose host stops Claude, and then the servers it started; its row stays,
+// settled.
+func (s *Sessions) Settle(id string) error {
+	if err := s.settle(id, chat.StopSettle, ""); err != nil {
+		return err
+	}
+	s.stopServers(id)
+	return nil
+}
 
 // settle stops the thread for reason, chat.StopSettle or chat.StopRestart with the access it starts again with. Its host
 // is told first, so it logs Claude's exit as that stop and not as a crash; a kill that fails takes that back.

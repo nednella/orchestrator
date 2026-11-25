@@ -11,20 +11,27 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 const (
 	sessionVar = "AGENTOS_SESSION"
 	socketVar  = "AGENTOS_SOCKET"
 
-	// commandWidth is how much of a server's command line it shows.
+	// stopGrace is how long a server has to exit after SIGTERM before it gets SIGKILL.
+	stopGrace = 5 * time.Second
+	stopPoll  = 50 * time.Millisecond
+	// commandWidth is how much of a server's command line it shows, and logWidth how much a log line names.
 	commandWidth = 200
+	logWidth     = 60
 )
 
 // Runner runs a command and returns its stdout.
@@ -36,24 +43,27 @@ type process struct {
 	start           int64 // microseconds since the epoch
 }
 
-// system is what the table reads; tests give a fake.
+// system is what the table reads and signals; tests give a fake.
 type system interface {
 	// processes are the live processes, without zombies.
 	processes() ([]process, error)
 	// args are the arguments and the environment the process was started with; an error for another user's process.
 	args(pid int) (argv, env []string, err error)
+	signal(pid int, sig syscall.Signal) error
 }
 
-// Table finds the servers of this app's threads.
+// Table finds and stops the servers of this app's threads.
 type Table struct {
 	socket string
 	sys    system
 	run    Runner
+	grace  time.Duration
+	logf   func(format string, args ...any)
 }
 
 // New is a table for the threads of the app whose hook socket is socket. lsof runs through run.
 func New(socket string, run Runner) *Table {
-	return &Table{socket: socket, sys: kernel{}, run: run}
+	return &Table{socket: socket, sys: kernel{}, run: run, grace: stopGrace, logf: log.Printf}
 }
 
 // Server is a process of a thread's that listens on TCP ports.
@@ -62,6 +72,10 @@ type Server struct {
 	PID     int
 	Ports   []int
 	Command string // its command line, the program by its base name
+	start   int64
+	// agent is the thread's host when it runs: the host and the agent it runs are never servers, and a group that
+	// holds either is never signalled whole.
+	agent int
 }
 
 // snapshot is every process at one moment, and which of them belong to the threads asked about.
@@ -143,7 +157,7 @@ func (t *Table) Servers(ctx context.Context, threads map[string]int) ([]Server, 
 		if !ok || snap.isAgent(pid, threads[id]) || pid == os.Getpid() {
 			continue
 		}
-		servers = append(servers, Server{Thread: id, PID: pid, Ports: list, Command: command(snap.argv[pid])})
+		servers = append(servers, Server{Thread: id, PID: pid, Ports: list, Command: command(snap.argv[pid]), start: snap.procs[pid].start, agent: threads[id]})
 	}
 	slices.SortFunc(servers, func(a, b Server) int {
 		return cmp.Or(cmp.Compare(a.Thread, b.Thread), cmp.Compare(a.Ports[0], b.Ports[0]))
@@ -203,6 +217,125 @@ func clip(s string, width int) string {
 		return string(r[:width-1]) + "…"
 	}
 	return s
+}
+
+// Stop stops each server: SIGTERM to its process group when every process in the group carries its thread's marker
+// and none is the thread's host or agent, else to the server alone, then SIGKILL to each of them still there after 5 s.
+// Each process is checked just before its signal: one that is gone, no longer carries the marker or has another start
+// time, as when its pid was taken by a new process, is left alone. It logs one line per server it stops.
+func (t *Table) Stop(ctx context.Context, servers []Server) {
+	if len(servers) == 0 {
+		return
+	}
+	threads := map[string]bool{}
+	for _, s := range servers {
+		threads[s.Thread] = true
+	}
+	snap, err := t.scan(func(id string) bool { return threads[id] })
+	if err != nil {
+		t.logf("agentos: stopping the servers of a thread: %v", err)
+		return
+	}
+	sent := map[int]process{} // each process signalled, by pid
+	for _, s := range servers {
+		p, ok := snap.procs[s.PID]
+		if !ok || p.start != s.start || snap.threads[s.PID] != s.Thread || s.PID <= 1 || s.PID == os.Getpid() {
+			continue
+		}
+		if _, done := sent[s.PID]; done {
+			continue
+		}
+		if group := snap.group(p.pgid); snap.whole(group, s) {
+			if err := t.sys.signal(-p.pgid, syscall.SIGTERM); err != nil {
+				t.logf("agentos: stopping process group %d of thread %s: %v", p.pgid, s.Thread, err)
+				continue
+			}
+			for _, q := range group {
+				sent[q.pid] = q
+			}
+			t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s, with its process group %d", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, p.pgid)
+			continue
+		}
+		if err := t.sys.signal(s.PID, syscall.SIGTERM); err != nil {
+			t.logf("agentos: stopping process %d of thread %s: %v", s.PID, s.Thread, err)
+			continue
+		}
+		sent[s.PID] = p
+		t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread)
+	}
+	t.killLeft(ctx, sent, snap.threads)
+}
+
+// group are the processes of the process group pgid.
+func (snap snapshot) group(pgid int) []process {
+	var group []process
+	for _, p := range snap.procs {
+		if p.pgid == pgid {
+			group = append(group, p)
+		}
+	}
+	return group
+}
+
+// whole says whether the server's whole process group may be signalled: a group of its own, every member of it the
+// thread's, none the thread's host or agent and none this process.
+func (snap snapshot) whole(group []process, s Server) bool {
+	if len(group) == 0 || group[0].pgid <= 1 || group[0].pgid == syscall.Getpgrp() {
+		return false
+	}
+	for _, q := range group {
+		if snap.threads[q.pid] != s.Thread || snap.isAgent(q.pid, s.agent) || q.pid == os.Getpid() {
+			return false
+		}
+	}
+	return true
+}
+
+// killLeft waits for the signalled processes to exit, and after the grace sends SIGKILL to each that is still there,
+// the same process and still its thread's.
+func (t *Table) killLeft(ctx context.Context, sent map[int]process, threads map[int]string) {
+	deadline := time.Now().Add(t.grace)
+	for len(sent) > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(stopPoll):
+		}
+		list, err := t.sys.processes()
+		if err != nil {
+			t.logf("agentos: waiting for a thread's servers to stop: %v", err)
+			return
+		}
+		live := make(map[int]process, len(list))
+		for _, p := range list {
+			live[p.pid] = p
+		}
+		for pid, p := range sent {
+			if q, ok := live[pid]; !ok || q.start != p.start {
+				delete(sent, pid)
+			}
+		}
+		if len(sent) == 0 || time.Now().Before(deadline) {
+			continue
+		}
+		for pid := range sent {
+			if _, env, err := t.sys.args(pid); err == nil {
+				if id, ok := t.marker(env); ok && id == threads[pid] {
+					t.logf("agentos: process %d of thread %s did not stop in %s; killing it", pid, id, t.grace)
+					_ = t.sys.signal(pid, syscall.SIGKILL)
+				}
+			}
+		}
+		return
+	}
+}
+
+func portList(ports []int) string {
+	list := make([]string, len(ports))
+	for i, p := range ports {
+		list[i] = strconv.Itoa(p)
+	}
+	return strings.Join(list, ", ")
 }
 
 // parseProcArgs reads kern.procargs2: the argument count as a 32-bit integer, the path the process was started from,

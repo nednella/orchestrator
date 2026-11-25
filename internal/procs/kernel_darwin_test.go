@@ -72,6 +72,8 @@ func execRunner(ctx context.Context, name string, args ...string) ([]byte, error
 	return exec.CommandContext(ctx, name, args...).Output()
 }
 
+func running(pid int) bool { return syscall.Kill(pid, 0) == nil }
+
 func TestKernelReadsAProcess(t *testing.T) {
 	cmd := listener(t, freePort(t), sessionVar+"=test/kernel", socketVar+"="+testSocket)
 	argv, env, err := kernel{}.args(cmd.Process.Pid)
@@ -91,13 +93,13 @@ func TestKernelReadsAProcess(t *testing.T) {
 	}
 }
 
-func TestServersOnThisMac(t *testing.T) {
+func TestServersAndStopOnThisMac(t *testing.T) {
 	socket := t.TempDir() + "/agentos.sock"
 	id := fmt.Sprintf("test/%d", os.Getpid())
 	mine := freePort(t)
 	server := listener(t, mine, sessionVar+"="+id, socketVar+"="+socket)
-	listener(t, freePort(t))
-	listener(t, freePort(t), sessionVar+"="+id, socketVar+"=/another/app/agentos.sock")
+	owners := listener(t, freePort(t))
+	otherApps := listener(t, freePort(t), sessionVar+"="+id, socketVar+"=/another/app/agentos.sock")
 	table := New(socket, execRunner)
 
 	servers, err := table.Servers(context.Background(), map[string]int{id: 0})
@@ -106,5 +108,17 @@ func TestServersOnThisMac(t *testing.T) {
 	}
 	if len(servers) != 1 || servers[0].PID != server.Process.Pid || !slices.Equal(servers[0].Ports, []int{mine}) || !strings.Contains(servers[0].Command, " -c import socket, sys, time s = socket.socket()") {
 		t.Fatalf("Servers = %+v, want only the thread's listener on %d", servers, mine)
+	}
+	table.Stop(context.Background(), servers)
+	// Stop returns once the kernel lists it no more, or lists it as a zombie, which this test reaps.
+	list, err := kernel{}.processes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(list, func(p process) bool { return p.pid == server.Process.Pid }) {
+		t.Error("the thread's listener still runs after Stop")
+	}
+	if !running(owners.Process.Pid) || !running(otherApps.Process.Pid) {
+		t.Error("Stop stopped a listener without this app's marker")
 	}
 }

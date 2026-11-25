@@ -1138,6 +1138,7 @@ func (h *Harness) ShellClose(id string) error                      { return h.se
 func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
 func (h *Harness) OwnWorktree(id string) string                    { return h.sessions.OwnWorktree(id) }
 func (h *Harness) Servers(id string) ([]sessions.Server, error)    { return h.sessions.Servers(id) }
+func (h *Harness) StopServer(id string, pid int) error             { return h.sessions.StopServer(id, pid) }
 func (h *Harness) OpenServer(port int) error                       { return h.sessions.OpenServer(port) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) SetAccess(id, access string) error               { return h.sessions.SetAccess(id, access) }

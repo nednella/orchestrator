@@ -61,7 +61,7 @@ func (v *Service) ShellNew(sessionID string) (ShellInfo, error) {
 // ShellClose stops one shell of the current project.
 func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 
-// SettleThread stops the agent; its row stays, settled.
+// SettleThread stops the agent and the servers it started; its row stays, settled.
 func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 
 // DeleteThread stops the thread when it runs and removes it with its chat. With worktree, the worktree agentos made
@@ -75,6 +75,10 @@ func (v *Service) OwnWorktree(id string) string { return v.s.OwnWorktree(id) }
 // Servers are the ports the servers thread id started listen on, one row per port: the processes that carry the
 // thread's marker, without its host and Claude. [] when it has none.
 func (v *Service) Servers(id string) ([]Server, error) { return v.s.Servers(id) }
+
+// StopServer stops the server pid of thread id. pid is looked up again among the thread's servers first, so no other
+// process is stopped.
+func (v *Service) StopServer(id string, pid int) error { return v.s.StopServer(id, pid) }
 
 // OpenServer opens http://localhost:<port> in the default browser.
 func (v *Service) OpenServer(port int) error { return v.s.OpenServer(port) }

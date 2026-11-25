@@ -2,14 +2,22 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"net"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/internal/procs"
 	"github.com/nednella/agentos/internal/session"
 )
+
+// hostDial is how long the sweep waits for a thread's host to answer before it counts the host as gone.
+const hostDial = 200 * time.Millisecond
 
 // Server is one port a thread's server listens on, as the front end sees it.
 type Server struct {
@@ -33,6 +41,21 @@ func (s *Sessions) Servers(id string) ([]Server, error) {
 	}
 	slices.SortFunc(rows, func(a, b Server) int { return a.Port - b.Port })
 	return rows, nil
+}
+
+// StopServer stops the server pid of thread id, once it finds pid among the thread's servers again.
+func (s *Sessions) StopServer(id string, pid int) error {
+	ctx := s.context()
+	list, err := s.serversOf(ctx, id)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(list, func(srv procs.Server) bool { return srv.PID == pid })
+	if i < 0 {
+		return errors.New("That server is not running")
+	}
+	s.procs.Stop(ctx, list[i:i+1])
+	return nil
 }
 
 // OpenServer opens http://localhost:<port> in the owner's default browser.
@@ -75,9 +98,65 @@ func (s *Sessions) serversOf(ctx context.Context, id string) ([]procs.Server, er
 	return s.procs.Servers(ctx, map[string]int{id: host})
 }
 
+// stopServers stops the servers of the threads, which no longer run: their host is gone.
+func (s *Sessions) stopServers(ids ...string) {
+	threads := map[string]int{}
+	for _, id := range ids {
+		threads[id] = 0
+	}
+	ctx := s.context()
+	list, err := s.procs.Servers(ctx, threads)
+	if err != nil {
+		log.Printf("agentos: finding the servers of %s: %v", strings.Join(ids, ", "), err)
+		return
+	}
+	s.procs.Stop(ctx, list)
+}
+
+// sweepServers stops at the app's start the servers of the threads this app knows have settled or were deleted,
+// which a host that was killed left running. A thread whose host answers runs under another app on the same state
+// folder, which knows it as live, and keeps its servers.
+func (s *Sessions) sweepServers() {
+	s.mu.Lock()
+	threads := map[string]int{}
+	for id, e := range s.ended {
+		if e.info.Hosted {
+			threads[id] = 0
+		}
+	}
+	for id := range s.deleted {
+		threads[id] = 0
+	}
+	s.mu.Unlock()
+	if len(threads) == 0 {
+		return
+	}
+	ctx := s.context()
+	list, err := s.procs.Servers(ctx, threads)
+	if err != nil {
+		log.Printf("agentos: finding the servers of settled threads: %v", err)
+		return
+	}
+	list = slices.DeleteFunc(list, func(srv procs.Server) bool {
+		name, err := session.ParseName(srv.Thread)
+		return err != nil || hostAnswers(s.hostSocket(name))
+	})
+	s.procs.Stop(ctx, list)
+}
+
 // anyDir runs commands through r in no folder of their own.
 func anyDir(r run.Runner) procs.Runner {
 	return func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return r(ctx, "", name, args...)
 	}
+}
+
+// hostAnswers says whether a host listens on socket.
+func hostAnswers(socket string) bool {
+	conn, err := net.DialTimeout("unix", socket, hostDial)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }

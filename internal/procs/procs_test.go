@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 )
 
 const testSocket = "/state/agentos.sock"
@@ -20,12 +22,19 @@ func marked(id string) []string {
 type fakeProc struct {
 	process
 	argv, env []string
+	stubborn  bool // ignores SIGTERM
 }
 
-// fakeSystem is a process table.
+type signalled struct {
+	pid int
+	sig syscall.Signal
+}
+
+// fakeSystem is a process table: a signal ends the processes it reaches, but SIGTERM spares a stubborn one.
 type fakeSystem struct {
 	mu    sync.Mutex
 	procs map[int]*fakeProc
+	sent  []signalled
 }
 
 func newFake(procs ...fakeProc) *fakeSystem {
@@ -56,6 +65,31 @@ func (f *fakeSystem) args(pid int) ([]string, []string, error) {
 	return p.argv, p.env, nil
 }
 
+func (f *fakeSystem) signal(pid int, sig syscall.Signal) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, signalled{pid, sig})
+	for _, p := range f.procs {
+		if (pid < 0 && p.pgid == -pid || p.pid == pid) && (sig == syscall.SIGKILL || !p.stubborn) {
+			delete(f.procs, p.pid)
+		}
+	}
+	return nil
+}
+
+func (f *fakeSystem) signals() []signalled {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.sent)
+}
+
+func (f *fakeSystem) alive(pid int) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.procs[pid]
+	return ok
+}
+
 // lsofSays is a runner that prints out as lsof, or fails as lsof does when nothing listens.
 func lsofSays(out string) Runner {
 	return func(_ context.Context, name string, _ ...string) ([]byte, error) {
@@ -71,7 +105,7 @@ func lsofSays(out string) Runner {
 
 func newTable(t *testing.T, sys system, run Runner) *Table {
 	t.Helper()
-	return &Table{socket: testSocket, sys: sys, run: run}
+	return &Table{socket: testSocket, sys: sys, run: run, grace: 200 * time.Millisecond, logf: t.Logf}
 }
 
 func TestParseProcArgs(t *testing.T) {
@@ -197,7 +231,7 @@ func TestServersShowsTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Server{Thread: "p/ab", PID: 200, Ports: []int{18080}, Command: "python3 -m http.server 18080"}
+	want := Server{Thread: "p/ab", PID: 200, Ports: []int{18080}, Command: "python3 -m http.server 18080", start: 5}
 	if len(got) != 1 || got[0].Thread != want.Thread || got[0].Command != want.Command || !slices.Equal(got[0].Ports, want.Ports) {
 		t.Errorf("Servers = %+v, want %+v", got, want)
 	}
@@ -214,5 +248,121 @@ func TestServersWhenLsofFails(t *testing.T) {
 	run := func(context.Context, string, ...string) ([]byte, error) { return nil, errors.New("lsof: not found") }
 	if _, err := newTable(t, newFake(thread...), run).Servers(context.Background(), map[string]int{"p/ab": 0}); err == nil {
 		t.Error("Servers with lsof failing gave no error")
+	}
+}
+
+func TestStop(t *testing.T) {
+	server := fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, argv: []string{"node", "server"}, env: marked("p/ab")}
+	child := fakeProc{process: process{pid: 201, ppid: 200, pgid: 200, start: 5}, argv: []string{"node", "worker"}, env: marked("p/ab")}
+	tests := []struct {
+		name    string
+		procs   []fakeProc
+		agent   int
+		target  Server
+		want    []signalled
+		alive   []int
+		stopped []int
+	}{
+		{
+			name:    "a group of the thread's alone, whole",
+			procs:   []fakeProc{server, child},
+			target:  Server{Thread: "p/ab", PID: 200, start: 5},
+			want:    []signalled{{-200, syscall.SIGTERM}},
+			stopped: []int{200, 201},
+		},
+		{
+			name:    "a group with a process of the owner's, the server alone",
+			procs:   []fakeProc{server, {process: process{pid: 201, ppid: 200, pgid: 200, start: 5}, env: []string{"HOME=/h"}}},
+			target:  Server{Thread: "p/ab", PID: 200, start: 5},
+			want:    []signalled{{200, syscall.SIGTERM}},
+			alive:   []int{201},
+			stopped: []int{200},
+		},
+		{
+			name:    "a group with another thread's process, the server alone",
+			procs:   []fakeProc{server, {process: process{pid: 201, ppid: 200, pgid: 200, start: 5}, env: marked("p/ab2")}},
+			target:  Server{Thread: "p/ab", PID: 200, start: 5},
+			want:    []signalled{{200, syscall.SIGTERM}},
+			alive:   []int{201},
+			stopped: []int{200},
+		},
+		{
+			name:    "Claude's group, the server alone",
+			procs:   append(slices.Clone(thread), fakeProc{process: process{pid: 200, ppid: 101, pgid: 101, start: 5}, env: marked("p/ab")}),
+			target:  Server{Thread: "p/ab", PID: 200, start: 5, agent: 100},
+			want:    []signalled{{200, syscall.SIGTERM}},
+			alive:   []int{100, 101},
+			stopped: []int{200},
+		},
+		{
+			name:   "a pid with another start time, nothing",
+			procs:  []fakeProc{server},
+			target: Server{Thread: "p/ab", PID: 200, start: 4},
+			alive:  []int{200},
+		},
+		{
+			name:   "a pid without the marker now, nothing",
+			procs:  []fakeProc{{process: server.process, env: []string{"HOME=/h"}}},
+			target: Server{Thread: "p/ab", PID: 200, start: 5},
+			alive:  []int{200},
+		},
+		{
+			name:   "a pid of another thread's now, nothing",
+			procs:  []fakeProc{{process: server.process, env: marked("p/ab2")}},
+			target: Server{Thread: "p/ab", PID: 200, start: 5},
+			alive:  []int{200},
+		},
+		{
+			name:   "a pid that is gone, nothing",
+			target: Server{Thread: "p/ab", PID: 200, start: 5},
+		},
+		{
+			name:    "one that ignores SIGTERM, SIGKILL after the grace",
+			procs:   []fakeProc{{process: server.process, env: server.env, stubborn: true}},
+			target:  Server{Thread: "p/ab", PID: 200, start: 5},
+			want:    []signalled{{-200, syscall.SIGTERM}, {200, syscall.SIGKILL}},
+			stopped: []int{200},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sys := newFake(tt.procs...)
+			newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{tt.target})
+			if got := sys.signals(); !slices.Equal(got, tt.want) {
+				t.Errorf("signals = %v, want %v", got, tt.want)
+			}
+			for _, pid := range tt.alive {
+				if !sys.alive(pid) {
+					t.Errorf("process %d was stopped", pid)
+				}
+			}
+			for _, pid := range tt.stopped {
+				if sys.alive(pid) {
+					t.Errorf("process %d still runs", pid)
+				}
+			}
+		})
+	}
+}
+
+func TestStopSignalsAGroupOnce(t *testing.T) {
+	sys := newFake(
+		fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, env: marked("p/ab")},
+		fakeProc{process: process{pid: 201, ppid: 200, pgid: 200, start: 5}, env: marked("p/ab")},
+	)
+	newTable(t, sys, lsofSays("")).Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, start: 5}, {Thread: "p/ab", PID: 201, start: 5}})
+	if got, want := sys.signals(), []signalled{{-200, syscall.SIGTERM}}; !slices.Equal(got, want) {
+		t.Errorf("signals = %v, want %v", got, want)
+	}
+}
+
+func TestStopLogsEachServer(t *testing.T) {
+	var lines []string
+	sys := newFake(fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, env: marked("p/ab")})
+	table := newTable(t, sys, lsofSays(""))
+	table.logf = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
+	table.Stop(context.Background(), []Server{{Thread: "p/ab", PID: 200, Ports: []int{18080, 18081}, Command: "node server", start: 5}})
+	if len(lines) != 1 || !strings.Contains(lines[0], "node server (pid 200, ports 18080, 18081) of thread p/ab") {
+		t.Errorf("logged %q, want one line naming the server", lines)
 	}
 }
