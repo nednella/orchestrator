@@ -48,6 +48,7 @@ const (
 	startRows     = 32
 	prefillWait   = 6 * time.Second
 	hostWait      = 10 * time.Second // for a new session's host to listen
+	hostStarting  = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
 	promptSettles = 300 * time.Millisecond
 )
 
@@ -1647,20 +1648,20 @@ func (s *Sessions) typeWhenReady(name session.Name, ready <-chan struct{}, text 
 // giveHost gives text to the session's host once its socket takes connections: sent to the agent when send is set,
 // else left as a draft.
 func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string, send bool) {
-	ctx, cancel := context.WithTimeout(ctx, hostWait)
-	defer cancel()
-	socket := s.hostSocket(name)
-	err := host.Ready(ctx, socket)
-	if err == nil {
-		err = toHost(ctx, socket, text, send)
-	}
-	if err != nil {
+	if err := toHost(ctx, s.hostSocket(name), text, send, hostWait); err != nil {
 		log.Printf("agentos: session %s did not get its first prompt: %v", name, err)
 	}
 }
 
-// toHost gives text to the host at socket: sent to the agent when send is set, else left as a draft.
-func toHost(ctx context.Context, socket, text string, send bool) error {
+// toHost gives text to the host at socket once its socket takes connections, waiting at most wait: sent to the agent
+// when send is set, else left as a draft.
+func toHost(ctx context.Context, socket, text string, send bool, wait time.Duration) error {
+	ready, cancel := context.WithTimeout(ctx, wait)
+	err := host.Ready(ready, socket)
+	cancel()
+	if err != nil {
+		return err
+	}
 	if send {
 		return host.Send(ctx, socket, text)
 	}
@@ -1671,7 +1672,7 @@ func toHost(ctx context.Context, socket, text string, send bool) error {
 // set, else left as a draft; another has it typed into its prompt, and Enter pressed when submit is set.
 func (s *Sessions) send(ctx context.Context, name session.Name, text string, submit bool) {
 	if socket := s.hostOf(name); socket != "" {
-		if err := toHost(ctx, socket, text, submit); err != nil {
+		if err := toHost(ctx, socket, text, submit, hostStarting); err != nil {
 			log.Printf("agentos: session %s did not get a prompt: %v", name, err)
 		}
 		return
