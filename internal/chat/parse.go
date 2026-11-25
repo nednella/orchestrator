@@ -20,6 +20,7 @@ type line struct {
 	TotalCost    float64         `json:"total_cost_usd"`
 	IsReplay     bool            `json:"isReplay"`
 	Response     json.RawMessage `json:"response"`
+	Errors       []string        `json:"errors"`
 }
 
 type block struct {
@@ -55,7 +56,7 @@ func Parse(data []byte) ([]Event, error) {
 	case "control_request":
 		return parseControlRequest(l)
 	case "result":
-		return []Event{{Kind: KindTurnEnd, Cost: l.TotalCost, Error: l.IsError}}, nil
+		return []Event{{Kind: KindTurnEnd, Cost: l.TotalCost, Error: l.IsError, Text: strings.Join(l.Errors, "\n")}}, nil
 	}
 	return nil, nil
 }

@@ -173,7 +173,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
-        end(e, e.error ? { text: interrupted ? 'Stopped' : 'The turn ended with an error', error: !interrupted } : null)
+        end(e, e.error ? { text: interrupted ? 'Stopped' : e.text || 'The turn ended with an error', error: !interrupted } : null)
         interrupted = false
         return
       case 'exit':

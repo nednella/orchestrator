@@ -221,6 +221,11 @@ test('interrupt gives Stopped', () => {
   assert.equal(only(exited.items, 'notice')[0].error, true)
 })
 
+test('a failed turn says why when Claude does', () => {
+  const notices = only(buildTimeline(log(user('u1', 'Go'), { kind: 'turn_end', error: true, text: 'No message found with message.uuid of: r9' }), {}).items, 'notice')
+  assert.deepEqual(notices.map((n) => [n.text, n.error]), [['No message found with message.uuid of: r9', true]])
+})
+
 test('queued until delivered', () => {
   const sent = log(user('u1', 'Slow job'), message('msg_1', 'Working.'), { kind: 'queued', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] })
   const waiting = buildTimeline(sent, {})

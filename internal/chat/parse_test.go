@@ -119,6 +119,13 @@ func TestParseInterruptEndsTurnWithError(t *testing.T) {
 	}
 }
 
+func TestParseGivesTheErrorsOfAFailedStart(t *testing.T) {
+	events, err := Parse([]byte(`{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0,"errors":["No message found with message.uuid of: 1203a261"]}`))
+	if err != nil || len(events) != 1 || events[0].Kind != KindTurnEnd || !events[0].Error || events[0].Text != "No message found with message.uuid of: 1203a261" {
+		t.Errorf("got %+v, %v", events, err)
+	}
+}
+
 func TestParseIgnoresUnknownTypes(t *testing.T) {
 	events, err := Parse([]byte(`{"type":"rate_limit_event"}`))
 	if err != nil || len(events) != 0 {
