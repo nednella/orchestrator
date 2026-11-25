@@ -871,10 +871,10 @@ func CLIPath(t *testing.T) string {
 // once answered, "slow" replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
 // asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, "leave plan"
 // reports the mode default before its reply with no plan approved, and "serve <port>" starts a listener on
-// 127.0.0.1:<port> in a session of its own, which writes its pid to <dir>/<session id, "/" as "_">.serve<port>. It
-// answers a rewind of the files with the files RewindAs names, into each of which a rewind that is not a dry run writes
-// "before", and a rewind of the conversation with the text of the message rewound to, as Claude does; RewindAs can make
-// it answer as another Claude would.
+// 127.0.0.1:<port> in a session of its own, which writes its pid to <dir>/<session id, "/" as "_">.serve<port>, and
+// "exit" ends it, as Claude ending by itself. It answers a rewind of the files with the files RewindAs names, into each
+// of which a rewind that is not a dry run writes "before", and a rewind of the conversation with the text of the message
+// rewound to, as Claude does; RewindAs can make it answer as another Claude would.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
 // RewindAs makes the session's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
@@ -986,6 +986,8 @@ while IFS= read -r line; do
 		python3 -c "$serve" "$port" "$f.serve$port" </dev/null >/dev/null 2>&1
 		printf '%s\n' "$init"
 		reply ;;
+	*'"type":"user"'*'"text":"exit"'*)
+		exit 0 ;;
 	*'"type":"user"'*'"text":"plan"'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"plan-1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Add made.txt"}}}' ;;
 	*'"type":"user"'*'"text":"leave plan"'*)

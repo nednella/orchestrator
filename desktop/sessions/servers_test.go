@@ -192,9 +192,7 @@ func TestSleepStopsAThreadsServers(t *testing.T) {
 	if err := h.SettleThread(thread.ID); err != nil {
 		t.Fatal(err)
 	}
-	if running(pid, started) {
-		t.Error("the thread's server runs after the thread slept")
-	}
+	eventually(t, "the thread's server stopped", func() bool { return !running(pid, started) })
 	if !running(owners, ownersStart) || !running(others, othersStart) || !running(unknown, unknownStart) {
 		t.Error("the thread's sleep stopped a process that is not its own")
 	}
@@ -207,8 +205,36 @@ func TestDeleteStopsAThreadsServers(t *testing.T) {
 	if err := h.DeleteThread(thread.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if running(pid, started) {
-		t.Error("the thread's server runs after the thread was deleted")
+	eventually(t, "the thread's server stopped", func() bool { return !running(pid, started) })
+}
+
+func TestClaudeEndingStopsAThreadsServers(t *testing.T) {
+	h := newHarness(t)
+	thread, _, pid := threadServing(t, h)
+	started := startOf(pid)
+	if _, err := h.ChatSend(thread.ID, "exit"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { s, ok := h.Session(thread.ID); return ok && s.State == session.Settled })
+	eventually(t, "the thread's server stopped", func() bool { return !running(pid, started) })
+}
+
+func TestAccessRestartKeepsAThreadsServers(t *testing.T) {
+	h := newHarness(t)
+	thread, _, pid := threadServing(t, h)
+	started := startOf(pid)
+	eventually(t, "the thread's turn over", func() bool { s, ok := h.Session(thread.ID); return ok && s.State != session.Working })
+	if err := h.SetAccess(thread.ID, "full"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread back with full access", func() bool {
+		s, ok := h.Session(thread.ID)
+		return ok && s.State != session.Settled && s.Access == session.Full
+	})
+	h.Sessions().Refresh()
+	time.Sleep(time.Second) // a stop the restart started would be done by now
+	if !running(pid, started) {
+		t.Error("the thread's server stopped when the thread started again for its new access")
 	}
 }
 
@@ -254,10 +280,11 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 	unknownStart := startOf(unknown)
 	_, otherApps := listener(t, "AGENTOS_SESSION="+thread.ID, "AGENTOS_SOCKET=/another/app/agentos.sock")
 	otherAppsStart := startOf(otherApps)
+	h.App.Stop() // so only the next app's start sees the thread gone
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+thread.ID).Run(); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread settled", func() bool { s, ok := h.Session(thread.ID); return ok && s.State == session.Settled })
+	backdate(t, h, thread.ID)
 	if !running(pid, started) {
 		t.Fatal("the thread's server stopped with its tmux session; this test needs one that outlives it")
 	}
@@ -274,27 +301,19 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 
 // An app started on the same state folder with another tmux socket, as a check that sets only part of its isolation,
 // finds the threads of the first settled. A thread whose host answers runs, so it keeps its servers; one whose host was
-// killed loses them.
+// killed while no app ran loses them.
 func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	h := newHarness(t)
 	live, _, livePID := threadServing(t, h)
 	liveStart := startOf(livePID)
 	killed, _, killedPID := threadServing(t, h)
 	killedStart := startOf(killedPID)
+	h.App.Stop() // so only the second app's start sees the killed thread gone
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+killed.ID).Run(); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the killed thread settled", func() bool { s, ok := h.Session(killed.ID); return ok && s.State == session.Settled })
-
-	// Old enough that the second app does not take it for a thread tmux has not listed yet.
-	rec, err := bus.ReadState(h.State, live.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec.At = time.Now().Add(-time.Minute)
-	if err := bus.WriteState(h.State, rec); err != nil {
-		t.Fatal(err)
-	}
+	backdate(t, h, live.ID)
+	backdate(t, h, killed.ID)
 
 	t.Setenv("AGENTOS_TMUX_SOCKET", h.Socket+"-other")
 	second := h.Restart(t)
@@ -310,6 +329,20 @@ func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	eventually(t, "the killed thread's server stopped", func() bool { return !running(killedPID, killedStart) })
 	if !running(livePID, liveStart) {
 		t.Errorf("the second app stopped a server of thread %s, which runs under the first", live.ID)
+	}
+}
+
+// backdate makes the thread's state a minute old, so the next app does not take a thread missing from tmux for one
+// tmux has not listed yet.
+func backdate(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	rec, err := bus.ReadState(h.State, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.At = time.Now().Add(-time.Minute)
+	if err := bus.WriteState(h.State, rec); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -98,8 +98,10 @@ func (s *Sessions) serversOf(ctx context.Context, id string) ([]procs.Server, er
 	return s.procs.Servers(ctx, map[string]int{id: host})
 }
 
-// stopServers stops the servers of the threads, which no longer run: their host is gone.
-func (s *Sessions) stopServers(ids ...string) {
+// stopServers stops the servers of the threads, which no longer run. Once Settle has stopped a thread its host is
+// gone; elsewhere guarded leaves out a thread whose host answers, which runs: it may run under another app on the same
+// state folder, which knows it as live.
+func (s *Sessions) stopServers(guarded bool, ids ...string) {
 	threads := map[string]int{}
 	for _, id := range ids {
 		threads[id] = 0
@@ -110,38 +112,32 @@ func (s *Sessions) stopServers(ids ...string) {
 		log.Printf("agentos: finding the servers of %s: %v", strings.Join(ids, ", "), err)
 		return
 	}
+	if guarded {
+		list = slices.DeleteFunc(list, func(srv procs.Server) bool {
+			name, err := session.ParseName(srv.Thread)
+			return err != nil || hostAnswers(s.hostSocket(name))
+		})
+	}
 	s.procs.Stop(ctx, list)
 }
 
 // sweepServers stops at the app's start the servers of the threads this app knows have settled or were deleted,
-// which a host that was killed left running. A thread whose host answers runs under another app on the same state
-// folder, which knows it as live, and keeps its servers.
+// which a host that was killed left running.
 func (s *Sessions) sweepServers() {
 	s.mu.Lock()
-	threads := map[string]int{}
+	var ids []string
 	for id, e := range s.ended {
 		if e.info.Hosted {
-			threads[id] = 0
+			ids = append(ids, id)
 		}
 	}
 	for id := range s.deleted {
-		threads[id] = 0
+		ids = append(ids, id)
 	}
 	s.mu.Unlock()
-	if len(threads) == 0 {
-		return
+	if len(ids) > 0 {
+		s.stopServers(true, ids...)
 	}
-	ctx := s.context()
-	list, err := s.procs.Servers(ctx, threads)
-	if err != nil {
-		log.Printf("agentos: finding the servers of settled threads: %v", err)
-		return
-	}
-	list = slices.DeleteFunc(list, func(srv procs.Server) bool {
-		name, err := session.ParseName(srv.Thread)
-		return err != nil || hostAnswers(s.hostSocket(name))
-	})
-	s.procs.Stop(ctx, list)
 }
 
 // anyDir runs commands through r in no folder of their own.

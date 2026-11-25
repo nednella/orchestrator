@@ -174,6 +174,7 @@ type Sessions struct {
 	held       map[string]int64        // the memory each live session held at the last sample
 	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
 	refused    map[string]bool         // the flags Claude did not know in this run of the app, which it now starts without
+	restarting map[string]bool         // the threads settled for a change of access until they wake again: they keep their servers
 	memory     Memory
 	serverPID  int // the tmux server's, as tmux gave it; asked again once ps no longer lists it
 }
@@ -267,7 +268,7 @@ func newSessions(o Options) *Sessions {
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{},
-		nums: map[string]int{}, lastNum: map[string]int{},
+		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
 		records:   map[string]session.Record{},
 		cwds:      map[string]string{},
 		seen:      map[string]session.State{},
@@ -805,7 +806,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
 	}
 	s.awaitHostExit(name)
-	s.stopServers(id)
+	s.stopServers(false, id)
 	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
 		if err := os.RemoveAll(path); err != nil {
 			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
@@ -1101,6 +1102,9 @@ func (s *Sessions) sync() {
 				go s.countUsage(id, rec.Transcript, rec.AgentModel, true)
 			}
 			go s.closeBrowser(id)
+			if !s.restarting[id] {
+				go s.stopServers(true, id)
+			}
 			s.endSession(id, time.Now())
 			delete(s.seen, id)
 			delete(s.records, id)
@@ -2745,7 +2749,7 @@ func (s *Sessions) Settle(id string) error {
 	if err := s.settle(id, chat.StopSettle, ""); err != nil {
 		return err
 	}
-	s.stopServers(id)
+	s.stopServers(false, id)
 	return nil
 }
 
@@ -2845,6 +2849,7 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 	case err != nil:
 		return err
 	case change == accessRestart:
+		defer s.restarted(id)
 		_, err := s.wakeOrJoin(id, "")
 		return err
 	case change == accessLive:
@@ -2900,7 +2905,11 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		s.release(name)
 		return accessDone, fmt.Errorf("saving the thread's access: %w", err)
 	}
+	s.mu.Lock()
+	s.restarting[id] = true
+	s.mu.Unlock()
 	if err := s.settle(id, chat.StopRestart, access); err != nil {
+		s.restarted(id)
 		s.release(name)
 		if undo := s.liveAccess(name, in.Access); undo != nil {
 			log.Printf("agentos: putting back the access of thread %s: %v", id, undo)
@@ -2908,6 +2917,13 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		return accessDone, err
 	}
 	return accessRestart, nil
+}
+
+// restarted ends the mark a restart for a change of access set, which kept the thread's servers.
+func (s *Sessions) restarted(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.restarting, id)
 }
 
 // readyHost is the socket of the live thread's host once it listens, waiting for one that is still starting.
