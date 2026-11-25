@@ -33,5 +33,6 @@ export function questionAnswer(input: unknown, picks: Record<string, string[] | 
 }
 
 // answeredLate reports whether the host refused an answer because its approval no longer waits: the turn ended, or
-// the request was answered elsewhere.
+// the request was answered elsewhere. The pattern is the host's sentence `no approval %q is waiting` (internal/host),
+// as the chat service passes it on; desktop/chat/chat_test.go checks that sentence, so change both together.
 export const answeredLate = (message: string) => /^No approval .* is waiting$/.test(message)
