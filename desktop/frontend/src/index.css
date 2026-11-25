@@ -933,6 +933,10 @@
     overflow-wrap: normal;
   }
 
+  .chat-jump {
+    box-shadow: var(--shadow-popup);
+  }
+
   .note-card {
     background: var(--bg-note-card);
     border: 1px solid var(--border-note);

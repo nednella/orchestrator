@@ -20,6 +20,33 @@ const replies = [
   'Tests pass: 48 passed, 0 failed.',
 ]
 
+const olderReplies = [
+  'The cart total rounds each line before it adds them up, so two lines of 0.005 come to 0.02 where the order says 0.01.',
+  'Two places read the locale:\n\n- `formatPrice` in `money.ts`, which takes it from the store\n- `Checkout.tsx`, which reads `navigator.language` itself\n\nThe second one is the odd one out.',
+  "Here is the retry loop as it stands:\n\n```ts\nfor (let i = 0; i < 3; i++) {\n  const res = await fetch(url)\n  if (res.ok) return res\n  await sleep(500 * 2 ** i)\n}\nthrow new Error('gave up')\n```\n\nIt waits 0.5 s, 1 s, then 2 s.",
+  'Yes.',
+  '## What changed\n\n1. The product page loads its sections in parallel.\n2. The reviews section waits for the fold.\n3. The gallery keeps its own state.\n\nNothing in the cart moved.',
+]
+
+// olderTurns is finished turns that give a chat at least that many items: each a message and its reply, and every
+// fifth one a tool call that folds into a work item.
+function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
+  const turns: Draft[] = []
+  for (let n = 1, count = 0; count < items; n++) {
+    const at = ago(38 + items - count)
+    turns.push({ kind: 'user', id: `old-u-${n}`, text: n % 7 === 0 ? `Question ${n}: what does the cart do with a coupon\nthat has run out?` : `Question ${n}: check the cart again.`, at })
+    if (n % 5 === 0) {
+      turns.push({ kind: 'tool_use', id: `old-t-${n}`, tool: 'Read', input: { file_path: 'app-frontend/src/js/cart.ts' }, at })
+      turns.push({ kind: 'tool_result', parent: `old-t-${n}`, text: 'export const cart = {}', at })
+      count++
+    }
+    turns.push({ kind: 'message', id: `old-m-${n}`, text: olderReplies[n % olderReplies.length], at })
+    turns.push({ kind: 'turn_end', cost: 0.01, at })
+    count += 2
+  }
+  return turns
+}
+
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second. thread throws for an id that has no chat.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
@@ -115,11 +142,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     thread(id).setState('idle')
   }
 
-  // seed fills a thread's log with two turns, the second of which waits on a Bash approval.
-  function seed(id: string) {
+  // seed fills a thread's log with two turns, the second of which waits on a Bash approval, after earlier turns that
+  // give the chat about that many more items.
+  function seed(id: string, earlier = 0) {
     const ago = (minutes: number) => Date.now() - minutes * minute
     const turns: Draft[] = [
-      { kind: 'commands', input: commands, at: ago(38) },
+      { kind: 'commands', input: commands, at: ago(38 + earlier) },
+      ...olderTurns(earlier, ago),
       { kind: 'user', id: 'u-1', text: 'Move checkout to its own route, and keep the cart page as it is.', at: ago(38) },
       { kind: 'init', id: 'mock-session', at: ago(38) },
       { kind: 'message', id: 'msg_1', text: "I'll read the router first.", at: ago(37) },

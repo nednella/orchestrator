@@ -196,6 +196,7 @@ export function createMock(params: URLSearchParams) {
     patchNotes: params.has('patchnotes'),
     fullDataDir: params.has('fulldata'),
     noModel: params.has('nomodel'),
+    longChat: params.has('longchat'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: MockSession[] = []
@@ -496,7 +497,7 @@ export function createMock(params: URLSearchParams) {
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     sessions.forEach((s) => (s.hosted = s === byIssue(444)))
-    chats.seed(byIssue(444).id)
+    chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
     sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!.detail = 'Should I keep the old cart hook or replace it?'
   }
 
