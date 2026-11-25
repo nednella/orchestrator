@@ -55,6 +55,7 @@ type Backend = {
   ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
   ChatAnswerInput(id: string, request: string, input: string): Promise<void>
   ChatPending(): Promise<Pending[]>
+  ChatFiles(id: string, query: string): Promise<string[]>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
   Memory(): Promise<Memory>
@@ -108,7 +109,7 @@ declare global {
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
   sessions: ['NewSession', 'NewChat', 'KillSession', 'DismissSession', 'ResumeSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -200,6 +201,7 @@ export const api = {
   chatAnswer: (id: string, request: string, allow: boolean, message = '') => backend.ChatAnswer(id, request, allow, message),
   chatAnswerInput: (id: string, request: string, input: string) => backend.ChatAnswerInput(id, request, input),
   chatPending: () => backend.ChatPending(),
+  chatFiles: (id: string, query: string) => backend.ChatFiles(id, query),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),

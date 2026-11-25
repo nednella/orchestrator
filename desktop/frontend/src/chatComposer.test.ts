@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { composerAction, escapeAction, lastTurnEnd, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
+import { composerAction, escapeAction, lastTurnEnd, mentionToken, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
 import type { ChatEvent, Pending } from './types.ts'
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'>
@@ -104,4 +104,17 @@ test('empty selection quotes nothing', () => {
 test('reply label is the first line, clipped to 80 chars', () => {
   assert.equal(replyLabel('\nfirst\nsecond'), 'first')
   assert.equal(replyLabel('y'.repeat(100)), `${'y'.repeat(79)}…`)
+})
+
+test('mentionToken: the path typed after an @ that starts a word', () => {
+  assert.equal(mentionToken('@'), '')
+  assert.equal(mentionToken('look at @src/app/main_test.go'), 'src/app/main_test.go')
+  assert.equal(mentionToken('first line\n@docs/'), 'docs/')
+  assert.equal(mentionToken('@../up-one.ts'), '../up-one.ts')
+})
+
+test('mentionToken: no mention inside a word or once a space ends it', () => {
+  assert.equal(mentionToken('mail me@example'), null)
+  assert.equal(mentionToken('@src/a.go '), null)
+  assert.equal(mentionToken('no mention'), null)
 })

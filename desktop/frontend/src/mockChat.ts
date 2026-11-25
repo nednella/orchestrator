@@ -18,6 +18,51 @@ const commands = [
   { name: 'compact', description: 'Clear the conversation but keep a summary of it', argumentHint: '<instructions>', builtin: true },
   { name: 'greet', description: 'Say a fixed greeting (project)', argumentHint: '' },
 ]
+// The files of every mock thread's folder, as git lists them.
+const files = [
+  'README.md',
+  'package.json',
+  'app-frontend/package.json',
+  'app-frontend/src/js/routes.tsx',
+  'app-frontend/src/js/cart.ts',
+  'app-frontend/src/js/money.ts',
+  'app-frontend/src/js/pages/Cart.tsx',
+  'app-frontend/src/js/pages/Checkout.tsx',
+  'app-frontend/src/js/pages/checkout_steps.tsx',
+  'app-frontend/src/js/pages/[slug]/Index.tsx',
+  'app-frontend/src/js/hooks/useCart.ts',
+  'app-frontend/src/js/hooks/useCheckout.ts',
+  'app-frontend/test/checkout.test.ts',
+  'app-backend/cmd/server/main.go',
+  'app-backend/internal/cart/cart.go',
+  'app-backend/internal/cart/cart_test.go',
+]
+const fileLimit = 30
+
+// subsequence says whether s has the letters of sub in order, not always side by side.
+function subsequence(s: string, sub: string) {
+  let at = 0
+  for (const c of sub) {
+    at = s.indexOf(c, at)
+    if (at < 0) return false
+    at += c.length
+  }
+  return true
+}
+
+// rankFiles orders the files that match as the service does: file name prefix, then contains, then the letters in
+// order, shorter first among equals.
+function rankFiles(paths: string[], query: string): string[] {
+  const q = query.toLowerCase()
+  const rankOf = (lower: string) => (lower.slice(lower.lastIndexOf('/') + 1).startsWith(q) ? 0 : lower.includes(q) ? 1 : subsequence(lower, q) ? 2 : -1)
+  return paths
+    .map((path) => ({ path, rank: rankOf(path.toLowerCase()) }))
+    .filter((f) => f.rank >= 0)
+    .sort((a, b) => a.rank - b.rank || a.path.length - b.path.length)
+    .slice(0, fileLimit)
+    .map((f) => f.path)
+}
+
 const replies = [
   'Done. The checkout route now loads its own data, and the cart page no longer calls the cart API twice.',
   'I read the router and the checkout page. Nothing else needs to change for this.',
@@ -321,6 +366,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
       answer(id, request, true, '', given)
     },
     ChatPending: async () => [...pending.values()].map((p) => ({ ...p })),
+    ChatFiles: async (id: string, query: string) => {
+      thread(id)
+      return rankFiles(files, query)
+    },
   }
 
   // save checks the images as the service does and keeps each at the path it would have, under the thread's

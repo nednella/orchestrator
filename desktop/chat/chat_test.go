@@ -432,3 +432,14 @@ func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
 		t.Errorf("user event = %+v, want the image saved as a .png", user)
 	}
 }
+
+func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
+	h, id := newThread(t)
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Dir != h.Dir {
+		t.Errorf("Dir = %q, want %q", ch.Dir, h.Dir)
+	}
+}

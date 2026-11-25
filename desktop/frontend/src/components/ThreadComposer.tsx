@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { ThreadDraft } from '../AgentosContext'
 import { api } from '../api'
-import { composerAction, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
+import { composerAction, mentionToken, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
 import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText } from '../composerMarkdown'
@@ -14,6 +14,8 @@ import { usePendingImages } from '../usePendingImages'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
+import { ComposerPickList } from './ComposerPickList'
+import type { PickRow } from './ComposerPickList'
 import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
 
@@ -43,6 +45,17 @@ const WAITING_PLACEHOLDER: Record<Pending['kind'], string> = {
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
+// PickList is the pick list open in the composer: what it lists and what picking a row does.
+type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: number): void }
+
+// Files are what the thread's folder lists for the mention, or why it did not.
+type Files = { paths: string[]; error: string }
+
+const fileRow = (path: string): PickRow => {
+  const slash = path.lastIndexOf('/')
+  return { key: path, icon: <Icon name="file" size={14} />, name: path.slice(slash + 1), description: path.slice(0, slash + 1) }
+}
+
 export function ThreadComposer({ inputRef: input, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, resumeSession, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'resumeSession', 'report', 'pushToast')
   const { id } = session
@@ -53,6 +66,11 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
   const [sending, setSending] = useState(false)
   const pending = usePendingImages()
   const picker = useRef<HTMLInputElement>(null)
+  const [caret, setCaret] = useState('')
+  const [cursor, setCursor] = useState(-1)
+  const [dismissed, setDismissed] = useState(false)
+  const [files, setFiles] = useState<Files | null>(null)
+  const mention = dismissed ? null : mentionToken(caret)
 
   const update = useCallback(
     (next: ThreadDraft) => {
@@ -69,6 +87,18 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     if (unseen.length === 0) return
     update({ draft: unseen.reduce((d, e) => appendText(d, e.text ?? ''), latest.current.draft), seen: unseen[unseen.length - 1].seq })
   }, [events, update])
+
+  useEffect(() => {
+    if (mention === null) return
+    let current = true
+    api.chatFiles(id, mention).then(
+      (paths) => current && setFiles({ paths, error: '' }),
+      (err) => current && setFiles({ paths: [], error: String(err) }),
+    )
+    return () => {
+      current = false
+    }
+  }, [id, mention])
 
   const focusInput = useCallback(() => input.current?.focus(), [])
   useFocusRequest('composer', focusInput)
@@ -119,6 +149,43 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
     })
   }
 
+  const pickFile = (path: string) => {
+    if (mention === null) return
+    input.current?.deleteBefore(mention.length + 1)
+    input.current?.insertLiteral(`@${path} `)
+    setCursor(-1)
+  }
+
+  const shown = files ?? { paths: [], error: '' }
+  const pickList: PickList | null =
+    mention === null
+      ? null
+      : { label: 'Files', rows: shown.paths.map(fileRow), empty: files === null ? 'Listing the files' : shown.error || 'No file matches', pick: (i) => pickFile(shown.paths[i]) }
+  const highlighted = pickList ? Math.min(cursor, pickList.rows.length - 1) : -1
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (pickList && pickList.rows.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setCursor(e.key === 'ArrowDown' ? Math.min(highlighted + 1, pickList.rows.length - 1) : Math.max(highlighted - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickList.pick(Math.max(highlighted, 0))
+        return
+      }
+    }
+    if (e.key !== 'Escape') return
+    const done = onEscape(pickList !== null)
+    if (done === 'close-picker') {
+      e.preventDefault()
+      e.stopPropagation()
+      setDismissed(true)
+    }
+    if (done === 'blur') input.current?.blur()
+  }
+
   const placeholder = timeline.pending ? WAITING_PLACEHOLDER[timeline.pending.kind] : timeline.turnOpen ? 'Claude takes in a message at its next step' : 'Message Claude'
 
   return (
@@ -130,6 +197,7 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
       canSend={!empty}
       sendLabel={SEND_LABEL[action]}
       sendText={action === 'deny' ? SEND_LABEL.deny : undefined}
+      drawer={pickList && <ComposerPickList label={pickList.label} rows={pickList.rows} cursor={highlighted} empty={pickList.empty} onPick={pickList.pick} />}
       banner={
         (reply !== null || timeline.queued.length > 0) && (
           <>
@@ -174,10 +242,13 @@ export function ThreadComposer({ inputRef: input, reply, onReply, session, timel
       }
       sending={sending}
       stop={action === 'stop' && !sending ? { stopping, onStop } : undefined}
-      onChange={(next) => update({ ...latest.current, draft: next })}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && onEscape(false) === 'blur') input.current?.blur()
+      onChange={(next) => {
+        update({ ...latest.current, draft: next })
+        setCursor(-1)
+        setDismissed(false)
       }}
+      onCaret={(before) => setCaret(before)}
+      onKeyDown={onKeyDown}
       onAttach={pending.attach}
       onSend={send}
     />

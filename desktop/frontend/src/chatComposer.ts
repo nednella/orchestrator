@@ -55,3 +55,6 @@ export function replyLabel(text: string): string {
   const line = text.trim().split('\n')[0]
   return line.length > LABEL_CHARS ? `${line.slice(0, LABEL_CHARS - 1)}…` : line
 }
+
+// mentionToken is what the @ mention the caret ends has typed after its @, or null when the caret ends none.
+export const mentionToken = (before: string): string | null => /(^|\s)@([\w./-]*)$/.exec(before)?.[2] ?? null

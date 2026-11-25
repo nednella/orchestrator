@@ -12,6 +12,7 @@ export type ComposerInput = {
   focus(): void
   blur(): void
   insert(text: string): void
+  insertLiteral(text: string): void
   insertDoc(doc: JSONContent): void
   deleteBefore(length: number): void
 }
@@ -93,6 +94,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder, onChange, 
       focus: () => editor?.commands.focus(),
       blur: () => editor?.commands.blur(),
       insert: (text) => editor?.commands.insertContent({ type: 'text', text }),
+      insertLiteral: (text) => editor?.commands.insertContent({ type: 'text', text, marks: [{ type: 'literal' }] }),
       insertDoc: (doc) => {
         // A caret never placed sits at the start of the draft; the quote goes after it.
         const chain = editor?.chain()

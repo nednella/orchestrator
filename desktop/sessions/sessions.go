@@ -2013,11 +2013,11 @@ func (s *Sessions) TurnEnded(id string, e chat.Event) {
 	}
 }
 
-// Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on and
-// the folder that holds the images sent in it.
+// Chat is a session whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on, the
+// folder that holds the images sent in it and the folder it works in.
 type Chat struct {
-	ID, Project, Log, Socket, Media string
-	Live                            bool // the session runs; an ended one has only its log
+	ID, Project, Log, Socket, Media, Dir string
+	Live                                 bool // the session runs; an ended one has only its log
 }
 
 // ChatOf is the chat of the session id, live or ended. A session whose agent runs in its terminal has none. It takes
@@ -2040,7 +2040,7 @@ func (s *Sessions) ChatOf(id string) (Chat, error) {
 	if !in.Hosted {
 		return Chat{}, fmt.Errorf("Thread %s has no chat: its agent runs in its terminal", id)
 	}
-	return s.chatOf(name, live), nil
+	return s.chatOf(in, live), nil
 }
 
 // Chats are the chats of the live sessions under a host. It takes mu.
@@ -2050,14 +2050,17 @@ func (s *Sessions) Chats() []Chat {
 	var out []Chat
 	for _, in := range s.info {
 		if in.Hosted {
-			out = append(out, s.chatOf(in.Name, true))
+			out = append(out, s.chatOf(in, true))
 		}
 	}
 	return out
 }
 
-func (s *Sessions) chatOf(name session.Name, live bool) Chat {
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Live: live}
+// chatOf is the session's chat; it works in its worktree once the lifecycle knows it, else where it started. It needs mu.
+func (s *Sessions) chatOf(in term.Info, live bool) Chat {
+	name := in.Name
+	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, Live: live}
 }
 
 // hostOf is the socket of the session's host, "" when its agent runs in its pane: a Claude session started before

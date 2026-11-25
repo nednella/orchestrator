@@ -158,7 +158,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.services = []any{
 		proj,
 		sessSvc,
-		chat.NewService(chats, ctx),
+		chat.NewService(chats, runner, ctx),
 		terminal.NewService(terms),
 		issues.NewService(iss, ctx),
 		notes.NewService(store, sess, sess, iss, events, runner, h.Emit, ctx),

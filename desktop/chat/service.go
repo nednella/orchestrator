@@ -10,6 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
@@ -20,12 +21,15 @@ const hostStarting = 3 * time.Second
 
 // Service is bound to the front end.
 type Service struct {
-	c   *Chats
-	ctx func() context.Context
+	c     *Chats
+	files *files
+	ctx   func() context.Context
 }
 
-// NewService binds the chats; ctx gives the app's context at call time.
-func NewService(c *Chats, ctx func() context.Context) *Service { return &Service{c: c, ctx: ctx} }
+// NewService binds the chats; runner runs git, and ctx gives the app's context at call time.
+func NewService(c *Chats, runner run.Runner, ctx func() context.Context) *Service {
+	return &Service{c: c, files: newFiles(runner), ctx: ctx}
+}
 
 // ChatHistory is the thread's logged events with a seq above after, live or ended. Call ChatWatch first and merge the
 // two by seq: an event logged in between comes in both.
@@ -133,6 +137,24 @@ func (v *Service) ChatAnswerInput(id, request, input string) error {
 		return errors.New("The answer is not valid JSON")
 	}
 	return v.failed(id, "the answer", host.AnswerWith(v.ctx(), ch.Socket, request, json.RawMessage(input)))
+}
+
+// ChatFiles is the files of the thread's folder that best match query, for an @ mention: those git tracks and those
+// it does not ignore. A folder outside git has none.
+func (v *Service) ChatFiles(id, query string) ([]string, error) {
+	ch, err := v.c.threads.ChatOf(id)
+	if err != nil {
+		return nil, err
+	}
+	if ch.Dir == "" {
+		return []string{}, nil
+	}
+	paths, err := v.files.list(v.ctx(), ch.Dir)
+	if err != nil {
+		log.Printf("agentos: listing the files of thread %s in %s: %v", id, ch.Dir, err)
+		return nil, fmt.Errorf("Could not list the files of thread %s", id)
+	}
+	return rankFiles(paths, query, fileLimit), nil
 }
 
 // ChatPending is the approval each live thread waits on.
