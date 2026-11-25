@@ -14,14 +14,78 @@ export function matchesThread(session: Session, query: string): boolean {
   return session.title.toLowerCase().includes(q) || session.branch.toLowerCase().includes(q) || (number !== '' && session.issue > 0 && String(session.issue).includes(number))
 }
 
-// The thread list's order: attention, working, idle, then settled, newest first.
-export function sortThreads(sessions: Session[]): Session[] {
-  const { waiting, working, idle, settled } = splitThreads(sessions)
-  return [...waiting, ...working, ...idle, ...settled]
+// isTopLevel is whether the thread shows in the sidebar: the owner started it, or the thread that delegated to it is
+// no longer in the list, so a lost child shows rather than vanishes.
+export function isTopLevel(s: Session, byId: Map<string, Session>): boolean {
+  return s.parent === '' || !byId.has(s.parent)
 }
 
-export function sidebarThreads(sessions: Session[], projectKey: string | undefined): Session[] {
-  return sortThreads(sessions.filter((s) => s.project === projectKey))
+function childrenOf(sessions: Session[]): Map<string, Session[]> {
+  const children = new Map<string, Session[]>()
+  for (const s of sessions) {
+    if (!s.parent) continue
+    const list = children.get(s.parent)
+    if (list) list.push(s)
+    else children.set(s.parent, [s])
+  }
+  return children
+}
+
+// The thread's descendants, nearest first; seen keeps a loop in the parent links from walking forever.
+function descendantsIn(id: string, children: Map<string, Session[]>): Session[] {
+  const found: Session[] = []
+  const seen = new Set([id])
+  for (let i = -1; i < found.length; i++) {
+    for (const child of children.get(i < 0 ? id : found[i].id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      found.push(child)
+    }
+  }
+  return found
+}
+
+export function descendantsOf(id: string, sessions: Session[]): Session[] {
+  return descendantsIn(id, childrenOf(sessions))
+}
+
+const nearestWaiting = (s: Session, descendants: Session[]) => (s.state === 'waiting' ? s : descendants.find((d) => d.state === 'waiting'))
+
+// needsOwner is the thread the owner must answer for s: s when it waits, else its nearest waiting descendant.
+export function needsOwner(s: Session, sessions: Session[]): Session | undefined {
+  return nearestWaiting(s, descendantsOf(s.id, sessions))
+}
+
+// ThreadTree is what the sidebar needs of the threads' families, built once per list: the top-level thread of every
+// thread, itself for a top-level one, and for each top-level thread that needs the owner, the thread that waits.
+export type ThreadTree = { top: Map<string, Session>; attention: Map<string, Session> }
+
+export function threadTreeOf(sessions: Session[]): ThreadTree {
+  const byId = new Map(sessions.map((s) => [s.id, s]))
+  const children = childrenOf(sessions)
+  const top = new Map<string, Session>()
+  const attention = new Map<string, Session>()
+  for (const s of sessions) {
+    if (!isTopLevel(s, byId)) continue
+    const descendants = descendantsIn(s.id, children)
+    top.set(s.id, s)
+    descendants.forEach((d) => top.set(d.id, s))
+    const waiting = nearestWaiting(s, descendants)
+    if (waiting) attention.set(s.id, waiting)
+  }
+  return { top, attention }
+}
+
+// The thread list's order, of the top-level threads among sessions: attention (a thread that waits or has a waiting
+// descendant), working, idle, then settled, newest first.
+export function sortThreads(sessions: Session[], tree = threadTreeOf(sessions)): Session[] {
+  const shown = sessions.filter((s) => tree.top.get(s.id) === s)
+  const { working, idle, settled } = splitThreads(shown.filter((s) => !tree.attention.has(s.id)))
+  return [...shown.filter((s) => tree.attention.has(s.id)), ...working, ...idle, ...settled]
+}
+
+export function sidebarThreads(sessions: Session[], projectKey: string | undefined, tree = threadTreeOf(sessions)): Session[] {
+  return sortThreads(sessions.filter((s) => s.project === projectKey), tree)
 }
 
 // goneThreads is the ids of the project's threads in before that its new list, after, no longer holds.
@@ -30,17 +94,22 @@ export function goneThreads(before: Session[], projectKey: string, after: Sessio
   return before.filter((s) => s.project === projectKey && !kept.has(s.id)).map((s) => s.id)
 }
 
-export function waitingByProject(sessions: Session[]): Map<string, number> {
+// The threads that wait in each project, a child counted in its top-level thread's project, where its row shows it.
+export function waitingByProject(sessions: Session[], tree = threadTreeOf(sessions)): Map<string, number> {
   const counts = new Map<string, number>()
-  for (const s of sessions) if (s.state === 'waiting') counts.set(s.project, (counts.get(s.project) ?? 0) + 1)
+  for (const s of sessions) {
+    if (s.state !== 'waiting') continue
+    const project = (tree.top.get(s.id) ?? s).project
+    counts.set(project, (counts.get(project) ?? 0) + 1)
+  }
   return counts
 }
 
-export function liveThreads(projects: Project[], sessions: Session[]): Session[] {
-  return projects.flatMap((p) => {
-    const { waiting, working, idle } = splitThreads(sessions.filter((s) => s.project === p.key))
-    return [...waiting, ...working, ...idle]
-  })
+// The top-level threads the owner's next move is on, in the order the next-attention step visits them: those that
+// need the owner, project by project, then those whose reply is in.
+export function urgentThreads(projects: Project[], sessions: Session[], tree = threadTreeOf(sessions)): Session[] {
+  const shown = projects.flatMap((p) => sidebarThreads(sessions, p.key, tree))
+  return [...shown.filter((s) => tree.attention.has(s.id)), ...shown.filter((s) => s.state === 'idle' && !tree.attention.has(s.id))]
 }
 
 export type TaskTone = 'pending' | 'passing' | 'failing' | 'merged' | 'closed'

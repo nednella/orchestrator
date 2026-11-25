@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { currentTask, goneThreads, shortAgo, sortThreads } from './threads.ts'
+import { currentTask, descendantsOf, goneThreads, isTopLevel, needsOwner, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import type { Project } from './types.ts'
 import type { PR, Session, State } from './types.ts'
 
-function thread(id: string, state: State, lastEventAt = 0): Session {
+function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session {
   return {
     id,
     project: 'shop',
@@ -32,7 +33,7 @@ function thread(id: string, state: State, lastEventAt = 0): Session {
     hosted: true,
     action: '',
     forkOf: '',
-    parent: '',
+    parent,
     tokens: 0,
     cost: 0,
     memory: 0,
@@ -112,4 +113,67 @@ test('a thread is gone when its project\'s new list leaves it out', () => {
   const other = { ...thread('other', 'idle'), project: 'blog' }
   assert.deepEqual(goneThreads([thread('a', 'idle'), thread('b', 'settled'), other], 'shop', [thread('a', 'idle')]), ['b'])
   assert.deepEqual(goneThreads([thread('a', 'idle')], 'shop', [thread('a', 'working'), thread('c', 'idle')]), [])
+})
+
+test('children are not in the sidebar', () => {
+  const sessions = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child')]
+  assert.deepEqual(
+    sidebarThreads(sessions, 'shop').map((s) => s.id),
+    ['lead'],
+  )
+  const byId = new Map(sessions.map((s) => [s.id, s]))
+  assert.equal(isTopLevel(sessions[0], byId), true)
+  assert.equal(isTopLevel(sessions[1], byId), false)
+})
+
+test('a lost child shows', () => {
+  const sessions = [thread('lead', 'idle'), thread('orphan', 'working', 0, 'deleted-lead')]
+  assert.equal(isTopLevel(sessions[1], new Map(sessions.map((s) => [s.id, s]))), true)
+  assert.deepEqual(
+    sortThreads(sessions).map((s) => s.id),
+    ['orphan', 'lead'],
+  )
+})
+
+test('a waiting grandchild puts its top thread in attention', () => {
+  const sessions = [thread('busy', 'working'), thread('lead', 'idle'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'waiting', 0, 'child')]
+  assert.deepEqual(
+    sortThreads(sessions).map((s) => s.id),
+    ['lead', 'busy'],
+  )
+  assert.equal(threadTreeOf(sessions).attention.get('lead')?.id, 'grandchild')
+  assert.equal(needsOwner(sessions[1], sessions)?.id, 'grandchild')
+  assert.deepEqual(
+    descendantsOf('lead', sessions).map((s) => s.id),
+    ['child', 'grandchild'],
+  )
+})
+
+test('needsOwner prefers the thread itself', () => {
+  const sessions = [thread('lead', 'waiting'), thread('child', 'waiting', 0, 'lead')]
+  assert.equal(needsOwner(sessions[0], sessions)?.id, 'lead')
+  assert.equal(needsOwner(thread('alone', 'idle'), [thread('alone', 'idle')]), undefined)
+})
+
+test('needsOwner takes the nearest waiting descendant', () => {
+  const sessions = [thread('lead', 'working'), thread('a', 'working', 0, 'lead'), thread('deep', 'waiting', 0, 'a'), thread('b', 'waiting', 0, 'lead')]
+  assert.equal(needsOwner(sessions[0], sessions)?.id, 'b')
+})
+
+test('rail counts a child in its parent\'s project', () => {
+  const sessions = [thread('lead', 'working'), { ...thread('child', 'waiting', 0, 'lead'), project: 'blog' }, { ...thread('own', 'waiting'), project: 'blog' }]
+  assert.deepEqual(waitingByProject(sessions), new Map([['shop', 1], ['blog', 1]]))
+  assert.deepEqual(
+    sidebarThreads(sessions, 'blog').map((s) => s.id),
+    ['own'],
+  )
+})
+
+test('the next thread that needs the owner is the top thread of a waiting child', () => {
+  const projects = [{ key: 'shop' }, { key: 'blog' }] as Project[]
+  const sessions = [thread('replied', 'idle'), thread('lead', 'working'), thread('child', 'waiting', 0, 'lead'), { ...thread('asks', 'waiting'), project: 'blog' }, thread('asleep', 'settled')]
+  assert.deepEqual(
+    urgentThreads(projects, sessions).map((s) => s.id),
+    ['lead', 'asks', 'replied'],
+  )
 })

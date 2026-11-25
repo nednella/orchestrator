@@ -7,8 +7,9 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 type TitleBreadcrumbProps = { showsThread: boolean }
 
 export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
-  const { project, projects, showHome } = useAgentos('project', 'projects', 'showHome')
+  const { project, projects, showHome, select } = useAgentos('project', 'projects', 'showHome', 'select')
   const thread = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const parent = useAgentosSelector((a) => (thread?.parent ? a.sessions.find((s) => s.id === thread.parent) : undefined))
   const { digestOpen } = useLayout()
 
   if (digestOpen) {
@@ -43,6 +44,16 @@ export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
       <span className="flex-none text-dim" aria-hidden="true">
         /
       </span>
+      {parent && (
+        <>
+          <button className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink" style={noDrag} title={`Open ${parent.title}`} onClick={() => select(parent.id)}>
+            {parent.title}
+          </button>
+          <span className="flex-none text-dim" aria-hidden="true">
+            /
+          </span>
+        </>
+      )}
       <span className="min-w-0 truncate" aria-current="page" title={thread.title}>
         {thread.title}
       </span>

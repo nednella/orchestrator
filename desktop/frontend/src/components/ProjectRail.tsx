@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { RAIL_REM } from '../LayoutContext'
@@ -26,8 +27,8 @@ function tileLabels(projects: Project[]): string[] {
 }
 
 export function ProjectRail() {
-  const { projects, sessions } = useAgentos('projects', 'sessions')
-  const waiting = waitingByProject(sessions)
+  const { projects, sessions, threadTree } = useAgentos('projects', 'sessions', 'threadTree')
+  const waiting = useMemo(() => waitingByProject(sessions, threadTree), [sessions, threadTree])
   const labels = tileLabels(projects)
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {

@@ -8,7 +8,8 @@ import { serversTabShown } from './useThreadServers'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
-import { goneThreads, liveThreads, sidebarThreads } from './threads'
+import { goneThreads, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
+import type { ThreadTree } from './threads'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
@@ -36,6 +37,8 @@ type AgentosState = {
   projects: Project[]
   sessions: Session[]
   projectSessions: Session[]
+  // Each thread's top-level thread and what each top-level thread needs the owner for, built once per sessions change.
+  threadTree: ThreadTree
   selectedId: string | null
   issues: Issue[]
   issuesLoading: boolean
@@ -279,7 +282,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [composerAccess, setComposerAccess] = useState<Access>('supervised')
   const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'thread', n: 0 })
 
+  const threadTree = useMemo(() => threadTreeOf(sessions), [sessions])
   const sessionsRef = useRef(sessions)
+  const treeRef = useRef(threadTree)
   const projectsRef = useRef(projects)
   const selectedRef = useRef(selectedId)
   const projectRef = useRef(project)
@@ -297,6 +302,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const viewsRef = useRef(views)
   const issuesRef = useRef<Issue[]>([])
   sessionsRef.current = sessions
+  treeRef.current = threadTree
   projectsRef.current = projects
   projectRef.current = project
   shellIdsRef.current = shellIds
@@ -363,7 +369,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         detached.current = true
         return
       }
-      const next = remembered ?? list[0]
+      // A child is not in the sidebar, so the first pick is a thread the owner started.
+      const next = remembered ?? list.find((s) => !s.parent) ?? list[0]
       selectId(next ? next.id : null)
     },
     [selectId],
@@ -589,6 +596,12 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         // The sessions event that carries prAttention lands in the same tick as this one.
         setTimeout(() => {
           const current = sessionsRef.current.find((s) => s.id === id) ?? session
+          // A child that waits is answered from its top-level thread's row, so the toast names that thread and opens it.
+          const top = treeRef.current.top.get(id)
+          if (state === 'waiting' && top && top.id !== id) {
+            pushToast({ tone: state, text: `${top.title} · ${current.title} needs you`, sessionId: top.id })
+            return
+          }
           pushToast({ tone: state, text: `${current.title} ${describe(current)}`, sessionId: id, view: state === 'evidence' ? 'evidence' : undefined })
         }, 50)
       }),
@@ -647,7 +660,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   )
 
   const inSidebarOrder = useCallback(() => {
-    return sidebarThreads(sessionsRef.current, projectRef.current?.key)
+    return sidebarThreads(sessionsRef.current, projectRef.current?.key, treeRef.current)
   }, [])
 
   const selectSession = useCallback(
@@ -727,7 +740,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       stepSession(delta) {
         const list = inSidebarOrder()
         if (list.length === 0) return
-        const at = list.findIndex((s) => s.id === selectedRef.current)
+        const selected = treeRef.current.top.get(selectedRef.current ?? '')
+        const at = list.findIndex((s) => s.id === selected?.id)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
       async newThread({ prompt, model, effort }, access, place) {
@@ -905,10 +919,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         addSession(await api.noteToSession(id))
       },
       nextAttention() {
-        const list = liveThreads(projectsRef.current, sessionsRef.current)
-        const urgent = [...list.filter((s) => s.state === 'waiting'), ...list.filter((s) => s.state === 'idle')]
+        const urgent = urgentThreads(projectsRef.current, sessionsRef.current, treeRef.current)
         if (urgent.length === 0) throw 'Nothing needs you right now'
-        const at = urgent.findIndex((s) => s.id === selectedRef.current)
+        const selected = treeRef.current.top.get(selectedRef.current ?? '')
+        const at = urgent.findIndex((s) => s.id === selected?.id)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
       setComposerDraft(draft) {
@@ -973,6 +987,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       projects,
       sessions,
       projectSessions,
+      threadTree,
       selectedId,
       issues,
       issuesLoading,
@@ -1005,7 +1020,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

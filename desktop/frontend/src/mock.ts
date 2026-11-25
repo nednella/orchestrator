@@ -195,6 +195,7 @@ export function createMock(params: URLSearchParams) {
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
     staleAnswer: params.has('stale'),
+    childAsk: params.has('childask'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: Session[] = []
@@ -502,9 +503,16 @@ export function createMock(params: URLSearchParams) {
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], 'read')
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], 'read')
-    // A thread that delegated two tasks: one child in its own project, one in another.
+    // A thread that delegated two tasks: one child in its own project, one in another. With childask, the first
+    // waits on a tool approval, and the app hears of it.
     const lead = sessions.find((x) => x.title === 'checkout tests scratch')!
-    seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read').parent = lead.id
+    const finder = seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read')
+    finder.parent = lead.id
+    if (flags.childAsk) {
+      Object.assign(finder, { state: 'waiting', detail: 'Claude needs your permission to use Bash: npm install' })
+      chats.seed(finder.id)
+      setTimeout(() => emit('attention', { id: finder.id, state: 'waiting' }), 1500)
+    }
     seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read').parent = lead.id
     if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], 'read')
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'

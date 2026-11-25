@@ -13,7 +13,7 @@ import { ThreadRow } from './ThreadRow'
 export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
-  const { projectSessions, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'selectedId', 'select', 'focus', 'setComposerMode')
+  const { projectSessions, threadTree, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
   const { widths, returnToTerminal, showHome, focusPanel } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
@@ -24,7 +24,7 @@ export function ThreadSidebar() {
   useFocusRequest('sidebar', panel)
   useFocusRequest('thread-search', search)
 
-  const threads = useMemo(() => sortThreads(projectSessions.filter((s) => matchesThread(s, query))), [projectSessions, query])
+  const threads = useMemo(() => sortThreads(projectSessions.filter((s) => matchesThread(s, query)), threadTree), [projectSessions, threadTree, query])
 
   const nav = useListNav(
     threads.map((s) => s.id),
@@ -105,7 +105,7 @@ export function ThreadSidebar() {
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-1">
         {threads.map((s) => (
-          <ThreadRow key={s.id} session={s} selected={s.id === selectedId} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
+          <ThreadRow key={s.id} session={s} needs={threadTree.attention.get(s.id)} selected={s.id === selectedId} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
         ))}
         {threads.length === 0 && <p className="px-4 py-4 text-small text-dim">{query.trim() ? 'No thread matches.' : 'No threads'}</p>}
       </div>

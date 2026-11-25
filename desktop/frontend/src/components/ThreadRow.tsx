@@ -22,19 +22,21 @@ import { ThreadMenu } from './ThreadMenu'
 import { ThreadTask } from './ThreadTask'
 import { useHoverCard } from './useHoverCard'
 
-// menuRequest changes when the list asks this row, from the keyboard, to open its menu.
-type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; menuRequest: number }
+// needs is the thread the owner must answer for this one: itself, or the descendant of it that waits. menuRequest
+// changes when the list asks this row, from the keyboard, to open its menu.
+type ThreadRowProps = { session: Session; needs: Session | undefined; selected: boolean; cursor: boolean; menuRequest: number }
 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
-function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
+function ThreadRowView({ session, needs, selected, cursor, menuRequest }: ThreadRowProps) {
   const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
-  const pending = useAgentosSelector((s) => s.pending[session.id])
+  const asker = needs ?? session
+  const pending = useAgentosSelector((s) => s.pending[asker.id])
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
-  const asking = pending?.kind === 'tool' ? approvalLine(pending) : session.detail
+  const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
   const cleanup = useArmedConfirm()
   const remove = useArmedConfirm()
   const card = useHoverCard(400)
@@ -76,7 +78,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     <div
       ref={row}
       className="row row-inset thread-row group flex-col"
-      data-state={session.state}
+      data-state={needs ? 'waiting' : session.state}
       data-selected={selected}
       data-cursor={cursor}
       data-menu-open={menuAt !== null}
@@ -96,7 +98,7 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
     >
       <div className="thread-card">
         <span className="thread-dim flex h-[1.375rem] items-center">
-          <StateIcon state={session.state} />
+          <StateIcon state={needs ? 'waiting' : session.state} />
         </span>
         {renaming ? (
           <div className="col-span-2 flex min-w-0">
@@ -176,10 +178,11 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
             )}
           </div>
         )}
-        {session.state === 'waiting' && (asking || pending) && (
+        {needs && (asking || pending) && (
           <div className="thread-question col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5">
+            {needs !== session && <p className="truncate font-medium text-ink">{needs.title}</p>}
             {asking && <p className="truncate">{asking}</p>}
-            {pending && <ThreadAnswer key={pending.request} session={session} pending={pending} />}
+            {pending && <ThreadAnswer key={pending.request} session={needs} pending={pending} />}
           </div>
         )}
       </div>
