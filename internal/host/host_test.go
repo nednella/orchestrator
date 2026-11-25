@@ -274,8 +274,17 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"still_queued": []string{}}}})
 			result(true)
 		case "control_response":
-			if l.Response.RequestID == "r1" {
+			switch l.Response.RequestID {
+			case "r1":
 				result(l.Response.Response.Behavior != "allow")
+			case "r2":
+				// The subagent's call runs, or is denied, and the subagent ends, which Claude tells of in a turn of its own.
+				print(map[string]any{"type": "user", "parent_tool_use_id": "toolu_asker", "message": map[string]any{"role": "user", "content": []any{
+					map[string]any{"type": "tool_result", "tool_use_id": "toolu_write", "content": l.Response.Response.Behavior, "is_error": l.Response.Response.Behavior != "allow"},
+				}}})
+				print(map[string]any{"type": "system", "subtype": "task_notification", "task_id": "a2", "tool_use_id": "toolu_asker", "status": "completed", "summary": "written"})
+				reply("report")
+				result(false)
 			}
 		case "user":
 			echo(l)
@@ -360,6 +369,21 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				notify("toolu_bg", nil)
 				during(time.After(wait))
 				reply("report")
+				result(false)
+			case "subagent asks":
+				// A subagent in the background asks for an approval, naming its call and itself by its task id, as Claude
+				// does, and the turn that started it ends while the approval waits.
+				print(map[string]any{"type": "assistant", "uuid": "ucall", "message": map[string]any{"id": "msg_call", "role": "assistant", "content": []any{
+					map[string]any{"type": "tool_use", "id": "toolu_asker", "name": "Agent", "input": map[string]any{"description": "Write sub.txt", "prompt": "write"}},
+				}}})
+				print(map[string]any{"type": "system", "subtype": "task_started", "task_id": "a2", "tool_use_id": "toolu_asker", "description": "Write sub.txt", "is_backgrounded": true, "task_type": "local_agent"})
+				print(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_asker", "content": "Async agent launched"}}}})
+				print(map[string]any{"type": "assistant", "uuid": "usub", "parent_tool_use_id": "toolu_asker", "message": map[string]any{"id": "msg_sub", "role": "assistant", "content": []any{
+					map[string]any{"type": "tool_use", "id": "toolu_write", "name": "Write", "input": map[string]any{"file_path": "sub.txt", "content": "ok"}},
+				}}})
+				print(map[string]any{"type": "control_request", "request_id": "r2", "request": map[string]any{
+					"subtype": "can_use_tool", "tool_name": "Write", "input": map[string]any{"file_path": "sub.txt", "content": "ok"}, "tool_use_id": "toolu_write", "agent_id": "a2",
+				}})
 				result(false)
 			case "big":
 				reply(strings.Repeat("x", 1<<20))
@@ -778,6 +802,56 @@ func TestABackgroundSubagentKeepsTheHostBusyUntilClaudeHasToldOfItsEnd(t *testin
 	// Only the shell runs now, which may be a server that never ends.
 	if !hold() {
 		t.Error("not held once only a shell runs")
+	}
+}
+
+func TestASubagentsApprovalWaitsUntilItIsAnswered(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		answer func(t *testing.T, socket string)
+		result string
+	}{
+		{"allowed", func(t *testing.T, socket string) {
+			if err := Answer(ctxT(t), socket, "r2", true, ""); err != nil {
+				t.Fatal(err)
+			}
+		}, "allow"},
+		{"denied by a message", func(t *testing.T, socket string) { sendMessage(t, socket, "use b.txt") }, "deny"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := startHost(t)
+			events := subscribe(t, h.socket, 0)
+			waitKind(t, events, chat.KindInit)
+			sendMessage(t, h.socket, "subagent asks")
+			if asked := waitKind(t, events, chat.KindApproval); asked.Agent != "toolu_asker" || asked.Parent != "toolu_write" {
+				t.Fatalf("approval %+v, want the subagent's for its Write", asked)
+			}
+			waitKind(t, events, chat.KindTurnEnd)
+			if idle, err := Hold(ctxT(t), h.socket); err != nil || idle {
+				t.Fatalf("hold while the subagent's approval waits: %v, %v", idle, err)
+			}
+
+			tt.answer(t, h.socket)
+			if got := waitTask(t, events, chat.KindTaskEnd, "toolu_asker"); got.Kind != chat.KindTaskEnd {
+				t.Fatal(got)
+			}
+			if e := waitKind(t, events, chat.KindMessage); e.Text != "report" {
+				t.Fatalf("message %+v, want Claude's report", e)
+			}
+			waitKind(t, events, chat.KindTurnEnd)
+			results := logged(t, h.log, chat.KindToolResult)
+			if last := results[len(results)-1]; last.Parent != "toolu_write" || last.Text != tt.result {
+				t.Errorf("the Write's result %+v, want %s", last, tt.result)
+			}
+			if users := logged(t, h.log, chat.KindUser); tt.result == "deny" && users[len(users)-1].Agent != "toolu_asker" {
+				t.Errorf("the message that denied it %+v, want it to be the subagent's answer", users[len(users)-1])
+			}
+			if idle, err := Hold(ctxT(t), h.socket); err != nil || !idle {
+				t.Errorf("hold once all ended: %v, %v", idle, err)
+			}
+		})
 	}
 }
 

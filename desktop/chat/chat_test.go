@@ -536,3 +536,20 @@ func TestAThreadWorksWhileItsSubagentRuns(t *testing.T) {
 	second.Hook(t, id, "Stop", `{}`)
 	eventually(t, "idle once the subagent ended", func() bool { state, n := subagents(second); return state == "idle" && n == 0 })
 }
+
+func TestASubagentsApprovalWaitsPastTheTurnUntilItIsAnswered(t *testing.T) {
+	h, id := newThread(t)
+	send(t, h, id, "subagent asks")
+	eventually(t, "the subagent's approval after the turn's end", func() bool { return turnEnds(t, h, id) == 1 && len(h.ChatPending()) == 1 })
+	if p := h.ChatPending()[0]; p.Request != "sub-1" || p.Tool != "Write" || p.Summary != "sub.txt" {
+		t.Fatalf("pending = %+v, want the subagent's Write", p)
+	}
+
+	second := h.Restart(t)
+	eventually(t, "the approval read again after a restart of the app", func() bool { return len(second.ChatPending()) == 1 })
+	if err := second.ChatAnswer(id, "sub-1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "nothing waiting", func() bool { return len(second.ChatPending()) == 0 })
+	eventually(t, "Claude's report of the subagent's end", func() bool { return turnEnds(t, second, id) == 2 })
+}

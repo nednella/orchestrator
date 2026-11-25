@@ -183,7 +183,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
 // another, or about 30 KB of markdown, as Claude streams it, to a message that says "long", or two subagents in the
-// background to a message that says "agents". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
+// background to a message that says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
 // would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
 // says whether a project key is configured.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
@@ -194,7 +194,9 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   const queued = new Map<string, { id: string; text: string; files: string[] }[]>()
   const media = new Map<string, string>() // a saved image's data URL, by its path
   const replying = new Map<string, () => void>() // stops the reply each thread is streaming
-  const background = new Map<string, { stop(): void; calls: string[] }>() // the subagents each thread runs in the background, by call, and how to stop them
+  // The subagents each thread runs in the background, by call, how to stop them, and how to go on once the approval one
+  // of them waits on is answered.
+  const background = new Map<string, { stop(): void; calls: string[]; resume?: (allow: boolean) => void }>()
   const batches = new Map<string, { events: ChatEvent[]; due: boolean; sent: number }>()
   // The command list a thread of each project reported last, as the service keeps it for Home.
   const projectCommands = new Map<string, { at: number; list: typeof commands }>()
@@ -289,8 +291,9 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
 
   // subagents runs a turn that starts two subagents in the background, as Claude does by default: the turn ends once
   // both are launched, each then works and ends on its own, and Claude reports both in a turn of its own, with no
-  // message of the owner's. The row works until that turn ends, as the sessions show it.
-  function subagents(id: string) {
+  // message of the owner's. The row works until that turn ends, as the sessions show it. With ask, the subagents' Bash
+  // call waits on the owner's approval.
+  function subagents(id: string, ask: boolean) {
     const t = thread(id)
     const runs = backgroundAgents.map((a) => ({ ...a, call: `toolu_${Math.random().toString(36).slice(2, 10)}`, done: 0 }))
     t.setState('working')
@@ -303,7 +306,9 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     append(id, { kind: 'turn_end', cost: 0.02 })
     const open = runs.map((r) => r.call)
     t.setSubagents(open.length)
+    let waiting = false
     const timer = setInterval(() => {
+      if (waiting) return
       const r = runs.find((r) => r.done <= r.steps.length)
       if (!r) {
         clearInterval(timer)
@@ -315,7 +320,18 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       }
       const step = r.steps[r.done]
       const tool = `toolu_${Math.random().toString(36).slice(2, 10)}`
-      if (step) {
+      if (step && ask && step.tool === 'Bash') {
+        append(id, { kind: 'tool_use', id: tool, tool: step.tool, input: step.input, agent: r.call })
+        append(id, { kind: 'approval', id: `req-${tool}`, parent: tool, tool: step.tool, input: step.input, agent: r.call })
+        setPending(id, { id, request: `req-${tool}`, tool: step.tool, summary: (step.input as { command: string }).command, kind: 'tool' })
+        waiting = true
+        const run = background.get(id)
+        if (run)
+          run.resume = (allow) => {
+            append(id, { kind: 'tool_result', parent: tool, text: allow ? step.result : 'The user denied this tool call.', error: !allow, agent: r.call })
+            waiting = false
+          }
+      } else if (step) {
         append(id, { kind: 'tool_use', id: tool, tool: step.tool, input: step.input, agent: r.call })
         append(id, { kind: 'tool_result', parent: tool, text: step.result, agent: r.call })
       } else {
@@ -401,6 +417,11 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     append(id, { kind: 'answer', id: request, text: allow ? 'allow' : 'deny', ...(input ? { input } : {}) })
     setPending(id, null)
     const asked = logOf(id).find((e) => e.kind === 'approval' && e.id === request)
+    // A subagent's approval lets its subagent go on, beside the turns.
+    if (asked?.agent) {
+      background.get(id)?.resume?.(allow)
+      return
+    }
     const answered = Object.entries(input?.answers ?? {}).map(([q, a]) => `"${q}"="${a}"`)
     const allowed = { tool: 'added 12 packages in 3s', question: `The user answered: ${answered.join(', ')}.`, plan: 'User has approved your plan. You can now start coding.' }
     append(id, { kind: 'tool_result', parent: asked?.parent, text: allow ? allowed[p.kind] : message.trim() || 'The user denied this tool call.', error: !allow })
@@ -516,11 +537,16 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       const waiting = pending.get(id)
       if (waiting && files.length > 0) throw 'Answer the approval before sending images'
       if (waiting) {
-        append(id, { kind: 'answer', id: waiting.request, text: 'deny' })
-        append(id, { kind: 'user', id: message, text, parent: waiting.request })
         const asked = logOf(id).find((e) => e.kind === 'approval' && e.id === waiting.request)
-        append(id, { kind: 'tool_result', parent: asked?.parent, text, error: true })
+        append(id, { kind: 'answer', id: waiting.request, text: 'deny' })
+        append(id, { kind: 'user', id: message, text, parent: waiting.request, ...(asked?.agent ? { agent: asked.agent } : {}) })
         setPending(id, null)
+        // The text tells the subagent that asked why, and starts no turn.
+        if (asked?.agent) {
+          background.get(id)?.resume?.(false)
+          return { id: message }
+        }
+        append(id, { kind: 'tool_result', parent: asked?.parent, text, error: true })
         t.setState('working')
         reply(id, text)
         return { id: message }
@@ -544,7 +570,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       }
       append(id, { kind: 'init', id: 'mock-session' })
       if (/\bagents\b/i.test(text)) {
-        subagents(id)
+        subagents(id, /\bask\b/i.test(text))
         return { id: message }
       }
       t.setState('working')

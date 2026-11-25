@@ -54,11 +54,6 @@ const MaxImage = 3932160
 
 var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
 
-type approval struct {
-	id    string
-	input json.RawMessage
-}
-
 type queuedMessage struct {
 	text  string
 	files []string
@@ -106,7 +101,10 @@ type host struct {
 	exited    bool
 	subs      map[*subscriber]struct{}
 	conns     map[net.Conn]struct{}
-	approvals []approval // in the order Claude asked
+	approvals []chat.Event // in the order Claude asked, as chat.Waiting keeps them
+	// subagentCalls are the calls of subagents that have no result yet, each to the Agent call of its subagent: Claude
+	// names no subagent in an approval it asks for, only the call.
+	subagentCalls map[string]string
 	// turnOpen is set from writing a user line, from Claude taking in a queued one, or from Claude starting a turn of
 	// its own, until the turn ends.
 	turnOpen bool
@@ -173,6 +171,8 @@ func Run(ctx context.Context, c Config) error {
 		queued:  map[string]queuedMessage{},
 		replies: map[string]chan chat.Event{},
 		prompts: prompts,
+
+		subagentCalls: map[string]string{},
 	}
 	defer h.shutdown(ln)
 
@@ -483,11 +483,15 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 
 // logLocked logs e and hands it on, as appendLocked does, whether or not Claude has exited.
 func (h *host) logLocked(e chat.Event) (chat.Event, error) {
+	if e.Kind == chat.KindApproval && e.Agent == "" {
+		e.Agent = h.subagentCalls[e.Parent]
+	}
 	e, err := h.log.Append(h.tasks.Named(e))
 	if err != nil {
 		return chat.Event{}, err
 	}
 	h.prompts = chat.Prompts(h.prompts, e)
+	h.approvals = chat.Waiting(h.approvals, e)
 	if task, ok := h.tasks.See(e); ok && task.ReportedAlone(e) {
 		h.turnOpen = true
 	}
@@ -495,14 +499,17 @@ func (h *host) logLocked(e chat.Event) (chat.Event, error) {
 		h.turnOpen = true
 	}
 	switch e.Kind {
-	case chat.KindApproval:
-		h.approvals = append(h.approvals, approval{id: e.ID, input: e.Input})
+	case chat.KindToolUse:
+		if e.Agent != "" {
+			h.subagentCalls[e.ID] = e.Agent
+		}
+	case chat.KindToolResult:
+		delete(h.subagentCalls, e.Parent)
 	case chat.KindTurnEnd:
-		h.approvals = nil
 		h.turnOpen = false
 	case chat.KindExit:
 		h.exited = true
-		h.approvals = nil
+		clear(h.subagentCalls)
 		for id, ch := range h.replies {
 			ch <- chat.Event{Kind: chat.KindReply, ID: id, Error: true, Text: errExited.Error()}
 			delete(h.replies, id)
@@ -762,16 +769,20 @@ func (h *host) sendLocked(id, text string, files []string, from string, images [
 		if len(files) > 0 {
 			return nil, nil, errors.New("Answer the approval before sending images")
 		}
-		parent := h.approvals[0].id
+		// The text denies every approval that waits. When only subagents ask, it answers the first of them and starts no
+		// turn of the thread's own Claude.
+		parent, agent := h.approvals[0].ID, h.approvals[0].Agent
 		for len(h.approvals) > 0 {
 			a := h.approvals[0]
-			if err := log(chat.Event{Kind: chat.KindAnswer, ID: a.id, Text: "deny"}); err != nil {
+			if a.Agent == "" {
+				agent = ""
+			}
+			if err := log(chat.Event{Kind: chat.KindAnswer, ID: a.ID, Text: "deny"}); err != nil {
 				return lines, logged, err
 			}
-			h.approvals = h.approvals[1:]
-			lines = append(lines, chat.Deny(a.id, prompts.Denied(text)))
+			lines = append(lines, chat.Deny(a.ID, prompts.Denied(text)))
 		}
-		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Parent: parent})
+		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Parent: parent, Agent: agent})
 	}
 	line := chat.UserMessageWith(id, text, images)
 	if h.turnOpen || len(h.queued) > 0 {
@@ -1296,7 +1307,7 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 		h.mu.Unlock()
 		return fmt.Errorf("no approval %q is waiting", id)
 	}
-	input := h.approvals[i].input
+	input := h.approvals[i].Input
 	if len(given) > 0 {
 		input = given
 	}
@@ -1316,7 +1327,6 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 		h.mu.Unlock()
 		return err
 	}
-	h.approvals = append(h.approvals[:i], h.approvals[i+1:]...)
 	h.mu.Unlock()
 	h.echoEvent(e)
 	return h.writeLocked(line)
@@ -1325,7 +1335,7 @@ func (h *host) answer(id string, allow bool, message string, given json.RawMessa
 // approvalIndex must be called with h.mu held; it is -1 when no approval id waits.
 func (h *host) approvalIndex(id string) int {
 	for i, a := range h.approvals {
-		if a.id == id {
+		if a.ID == id {
 			return i
 		}
 	}

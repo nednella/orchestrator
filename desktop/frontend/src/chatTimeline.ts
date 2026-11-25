@@ -70,8 +70,9 @@ type Thought = { kind: 'thought'; key: string; id: string; text: string }
 type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem | AgentItem | ChildItem
 // A delegation is a delegate call: its card, the call it turns back into if it fails, and the turn that made it.
 type Delegation = { item: ChildItem; call: ToolCall; turn: Turn }
-// An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
-type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean }
+// An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one. agent
+// is the Agent call of the subagent that asks, whose row the item shows after.
+type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean; agent?: string }
 // unsent holds the not-sent notices logged during the turn: the host drops a message before the turn ends, and the
 // notice shows after the turn's own.
 type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval[]; unsent: Notice[] }
@@ -138,6 +139,11 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const agents = new Map<string, AgentItem>()
   const delegations = new Map<string, Delegation>()
   const children = new Set<string>()
+  // The calls each subagent makes, by call, to the Agent call of the subagent.
+  const agentOfCall = new Map<string, string>()
+  // The approvals subagents ask for, oldest first: a subagent in the background asks after the turn that started it
+  // ended, and its approval waits until it is answered, its call has its result, the subagent ends or its Claude goes.
+  const agentApprovals: Approval[] = []
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
@@ -191,6 +197,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   // stopAgents stops each subagent still at work: its Claude is gone.
   const stopAgents = (at: number) => {
     for (const a of agents.values()) if (a.state === 'running') Object.assign(a, { state: 'stopped', endedAt: at })
+    expireAgentApprovals(() => true)
+  }
+
+  // expireAgentApprovals marks each subagent's approval that waits and matches as one that can no longer be answered.
+  const expireAgentApprovals = (match: (a: Approval) => boolean) => {
+    for (const a of agentApprovals) if (!a.answered && a.item && match(a)) a.item.expired = true
   }
 
   // subagent adds what a subagent did to its Agent call's item, never to the turn: a subagent in the background goes on
@@ -206,6 +218,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'tool_use': {
         const call: ToolCall = { id: e.id || `seq-${e.seq}`, tool: e.tool ?? '', input: e.input, result: null, error: false }
         calls.set(call.id, call)
+        agentOfCall.set(call.id, a.id)
         a.steps.push({ kind: 'call', call })
         a.tools++
         return
@@ -229,7 +242,21 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     else d.item.error = true
   }
 
+  // agentApproval keeps a subagent's approval for its call, apart from the turns.
+  const agentApproval = (e: ChatEvent, agent: string) => {
+    const a: Approval = { request: e.id ?? '', tool: e.tool ?? '', call: calls.get(e.parent ?? ''), answered: false, agent }
+    a.item = { kind: 'approval', key: `approval-${a.request}`, at: e.at, request: a.request, tool: a.tool, input: e.input, expired: false }
+    approvals.set(a.request, a)
+    agentApprovals.push(a)
+  }
+
   events.forEach((e, i) => {
+    // A log from before the host named the subagent that asks names only the call.
+    const asker = e.kind === 'approval' ? e.agent || agentOfCall.get(e.parent ?? '') : undefined
+    if (asker) {
+      if (agents.has(asker)) agentApproval(e, asker)
+      return
+    }
     // A subagent's tool result finds its call as any other does, and its tasks are the thread's.
     if (e.agent && e.kind !== 'tool_result' && e.kind !== 'task_start' && e.kind !== 'task_end') {
       const a = agents.get(e.agent)
@@ -316,6 +343,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         // subagent's end says the rest. A failed call started none.
         const a = agents.get(e.parent ?? '')
         if (a?.state === 'running' && e.error) Object.assign(a, { state: 'failed', endedAt: e.at, result: e.text ?? '' })
+        expireAgentApprovals((w) => w.call?.id === e.parent || w.agent === e.parent)
         const call = calls.get(e.parent ?? '')
         if (call) Object.assign(call, { result: e.text ?? '', error: e.error ?? false })
         const ask = asks.get(e.parent ?? '')
@@ -346,7 +374,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         a.answered = true
         if (a.ask) Object.assign(a.ask, { answer, answers: answersOf(e.input) })
         if (a.call) a.call.answer = answer
-        if (turn && a.item) turn.parts = turn.parts.filter((p) => p !== a.item)
+        if (turn && a.item && !a.agent) turn.parts = turn.parts.filter((p) => p !== a.item)
         return
       }
       case 'task_start': {
@@ -359,6 +387,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       case 'task_end': {
         // Claude tells of the end of a task of its own that was not stopped in a turn it starts itself.
         if (tasks.delete(e.parent ?? '') && held !== null && tasks.size === 0 && (e.agent || e.stop === 'stopped')) close(held)
+        expireAgentApprovals((w) => w.agent === e.parent)
         const a = agents.get(e.parent ?? '')
         if (a?.state !== 'running') return
         Object.assign(a, { state: e.stop === 'stopped' ? 'stopped' : e.error ? 'failed' : 'done', endedAt: e.at, result: e.text ?? '' })
@@ -414,8 +443,13 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
 
   const running = turn as Turn | null
   if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
+  // A subagent's approval shows after its row until it is answered.
+  for (const a of agentApprovals.toReversed()) {
+    const at = items.findIndex((item) => item.kind === 'agent' && item.id === a.agent)
+    if (!a.answered && a.item && at >= 0) items.splice(at + 1, 0, a.item)
+  }
   const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
-  const waiting = running?.approvals.find(unanswered)
+  const waiting = running?.approvals.find(unanswered) ?? agentApprovals.find(unanswered)
   return {
     items,
     queued: [...queued.values()],

@@ -582,6 +582,56 @@ test("a subagent's own task holds the work open, and a subagent woken again runs
   assert.equal(only(t.items, 'agent')[0].state, 'running')
 })
 
+// A subagent in the background asks for an approval after the turn that started it ended.
+const asking = log(
+  user('u1', 'Write the file in a subagent'),
+  agentCall('a1', 'Write file'),
+  taskStart('a1'),
+  toolResult('a1', 'Async agent launched successfully.'),
+  turnEnd(),
+  from('a1', toolUse('s1', 'Write', { file_path: 'sub.txt' })),
+  from('a1', approval('r1', 'Write', { file_path: 'sub.txt' }, 's1')),
+)
+
+test("a subagent's approval shows after its row and waits past the turns until it is answered", () => {
+  const t = buildTimeline(asking, {}, 'main/t1')
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'approval'])
+  assert.deepEqual([t.pending?.request, t.pending?.tool, t.pending?.summary], ['r1', 'Write', 'sub.txt'])
+  const later = buildTimeline([...asking, ...log(user('u2', 'Meanwhile, hi'), message('msg_2', 'Hi.'), turnEnd()).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
+  assert.deepEqual(kinds(later.items), ['user', 'work', 'agent', 'approval', 'user', 'work', 'reply'], "another turn's end leaves it")
+  assert.equal(only(later.items, 'approval')[0].expired, false)
+  assert.equal(later.pending?.request, 'r1')
+  const answered = buildTimeline([...asking, ...log(answer('r1', 'allow'), from('a1', toolResult('s1', 'Wrote sub.txt'))).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
+  assert.deepEqual(kinds(answered.items), ['user', 'work', 'agent'])
+  assert.equal(answered.pending, null)
+  const [step] = only(answered.items, 'agent')[0].steps
+  assert.deepEqual(step.kind === 'call' && [step.call.answer, step.call.result], ['allow', 'Wrote sub.txt'])
+})
+
+test("a subagent's approval can no longer be answered once its call has a result, the subagent ends or its Claude goes", () => {
+  const after = (d: Draft) => buildTimeline([...asking, { at: 99_000, ...d, seq: asking.length + 1 }], {})
+  for (const [name, d] of [
+    ['its call has a result', from('a1', toolResult('s1', 'denied', true))],
+    ['the subagent ends', taskEnd('a1', '', 'stopped')],
+    ['its Claude exits', { kind: 'exit' }],
+    ['a new run starts', { kind: 'start' }],
+  ] as [string, Draft][]) {
+    const t = after(d)
+    assert.deepEqual([only(t.items, 'approval')[0]?.expired, t.pending], [true, null], name)
+  }
+})
+
+test("a message that denies a subagent's approval is its answer, not a turn of the thread's", () => {
+  const t = buildTimeline([...asking, ...log(answer('r1', 'deny'), from('a1', { ...user('u2', 'Use b.txt'), parent: 'r1' }), from('a1', toolResult('s1', 'denied', true))).map((e) => ({ ...e, seq: e.seq + asking.length }))], {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent'])
+  assert.deepEqual([t.turnOpen, t.pending], [false, null])
+})
+
+test('an approval in a log from before the host named the subagent finds it by its call', () => {
+  const unnamed = asking.map((e) => (e.kind === 'approval' ? { ...e, agent: undefined } : e))
+  assert.deepEqual(kinds(buildTimeline(unnamed, {}).items), ['user', 'work', 'agent', 'approval'])
+})
+
 test('the agent list puts the newest turn first', () => {
   const events = log(user('u1', 'One'), agentCall('a1', 'First'), agentCall('a2', 'Second'), turnEnd(), user('u2', 'Two'), agentCall('a3', 'Third'), turnEnd())
   assert.deepEqual(

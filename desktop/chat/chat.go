@@ -217,7 +217,7 @@ func waitingIn(ch sessions.Chat) *Pending {
 	}
 	var approvals []chatlog.Event
 	for _, e := range logged {
-		approvals = waitingAfter(approvals, e)
+		approvals = chatlog.Waiting(approvals, e)
 	}
 	if len(approvals) == 0 {
 		return nil
@@ -353,7 +353,7 @@ func (f *follower) take(e chatlog.Event) {
 	}
 }
 
-// see keeps the approvals that wait, as waitingAfter says, and the tasks Claude runs in the background. For a mode
+// see keeps the approvals that wait, as chatlog.Waiting says, and the tasks Claude runs in the background. For a mode
 // event it returns the mode and whether the owner allowed an ExitPlanMode since the mode before it, in the same turn.
 func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	f.mu.Lock()
@@ -361,7 +361,7 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	if e.Kind == chatlog.KindAnswer && e.Text == "allow" && slices.ContainsFunc(f.approvals, func(a chatlog.Event) bool { return a.ID == e.ID && a.Tool == "ExitPlanMode" }) {
 		f.planApproved = true
 	}
-	f.approvals = waitingAfter(f.approvals, e)
+	f.approvals = chatlog.Waiting(f.approvals, e)
 	if task, ok := f.tasks.See(e); ok && task.ReportedAlone(e) {
 		f.reporting = true
 	}
@@ -380,19 +380,6 @@ func (f *follower) backgroundNow() sessions.Background {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return sessions.Background{Subagents: f.tasks.Working(), Reporting: f.reporting}
-}
-
-// waitingAfter is the approvals that wait, oldest first, once e has happened.
-func waitingAfter(approvals []chatlog.Event, e chatlog.Event) []chatlog.Event {
-	switch e.Kind {
-	case chatlog.KindApproval:
-		return append(approvals, e)
-	case chatlog.KindAnswer:
-		return slices.DeleteFunc(approvals, func(a chatlog.Event) bool { return a.ID == e.ID })
-	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindStart:
-		return nil
-	}
-	return approvals
 }
 
 func (f *follower) hasRead() bool {
