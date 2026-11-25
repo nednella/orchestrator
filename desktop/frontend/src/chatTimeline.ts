@@ -43,6 +43,9 @@ type Turn = { key: string; startedAt: number; parts: Part[]; approvals: Approval
 // One empty list for every message without images keeps a memoised row from rendering again.
 const noFiles: string[] = []
 
+// turnError is why Claude says a turn failed, without the diagnostic lines it adds for its own use; '' when none.
+const turnError = (errors = '') => errors.split('\n').filter((line) => !line.startsWith('[ede_diagnostic]')).join('\n').trim()
+
 const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'question', ExitPlanMode: 'plan' }
 
 // approvalKind is what an approval for the tool asks of the user: to let a tool run, to answer a question or to
@@ -179,7 +182,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (turn) interrupted = true
         return
       case 'turn_end':
-        end(e, e.error ? { text: interrupted ? 'Stopped' : e.text || 'The turn ended with an error', error: !interrupted } : null)
+        end(e, e.error ? { text: interrupted ? 'Stopped' : turnError(e.text) || 'The turn ended with an error', error: !interrupted } : null)
         interrupted = false
         return
       case 'exit':

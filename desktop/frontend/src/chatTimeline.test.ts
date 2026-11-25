@@ -224,6 +224,9 @@ test('interrupt gives Stopped', () => {
 test('a failed turn says why when Claude does', () => {
   const notices = only(buildTimeline(log(user('u1', 'Go'), { kind: 'turn_end', error: true, text: 'No message found with message.uuid of: r9' }), {}).items, 'notice')
   assert.deepEqual(notices.map((n) => [n.text, n.error]), [['No message found with message.uuid of: r9', true]])
+  const failed = (text: string) => only(buildTimeline(log(user('u1', 'Go'), { kind: 'turn_end', error: true, text }), {}).items, 'notice')[0].text
+  assert.equal(failed('[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=null'), 'The turn ended with an error', 'only a diagnostic line says nothing')
+  assert.equal(failed('[ede_diagnostic] result_type=user\nNo conversation found with session ID: abc'), 'No conversation found with session ID: abc')
 })
 
 test('a reply forks at its last block, and a message at the reply before it', () => {
