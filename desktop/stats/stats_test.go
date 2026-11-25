@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,5 +126,70 @@ func TestWaitIsRecordedAsAnEvent(t *testing.T) {
 	want := fmt.Sprintf(`{"at":%d,"kind":"wait","session":"p/aaaaaaaa","issue":3,"model":"opus","ms":1500,"label":"permission","title":"#3 work","cause":"Edit"}`+"\n", start.Add(1500*time.Millisecond).UnixMilli())
 	if string(data) != want {
 		t.Errorf("events = %s, want %s", data, want)
+	}
+}
+
+func TestStatsSumsTheDailyRollup(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
+	midnight := func(daysAgo int) time.Time { return time.Date(2026, 10, 9-daysAgo, 0, 0, 0, 0, time.Local) }
+	for _, wait := range []Wait{
+		{Kind: "permission", Label: "Edit", StartedAt: now.UnixMilli(), WaitedMs: 1000},
+		{Kind: "permission", Label: "Edit", StartedAt: midnight(1).Add(time.Hour).UnixMilli(), WaitedMs: 3000},
+		{Kind: "question", Label: "Question", StartedAt: midnight(6).Add(time.Minute).UnixMilli(), WaitedMs: 5000},
+		{Kind: "idle", Label: "Reply landed", StartedAt: midnight(6).Add(-time.Minute).UnixMilli(), WaitedMs: 2 * 60_000},
+		{Kind: "idle", Label: "Reply landed", StartedAt: midnight(9).UnixMilli(), WaitedMs: 7000},
+	} {
+		writeWait(t, dir, "p", wait)
+	}
+	st, err := New(NewLog(dir, mine)).Stats([]string{"p"}, 7, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Total != 3 || st.TotalWaitMs != 9000 || st.MedianWaitMs != 3000 {
+		t.Errorf("total %d, wait %d, median %d: want the three that started in the range, not the one that ended in it", st.Total, st.TotalWaitMs, st.MedianWaitMs)
+	}
+	if len(st.ByCause) != 2 || st.ByCause[0] != (CauseCount{Kind: "permission", Label: "Edit", Count: 2, TotalWaitMs: 4000}) {
+		t.Errorf("byCause = %+v", st.ByCause)
+	}
+	counts := map[string]int{}
+	for _, d := range st.ByDay {
+		counts[d.Day] = d.Count
+	}
+	if len(st.ByDay) != 7 || counts["2026-10-09"] != 1 || counts["2026-10-08"] != 1 || counts["2026-10-03"] != 1 || counts["2026-10-02"] != 0 {
+		t.Errorf("byDay = %v", st.ByDay)
+	}
+	if len(st.Recent) != 3 || st.Recent[0].WaitedMs != 1000 || st.Recent[2].WaitedMs != 5000 {
+		t.Errorf("recent = %+v, want the range's waits, latest first", st.Recent)
+	}
+}
+
+func TestStatsRereadsOnlyTheFileThatChanged(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	old := Wait{Kind: "question", Label: "Question", StartedAt: now.AddDate(0, 0, -3).UnixMilli(), WaitedMs: 4000}
+	writeWait(t, dir, "p", old)
+	w := New(NewLog(dir, mine))
+	if st, _ := w.Stats([]string{"p"}, 7, now); st.Total != 1 {
+		t.Fatalf("total = %d, want 1", st.Total)
+	}
+
+	// The old day's file turns to nonsense of the same size and time: only a fresh read would see it.
+	path := filepath.Join(dir, "p", eventsFolder, localDay(time.UnixMilli(old.StartedAt+old.WaitedMs))+".jsonl")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", int(info.Size()))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	writeWait(t, dir, "p", Wait{Kind: "idle", Label: "Reply landed", StartedAt: now.UnixMilli() - 1000, WaitedMs: 1000})
+
+	st, _ := w.Stats([]string{"p"}, 7, now)
+	if st.Total != 2 || st.TotalWaitMs != 5000 || st.ByDay[6].Count != 1 || st.ByDay[3].Count != 1 {
+		t.Errorf("total %d, wait %d, by day %v: want today's new wait and the old day from the cache", st.Total, st.TotalWaitMs, st.ByDay)
 	}
 }

@@ -116,61 +116,46 @@ func (w *Waits) End(id string, at time.Time) bool {
 	return true
 }
 
-// Stats sums up the waits of the projects whose keys are given over the last days days, today included.
+// Stats sums up the waits of the projects whose keys are given over the last days days, today included, from
+// the daily rollup and the waits still open.
 func (w *Waits) Stats(keys []string, days int, now time.Time) (Stats, error) {
 	days = max(days, 1)
 	st := Stats{Days: days, ByCause: []CauseCount{}, ByDay: []DayCount{}, Recent: []Wait{}}
 	y, m, d := now.Date()
 	from := time.Date(y, m, d-(days-1), 0, 0, 0, 0, now.Location())
-	var waits []Wait
+	var tally waitTally
+	perDay := map[string]int{}
 	for _, key := range keys {
-		w.log.Since(key, localDay(from), func(e activity.Event) {
-			if e.Kind != activity.Wait {
-				return
+		for day, v := range w.log.Days(key) {
+			if day >= localDay(from) {
+				tally.merge(v.waits)
+				perDay[day] += v.waits.total
 			}
-			waits = append(waits, Wait{SessionTitle: e.Title, Issue: e.Issue, Model: e.Model, Kind: e.Label, Label: cmp.Or(e.Cause, e.Label), StartedAt: e.At - e.Ms, WaitedMs: e.Ms})
-		})
+		}
 	}
 	w.mu.Lock()
 	for id, wait := range w.open {
-		if slices.Contains(keys, session.ProjectKey(id)) {
+		if slices.Contains(keys, session.ProjectKey(id)) && wait.StartedAt >= from.UnixMilli() {
 			wait.WaitedMs = 0
-			waits = append(waits, wait)
+			tally.count(wait)
+			perDay[localDay(time.UnixMilli(wait.StartedAt))]++
 		}
 	}
 	w.mu.Unlock()
+	tally.keepLatest()
 
-	perDay := map[string]int{}
-	causes := map[[2]string]*CauseCount{}
-	var closed []int64
-	var inRange []Wait
-	for _, wait := range waits {
-		if wait.StartedAt < from.UnixMilli() {
-			continue
-		}
-		inRange = append(inRange, wait)
-		st.Total++
-		st.TotalWaitMs += wait.WaitedMs
-		perDay[time.UnixMilli(wait.StartedAt).In(now.Location()).Format(time.DateOnly)]++
-		c := causes[[2]string{wait.Kind, wait.Label}]
-		if c == nil {
-			c = &CauseCount{Kind: wait.Kind, Label: wait.Label}
-			causes[[2]string{wait.Kind, wait.Label}] = c
-		}
-		c.Count++
-		c.TotalWaitMs += wait.WaitedMs
-		if wait.WaitedMs > 0 {
-			closed = append(closed, wait.WaitedMs)
-		}
+	st.Total = tally.total
+	waited := slices.Sorted(slices.Values(tally.waited))
+	for _, ms := range waited {
+		st.TotalWaitMs += ms
 	}
-	slices.Sort(closed)
-	if n := len(closed); n > 0 {
-		st.MedianWaitMs = closed[n/2]
+	if n := len(waited); n > 0 {
+		st.MedianWaitMs = waited[n/2]
 		if n%2 == 0 {
-			st.MedianWaitMs = (closed[n/2-1] + closed[n/2]) / 2
+			st.MedianWaitMs = (waited[n/2-1] + waited[n/2]) / 2
 		}
 	}
-	for _, c := range causes {
+	for _, c := range tally.causes {
 		st.ByCause = append(st.ByCause, *c)
 	}
 	slices.SortFunc(st.ByCause, func(a, b CauseCount) int {
@@ -186,7 +171,69 @@ func (w *Waits) Stats(keys []string, days int, now time.Time) (Stats, error) {
 		day := from.AddDate(0, 0, i).Format(time.DateOnly)
 		st.ByDay = append(st.ByDay, DayCount{Day: day, Count: perDay[day]})
 	}
-	slices.SortStableFunc(inRange, func(a, b Wait) int { return int(b.StartedAt - a.StartedAt) })
-	st.Recent = append(st.Recent, inRange[:min(len(inRange), recentWaits)]...)
+	st.Recent = append(st.Recent, tally.latest...)
 	return st, nil
+}
+
+// waitOf is the finished wait an event records.
+func waitOf(e activity.Event) Wait {
+	return Wait{SessionTitle: e.Title, Issue: e.Issue, Model: e.Model, Kind: e.Label, Label: cmp.Or(e.Cause, e.Label), StartedAt: e.At - e.Ms, WaitedMs: e.Ms}
+}
+
+// waitTally is the waits of a day, or of a range of days, summed up. It keeps every wait's time for the median,
+// and only the latest waits, which are all a range can show of a day.
+type waitTally struct {
+	total  int
+	causes map[[2]string]*CauseCount // by kind and label
+	waited []int64                   // of the closed waits
+	latest []Wait                    // latest first once kept
+}
+
+func (t *waitTally) count(w Wait) {
+	if t.causes == nil {
+		t.causes = map[[2]string]*CauseCount{}
+	}
+	t.total++
+	key := [2]string{w.Kind, w.Label}
+	c := t.causes[key]
+	if c == nil {
+		c = &CauseCount{Kind: w.Kind, Label: w.Label}
+		t.causes[key] = c
+	}
+	c.Count++
+	c.TotalWaitMs += w.WaitedMs
+	if w.WaitedMs > 0 {
+		t.waited = append(t.waited, w.WaitedMs)
+	}
+	t.latest = append(t.latest, w)
+	if len(t.latest) > 2*recentWaits {
+		t.keepLatest()
+	}
+}
+
+// merge adds o, never sharing its maps or slices: a day's tally stays in the cache.
+func (t *waitTally) merge(o waitTally) {
+	if o.total == 0 {
+		return
+	}
+	if t.causes == nil {
+		t.causes = map[[2]string]*CauseCount{}
+	}
+	t.total += o.total
+	for key, c := range o.causes {
+		if t.causes[key] == nil {
+			t.causes[key] = &CauseCount{Kind: c.Kind, Label: c.Label}
+		}
+		t.causes[key].Count += c.Count
+		t.causes[key].TotalWaitMs += c.TotalWaitMs
+	}
+	t.waited = append(slices.Clip(t.waited), o.waited...)
+	t.latest = append(slices.Clip(t.latest), o.latest...)
+	t.keepLatest()
+}
+
+// keepLatest drops all but the latest waits.
+func (t *waitTally) keepLatest() {
+	slices.SortStableFunc(t.latest, func(a, b Wait) int { return cmp.Compare(b.StartedAt, a.StartedAt) })
+	t.latest = t.latest[:min(len(t.latest), recentWaits)]
 }
