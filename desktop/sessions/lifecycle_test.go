@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -167,14 +168,14 @@ func TestCleanupMerged(t *testing.T) {
 	openThenMerge(h)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
-	if exists(wt) || branches(t, h.Dir) != "" {
+	if exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
 	log := h.Cleanups()
 	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 7 || log[0].PR != 12 || !log[0].Merged || log[0].SessionTitle != "#7 work" {
 		t.Fatalf("log = %+v", log)
 	}
-	if want := []string{"clean-up command for issue-7", "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
+	if want := []string{"worktree " + wt, "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
 		t.Errorf("removed = %q, want %q", log[0].Removed, want)
 	}
 	if got := h.Events(t, activity.Cleanup); len(got) != 1 || got[0].Label != "done" || got[0].Issue != 7 || got[0].PR != 12 || got[0].Session != s.ID {
@@ -247,7 +248,7 @@ func TestCleanupBlocked(t *testing.T) {
 			if err := h.Cleanup(s.ID, true); err != nil {
 				t.Fatal(err)
 			}
-			if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
+			if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
 				t.Errorf("forced clean-up left things: wt %v branches %q", exists(wt), branches(t, h.Dir))
 			}
 			if log := h.Cleanups(); len(log) != 2 || log[0].Status != "done" {
@@ -276,8 +277,8 @@ func TestCleanupClosedAsksFirst(t *testing.T) {
 	if err := h.Cleanup(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("the confirmed clean-up left things behind")
+	if !cleanedUp(h, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("the confirmed clean-up: worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
 }
 
@@ -327,8 +328,8 @@ func TestCleanupMergedWithRemoteBranchGone(t *testing.T) {
 
 	openThenMergeAt(h, gitIn(t, h.Dir, "rev-parse", "issue-7"))
 	eventually(t, "clean-up of a merged branch GitHub deleted", cleanedUp(h, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("left things behind")
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
 }
 
@@ -636,7 +637,7 @@ func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 }
 
 func TestBranchStatusAfterARebaseMerge(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -656,7 +657,7 @@ func TestBranchStatusAfterARebaseMerge(t *testing.T) {
 }
 
 func TestCleanupCustomCommand(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree} && git branch -D {branch} && touch {dir}/cleaned-{branch}"})
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree} && touch {dir}/cleaned-{branch}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -667,13 +668,13 @@ func TestCleanupCustomCommand(t *testing.T) {
 	if exists(wt) || !exists(filepath.Join(h.Dir, "cleaned-issue-7")) {
 		t.Errorf("custom command: worktree exists %v, marker exists %v", exists(wt), exists(filepath.Join(h.Dir, "cleaned-issue-7")))
 	}
-	if branches(t, h.Dir) != "" {
-		t.Error("the branch was kept")
+	if branches(t, h.Dir) == "" {
+		t.Error("the branch is gone")
 	}
 }
 
 func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "printf '[%s]' {force} > {dir}/force-{branch}; git worktree remove {force} {worktree} && git branch -D {branch}"})
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "printf '[%s]' {force} > {dir}/force-{branch}; git worktree remove {force} {worktree}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -697,101 +698,282 @@ func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(h.Dir, "force-issue-8")); string(got) != "[--force]" || exists(dirty) {
 		t.Errorf("forced {force} = %q, worktree exists %v", got, exists(dirty))
 	}
-}
-
-func TestCleanupCommandMayWorkInTheMainTree(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git checkout main && git branch -D {branch}"})
-	repoFixture(t, h)
-	gitIn(t, h.Dir, "checkout", "-b", "issue-7")
-	gitIn(t, h.Dir, "push", "-u", "origin", "issue-7")
-	s := issueSession(h, t, 7)
-
-	openThenMerge(h)
-	eventually(t, "clean-up", cleanedUp(h, s.ID))
-	if branches(t, h.Dir) != "" || gitIn(t, h.Dir, "branch", "--show-current") != "main" {
-		t.Errorf("branches %q, folder on %q", branches(t, h.Dir), gitIn(t, h.Dir, "branch", "--show-current"))
+	if gitIn(t, h.Dir, "branch", "--list", "issue-8") == "" {
+		t.Error("the forced clean-up deleted the branch")
 	}
 }
 
-func TestCleanupWithoutCommandRemovesOnlyTheSession(t *testing.T) {
-	h := apptest.New(t)
+func TestSetupCleanupCommand(t *testing.T) {
+	var set project.Project
+	set.SetUp()
+	if set.CleanupCommand != "" || set.RemoveWorktree() != project.DefaultCleanupCommand {
+		t.Fatalf("a set-up project cleans up with %q, want the default %q", set.RemoveWorktree(), project.DefaultCleanupCommand)
+	}
+	h := apptest.New(t) // no session_cleanup_command, as SetUp writes none
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-
-	openThenMerge(h)
-	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-	if !exists(wt) || branches(t, h.Dir) == "" {
-		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
-	}
-	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
-		t.Errorf("log = %+v", log)
-	}
-}
-
-func TestCleanupCommandFailureStopsBeforeTheSession(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "false"})
-	repoFixture(t, h)
-	s := issueThread(h, t, 7)
-	pushWork(t, s.Worktree)
-
-	openThenMerge(h)
-	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
-	if got, _ := h.Session(s.ID); !strings.Contains(got.CleanupReason, "the clean-up command failed for issue-7") {
-		t.Errorf("reason = %q", got.CleanupReason)
-	}
-}
-
-func TestCleanupCommandFailureWithNothingLeftCleansUpTheSession(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove --force {worktree} && git branch -D {branch}; exit 3"})
-	repoFixture(t, h)
-	s := issueThread(h, t, 7)
-	wt := s.Worktree
-	pushWork(t, wt)
+	head := gitIn(t, wt, "rev-parse", "HEAD")
 
 	openThenMerge(h)
 	eventually(t, "clean-up", cleanedUp(h, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
-		t.Errorf("worktree exists %v, branches %q", exists(wt), branches(t, h.Dir))
+	if exists(wt) {
+		t.Error("the default command left the worktree")
 	}
-	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || !strings.Contains(strings.Join(log[0].Removed, "|"), "failed with nothing left: sh -c: exit status 3") {
-		t.Errorf("log = %+v", log)
-	}
-}
-
-func TestCleanupCommandFailureWithABranchLeftStillBlocks(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove --force {worktree}; exit 3"})
-	repoFixture(t, h)
-	s := issueThread(h, t, 7)
-	pushWork(t, s.Worktree)
-
-	openThenMerge(h)
-	eventually(t, "blocked", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
-	if got, _ := h.Session(s.ID); !strings.Contains(got.CleanupReason, "the clean-up command failed for issue-7") {
-		t.Errorf("reason = %q", got.CleanupReason)
+	if got := gitIn(t, h.Dir, "rev-parse", "refs/heads/issue-7"); got != head {
+		t.Errorf("issue-7 is at %q, want %s", got, head)
 	}
 }
 
-func TestSessionWithoutIssueIsNeverCleanedUp(t *testing.T) {
+func TestCleanupRemovesTheWorktreeAndKeepsTheBranch(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s, err := h.NewThreadIn("plain", "", "supervised", "project")
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	head := gitIn(t, wt, "rev-parse", "HEAD")
+
+	openThenMergeAt(h, head)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(wt) || strings.Contains(gitIn(t, h.Dir, "worktree", "list", "--porcelain"), wt) {
+		t.Errorf("the worktree is still there: on disk %v, git lists %s", exists(wt), gitIn(t, h.Dir, "worktree", "list", "--porcelain"))
+	}
+	if got := gitIn(t, h.Dir, "branch", "--list", "issue-7"); got == "" {
+		t.Error("the branch is gone")
+	}
+	if got := gitIn(t, h.Dir, "rev-parse", "refs/heads/issue-7"); got != head {
+		t.Errorf("issue-7 is at %s, want %s", got, head)
+	}
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.Worktree != "" || got.Branch != "issue-7" {
+		t.Errorf("row = %+v", got)
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Path != wt || records[0].Removed == 0 {
+		t.Errorf("records = %+v", records)
+	}
+	log := h.Cleanups()
+	if len(log) != 1 || log[0].Status != "done" || !log[0].Merged {
+		t.Fatalf("log = %+v", log)
+	}
+	if want := []string{"worktree " + wt, "settled thread", "temp folder"}; !slices.Equal(log[0].Removed, want) {
+		t.Errorf("removed = %q, want %q", log[0].Removed, want)
+	}
+}
+
+func TestCleanupNeverRemovesAWorktreeAHumanMade(t *testing.T) {
+	for _, forced := range []bool{false, true} {
+		t.Run(fmt.Sprintf("forced %v", forced), func(t *testing.T) {
+			ran := filepath.Join(t.TempDir(), "ran")
+			h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
+			repoFixture(t, h)
+			human := filepath.Join(h.Dir, "trees", "issue-7")
+			gitIn(t, h.Dir, "worktree", "add", "-b", "issue-7", human)
+			commitIn(t, human, "human.txt")
+			head := gitIn(t, human, "rev-parse", "HEAD")
+			notes := filepath.Join(human, "notes.txt")
+			if err := os.WriteFile(notes, []byte("mine\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			s := issueSession(h, t, 7)
+			if s.Branch != "issue-7" || s.Worktree != "" {
+				t.Fatalf("thread = %+v, want it in the human's worktree on issue-7", s)
+			}
+
+			if forced {
+				if err := h.Cleanup(s.ID, true); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				openThenMerge(h)
+			}
+			eventually(t, "the clean-up", cleanedUp(h, s.ID))
+			if !exists(notes) || !exists(filepath.Join(human, "human.txt")) || worktreesOf(t, h.Dir)["issue-7"] != realDir(t, human) {
+				t.Errorf("the human's worktree: notes there %v, worktrees %v", exists(notes), worktreesOf(t, h.Dir))
+			}
+			if got := gitIn(t, h.Dir, "rev-parse", "refs/heads/issue-7"); got != head {
+				t.Errorf("issue-7 is at %s, want %s", got, head)
+			}
+			if runs := cleanupRuns(ran); len(runs) != 0 {
+				t.Errorf("the clean-up command ran for %q", runs)
+			}
+			if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
+				t.Errorf("log = %+v", log)
+			}
+		})
+	}
+}
+
+// projectFolderThread is a Write thread in the project folder that tracks my-fix, checked out and pushed there. Its
+// clean-up command notes each folder it runs for in the file ran.
+func projectFolderThread(t *testing.T) (h *apptest.Harness, s sessions.Session, ran string) {
+	t.Helper()
+	ran = filepath.Join(t.TempDir(), "ran")
+	h = apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
+	repoFixture(t, h)
+	gitIn(t, h.Dir, "checkout", "-b", "my-fix")
+	gitIn(t, h.Dir, "push", "-u", "origin", "my-fix")
+	s, err := h.NewThreadIn("my work", "", "supervised", "project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Sessions().Track(s.ID, "my-fix"); err != nil {
+		t.Fatal(err)
+	}
+	return h, s, ran
+}
+
+// projectFolderIntact checks that the project folder is the repo's checkout, on my-fix, with its README and file.
+func projectFolderIntact(t *testing.T, h *apptest.Harness, file string) {
+	t.Helper()
+	if !exists(filepath.Join(h.Dir, "README")) || !exists(filepath.Join(h.Dir, file)) {
+		t.Errorf("the project folder lost files: README there %v, %s there %v", exists(filepath.Join(h.Dir, "README")), file, exists(filepath.Join(h.Dir, file)))
+	}
+	if got := gitIn(t, h.Dir, "branch", "--show-current"); got != "my-fix" {
+		t.Errorf("the project folder is on %q, want my-fix", got)
+	}
+	if realDir(t, gitIn(t, h.Dir, "rev-parse", "--show-toplevel")) != realDir(t, h.Dir) {
+		t.Error("the project folder is no longer the repo's checkout")
+	}
+}
+
+func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
+	h, s, ran := projectFolderThread(t)
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	projectFolderIntact(t, h, "README")
+	if runs := cleanupRuns(ran); len(runs) != 0 {
+		t.Errorf("the clean-up command ran for %q", runs)
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"settled thread", "temp folder"}) {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestForcedCleanupNeverRemovesTheProjectFolder(t *testing.T) {
+	h, s, ran := projectFolderThread(t)
+	if err := os.WriteFile(filepath.Join(h.Dir, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Cleanup(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	projectFolderIntact(t, h, "notes.txt")
+	if runs := cleanupRuns(ran); len(runs) != 0 {
+		t.Errorf("the clean-up command ran for %q", runs)
+	}
+	if log := h.Cleanups(); len(log) != 1 || slices.ContainsFunc(log[0].Removed, func(r string) bool { return strings.HasPrefix(r, "worktree") }) {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestHumanWorktreeAtARemovedPathIsNotRemoved(t *testing.T) {
+	ran := filepath.Join(t.TempDir(), "ran")
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(wt) {
+		t.Fatal("the clean-up left the worktree")
+	}
+
+	gitIn(t, h.Dir, "worktree", "add", wt, "issue-7")
+	mine := filepath.Join(wt, "mine.txt")
+	if err := os.WriteFile(mine, []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Cleanup(s.ID, true); err == nil {
+		t.Error("a forced clean-up after the worktree was removed ran")
+	}
+	fresh := h.Restart(t)
+	fresh.RefreshPRs()
+	fresh.RefreshPRs()
+	if err := fresh.Cleanup(s.ID, true); err == nil {
+		t.Error("a forced clean-up after a restart ran")
+	}
+	time.Sleep(300 * time.Millisecond)
+	if !exists(mine) || worktreesOf(t, h.Dir)["issue-7"] != realDir(t, wt) {
+		t.Errorf("the human's worktree: file there %v, worktrees %v", exists(mine), worktreesOf(t, h.Dir))
+	}
+	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{wt}) {
+		t.Errorf("the clean-up command ran for %q, want once for %s", runs, wt)
+	}
+	if log := fresh.Cleanups(); len(log) != 1 {
+		t.Errorf("log = %+v", log)
+	}
+}
+
+func TestCleanupCommandThatFailsWithTheWorktreeGoneCounts(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree}; exit 3"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+
+	openThenMerge(h)
+	eventually(t, "clean-up", cleanedUp(h, s.ID))
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree exists %v, branches %q", exists(wt), branches(t, h.Dir))
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" || !slices.Equal(log[0].Removed, []string{"worktree " + wt, "settled thread", "temp folder"}) {
+		t.Errorf("log = %+v", log)
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed == 0 {
+		t.Errorf("records = %+v", records)
+	}
+}
+
+func TestCleanupCommandThatFailsWithTheWorktreeLeftKeeps(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "echo no such luck >&2; exit 3"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "the clean-up command failed: sh -c: exit status 3: no such luck")
+	if got, _ := h.Session(s.ID); got.State != "settled" || got.Worktree != wt {
+		t.Errorf("row = %+v", got)
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "blocked" || len(log[0].Removed) != 0 {
+		t.Errorf("log = %+v", log)
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed != 0 {
+		t.Errorf("records = %+v", records)
+	}
+}
+
+func TestCleanupCommandThatLeavesTheWorktreeKeeps(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "true {worktree}"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, wt, "the clean-up command left "+wt)
+}
+
+func TestReadThreadHasNothingToCleanUp(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
 		t.Fatal(err)
 	}
 	openThenMerge(h)
 	time.Sleep(400 * time.Millisecond)
-	if _, ok := h.Session(s.ID); !ok {
-		t.Error("a session without an issue was cleaned up")
+	if got, ok := h.Session(s.ID); !ok || got.State == "settled" || got.Branch != "" || got.PR != nil {
+		t.Errorf("the Read thread = %+v, there %v", got, ok)
 	}
 	if err := h.Cleanup(s.ID, true); err == nil {
-		t.Error("Cleanup accepted a session without an issue")
+		t.Error("Cleanup accepted a Read thread with no branch")
 	}
-	if got, _ := h.Session(s.ID); got.Branch != "" || got.PR != nil {
-		t.Errorf("session = %+v", got)
+	if !exists(filepath.Join(h.Dir, "README")) || len(h.Cleanups()) != 0 {
+		t.Errorf("README there %v, log %+v", exists(filepath.Join(h.Dir, "README")), h.Cleanups())
 	}
 }
 
@@ -832,8 +1014,8 @@ func TestPRMergedWhileTheAppWasClosedIsCleanedUp(t *testing.T) {
 	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))
 	fresh.RefreshPRs()
 	eventually(t, "the clean-up at the next start", cleanedUp(fresh, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("the clean-up left things behind")
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
 	if log := fresh.Cleanups(); len(log) != 1 || log[0].Status != "done" || !log[0].Merged {
 		t.Errorf("log = %+v", log)
@@ -887,8 +1069,8 @@ func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	fresh.RefreshPRs()
 	eventually(t, "the restarted app to clean up", cleanedUp(fresh, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
-		t.Error("the clean-up left things behind")
+	if exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
 	}
 }
 
@@ -949,7 +1131,7 @@ func openThenClose(h *apptest.Harness) {
 }
 
 func TestCleanupMergeManualAsks(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -964,7 +1146,7 @@ func TestCleanupMergeManualAsks(t *testing.T) {
 }
 
 func TestCleanupCloseAuto(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -972,13 +1154,13 @@ func TestCleanupCloseAuto(t *testing.T) {
 
 	openThenClose(h)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
+	if exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
 }
 
 func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1027,7 +1209,7 @@ func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 }
 
 func TestMergedPRSettlesTheThread(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1047,7 +1229,7 @@ func TestMergedPRSettlesTheThread(t *testing.T) {
 }
 
 func TestClosedPRSettlesTheThread(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1119,14 +1301,16 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	}
 }
 
-func TestCleanupRunsOnceForASettledThread(t *testing.T) {
-	h := newHarness(t)
+func TestCleanupRunsOncePerWorktree(t *testing.T) {
+	ran := filepath.Join(t.TempDir(), "ran")
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	pushWork(t, s.Worktree)
 
 	openThenMerge(h)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	removedAt := madeRecords(t, h)[0].Removed
 	h.RefreshPRs()
 	if err := h.Cleanup(s.ID, true); err == nil {
 		t.Error("a second clean-up of the thread was accepted")
@@ -1135,12 +1319,63 @@ func TestCleanupRunsOnceForASettledThread(t *testing.T) {
 	fresh := h.Restart(t)
 	fresh.RefreshPRs()
 	fresh.RefreshPRs()
+	if err := fresh.Cleanup(s.ID, true); err == nil {
+		t.Error("a clean-up after a restart was accepted")
+	}
 	time.Sleep(300 * time.Millisecond)
 	if log := fresh.Cleanups(); len(log) != 1 {
 		t.Errorf("log = %+v", log)
 	}
+	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{s.Worktree}) {
+		t.Errorf("the clean-up command ran for %q", runs)
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed != removedAt {
+		t.Errorf("records = %+v, want removed at %d", records, removedAt)
+	}
 	if got, ok := fresh.Session(s.ID); !ok || !cleanedUp(fresh, s.ID)() {
 		t.Errorf("after a restart the row = %+v, there %v", got, ok)
+	}
+}
+
+func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	ended(t, h, s)
+	time.Sleep(2 * time.Millisecond) // the merge must come after the start, and the wake after the merge, to the millisecond
+	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), time.Now()))
+	h.RefreshPRs()
+	if got, _ := h.Session(s.ID); got.Cleanup != "ask" {
+		t.Fatalf("after the merge = %+v", got)
+	}
+	time.Sleep(2 * time.Millisecond)
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	asks := func(h *apptest.Harness, when string) {
+		t.Helper()
+		got, _ := h.Session(s.ID)
+		if got.State == "settled" || got.PR == nil || got.PR.State != "merged" || got.Cleanup != "ask" || !exists(wt) {
+			t.Errorf("%s: row = %+v, worktree there %v", when, got, exists(wt))
+		}
+	}
+	h.RefreshPRs()
+	h.RefreshPRs()
+	asks(h, "after the wake")
+	fresh := h.Restart(t)
+	fresh.RefreshPRs()
+	asks(fresh, "after a restart")
+
+	if err := fresh.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(fresh, s.ID)() || exists(wt) || branches(t, h.Dir) == "" {
+		t.Errorf("the confirmed clean-up: row cleaned up %v, worktree there %v, branches %q", cleanedUp(fresh, s.ID)(), exists(wt), branches(t, h.Dir))
 	}
 }
 
@@ -1150,5 +1385,53 @@ func TestForkDoesNotSettleOnTheSourcesPR(t *testing.T) {
 	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
 	if got := stateOf(h, fork.ID); got == "settled" || got == "missing" {
 		t.Errorf("the fork is %s", got)
+	}
+}
+
+// slowOrigin makes each fetch from origin wait first, through an ssh command that sleeps and then runs git's own side
+// of the fetch on the bare origin.
+func slowOrigin(t *testing.T, h *apptest.Harness, origin string, wait time.Duration) {
+	t.Helper()
+	ssh := filepath.Join(t.TempDir(), "slow-ssh")
+	script := fmt.Sprintf("#!/bin/sh\nsleep %g\nfor last; do :; done\nexec sh -c \"$last\"\n", wait.Seconds())
+	if err := os.WriteFile(ssh, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, h.Dir, "config", "core.sshCommand", ssh)
+	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", "git upload-pack")
+	gitIn(t, h.Dir, "remote", "set-url", "origin", "ssh://localhost"+origin)
+}
+
+func TestWakeDuringTheCleanupKeepsTheWorktree(t *testing.T) {
+	h := newHarness(t)
+	origin := repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	wt := s.Worktree
+	pushWork(t, wt)
+	withConversation(t, h, s.ID)
+	slowOrigin(t, h, origin, 3*time.Second) // the clean-up fetches before the settle and again after it
+
+	done := make(chan error, 1)
+	go func() { done <- h.Cleanup(s.ID, false) }()
+	eventually(t, "the clean-up to settle the thread", func() bool { return stateOf(h, s.ID) == "settled" })
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	want := fmt.Sprintf("Thread %d woke during the clean-up", s.N)
+	if got, _ := h.Session(s.ID); got.State == "settled" || got.Cleanup != "blocked" || got.CleanupReason != want || got.Worktree != wt {
+		t.Errorf("row = %+v, want it live and kept with %q", got, want)
+	}
+	if !exists(filepath.Join(wt, "work.txt")) || branches(t, h.Dir) == "" {
+		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
+	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Removed != 0 {
+		t.Errorf("records = %+v", records)
+	}
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "blocked" || log[0].Reason != want || len(log[0].Removed) != 0 {
+		t.Errorf("log = %+v", log)
 	}
 }

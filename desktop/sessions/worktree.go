@@ -161,11 +161,11 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	}
 	w := Made{Path: dir, Branch: branch, Base: base, BaseOid: baseOid, Thread: thread.String(), Created: time.Now().UnixMilli()}
 	if err := l.sessions.made.Add(proj.Key(), w); err != nil {
-		l.removeWorktree(ctx, proj, dir)
+		l.removeUnstarted(ctx, proj, dir)
 		return workPlace{}, err
 	}
 	if err := l.mark(ctx, dir, thread.String()); err != nil {
-		l.removeWorktree(ctx, proj, dir)
+		l.removeUnstarted(ctx, proj, dir)
 		return workPlace{}, err
 	}
 	return workPlace{dir: dir, branch: branch, made: true}, nil
@@ -244,11 +244,11 @@ func (l *Lifecycle) undoWorktree(ctx context.Context, proj project.Project, thre
 	if !w.made || !l.ours(ctx, proj.Key(), w.dir, thread.String()) {
 		return
 	}
-	l.removeWorktree(ctx, proj, w.dir)
+	l.removeUnstarted(ctx, proj, w.dir)
 }
 
-// removeWorktree removes a worktree agentos just made, and records it gone.
-func (l *Lifecycle) removeWorktree(ctx context.Context, proj project.Project, dir string) {
+// removeUnstarted removes a worktree agentos just made for a thread that did not start, and records it gone.
+func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, dir string) {
 	if _, err := l.git(ctx, proj.Dir, "worktree", "remove", dir); err != nil {
 		log.Printf("agentos: removing the worktree %s of a thread that did not start: %v", dir, err)
 		return

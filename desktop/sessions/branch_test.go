@@ -256,7 +256,7 @@ func TestTrackRefusesABranchCheckedOutInAnotherThreadsWorktree(t *testing.T) {
 }
 
 func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "{ [ -z {worktree} ] || git worktree remove {force} {worktree}; } && git branch -D {branch}"})
+	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	gitIn(t, h.Dir, "branch", "side")
@@ -268,11 +268,21 @@ func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
 	h.RefreshPRs()
 	h.GH.SetPRFor("side", numberedPR(20, "MERGED"))
 	h.RefreshPRs()
-	eventually(t, "the clean-up of side", cleanedUp(h, s.ID))
+	eventually(t, "the clean-up of side to keep the worktree", func() bool { got, _ := h.Session(s.ID); return got.Cleanup == "blocked" })
+	if got, _ := h.Session(s.ID); got.CleanupReason != "the worktree "+s.Worktree+" is not on side" {
+		t.Errorf("reason = %q", got.CleanupReason)
+	}
 	if !exists(s.Worktree) || gitIn(t, s.Worktree, "branch", "--show-current") != "issue-7" {
 		t.Error("the clean-up of a branch the worktree does not have removed the worktree")
 	}
 	if records := madeRecords(t, h); len(records) != 1 || records[0].Branch != "issue-7" || records[0].Removed != 0 {
 		t.Errorf("records = %+v", records)
+	}
+
+	if err := h.Cleanup(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(s.Worktree) || gitIn(t, h.Dir, "branch", "--list", "issue-7", "side") == "" {
+		t.Errorf("the forced clean-up: worktree there %v, branches %q", exists(s.Worktree), gitIn(t, h.Dir, "branch", "--list", "issue-7", "side"))
 	}
 }

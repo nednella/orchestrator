@@ -2,9 +2,12 @@ package sessions
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/project"
@@ -158,5 +161,75 @@ func TestReviewAfterACommentIsDeletedWakesTheSession(t *testing.T) {
 		if o := l.update(tg, "", &PR{Number: 7, State: "open", Comments: tt.comments}); o.wake != tt.want {
 			t.Errorf("fetch %d with %d comments woke with %q, want %q", i, tt.comments, o.wake, tt.want)
 		}
+	}
+}
+
+func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
+	recordProjectFolder := func(t *testing.T, l *Lifecycle, dir string) {
+		t.Helper()
+		if err := l.sessions.made.Add("p", Made{Path: dir, Branch: "issue-7", Thread: "p/t1"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".git", markerFile), []byte("p/t1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		name   string
+		place  func(t *testing.T, l *Lifecycle, dir string) (projDir, path string)
+		reason string
+	}{
+		{"the thread's own", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			return dir, madeTree(t, l, dir, "issue-7", "p/t1")
+		}, ""},
+		{"the project folder", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			recordProjectFolder(t, l, dir)
+			return dir, dir
+		}, "holds the project's own checkout, which agentos never removes"},
+		{"the repo's checkout around a project in a folder of it", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			recordProjectFolder(t, l, dir)
+			sub := filepath.Join(dir, "sub")
+			if err := os.Mkdir(sub, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			return sub, dir
+		}, "holds the project's own checkout, which agentos never removes"},
+		{"a human's worktree at a path agentos removed", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			wt := madeTree(t, l, dir, "issue-7", "p/t1")
+			gitT(t, dir, "worktree", "remove", wt)
+			if err := l.sessions.made.Removed("p", wt, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			gitT(t, dir, "worktree", "add", wt, "issue-7")
+			return dir, wt
+		}, "is not the worktree agentos made for this thread"},
+		{"another thread's", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			return dir, madeTree(t, l, dir, "issue-7", "p/t2")
+		}, "is not the worktree agentos made for this thread"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l, dir, _ := madeRepo(t)
+			projDir, path := tt.place(t, l, dir)
+			ran := filepath.Join(t.TempDir(), "ran")
+			proj := project.Project{Name: "p", Dir: projDir, CleanupCommand: fmt.Sprintf("echo {worktree} >> %q && git worktree remove --force {worktree}", ran)}
+			plan := cleanupPlan{branchPlan: branchPlan{branch: "issue-7", worktree: path, made: true}, force: true}
+			removed, reason := l.removeWorktree(t.Context(), target{id: "p/t1", branch: "issue-7", proj: proj}, &plan)
+			if tt.reason == "" {
+				if reason != "" || !slices.Equal(removed, []string{"worktree " + path}) || !gone(path) {
+					t.Errorf("removed %q, reason %q, folder gone %v", removed, reason, gone(path))
+				}
+				return
+			}
+			if !strings.Contains(reason, tt.reason) || len(removed) != 0 {
+				t.Errorf("removed %q, reason %q, want %q", removed, reason, tt.reason)
+			}
+			if _, err := os.Stat(ran); err == nil {
+				t.Error("the clean-up command ran")
+			}
+			if _, err := os.Stat(filepath.Join(path, "README")); err != nil {
+				t.Errorf("the folder is not there: %v", err)
+			}
+		})
 	}
 }

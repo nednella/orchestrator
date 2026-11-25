@@ -36,14 +36,14 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
 	h.RefreshPRs()
 	eventually(t, "the ended row to be cleaned up", cleanedUp(h, s.ID))
-	if exists(wt) || branches(t, h.Dir) != "" {
+	if exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
 	log := h.Cleanups()
 	if len(log) != 1 || log[0].Status != "done" || log[0].PR != 12 {
 		t.Fatalf("log = %+v", log)
 	}
-	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "settled thread") || !strings.Contains(removed, "clean-up command for issue-7") {
+	if removed := strings.Join(log[0].Removed, "|"); !strings.Contains(removed, "settled thread") || !strings.Contains(removed, "worktree "+wt) {
 		t.Errorf("removed = %q", log[0].Removed)
 	}
 }
@@ -362,7 +362,7 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 }
 
 func TestWokenThreadIsCleanedUpOnMerge(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -588,7 +588,7 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 }
 
 func TestCleanedUpThreadIsLeftOutOfTheWebhook(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{CleanupCommand: removeWorktreeAndBranch, ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	h.GH.WebhookWorks()
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)

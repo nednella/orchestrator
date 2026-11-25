@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -266,10 +266,26 @@ func (l *Lifecycle) forget(id string) {
 	delete(l.tracks, id)
 	l.gone[id] = true
 	key := session.ProjectKey(id)
+	l.setAsked(id, 0)
 	if f := l.prs(key); slices.Contains(f.Cleaned, id) {
 		f.Cleaned = slices.DeleteFunc(f.Cleaned, func(c string) bool { return c == id })
 		l.savePRs(key)
 	}
+}
+
+// setAsked records that the thread's clean-up after PR n waits on the owner, or with 0 that it does not. It needs mu.
+func (l *Lifecycle) setAsked(id string, n int) {
+	key := session.ProjectKey(id)
+	f := l.prs(key)
+	if f.Asked[id] == n {
+		return
+	}
+	if n == 0 {
+		delete(f.Asked, id)
+	} else {
+		f.Asked[id] = n
+	}
+	l.savePRs(key)
 }
 
 // retire forgets a session whose clean-up finished, also after a restart, so no second one runs on its settled thread.
@@ -426,13 +442,28 @@ func sharing(targets []target, only []string) []target {
 }
 
 // prOf is the PR of the thread's branch, or nil when the branch has none or its PR merged or closed before the thread
-// last started. found caches the lookups by branch.
+// last started, unless the owner was asked to clean up after it and has not answered: a wake does not hide the ask.
+// found caches the lookups by branch.
 func (l *Lifecycle) prOf(ctx context.Context, t target, found map[string]*PR) (*PR, error) {
 	pr, err := l.cachedPR(ctx, t.proj.Dir, t.branch, found)
-	if err != nil || pr == nil || t.predates(pr) {
+	if err != nil || pr == nil || t.predates(pr) && !l.asked(t.id, pr.Number) {
 		return nil, err
 	}
 	return pr, nil
+}
+
+// asked says whether the thread's clean-up after PR n waits on the owner.
+func (l *Lifecycle) asked(id string, n int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.prs(session.ProjectKey(id)).Asked[id] == n
+}
+
+// hasWorktree says whether agentos made a worktree for the thread that it has not removed. It may be called with mu
+// held: the record has its own lock and never takes mu.
+func (l *Lifecycle) hasWorktree(t target) bool {
+	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
+	return ok && w.Removed == 0
 }
 
 func (l *Lifecycle) cachedPR(ctx context.Context, dir, branch string, found map[string]*PR) (*PR, error) {
@@ -495,6 +526,7 @@ func (l *Lifecycle) update(t target, worktree string, pr *PR) outcome {
 		if tr.cleanup == "ask" {
 			tr.cleanup = ""
 		}
+		l.setAsked(t.id, 0)
 		return o
 	}
 	live := pr.State == "draft" || pr.State == "open"
@@ -514,20 +546,23 @@ func (l *Lifecycle) update(t target, worktree string, pr *PR) outcome {
 		}
 	}
 	o.queue = !live && (prev == nil || prev.State != pr.State)
+	// The owner is asked only when a worktree would go: with none, a clean-up loses nothing.
 	switch {
 	case live:
 		if tr.cleanup == "ask" {
 			tr.cleanup = ""
 		}
+		l.setAsked(t.id, 0)
 	case tr.cleanup != "":
-	case !wantsAuto(t.proj.CleanupMode, pr.State):
+	case l.prs(key).Asked[t.id] == pr.Number, !wantsAuto(t.proj.CleanupMode, pr.State) && l.hasWorktree(t):
 		tr.cleanup = "ask"
+		l.setAsked(t.id, pr.Number)
 	case !tr.autoTried:
 		tr.autoTried = true
 		o.auto = true
 	}
 	changed := prev == nil || prev.State != pr.State
-	o.settle = !live && changed && !t.ended
+	o.settle = !live && changed && !t.ended && !t.predates(pr)
 	return o
 }
 
@@ -580,6 +615,7 @@ type prsFile struct {
 	Nudged  map[string]nudge `json:"nudged"`  // PR number -> nudge
 	Opened  map[string]int64 `json:"opened"`  // PR number -> when it was first seen open, until it merges or closes
 	Cleaned []string         `json:"cleaned"` // the sessions whose clean-up finished; their threads stay, settled
+	Asked   map[string]int   `json:"asked"`   // thread id -> the merged or closed PR whose clean-up waits on the owner
 }
 
 // prs needs mu.
@@ -599,6 +635,9 @@ func (l *Lifecycle) prs(key string) *prsFile {
 	}
 	if f.Opened == nil {
 		f.Opened = map[string]int64{}
+	}
+	if f.Asked == nil {
+		f.Asked = map[string]int{}
 	}
 	l.files[key] = f
 	return f
@@ -706,6 +745,7 @@ func (l *Lifecycle) Ack(id string) error {
 // in the middle of a rebase is detached, so its branch comes from the rebase.
 type worktrees struct {
 	main     string
+	paths    []string // every worktree's folder, main's first
 	byBranch map[string]string
 	detached []string
 	rebasing map[string]bool
@@ -756,6 +796,7 @@ func parseWorktrees(out string) worktrees {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
 			path = strings.TrimPrefix(line, "worktree ")
+			w.paths = append(w.paths, path)
 			if w.main == "" {
 				w.main = path
 			}
@@ -933,8 +974,8 @@ func verdict(reviews []review) string {
 	return ""
 }
 
-// Cleanup removes a session's worktree, branch and temp folder and settles its thread, which stays.
-// Without force it first checks that nothing would be lost.
+// Cleanup removes the worktree agentos made for a thread and its temp folder, and settles the thread, which stays with
+// its branch. Without force it first checks that nothing would be lost.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 	t, err := l.sessions.target(id)
 	if err != nil {
@@ -1002,113 +1043,170 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 	return reason
 }
 
-// removeAll runs the clean-up steps in order. A non-empty reason means it stopped before the end.
-// A step that finds the context cancelled stops with closedReason.
+// removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
+// may have changed the worktree until it stopped, the worktree's removal, and the rest of the settle. A non-empty reason
+// means it stopped before the end. A step that finds the context cancelled stops with closedReason.
 func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool) (removed []string, reason string) {
 	removed = []string{}
-	steps := []func(context.Context, target, *cleanupPlan) ([]string, string){l.runCleanupCommand, l.settleSession}
-	plan, reason := l.plan(ctx, t, pr, force)
-	for _, step := range steps {
-		if reason != "" {
-			break
+	if _, reason := l.planFor(ctx, t, pr, force); reason != "" {
+		return removed, reason
+	}
+	if ctx.Err() != nil {
+		return removed, closedReason
+	}
+	if !t.ended {
+		if err := l.sessions.Settle(t.id); err != nil {
+			return removed, fmt.Sprintf("settling the thread failed: %v", err)
 		}
+		t.ended = true
+	}
+	plan, reason := l.planFor(ctx, t, pr, force)
+	if reason != "" {
+		return removed, reason
+	}
+	for _, step := range []func(context.Context, target, *cleanupPlan) ([]string, string){l.removeWorktree, l.settleSession} {
 		if ctx.Err() != nil {
 			return removed, closedReason
 		}
-		var done []string
-		done, reason = step(ctx, t, &plan)
+		done, reason := step(ctx, t, &plan)
 		removed = append(removed, done...)
+		if reason != "" {
+			return removed, reason
+		}
 	}
-	return removed, reason
+	return removed, ""
 }
 
-// cleanupPlan is what a clean-up found out before it runs the project's command.
+// cleanupPlan is what a clean-up found out before it removes anything.
 type cleanupPlan struct {
-	branches []branchPlan
-	force    bool
+	branchPlan
+	force bool
 }
 
+// branchPlan is the thread's branch and the worktree agentos made for it.
 type branchPlan struct {
-	branch       string
-	worktree     string // the folder the branch is checked out in, or ""
-	branchExists bool
+	branch   string
+	worktree string // the recorded folder of the worktree, or ""
+	made     bool   // agentos made the worktree for the thread and has not removed it, so the clean-up removes it
 }
 
-// plan looks at the worktree and the branch of the thread, and unless forced, says why cleaning them up could lose
-// work, or that a live fork works in the worktree.
-func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, force bool) (cleanupPlan, string) {
+// planFor finds the worktree agentos made for the thread, and unless forced, says why removing it could lose work. A
+// thread with no such worktree, or one removed already, has nothing on disk to lose: the branch always stays. The
+// worktree goes only while it is on the thread's branch, the one whose PR merged or closed.
+func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force bool) (cleanupPlan, string) {
+	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force}
+	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
+	if !ok || w.Removed != 0 {
+		return p, ""
+	}
+	p.worktree, p.made = w.Path, true
+	if gone(w.Path) {
+		return p, ""
+	}
 	dir := t.proj.Dir
 	trees, err := l.worktrees(ctx, dir)
-	if err != nil {
-		return cleanupPlan{}, fmt.Sprintf("git could not list the worktrees: %v", err)
-	}
-	b := branchPlan{branch: t.branch, worktree: trees.byBranch[t.branch]}
-	_, rerr := l.git(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+t.branch)
-	b.branchExists = rerr == nil
-	p := cleanupPlan{branches: []branchPlan{b}, force: force}
 	switch {
+	case err != nil:
+		return p, fmt.Sprintf("git could not list the worktrees: %v", err)
 	case force:
 		return p, ""
+	case !t.made || !samePath(trees.byBranch[t.branch], w.Path):
+		return p, fmt.Sprintf("the worktree %s is not on %s", w.Path, t.branch)
 	case trees.rebasing[t.branch]:
 		return p, fmt.Sprintf("the worktree of %s is in the middle of a rebase", t.branch)
-	case b.worktree == "" && !b.branchExists:
-		return p, ""
 	}
 	if err := l.fetchOrigin(ctx, dir); err != nil {
 		fmt.Fprintf(os.Stderr, "agentos: fetching origin before a clean-up: %v\n", err)
 		return p, "Could not fetch origin, so agentos cannot tell whether every commit is pushed"
 	}
-	if reason := l.unsafe(ctx, dir, b.worktree, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
+	if reason := l.unsafe(ctx, dir, w.Path, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
 		return p, reason
 	}
-	if b.worktree == "" {
-		return p, ""
-	}
-	if fork := l.sessions.forkIn(b.worktree); fork != "" {
+	if fork := l.sessions.forkIn(w.Path); fork != "" {
 		return p, fmt.Sprintf("Fork %s still works in this worktree", fork)
 	}
 	return p, ""
 }
 
-// runCleanupCommand hands each branch the session worked on to the project's clean-up command.
-// With no command the git side stays as it is.
-func (l *Lifecycle) runCleanupCommand(ctx context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
-	if t.proj.CleanupCommand == "" {
+// removeWorktree removes the worktree agentos made for the thread with the project's session_cleanup_command, and
+// records it removed. Forced or not, it never runs the command on the project folder, git's main worktree, a folder
+// that holds either, or a worktree that is not the one agentos made for the thread, as one a human made again at a path
+// agentos used, and it keeps everything when the thread woke since the clean-up settled it. A worktree whose folder is
+// gone already counts as removed.
+func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
+	if !p.made {
 		return nil, ""
 	}
-	for _, b := range p.branches {
-		if b.worktree == "" && !b.branchExists {
-			continue
+	dir, path := t.proj.Dir, p.worktree
+	if path == "" {
+		return nil, "agentos has no folder recorded for the worktree of this thread"
+	}
+	trees, err := l.worktrees(ctx, dir)
+	if err != nil {
+		return nil, fmt.Sprintf("git could not list the worktrees: %v", err)
+	}
+	if inside(dir, path) || trees.main != "" && inside(trees.main, path) {
+		return nil, fmt.Sprintf("%s holds the project's own checkout, which agentos never removes", path)
+	}
+	if l.live(t.id) {
+		return nil, fmt.Sprintf("Thread %d woke during the clean-up", l.sessions.Number(t.id))
+	}
+	if !gone(path) {
+		if !l.ours(ctx, t.proj.Key(), path, t.id) {
+			return nil, fmt.Sprintf("%s is not the worktree agentos made for this thread", path)
 		}
 		force := ""
 		if p.force {
 			force = "--force"
 		}
-		if _, err := l.projectCommand(ctx, t.proj, t.proj.CleanupCommand, "{branch}", util.ShellQuote(b.branch), "{worktree}", util.ShellQuote(b.worktree), "{force}", force); err != nil {
-			if !l.leftBehind(ctx, t.proj.Dir, b.branch) {
-				removed = append(removed, fmt.Sprintf("clean-up command for %s (failed with nothing left: %v)", b.branch, err))
-				continue
-			}
-			return removed, fmt.Sprintf("the clean-up command failed for %s: %v", b.branch, err)
+		_, err := l.projectCommand(ctx, t.proj, t.proj.RemoveWorktree(), "{branch}", util.ShellQuote(p.branch), "{worktree}", util.ShellQuote(path), "{force}", force)
+		left := l.worktreeLeft(ctx, dir, path)
+		switch {
+		case left && err != nil:
+			return nil, "the clean-up command failed: " + util.FirstLine(err.Error())
+		case left:
+			return nil, fmt.Sprintf("the clean-up command left %s", path)
+		case err != nil:
+			fmt.Fprintf(os.Stderr, "agentos: the clean-up command failed, but %s is gone: %v\n", path, err)
 		}
-		removed = append(removed, "clean-up command for "+b.branch)
 	}
-	return removed, ""
+	if err := l.sessions.made.Removed(t.proj.Key(), path, time.Now()); err != nil {
+		return []string{"worktree " + path}, fmt.Sprintf("recording the worktree removed failed: %v", err)
+	}
+	return []string{"worktree " + path}, ""
 }
 
-// leftBehind says whether the branch still exists or any worktree has it checked out. A failed
-// git call counts as left behind, so the clean-up blocks as it did.
-func (l *Lifecycle) leftBehind(ctx context.Context, dir, branch string) bool {
+// live says whether the thread runs, as after a wake since the clean-up settled it.
+func (l *Lifecycle) live(id string) bool {
+	t, err := l.sessions.target(id)
+	return err == nil && !t.ended
+}
+
+// CleaningUp says whether a clean-up of the thread runs now, so a wake can wait until it ends.
+func (l *Lifecycle) CleaningUp(id string) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tr := l.tracks[id]
+	return tr != nil && tr.cleanup == "pending"
+}
+
+// gone says whether nothing is at path.
+func gone(path string) bool {
+	_, err := os.Lstat(path)
+	return errors.Is(err, fs.ErrNotExist)
+}
+
+// worktreeLeft says whether the worktree at path is still on disk or in git's list of the repo's worktrees. A list git
+// cannot give counts as left.
+func (l *Lifecycle) worktreeLeft(ctx context.Context, dir, path string) bool {
+	if !gone(path) {
+		return true
+	}
 	trees, err := l.worktrees(ctx, dir)
-	if err != nil {
-		return true
-	}
-	if _, ok := trees.byBranch[branch]; ok {
-		return true
-	}
-	_, err = l.git(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	var exit *exec.ExitError
-	return !errors.As(err, &exit) || exit.ExitCode() != 1
+	return err != nil || slices.ContainsFunc(trees.paths, func(p string) bool { return canonicalPath(p) == canonicalPath(path) })
 }
 
 // settleSession settles the session's thread, closes its browser window and removes its temp folder. The thread

@@ -326,7 +326,7 @@ func TestForkStaysAFork(t *testing.T) {
 func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork sessions.Session) {
 	t.Helper()
 	ran = filepath.Join(t.TempDir(), "cleanups")
-	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + removeWorktreeAndBranch})
+	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + project.DefaultCleanupCommand})
 	repoFixture(t, h)
 	src, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
 	if err != nil {
