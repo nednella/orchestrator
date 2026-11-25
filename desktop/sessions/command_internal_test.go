@@ -115,6 +115,22 @@ func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
 	}
 }
 
+func TestHostedRefusesASocketPathTooLong(t *testing.T) {
+	name := session.Name{Project: "p", Token: session.NewToken()}
+	fits := &Sessions{stateDir: "/" + strings.Repeat("s", 73), agents: agent.Registry{Exe: "/x"}}
+	if got := len(fits.hostSocket(name)); got != 103 {
+		t.Fatalf("socket path is %d bytes, want 103", got)
+	}
+	long := &Sessions{stateDir: filepath.Join(t.TempDir(), strings.Repeat("s", 100)), agents: agent.Registry{Exe: "/x"}}
+	_, err := long.hosted(name, []string{"claude"})
+	if err == nil || !strings.HasPrefix(err.Error(), "the session socket path is too long: ") {
+		t.Errorf("err = %v", err)
+	}
+	if _, statErr := os.Stat(long.stateDir); !os.IsNotExist(statErr) {
+		t.Errorf("the refused session made its folder: %v", statErr)
+	}
+}
+
 func TestClaudeCommandLeavesTheStartPromptToTheHost(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{}}
 	for _, brief := range []string{"", "set it up"} {

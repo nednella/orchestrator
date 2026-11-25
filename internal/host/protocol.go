@@ -26,5 +26,5 @@ type reply struct {
 
 const maxRequest = 1 << 20
 
-// maxSocketPath is the longest path a unix socket can bind on macOS: sun_path holds 104 bytes with the closing NUL.
-const maxSocketPath = 103
+// MaxSocketPath is the longest path a unix socket can bind on macOS: sun_path holds 104 bytes with the closing NUL.
+const MaxSocketPath = 103

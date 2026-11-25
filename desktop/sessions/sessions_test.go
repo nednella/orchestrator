@@ -1,6 +1,8 @@
 package sessions_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -202,10 +204,16 @@ func TestThreadWithAnUnknownModelDoesNotStart(t *testing.T) {
 	}
 }
 
+// hostFolder is the folder of the hosts' sockets of the project with that key.
+func hostFolder(h *apptest.Harness, key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(h.State, "hosts", hex.EncodeToString(sum[:4]))
+}
+
 // hostFiles are the chat log and the socket of a session's host.
 func hostFiles(h *apptest.Harness, id string) (chatLog, socket string) {
 	name, _ := session.ParseName(id)
-	return filepath.Join(h.State, "data", name.Project, "chats", name.Token+".jsonl"), filepath.Join(h.State, "hosts", name.Project, name.Token+".sock")
+	return filepath.Join(h.State, "data", name.Project, "chats", name.Token+".jsonl"), filepath.Join(hostFolder(h, name.Project), name.Token+".sock")
 }
 
 // userLines are the user messages the stand-in claude read on its stdin.
@@ -263,7 +271,7 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	apptest.ClaudeOnPath(t)
 	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
-	folder := filepath.Join(h.State, "hosts", "main")
+	folder := hostFolder(h, "main")
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -279,6 +287,27 @@ func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	if info, err := os.Stat(folder); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("socket folder = %v, %v; want mode 700", info.Mode(), err)
 	}
+}
+
+func TestALongProjectKeyStartsItsHost(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	dir := filepath.Join(t.TempDir(), strings.Repeat("a-long-project-name-", 5))
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.AddProjectDir(dir); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name, _ := session.ParseName(s.ID); len(name.Project) < 90 {
+		t.Fatalf("project key %q is not long", name.Project)
+	}
+	_, socket := hostFiles(h, s.ID)
+	eventually(t, "the host's socket", func() bool { return exists(socket) })
 }
 
 func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {

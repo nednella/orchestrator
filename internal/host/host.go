@@ -496,8 +496,8 @@ func writeReply(conn net.Conn, err error) error {
 }
 
 func listen(path string) (net.Listener, error) {
-	if len(path) > maxSocketPath {
-		return nil, fmt.Errorf("socket path %s is %d bytes, over the %d a unix socket allows", path, len(path), maxSocketPath)
+	if len(path) > MaxSocketPath {
+		return nil, fmt.Errorf("socket path %s is %d bytes, over the %d a unix socket allows", path, len(path), MaxSocketPath)
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {

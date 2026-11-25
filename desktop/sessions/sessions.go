@@ -4,6 +4,8 @@ package sessions
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -574,10 +576,11 @@ func (s *Sessions) chatLogPath(name session.Name) string {
 	return filepath.Join(s.localDir, name.Project, "chats", name.Token+".jsonl")
 }
 
-// hostSocket is where the session's host listens. It sits in the state folder, whose path is short: a unix socket's
-// path may be 103 bytes at most.
+// hostSocket is where the session's host listens. A unix socket's path is short, so it sits in the state folder, in a
+// folder named by a hash of the project key: its length does not depend on the project's name.
 func (s *Sessions) hostSocket(name session.Name) string {
-	return filepath.Join(s.stateDir, "hosts", name.Project, name.Token+".sock")
+	sum := sha256.Sum256([]byte(name.Project))
+	return filepath.Join(s.stateDir, "hosts", hex.EncodeToString(sum[:4]), name.Token+".sock")
 }
 
 // handoverPath is where the handover a session started with is kept: a session that resumes its conversation
@@ -1507,6 +1510,9 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 // private, as the host asks; a folder an older run made may be wider, and it is the app's own.
 func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 	socket := s.hostSocket(name)
+	if len(socket) > host.MaxSocketPath {
+		return nil, fmt.Errorf("the session socket path is too long: %d bytes, over the %d a unix socket takes", len(socket), host.MaxSocketPath)
+	}
 	dir := filepath.Dir(socket)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("making the session's socket folder: %w", err)
