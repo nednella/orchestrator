@@ -18,7 +18,7 @@ type ChatReplyRowProps = {
 export const ChatReplyRow = memo(function ChatReplyRow({ uuid, text, at, streaming, ended, toolsAfter, onReply, onFork }: ChatReplyRowProps) {
   return (
     <div data-message data-streaming={streaming || undefined} className="group/message -mb-3">
-      <ChatMarkdown text={text} />
+      <ChatMarkdown text={text} streaming={streaming} />
       {!toolsAfter && <ChatMessageActions text={text} at={at} streaming={streaming} ended={ended} onReply={onReply} onFork={uuid ? () => onFork(uuid, '') : undefined} />}
     </div>
   )

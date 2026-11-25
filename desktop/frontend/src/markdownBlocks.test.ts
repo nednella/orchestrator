@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import Markdown from 'react-markdown'
+import { markdownProps } from './chatMarkdown.ts'
+import { markdownBlocks } from './markdownBlocks.ts'
+
+const render = (children: string) => renderToStaticMarkup(createElement(Markdown, { ...markdownProps, children }))
+
+// The blocks render as the whole text does, but for the line breaks between top-level elements.
+const sameAsWhole = (text: string) => {
+  const blocks = markdownBlocks(text)
+  const joined = (html: string) => html.replace(/>\n</g, '><')
+  assert.equal(joined(blocks.map(render).join('')), joined(render(text)), JSON.stringify(blocks))
+}
+
+test('paragraphs and headings are cut at blank lines', () => {
+  assert.deepEqual(markdownBlocks('## Title\n\nOne.\n\n\nTwo.'), ['## Title', 'One.', 'Two.'])
+})
+
+test('a fenced code block is never cut', () => {
+  assert.deepEqual(markdownBlocks('```ts\na\n\nb\n```\n\nc'), ['```ts\na\n\nb\n```', 'c'])
+  assert.deepEqual(markdownBlocks('~~~~\na\n\n~~~\nb\n~~~~\n\nc'), ['~~~~\na\n\n~~~\nb\n~~~~', 'c'])
+  assert.deepEqual(markdownBlocks('```\na\n\nb'), ['```\na\n\nb'])
+})
+
+test('a list is never cut, with its items or indented continuations after blank lines', () => {
+  assert.deepEqual(markdownBlocks('- a\n\n- b\n\nAfter.'), ['- a\n\n- b', 'After.'])
+  assert.deepEqual(markdownBlocks('1. a\n\n2. b\n\n   more of b\n\nAfter.'), ['1. a\n\n2. b\n\n   more of b', 'After.'])
+  assert.deepEqual(markdownBlocks('Intro:\n- a\n\n- b'), ['Intro:\n- a\n\n- b'])
+})
+
+test('a line still being written after a list is not cut while it may become an item', () => {
+  assert.deepEqual(markdownBlocks('- a\n\n-'), ['- a\n\n-'])
+  assert.deepEqual(markdownBlocks('- a\n\n12'), ['- a\n\n12'])
+  assert.deepEqual(markdownBlocks('- a\n\nN'), ['- a', 'N'])
+  assert.deepEqual(markdownBlocks('- a\n\n12 more'), ['- a', '12 more'])
+})
+
+test('a code fence inside a list item ends with the item', () => {
+  assert.deepEqual(markdownBlocks('- a\n  ```\n  x\n\ny\n\nz'), ['- a\n  ```\n  x', 'y', 'z'])
+  assert.deepEqual(markdownBlocks('- a\n\n  ```\n  x\n\n  y\n  ```\n\nz'), ['- a\n\n  ```\n  x\n\n  y\n  ```', 'z'])
+})
+
+test('an indented code block is not cut', () => {
+  assert.deepEqual(markdownBlocks('Code:\n\n    a\n\n    b\n\nAfter.'), ['Code:\n\n    a\n\n    b', 'After.'])
+})
+
+test('tables and block quotes are cut only after they end', () => {
+  assert.deepEqual(markdownBlocks('| a | b |\n| - | - |\n| 1 | 2 |\n\nAfter.'), ['| a | b |\n| - | - |\n| 1 | 2 |', 'After.'])
+  assert.deepEqual(markdownBlocks('> a\n>\n> b\n\nAfter.'), ['> a\n>\n> b', 'After.'])
+})
+
+test('a text with link reference definitions, footnotes or raw HTML is one block', () => {
+  for (const text of ['See [the docs][d].\n\n[d]: https://example.com', 'A claim.[^1]\n\nMore.\n\n[^1]: The source.', '<div>\n\nhi\n\n</div>\n\nAfter.']) {
+    assert.deepEqual(markdownBlocks(text), [text])
+  }
+})
+
+test('markup inside a code fence does not tie blocks together', () => {
+  assert.deepEqual(markdownBlocks('```html\n<div>\n[a]: b\n```\n\nAfter.'), ['```html\n<div>\n[a]: b\n```', 'After.'])
+})
+
+const texts = [
+  '## Title\n\nSome **bold** and `code`.\n\n- a\n\n- b\n  - nested\n\n1. one\n2. two\n\nAfter.',
+  '```ts\nconst a = 1\n\nconst b = 2\n```\n\n| a | b |\n| - | -: |\n| 1 | 2 |\n\n> quoted\n>\n> more\n\n---\n\nEnd.',
+  '- a\n  ```\n  x\n\ny\n\n    indented\n\n    code\n\nLast.',
+  'Para\nnext line\n\n* * *\n\n- [ ] todo\n- [x] done\n\n~~~\n~~~',
+]
+
+test('the blocks render as the whole text', () => {
+  texts.forEach(sameAsWhole)
+})
+
+test('a block once closed stays the same as the text grows', () => {
+  const text = texts.join('\n\n')
+  const whole = markdownBlocks(text)
+  for (let n = 1; n < text.length; n++) {
+    const blocks = markdownBlocks(text.slice(0, n))
+    blocks.slice(0, -1).forEach((block, i) => assert.equal(block, whole[i], `at ${n}`))
+  }
+})

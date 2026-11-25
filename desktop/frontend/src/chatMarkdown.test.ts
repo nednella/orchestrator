@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
-import { codeLanguage, markdownProps } from './chatMarkdown.ts'
+import { codeLanguage, markdownProps, textCache } from './chatMarkdown.ts'
 
 const render = (children: string) => renderToStaticMarkup(createElement(Markdown, { ...markdownProps, children }))
 
@@ -41,4 +41,22 @@ test('other links render with no usable href', () => {
     const html = render(`[x](${url})`)
     assert.equal(/href="[^"]/.test(html), false, url)
   }
+})
+
+test('textCache lets the least recently used text go first', () => {
+  const cache = textCache<number>(40)
+  cache.set('a'.repeat(10), 1)
+  cache.set('b'.repeat(10), 2)
+  cache.set('c'.repeat(10), 3)
+  assert.equal(cache.get('a'.repeat(10)), 1)
+  cache.set('d'.repeat(10), 4)
+  cache.set('e'.repeat(10), 5)
+  assert.equal(cache.get('b'.repeat(10)), undefined)
+  assert.deepEqual(['a', 'c', 'd', 'e'].map((c) => cache.get(c.repeat(10))), [1, 3, 4, 5])
+})
+
+test('textCache keeps no text over a quarter of its limit', () => {
+  const cache = textCache<number>(40)
+  cache.set('a'.repeat(11), 1)
+  assert.equal(cache.get('a'.repeat(11)), undefined)
 })

@@ -102,6 +102,21 @@ const askedQuestions = [
 
 const askedPlan = '## Split checkout into three steps\n\n1. Add `/checkout/address`, `/checkout/payment` and `/checkout/review` routes.\n2. Move the form state into a `useCheckout` store so each step reads it.\n3. Keep the cart page as it is.\n\nThe tests for `Checkout.tsx` move with the steps.'
 
+// longReply is about 30 KB of headings, prose, lists, code and tables, streamed in deltas of up to 15 characters as
+// often as Claude sends them.
+const longDeltaEvery = 21
+const longReply = Array.from({ length: 19 }, (_, i) => {
+  const n = i + 1
+  return [
+    `## ${n}. The cart total, step ${n}`,
+    `The cart adds up each line's **rounded price**, so two lines of \`0.005\` come to \`0.02\` where the order says *0.01*. Step ${n} reads the total from \`cart.ts\` and checks it against the order the server sent, line by line, before the owner pays. When the two differ, it shows the order's figure and logs the cart's, so the support team can see where the cent went.`,
+    `What step ${n} checks:\n\n- the **subtotal** of every line, before the coupon\n- the coupon, which takes off a share or a fixed sum\n  - a share rounds once, on the subtotal\n  - a fixed sum never takes the total below zero\n- the tax, from the address the owner typed\n- the shipping, which is free over \`50.00\``,
+    `\`\`\`ts\nexport function total(lines: Line[], coupon?: Coupon): number {\n  const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0)\n  const off = coupon ? discount(subtotal, coupon) : 0\n  const taxed = (subtotal - off) * (1 + taxRate(lines))\n  return Math.round(taxed * 100) / 100\n}\n\nfunction discount(subtotal: number, coupon: Coupon): number {\n  if (coupon.kind === 'share') return Math.round(subtotal * coupon.share * 100) / 100\n  return Math.min(subtotal, coupon.amount)\n}\n\`\`\``,
+    `| Case | Cart | Order | Step ${n} |\n| --- | ---: | ---: | --- |\n| two lines of 0.005 | 0.02 | 0.01 | shows 0.01 |\n| a 10% coupon on 9.99 | 8.99 | 8.99 | passes |\n| a 5.00 coupon on 3.00 | 0.00 | 0.00 | passes |\n| free shipping at 50.00 | 50.00 | 50.00 | passes |`,
+    `1. Read the cart from the store.\n2. Ask the server for the order.\n3. Compare them, and keep the order's figure when they differ.`,
+  ].join('\n\n')
+}).join('\n\n')
+
 const longMessage = Array.from({ length: 14 }, (_, i) => `${i + 1}. Check that step ${i + 1} of the checkout keeps the cart total, the coupon and the address the owner typed.`).join('\n')
 
 // olderTurns is finished turns that give a chat at least that many items: each a message and its reply, every fifth one
@@ -134,7 +149,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
-// another. Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
+// another, or about 30 KB of markdown, as Claude streams it, to a message that says "long". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
 // would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
 // says whether a project key is configured.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
@@ -203,11 +218,12 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     return t
   }
 
-  // reply streams a reply, then ends the turn, or runs the next queued message as its own turn.
-  function reply(id: string, slow = false) {
+  // reply streams a reply to the message asked, then ends the turn, or runs the next queued message as its own turn.
+  function reply(id: string, asked = '') {
     const t = thread(id)
-    const text = replies[nextReply++ % replies.length]
-    const words = text.split(/(?<= )/)
+    const long = /\blong\b/i.test(asked)
+    const text = long ? longReply : replies[nextReply++ % replies.length]
+    const words = long ? text.match(/[^]{1,15}/g)! : text.split(/(?<= )/)
     const message = `msg_${Math.random().toString(36).slice(2, 10)}`
     let i = 0
     const timer = setInterval(() => {
@@ -221,7 +237,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       if (runQueued(id)) return
       append(id, { kind: 'turn_end', cost: 0.04 })
       t.setState('idle')
-    }, (slow ? 8000 : 1000) / words.length)
+    }, long ? longDeltaEvery : (/\bslow\b/i.test(asked) ? 8000 : 1000) / words.length)
     replying.set(id, () => clearInterval(timer))
   }
 
@@ -374,7 +390,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
         append(id, { kind: 'tool_result', parent: asked?.parent, text, error: true })
         setPending(id, null)
         t.setState('working')
-        reply(id)
+        reply(id, text)
         return { id: message }
       }
       if (replying.has(id)) {
@@ -396,7 +412,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       }
       append(id, { kind: 'init', id: 'mock-session' })
       t.setState('working')
-      reply(id, /\bslow\b/i.test(text))
+      reply(id, text)
       return { id: message }
     },
     ChatDraft: async (id: string, text: string) => {
