@@ -82,7 +82,8 @@ type AgentosActions = {
   newSession(start: ThreadStart): Promise<Session>
   newChat(start: ThreadStart): Promise<Session>
   settleThread(id: string): Promise<void>
-  dismissSession(id: string): Promise<void>
+  // archiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
+  archiveThread(id: string): Promise<void>
   wakeThread(id: string): Promise<Session>
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
@@ -737,8 +738,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (next) selectId(next.id)
         else detach()
       },
-      async dismissSession(id) {
-        await api.dismissSession(id)
+      async archiveThread(id) {
+        await api.archiveThread(id)
+        forgetThreadDraft(id)
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
       },

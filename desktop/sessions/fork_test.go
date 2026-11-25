@@ -354,7 +354,7 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the fork settled", func() bool { return stateOf(h, fork.ID) == "settled" })
-	if err := h.DismissSession(fork.ID); err != nil {
+	if err := h.ArchiveThread(fork.ID); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)

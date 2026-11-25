@@ -412,7 +412,7 @@ func TestTooManyImagesAreRefused(t *testing.T) {
 	}
 }
 
-func TestDismissRemovesChatImages(t *testing.T) {
+func TestArchiveKeepsChatImages(t *testing.T) {
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {
@@ -430,14 +430,13 @@ func TestDismissRemovesChatImages(t *testing.T) {
 	}
 	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
 	if !apptest.Exists(ch.Media) {
-		t.Fatalf("%s went when the thread ended, want it kept until the row is dismissed", ch.Media)
+		t.Fatalf("%s went when the thread ended", ch.Media)
 	}
-	if err := h.DismissSession(id); err != nil {
+	if err := h.ArchiveThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread's images to go", func() bool { return !apptest.Exists(ch.Media) })
-	if !apptest.Exists(filepath.Dir(ch.Media)) {
-		t.Errorf("the project's %s went with the thread's", filepath.Dir(ch.Media))
+	if !apptest.Exists(ch.Media) {
+		t.Errorf("%s went with the archived thread, want it kept", ch.Media)
 	}
 }
 

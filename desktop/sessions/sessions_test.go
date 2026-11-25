@@ -101,16 +101,13 @@ func TestSessionLifecycle(t *testing.T) {
 		if err := h.SettleThread(first.ID); err == nil {
 			t.Error("killing an ended session succeeded")
 		}
-		if err := h.DismissSession(second.ID); err == nil {
-			t.Error("dismissed a session that is running")
-		}
-		if err := h.DismissSession(first.ID); err != nil {
+		if err := h.ArchiveThread(first.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the dismissed row to go", func() bool { return len(h.Rec.LastSessions()) == 1 })
+		eventually(t, "the archived row to go", func() bool { return len(h.Rec.LastSessions()) == 1 })
 		time.Sleep(2500 * time.Millisecond) // a poll must not bring it back
 		if got := h.Snapshot().Sessions; len(got) != 1 || got[0].ID != second.ID {
-			t.Errorf("sessions after dismiss and a poll = %+v", got)
+			t.Errorf("sessions after archive and a poll = %+v", got)
 		}
 	})
 
@@ -131,7 +128,7 @@ func TestSessionLifecycle(t *testing.T) {
 		if err != nil || third.ID == second.ID {
 			t.Errorf("new session = %+v, %v", third, err)
 		}
-		if err := h.DismissSession(second.ID); err != nil {
+		if err := h.ArchiveThread(second.ID); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -388,39 +385,6 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 	eventually(t, "the prompt on claude's stdin", func() bool { return len(userLines(t, h, id)) == 1 })
 	if users := userLines(t, h, id); !strings.Contains(users[0], `"text":"APPLICATION_PROMPT: write the queue"`) {
 		t.Errorf("user line = %s", users[0])
-	}
-}
-
-func TestDismissRemovesTheChatLog(t *testing.T) {
-	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "hello", true, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chatLog, socket := hostFiles(h, s.ID)
-	eventually(t, "the chat log", func() bool {
-		data, _ := os.ReadFile(chatLog)
-		return strings.Contains(string(data), `"kind":"user"`)
-	})
-	if err := h.SettleThread(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the killed session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
-	if got, _ := h.Session(s.ID); got.Detail != "" {
-		t.Errorf("ended row = %+v, want no failure shown", got)
-	}
-	// A host that dies without its shutdown leaves its socket behind.
-	if err := os.WriteFile(socket, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if !exists(chatLog) {
-		t.Fatal("the chat log is gone before the dismiss")
-	}
-	if err := h.DismissSession(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	if exists(chatLog) || exists(socket) {
-		t.Errorf("after dismiss, chat log there: %v, socket there: %v", exists(chatLog), exists(socket))
 	}
 }
 
@@ -739,11 +703,11 @@ func TestSettledSessionsSurviveARestart(t *testing.T) {
 	if got.State != "settled" || got.Title != "keep me" || got.SettledAt == 0 {
 		t.Errorf("after a restart = %+v", got)
 	}
-	if err := fresh.DismissSession(s.ID); err != nil {
+	if err := fresh.ArchiveThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if exists(filepath.Join(h.State, "sessions", s.ID+".json")) {
-		t.Error("the state file of a dismissed session is still there")
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.State != session.Archived || rec.Title != "keep me" {
+		t.Errorf("the state file of an archived thread = %+v, %v; want it archived, with its title", rec, err)
 	}
 }
 

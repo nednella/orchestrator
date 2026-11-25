@@ -64,8 +64,8 @@ func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 // SettleThread stops the agent; its row stays, settled.
 func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 
-// DismissSession removes the row of a settled session.
-func (v *Service) DismissSession(id string) error { return v.s.Dismiss(id) }
+// ArchiveThread takes the thread off the list for good, settling it first when it runs; its history stays on disk.
+func (v *Service) ArchiveThread(id string) error { return v.s.Archive(id) }
 
 // WakeThread starts a settled thread again under its own id, with nothing sent to it.
 func (v *Service) WakeThread(id string) (Session, error) {

@@ -22,7 +22,7 @@ projects:
 
 Clean up afterwards: `tmux -L $AGENTOS_TMUX_SOCKET kill-server`, kill the app and any browser started on `$S/data/<key>/browser`, `rm -rf $S`. Check with `pgrep -fl "$S"`.
 
-An agentos session runs with `TMPDIR` set to its own temp folder, which it may use without asking and which goes when the session is dismissed. Put screenshots and scratch files there, never in `/tmp`.
+An agentos session runs with `TMPDIR` set to its own temp folder, which it may use without asking and which goes when the thread is archived or cleaned up. Put screenshots and scratch files there, never in `/tmp`.
 
 ## Unit and integration tests
 

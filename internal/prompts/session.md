@@ -13,4 +13,4 @@ When you stop for an answer from the owner, ask with `AskUserQuestion` when you 
 
 After you change an issue's labels, run `agentos refresh` so the owner's queue shows the new ones.
 
-TMPDIR is this thread's own temp folder: put scratch files there. It goes when the thread is dismissed.
+TMPDIR is this thread's own temp folder: put scratch files there. It goes when the thread is archived or cleaned up.

@@ -1007,7 +1007,7 @@ func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.se
 func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }
 func (h *Harness) ShellClose(id string) error                      { return h.sessions.ShellClose(id) }
 func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
-func (h *Harness) DismissSession(id string) error                  { return h.sessions.DismissSession(id) }
+func (h *Harness) ArchiveThread(id string) error                   { return h.sessions.ArchiveThread(id) }
 func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
 func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
 func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }

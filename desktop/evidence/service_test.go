@@ -81,7 +81,7 @@ func TestShowFilesEvidence(t *testing.T) {
 		}
 	})
 
-	t.Run("deleting and dismissing", func(t *testing.T) {
+	t.Run("deleting and archiving", func(t *testing.T) {
 		if err := h.DeleteEvidence(s.ID, items[0].ID); err != nil || len(h.Evidence(s.ID)) != 2 {
 			t.Errorf("DeleteEvidence: %v", err)
 		}
@@ -90,11 +90,13 @@ func TestShowFilesEvidence(t *testing.T) {
 		}
 		eventually(t, "the session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
 		if len(h.Evidence(s.ID)) != 2 {
-			t.Error("evidence went with the ended session; it should stay until dismissed")
+			t.Error("evidence went with the ended session")
 		}
-		if err := h.DismissSession(s.ID); err != nil {
+		if err := h.ArchiveThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "evidence removed with the dismissed session", func() bool { return len(h.Evidence(s.ID)) == 0 })
+		if len(h.Evidence(s.ID)) != 2 {
+			t.Error("evidence went with the archived thread; it should stay on disk")
+		}
 	})
 }

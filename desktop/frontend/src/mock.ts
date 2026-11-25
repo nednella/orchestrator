@@ -415,7 +415,9 @@ export function createMock(params: URLSearchParams) {
   // Two seeded threads have a chat, one waiting on a tool and one on a question; the others start with an empty one,
   // and one ran in a terminal before agentos showed chats, so it has none. With chatcases, one chat log cannot be read
   // and one more thread waits on a plan. With stale, the tool's approval ends on the host's side and the app is not told.
+  const archived = new Set<string>()
   const chats = mockChat(emit, (id) => {
+    if (archived.has(id)) throw `Thread ${id} is archived`
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return { settled: s.state === 'settled', setState: (state) => setState(s, state), wake: () => wake(s) }
@@ -872,9 +874,13 @@ export function createMock(params: URLSearchParams) {
       publish()
       return view(s)
     },
-    DismissSession: async (id: string) => {
+    ArchiveThread: async (id: string) => {
       const s = find(id)
-      if (s.state !== 'settled') throw `Thread ${id} has not settled`
+      if (s.state !== 'settled') {
+        emit('term:exit', { id })
+        chats.end(id)
+      }
+      archived.add(id)
       sessions.splice(sessions.indexOf(s), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })

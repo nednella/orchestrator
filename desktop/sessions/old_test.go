@@ -85,17 +85,6 @@ func TestOldTerminalSessionIsLeftAlone(t *testing.T) {
 	if _, err := h.ChatHistory(id, 0); err == nil || err.Error() != oldChat {
 		t.Errorf("ChatHistory = %v, want %q", err, oldChat)
 	}
-
-	if err := h.DismissSession(id); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := h.Session(id); ok {
-		t.Error("a dismissed old session still has a row")
-	}
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}#{@agentos-name}").Output()
-	if err != nil || strings.TrimSpace(string(out)) != "sleep#12 work" {
-		t.Errorf("old session's pane runs and is named %q (%v), want sleep#12 work", out, err)
-	}
 }
 
 func TestAnIssueWithAnOldSessionOpensIt(t *testing.T) {

@@ -24,7 +24,7 @@ type ThreadRowProps = { session: Session; selected: boolean; cursor: boolean; me
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'dismissSession', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'archiveThread', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -154,8 +154,8 @@ function ThreadRowView({ session, selected, cursor, menuRequest }: ThreadRowProp
                     Wake
                   </button>
                 )}
-                <button className="btn h-[1.375rem] px-2 text-label" onClick={() => a.report(() => a.dismissSession(session.id))}>
-                  Dismiss
+                <button className="btn h-[1.375rem] px-2 text-label" title="Take this thread off the list; its history stays" onClick={() => a.report(() => a.archiveThread(session.id))}>
+                  Archive
                 </button>
               </span>
             ) : (

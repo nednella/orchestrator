@@ -37,6 +37,10 @@ type reader struct {
 func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	s.mu.Lock()
 	in, ok := s.infoOf(id)
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
 	created, _ := s.startsOf(id, in)
 	live := slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name.String() == id })
 	ctx := s.ctx
@@ -46,9 +50,6 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		s.readers[id] = r
 	}
 	s.mu.Unlock()
-	if !ok {
-		return
-	}
 	kind := activity.Usage
 	if in.Chat {
 		kind = activity.ChatUsage
@@ -112,7 +113,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 		}
 		r.pending = nil
 	}
-	if _, kept := s.readers[id]; kept { // a dismissed session has no row to show it
+	if _, kept := s.readers[id]; kept { // an archived thread has no row to show it
 		s.spent[id] = total
 		s.sync()
 		if record && nameErr == nil {

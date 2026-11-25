@@ -147,7 +147,7 @@ func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 	}
 }
 
-func TestDismissedSessionStaysGoneAfterALateHook(t *testing.T) {
+func TestArchivedThreadStaysGoneAfterALateHook(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("done", "")
 	if err != nil {
@@ -156,15 +156,15 @@ func TestDismissedSessionStaysGoneAfterALateHook(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.DismissSession(s.ID); err != nil {
+	if err := h.ArchiveThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the dismissal
-	if exists(filepath.Join(h.State, "sessions", s.ID+".json")) {
-		t.Error("the late hook wrote the state file of a dismissed session")
+	h.Hook(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the archive
+	if rec, _ := bus.ReadState(h.State, s.ID); rec.State != session.Archived {
+		t.Errorf("the late hook wrote the state file of an archived thread: %+v", rec)
 	}
 	if got := h.Restart(t).Sessions().List(); len(got) != 0 {
-		t.Errorf("a dismissed session came back after a restart: %+v", got)
+		t.Errorf("an archived thread came back after a restart: %+v", got)
 	}
 }
 
@@ -212,7 +212,7 @@ func TestNewSessionDoesNotInheritAnOlderOnesLiveFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Sessions().Refresh()
-	if err := h.DismissSession("main/1"); err != nil {
+	if err := h.ArchiveThread("main/1"); err != nil {
 		t.Fatal(err)
 	}
 

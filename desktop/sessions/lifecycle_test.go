@@ -720,7 +720,7 @@ func TestLiveFlagGoesWithTheSession(t *testing.T) {
 	if !live() {
 		t.Error("the live flag went with the session's end, although its row still tracks the PR")
 	}
-	if err := h.DismissSession(s.ID); err != nil {
+	if err := h.ArchiveThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if live() {

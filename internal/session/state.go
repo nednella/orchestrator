@@ -9,10 +9,11 @@ import (
 type State string
 
 const (
-	Idle    State = "idle"    // started, or a turn ended: the user's move
-	Working State = "working" // the agent is running
-	Waiting State = "waiting" // blocked on the user
-	Settled State = "settled" // the agent's session is gone; the row stays until archived
+	Idle     State = "idle"     // started, or a turn ended: the user's move
+	Working  State = "working"  // the agent is running
+	Waiting  State = "waiting"  // blocked on the user
+	Settled  State = "settled"  // the agent's session is gone; the row stays until archived
+	Archived State = "archived" // the owner archived the thread: it has no row, and its state file keeps its history
 )
 
 // endedBefore is what older builds wrote for a settled session.

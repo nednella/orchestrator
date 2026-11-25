@@ -1,7 +1,6 @@
 package sessions_test
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ func TestNumbersAreNeverReused(t *testing.T) {
 	if err := h.SettleThread(first.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.DismissSession(first.ID); err != nil {
+	if err := h.ArchiveThread(first.ID); err != nil {
 		t.Fatal(err)
 	}
 	third, err := h.NewSession("third", "")
@@ -76,7 +75,7 @@ func TestNumbersAfterARestartFollowCreationOrder(t *testing.T) {
 	}
 }
 
-func TestNewSessionSeesNothingOfADismissedOne(t *testing.T) {
+func TestNewSessionSeesNothingOfAnArchivedOne(t *testing.T) {
 	h := newHarness(t)
 	old, err := h.NewSession("old", "")
 	if err != nil {
@@ -89,10 +88,12 @@ func TestNewSessionSeesNothingOfADismissedOne(t *testing.T) {
 	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.DismissSession(old.ID); err != nil {
+	if err := h.ArchiveThread(old.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the evidence to go", func() bool { return !exists(evidenceDir(h, old.ID)) })
+	if !exists(evidenceDir(h, old.ID)) {
+		t.Error("the archived thread's evidence went")
+	}
 
 	fresh, err := h.NewSession("fresh", "")
 	if err != nil {
@@ -124,10 +125,12 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.DismissSession(s.ID); err != nil {
+	if err := h.ArchiveThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the temp folder to go", func() bool { return !exists(tmp) })
+	if exists(tmp) {
+		t.Error("the temp folder is still there after the archive")
+	}
 }
 
 func TestSettledThreadStays(t *testing.T) {
@@ -162,32 +165,5 @@ func TestSettledThreadStays(t *testing.T) {
 	}
 	if !exists(filepath.Join(h.State, "sessions", "main", "old1.json")) || !exists(evidenceDir(h, id)) {
 		t.Error("the state file or the evidence of a thread settled 8 days ago went")
-	}
-}
-
-func TestADismissedShellRowLeavesTheChatImages(t *testing.T) {
-	h := newHarness(t)
-	image := filepath.Join(h.State, "data", "main", "chat-media", "k3x9q0ab", "0123456789abcdef.png")
-	if err := os.MkdirAll(filepath.Dir(image), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(image, []byte("png"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	long := time.Now().Add(-8 * 24 * time.Hour)
-	// A shell's name has no token.
-	rec := session.Record{Session: "main/shell", State: session.Settled, Event: "SessionEnd", At: long, Identity: session.Identity{Title: "old"}, SettledAt: long.UnixMilli()}
-	if err := bus.WriteState(h.State, rec); err != nil {
-		t.Fatal(err)
-	}
-
-	h.Sessions().Refresh()
-	if err := h.DismissSession("main/shell"); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the dismissed row to go", func() bool { return !exists(filepath.Join(h.State, "sessions", "main", "shell.json")) })
-	time.Sleep(100 * time.Millisecond) // past the row's clean-up
-	if !exists(image) {
-		t.Error("the project's chat images went with a row that has no token")
 	}
 }
