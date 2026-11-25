@@ -197,6 +197,7 @@ export function createMock(params: URLSearchParams) {
     fullDataDir: params.has('fulldata'),
     noModel: params.has('nomodel'),
     longChat: params.has('longchat'),
+    chatCases: params.has('chatcases'),
   }
   const handlers = new Map<string, Set<Handler>>()
   const sessions: MockSession[] = []
@@ -442,6 +443,7 @@ export function createMock(params: URLSearchParams) {
   }
 
   // Only one seeded thread runs under a host, so the rest keep their terminals; a thread started in the mock is hosted.
+  // With chatcases, two more do: one with an empty chat and one whose chat log cannot be read.
   const chats = mockChat(emit, (id) => {
     const s = find(id)
     if (!s.hosted) throw `Thread ${id} has no chat: its agent runs in its terminal`
@@ -496,7 +498,10 @@ export function createMock(params: URLSearchParams) {
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], true)
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], true)
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
-    sessions.forEach((s) => (s.hosted = s === byIssue(444)))
+    const emptyChat = sessions.find((x) => x.title === 'Where do we set the cache headers?')!
+    const brokenChat = byIssue(326)
+    sessions.forEach((s) => (s.hosted = s === byIssue(444) || (flags.chatCases && (s === emptyChat || s === brokenChat))))
+    if (flags.chatCases) chats.breakLog(brokenChat.id)
     chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
     sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!.detail = 'Should I keep the old cart hook or replace it?'
   }

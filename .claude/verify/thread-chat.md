@@ -6,11 +6,11 @@ A thread whose session runs under a host (`session.hosted`) shows its chat in th
 
 ## How a user reaches it
 
-Click a hosted thread in the left sidebar. In the mock only `#444 checkout route` is hosted.
+Click a hosted thread in the left sidebar. In the mock only `#444 checkout route` is hosted. Selecting it puts the focus in the chat's scroll area, so PageUp, PageDown and the arrow keys scroll it.
 
 ## How to drive it
 
-`npx vite` in `desktop/frontend` serves the front end on `mock.ts`; add `?longchat` for a thread of about 500 items. The scroll element is `section[data-panel="terminal"] .overflow-y-auto`, its rows carry `data-index`, the pill is `.chat-jump`. In `vite dev`, `(await import('/src/api.ts')).api.chatSend(id, text)` streams a mock reply over a second (it denies the waiting approval first).
+`npx vite` in `desktop/frontend` serves the front end on `mock.ts`; add `?longchat` for a thread of about 500 items, and `?chatcases` to make `Where do we set the cache headers?` a hosted thread with an empty chat and `#326 cart rounding` one whose chat log cannot be read. The scroll element is `section[data-panel="terminal"] .overflow-y-auto`, its rows carry `data-index`, the pill is `.chat-jump`. In `vite dev`, `(await import('/src/api.ts')).api.chatSend(id, text)` streams a mock reply over a second (it denies the waiting approval first).
 
 ## What goes wrong
 

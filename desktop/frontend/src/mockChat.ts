@@ -51,6 +51,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 // reply streamed as deltas over a second. thread throws for an id that has no chat.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const logs = new Map<string, ChatEvent[]>()
+  const unreadable = new Set<string>()
   const watched = new Set<string>()
   const pending = new Map<string, Pending>()
   const queued = new Map<string, { id: string; text: string }[]>()
@@ -183,6 +184,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
   const backend = {
     ChatHistory: async (id: string, after: number) => {
       thread(id)
+      if (unreadable.has(id)) throw `The chat log of ${id} could not be read`
       return logOf(id).filter((e) => e.seq > after).map((e) => ({ ...e }))
     },
     ChatWatch: async (id: string) => {
@@ -251,5 +253,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread) {
     if (logs.has(id)) append(id, { kind: 'exit' })
   }
 
-  return { backend, seed, end }
+  // breakLog makes a thread's history fail to read, as a chat log the app cannot open does.
+  const breakLog = (id: string) => unreadable.add(id)
+
+  return { backend, seed, end, breakLog }
 }
