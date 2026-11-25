@@ -288,7 +288,7 @@ func (v *Service) rewindFailed(id, what string, err error) error {
 		return errors.New(off)
 	case strings.HasPrefix(refused.Reason, "unknown op"):
 		log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
-		return fmt.Errorf("Thread %s runs under a host from before Edit from here; settle and wake it to edit", id)
+		return fmt.Errorf("Thread %s runs under a host from before Edit from here; put it to sleep and wake it to edit", id)
 	}
 	return v.failed(id, what, err)
 }

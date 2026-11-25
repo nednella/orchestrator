@@ -3412,7 +3412,7 @@ func (s *Sessions) usersOf(dir, except string, asleep bool) string {
 		return ""
 	}
 	for id, e := range s.ended {
-		if id != except && e.info.Hosted && e.info.Path != "" && inside(e.info.Path, dir) {
+		if id != except && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
 			return cmp.Or(e.info.Title, defaultTitle)
 		}
 	}
