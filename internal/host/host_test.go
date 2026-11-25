@@ -50,6 +50,9 @@ func TestHelperFakeClaude(t *testing.T) {
 	}
 	// Claude fails at its start on a flag it does not know; the flags it is given come after "--".
 	if flag := os.Getenv("AOS_FAKE_REJECT"); flag != "" && slices.Contains(os.Args, flag) {
+		if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_REJECT_AFTER")); err == nil {
+			time.Sleep(wait)
+		}
 		fmt.Fprintf(os.Stderr, "error: unknown option '%s'\n", os.Getenv("AOS_FAKE_REJECT_NAMES"))
 		os.Exit(1)
 	}
@@ -473,6 +476,34 @@ func TestClaudeThatDoesNotKnowTheThinkingFlagStartsWithoutIt(t *testing.T) {
 	if !strings.Contains(h.echo.String(), "claude does not know "+agent.ThinkingDisplay) {
 		t.Errorf("echo = %q", h.echo.String())
 	}
+}
+
+func TestALargeReplayDoesNotBlockClaudesOutput(t *testing.T) {
+	t.Parallel()
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_AFTER=500ms")
+	events := subscribe(t, h.socket, 0)
+	// The first claude reads none of it, so the host gives all of it to the second, which writes each message back
+	// as it reads it: far more than a pipe holds, both ways.
+	const n = 4
+	errs := make(chan error, n)
+	for i := range n {
+		go func() { errs <- Send(ctxT(t), h.socket, fmt.Sprintf("message %d %s", i, strings.Repeat("y", 900<<10))) }()
+	}
+	for range n {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	eventually(t, "every message on the second claude's stdin", func() bool {
+		users := 0
+		for _, l := range stdinLines(t, h.stdin) {
+			if strings.HasPrefix(l, `{"type":"user"`) {
+				users++
+			}
+		}
+		return users == n
+	})
 }
 
 func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {

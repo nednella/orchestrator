@@ -217,7 +217,8 @@ func (h *host) start(ctx context.Context, c Config, argv []string) (*claudeRun, 
 }
 
 // startAgain starts Claude again with argv, without the flag the first start had and Claude did not know, and gives it
-// what the host wrote to the first start: Claude read none of it.
+// what the host wrote to the first start: Claude read none of it. It gives it while the caller reads Claude's output,
+// which Claude writes as it reads, and holds stdinMu until it has, so a later write comes after.
 func (h *host) startAgain(ctx context.Context, c Config, argv []string, flag string) (*claudeRun, error) {
 	fmt.Fprintf(h.echo, "host: claude does not know %s; starting it without\n", flag)
 	if _, err := h.publish(chat.Event{Kind: chat.KindStart, Text: flag}); err != nil {
@@ -228,14 +229,16 @@ func (h *host) startAgain(ctx context.Context, c Config, argv []string, flag str
 		return nil, err
 	}
 	h.stdinMu.Lock()
-	defer h.stdinMu.Unlock()
 	h.stdin = run.stdin
-	for _, line := range h.unanswered {
-		if _, err := h.stdin.Write(line); err != nil {
-			h.stdinErr = fmt.Errorf("claude's stdin is closed: %w", err)
-			break
+	go func() {
+		defer h.stdinMu.Unlock()
+		for _, line := range h.unanswered {
+			if _, err := h.stdin.Write(line); err != nil {
+				h.stdinErr = fmt.Errorf("claude's stdin is closed: %w", err)
+				return
+			}
 		}
-	}
+	}()
 	return run, nil
 }
 
