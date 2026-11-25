@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/sessions"
 )
 
@@ -24,6 +25,28 @@ func TestNewThreadWithoutAgentosFails(t *testing.T) {
 	if out, err := exec.Command("tmux", "-L", h.Socket, "list-sessions", "-F", "#{session_name}").CombinedOutput(); err == nil && strings.TrimSpace(string(out)) != "" {
 		t.Errorf("the failed start left tmux sessions: %s", out)
 	}
+}
+
+func TestAThreadStartsOnceAgentosIsFound(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{NoAgentos: true})
+	missing := warn.Warning{Source: "agent", Message: "The agentos command is not on PATH, so a thread's hooks cannot report its state"}
+	if _, err := h.NewSession("work", ""); err == nil || err.Error() != missing.Message {
+		t.Fatalf("NewSession = %v, want %q", err, missing.Message)
+	}
+	eventually(t, "the warning", func() bool { return slices.Contains(h.Rec.Warnings(), missing) })
+
+	t.Setenv("PATH", filepath.Dir(apptest.CLIPath(t))+string(os.PathListSeparator)+os.Getenv("PATH"))
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := claudeArgs(t, h, s.ID); !strings.Contains(strings.Join(args, " "), apptest.CLIPath(t)+"' hook Stop") {
+		t.Errorf("claude's hooks do not call the agentos found: %q", args)
+	}
+	eventually(t, "the warning to clear", func() bool {
+		w := h.Rec.Warnings()
+		return w[len(w)-1] == warn.Warning{Source: "agent"}
+	})
 }
 
 func TestOldAgentKeysAreIgnored(t *testing.T) {

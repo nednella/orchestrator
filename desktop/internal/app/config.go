@@ -132,12 +132,11 @@ func machineID(stateDir string) (string, error) {
 }
 
 // agents is the registry the sessions get their provider from. Without the agentos command on PATH the agent's hooks
-// could not call back, so no thread starts.
+// could not call back, so no thread starts until it is found.
 func agents(dirs []string) agent.Registry {
 	exe, err := exec.LookPath("agentos")
 	if err != nil {
-		log.Printf("agentos: the agentos command is not on PATH, so no thread can start: %v", err)
-		return agent.Registry{}
+		log.Printf("agentos: the agentos command is not on PATH, so no thread can start until it is: %v", err)
 	}
 	return agent.Registry{Exe: exe, Dirs: dirs}
 }

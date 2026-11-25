@@ -101,18 +101,24 @@ func checkModel(agent string, models []Model, model, effort string) error {
 }
 
 // Registry makes the provider each session starts with. Exe is the agentos command the agent's hooks call, "" when
-// it is not on PATH. Dirs are the app's folders the agent may use.
+// it was not on PATH when the app started. Dirs are the app's folders the agent may use.
 type Registry struct {
 	Exe  string
 	Dirs []string
 }
 
-// Provider is claude with hooks that call Exe. Without Exe nothing could report a thread's state, so there is none.
+// Provider is claude with hooks that call Exe, else the agentos command on PATH now, so one installed while the app
+// runs is found. Without either nothing could report a thread's state, so there is none.
 func (r Registry) Provider() (Provider, error) {
-	if r.Exe == "" {
-		return nil, errors.New("The agentos command is not on PATH, so a thread's hooks cannot report its state")
+	exe := r.Exe
+	if exe == "" {
+		found, err := exec.LookPath("agentos")
+		if err != nil {
+			return nil, errors.New("The agentos command is not on PATH, so a thread's hooks cannot report its state")
+		}
+		exe = found
 	}
-	return Claude{Exe: r.Exe, ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
+	return Claude{Exe: exe, ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
 }
 
 // claudeConfigDir is where claude keeps the user's settings, "" when there is no home.
