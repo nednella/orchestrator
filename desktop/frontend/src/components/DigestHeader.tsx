@@ -1,54 +1,36 @@
-import type { ReactNode } from "react";
-import { useLayout } from "../LayoutContext";
-import { Icon } from "./Icon";
+import { Newspaper, RefreshCw } from 'lucide-react'
+import { DigestTile } from './DigestTile'
 
 type DigestHeaderProps = {
-  updated: string;
-  running: boolean;
-  onRun(): void;
-  children: ReactNode;
-};
+  project: string
+  automatic: boolean
+  running: boolean
+  onRun(): void
+}
 
-export function DigestHeader({
-  updated,
-  running,
-  onRun,
-  children,
-}: DigestHeaderProps) {
-  const { closeCentre } = useLayout();
-
+export function DigestHeader({ project, automatic, running, onRun }: DigestHeaderProps) {
   return (
-    <>
-      <header className="panel-head flex h-10 flex-none items-center gap-2 border-b border-line px-4">
-        <h2 className="truncate text-body font-semibold">Weekly digest</h2>
-        <span className="mono ml-auto flex-none text-small text-dim">
-          {updated}
-        </span>
-        <button
-          className="btn h-7 w-7 flex-none justify-center px-0"
-          title="Run now"
-          aria-label="Run now"
-          disabled={running}
-          onClick={onRun}
-        >
-          <span
-            className={running ? "inline-flex animate-spin" : "inline-flex"}
-          >
-            <Icon name="refresh" size={13} />
-          </span>
+    <header className="flex flex-wrap items-center gap-3">
+      <DigestTile size="md">
+        <Newspaper size={16} aria-hidden />
+      </DigestTile>
+      <div className="flex min-w-48 flex-1 flex-col">
+        <h1 className="text-title leading-[1.375] font-semibold">News</h1>
+        <p className="text-small text-soft">
+          What changed in the tools {project} depends on, picked by an agent {automatic ? 'each week' : 'when you run it'}
+        </p>
+      </div>
+      {running ? (
+        <button className="btn" disabled>
+          <span className="spinner" aria-hidden="true" />
+          Checking
         </button>
-        <button
-          className="btn btn-ghost h-7 w-7 flex-none justify-center px-0"
-          title="Close (Esc)"
-          aria-label="Close the digest"
-          onClick={closeCentre}
-        >
-          <Icon name="close" />
+      ) : (
+        <button className="btn" onClick={onRun}>
+          <RefreshCw size={14} aria-hidden />
+          Run now
         </button>
-      </header>
-      <p className="flex-none border-b border-line px-6 py-2.5 text-small text-dim">
-        {children}
-      </p>
-    </>
-  );
+      )}
+    </header>
+  )
 }
