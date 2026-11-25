@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -98,47 +99,47 @@ func TestMadeTreesRecord(t *testing.T) {
 			name:    "the newest record of a thread",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}, {Path: filepath.Join(trees, "b"), Thread: "p/t1"}},
 			thread:  "p/t1", path: filepath.Join(trees, "b"),
-			want: Made{Path: filepath.Join(trees, "b"), Thread: "p/t1"},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "b")), Thread: "p/t1"},
 		},
 		{
 			name:    "the newest record at a path agentos used twice",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1", Removed: 9}, {Path: filepath.Join(trees, "a"), Thread: "p/t2"}},
 			thread:  "p/t2", path: filepath.Join(trees, "a"),
-			want: Made{Path: realPath(filepath.Join(trees, "a")), Thread: "p/t2"},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t2"},
 		},
 		{
 			name:    "a path found through a link",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			thread:  "p/t1", path: filepath.Join(link, "a"),
-			want: Made{Path: realPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
 		},
 		{
 			name:    "branch set",
 			records: []Made{{Path: filepath.Join(trees, "a"), Branch: "issue-7", Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.SetBranch("p", filepath.Join(trees, "a"), "issue-8") },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: realPath(filepath.Join(trees, "a")), Branch: "issue-8", Thread: "p/t1"},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Branch: "issue-8", Thread: "p/t1"},
 		},
 		{
 			name:    "removed",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.Removed("p", filepath.Join(trees, "a"), at) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: realPath(filepath.Join(trees, "a")), Thread: "p/t1", Removed: 5000},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1", Removed: 5000},
 		},
 		{
 			name:    "restored",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1", Removed: 5000}},
 			change:  func(m *madeTrees) error { return m.Restored("p", filepath.Join(trees, "a")) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want: Made{Path: realPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want: Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
 		},
 		{
 			name:    "a change at a path agentos never used",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.Removed("p", filepath.Join(trees, "elsewhere"), at) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
-			want:    Made{Path: realPath(filepath.Join(trees, "a")), Thread: "p/t1"},
+			want:    Made{Path: canonicalPath(filepath.Join(trees, "a")), Thread: "p/t1"},
 			wantErr: true,
 		},
 	}
@@ -164,6 +165,71 @@ func TestMadeTreesRecord(t *testing.T) {
 				t.Errorf("At = %+v, %v; want %+v", got, ok, tt.want)
 			}
 		})
+	}
+}
+
+func TestRecordOfAMissingFolderIsFoundByAnySpelling(t *testing.T) {
+	trees := filepath.Join(t.TempDir(), "trees")
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(trees, link); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name         string
+		added, asked string
+	}{
+		{"added by the link, asked by the folder", filepath.Join(link, "a"), filepath.Join(trees, "a")},
+		{"added by the folder, asked by the link", filepath.Join(trees, "a"), filepath.Join(link, "a")},
+		{"added and asked by the link", filepath.Join(link, "a"), filepath.Join(link, "a")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.MkdirAll(filepath.Join(trees, "a"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			m := newMadeTrees(t.TempDir())
+			if err := m.Add("p", Made{Path: tt.added, Thread: "p/t1"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.RemoveAll(filepath.Join(trees, "a")); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.Removed("p", tt.asked, time.UnixMilli(5000)); err != nil {
+				t.Fatalf("Removed by another spelling of a missing folder: %v", err)
+			}
+			if got, ok := m.At("p", tt.asked); !ok || got.Removed != 5000 {
+				t.Errorf("At = %+v, %v; want the record, removed at 5000", got, ok)
+			}
+		})
+	}
+}
+
+func TestEmptyThreadIsRefused(t *testing.T) {
+	l, dir, local := madeRepo(t)
+	wt := filepath.Join(dir, "trees", "issue-7")
+	gitT(t, dir, "worktree", "add", "-b", "issue-7", wt)
+	if err := l.sessions.made.Add("p", Made{Path: wt}); err == nil {
+		t.Error("recorded a worktree for no thread")
+	}
+	if err := l.mark(t.Context(), wt, ""); err == nil {
+		t.Error("marked a worktree for no thread")
+	}
+	gitDir := gitT(t, wt, "rev-parse", "--path-format=absolute", "--git-dir")
+	if err := os.WriteFile(filepath.Join(gitDir, markerFile), []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(local, "p"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	record := `[{"path":` + strconv.Quote(canonicalPath(wt)) + `,"thread":""}]`
+	if err := os.WriteFile(filepath.Join(local, "p", "worktrees.json"), []byte(record), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := l.sessions.made.At("p", wt); !ok {
+		t.Fatal("the hand-written record is not read")
+	}
+	if l.ours(t.Context(), "p", wt, "") {
+		t.Error("a worktree is ours for no thread")
 	}
 }
 

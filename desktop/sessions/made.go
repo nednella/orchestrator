@@ -80,13 +80,16 @@ func (m *madeTrees) save(key string, list []Made) error {
 
 // Add records a worktree agentos made.
 func (m *madeTrees) Add(key string, w Made) error {
+	if w.Thread == "" {
+		return errors.New("recording a worktree: no thread")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	list, err := m.list(key)
 	if err != nil {
 		return err
 	}
-	w.Path = realPath(w.Path)
+	w.Path = canonicalPath(w.Path)
 	return m.save(key, append(list, w))
 }
 
@@ -97,7 +100,8 @@ func (m *madeTrees) Of(key, thread string) (Made, bool) {
 
 // At is the newest record of a worktree at path.
 func (m *madeTrees) At(key, path string) (Made, bool) {
-	return m.newest(key, func(w Made) bool { return samePath(w.Path, path) })
+	path = canonicalPath(path)
+	return m.newest(key, func(w Made) bool { return w.Path == path })
 }
 
 func (m *madeTrees) newest(key string, match func(Made) bool) (Made, bool) {
@@ -138,14 +142,33 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 	if err != nil {
 		return err
 	}
+	canonical := canonicalPath(path)
 	for i := len(list) - 1; i >= 0; i-- {
-		if samePath(list[i].Path, path) {
+		if list[i].Path == canonical {
 			list = append([]Made(nil), list...)
 			edit(&list[i])
 			return m.save(key, list)
 		}
 	}
 	return fmt.Errorf("no worktree agentos made at %s", path)
+}
+
+// canonicalPath is path with every link resolved, also when its last parts are gone, as they are
+// once a worktree is removed: `/var/x/trees/a` and `/private/var/x/trees/a` are one path.
+func canonicalPath(path string) string {
+	path = filepath.Clean(path)
+	var gone []string
+	for {
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return filepath.Join(append([]string{real}, gone...)...)
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return filepath.Join(append([]string{path}, gone...)...)
+		}
+		gone = append([]string{filepath.Base(path)}, gone...)
+		path = parent
+	}
 }
 
 // linkedGitDir is the worktree's own git folder, `<repo>/.git/worktrees/<name>`. The project
@@ -163,6 +186,9 @@ func (l *Lifecycle) linkedGitDir(ctx context.Context, worktree string) (string, 
 
 // mark writes the thread's id into the worktree's own git folder.
 func (l *Lifecycle) mark(ctx context.Context, worktree, thread string) error {
+	if thread == "" {
+		return errors.New("marking the worktree: no thread")
+	}
 	gitDir, err := l.linkedGitDir(ctx, worktree)
 	if err != nil {
 		return fmt.Errorf("marking the worktree: %w", err)
@@ -177,6 +203,9 @@ func (l *Lifecycle) mark(ctx context.Context, worktree, thread string) error {
 // newest record at the path is the thread's and not removed, and the worktree's marker holds the
 // thread's id. A worktree a human made again at a path agentos used has no marker.
 func (l *Lifecycle) ours(ctx context.Context, key, worktree, thread string) bool {
+	if thread == "" {
+		return false
+	}
 	w, ok := l.sessions.made.At(key, worktree)
 	if !ok || w.Thread != thread || w.Removed != 0 {
 		return false
