@@ -41,6 +41,24 @@ export function fit(windowPx: number, prefs: FitPrefs, root: number): Fitted {
   }
 }
 
+// The widest a docked panel can be dragged: the thread keeps THREAD_MIN_REM beside it, and the other panel, docked and
+// open, keeps its place, so a drag never moves a panel over the thread. Floored to a hundredth of a rem, so that
+// rounding never tips fit the other way.
+export function dockedMax(panel: SidePanel, windowPx: number, prefs: FitPrefs & { rightOpen: boolean }, root: number): number {
+  const { docked } = fit(windowPx, prefs, root)
+  const room = windowPx - THREAD_MIN_REM * root - LINES_PX
+  const sidebarBeside = docked.sidebar && prefs.sidebarOpen ? (RAIL_REM + prefs.sidebar) * root + LINES_PX : 0
+  const rightBeside = docked.right && prefs.rightOpen ? (prefs.right ?? RIGHT_DEFAULT_REM) * root + LINES_PX : 0
+  const max = panel === 'sidebar' ? (room - rightBeside) / root - RAIL_REM : (room - sidebarBeside) / root
+  return Math.floor(max * 100) / 100
+}
+
+// Opening the docked sidebar can leave the docked right panel no room beside the thread. The owner opened both, so
+// the right panel then stays open, over the thread.
+export function sidebarPushesRightOver(windowPx: number, prefs: FitPrefs, root: number): boolean {
+  return fit(windowPx, { ...prefs, sidebarOpen: false }, root).docked.right && !fit(windowPx, { ...prefs, sidebarOpen: true }, root).docked.right
+}
+
 export function modeFor(width: number): LayoutMode {
   if (width < OVERLAY_BELOW) return 'narrow'
   if (width < COMPACT_BELOW) return 'compact'

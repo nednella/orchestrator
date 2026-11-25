@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fit, modeFor, nextOverlay, OVERLAY_BELOW } from './panelLayout.ts'
+import { dockedMax, fit, modeFor, nextOverlay, OVERLAY_BELOW, sidebarPushesRightOver } from './panelLayout.ts'
 
 const ROOT = 16
 
@@ -50,6 +50,42 @@ test('a panel over the thread opens at its full width, capped by the room under 
   assert.equal(fit(300, prefs(18), ROOT).widths.right, 300 / ROOT)
   assert.equal(fit(700, prefs(18), ROOT).widths.sidebar, 18)
   assert.equal(fit(300, prefs(18), ROOT).widths.sidebar, 300 / ROOT - 3)
+})
+
+test('a drag of the docked sidebar stops where it would leave the side of the thread', () => {
+  for (const root of [16, 17.6, 19.2]) {
+    for (const windowPx of [820, 1000, 1512, 2560]) {
+      const max = dockedMax('sidebar', windowPx, { ...prefs(18), rightOpen: false }, root)
+      assert.equal(fit(windowPx, prefs(max), root).docked.sidebar, true, `${windowPx}px at ${root}`)
+      assert.equal(fit(windowPx, prefs(max + 0.02), root).docked.sidebar, false, `${windowPx}px at ${root}, past the limit`)
+    }
+  }
+  assert.equal(dockedMax('sidebar', 1512, { ...prefs(18), rightOpen: false }, ROOT), 61.31)
+})
+
+test('a drag of the docked sidebar keeps the open docked right panel beside the thread', () => {
+  const open = { ...prefs(18, 22), rightOpen: true }
+  const max = dockedMax('sidebar', 1512, open, ROOT)
+  assert.equal(max, 39.12)
+  assert.deepEqual(fit(1512, prefs(max, 22), ROOT).docked, { sidebar: true, right: true })
+  assert.deepEqual(fit(1512, prefs(max + 0.02, 22), ROOT).docked, { sidebar: true, right: false })
+  assert.equal(dockedMax('sidebar', 1512, { ...prefs(18, 22), rightOpen: false }, ROOT), 61.31)
+})
+
+test('a drag of the docked right panel stops where it would leave the side of the thread', () => {
+  const max = dockedMax('right', 1512, { ...prefs(18, 22), rightOpen: true }, ROOT)
+  assert.equal(max, 43.12)
+  assert.equal(fit(1512, prefs(18, max), ROOT).docked.right, true)
+  assert.equal(fit(1512, prefs(18, max + 0.02), ROOT).docked.right, false)
+  assert.equal(dockedMax('right', 1512, { ...prefs(18, 22, false), rightOpen: true }, ROOT), 64.31)
+})
+
+test('opening the sidebar pushes the right panel over the thread only when it then has no room', () => {
+  assert.equal(sidebarPushesRightOver(1512, prefs(18, 22, false), ROOT), false)
+  assert.equal(sidebarPushesRightOver(1200, prefs(18, 22, false), ROOT), false)
+  assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, false), ROOT), true)
+  assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, true), ROOT), true)
+  assert.equal(sidebarPushesRightOver(700, prefs(18, 22, false), ROOT), false)
 })
 
 test('the window width picks the layout band', () => {

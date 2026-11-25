@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
 import type { FocusTarget, SessionView } from './AgentosContext'
 import { devFlags } from './api'
-import { fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM } from './panelLayout'
+import { dockedMax, fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, sidebarPushesRightOver } from './panelLayout'
 import type { Band, FitPrefs, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
@@ -161,6 +161,18 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (openOverlay && docked[openOverlay]) setOpenOverlay(null)
   }, [openOverlay, docked.sidebar, docked.right])
 
+  // A docked panel that held the focus and leaves the side of the thread (the window got narrower, or the sidebar
+  // pushed the right panel over the thread) leaves the focus nowhere: it goes into the panel's overlay, or to the
+  // thread when the panel is closed.
+  const dockedBefore = useRef(docked)
+  useEffect(() => {
+    const before = dockedBefore.current
+    dockedBefore.current = docked
+    const left = (['sidebar', 'right'] as const).find((panel) => before[panel] && !docked[panel])
+    if (!left || (document.activeElement && document.activeElement !== document.body)) return
+    focus(overlay === left ? PANEL_FOCUS[left] : 'thread')
+  }, [docked.sidebar, docked.right])
+
   const previousSelected = useRef(selectedId)
   useEffect(() => {
     if (previousSelected.current === selectedId) return
@@ -174,10 +186,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setSidebarOpen = useCallback(
     (open: boolean) => {
-      if (docked.sidebar) updatePrefs({ sidebarOpen: open })
-      else moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
+      if (!docked.sidebar) return moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
+      if (open && prefs.rightOpen && sidebarPushesRightOver(width, fitPrefs, 16 * scale)) moveOverlay({ open: 'right' })
+      updatePrefs({ sidebarOpen: open })
     },
-    [docked.sidebar, moveOverlay, updatePrefs],
+    [docked.sidebar, prefs.rightOpen, width, fitPrefs, scale, moveOverlay, updatePrefs],
   )
 
   // A panel closed another way (its close button, the other overlay) forgets where the focus was.
@@ -202,8 +215,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
 
   const setRightOpen = useCallback(
     (open: boolean) => {
-      if (docked.right) updatePrefs({ rightOpen: open })
-      else moveOverlay(open ? { open: 'right' } : { close: 'right' })
+      if (docked.right) return updatePrefs({ rightOpen: open })
+      moveOverlay(open ? { open: 'right' } : { close: 'right' })
+      // A right panel the sidebar pushed over the thread would dock again, open, when the sidebar closes.
+      if (!open) updatePrefs({ rightOpen: false })
     },
     [docked.right, moveOverlay, updatePrefs],
   )
@@ -272,7 +287,8 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         moveOverlay(why)
       },
       setWidth(panel, rem, commit) {
-        const next = Math.min(Math.max(rem, MIN_REM[panel]), MAX_REM)
+        const limit = docked[panel] ? Math.min(MAX_REM, dockedMax(panel, width, { ...fitPrefs, rightOpen: prefs.rightOpen }, 16 * scale)) : MAX_REM
+        const next = Math.max(Math.min(rem, limit), MIN_REM[panel])
         if (panel === 'sidebar') {
           setSidebarRem(next)
           if (commit) writeStored(SIDEBAR_WIDTH_KEY, next)
