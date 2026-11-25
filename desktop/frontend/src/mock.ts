@@ -513,7 +513,24 @@ export function createMock(params: URLSearchParams) {
       chats.seed(finder.id)
       setTimeout(() => emit('attention', { id: finder.id, state: 'waiting' }), 1500)
     }
-    seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read').parent = lead.id
+    const notesCheck = seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read')
+    notesCheck.parent = lead.id
+    const sender = byIssue(444)
+    chats.delegations(
+      lead.id,
+      [
+        { id: finder.id, title: finder.title, task: 'Find which checkout test fails now and then, and why.', access: 'read' },
+        {
+          id: notesCheck.id,
+          title: notesCheck.title,
+          task: 'Check whether the notes sync has the race the checkout tests hit.',
+          access: 'read',
+          project: notesCheck.project,
+          result: 'No race in the notes sync. It writes each note to a temp file and renames it into place, so a reader never sees half a note.\n\n- `sync.ts` holds one lock per note\n- the tests run 200 syncs side by side and all pass\n- the only shared state is the queue, which is read under the same lock',
+        },
+      ],
+      { id: sender.id, title: sender.title },
+    )
     if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], 'read')
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     const brokenChat = byIssue(326)

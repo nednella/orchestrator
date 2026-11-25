@@ -5,9 +5,10 @@ import { ACCESS_LABEL } from '../access'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
 import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
-import type { TimelineItem } from '../chatTimeline'
+import type { ChildItem, TimelineItem } from '../chatTimeline'
 import { ChatAgentRow } from './ChatAgentRow'
 import { ChatApprovalCard } from './ChatApprovalCard'
+import { ChatChildCard } from './ChatChildCard'
 import { ChatMessageActions } from './ChatMessageActions'
 import { ChatMinimap } from './ChatMinimap'
 import { ChatNotice } from './ChatNotice'
@@ -54,6 +55,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
           uuid={item.uuid}
           text={item.text}
           files={item.files}
+          from={item.from}
           at={item.at}
           afterUser={items[index - 1]?.kind === 'user'}
           beforeUser={items[index + 1]?.kind === 'user'}
@@ -101,6 +103,13 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatPlanCard thread={thread} request={item.request} input={item.input} answer={item.answer} expired={item.expired} result={item.result} />
     case 'agent':
       return <ChatAgentRow thread={thread} id={item.id} description={item.description} type={item.type} state={item.state} startedAt={item.startedAt} endedAt={item.endedAt} tools={item.tools} steps={item.steps} result={item.result} folder={folder} />
+    case 'child':
+      if (item.error) return <ChatNotice text={`${item.title} did not start`} error />
+      return <ChatChildCard id={item.child} title={item.title} />
+    case 'childResult': {
+      const title = items.find((i): i is ChildItem => i.kind === 'child' && i.child === item.child)?.title ?? 'Child thread'
+      return <ChatChildCard id={item.child} title={title} result={item.text} />
+    }
   }
 }
 

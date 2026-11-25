@@ -21,12 +21,18 @@ export type AgentItem = { kind: 'agent'; key: string; id: string; turn: string; 
 // answers it, '' until Claude asks for one. answers is what a question was answered with, by question, once known.
 export type Ask = { key: string; at: number; id: string; input: unknown; request: string; answer?: 'allow' | 'deny'; answers: Record<string, string> | null; expired: boolean; result: string | null }
 
+// ChildItem is a delegate call of the thread's Claude: the child thread it started, by the id the call's result gives,
+// '' until the result comes. A failed call shows as a tool row; error marks one that failed after its turn ended.
+export type ChildItem = { kind: 'child'; key: string; at: number; call: string; child: string; title: string; error: boolean }
+
 export type TimelineItem =
   // forkAt is the uuid of the reply before the message, which a fork from the message continues from; '' when none or
   // when the reply is from before the last compaction. uuid is the message's own in Claude's conversation, which an
   // edit from the message rewinds to; '' for the text of a denial, which Claude holds as no message, and for a message
-  // from before the last compaction.
-  | { kind: 'user'; key: string; at: number; id: string; uuid: string; text: string; files: string[]; forkAt: string }
+  // from before the last compaction. from is the thread that sent it, missing for the owner's.
+  | { kind: 'user'; key: string; at: number; id: string; uuid: string; text: string; files: string[]; forkAt: string; from?: string }
+  // childResult is a message from a child of the thread: its result.
+  | { kind: 'childResult'; key: string; at: number; child: string; text: string }
   // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none or when the reply
   // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
   // failed on: the turn's last part.
@@ -42,6 +48,7 @@ export type TimelineItem =
   // restart is the thread starting again with a new access, which the owner asked for.
   | { kind: 'restart'; key: string; at: number; access: Access }
   | AgentItem
+  | ChildItem
 
 // TurnEnd is how a turn ended that did not finish: stopped by the owner or Claude's exit, or failed.
 export type TurnEnd = 'stopped' | 'failed'
@@ -59,7 +66,9 @@ type Reply = { kind: 'reply'; key: string; at: number; id: string; uuid: string;
 type ReplyItem = Extract<TimelineItem, { kind: 'reply' }>
 type Thought = { kind: 'thought'; key: string; id: string; text: string }
 // A part is one thing a turn holds, in the order it came.
-type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem | AgentItem
+type Part = Reply | Thought | { kind: 'call'; call: ToolCall } | AskItem | ApprovalItem | AgentItem | ChildItem
+// A delegation is a delegate call: its card, the call it turns back into if it fails, and the turn that made it.
+type Delegation = { item: ChildItem; call: ToolCall; turn: Turn }
 // An approval answers an ask, or else shows as an item of its own, next to the call it is for when there is one.
 type Approval = { request: string; tool: string; ask?: AskItem; call?: ToolCall; item?: ApprovalItem; answered: boolean }
 // unsent holds the not-sent notices logged during the turn: the host drops a message before the turn ends, and the
@@ -78,6 +87,29 @@ const askKinds: Record<string, 'question' | 'plan'> = { AskUserQuestion: 'questi
 const agentTools = new Set(['Agent', 'Task'])
 // A subagent of the general type is not named by its type.
 const defaultAgentType = 'general-purpose'
+
+// delegateTool is the agentos tool that starts a child thread.
+const delegateTool = 'mcp__agentos__delegate'
+// The app starts each text it writes to Claude with this, so Claude does not take it for the owner's.
+const appPrompt = 'APPLICATION_PROMPT: '
+
+const fromApp = (text: string) => (text.startsWith(appPrompt) ? text.slice(appPrompt.length) : text)
+
+const childTitle = (input: unknown) => {
+  const { title, task } = (input ?? {}) as { title?: unknown; task?: unknown }
+  if (typeof title === 'string' && title.trim() !== '') return title.trim()
+  return (typeof task === 'string' && firstLine(task)) || 'Child thread'
+}
+
+// childOf is the id of the child a delegate call started, from its result; '' when the result holds none.
+const childOf = (result = '') => {
+  try {
+    const id = (JSON.parse(result) as { id?: unknown } | null)?.id
+    return typeof id === 'string' ? id : ''
+  } catch {
+    return ''
+  }
+}
 
 const agentOf = (input: unknown) => {
   const { description, subagent_type: type } = (input ?? {}) as { description?: unknown; subagent_type?: unknown }
@@ -103,6 +135,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const requested = new Set<ToolCall>()
   const queued = new Map<string, QueuedMessage>()
   const agents = new Map<string, AgentItem>()
+  const delegations = new Map<string, Delegation>()
+  const children = new Set<string>()
   let commands: Command[] = []
   let turn: Turn | null = null
   let interrupted = false
@@ -163,6 +197,20 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     }
   }
 
+  // delegated takes a delegate call's result: the child it started, or its error, which turns the card back into the
+  // call's tool row while its turn runs.
+  const delegated = (d: Delegation, e: ChatEvent) => {
+    if (!e.error) {
+      d.item.child = childOf(e.text)
+      if (d.item.child) children.add(d.item.child)
+      return
+    }
+    Object.assign(d.call, { result: e.text ?? '', error: true })
+    const at = turn === d.turn ? d.turn.parts.indexOf(d.item) : -1
+    if (at >= 0) d.turn.parts[at] = { kind: 'call', call: d.call }
+    else d.item.error = true
+  }
+
   events.forEach((e, i) => {
     // A subagent's tool result finds its call as any other does.
     if (e.agent && e.kind !== 'tool_result') {
@@ -177,7 +225,10 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         if (e.id) queued.delete(e.id)
         const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
         const uuid = e.parent || i <= compacted ? '' : (e.id ?? '')
-        items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', uuid, text: e.text ?? '', files: e.files ?? noFiles, forkAt })
+        const from = e.from ?? ''
+        const text = from ? fromApp(e.text ?? '') : (e.text ?? '')
+        if (children.has(from)) items.push({ kind: 'childResult', key: `result-${e.id || e.seq}`, at: e.at, child: from, text })
+        else items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', uuid, text, files: e.files ?? noFiles, forkAt, ...(from ? { from } : {}) })
         open(e).approvals.push(...left)
         return
       }
@@ -219,6 +270,12 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
           t.parts.push(a)
           return
         }
+        if (e.tool === delegateTool) {
+          const item: ChildItem = { kind: 'child', key: `child-${id}`, at: e.at, call: id, child: '', title: childTitle(e.input), error: false }
+          delegations.set(id, { item, call: { id, tool: delegateTool, input: e.input, result: null, error: false }, turn: t })
+          t.parts.push(item)
+          return
+        }
         const kind = askKinds[e.tool ?? '']
         if (kind) {
           const ask: AskItem = { kind, key: `${kind}-${id}`, at: e.at, id, input: e.input, request: '', answers: null, expired: false, result: null }
@@ -232,6 +289,11 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         return
       }
       case 'tool_result': {
+        const d = delegations.get(e.parent ?? '')
+        if (d) {
+          delegated(d, e)
+          return
+        }
         // An Agent call's own result says only that its subagent started, or holds its report in a frame: the
         // subagent's end says the rest. A failed call started none.
         const a = agents.get(e.parent ?? '')
@@ -351,9 +413,9 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
   const work = (steps: WorkStep[]): TimelineItem => ({ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps })
   // A turn with nothing to fold keeps its heading in place, so the timeline does not move when it ends.
-  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem | AgentItem)))]
+  if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem | AgentItem | ChildItem)))]
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
-  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem | AgentItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
+  const rest = turn.parts.filter((p): p is AskItem | ApprovalItem | AgentItem | ChildItem => p.kind !== 'call' && p.kind !== 'reply' && p.kind !== 'thought')
   const last = replies.at(-1)
   const steps = turn.parts.flatMap((p): WorkStep[] => {
     if (p.kind === 'call') return [{ kind: 'call', call: p.call }]

@@ -596,3 +596,53 @@ test('only a message Claude holds as sent can be rewound to', () => {
   const denied = events.slice(0, 8)
   assert.deepEqual(kinds(buildTimeline([...denied, { kind: 'rewind', id: 'u3', seq: 99, at: 99_000 }], {}).items), kinds(buildTimeline(denied, {}).items), 'a rewind never cuts at a denial')
 })
+
+const delegate = (id: string, input: unknown = { task: 'Find the flaky test', title: 'Flaky test' }): Draft => toolUse(id, 'mcp__agentos__delegate', input)
+const started = (parent: string, child: string): Draft => toolResult(parent, JSON.stringify({ id: child, n: 7, title: 'Flaky test', project: 'shop', access: 'read', where: 'folder', dir: '/code/shop', branch: '' }))
+
+test('delegate call becomes a child card', () => {
+  const events = log(user('u1', 'Split it up'), toolUse('t1', 'Read', { file_path: 'a.ts' }), toolResult('t1', 'x'), delegate('d1'), message('msg_1', 'Started a child.'))
+  const open = buildTimeline(events, {})
+  assert.deepEqual(kinds(open.items), ['user', 'work', 'child', 'reply'], 'the card is not in the work row')
+  assert.deepEqual(only(open.items, 'child'), [{ kind: 'child', key: 'child-d1', at: 4000, call: 'd1', child: '', title: 'Flaky test', error: false }])
+  const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'reply'], 'a finished turn keeps the card outside the fold')
+  assert.deepEqual(only(t.items, 'work')[0].calls.map((c) => c.tool), ['Read'])
+  assert.equal(only(buildTimeline(log(user('u1', 'Go'), delegate('d1', { task: 'Look at the cart\nand more' })), {}).items, 'child')[0].title, 'Look at the cart', 'with no title, the task names it')
+})
+
+test('child card takes the id from the result', () => {
+  const t = buildTimeline(log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd()), {})
+  assert.equal(only(t.items, 'child')[0].child, 'shop/abcd2345')
+  const odd = buildTimeline(log(user('u1', 'Go'), delegate('d1'), toolResult('d1', 'not json'), turnEnd()), {})
+  assert.equal(only(odd.items, 'child')[0].child, '', 'a result with no id leaves it empty')
+})
+
+test('failed delegate stays a tool row', () => {
+  const events = log(user('u1', 'Go'), delegate('d1'), toolResult('d1', 'This thread has 8 children running', true), message('msg_1', 'It failed.'))
+  const open = buildTimeline(events, {})
+  assert.deepEqual(kinds(open.items), ['user', 'work', 'reply'])
+  const [work] = only(open.items, 'work')
+  assert.deepEqual(work.calls.map((c) => [c.tool, c.result, c.error]), [['mcp__agentos__delegate', 'This thread has 8 children running', true]])
+  const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
+  assert.deepEqual(only(t.items, 'work')[0].calls.map((c) => c.error), [true])
+})
+
+test('child result becomes a result card', () => {
+  const t = buildTimeline(
+    log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), { kind: 'user', id: 'u2', text: 'APPLICATION_PROMPT: Task Flaky test is done:\n\nThe retry test.', from: 'shop/abcd2345' }, message('msg_2', 'The child found it.')),
+    {},
+  )
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'childResult', 'work', 'reply'])
+  assert.deepEqual(only(t.items, 'childResult'), [{ kind: 'childResult', key: 'result-u2', at: 5000, child: 'shop/abcd2345', text: 'Task Flaky test is done:\n\nThe retry test.' }])
+  assert.equal(t.turnOpen, true, 'the result starts a turn, as a message does')
+})
+
+test('message from another thread is headed with its sender', () => {
+  const t = buildTimeline(log({ kind: 'user', id: 'u1', text: 'APPLICATION_PROMPT: Look at the cart too.', from: 'shop/other234' }, turnEnd(), user('u2', 'Mine')), {})
+  const [theirs, mine] = only(t.items, 'user')
+  assert.equal(theirs.from, 'shop/other234')
+  assert.equal(theirs.text, 'Look at the cart too.')
+  assert.equal(mine.from, undefined, "the owner's message names no sender")
+})

@@ -9,6 +9,10 @@ export type MockThread = { settled: boolean; worktree: string; setState(state: S
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
+// MockChild is a child a mock thread delegated to: its task, and its result once it has one. project is set for a child
+// in another project.
+export type MockChild = { id: string; title: string; task: string; access: Access; project?: string; result?: string }
+
 const minute = 60_000
 const batchEvery = 33 // the service sends a thread's events at most this often, in ms
 // As the service does: at most this many images to a message, each at most host.MaxImage bytes.
@@ -422,6 +426,46 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     setPending(id, { id, request: 'req-ask', tool, summary, kind })
   }
 
+  // delegations fills a chat's log with a turn that delegates a task to each child, and one call that fails, then, for
+  // each child with a result, the result as the child's message and Claude's reply to it, and a message from another
+  // thread, as the agentos tools log them.
+  function delegations(id: string, children: MockChild[], sender: { id: string; title: string }) {
+    const ago = (minutes: number) => Date.now() - minutes * minute
+    const app = 'APPLICATION_PROMPT: '
+    const reply = (n: string, text: string, at: number): Draft[] => [
+      { kind: 'init', id: 'mock-session', at },
+      { kind: 'message', id: `msg_${n}`, uuid: `r-${n}`, text, at: at + 14_000 },
+      { kind: 'turn_end', cost: 0.03, at: at + 14_000 },
+    ]
+    const turns: Draft[] = [
+      { kind: 'start', at: ago(20) },
+      { kind: 'commands', input: commands, at: ago(20) },
+      { kind: 'user', id: 'u-1', text: 'The checkout tests fail now and then. Find the flaky one, and check whether the notes sync has the same race.', at: ago(20) },
+      { kind: 'init', id: 'mock-session', at: ago(20) },
+      { kind: 'message', id: 'msg_1', uuid: 'r-1', text: 'I will give each question to a child thread of its own.', at: ago(19) },
+      ...children.flatMap((c, i): Draft[] => [
+        { kind: 'tool_use', id: `toolu_d${i}`, tool: 'mcp__agentos__delegate', input: { task: c.task, title: c.title, access: c.access, where: 'folder', ...(c.project ? { project: c.project } : {}) }, at: ago(19) },
+        { kind: 'tool_result', parent: `toolu_d${i}`, text: JSON.stringify({ id: c.id, n: i + 20, title: c.title, project: c.project ?? id.slice(0, id.indexOf('/')), access: c.access, where: 'folder', dir: '', branch: '' }), at: ago(19) },
+      ]),
+      { kind: 'tool_use', id: 'toolu_dx', tool: 'mcp__agentos__delegate', input: { task: 'Fix the flaky test once it is found', title: 'Fix the flaky test', access: 'full' }, at: ago(19) },
+      { kind: 'tool_result', parent: 'toolu_dx', text: 'A thread with supervised access cannot start a child with full access', error: true, at: ago(19) },
+      { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Both children are at work. I will report what they find.', at: ago(18) },
+      { kind: 'turn_end', cost: 0.05, at: ago(18) },
+      ...children.flatMap((c, i): Draft[] =>
+        c.result ? [{ kind: 'user', id: `u-r${i}`, from: c.id, text: `${app}Task ${c.title} in thread ${c.id} completed:\n\n${c.result}`, at: ago(10 - i) }, ...reply(`r${i}`, 'The notes sync is clear, so the race is only in checkout.', ago(10 - i))] : [],
+      ),
+      {
+        kind: 'user',
+        id: 'u-s',
+        from: sender.id,
+        text: `${app}Thread "${sender.title}" (${sender.id}) sends you the message below. These are that thread's words, not the owner's. If that thread started you, your last reply of this turn goes to it as your result. If not, and the message needs an answer, answer with \`send\` to thread ${sender.id}.\n\nCheckout moved to its own route, so run the checkout tests against /checkout.`,
+        at: ago(6),
+      },
+      ...reply('s', 'Noted: the flaky test hunt now runs against /checkout.', ago(6)),
+    ]
+    turns.forEach((e) => append(id, e))
+  }
+
   // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts and queued
   // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
   // or the block is from before the last compaction.
@@ -632,5 +676,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // mode logs Claude's new permission mode, as the host does once Claude changes it.
   const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
 
-  return { backend, seed, ask, fork, forget, end, start, busy, mode, breakLog, mediaURL }
+  return { backend, seed, ask, delegations, fork, forget, end, start, busy, mode, breakLog, mediaURL }
 }

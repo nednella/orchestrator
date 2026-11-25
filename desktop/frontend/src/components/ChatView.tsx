@@ -11,6 +11,7 @@ import { readStored, writeStored } from '../storage'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
+import { ChatChildApprovals } from './ChatChildApprovals'
 import { ChatColumnHandle } from './ChatColumnHandle'
 import { ChatEditConfirm } from './ChatEditConfirm'
 import { ChatEndPill } from './ChatEndPill'
@@ -197,6 +198,7 @@ export function ChatView({ session }: ChatViewProps) {
                 <ChatNotice text={error} error />
               </div>
             )}
+            <ChatChildApprovals parent={session.id} />
             <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
