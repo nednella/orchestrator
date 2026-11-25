@@ -1174,12 +1174,14 @@ export function createMock(params: URLSearchParams) {
       publish()
     },
     TypeInto: async (id: string, text: string) => {
-      write(find(id), text)
+      const s = find(id)
+      if (s.state === 'ended') throw `session ${id} has ended`
+      write(s, text)
     },
     Interrupt: async (id: string) => {
       const s = find(id)
-      if (s.agent !== 'claude') throw `session ${id} cannot be interrupted: its agent does not run under a host`
-      if (s.state === 'ended') throw `session ${id} did not take the interrupt: it has ended`
+      if (s.state === 'ended') throw `session ${id} has ended`
+      if (s.agent !== 'claude') throw `session ${id} cannot be interrupted: its agent runs in its terminal`
     },
     Cleanup: async (id: string, force: boolean) => {
       const s = find(id)

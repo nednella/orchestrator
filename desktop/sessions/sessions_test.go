@@ -427,8 +427,29 @@ func TestAPlainSessionTakesNoInterrupt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.Interrupt(s.ID); err == nil {
-		t.Error("a plain session took an interrupt")
+	want := "session " + s.ID + " cannot be interrupted: its agent runs in its terminal"
+	if err := h.Interrupt(s.ID); err == nil || err.Error() != want {
+		t.Errorf("Interrupt = %v, want %q", err, want)
+	}
+}
+
+func TestAnEndedSessionTakesNoTextOrInterrupt(t *testing.T) {
+	apptest.ClaudeOnPath(t)
+	h := apptest.NewWith(t, apptest.Options{Agent: "claude"})
+	s, err := h.Sessions().Create("work", "", false, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.KillSession(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the killed session to show as ended", func() bool { got, _ := h.Session(s.ID); return got.State == "ended" })
+	want := "session " + s.ID + " has ended"
+	if err := h.Interrupt(s.ID); err == nil || err.Error() != want {
+		t.Errorf("Interrupt = %v, want %q", err, want)
+	}
+	if err := h.TypeInto(s.ID, "hello"); err == nil || err.Error() != want {
+		t.Errorf("TypeInto = %v, want %q", err, want)
 	}
 }
 

@@ -1918,9 +1918,13 @@ func (s *Sessions) TypeInto(id, text string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.refuseEnded(id); err != nil {
+		return err
+	}
 	if socket := s.hostOf(name); socket != "" {
 		if err := host.Draft(s.context(), socket, text); err != nil {
-			return fmt.Errorf("session %s did not take the text: %w", id, err)
+			log.Printf("agentos: session %s did not take a draft: %v", id, err)
+			return fmt.Errorf("session %s did not take the text", id)
 		}
 		return nil
 	}
@@ -1935,12 +1939,27 @@ func (s *Sessions) Interrupt(id string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.refuseEnded(id); err != nil {
+		return err
+	}
 	socket := s.hostOf(name)
 	if socket == "" {
-		return fmt.Errorf("session %s cannot be interrupted: its agent does not run under a host", id)
+		return fmt.Errorf("session %s cannot be interrupted: its agent runs in its terminal", id)
 	}
 	if err := host.Interrupt(s.context(), socket); err != nil {
-		return fmt.Errorf("session %s did not take the interrupt: %w", id, err)
+		log.Printf("agentos: session %s did not take an interrupt: %v", id, err)
+		return fmt.Errorf("session %s did not take the interrupt", id)
+	}
+	return nil
+}
+
+// refuseEnded is an error for a session that has ended. It takes mu.
+func (s *Sessions) refuseEnded(id string) error {
+	s.mu.Lock()
+	_, ended := s.ended[id]
+	s.mu.Unlock()
+	if ended {
+		return fmt.Errorf("session %s has ended", id)
 	}
 	return nil
 }
