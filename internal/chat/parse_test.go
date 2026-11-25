@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -492,5 +493,72 @@ func TestParseRewindRepliesKeepWhatClaudeAnswered(t *testing.T) {
 		if e.Kind != KindReply || e.ID != "aos-4" || string(e.Input) != c.input || e.Text != c.text || e.Error != (c.text != "") {
 			t.Errorf("%s: got %+v", c.line, e)
 		}
+	}
+}
+
+func TestParseTaskStartOnlyForATaskInTheBackground(t *testing.T) {
+	for _, tt := range []struct {
+		name, line string
+		want       []Event
+	}{
+		{"a subagent", `{"type":"system","subtype":"task_started","task_id":"a1","tool_use_id":"toolu_1","description":"Count lines","subagent_type":"Explore","is_backgrounded":true,"task_type":"local_agent"}`,
+			[]Event{{Kind: KindTaskStart, ID: "a1", Parent: "toolu_1", Tool: "local_agent", Text: "Count lines"}}},
+		{"a shell", `{"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"toolu_2","description":"Sleep","is_backgrounded":true,"task_type":"local_bash"}`,
+			[]Event{{Kind: KindTaskStart, ID: "b1", Parent: "toolu_2", Tool: TaskShell, Text: "Sleep"}}},
+		{"a subagent's shell", `{"type":"system","subtype":"task_started","task_id":"b2","owned_by_subagent":true,"tool_use_id":"toolu_3","description":"Sleep","is_backgrounded":true,"parent_task_id":"a1","task_type":"local_bash"}`,
+			[]Event{{Kind: KindTaskStart, ID: "b2", Parent: "toolu_3", Tool: TaskShell, Text: "Sleep", Agent: "a1"}}},
+		{"a task the turn waits on", `{"type":"system","subtype":"task_started","task_id":"b3","tool_use_id":"toolu_4","description":"Sleep","is_backgrounded":false,"task_type":"local_bash"}`, nil},
+		{"a task no call started", `{"type":"system","subtype":"task_started","task_id":"b4","is_backgrounded":true,"task_type":"local_bash"}`, nil},
+	} {
+		got, err := Parse([]byte(tt.line))
+		if err != nil || !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s: got %+v, %v, want %+v", tt.name, got, err, tt.want)
+		}
+	}
+}
+
+func TestParseBackgroundTasksEachEnd(t *testing.T) {
+	events := parseFile(t, "background.jsonl")
+	var starts []Event
+	for _, e := range events {
+		if e.Kind == KindTaskStart {
+			starts = append(starts, e)
+		}
+	}
+	// The subagent, Claude's own shell, the subagent's shell, and the subagent woken again by its shell's end.
+	if len(starts) != 4 || starts[0].Tool != "local_agent" || starts[1].Tool != TaskShell || starts[2].Tool != TaskShell || starts[2].Agent != starts[0].ID || starts[3].Parent != starts[0].Parent {
+		t.Fatalf("starts = %+v", starts)
+	}
+	var tasks Tasks
+	for _, e := range events {
+		tasks.See(e)
+	}
+	if open := tasks.Open(); len(open) != 0 {
+		t.Errorf("tasks still open at the end: %+v", open)
+	}
+	reported := 0
+	for _, e := range events {
+		if e.Kind == KindTurnEnd {
+			reported++
+		}
+	}
+	if reported != 4 {
+		t.Errorf("%d turns, want the owner's and one for each end of a task of Claude's own", reported)
+	}
+}
+
+func TestParseASubagentsApprovalNamesItsCall(t *testing.T) {
+	events := parseFile(t, "subagent-approval.jsonl")
+	approval, ok := first(events, KindApproval)
+	if !ok || approval.Agent != "" {
+		t.Fatalf("approval = %+v, want one that names no subagent itself", approval)
+	}
+	asked := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindApproval })
+	i := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindToolUse && e.ID == approval.Parent })
+	if i < 0 || events[i].Agent == "" || i > asked {
+		t.Fatalf("the approval's call %s is no subagent's call before it", approval.Parent)
+	}
+	if end := slices.IndexFunc(events, func(e Event) bool { return e.Kind == KindTurnEnd }); end > asked {
+		t.Error("the approval came before the turn that started its subagent ended")
 	}
 }

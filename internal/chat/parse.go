@@ -29,6 +29,13 @@ type line struct {
 	ToolUseID string `json:"tool_use_id"`
 	Status    string `json:"status"`
 	Summary   string `json:"summary"`
+	// TaskID, TaskType, Description, IsBackgrounded and ParentTaskID are a task's start: Claude's id for it, its kind,
+	// what it does, whether it runs beside the turn, and the id of the subagent's task that started it.
+	TaskID         string `json:"task_id"`
+	TaskType       string `json:"task_type"`
+	Description    string `json:"description"`
+	IsBackgrounded bool   `json:"is_backgrounded"`
+	ParentTaskID   string `json:"parent_task_id"`
 }
 
 type block struct {
@@ -60,6 +67,8 @@ func Parse(data []byte) ([]Event, error) {
 			if l.PermissionMode != "" {
 				return []Event{{Kind: KindMode, Text: l.PermissionMode}}, nil
 			}
+		case "task_started":
+			return parseTaskStart(l), nil
 		case "task_notification":
 			return parseTaskEnd(l), nil
 		}
@@ -90,13 +99,22 @@ func parseTurn(l line) ([]Event, error) {
 	return parseUser(l)
 }
 
+// parseTaskStart reads the start of a task Claude runs in the background. A task Claude waits on in its turn, as a
+// subagent it does not run in the background, ends within the turn and gives none.
+func parseTaskStart(l line) []Event {
+	if l.ToolUseID == "" || !l.IsBackgrounded {
+		return nil
+	}
+	return []Event{{Kind: KindTaskStart, ID: l.TaskID, Parent: l.ToolUseID, Tool: l.TaskType, Text: l.Description, Agent: l.ParentTaskID}}
+}
+
 // parseTaskEnd reads the end of a task Claude runs beside its turn. Only a task a tool call started can be shown at
 // its call.
 func parseTaskEnd(l line) []Event {
 	if l.ToolUseID == "" {
 		return nil
 	}
-	e := Event{Kind: KindTaskEnd, Parent: l.ToolUseID, Text: l.Summary, Error: l.Status != "completed"}
+	e := Event{Kind: KindTaskEnd, ID: l.TaskID, Parent: l.ToolUseID, Text: l.Summary, Error: l.Status != "completed"}
 	if l.Status == TaskStopped {
 		e.Stop = TaskStopped
 	}

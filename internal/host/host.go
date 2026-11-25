@@ -107,8 +107,11 @@ type host struct {
 	subs      map[*subscriber]struct{}
 	conns     map[net.Conn]struct{}
 	approvals []approval // in the order Claude asked
-	// turnOpen is set from writing a user line, or from Claude taking in a queued one, until the turn ends.
+	// turnOpen is set from writing a user line, from Claude taking in a queued one, or from Claude starting a turn of
+	// its own, until the turn ends.
 	turnOpen bool
+	// tasks are what Claude runs in the background, beside its turns and after them.
+	tasks chat.Tasks
 	// queued holds the messages written during a turn that Claude has not taken in yet. Claude runs one written during
 	// a turn's last step as a turn of its own after that turn ends, so the host stays busy while any is left.
 	queued map[string]queuedMessage
@@ -333,6 +336,7 @@ var errExited = errors.New("claude has exited")
 // publishExit logs Claude's exit. One the app said it would make is that stop and no error, though Claude exits on the
 // signal it got; any other is logged as it came.
 func (h *host) publishExit(err error) {
+	h.stopTasks()
 	e := chat.Event{Kind: chat.KindExit}
 	h.mu.Lock()
 	planned, access := h.plannedStop, h.restartAccess
@@ -348,6 +352,24 @@ func (h *host) publishExit(err error) {
 	}
 	if _, err := h.publish(e); err != nil {
 		fmt.Fprintf(h.echo, "host: %v\n", err)
+	}
+}
+
+// stopTasks logs the end of each task Claude left running when it exited: they ended with it.
+func (h *host) stopTasks() {
+	h.mu.Lock()
+	var stopped []chat.Event
+	for _, t := range h.tasks.Open() {
+		e, err := h.logLocked(chat.Event{Kind: chat.KindTaskEnd, ID: t.ID, Parent: t.Call, Error: true, Stop: chat.TaskStopped})
+		if err != nil {
+			fmt.Fprintf(h.echo, "host: %v\n", err)
+			continue
+		}
+		stopped = append(stopped, e)
+	}
+	h.mu.Unlock()
+	for _, e := range stopped {
+		h.echoEvent(e)
 	}
 }
 
@@ -456,11 +478,22 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 	if h.exited && e.Kind != chat.KindExit {
 		return chat.Event{}, errExited
 	}
-	e, err := h.log.Append(e)
+	return h.logLocked(e)
+}
+
+// logLocked logs e and hands it on, as appendLocked does, whether or not Claude has exited.
+func (h *host) logLocked(e chat.Event) (chat.Event, error) {
+	e, err := h.log.Append(h.tasks.Named(e))
 	if err != nil {
 		return chat.Event{}, err
 	}
 	h.prompts = chat.Prompts(h.prompts, e)
+	if task, ok := h.tasks.See(e); ok && task.ReportedAlone(e) {
+		h.turnOpen = true
+	}
+	if e.Agent == "" && startsTurn(e.Kind) {
+		h.turnOpen = true
+	}
 	switch e.Kind {
 	case chat.KindApproval:
 		h.approvals = append(h.approvals, approval{id: e.ID, input: e.Input})
@@ -485,6 +518,16 @@ func (h *host) appendLocked(e chat.Event) (chat.Event, error) {
 		}
 	}
 	return e, nil
+}
+
+// startsTurn reports whether Claude's own output of kind comes only in a turn: one Claude starts of its own, to tell of
+// a task's end, opens with it.
+func startsTurn(kind chat.Kind) bool {
+	switch kind {
+	case chat.KindDelta, chat.KindThinking, chat.KindThought, chat.KindMessage, chat.KindToolUse:
+		return true
+	}
+	return false
 }
 
 // echoEvent shows e in the pane. Claude sends its session id at every turn and its running cost at every turn's end,
@@ -878,9 +921,9 @@ func (h *host) release() {
 	h.holding, h.plannedStop, h.restartAccess = false, "", ""
 }
 
-// busyLocked needs h.mu.
+// busyLocked needs h.mu. A task Claude runs in the background keeps the host busy as a turn does, but a shell does not.
 func (h *host) busyLocked() bool {
-	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0 || h.rewinding
+	return h.turnOpen || len(h.approvals) > 0 || len(h.queued) > 0 || h.rewinding || h.tasks.Working() > 0
 }
 
 // setMode asks Claude to change its permission mode, plan or default, and logs the mode once Claude takes it. A change
@@ -1521,9 +1564,14 @@ func echoLine(e chat.Event) string {
 		s = "compacted"
 	case chat.KindMode:
 		s = "permission mode: " + e.Text
+	case chat.KindTaskStart:
+		s = "task started: " + e.Text
 	case chat.KindTaskEnd:
 		s = "task ended: " + e.Text
-		if e.Error {
+		switch {
+		case e.Stop == chat.TaskStopped:
+			s = "task stopped: " + e.Text
+		case e.Error:
 			s = "task failed: " + e.Text
 		}
 	case chat.KindExit:

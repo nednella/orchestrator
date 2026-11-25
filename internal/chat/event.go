@@ -45,6 +45,11 @@ const (
 	// KindReply is Claude's reply to a control request of the host's, by its request ID: Input is what it answered, or
 	// Error and Text say that it failed and why. The host consumes it and never logs it.
 	KindReply Kind = "reply"
+	// KindTaskStart is a task Claude runs in the background starting, beside its turn and outliving it: Parent is the tool
+	// call that started it, ID Claude's id for it, Tool its kind (TaskShell, or another, such as a subagent's
+	// local_agent), Text what it does, and Agent the Agent call of the subagent that started it, "" for the thread's own
+	// Claude. Parse gives that subagent by Claude's id for it, which the host turns into its Agent call.
+	KindTaskStart Kind = "task_start"
 	// KindTaskEnd is a task Claude ran beside its turn ending, as a subagent or a shell in the background: Parent is the
 	// tool call that started it, Text its report, Error set when it failed or was stopped, and Stop TaskStopped when it
 	// was stopped. A subagent in the background outlives its call's result and the turn that made it, so only this says
@@ -65,6 +70,9 @@ const (
 // TaskStopped is the Stop of a task_end for a task that was stopped.
 const TaskStopped = "stopped"
 
+// TaskShell is the kind of a shell Claude runs in the background.
+const TaskShell = "local_bash"
+
 // Event is one entry of a chat's log. At is unix milliseconds.
 type Event struct {
 	Seq    int64           `json:"seq"`
@@ -82,7 +90,8 @@ type Event struct {
 	// Stop is set on an exit the host made itself, which is no error: StopSettle, or StopRestart; and on a task_end,
 	// TaskStopped.
 	Stop string `json:"stop,omitempty"`
-	// Agent is the id of the Agent tool call whose subagent sent the event, "" for the thread's own Claude.
+	// Agent is the id of the Agent tool call whose subagent sent the event, asked for the approval or started or ended
+	// the task, "" for the thread's own Claude.
 	Agent string `json:"agent,omitempty"`
 	// From is the thread that sent a user or queued message, or that asked for an interrupt; "" for the owner or the
 	// app.

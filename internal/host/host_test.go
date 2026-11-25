@@ -12,6 +12,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"os/exec"
@@ -321,6 +322,45 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 					map[string]any{"type": "text", "text": "a.go"},
 				}}})
 				print(map[string]any{"type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": "toolu_agent", "status": "completed", "summary": "a.go"})
+			case "background":
+				// A subagent and a shell in the background: the turn ends on their launch. The subagent's own shell ends
+				// first, AOS_FAKE_TASK_WAIT in, then the subagent, whose end Claude tells of in a turn of its own a moment
+				// later; Claude's shell runs until Claude exits.
+				background := func(call, id, kind string, more map[string]any) {
+					started := map[string]any{"type": "system", "subtype": "task_started", "task_id": id, "tool_use_id": call, "description": call, "is_backgrounded": true, "task_type": kind}
+					maps.Copy(started, more)
+					print(started)
+				}
+				notify := func(call string, more map[string]any) {
+					ended := map[string]any{"type": "system", "subtype": "task_notification", "tool_use_id": call, "status": "completed", "summary": call + " done"}
+					maps.Copy(ended, more)
+					print(ended)
+				}
+				print(map[string]any{"type": "assistant", "uuid": "ucall", "message": map[string]any{"id": "msg_call", "role": "assistant", "content": []any{
+					map[string]any{"type": "tool_use", "id": "toolu_bg", "name": "Agent", "input": map[string]any{"description": "List files", "prompt": "ls"}},
+					map[string]any{"type": "tool_use", "id": "toolu_sh", "name": "Bash", "input": map[string]any{"command": "serve", "run_in_background": true}},
+				}}})
+				background("toolu_bg", "a1", "local_agent", nil)
+				background("toolu_sh", "b1", chat.TaskShell, nil)
+				print(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{
+					map[string]any{"type": "tool_result", "tool_use_id": "toolu_bg", "content": "Async agent launched"},
+					map[string]any{"type": "tool_result", "tool_use_id": "toolu_sh", "content": "Command running in background"},
+				}}})
+				result(false)
+				background("toolu_subsh", "b2", chat.TaskShell, map[string]any{"owned_by_subagent": true, "parent_task_id": "a1"})
+				wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_TASK_WAIT"))
+				if err != nil {
+					wait = 300 * time.Millisecond
+				}
+				during(time.After(wait))
+				notify("toolu_subsh", map[string]any{"owned_by_subagent": true})
+				print(map[string]any{"type": "assistant", "uuid": "usub", "parent_tool_use_id": "toolu_bg", "message": map[string]any{"id": "msg_sub", "role": "assistant", "content": []any{
+					map[string]any{"type": "text", "text": "a.go"},
+				}}})
+				notify("toolu_bg", nil)
+				during(time.After(wait))
+				reply("report")
+				result(false)
 			case "big":
 				reply(strings.Repeat("x", 1<<20))
 				result(false)
@@ -660,6 +700,110 @@ func TestASubagentsEventsKeepTheirAgentCall(t *testing.T) {
 		echo := h.echo.String()
 		return strings.Contains(echo, "subagent: claude: a.go") && strings.Contains(echo, "task ended: a.go")
 	})
+}
+
+// waitTask waits for the task start or end of call.
+func waitTask(t *testing.T, ch <-chan chat.Event, kind chat.Kind, call string) chat.Event {
+	t.Helper()
+	for {
+		if e := next(t, ch); e.Kind == kind && e.Parent == call {
+			return e
+		}
+	}
+}
+
+func TestBackgroundTasksAreLoggedWithTheSubagentThatStartedThem(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	sendMessage(t, h.socket, "background")
+	waitTask(t, events, chat.KindTaskEnd, "toolu_bg")
+	waitKind(t, events, chat.KindTurnEnd)
+
+	got := logged(t, h.log, chat.KindTaskStart, chat.KindTaskEnd)
+	type task struct{ kind, call, agent, tool string }
+	var tasks []task
+	for _, e := range got {
+		tasks = append(tasks, task{string(e.Kind), e.Parent, e.Agent, e.Tool})
+	}
+	want := []task{
+		{"task_start", "toolu_bg", "", "local_agent"},
+		{"task_start", "toolu_sh", "", chat.TaskShell},
+		{"task_start", "toolu_subsh", "toolu_bg", chat.TaskShell},
+		{"task_end", "toolu_subsh", "toolu_bg", ""},
+		{"task_end", "toolu_bg", "", ""},
+	}
+	if !reflect.DeepEqual(tasks, want) {
+		t.Fatalf("tasks logged %+v, want %+v", tasks, want)
+	}
+	eventually(t, "the echo of the tasks", func() bool {
+		echo := h.echo.String()
+		return strings.Contains(echo, "task started: toolu_bg") && strings.Contains(echo, "subagent: task started: toolu_subsh") && strings.Contains(echo, "task ended: toolu_bg done")
+	})
+}
+
+func TestABackgroundSubagentKeepsTheHostBusyUntilClaudeHasToldOfItsEnd(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_TASK_WAIT=1s")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	hold := func() bool {
+		t.Helper()
+		idle, err := Hold(ctxT(t), h.socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return idle
+	}
+
+	sendMessage(t, h.socket, "background")
+	waitKind(t, events, chat.KindTurnEnd)
+	if hold() {
+		t.Error("held while a subagent works in the background")
+	}
+	err := SetMode(ctxT(t), h.socket, "plan")
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "Change access when the turn ends" {
+		t.Errorf("mode change while a subagent works: %v", err)
+	}
+	waitTask(t, events, chat.KindTaskEnd, "toolu_bg")
+	// Claude has not started the turn in which it tells of the end yet.
+	if hold() {
+		t.Error("held after the subagent's end, before Claude told of it")
+	}
+	if e := waitKind(t, events, chat.KindMessage); e.Text != "report" {
+		t.Fatalf("message %+v, want Claude's report", e)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	// Only the shell runs now, which may be a server that never ends.
+	if !hold() {
+		t.Error("not held once only a shell runs")
+	}
+}
+
+func TestTasksOpenWhenClaudeExitsEndStopped(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_TASK_WAIT=5s")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+	sendMessage(t, h.socket, "background")
+	waitTask(t, events, chat.KindTaskStart, "toolu_subsh")
+	h.cancel()
+	waitKind(t, events, chat.KindExit)
+
+	got := logged(t, h.log, chat.KindTaskEnd, chat.KindExit)
+	type end struct {
+		call, agent string
+		stop        bool
+	}
+	var ends []end
+	for _, e := range got[:len(got)-1] {
+		ends = append(ends, end{e.Parent, e.Agent, e.Stop == chat.TaskStopped && e.Error})
+	}
+	want := []end{{"toolu_bg", "", true}, {"toolu_sh", "", true}, {"toolu_subsh", "toolu_bg", true}}
+	if !reflect.DeepEqual(ends, want) || got[len(got)-1].Kind != chat.KindExit {
+		t.Fatalf("ends %+v then %+v, want %+v then the exit", ends, got[len(got)-1], want)
+	}
 }
 
 func TestEchoShowsAThoughtsFirstLine(t *testing.T) {
