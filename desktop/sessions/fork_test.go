@@ -343,3 +343,45 @@ func TestMergeCleansUpTheSourceOnly(t *testing.T) {
 		t.Errorf("the fork = %+v, %v", got, ok)
 	}
 }
+
+func TestLiveForkInTheWorktreeBlocksTheCleanup(t *testing.T) {
+	h, wt, ran, src, fork := forkHarness(t)
+	in := filepath.Join(wt, "sub")
+	if err := os.Mkdir(in, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, in))
+	eventually(t, "the fork at work", func() bool { return stateOf(h, fork.ID) == "working" })
+
+	openThenMerge(h)
+	eventually(t, "the source blocked", func() bool { got, _ := h.Session(src.ID); return got.Cleanup == "blocked" })
+	if got, _ := h.Session(src.ID); got.CleanupReason != "Fork #7 work (fork) still works in this worktree" {
+		t.Errorf("reason = %q", got.CleanupReason)
+	}
+	if runs := cleanupRuns(ran); len(runs) != 0 || !exists(wt) {
+		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
+	}
+
+	if err := h.Cleanup(src.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := h.Session(src.ID); ok || exists(wt) || !slices.Equal(cleanupRuns(ran), []string{"issue-7"}) {
+		t.Errorf("the forced clean-up: source row there %v, worktree there %v, runs %q", ok, exists(wt), cleanupRuns(ran))
+	}
+}
+
+func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
+	h, wt, ran, src, fork := forkHarness(t)
+	h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
+	eventually(t, "the fork at work", func() bool { return stateOf(h, fork.ID) == "working" })
+	if err := h.KillSession(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the fork ended", func() bool { return stateOf(h, fork.ID) == "ended" })
+
+	openThenMerge(h)
+	eventually(t, "the source cleaned up", func() bool { _, ok := h.Session(src.ID); return !ok })
+	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
+		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
+	}
+}

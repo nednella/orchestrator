@@ -2231,6 +2231,18 @@ func (s *Sessions) Track(id, branch string) error {
 	return nil
 }
 
+// forkIn is the title of a live fork whose working folder is dir or a folder inside it, "" when none. It takes mu.
+func (s *Sessions) forkIn(dir string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, in := range s.info {
+		if cwd := s.cwds[in.Name.String()]; in.Fork != "" && cwd != "" && inside(cwd, dir) {
+			return cmp.Or(in.Title, defaultTitle)
+		}
+	}
+	return ""
+}
+
 func (s *Sessions) Has(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

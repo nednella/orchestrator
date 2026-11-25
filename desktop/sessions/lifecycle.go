@@ -888,14 +888,19 @@ func parseWorktrees(out string) worktrees {
 	return w
 }
 
-func samePath(a, b string) bool {
-	real := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
-		return filepath.Clean(p)
+func samePath(a, b string) bool { return realPath(a) == realPath(b) }
+
+// inside says whether path is dir or a folder inside it.
+func inside(path, dir string) bool {
+	rel, err := filepath.Rel(realPath(dir), realPath(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func realPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
 	}
-	return real(a) == real(b)
+	return filepath.Clean(p)
 }
 
 func (l *Lifecycle) findPR(ctx context.Context, dir, branch string) (*PR, error) {
@@ -1195,7 +1200,8 @@ type branchPlan struct {
 
 // plan looks at the worktree and branch of each branch the session worked on, and unless forced,
 // says why cleaning them up could lose work. Each other branch counts with its own PR, and one still
-// open stops the clean-up. A branch the session only looked at is left alone, unless it saw its PR open.
+// open stops the clean-up, and so does a live fork that works in a worktree. A branch the session only
+// looked at is left alone, unless it saw its PR open.
 func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string, force bool) (cleanupPlan, string) {
 	dir := t.proj.Dir
 	trees, err := l.worktrees(ctx, dir)
@@ -1229,6 +1235,12 @@ func (l *Lifecycle) plan(ctx context.Context, t target, pr *PR, prBranch string,
 		}
 		if reason := l.unsafe(ctx, dir, b.worktree, branch, b.branchExists, branchPR); reason != "" {
 			return p, reason
+		}
+		if b.worktree == "" {
+			continue
+		}
+		if fork := l.sessions.forkIn(b.worktree); fork != "" {
+			return p, fmt.Sprintf("Fork %s still works in this worktree", fork)
 		}
 	}
 	return p, ""
