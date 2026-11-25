@@ -1300,6 +1300,7 @@ func (s *Sessions) Resume(id string) (Session, error) {
 		in = e.info
 	}
 	proj, known := s.projectOf(in)
+	source, _ := s.infoOf(in.Fork)
 	s.mu.Unlock()
 	switch {
 	case !ended:
@@ -1320,7 +1321,7 @@ func (s *Sessions) Resume(id string) (Session, error) {
 			return s.liveRow(live, issue)
 		}
 	} else {
-		view, err = s.createIn(proj, title, "", false, issue, model, id, "", handover, in.Chat, in.Action, forkStart{of: in.Fork})
+		view, err = s.createIn(proj, title, "", false, issue, model, id, "", handover, in.Chat, in.Action, forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)})
 	}
 	if err != nil {
 		return Session{}, err
@@ -1456,8 +1457,8 @@ func (s *Sessions) carryChat(from string, to session.Name) (restore func(), err 
 // forkStart is what a fork starts from: the thread it forks, which a resumed fork keeps, and for a new fork that
 // thread's conversation, the message it forks at and its chat up to that message.
 type forkStart struct {
-	of, conversation, at string
-	events               []chat.Event
+	of, title, conversation, at string
+	events                      []chat.Event
 }
 
 // Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
@@ -1503,7 +1504,7 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	}
 	issue, _ := strconv.Atoi(in.Issue)
 	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
-	return s.createIn(proj, title, "", false, issue, model, "", "", s.handoverOf(id), in.Chat, "", forkStart{of: id, conversation: conversation, at: at, events: events[:cut+1]})
+	return s.createIn(proj, title, "", false, issue, model, "", "", s.handoverOf(id), in.Chat, "", forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: at, events: events[:cut+1]})
 }
 
 // copyChat writes the fork's chat log before the fork's host opens it: the source's events, with the turn they stop in
@@ -1609,7 +1610,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		}
 		env = append(env, agentEnv...)
 	}
-	l := launchFor(model, conversation, brief, handover, chat, browser)
+	l := launchFor(model, conversation, brief, handover, chat, browser, fork)
 	l.TmpDir, l.ForkAt = tmp, fork.at
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -2258,15 +2259,15 @@ func (s *Sessions) hasBrowser(proj project.Project, brief string) bool {
 // launchFor is what the session's agent starts with. The agent learns where it runs and the commands that reach the
 // app, and about the browser when it has one; a session with a brief learns only the brief. A task started by another
 // session gets that session's handover last.
-func launchFor(model project.Model, conversation, brief, handover string, chat, browser bool) agent.Launch {
+func launchFor(model project.Model, conversation, brief, handover string, chat, browser bool, fork forkStart) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Resume: conversation, Chat: chat}
 	if brief != "" {
 		l.Prompt = brief
 		return l
 	}
-	l.Prompt = prompts.Session() + "\n\n" + prompts.Task()
-	if chat {
-		l.Prompt = prompts.Session() + "\n\n" + prompts.Chat()
+	l.Prompt = prompts.Session() + "\n\n" + prompts.Thread()
+	if fork.of != "" {
+		l.Prompt += "\n\n" + prompts.Fork(fork.title)
 	}
 	if browser {
 		l.Browser = true

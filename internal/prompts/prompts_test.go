@@ -15,9 +15,9 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		hash string
 	}{
 		{"browser", Browser(), "926e745d1d793d4cc18ced3cc6228d0f77e729f20bc7d3d3ac9c535546cf68ae"},
-		{"session", Session(), "c00e06a37449bf998de950d556b18987b31c3b9cd16f4d5d0a69e2ace6f97556"},
-		{"task", Task(), "5181694ae5b63faba593eade34cb2f8e912ea7b0444ade07b08183da5c2373f2"},
-		{"chat", Chat(), "57f342fc719f0f69df117a2b854c3d703f6542efb48bd22cdb544c8a064ed87a"},
+		{"session", Session(), "9f221e0465337d0ffda78b77b11a34672b230746dcac6e3a075712aae4b15bff"},
+		{"thread", Thread(), "7b693d6a0a1d034397ff821b1dde9a6875b2b4f48670199c6203ac888fffd5ee"},
+		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
 		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
 		{"setup brief", SetupBrief(), "49356dfd52b744489a741e1d0be5f00c19545f7c156e3a1ccd919c15c7ff1040"},
 		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
@@ -35,6 +35,13 @@ func TestPromptsKeepTheirText(t *testing.T) {
 				t.Errorf("text keeps its file framing: %q", tt.text)
 			}
 		})
+	}
+}
+
+func TestForkNamesItsSource(t *testing.T) {
+	got := Fork("Fix the login")
+	if !strings.Contains(got, `fork of the thread "Fix the login"`) || strings.Contains(got, "{title}") || !strings.Contains(got, "never run `agentos track`") {
+		t.Errorf("Fork = %q", got)
 	}
 }
 

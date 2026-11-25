@@ -13,6 +13,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/prompts"
 )
 
 // withConversation tells the app, as Claude's hook does, that the thread's conversation is abc.
@@ -411,5 +412,26 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 	eventually(t, "the source cleaned up", cleanedUp(h, src.ID))
 	if runs := cleanupRuns(ran); !slices.Equal(runs, []string{"issue-7"}) || exists(wt) {
 		t.Errorf("the clean-up command ran for %q; worktree there: %v", runs, exists(wt))
+	}
+}
+
+func TestForkIsToldNotToTrack(t *testing.T) {
+	h := apptest.New(t)
+	src, err := h.Sessions().Create("Source work", "", false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := claudeArgs(t, h, fork.ID)
+	if !strings.Contains(strings.Join(args, "\n"), prompts.Fork("Source work")) {
+		t.Errorf("the fork's system prompt has no fork text: %q", args)
+	}
+	if got := claudeArgs(t, h, src.ID); strings.Contains(strings.Join(got, "\n"), prompts.Fork("Source work")) {
+		t.Error("the source is told it is a fork")
 	}
 }

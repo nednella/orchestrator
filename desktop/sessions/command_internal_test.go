@@ -25,7 +25,7 @@ func (f fakeBrowsers) PIDs() []int                               { return nil }
 
 // commandFor is the argv claude starts with.
 func (s *Sessions) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, chat bool) []string {
-	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, chat, s.hasBrowser(proj, brief)))
+	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, chat, s.hasBrowser(proj, brief), forkStart{}))
 }
 
 // allowedTools is the --allowedTools value in argv, "" when there is none.
@@ -59,7 +59,7 @@ func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
 			if prompt < 0 {
 				t.Fatalf("argv = %q", argv)
 			}
-			if !strings.HasPrefix(argv[prompt+1], prompts.Session()+"\n\n"+prompts.Task()) {
+			if !strings.HasPrefix(argv[prompt+1], prompts.Session()+"\n\n"+prompts.Thread()) {
 				t.Errorf("system prompt = %q", argv[prompt+1])
 			}
 			if strings.Contains(argv[prompt+1], prompts.Browser()) != tt.want {
@@ -127,7 +127,7 @@ func TestHostedRefusesASocketPathTooLong(t *testing.T) {
 func TestCommandEndsATasksPromptWithTheHandover(t *testing.T) {
 	s := &Sessions{browsers: fakeBrowsers{}}
 	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "", "the patch is in /tmp/x", false)
-	want := prompts.Session() + "\n\n" + prompts.Task() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
+	want := prompts.Session() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != want {
 		t.Errorf("argv = %q", argv)
 	}
@@ -143,7 +143,7 @@ func TestCommandMakesAChatReadOnlyWithTheBrowser(t *testing.T) {
 	if got := allowedTools(argv); got != tools {
 		t.Errorf("allowed tools = %q", got)
 	}
-	want := prompts.Session() + "\n\n" + prompts.Chat() + "\n\n" + prompts.Browser()
+	want := prompts.Session() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Browser()
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != want {
 		t.Errorf("system prompt = %q", argv)
 	}

@@ -65,7 +65,7 @@ func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
 			if i := slices.Index(args, "--allowedTools"); i < 0 || !strings.Contains(args[i+1], "Bash(agentos new:*)") {
 				t.Errorf("args = %q", args)
 			}
-			if joined := strings.Join(args, "\n"); !strings.Contains(joined, prompts.Chat()) || strings.Contains(joined, prompts.Task()) {
+			if joined := strings.Join(args, "\n"); !strings.Contains(joined, prompts.Thread()) {
 				t.Errorf("system prompt of the chat = %q", joined)
 			}
 		})
@@ -79,7 +79,7 @@ func TestNewChatStartsClaudeInPlanMode(t *testing.T) {
 		t.Error("a session is flagged as a chat")
 	}
 	args := claudeArgs(t, h, work.ID)
-	if slices.Contains(args, "--permission-mode") || !strings.Contains(strings.Join(args, "\n"), prompts.Task()) {
+	if slices.Contains(args, "--permission-mode") || !strings.Contains(strings.Join(args, "\n"), prompts.Thread()) {
 		t.Errorf("args of a session = %q", args)
 	}
 }
@@ -323,5 +323,28 @@ func TestManualWakeIsADraft(t *testing.T) {
 				t.Errorf("user lines on stdin = %v, want none", users)
 			}
 		})
+	}
+}
+
+func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
+	h := newHarness(t)
+	read, err := h.NewChat("read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	supervised, err := h.NewSession("supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := func(id string) string {
+		args := claudeArgs(t, h, id)
+		i := slices.Index(args, "--append-system-prompt")
+		if i < 0 {
+			t.Fatalf("args = %q", args)
+		}
+		return strings.Join(args[i+1:], "\n")
+	}
+	if a, b := prompt(read.ID), prompt(supervised.ID); a != b {
+		t.Errorf("a Read thread and a Supervised thread get different prompts:\n%s\n---\n%s", a, b)
 	}
 }

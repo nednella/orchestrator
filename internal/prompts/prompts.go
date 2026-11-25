@@ -30,10 +30,10 @@ var (
 	startIssueBranch string
 	//go:embed session.md
 	session string
-	//go:embed task.md
-	task string
-	//go:embed chat.md
-	chat string
+	//go:embed thread.md
+	thread string
+	//go:embed fork.md
+	fork string
 	//go:embed handover.md
 	handover string
 	//go:embed denied.md
@@ -47,19 +47,19 @@ func Digest(dependencies []string) string {
 	return strings.Replace(body(digest), "{dependencies}", strings.Join(dependencies, "\n"), 1)
 }
 
-// Browser is appended to a task's system prompt when it has a browser.
+// Browser is appended to a thread's system prompt when it has a browser.
 func Browser() string { return body(browser) }
 
-// Session starts the system prompt of every Claude session, task or chat: where it runs and the commands every session uses.
+// Session starts the system prompt of every Claude thread: where it runs and the commands every thread uses.
 func Session() string { return body(session) }
 
-// Task follows Session in the system prompt of a task, which works on the project: its commands and branches.
-func Task() string { return body(task) }
+// Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
+func Thread() string { return body(thread) }
 
-// Chat follows Session in the system prompt of a chat: why it runs in plan mode and how it hands work off.
-func Chat() string { return body(chat) }
+// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own.
+func Fork(title string) string { return strings.Replace(body(fork), "{title}", title, 1) }
 
-// Handover ends the system prompt of a task that another session asked for, with the context that session gave.
+// Handover ends the system prompt of a thread that another thread asked for, with the context that thread gave.
 func Handover(context string) string { return strings.Replace(body(handover), "{context}", context, 1) }
 
 // Denied is the reason a tool call is denied with when the user sends a message while it waits for their approval.
