@@ -19,7 +19,8 @@ import (
 // maxImages is how many images one message takes.
 const maxImages = 10
 
-// Image is an image the user attached to a message: its bytes in base64 and its type.
+// Image is an image the user attached to a message: its bytes in base64 and the type it was given, which its bytes
+// overrule.
 type Image struct {
 	Base64 string `json:"base64"`
 	Mime   string `json:"mime"`
@@ -52,7 +53,8 @@ func saveImages(dir string, images []Image) ([]string, error) {
 	return paths, nil
 }
 
-// decodeImage is the image's bytes and file extension, or what is wrong with it, to follow "Image <n>".
+// decodeImage is the image's bytes and the file extension of the type they are, or what is wrong with it, to follow
+// "Image <n>".
 func decodeImage(image Image) ([]byte, string, error) {
 	tooLarge := fmt.Errorf("is too large (the limit is %s MB)", strconv.FormatFloat(float64(host.MaxImage)/(1<<20), 'f', -1, 64))
 	if base64.StdEncoding.DecodedLen(len(image.Base64)) > host.MaxImage+3 {
@@ -65,9 +67,8 @@ func decodeImage(image Image) ([]byte, string, error) {
 	if len(data) > host.MaxImage {
 		return nil, "", tooLarge
 	}
-	mime := http.DetectContentType(data)
-	ext, ok := media.Ext(mime)
-	if !ok || mime != image.Mime {
+	ext, ok := media.Ext(http.DetectContentType(data))
+	if !ok {
 		return nil, "", errors.New("is not png, jpeg, gif or webp")
 	}
 	return data, ext, nil

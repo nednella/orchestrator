@@ -378,7 +378,6 @@ func TestTooManyImagesAreRefused(t *testing.T) {
 		{images, "A message takes at most 10 images"},
 		{[]chat.Image{images[0], {Base64: big, Mime: "image/png"}}, "Image 2 is too large (the limit is 3.75 MB)"},
 		{[]chat.Image{{Base64: base64.StdEncoding.EncodeToString([]byte("<svg></svg>")), Mime: "image/svg+xml"}}, "Image 1 is not png, jpeg, gif or webp"},
-		{[]chat.Image{{Base64: dot, Mime: "image/jpeg"}}, "Image 1 is not png, jpeg, gif or webp"},
 	} {
 		if _, err := h.ChatSend(id, "see", tt.images...); err == nil || err.Error() != tt.want {
 			t.Errorf("ChatSend = %v, want %q", err, tt.want)
@@ -418,5 +417,18 @@ func TestDismissRemovesChatImages(t *testing.T) {
 	eventually(t, "the thread's images to go", func() bool { return !apptest.Exists(ch.Media) })
 	if !apptest.Exists(filepath.Dir(ch.Media)) {
 		t.Errorf("the project's %s went with the thread's", filepath.Dir(ch.Media))
+	}
+}
+
+func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
+	h, id := newThread(t)
+	sent, err := h.ChatSend(id, "see", chat.Image{Base64: dot, Mime: "image/jpeg"})
+	if err != nil {
+		t.Fatalf("ChatSend of a png given as a jpeg = %v, want it sent", err)
+	}
+	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
+	user := history(t, h, id, 0)[0]
+	if user.ID != sent.ID || len(user.Files) != 1 || filepath.Ext(user.Files[0]) != ".png" {
+		t.Errorf("user event = %+v, want the image saved as a .png", user)
 	}
 }
