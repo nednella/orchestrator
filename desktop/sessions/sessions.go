@@ -817,6 +817,10 @@ func (s *Sessions) remove(id string) error {
 		rec = e.rec
 	}
 	s.mu.Unlock()
+	asleep := ""
+	if s.isLive(id) {
+		asleep = id
+	}
 	if err := s.settleToDelete(name); err != nil {
 		return err
 	}
@@ -826,7 +830,7 @@ func (s *Sessions) remove(id string) error {
 		s.countUsage(id, rec.Transcript, rec.AgentModel, true)
 	}
 	if err := s.dropThread(name); err != nil {
-		return err
+		return s.asleepNow(err, asleep)
 	}
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
@@ -1066,7 +1070,7 @@ func (s *Sessions) removeWorktrees(family []string, trees familyTrees) error {
 		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
 		switch {
 		case err != nil:
-			return err
+			return s.asleepNow(err, asleep)
 		case reason != "":
 			return s.keptBy(id, reason, asleep, trees.count())
 		}
@@ -1082,7 +1086,7 @@ func (s *Sessions) checkWorktrees(ctx context.Context, family, own []string, asl
 		reason, err := s.life.checkCleanup(ctx, id, family...)
 		switch {
 		case err != nil:
-			return err
+			return s.asleepNow(err, asleep)
 		case reason != "":
 			return s.keptBy(id, reason, asleep, worktrees)
 		}
@@ -1132,6 +1136,15 @@ func (s *Sessions) keptBy(id, reason, asleep string, worktrees int) error {
 		return fmt.Errorf("Thread %d keeps its worktree: %s. It is asleep now. %s", n, reason, untick)
 	}
 	return fmt.Errorf("Thread %d keeps its worktree: %s. Thread %d is asleep now. %s", n, reason, s.Number(asleep), untick)
+}
+
+// asleepNow adds to err, from a Delete that failed after it put the thread asleep to sleep, that the thread is asleep
+// now. With asleep "" it is err.
+func (s *Sessions) asleepNow(err error, asleep string) error {
+	if asleep == "" {
+		return err
+	}
+	return fmt.Errorf("%w. Thread %d is asleep now", err, s.Number(asleep))
 }
 
 // isLive says whether the thread id runs under a host. It takes mu.
