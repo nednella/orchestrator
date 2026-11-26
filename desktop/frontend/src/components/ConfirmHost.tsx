@@ -49,7 +49,7 @@ export function ConfirmHost() {
     const onKey = (e: KeyboardEvent) => {
       if (answerFor(e.key) === false) {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         answerConfirm(id, false)
       } else if (e.key === 'Tab') keepFocusIn(dialog.current, e)
     }
