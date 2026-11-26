@@ -443,7 +443,7 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 		}
 	})
 
-	t.Run("a shell", func(t *testing.T) {
+	t.Run("a command in a shell", func(t *testing.T) {
 		h := shellHarness(t)
 		repoFixture(t, h)
 		s := issueThread(h, t, 7)
@@ -453,7 +453,11 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 		eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 		shell := newShell(t, h, "")
 		cdShell(t, h, shell, wt)
-		eventually(t, "the shell in the worktree", func() bool { return h.OwnWorktree(s.ID) == "" })
+		if got := h.OwnWorktree(s.ID); got != wt {
+			t.Errorf("OwnWorktree with an idle shell in it = %q, want %s", got, wt)
+		}
+		typeIn(t, h, shell, "sleep 60")
+		eventually(t, "the command in the worktree", func() bool { return h.OwnWorktree(s.ID) == "" })
 		if err := h.ShellClose(shell); err != nil {
 			t.Fatal(err)
 		}

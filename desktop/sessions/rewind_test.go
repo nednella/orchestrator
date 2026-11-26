@@ -65,7 +65,7 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 	typeIn(t, h, own.ID, "sleep 30")
 	eventually(t, "the shell's command keeps the files", func() bool {
 		_, _, reason := h.Sessions().FilesRewind(s.ID)
-		return reason == "a shell in this worktree runs a command"
+		return reason == "a command is running in a terminal in this worktree"
 	})
 }
 

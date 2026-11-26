@@ -4382,34 +4382,79 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	if user := s.usersOf(w.Path, true, id); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	if shell := s.busyShellIn(ctx, w.Path); shell != "" {
+	if shell := s.busyShellIn(ctx, proj.Key(), w.Path); shell != "" {
 		return "", false, shell
 	}
 	return w.Path, false, ""
 }
 
-// busyShellIn says why a shell keeps a rewind from the files in worktree: one in it runs a command, which may write
-// them, or tmux could not say. It is "" when none does. An idle shell does not keep the rewind.
-func (s *Sessions) busyShellIn(ctx context.Context, worktree string) string {
-	s.shellMu.Lock()
-	defer s.shellMu.Unlock()
+// worktreeShells are the shells in a folder as tmux lists them now.
+type worktreeShells struct {
+	idle, busy []session.Name // those whose folder is in it, by whether a command runs in them
+	unknown    bool           // a shell of the project is in a folder tmux cannot read
+}
+
+// shellsInTree lists the shells in the folder worktree, and whether a shell of the project key is in an unknown folder.
+// It needs shellMu.
+func (s *Sessions) shellsInTree(ctx context.Context, key, worktree string) (worktreeShells, error) {
+	var in worktreeShells
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	_, running, err := s.tmux.ListAll(ctx)
 	if err != nil {
-		return shellsUnlisted(err)
+		return in, err
 	}
 	paths, err := s.tmux.ShellPaths(ctx)
 	if err != nil {
-		return shellsUnlisted(err)
+		return in, err
 	}
 	for _, sh := range paths {
-		if sh.Path != "" && !folder.Inside(sh.Path, worktree) {
-			continue
+		switch {
+		case sh.Path == "":
+			in.unknown = in.unknown || sh.Name.Project == key
+		case folder.Inside(sh.Path, worktree):
+			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) {
+				in.busy = append(in.busy, sh.Name)
+			} else {
+				in.idle = append(in.idle, sh.Name)
+			}
 		}
-		if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) {
-			return "a shell in this worktree runs a command"
+	}
+	return in, nil
+}
+
+// closeShellsIn closes the shells in the worktree that a clean-up or a delete removes: those idle, and with force those
+// that run a command too. Without force a command that runs keeps the worktree, and nothing is closed. It says why
+// nothing was closed, or "". A shell it cannot stop is logged and left running.
+func (s *Sessions) closeShellsIn(ctx context.Context, key, worktree string, force bool) string {
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
+	in, err := s.shellsInTree(ctx, key, worktree)
+	switch {
+	case err != nil:
+		return shellsUnlisted(err)
+	case len(in.busy) > 0 && !force:
+		return runningInWorktree
+	}
+	for _, name := range slices.Concat(in.idle, in.busy) {
+		if err := s.stopShell(name); err != nil {
+			log.Printf("orchestrator: closing shell %s in %s: %v", name, worktree, err)
 		}
+	}
+	return ""
+}
+
+// busyShellIn says why a shell keeps a rewind from the files in worktree: one in it runs a command, which may write
+// them, or tmux could not say. It is "" when none does. An idle shell does not keep the rewind.
+func (s *Sessions) busyShellIn(ctx context.Context, key, worktree string) string {
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
+	in, err := s.shellsInTree(ctx, key, worktree)
+	switch {
+	case err != nil:
+		return shellsUnlisted(err)
+	case len(in.busy) > 0:
+		return runningInWorktree
 	}
 	return ""
 }

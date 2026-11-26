@@ -1294,7 +1294,7 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool,
 type cleanupPlan struct {
 	branchPlan
 	force  bool
-	family []string // the threads of the Delete that runs the clean-up, whose shells in the worktree go with it
+	family []string // the threads of the Delete that runs the clean-up
 }
 
 // branchPlan is the thread's branch and the worktree orchestrator made for it.
@@ -1310,8 +1310,8 @@ type branchPlan struct {
 // what changed since the first. A thread with no such worktree, or one removed already, has nothing on disk to lose:
 // the branch always stays. The worktree goes only while it is on the thread's branch, the one whose PR merged or
 // closed. With unchanged, the worktree holds no commit since the one it started at, so only its changes count and
-// origin is not fetched. The threads of family, a Delete's, do not count as others in the worktree, and neither do
-// their shells or the thread's own, which the worktree's removal closes.
+// origin is not fetched. The threads of family, a Delete's, do not count as others in the worktree. A shell in it that
+// runs a command keeps it; the idle ones do not, since the worktree's removal closes them.
 func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchanged bool, family ...string) (cleanupPlan, string) {
 	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force, family: family}
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
@@ -1358,34 +1358,28 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 	return p, l.shellIn(ctx, t.proj.Key(), w.Path)
 }
 
-// shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, or a shell of the project is
-// open in a folder tmux does not know. It is "" when none is. A shell belongs to the project, so one in a thread's
-// worktree keeps it until the owner closes the shell. It holds shellMu, so a shell that started before a clean-up's
+// shellIn says why a shell keeps the worktree from a clean-up or a delete: one in it runs a command, or tmux could not
+// say, or a shell of the project is open in a folder tmux does not know. It is "" when none is: the shells idle in the
+// worktree do not keep it, since its removal closes them. It holds shellMu, so a shell that started before a clean-up's
 // mark is listed, and NewShell refuses one after it.
 func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string) string {
 	s := l.sessions
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
-	defer cancel()
-	shells, err := s.tmux.ShellPaths(ctx)
-	if err != nil {
+	in, err := s.shellsInTree(ctx, key, worktree)
+	switch {
+	case err != nil:
 		return shellsUnlisted(err)
-	}
-	unknown := false
-	for _, sh := range shells {
-		switch {
-		case sh.Path == "":
-			unknown = unknown || sh.Name.Project == key
-		case folder.Inside(sh.Path, worktree):
-			return "a shell is open in this worktree"
-		}
-	}
-	if unknown {
+	case len(in.busy) > 0:
+		return runningInWorktree
+	case in.unknown:
 		return "a shell whose folder is unknown is open"
 	}
 	return ""
 }
+
+// runningInWorktree is why a terminal keeps a worktree: a command runs in it.
+const runningInWorktree = "a command is running in a terminal in this worktree"
 
 // shellsUnlisted is why a shell may keep a worktree or its files when tmux could not list the open shells.
 func shellsUnlisted(err error) string {
@@ -1396,8 +1390,9 @@ func shellsUnlisted(err error) string {
 // records it removed. Forced or not, it never runs the command on the project folder, git's main worktree, a folder
 // that holds either, or a worktree that is not the one orchestrator made for the thread, as one a human made again at a path
 // orchestrator used, and it keeps everything when the thread woke since the clean-up settled it. Once nothing keeps the
-// worktree, it closes the thread's shells and those of the plan's family in the worktree, so none is left in a folder
-// that is gone. A worktree whose folder is gone already counts as removed.
+// worktree, it closes the shells in the worktree, so none is left in a folder that is gone: those idle, and with force
+// those that run a command too; without force a command that runs keeps the worktree. Shells in other folders stay. A
+// worktree whose folder is gone already counts as removed.
 func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
 	if !p.made {
 		return nil, ""
@@ -1418,6 +1413,9 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	}
 	if !gone(path) && !l.ours(ctx, t.proj.Key(), path, t.id) {
 		return nil, fmt.Sprintf("%s is not the worktree orchestrator made for this thread", path)
+	}
+	if reason := l.sessions.closeShellsIn(ctx, t.proj.Key(), path, p.force); reason != "" {
+		return nil, reason
 	}
 	if !gone(path) {
 		force := ""

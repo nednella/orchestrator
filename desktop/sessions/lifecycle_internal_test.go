@@ -229,6 +229,7 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l, dir, _ := madeRepo(t)
+			l.sessions.tmux, l.sessions.closeTerm = testTmux(t), func(string) {}
 			projDir, path := tt.place(t, l, dir)
 			ran := filepath.Join(t.TempDir(), "ran")
 			proj := project.Project{Name: "p", Dir: projDir, CleanupCommand: fmt.Sprintf("echo {worktree} >> %q && git worktree remove --force {worktree}", ran)}

@@ -2,7 +2,6 @@ package sessions_test
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -138,96 +137,149 @@ func TestShellsAreReadAgainAfterARestart(t *testing.T) {
 	}
 }
 
-func TestDeleteKeepsEveryShell(t *testing.T) {
+const runningReason = "a command is running in a terminal in this worktree"
+
+// shellsAround starts a shell in the thread's worktree, one in the project folder and one in another folder, and
+// returns their ids.
+func shellsAround(t *testing.T, h *apptest.Harness, s sessions.Session) (inTree, inProject, elsewhere string) {
+	t.Helper()
+	inTree = newShell(t, h, s.ID)
+	eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, inTree) == resolved(s.Worktree) })
+	inProject = newShell(t, h, "")
+	elsewhere = newShell(t, h, "")
+	cdShell(t, h, elsewhere, t.TempDir())
+	return inTree, inProject, elsewhere
+}
+
+// keepsOthers checks that the shells in the project folder and in another folder still run.
+func keepsOthers(t *testing.T, h *apptest.Harness, shells ...string) {
+	t.Helper()
+	for _, id := range shells {
+		if !tmuxHas(h, id) {
+			t.Errorf("the shell %s outside the worktree was closed", id)
+		}
+	}
+}
+
+func TestSettleAndADeleteThatKeepsTheWorktreeCloseNoShell(t *testing.T) {
 	t.Parallel()
-	t.Run("without the worktree", func(t *testing.T) {
+	t.Run("settle", func(t *testing.T) {
+		h := shellHarness(t)
+		s := pushedThread(t, h)
+		inTree, inProject, elsewhere := shellsAround(t, h, s)
+		if err := h.SettleThread(s.ID); err != nil {
+			t.Fatal(err)
+		}
+		keepsOthers(t, h, inTree, inProject, elsewhere)
+	})
+	t.Run("delete without the worktree", func(t *testing.T) {
+		h := shellHarness(t)
+		s := pushedThread(t, h)
+		inTree, inProject, elsewhere := shellsAround(t, h, s)
+		if err := h.DeleteThread(s.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if !exists(s.Worktree) {
+			t.Error("the worktree went although the delete kept it")
+		}
+		keepsOthers(t, h, inTree, inProject, elsewhere)
+	})
+	t.Run("a thread with no worktree", func(t *testing.T) {
 		h := shellHarness(t)
 		gone, err := h.NewSession("gone", "")
 		if err != nil {
 			t.Fatal(err)
 		}
 		project := newShell(t, h, "")
-		fromGone := []string{newShell(t, h, gone.ID), newShell(t, h, gone.ID)}
-
+		own := newShell(t, h, gone.ID)
 		if err := h.DeleteThread(gone.ID, false); err != nil {
 			t.Fatal(err)
 		}
-		left := append([]string{project}, fromGone...)
-		for _, id := range left {
-			if !tmuxHas(h, id) {
-				t.Errorf("the shell %s went with the thread", id)
-			}
-		}
-		if got := shellIDs(h); !slices.Equal(got, left) {
-			t.Errorf("shells after the delete = %q, want %q", got, left)
-		}
-	})
-
-	t.Run("a shell in the worktree keeps it", func(t *testing.T) {
-		h := shellHarness(t)
-		s := pushedThread(t, h)
-		own := newShell(t, h, s.ID)
-		eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, own) == resolved(s.Worktree) })
-
-		if err := h.DeleteThread(s.ID, true); err == nil {
-			t.Fatal("the delete went through with a shell open in the worktree")
-		}
-		if !exists(s.Worktree) || !tmuxHas(h, own) {
-			t.Errorf("a refused delete: worktree there %v, shell runs %v; want both", exists(s.Worktree), tmuxHas(h, own))
-		}
-
-		if err := h.ShellClose(own); err != nil {
-			t.Fatal(err)
-		}
-		project := newShell(t, h, "")
-		if err := h.DeleteThread(s.ID, true); err != nil {
-			t.Fatal(err)
-		}
-		if exists(s.Worktree) || !tmuxHas(h, project) {
-			t.Errorf("worktree there %v, project shell runs %v; want it gone and the shell kept", exists(s.Worktree), tmuxHas(h, project))
-		}
-	})
-
-	t.Run("a refused delete", func(t *testing.T) {
-		h := shellHarness(t)
-		s := pushedThread(t, h)
-		own := newShell(t, h, s.ID)
-		if err := os.WriteFile(filepath.Join(s.Worktree, "unsaved.txt"), []byte("work\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := h.DeleteThread(s.ID, true); err == nil {
-			t.Fatal("the delete went through with changes in the worktree")
-		}
-		if !tmuxHas(h, own) {
-			t.Error("a refused delete closed the shell")
-		}
+		keepsOthers(t, h, project, own)
 	})
 }
 
-func TestCleanupWaitsForAShellInTheWorktreeAndKeepsEveryShell(t *testing.T) {
+func TestDeleteWithTheWorktreeClosesTheIdleShellsInIt(t *testing.T) {
 	t.Parallel()
 	h := shellHarness(t)
 	s := pushedThread(t, h)
-	own := newShell(t, h, s.ID)
-	eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, own) == resolved(s.Worktree) })
-	project := newShell(t, h, "")
+	inTree, inProject, elsewhere := shellsAround(t, h, s)
+	if got := h.DeletePlan(s.ID).Worktrees; got != 1 {
+		t.Errorf("the box offers %d worktrees with an idle shell in it, want 1", got)
+	}
+	if err := h.DeleteThread(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(s.Worktree) || tmuxHas(h, inTree) {
+		t.Errorf("worktree there %v, the shell in it runs %v; want neither", exists(s.Worktree), tmuxHas(h, inTree))
+	}
+	keepsOthers(t, h, inProject, elsewhere)
+}
+
+func TestDeleteWithTheWorktreeIsRefusedWhileACommandRunsInIt(t *testing.T) {
+	t.Parallel()
+	h := shellHarness(t)
+	s := pushedThread(t, h)
+	inTree, inProject, elsewhere := shellsAround(t, h, s)
+	typeIn(t, h, inTree, "sleep 60")
+	shellRuns(t, h, inTree, "sleep", true)
+	if got := h.DeletePlan(s.ID).Worktrees; got != 0 {
+		t.Errorf("the box offers %d worktrees with a command running in it, want 0", got)
+	}
+	err := h.DeleteThread(s.ID, true)
+	if err == nil || !strings.Contains(err.Error(), runningReason) {
+		t.Fatalf("delete = %v, want it refused for %q", err, runningReason)
+	}
+	if !exists(s.Worktree) {
+		t.Error("the worktree went with a command running in it")
+	}
+	keepsOthers(t, h, inTree, inProject, elsewhere)
+}
+
+func TestCleanupClosesTheIdleShellsInTheWorktreeOnly(t *testing.T) {
+	t.Parallel()
+	h := shellHarness(t)
+	s := pushedThread(t, h)
+	inTree, inProject, elsewhere := shellsAround(t, h, s)
 
 	openThenMerge(h)
-	keptFor(t, h, s.ID, s.Worktree, "a shell is open in this worktree")
-	if !tmuxHas(h, own) || !tmuxHas(h, project) {
-		t.Error("a kept clean-up closed a shell")
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(s.Worktree) || tmuxHas(h, inTree) {
+		t.Errorf("worktree there %v, the shell in it runs %v; want neither", exists(s.Worktree), tmuxHas(h, inTree))
 	}
+	keepsOthers(t, h, inProject, elsewhere)
+	if got := shellIDs(h); !slices.Equal(got, []string{inProject, elsewhere}) {
+		t.Errorf("shells after the clean-up = %q, want %q", got, []string{inProject, elsewhere})
+	}
+}
 
-	cdShell(t, h, own, h.Dir)
-	if err := h.Cleanup(s.ID, false); err != nil {
+func TestCleanupIsBlockedByACommandInTheWorktreeAndAForcedOneClosesIt(t *testing.T) {
+	t.Parallel()
+	h := shellHarness(t)
+	s := pushedThread(t, h)
+	inTree, inProject, elsewhere := shellsAround(t, h, s)
+	idle := newShell(t, h, s.ID)
+	eventually(t, "the second shell in the worktree", func() bool { return shellFolder(t, h, idle) == resolved(s.Worktree) })
+	typeIn(t, h, inTree, "sleep 60")
+	shellRuns(t, h, inTree, "sleep", true)
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, s.Worktree, runningReason)
+	if !tmuxHas(h, inTree) || !tmuxHas(h, idle) {
+		t.Error("a blocked clean-up closed a shell")
+	}
+	keepsOthers(t, h, inProject, elsewhere)
+
+	if err := h.Cleanup(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
-		t.Errorf("the clean-up once the shell left: cleaned up %v, worktree there %v", cleanedUp(h, s.ID)(), exists(s.Worktree))
+		t.Errorf("the forced clean-up: cleaned up %v, worktree there %v", cleanedUp(h, s.ID)(), exists(s.Worktree))
 	}
-	if got := shellIDs(h); !slices.Equal(got, []string{own, project}) {
-		t.Errorf("shells after the clean-up = %q, want %q", got, []string{own, project})
+	if tmuxHas(h, inTree) || tmuxHas(h, idle) {
+		t.Error("the forced clean-up left a shell of the worktree running")
 	}
+	keepsOthers(t, h, inProject, elsewhere)
 }
 
 func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {

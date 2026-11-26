@@ -311,14 +311,14 @@ func TestFilesAreNotRewoundWhileAShellRunsACommandInTheWorktree(t *testing.T) {
 		return reason != ""
 	})
 
-	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell in this worktree runs a command" {
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A command is running in a terminal in this worktree" {
 		t.Errorf("RewindFilesOffer = %+v", offer)
 	}
 	preview, err := h.RewindPreview(id, ids[0])
-	if err != nil || !preview.Offered || preview.Reason != "A shell in this worktree runs a command" {
+	if err != nil || !preview.Offered || preview.Reason != "A command is running in a terminal in this worktree" {
 		t.Errorf("RewindPreview = %+v, %v", preview, err)
 	}
-	if _, err := h.RewindTo(id, ids[0], true); err == nil || err.Error() != "A shell in this worktree runs a command" {
+	if _, err := h.RewindTo(id, ids[0], true); err == nil || err.Error() != "A command is running in a terminal in this worktree" {
 		t.Errorf("RewindTo with the files = %v", err)
 	}
 	if got := rewinds(t, h, id); len(got) != 0 {
@@ -350,7 +350,7 @@ func TestFilesAreRewoundBesideAnIdleShell(t *testing.T) {
 		_, _, reason := h.Sessions().FilesRewind(id)
 		return reason != ""
 	})
-	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell in this worktree runs a command" {
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A command is running in a terminal in this worktree" {
 		t.Errorf("RewindFilesOffer while a shell runs a command = %+v", offer)
 	}
 	if err := h.ShellClose(shell.ID); err != nil {
