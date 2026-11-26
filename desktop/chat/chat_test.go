@@ -331,6 +331,11 @@ func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ready, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := host.Ready(ready, ch.Socket); err != nil {
+		t.Fatal(err)
+	}
 	h.App.Stop()
 	if err := host.Interrupt(context.Background(), ch.Socket); err != nil {
 		t.Fatal(err)
