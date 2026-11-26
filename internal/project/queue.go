@@ -24,6 +24,7 @@ type Action struct {
 	Model   string         `yaml:"model,omitempty"`
 	Effort  string         `yaml:"effort,omitempty"`
 	Access  session.Access `yaml:"access,omitempty"` // Supervised unless set
+	Kind    string         `yaml:"kind,omitempty"`   // read only to refuse it: a config that sets it does not load
 }
 
 // ThreadAccess is the access the action starts its thread with.
@@ -182,6 +183,10 @@ func (p Project) validateQueue() error {
 			actions = append(actions, a.Name)
 			if err := (agent.Claude{}).ValidModel(a.Model, a.Effort); err != nil {
 				return fmt.Errorf("queue_sections.%s.%s: %w", s.Name, a.Name, err)
+			}
+			// Refused rather than ignored: an old chat action would start with write access.
+			if a.Kind != "" {
+				return fmt.Errorf("queue_sections.%s.%s: kind is gone; use access: read for a read-only action", s.Name, a.Name)
 			}
 			if _, err := session.ParseAccess(string(a.Access)); err != nil {
 				return fmt.Errorf("queue_sections.%s.%s: %w", s.Name, a.Name, err)

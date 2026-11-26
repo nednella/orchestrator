@@ -81,6 +81,15 @@ func TestActionAccess(t *testing.T) {
 	}
 }
 
+func TestKindIsRefused(t *testing.T) {
+	for _, kind := range []string{"chat", "task"} {
+		_, err := Load(writeConfig(t, "projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: Ready, actions: [{name: Plan, command: \"/plan {n}\", kind: "+kind+"}]}]}\n"))
+		if want := "queue_sections.Ready.Plan: kind is gone; use access: read for a read-only action"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("kind: %s loaded: %v, want an error that says %q", kind, err, want)
+		}
+	}
+}
+
 func writeConfig(t *testing.T, yaml string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
