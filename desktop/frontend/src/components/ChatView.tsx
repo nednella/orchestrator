@@ -8,7 +8,7 @@ import type { EscapeAction } from '../chatComposer'
 import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
-import { fromMarkdown } from '../composerMarkdown'
+import { appendText, fromMarkdown } from '../composerMarkdown'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Session } from '../types'
 import { useChat } from '../useChat'
@@ -35,7 +35,7 @@ type ChatViewProps = { session: Session }
 const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
 export function ChatView({ session }: ChatViewProps) {
-  const { project, report, forkSession } = useAgentos('project', 'report', 'forkSession')
+  const { project, report, forkSession, threadDraft, setThreadDraft } = useAgentos('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
   const latest = useLatestAgentos()
   const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
@@ -147,14 +147,17 @@ export function ChatView({ session }: ChatViewProps) {
             files = preview.files.length > 0
             if (files && !(await askConfirm(undoRequest(preview, preview.files.map((f) => relative(f, worktree))))).ok) return
           }
-          draft.current?.append(await api.rewindTo(thread, uuid, files))
+          const text = await api.rewindTo(thread, uuid, files)
+          // A view closed while the rewind ran has no composer: the text goes into the thread's saved draft.
+          if (draft.current) draft.current.append(text)
+          else setThreadDraft(thread, appendText(threadDraft(thread).draft, text))
         } finally {
           editing.current = false
           readRewindOff()
         }
       })
     },
-    [thread, worktree, report, readRewindOff],
+    [thread, worktree, report, readRewindOff, threadDraft, setThreadDraft],
   )
   const folder = session.worktree || project?.dir || ''
   const edit: ChatEdit | undefined = session.hosted ? { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom } : undefined
