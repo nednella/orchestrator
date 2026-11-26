@@ -17,6 +17,7 @@ import (
 )
 
 func TestStrayBrowserIsReplaced(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aosb")
 	if err != nil {
 		t.Fatal(err)
@@ -55,6 +56,7 @@ func TestStrayBrowserIsReplaced(t *testing.T) {
 }
 
 func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aosb")
 	if err != nil {
 		t.Fatal(err)
@@ -112,6 +114,7 @@ func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 }
 
 func TestStopStraysEndsTheLastRunsBrowsers(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aosb")
 	if err != nil {
 		t.Fatal(err)
@@ -138,6 +141,7 @@ func TestStopStraysEndsTheLastRunsBrowsers(t *testing.T) {
 }
 
 func TestStartForgetsTheLastRunsPages(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	saved := filepath.Join(b.dataDir, "p", "browser", "Default", "Sessions", "Session_1")
 	if err := os.MkdirAll(filepath.Dir(saved), 0o700); err != nil {
@@ -155,6 +159,7 @@ func TestStartForgetsTheLastRunsPages(t *testing.T) {
 }
 
 func TestDroppedConnectionIsRemade(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	if _, err := b.Open(ctx, "p/1", "data:text/html,<title>Kept</title>"); err != nil {
 		t.Fatal(err)
@@ -186,6 +191,7 @@ func TestDroppedConnectionIsRemade(t *testing.T) {
 }
 
 func TestOpenLeavesAnotherSessionsPagesAlone(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	// Every session gets the same label, as a page's would read when its session cannot be named.
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
@@ -207,6 +213,7 @@ func TestOpenLeavesAnotherSessionsPagesAlone(t *testing.T) {
 }
 
 func TestPIDsAreTheRunningBrowsers(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	if pids := b.PIDs(); len(pids) != 0 {
 		t.Fatalf("PIDs before a browser = %v", pids)
@@ -220,6 +227,7 @@ func TestPIDsAreTheRunningBrowsers(t *testing.T) {
 }
 
 func TestNoBrowserFound(t *testing.T) {
+	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary = ""
 	if b.Available() {
@@ -238,6 +246,7 @@ func TestNoBrowserFound(t *testing.T) {
 func testEnv() []string { return append(os.Environ(), "ORCHESTRATOR_BROWSER_HEADLESS=1") }
 
 func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	env := []string{"HOME=" + home, "ORCHESTRATOR_BROWSER="}
 	install := func(app string) string {
@@ -264,6 +273,7 @@ func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
 }
 
 func TestLaunchArgsPerMode(t *testing.T) {
+	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.headless = true
 	if args := b.launchArgs("/p", 24680); !slices.Contains(args, "--headless=new") || !slices.Contains(args, "--hide-scrollbars") || !slices.Contains(args, "--disable-brave-update") ||
@@ -283,6 +293,7 @@ func TestLaunchArgsPerMode(t *testing.T) {
 }
 
 func TestWebAddress(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in, want string
 		ok       bool
@@ -317,6 +328,7 @@ func newTestBrowsers(t *testing.T) (*Browsers, context.Context) {
 }
 
 func TestConcurrentOpensShareOneTab(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	var wg sync.WaitGroup
 	states := make([]BrowserState, 2)
@@ -341,6 +353,7 @@ func TestConcurrentOpensShareOneTab(t *testing.T) {
 }
 
 func TestOpenReportsAFirstPageThatFails(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	st, err := b.Open(ctx, "p/1", "http://127.0.0.1:1/")
 	if err == nil || !strings.Contains(err.Error(), "could not open") {
@@ -352,6 +365,7 @@ func TestOpenReportsAFirstPageThatFails(t *testing.T) {
 }
 
 func TestBrowserStopsWhenItsFirstWindowCannotOpen(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	p, err := b.start(ctx, "p")
 	if err != nil {
@@ -375,6 +389,7 @@ func TestBrowserStopsWhenItsFirstWindowCannotOpen(t *testing.T) {
 }
 
 func TestPageTitleDropsTheLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ prefix, title, want string }{
 		{"[demo · 2 fix]", "[demo · 2 fix] Example", "Example"},
 		{"[demo · 2 fix]", "[demo · 2 fix]", ""},
@@ -390,12 +405,14 @@ func TestPageTitleDropsTheLabel(t *testing.T) {
 }
 
 func TestTitleScriptQuotesTheLabel(t *testing.T) {
+	t.Parallel()
 	if script := titleScript(`[a "b" \ c]`); !strings.Contains(script, `"[a \"b\" \\ c]"`) {
 		t.Errorf("label not quoted in %s", script)
 	}
 }
 
 func TestWindowLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ in, want string }{
 		{"demo · 1 Fix", "[demo · 1 Fix]"},
 		{"demo · 1 Two  spaces", "[demo · 1 Two spaces]"},
@@ -411,6 +428,7 @@ func TestWindowLabel(t *testing.T) {
 }
 
 func TestConsoleShownKeepsTheLastLines(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	events := 0
 	b := New(t.TempDir(), func(event string, _ any) {
@@ -440,6 +458,7 @@ func TestConsoleShownKeepsTheLastLines(t *testing.T) {
 }
 
 func TestPortIsChosenOnceAndKept(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	first := New(dir, func(string, any) {}, testEnv()).Port("demo")
 	if first < portMin || first > portMax {
@@ -460,6 +479,7 @@ func TestPortIsChosenOnceAndKept(t *testing.T) {
 }
 
 func TestLaunchPortReplacesAPortSomethingElseHolds(t *testing.T) {
+	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	saved := b.Port("demo")
 	if got, err := b.launchPort("demo"); err != nil || got != saved {
@@ -480,6 +500,7 @@ func TestLaunchPortReplacesAPortSomethingElseHolds(t *testing.T) {
 }
 
 func TestBrowserListensOnItsSavedPort(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	port := b.Port("p")
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
@@ -496,6 +517,7 @@ func TestBrowserListensOnItsSavedPort(t *testing.T) {
 }
 
 func TestAgentOpenPrintsThePageWithoutTheLabel(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	b.Hook(func(string) string { return "" }, func(string) string { return "demo · 2 fix login" }, func() {})
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
@@ -512,6 +534,7 @@ func dialogLines(b *Browsers, id string) string {
 }
 
 func TestDialogLeftOpenIsDismissed(t *testing.T) {
+	t.Parallel()
 	const page = `<!doctype html><title>Dialogs</title>`
 	tests := []struct{ name, js, result, line string }{
 		{"confirm", `confirm("Delete?")`, "[false,true]", `dialog dismissed after 100ms: confirm "Delete?"`},
@@ -544,6 +567,7 @@ func TestDialogLeftOpenIsDismissed(t *testing.T) {
 }
 
 func TestDialogAnsweredInTimeIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	b.SetDialogWait(500 * time.Millisecond)
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
@@ -576,6 +600,7 @@ func TestDialogAnsweredInTimeIsLeftAlone(t *testing.T) {
 }
 
 func TestTitleScriptLabelsTheCurrentDocument(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	b.Hook(func(string) string { return "" }, func(string) string { return "demo · 2 fix" }, func() {})
 	if _, err := b.Open(ctx, "p/1", "data:text/html,<title>Hi</title>"); err != nil {
@@ -639,6 +664,7 @@ func waitLabelled(t *testing.T, ctx context.Context, b *Browsers, p *browserProc
 }
 
 func TestSessionClosesWithItsLastPage(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("<title>Tab</title>")) })

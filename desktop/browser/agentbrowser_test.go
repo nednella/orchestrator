@@ -49,6 +49,7 @@ func calls(t *testing.T, log string) []string {
 }
 
 func TestAgentEnvBindsTheSessionToNoTab(t *testing.T) {
+	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary = "/chrome"
 	fakeAgentBrowser(t, b)
@@ -78,6 +79,7 @@ func TestAgentEnvBindsTheSessionToNoTab(t *testing.T) {
 }
 
 func TestAgentEnvNeedsAgentBrowser(t *testing.T) {
+	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary, b.agentBrowser = "/chrome", ""
 	if _, err := b.AgentEnv("p/abcd2345", "/tmp/session"); err == nil || b.AgentReady() {
@@ -86,6 +88,7 @@ func TestAgentEnvNeedsAgentBrowser(t *testing.T) {
 }
 
 func TestOpenCloseAndForgetBindTheSessionsAgentBrowser(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	log := fakeAgentBrowser(t, b)
 	if _, err := b.AgentEnv("p/abcd2345", t.TempDir()); err != nil {
@@ -129,6 +132,7 @@ func TestOpenCloseAndForgetBindTheSessionsAgentBrowser(t *testing.T) {
 }
 
 func TestASessionWithoutAgentBrowserIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	log := fakeAgentBrowser(t, b)
 	if _, err := b.Open(ctx, "p/abcd2345", "about:blank"); err != nil {
@@ -146,6 +150,7 @@ func TestASessionWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 // TestAgentBrowserDrivesOnlyTheSessionsTab runs the agent-browser that ORCHESTRATOR_AGENT_BROWSER names, as make
 // agent-browser fetches it: the binding file is agent-browser's own, so a new version must pass this before it ships.
 func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
+	t.Parallel()
 	real := os.Getenv("ORCHESTRATOR_AGENT_BROWSER")
 	if out, err := exec.Command(real, "--version").Output(); real == "" || err != nil || !strings.HasPrefix(string(out), "agent-browser ") {
 		t.Skip("ORCHESTRATOR_AGENT_BROWSER names no agent-browser: run make agent-browser and set it to bin/agent-browser")

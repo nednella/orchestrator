@@ -55,6 +55,7 @@ func profileRunning(profile string) bool {
 }
 
 func TestBrowserAgentCLI(t *testing.T) {
+	t.Parallel()
 	h, s := browserHarness(t)
 	srv := demoServer(t)
 	profile := filepath.Join(h.State, "data", "main", "browser")
@@ -144,6 +145,7 @@ func TestBrowserAgentCLI(t *testing.T) {
 }
 
 func TestBrowserNeedsAKnownAction(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, args := range [][]string{nil, {"help"}, {"tab", "x"}} {
 		if resp := h.AskTool(t, ctl.Request{Cmd: "browser", Args: args}); resp.OK || !strings.Contains(resp.Error, "open, screenshot or close") {
@@ -153,6 +155,7 @@ func TestBrowserNeedsAKnownAction(t *testing.T) {
 }
 
 func TestBrowserTabs(t *testing.T) {
+	t.Parallel()
 	h, s := browserHarness(t)
 	srv := demoServer(t)
 	b := h.App.Browsers()

@@ -48,6 +48,7 @@ func browserHarness(t *testing.T) (*apptest.Harness, sessions.Session) {
 }
 
 func TestBrowserUserScreenshot(t *testing.T) {
+	t.Parallel()
 	h, s := browserHarness(t)
 	srv := demoServer(t)
 	state, err := h.BrowserOpen(s.ID, srv.URL)
