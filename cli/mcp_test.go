@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -136,6 +137,28 @@ func TestMCPWaitStopsAtItsTimeout(t *testing.T) {
 	}
 	if text != "Thread demo/x1 still runs." || isErr || calls.Load() < 2 {
 		t.Errorf("result = %q, error %v, app calls %d; want the last answer's text after more than one slice", text, isErr, calls.Load())
+	}
+}
+
+func TestMCPWaitPausesAfterAnEarlyAnswer(t *testing.T) {
+	var mu sync.Mutex
+	var asked []time.Time
+	fakeApp(t, func(context.Context, control.Request) control.Response {
+		mu.Lock()
+		asked = append(asked, time.Now())
+		mu.Unlock()
+		return control.Response{OK: true, Out: `{"done":false,"text":"The chat service has not started"}`}
+	})
+	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":3}`)
+	mu.Lock()
+	defer mu.Unlock()
+	// Pauses of 0.5, 1 and 2 s, the last cut at the deadline.
+	if len(asked) < 3 || len(asked) > 5 {
+		t.Fatalf("the app was asked %d times in 3 s, want 3 to 5", len(asked))
+	}
+	if first, second := asked[1].Sub(asked[0]), asked[2].Sub(asked[1]); first < 400*time.Millisecond || second < 3*first/2 {
+		t.Errorf("pauses %v then %v, want at least 0.4 s, then longer", first, second)
 	}
 }
 

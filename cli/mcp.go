@@ -22,6 +22,10 @@ const (
 	waitSliceCall    = 65 * time.Second
 	defaultWaitLimit = 300
 	maxWaitLimit     = 3600
+	// An answer that comes well before its slice ends, as while the app starts, is asked again after a pause that
+	// doubles each time, up to waitPauseMost.
+	waitPauseFirst = 500 * time.Millisecond
+	waitPauseMost  = 8 * time.Second
 )
 
 // newMCPCmd serves the orchestration tools to the agent that started it, over stdin and stdout.
@@ -87,6 +91,7 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 		return "", errors.New("timeout_seconds is at most 3600")
 	}
 	deadline := time.Now().Add(time.Duration(in.TimeoutSeconds) * time.Second)
+	pause := waitPauseFirst
 	for {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -94,6 +99,7 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 		slice := min(waitSlice, time.Until(deadline))
 		slice = max(slice, time.Millisecond)
 		opts := map[string]string{"slice_ms": strconv.FormatInt(slice.Milliseconds(), 10), "until_ms": strconv.FormatInt(deadline.UnixMilli(), 10)}
+		asked := time.Now()
 		out, err := orchestrate(ctx, socket, token, "wait", input, opts, waitSliceCall)
 		if err != nil {
 			return "", err
@@ -109,5 +115,15 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 		if answer.Done || time.Until(deadline) < time.Millisecond {
 			return answer.Text, nil
 		}
+		if time.Since(asked) >= slice/2 {
+			pause = waitPauseFirst
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(min(pause, time.Until(deadline))):
+		}
+		pause = min(2*pause, waitPauseMost)
 	}
 }
