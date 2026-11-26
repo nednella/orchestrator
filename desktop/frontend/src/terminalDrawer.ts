@@ -4,6 +4,8 @@ import { shellsOf } from './shells'
 import { readStored, writeStored } from './storage'
 import { prune, TERMINALS_KEY, withShells } from './terminalGroups'
 import type { ThreadTerms } from './terminalGroups'
+import { START_GRACE_MS, stillStarted } from './startedShells'
+import type { Started } from './startedShells'
 import type { Shell } from './types'
 
 // Each thread's drawer, '' for Home's: whether it is open, the height it was dragged to in px, and its terminals.
@@ -21,7 +23,8 @@ let terms = readStored<Saved<ThreadTerms>>(TERMINALS_KEY, {})
 // live are the current project's shells as Go last announced them; started are shells whose start returned before
 // their first announce, which an announce sent before the start can come ahead of.
 let live: Shell[] = []
-const started = new Map<string, string>()
+let project = ''
+let started: Started = new Map()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void) {
@@ -77,34 +80,52 @@ export function changeTerms(thread: string, change: (t: ThreadTerms) => ThreadTe
   changed()
 }
 
-// shellStarted keeps a new shell's pane until Go announces the shell.
+// shellStarted keeps a new shell's pane until Go announces the shell, or the grace passes.
 export function shellStarted(thread: string, id: string) {
-  if (!live.some((s) => s.id === id)) started.set(id, thread)
+  if (live.some((s) => s.id === id)) return
+  started = new Map(started).set(id, { thread, project, at: Date.now() })
+  setTimeout(() => settle(), START_GRACE_MS + 50)
 }
 
 // shellClosed forgets a started shell closed before Go announced it.
 export function shellClosed(id: string) {
+  if (!started.has(id)) return
+  started = new Map(started)
   started.delete(id)
 }
 
 // startedShells are the shells started that Go has not announced yet: the thread's, or with no thread every one.
 export function startedShells(thread?: string): string[] {
-  return [...started].filter(([, of]) => thread === undefined || of === thread).map(([id]) => id)
+  return [...started].filter(([, s]) => thread === undefined || s.thread === thread).map(([id]) => id)
+}
+
+// useStartedShells re-renders when the started shells change, as when the grace ends one.
+export function useStartedShells(): string {
+  return useSyncExternalStore(subscribe, () => startedShells().join())
+}
+
+function settle() {
+  const left = stillStarted(started, project, new Set(live.map((s) => s.id)), Date.now())
+  if (left.size === started.size) return
+  started = left
+  shellsChanged(project, live)
 }
 
 // shellsChanged takes the project's shells as Go announces them, and takes the panes of the gone ones out.
-export function shellsChanged(project: string, shells: Shell[]) {
+export function shellsChanged(key: string, shells: Shell[]) {
+  project = key
   live = shells
-  for (const s of shells) started.delete(s.id)
+  started = stillStarted(started, key, new Set(shells.map((s) => s.id)), Date.now())
   const keep = new Set([...shells.map((s) => s.id), ...started.keys()])
   let next: Saved<ThreadTerms> = {}
   for (const [thread, saved] of Object.entries(terms)) {
-    const pruned = prune(saved, project, keep)
+    const pruned = prune(saved, key, keep)
     if (pruned.groups.length > 0) next[thread] = JSON.stringify(pruned) === JSON.stringify(saved) ? saved : pruned
   }
-  if (JSON.stringify(next) === JSON.stringify(terms)) return
-  terms = next
-  writeStored(TERMINALS_KEY, terms)
+  if (JSON.stringify(next) !== JSON.stringify(terms)) {
+    terms = next
+    writeStored(TERMINALS_KEY, terms)
+  }
   changed()
 }
 

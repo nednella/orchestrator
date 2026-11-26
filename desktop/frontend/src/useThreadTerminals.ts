@@ -4,7 +4,7 @@ import { api } from './api'
 import { askConfirm } from './confirm'
 import { shellsOf } from './shells'
 import { keepSessions, termSession } from './terminal/session'
-import { changeTerms, savedTerms, setDrawerOpen, shellClosed, shellStarted, startedShells, useSavedTerms } from './terminalDrawer'
+import { changeTerms, savedTerms, setDrawerOpen, shellClosed, shellStarted, startedShells, useSavedTerms, useStartedShells } from './terminalDrawer'
 import { activeShell, addGroup, closePane, keepRecent, MAX_PANES, reconcile, select, split } from './terminalGroups'
 import type { ThreadTerms } from './terminalGroups'
 import type { Shell } from './types'
@@ -58,6 +58,7 @@ export type ThreadTerminals = {
 export function useThreadTerminals(thread: string): ThreadTerminals {
   const { shells: all } = useAgentos('shells')
   const ids = shellsOf(all, thread)
+  useStartedShells()
   const terms = reconcile(useSavedTerms(thread), [...ids, ...startedShells(thread)])
   return {
     terms,
@@ -75,9 +76,10 @@ export function useThreadTerminals(thread: string): ThreadTerminals {
 // once, and disposes the others'. Their shells run on in tmux. A shell just started is kept until Go announces it.
 export function useKeptTerminals(thread: string) {
   const { shells } = useAgentos('shells')
+  const started = useStartedShells()
   const recent = useRef<string[]>([])
   useEffect(() => {
     recent.current = keepRecent(recent.current, thread)
     keepSessions(new Set([...shells.filter((s) => recent.current.includes(s.thread)).map((s) => s.id), ...startedShells()]))
-  }, [thread, shells])
+  }, [thread, shells, started])
 }
