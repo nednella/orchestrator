@@ -22,17 +22,19 @@ warn() { echo "  ${YELLOW}warn${RESET}  $1"; }
 die()  { echo "  ${RED}error${RESET} $1" >&2; echo; exit 1; }
 
 # The agent browser is Chrome for Testing, not the browser you use: macOS sends a clicked link to any running copy of
-# the default browser's app, and a copy orchestrator runs has no window to show it in.
+# the default browser's app, and a copy orchestrator runs has no window to show it in. A copy that is there stays as it
+# is, since other apps may run from it and a running Chrome fails when its bundle is replaced under it.
 install_chrome() {
     local version have
-    version=$(curl -fsSL "$CHROME_LATEST") || return 1
     have=$(plutil -extract CFBundleShortVersionString raw -o - "$CHROME_APP/Contents/Info.plist" 2>/dev/null || true)
-    if [ "$have" != "$version" ]; then
-        curl -fsSL "$CHROME_STORE/$version/mac-arm64/chrome-mac-arm64.zip" -o "$TMP/chrome.zip" || return 1
-        ditto -x -k "$TMP/chrome.zip" "$TMP" || return 1
-        rm -rf "$CHROME_APP"
-        mv "$TMP/chrome-mac-arm64/Google Chrome for Testing.app" "$CHROME_APP" || return 1
+    if [ -n "$have" ]; then
+        ok "Chrome for Testing $have is there, for the agent browser; it is left as it is"
+        return 0
     fi
+    version=$(curl -fsSL "$CHROME_LATEST") || return 1
+    curl -fsSL "$CHROME_STORE/$version/mac-arm64/chrome-mac-arm64.zip" -o "$TMP/chrome.zip" || return 1
+    ditto -x -k "$TMP/chrome.zip" "$TMP" || return 1
+    mv "$TMP/chrome-mac-arm64/Google Chrome for Testing.app" "$CHROME_APP" || return 1
     ok "Chrome for Testing $version, for the agent browser"
 }
 

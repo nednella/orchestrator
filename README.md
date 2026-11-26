@@ -26,7 +26,7 @@ Needs macOS on Apple silicon, plus:
 curl -fsSL https://raw.githubusercontent.com/nednella/orchestrator/main/install.sh | bash
 ```
 
-The script puts `orchestrator.app` and Chrome for Testing, the agent browser, in `~/Applications`, then lists anything missing. No sudo. orchestrator runs beside agentos if you have it: the two apps share the one `Google Chrome for Testing.app`, which is only a program, and nothing else.
+The script puts `orchestrator.app` in `~/Applications`, and Chrome for Testing, the agent browser, when it is not there yet; one that is there stays as it is. It then lists anything missing. No sudo. orchestrator runs beside agentos if you have it: the two apps share the one `Google Chrome for Testing.app`, which is only a program, and nothing else.
 
 ## Start
 
