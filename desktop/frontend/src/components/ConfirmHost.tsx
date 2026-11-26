@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { answerConfirm, checkConfirm, useConfirm } from '../confirm'
-import { answerFor } from '../confirmQueue'
+import { answerFor, initialFocus } from '../confirmQueue'
 
 // keepFocusIn wraps Tab and Shift+Tab around the dialog's controls, so the focus never leaves it.
 function keepFocusIn(dialog: HTMLElement | null, e: KeyboardEvent) {
@@ -14,16 +14,19 @@ function keepFocusIn(dialog: HTMLElement | null, e: KeyboardEvent) {
 }
 
 // ConfirmHost shows the confirm askConfirm asks, one at a time: the next waits until this one is answered and gone.
-// Esc cancels and the confirm button has the focus; the element that had it before the first gets it back after the last.
+// Esc cancels. Cancel has the focus in a danger confirm and the confirm button in the others; the element that had it
+// before the first gets it back after the last.
 export function ConfirmHost() {
   const { focus } = useAgentos('focus')
   const { request, leaving } = useConfirm()
   const dialog = useRef<HTMLDivElement>(null)
+  const no = useRef<HTMLButtonElement>(null)
   const yes = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const bodyId = useId()
   const shown = request !== undefined
   const id = request?.id
+  const tone = request?.tone
 
   useEffect(() => {
     if (!shown) return
@@ -38,8 +41,11 @@ export function ConfirmHost() {
   }, [shown, focus])
 
   useEffect(() => {
+    if (tone !== undefined) (initialFocus(tone) === 'cancel' ? no : yes).current?.focus()
+  }, [id, tone])
+
+  useEffect(() => {
     if (id === undefined) return
-    yes.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (answerFor(e.key) === false) {
         e.preventDefault()
@@ -88,7 +94,7 @@ export function ConfirmHost() {
           </div>
         </div>
         <div className="confirm-foot">
-          <button className="btn" onClick={() => answerConfirm(request.id, false)}>
+          <button ref={no} className="btn" onClick={() => answerConfirm(request.id, false)}>
             Cancel
           </button>
           <button ref={yes} className={`btn ${request.tone === 'danger' ? 'btn-destructive' : 'btn-primary'}`} onClick={() => answerConfirm(request.id, true)}>

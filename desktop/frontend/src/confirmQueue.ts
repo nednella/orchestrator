@@ -37,3 +37,8 @@ export function check(q: ConfirmQueue, id: number, checked: boolean): ConfirmQue
 export function answerFor(key: string): false | undefined {
   return key === 'Escape' ? false : undefined
 }
+
+// initialFocus is the button a confirm focuses when it shows: Cancel for a danger one, so Enter never deletes.
+export function initialFocus(tone: ConfirmRequest['tone']): 'cancel' | 'confirm' {
+  return tone === 'danger' ? 'cancel' : 'confirm'
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { answerFor, check, current, enqueue, settle } from './confirmQueue.ts'
+import { answerFor, check, current, enqueue, initialFocus, settle } from './confirmQueue.ts'
 import type { ConfirmRequest } from './confirmQueue.ts'
 
 const ask = (id: number, title: string): ConfirmRequest => ({ id, title, confirm: 'Delete', tone: 'danger' })
@@ -32,4 +32,9 @@ test('ticking the box changes only that confirm', () => {
   assert.equal(ticked[0].checkbox?.checked, true)
   assert.equal(ticked[1].checkbox?.checked, false)
   assert.equal(check(q, 3, true), q, 'no confirm of that id changes nothing')
+})
+
+test('a danger confirm focuses Cancel, so Enter never deletes', () => {
+  assert.equal(initialFocus('danger'), 'cancel')
+  assert.equal(initialFocus('primary'), 'confirm')
 })
