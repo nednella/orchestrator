@@ -325,7 +325,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       if (step && ask && step.tool === 'Bash') {
         append(id, { kind: 'tool_use', id: tool, tool: step.tool, input: step.input, agent: r.call })
         append(id, { kind: 'approval', id: `req-${tool}`, parent: tool, tool: step.tool, input: step.input, agent: r.call })
-        setPending(id, { id, request: `req-${tool}`, tool: step.tool, summary: (step.input as { command: string }).command, kind: 'tool' })
+        setPending(id, { id, request: `req-${tool}`, tool: step.tool, summary: (step.input as { command: string }).command, kind: 'tool', input: step.input, inputTooLarge: false })
         waiting = true
         const run = background.get(id)
         if (run)

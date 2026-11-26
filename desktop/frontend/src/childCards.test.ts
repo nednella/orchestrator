@@ -34,6 +34,7 @@ const session = (over: Partial<Session>): Session => ({
   tokens: 0,
   cost: 0,
   memory: 0,
+  subagents: 0,
   ...over,
 })
 
