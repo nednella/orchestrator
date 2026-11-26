@@ -54,12 +54,10 @@ bin/%.app: desktop $(AGENT_BROWSER)
 	codesign --force --sign "$(SIGN_IDENTITY)" $@/Contents/Helpers/agent-browser
 	codesign --force --sign "$(SIGN_IDENTITY)" $@
 
-# The app and the command are one binary: the command is a link into the bundle.
 desktop-install: $(APP)
-	mkdir -p "$(HOME)/Applications" "$(HOME)/.local/bin"
+	mkdir -p "$(HOME)/Applications"
 	rm -rf "$(HOME)/Applications/agentos.app" && cp -R $(APP) "$(HOME)/Applications/"
-	ln -sfn "$(HOME)/Applications/agentos.app/Contents/MacOS/agentos" "$(HOME)/.local/bin/agentos"
-	@echo "installed $(HOME)/Applications/agentos.app; agentos is $(HOME)/.local/bin/agentos"
+	@echo "installed $(HOME)/Applications/agentos.app"
 
 RELEASE := bin/agentos-darwin-arm64.zip
 

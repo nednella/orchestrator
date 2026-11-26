@@ -7,8 +7,6 @@ ASSET="agentos-darwin-arm64.zip"
 DOWNLOAD="https://github.com/$REPO/releases/latest/download/$ASSET"
 APP_DIR="$HOME/Applications"
 APP="$APP_DIR/agentos.app"
-BIN_DIR="$HOME/.local/bin"
-LINK="$BIN_DIR/agentos"
 CHROME_APP="$APP_DIR/Google Chrome for Testing.app"
 CHROME_LATEST="https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE"
 CHROME_STORE="https://storage.googleapis.com/chrome-for-testing-public"
@@ -59,17 +57,8 @@ ditto -x -k "$TMP/$ASSET" "$TMP" || die "could not unpack $ASSET"
 mkdir -p "$APP_DIR"
 rm -rf "$APP"
 mv "$TMP/agentos.app" "$APP"
-VERSION=$("$APP/Contents/MacOS/agentos" version | awk '{print $NF}')
+VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist") || die "could not read the version of $APP"
 ok "installed agentos v$VERSION to $APP"
-
-mkdir -p "$BIN_DIR"
-ln -sfn "$APP/Contents/MacOS/agentos" "$LINK"
-ok "linked the agentos command to $LINK"
-
-case ":$PATH:" in
-    *":$BIN_DIR:"*) ;;
-    *) warn "$BIN_DIR is not on your PATH; add this to your shell profile: ${CYAN}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}" ;;
-esac
 
 install_chrome || warn "could not install Chrome for Testing to $APP_DIR; agents get no browser until you run this script again"
 
@@ -86,5 +75,5 @@ if pgrep -qf "$APP/Contents/MacOS/agentos"; then
 fi
 
 echo
-echo "  Run ${CYAN}agentos${RESET} to open it."
+echo "  Open ${CYAN}agentos${RESET} from $APP_DIR."
 echo
