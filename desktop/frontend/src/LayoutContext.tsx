@@ -251,6 +251,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   panelKeyRef.current = panelKey
   useEffect(() => onFocus((target) => updatePanel(panelKeyRef.current, (st) => panelOnFocus(st, target))), [onFocus])
 
+  // A centre page, Stats or News, opens in the chat column: the overlay goes, and the expanded panel gives the room back.
+  const showCentre = useCallback(() => {
+    moveOverlay('thread-opened')
+    updatePanel(panelKey, (st) => panelOnFocus(st, 'centre'))
+  }, [moveOverlay, panelKey])
+
   const showPanelView = useCallback(
     (view: PanelViewId, opts: { expanded?: boolean; thread?: string } = {}) => {
       setRightOpen(true)
@@ -364,19 +370,19 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       setSidebarOpen,
       showHome,
       toggleStats() {
+        if (!statsOpen) showCentre()
         setStatsOpen(!statsOpen)
         setDigestOpen(false)
-        if (!statsOpen) moveOverlay('thread-opened')
       },
       toggleDigest() {
+        if (!digestOpen) showCentre()
         setDigestOpen(!digestOpen)
         setStatsOpen(false)
-        if (!digestOpen) moveOverlay('thread-opened')
       },
       openDigest() {
+        showCentre()
         setDigestOpen(true)
         setStatsOpen(false)
-        moveOverlay('thread-opened')
       },
       closeCentre() {
         setStatsOpen(false)
@@ -387,7 +393,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, showCentre, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

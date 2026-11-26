@@ -35,12 +35,14 @@ export function stepTab(st: PanelState, delta: -1 | 1): PanelState {
   return { ...st, active: st.tabs[(at + delta + st.tabs.length) % st.tabs.length] }
 }
 
-// The focus targets in the chat column, which the expanded panel hides.
-const CHAT_COLUMN: FocusTarget[] = ['thread', 'composer', 'shell']
+// What the chat column holds, which the expanded panel hides: the focus targets in it, and the centre page, Stats or
+// News, that opens in the chat's place.
+type ChatColumnTarget = FocusTarget | 'centre'
+const CHAT_COLUMN: ChatColumnTarget[] = ['thread', 'composer', 'shell', 'centre']
 
-// panelOnFocus gives the chat column its room back when the focus moves into it: the expanded panel goes back to its
-// own size.
-export function panelOnFocus(st: PanelState, target: FocusTarget): PanelState {
+// panelOnFocus gives the chat column its room back when the focus moves into it or a centre page opens in it: the
+// expanded panel goes back to its own size.
+export function panelOnFocus(st: PanelState, target: ChatColumnTarget): PanelState {
   return st.expanded && CHAT_COLUMN.includes(target) ? { ...st, expanded: false } : st
 }
 

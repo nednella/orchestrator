@@ -62,9 +62,9 @@ test('the open sidebar sends the panel over the chat where the chat would get un
   }
 })
 
-test('a focus in the chat column gives it its room back', () => {
+test('a focus in the chat column, or Stats or News opening there, gives it its room back', () => {
   const expanded = state({ tabs: ['issues'], active: 'issues', expanded: true })
-  for (const target of ['thread', 'composer', 'shell'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
+  for (const target of ['thread', 'composer', 'shell', 'centre'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
   for (const target of ['right', 'sidebar', 'thread-search', 'queue-filter'] as const) assert.equal(panelOnFocus(expanded, target), expanded, target)
   const restored = state({ tabs: ['issues'], active: 'issues' })
   assert.equal(panelOnFocus(restored, 'thread'), restored, 'a panel at its own size stays as it is')
