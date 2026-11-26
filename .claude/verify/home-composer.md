@@ -2,7 +2,7 @@
 
 ## What exists
 
-One composer at the bottom of a project's Home, after T3 Code's: a rounded box with the text, and a footer with the mode switch **Thread · Note** at the left and a round send button at the right. In Thread mode the footer also has the access chip (Read starts a chat, Write starts a task), the model and effort chip, and `#`, which opens the issue picker in a drawer attached above the box. A picked issue shows as a chip above the text; an issue that already has a thread shows a line above the box, and the send button says "Open thread". In Note mode the send button says "Add note", the text is filed as a note, and pasted or dropped images go with it. Each project keeps its own draft and mode, also when the user leaves Home and comes back.
+One composer at the bottom of a project's Home: a rounded box with the text, and a footer with the mode switch **Thread · Note** at the left and a round send button at the right. In Thread mode the footer also has the access chip (Read starts a chat, Write starts a task), the model and effort chip, and `#`, which opens the issue picker in a drawer attached above the box. A picked issue shows as a chip above the text; an issue that already has a thread shows a line above the box, and the send button says "Open thread". In Note mode the send button says "Add note", the text is filed as a note, and pasted or dropped images go with it. Each project keeps its own draft and mode, also when the user leaves Home and comes back.
 
 ## How a user reaches it
 
