@@ -471,8 +471,7 @@ func TestAModeClaudeReportsDoesNotChangeTheAccessOfAFullOrSupervisedThread(t *te
 				t.Fatal(err)
 			}
 			eventually(t, "the mode in the log", modeLogged(h, s.ID, "default"))
-			eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-			time.Sleep(300 * time.Millisecond) // the follower takes the turn's end after the mode
+			eventually(t, "the turn's end in a chat event, which the follower sends after it took in the mode", func() bool { return sawTurnEnd(h, s.ID) })
 			if row, _ := h.Session(s.ID); row.Access != access || accessTag(t, h, s.ID) != string(access) {
 				t.Errorf("row = %+v, tagged %q, want %s", row, accessTag(t, h, s.ID), access)
 			}
@@ -545,6 +544,17 @@ func diedMidRun(t *testing.T, h *apptest.Harness, id string, events ...chatlog.E
 	}
 }
 
+// sawTurnEnd says whether the thread's follower has sent a turn's end in a chat event. It takes the events of the log in
+// order, so it has taken in each one before the turn's end by then.
+func sawTurnEnd(h *apptest.Harness, id string) bool {
+	for _, p := range h.Rec.All("chat:" + id) {
+		if slices.ContainsFunc(p.(chat.Update).Events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindTurnEnd }) {
+			return true
+		}
+	}
+	return false
+}
+
 // followedATurn waits until the thread's follower has handed on a turn, which it does only after its replay of the log.
 func followedATurn(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
@@ -554,14 +564,7 @@ func followedATurn(t *testing.T, h *apptest.Harness, id string) {
 	if _, err := h.ChatSend(id, "hi"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "a turn's end in a chat event", func() bool {
-		for _, p := range h.Rec.All("chat:" + id) {
-			if slices.ContainsFunc(p.(chat.Update).Events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindTurnEnd }) {
-				return true
-			}
-		}
-		return false
-	})
+	eventually(t, "a turn's end in a chat event", func() bool { return sawTurnEnd(h, id) })
 }
 
 func TestAModeOfAKilledRunIsNotFollowedAfterAWake(t *testing.T) {
