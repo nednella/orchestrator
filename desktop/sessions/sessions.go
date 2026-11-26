@@ -154,6 +154,7 @@ type Sessions struct {
 	shells     []term.Shell             // every project's shell sessions
 	sentShells map[string][]Shell       // by project key, the shells last sent
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
+	afterList  func()                   // see AfterList
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until deleted
 	nums       map[string]int           // the number each session shows: its state file's
 	lastNum    map[string]int           // the highest number given or recorded in each project
@@ -347,7 +348,11 @@ func (s *Sessions) Refresh() {
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(parent, tmuxTimeout)
 	defer cancel()
+	listing := time.Now()
 	infos, shells, err := s.tmux.ListAll(ctx)
+	if s.afterList != nil {
+		s.afterList()
+	}
 	if err != nil {
 		if parent.Err() == nil {
 			s.warn.Report("tmux", util.FirstLine(err.Error()))
@@ -366,6 +371,11 @@ func (s *Sessions) Refresh() {
 	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A settle that ran while tmux was listed took its thread out of the list's world: the list still has it live.
+	infos = slices.DeleteFunc(infos, func(in term.Info) bool {
+		e := s.ended[in.Name.String()]
+		return e != nil && e.at.After(listing)
+	})
 	s.info = infos
 	s.shells = shells
 	s.announceShells()
@@ -4262,6 +4272,9 @@ func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
 	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live, Deleting: s.deleting[name.String()]}
 }
+
+// AfterList sets what Refresh runs once it has listed tmux and before it applies the list; a test settles a thread there.
+func (s *Sessions) AfterList(f func()) { s.afterList = f }
 
 // SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default; 0 or less turns the
 // sweep off. It comes before Run.

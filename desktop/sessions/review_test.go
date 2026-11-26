@@ -130,6 +130,30 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 	}
 }
 
+func TestRefreshDoesNotReviveAThreadSettledWhileTmuxWasListed(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.NewSession("settles", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	h.Sessions().AfterList(func() {
+		once.Do(func() {
+			if err := h.SettleThread(s.ID); err != nil {
+				t.Error(err)
+			}
+		})
+	})
+	h.Sessions().Refresh()
+	if got := stateOf(h, s.ID); got != "settled" {
+		t.Errorf("the thread is %s after a refresh whose list was read before its settle, want settled", got)
+	}
+	h.Sessions().Refresh()
+	if got := stateOf(h, s.ID); got != "settled" {
+		t.Errorf("the thread is %s at the next refresh, want settled", got)
+	}
+}
+
 func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
