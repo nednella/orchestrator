@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { GitBranch } from 'lucide-react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
@@ -29,6 +29,7 @@ const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey &
 
 function ThreadRowView({ session, needs, selected, cursor, menuRequest }: ThreadRowProps) {
   const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'deleteThread', 'report')
+  const latest = useLatestAgentos()
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -70,7 +71,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
     }
   }, [cursor, showCard, closeCard])
 
-  const askDelete = () => a.report(() => confirmDelete(session, a.deleteThread))
+  const askDelete = () => a.report(() => confirmDelete(session, () => latest().sessions, a.deleteThread))
   const line2 = settled || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   return (

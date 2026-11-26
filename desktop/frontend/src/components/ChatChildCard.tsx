@@ -2,7 +2,7 @@ import { Folder, GitBranch } from 'lucide-react'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { ACCESS_HINT, ACCESS_LABEL } from '../access'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { childFacts } from '../childCards'
 import type { ChildFacts } from '../childCards'
@@ -29,6 +29,7 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
   const parentProject = useAgentosSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
   const facts = childFacts(child, title)
   const projectName = useAgentosSelector((s) => s.projects.find((p) => p.key === facts.project)?.name ?? facts.project)
+  const latest = useLatestAgentos()
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const card = useRef<HTMLDivElement>(null)
   const working = facts.state === 'working' || facts.state === 'waiting'
@@ -88,7 +89,7 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
             working && { label: 'Stop', run: () => a.report(() => api.chatInterrupt(child.id)) },
             asleep && child.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
             !asleep && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
-            { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => a.report(() => confirmDelete(child, a.deleteThread)) },
+            { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => a.report(() => confirmDelete(child, () => latest().sessions, a.deleteThread)) },
           ]}
         />
       )}
