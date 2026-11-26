@@ -176,6 +176,7 @@ type Sessions struct {
 	wakes      map[string][]heldPrompt // what waits for each thread to take it, oldest first: its PR's commands, each once, and the messages threads told it
 	afterTurn  map[string][]func()     // what waits for a session's turn to end or the session to go, oldest first: the settle after its PR merged or closed
 	slept      func(id string)         // hears of each thread that stopped running or was found asleep; OnSlept sets it before Run
+	onDelete   func(id string)         // hears of each thread deleted; OnDelete sets it before Run
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -289,6 +290,7 @@ func newSessions(o Options) *Sessions {
 		idling:     map[string]bool{},
 		afterTurn:  map[string][]func(){},
 		slept:      func(string) {},
+		onDelete:   func(string) {},
 		readers:    map[string]*reader{},
 		spent:      map[string]usage.Tokens{},
 		held:       map[string]int64{},
@@ -860,6 +862,7 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 	if err := s.dropThread(name); err != nil {
 		return live, err
 	}
+	s.onDelete(id)
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
@@ -987,6 +990,9 @@ func (s *Sessions) settleToDelete(name session.Name) error {
 // logged Claude's exit or hostWait has passed, and of each one the app finds asleep, as it starts. fn runs on a
 // goroutine of its own. It comes before Run.
 func (s *Sessions) OnSlept(fn func(id string)) { s.slept = fn }
+
+// OnDelete has fn hear of each thread once it is deleted. It comes before Run.
+func (s *Sessions) OnDelete(fn func(id string)) { s.onDelete = fn }
 
 // heardSleep tells the thread's stop to the function OnSlept set, once the thread's host is gone.
 func (s *Sessions) heardSleep(id string) {

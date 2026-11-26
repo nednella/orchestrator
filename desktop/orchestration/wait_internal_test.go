@@ -3,6 +3,7 @@ package orchestration
 import (
 	"bufio"
 	"encoding/json"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -157,6 +158,28 @@ func TestOutcomeTextSaysWhoPutTheChildToSleep(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := outcomeText(tc.t, tc.asleep); got != tc.want {
 				t.Errorf("outcomeText = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestThreadDeletedForgetsItsResults(t *testing.T) {
+	const parent, child, other = "main/parentaa", "main/childaaa", "main/otheraaa"
+	for _, tc := range []struct {
+		name    string
+		deleted string
+		want    []waitOn
+	}{
+		{"the child", child, []waitOn{{parent, other}}},
+		{"the parent", parent, []waitOn{{child, other}}},
+		{"a thread with no results", "main/nobodyaa", []waitOn{{child, other}, {parent, child}, {parent, other}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Commands{given: map[waitOn]givenBy{{parent, child}: {end: 4}, {parent, other}: {end: 7, byWait: true}, {child, other}: {end: 2}}}
+			c.ThreadDeleted(tc.deleted)
+			got := slices.SortedFunc(maps.Keys(c.given), func(a, b waitOn) int { return strings.Compare(a.waiter+a.thread, b.waiter+b.thread) })
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("given has %v, want %v", got, tc.want)
 			}
 		})
 	}

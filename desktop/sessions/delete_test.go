@@ -122,6 +122,38 @@ func TestDeleteRemovesTheThreadAndItsChat(t *testing.T) {
 	}
 }
 
+func TestDeleteIsHeard(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		child bool // the thread has a running child, which refuses its delete
+		want  int
+	}{
+		{"a delete", false, 1},
+		{"a refused delete", true, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := apptest.New(t)
+			s, err := h.NewThread("ask", "", "", "", "read")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.child {
+				if _, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: s.ID, Task: "keep working", Title: "Helper", Access: s.Access, Where: sessions.WhereFolder}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var heard []string
+			h.Sessions().OnDelete(func(id string) { heard = append(heard, id) })
+			if err := h.DeleteThread(s.ID, false); (err != nil) != tt.child {
+				t.Fatalf("DeleteThread = %v, want refused %v", err, tt.child)
+			}
+			if len(heard) != tt.want || tt.want > 0 && heard[0] != s.ID {
+				t.Errorf("heard %q, want %d deletes of %s", heard, tt.want, s.ID)
+			}
+		})
+	}
+}
+
 func TestDeleteSurvivesARestart(t *testing.T) {
 	h := apptest.New(t)
 	s := talked(t, h)
