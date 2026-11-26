@@ -280,9 +280,6 @@ func (a *App) Notes() *notes.Notes { return a.notes }
 // Browsers are the hidden browsers, for tests.
 func (a *App) Browsers() *browser.Browsers { return a.browsers }
 
-// Orchestration is the orchestrator tools, for tests.
-func (a *App) Orchestration() *orchestration.Commands { return a.tools }
-
 // SetConfigTick sets how often the config file is read again, 2 seconds by default. It comes before Start.
 func (a *App) SetConfigTick(every time.Duration) { a.configTick = every }
 

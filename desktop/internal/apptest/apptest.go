@@ -731,7 +731,7 @@ func (h *Harness) shortenWaits() {
 		h.App.Sessions().SetStopSettle(h.opts.StopSettle)
 	}
 	if h.opts.RetryFirst != 0 {
-		h.App.Orchestration().SetRetryFirst(h.opts.RetryFirst)
+		h.App.Tools().SetRetryFirst(h.opts.RetryFirst)
 	}
 	if h.opts.ConfigTick != 0 {
 		h.App.SetConfigTick(h.opts.ConfigTick)
