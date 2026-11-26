@@ -4,14 +4,12 @@ import { GitBranch } from 'lucide-react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
+import { confirmDelete } from '../confirm'
 import { currentTask } from '../threads'
 import type { Session } from '../types'
-import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
 import { ClaudeMark } from './ClaudeMark'
-import { CleanupControls } from './CleanupControls'
 import { CleanupMark } from './CleanupMark'
-import { DeleteConfirm } from './DeleteConfirm'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
@@ -30,7 +28,7 @@ type ThreadRowProps = { session: Session; needs: Session | undefined; selected: 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, needs, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'report')
+  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'deleteThread', 'report')
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
@@ -39,8 +37,6 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
   const open = useAgentosSelector((s) => s.selectedId === session.id)
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
-  const cleanup = useArmedConfirm()
-  const remove = useArmedConfirm()
   const card = useHoverCard(400)
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
@@ -74,6 +70,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
     }
   }, [cursor, showCard, closeCard])
 
+  const askDelete = () => a.report(() => confirmDelete(session, a.deleteThread))
   const line2 = settled || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
 
   return (
@@ -168,7 +165,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
                     Wake
                   </button>
                 )}
-                <button className="btn h-[1.375rem] px-2 text-label" title="Remove this thread and its chat" onClick={() => remove.arm()}>
+                <button className="btn h-[1.375rem] px-2 text-label" title="Remove this thread and its chat" onClick={askDelete}>
                   Delete
                 </button>
               </span>
@@ -188,16 +185,6 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
           </div>
         )}
       </div>
-      {cleanup.armed && (
-        <div className="flex w-full pr-3 pb-2 pl-9">
-          <CleanupControls session={session} remove={cleanup} />
-        </div>
-      )}
-      {remove.armed && (
-        <div className="flex w-full pr-3 pb-2 pl-9">
-          <DeleteConfirm session={session} onClose={remove.disarm} />
-        </div>
-      )}
       {menuAt && (
         <ThreadMenu
           session={session}
@@ -205,8 +192,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
           at={menuAt}
           onClose={() => setMenuAt(null)}
           onRename={() => setRenaming(true)}
-          onCleanup={() => cleanup.arm()}
-          onDelete={() => remove.arm()}
+          onDelete={askDelete}
         />
       )}
       {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}

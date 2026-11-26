@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react'
+import { api } from './api'
 import { check, current, enqueue, settle } from './confirmQueue'
 import type { ConfirmQueue, ConfirmRequest } from './confirmQueue'
+import { deleteRequest } from './deleteThread'
+import type { DeletePlan, Session } from './types'
 
 export type ConfirmAnswer = { ok: boolean; checked: boolean }
 
@@ -67,4 +70,11 @@ export function useConfirming(): boolean {
 export async function confirmed(r: Omit<ConfirmRequest, 'id'>, run: (checked: boolean) => unknown): Promise<void> {
   const { ok, checked } = await askConfirm(r)
   if (ok) await run(checked)
+}
+
+// confirmDelete asks before the thread goes, with what goes with it, and deletes it on yes. When the app cannot say
+// what goes with it, the confirm offers no worktree.
+export async function confirmDelete(session: Session, remove: (id: string, worktree: boolean) => Promise<void>): Promise<void> {
+  const plan = await api.deletePlan(session.id).catch((): DeletePlan => ({ worktrees: 0, children: [] }))
+  await confirmed(deleteRequest(session, plan), (worktree) => remove(session.id, worktree))
 }

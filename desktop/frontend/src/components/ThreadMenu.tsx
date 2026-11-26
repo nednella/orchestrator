@@ -1,19 +1,19 @@
 import { sessionActions } from '../actions/sessions'
 import { useAgentos } from '../AgentosContext'
-import { cleanupNowShown } from '../cleanupConfirm'
+import { cleanupForced, cleanupNowShown, cleanupRequest } from '../cleanupConfirm'
+import { confirmed } from '../confirm'
 import { useLayout } from '../LayoutContext'
 import type { Session } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
 
-// The row keeps what the menu starts in it: the rename field, the clean-up confirm and the delete confirm.
+// The row keeps the rename field the menu starts in it, and its delete, which its own Delete button asks for too.
 type ThreadMenuProps = {
   session: Session
   selected: boolean
   at: Point
   onClose(): void
   onRename(): void
-  onCleanup(): void
   onDelete(): void
 }
 
@@ -22,7 +22,7 @@ const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '',
 // A sleep stops the subagents with Claude.
 const subagentsWorking = (n: number) => (n === 0 ? undefined : `${n} ${n === 1 ? 'subagent is' : 'subagents are'} still working`)
 
-export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup, onDelete }: ThreadMenuProps) {
+export function ThreadMenu({ session, selected, at, onClose, onRename, onDelete }: ThreadMenuProps) {
   const a = useAgentos()
   const layout = useLayout()
   const { rightOpen, showPanel, toggleRight } = layout
@@ -35,6 +35,8 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
     if (!selected) a.select(session.id)
     showPanel('details')
   }
+
+  const cleanUp = () => confirmed(cleanupRequest(session), () => a.cleanupSession(session.id, cleanupForced(session.cleanup)))
 
   const copyBranch = async () => {
     await navigator.clipboard.writeText(session.branch)
@@ -51,7 +53,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onCleanup
         session.pr !== null && { label: `Open PR #${session.pr.number}`, run: () => a.report(() => a.openPR(session)) },
         session.branch !== '' && { label: 'Copy branch', run: () => a.report(copyBranch) },
         cleanupNowShown(session) && { label: 'Clean up now', run: () => a.report(() => a.cleanupSession(session.id, false)) },
-        CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: onCleanup },
+        CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: () => a.report(cleanUp) },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run([])) },
         settled && session.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },

@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import { useAgentos, useLatestAgentos } from '../AgentosContext'
-import { api } from '../api'
+import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
-import { editBlocked } from '../chatEdit'
+import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
+import { relative } from '../chatTools'
+import { askConfirm } from '../confirm'
 import { fromMarkdown } from '../composerMarkdown'
 import { readStored, writeStored } from '../storage'
-import type { Session } from '../types'
+import type { FilesRewind, Session } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
 import { ChatChildApprovals } from './ChatChildApprovals'
 import { ChatColumnHandle } from './ChatColumnHandle'
-import { ChatEditConfirm } from './ChatEditConfirm'
 import { ChatEndPill } from './ChatEndPill'
 import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
@@ -30,6 +31,8 @@ const stopWait = 10_000
 const insetGap = { narrow: 12, wide: 16, from: 640 }
 
 type ChatViewProps = { session: Session }
+
+const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
 export function ChatView({ session }: ChatViewProps) {
   const { project, report, forkSession } = useAgentos('project', 'report', 'forkSession')
@@ -115,39 +118,46 @@ export function ChatView({ session }: ChatViewProps) {
     [session.id, report, forkSession],
   )
 
-  // The message whose Edit from here confirm is open, by its uuid, and why Edit is off for the app's run.
-  const [editing, setEditing] = useState<string | null>(null)
+  // Why Edit from here is off for the app's run, read again after each edit.
   const [rewindOff, setRewindOff] = useState('')
   const readRewindOff = useCallback(() => {
     api.rewindOff().then(setRewindOff, () => undefined)
   }, [])
   useEffect(readRewindOff, [readRewindOff])
-  const closeEdit = useCallback(() => {
-    setEditing(null)
-    readRewindOff()
-  }, [readRewindOff])
+  // The latest items, read when an edit is asked for, so the rows keep one onOpen while the chat streams.
+  const items = useRef(timeline.items)
+  items.current = timeline.items
+  const editing = useRef(false)
+  const { id: thread, worktree } = session
+  // Edit from here asks first, and with the files box ticked shows the dry run's files and asks again. The message's
+  // text then goes in the composer, after a blank line when it holds a draft.
+  const editFrom = useCallback(
+    (uuid: string) => {
+      if (editing.current) return
+      editing.current = true
+      report(async () => {
+        try {
+          const offer = worktree ? await api.rewindFilesOffer(thread).catch((err): FilesRewind => ({ ...noFiles, offered: true, reason: errorMessage(err) })) : null
+          const asked = await askConfirm(editRequest(laterMessages(items.current, uuid), offer))
+          if (!asked.ok) return
+          let files = false
+          if (asked.checked) {
+            const preview = await api.rewindPreview(thread, uuid)
+            if (preview.reason) throw preview.reason
+            files = preview.files.length > 0
+            if (files && !(await askConfirm(undoRequest(preview, preview.files.map((f) => relative(f, worktree))))).ok) return
+          }
+          draft.current?.append(await api.rewindTo(thread, uuid, files))
+        } finally {
+          editing.current = false
+          readRewindOff()
+        }
+      })
+    },
+    [thread, worktree, report, readRewindOff],
+  )
   const folder = session.worktree || project?.dir || ''
-  const edit: ChatEdit | undefined = session.hosted
-    ? {
-        blocked: (uuid) => editBlocked(uuid, rewindOff, timeline),
-        open: editing,
-        onOpen: setEditing,
-        confirm: (uuid) => (
-          <ChatEditConfirm
-            thread={session.id}
-            message={uuid}
-            worktree={session.worktree}
-            draftEmpty={() => draft.current?.empty() ?? true}
-            onRewound={(text, prefill) => {
-              setEditing(null)
-              if (prefill === 'replace') draft.current?.replace(text)
-              else draft.current?.append(text)
-            }}
-            onClose={closeEdit}
-          />
-        ),
-      }
-    : undefined
+  const edit: ChatEdit | undefined = session.hosted ? { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom } : undefined
 
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))

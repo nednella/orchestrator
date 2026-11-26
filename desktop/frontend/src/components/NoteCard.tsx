@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { confirmed } from '../confirm'
 import { imageFiles, readImage } from '../images'
-import { useArmedConfirm } from '../useArmedConfirm'
 import type { Note } from '../types'
 import { Ago } from './Ago'
 import { AutoTextarea } from './AutoTextarea'
-import { ConfirmRow } from './ConfirmRow'
 import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
 import { NoteText } from './NoteText'
@@ -19,14 +18,11 @@ type NoteCardProps = {
   onOpenImage(url: string): void
 }
 
-type Confirm = 'file' | 'delete'
-
 const FOLD_LINES = 10
 const AUTOSAVE_MS = 700
 
 export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenImage }: NoteCardProps) {
   const a = useAgentos('report', 'updateNote', 'setNotePinned', 'setNoteArchived', 'addNoteImage', 'removeNoteImage', 'deleteNote', 'noteToIssue', 'noteToSession')
-  const confirm = useArmedConfirm<Confirm>()
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -41,6 +37,15 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
     const el = body.current
     if (el && !expanded) setOverflowing(el.scrollHeight > el.clientHeight + 1)
   }, [note.text, expanded, editing])
+
+  const fileIssue = () =>
+    a.report(() =>
+      confirmed(
+        { title: 'File this note as an issue?', body: [`It becomes the issue “${title}”${note.images.length > 0 ? ', with its pictures' : ''}. The note is deleted afterwards.`], confirm: 'File issue', tone: 'primary' },
+        () => a.noteToIssue(note.id),
+      ),
+    )
+  const remove = () => a.report(() => confirmed({ title: 'Delete this note?', confirm: 'Delete', tone: 'danger' }, () => a.deleteNote(note.id)))
 
   const save = (text: string) => {
     if ((text.trim() || note.images.length > 0) && text.trim() !== note.text) a.report(() => a.updateNote(note.id, text))
@@ -152,7 +157,7 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
             Start thread
           </button>
           {canFile && (
-            <button className="btn h-6 px-2" title="File the note as an issue" onClick={() => confirm.arm('file')}>
+            <button className="btn h-6 px-2" title="File the note as an issue" onClick={fileIssue}>
               File as issue
             </button>
           )}
@@ -164,7 +169,7 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           >
             <Icon name="archive" size={13} />
           </button>
-          <button className={iconButton} title="Delete" aria-label="Delete note" onClick={() => confirm.arm('delete')}>
+          <button className={iconButton} title="Delete" aria-label="Delete note" onClick={remove}>
             <Icon name="trash" size={13} />
           </button>
         </span>
@@ -181,33 +186,6 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           </button>
         )}
       </div>
-      {confirm.armed === 'file' && (
-        <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: 'var(--border-note)' }}>
-          <ConfirmRow
-            message={`File as issue “${title}”${note.images.length > 0 ? ' with its pictures' : ''}? The note is deleted afterwards.`}
-            confirmLabel="File"
-            onCancel={confirm.disarm}
-            onConfirm={() => {
-              confirm.disarm()
-              a.report(() => a.noteToIssue(note.id))
-            }}
-          />
-        </div>
-      )}
-      {confirm.armed === 'delete' && (
-        <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: 'var(--border-note)' }}>
-          <ConfirmRow
-            danger
-            message="Delete this note?"
-            confirmLabel="Delete"
-            onCancel={confirm.disarm}
-            onConfirm={() => {
-              confirm.disarm()
-              a.report(() => a.deleteNote(note.id))
-            }}
-          />
-        </div>
-      )}
     </article>
   )
 }

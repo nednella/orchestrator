@@ -435,6 +435,7 @@ export function createMock(params: URLSearchParams) {
     return {
       settled: s.state === 'settled',
       worktree: s.worktree,
+      filesReason: () => filesReason(s),
       setState: (state) => setState(s, state),
       wake: () => wake(s),
       followMode: (mode) => followMode(s, mode),
@@ -813,6 +814,14 @@ export function createMock(params: URLSearchParams) {
   // child in its folder. The threads of a delete's family do not count.
   const worktreeUser = (s: Session, family: Session[]) =>
     sessions.find((x) => x.id !== s.id && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+
+  // filesReason says why Edit from here cannot put the thread's files back, as the sessions do: a fork works in a
+  // worktree agentos did not make for it, and another thread may work in the thread's own.
+  const filesReason = (s: Session) => {
+    if (s.forkOf) return 'Files are rewound only in a worktree agentos made for this thread'
+    const user = worktreeUser(s, [])
+    return user ? `Thread ${user.title} also works in this worktree` : ''
+  }
 
   // descendants are the thread's children, their children and so on, nearest first.
   const descendants = (id: string): Session[] => {

@@ -5,7 +5,7 @@ type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 // What the mock knows of a thread: whether it has settled, its worktree, '' for a thread in the project folder, a way
 // to move its row's state as hooks would, a way to wake it when it has settled, and ways to follow the permission mode
 // its Claude reports and the subagents it runs in the background, as the sessions do.
-export type MockThread = { settled: boolean; worktree: string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
+export type MockThread = { settled: boolean; worktree: string; filesReason(): string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -649,14 +649,20 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       thread(id)
       return rankFiles(files, query)
     },
-    RewindFilesOffer: async (id: string): Promise<FilesRewind> => ({ offered: thread(id).worktree !== '', reason: '', files: [], insertions: 0, deletions: 0 }),
+    RewindFilesOffer: async (id: string): Promise<FilesRewind> => {
+      const t = thread(id)
+      return { offered: t.worktree !== '', reason: t.worktree ? t.filesReason() : '', files: [], insertions: 0, deletions: 0 }
+    },
     RewindPreview: async (id: string, message: string): Promise<FilesRewind> => {
-      if (!thread(id).worktree) return { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
+      const t = thread(id)
+      if (!t.worktree) return { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
+      if (t.filesReason()) return { offered: true, reason: t.filesReason(), files: [], insertions: 0, deletions: 0 }
       rewindable(id, message)
       return { offered: true, reason: '', ...editedSince(id, message) }
     },
     RewindTo: async (id: string, message: string, files: boolean) => {
       if (files && !thread(id).worktree) throw 'The files of the project folder are never rewound'
+      if (files && thread(id).filesReason()) throw thread(id).filesReason()
       awake(id)
       rewindable(id, message)
       append(id, { kind: 'rewind', id: message })

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
-import { useArmedConfirm } from '../useArmedConfirm'
+import { confirmed } from '../confirm'
 import type { Evidence } from '../types'
 import { Ago } from './Ago'
-import { ConfirmRow } from './ConfirmRow'
 import { Icon } from './Icon'
 import { FIT, ZOOM_STEP, ZoomableImage, zoomTo, type ImageView } from './ZoomableImage'
+
+const DELETE_EVIDENCE = { title: 'Delete this evidence?', confirm: 'Delete', tone: 'danger' } as const
 
 type EvidenceViewerProps = {
   sessionId: string
@@ -19,7 +20,6 @@ export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceV
   const { report } = useAgentos('report')
   const root = useRef<HTMLDivElement>(null)
   const [id, setId] = useState(startId)
-  const confirm = useArmedConfirm()
   const [copied, setCopied] = useState(false)
   const [view, setView] = useState<ImageView>(FIT)
   const at = items.findIndex((i) => i.id === id)
@@ -34,17 +34,15 @@ export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceV
   if (!item) return null
 
   const step = (delta: number) => {
-    confirm.disarm()
     setView(FIT)
     setId(items[(at + delta + items.length) % items.length].id)
   }
 
   const remove = () => {
     const next = items[at + 1] ?? items[at - 1]
-    confirm.disarm()
     setView(FIT)
     if (next) setId(next.id)
-    report(() => api.deleteEvidence(sessionId, item.id))
+    return api.deleteEvidence(sessionId, item.id)
   }
 
   return (
@@ -98,13 +96,9 @@ export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceV
           >
             {copied ? 'Copied' : 'Copy path/URL'}
           </button>
-          {confirm.armed ? (
-            <ConfirmRow inline danger message="Delete this item?" confirmLabel="Delete" cancelLabel="No" onCancel={confirm.disarm} onConfirm={remove} />
-          ) : (
-            <button className="btn btn-ghost" onClick={() => confirm.arm()}>
-              <Icon name="trash" /> Delete
-            </button>
-          )}
+          <button className="btn btn-ghost" onClick={() => report(() => confirmed(DELETE_EVIDENCE, remove))}>
+            <Icon name="trash" /> Delete
+          </button>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close">
             <Icon name="close" /> Close
           </button>

@@ -1,3 +1,4 @@
+import type { ConfirmRequest } from './confirmQueue'
 import type { Session } from './types'
 
 type CleanupTarget = Pick<Session, 'cleanup' | 'cleanupReason' | 'worktree' | 'branch'>
@@ -26,14 +27,15 @@ function tail(path: string): string {
   return path.split('/').slice(-2).join('/')
 }
 
-// cleanupConfirmText is the question the confirm asks: what goes, and for a forced clean-up why it was kept, which is
-// what forcing loses. The branch always stays.
-export function cleanupConfirmText({ cleanup, cleanupReason, worktree, branch }: CleanupTarget): string {
-  const stays = branch ? ` The branch ${branch} stays.` : ''
+// cleanupRequest is the confirm of a clean-up: what goes, and for a forced clean-up why it was kept, which is what
+// forcing loses. The branch always stays.
+export function cleanupRequest({ cleanup, cleanupReason, worktree, branch }: CleanupTarget): Omit<ConfirmRequest, 'id'> {
+  const stays = branch ? `The branch ${branch} stays.` : ''
   if (cleanupForced(cleanup)) {
-    const what = worktree ? `Remove the worktree ${tail(worktree)} anyway?` : 'Clean up anyway?'
-    return `${what} It was kept: ${cleanupReason}. What only it holds is lost.${stays}`
+    const title = worktree ? `Remove the worktree ${tail(worktree)} anyway?` : 'Clean up anyway?'
+    return { title, body: [[`It was kept: ${cleanupReason}. What only it holds is lost.`, stays].filter(Boolean).join(' ')], confirm: 'Remove', tone: 'danger' }
   }
   const what = worktree ? `the worktree ${tail(worktree)} and the thread's temp files` : "the thread's temp files"
-  return `Remove ${what}?${stays}${worktree ? ' A worktree that still holds work is kept.' : ''}`
+  const body = [stays, worktree ? 'A worktree that still holds work is kept.' : ''].filter(Boolean).join(' ')
+  return { title: `Remove ${what}?`, ...(body ? { body: [body] } : {}), confirm: 'Remove', tone: 'danger' }
 }

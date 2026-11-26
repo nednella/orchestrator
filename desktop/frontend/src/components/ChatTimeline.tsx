@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode, Ref } from 'react'
+import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
@@ -24,10 +24,9 @@ import { ImageViewer } from './ImageViewer'
 
 export type ChatTimelineEnd = { scrollToEnd(): void }
 
-// ChatEdit is Edit from here on the owner's messages: why it is off for the message with a uuid, '' when it is on, the
-// uuid of the message whose confirm is open, a way to open it, which stays the same from render to render so that the
-// rows stay memoised, and the confirm itself.
-export type ChatEdit = { blocked(uuid: string): string; open: string | null; onOpen(uuid: string): void; confirm(uuid: string): ReactNode }
+// ChatEdit is Edit from here on the owner's messages: why it is off for the message with a uuid, '' when it is on, and
+// a way to ask for it, which stays the same from render to render so that the rows stay memoised.
+export type ChatEdit = { blocked(uuid: string): string; onOpen(uuid: string): void }
 
 // inset is the height at the bottom that the composer covers, which the last row scrolls clear of. onFollowing says
 // whether the chat follows its end, as the reader scrolls away from it and back.
@@ -49,8 +48,8 @@ type ChatTimelineProps = {
 function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void, edit?: ChatEdit) {
   const item = items[index]
   switch (item.kind) {
-    case 'user': {
-      const row = (
+    case 'user':
+      return (
         <ChatUserRow
           thread={thread}
           id={item.id}
@@ -67,14 +66,6 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
           onOpenImage={onOpenImage}
         />
       )
-      if (!edit || edit.open === null || edit.open !== item.uuid) return row
-      return (
-        <>
-          {row}
-          {edit.confirm(item.uuid)}
-        </>
-      )
-    }
     case 'reply': {
       const next = items[index + 1]
       return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && next.endedAt === null} onReply={onReply} onFork={onFork} />

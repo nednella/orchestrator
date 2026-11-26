@@ -6,12 +6,11 @@ import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
 import { childFacts } from '../childCards'
 import type { ChildFacts } from '../childCards'
+import { confirmDelete } from '../confirm'
 import { STATE_LABEL } from '../stateMeta'
-import { useArmedConfirm } from '../useArmedConfirm'
 import type { Point } from '../useFloatingAt'
 import { ChatMarkdown } from './ChatMarkdown'
 import { ContextMenu } from './ContextMenu'
-import { DeleteConfirm } from './DeleteConfirm'
 import { StateDot } from './StateDot'
 
 // id is the child's thread, '' while the call that starts it runs; title is what the call named it, for a child the
@@ -25,13 +24,12 @@ const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey &
 // is the button that does it from the keyboard, so nothing interactive nests in another. Its actions are in its
 // right-click menu.
 export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: ChatChildCardProps) {
-  const a = useAgentos('select', 'settleThread', 'wakeThread', 'report')
+  const a = useAgentos('select', 'settleThread', 'wakeThread', 'deleteThread', 'report')
   const child = useAgentosSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
   const parentProject = useAgentosSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
   const facts = childFacts(child, title)
   const projectName = useAgentosSelector((s) => s.projects.find((p) => p.key === facts.project)?.name ?? facts.project)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
-  const remove = useArmedConfirm()
   const card = useRef<HTMLDivElement>(null)
   const working = facts.state === 'working' || facts.state === 'waiting'
   const asleep = facts.state === 'settled'
@@ -80,7 +78,6 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
         )}
         {result && <ChildResult text={result} />}
       </div>
-      {remove.armed && child && <DeleteConfirm session={child} onClose={remove.disarm} />}
       {menuAt && child && (
         <ContextMenu
           label={`Actions for ${facts.title}`}
@@ -91,7 +88,7 @@ export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: 
             working && { label: 'Stop', run: () => a.report(() => api.chatInterrupt(child.id)) },
             asleep && child.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
             !asleep && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
-            { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => remove.arm() },
+            { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => a.report(() => confirmDelete(child, a.deleteThread)) },
           ]}
         />
       )}
