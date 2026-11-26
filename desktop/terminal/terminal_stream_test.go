@@ -44,7 +44,6 @@ func TestOpenRefusesAThreadID(t *testing.T) {
 	if err := h.TermOpen(s.ID, 80, 24); err == nil || err.Error() != "Only a shell has a terminal" {
 		t.Errorf("open = %v, want %q", err, "Only a shell has a terminal")
 	}
-	time.Sleep(300 * time.Millisecond)
 	if out, err := exec.Command("tmux", "-L", h.Socket, "list-clients").Output(); err != nil || len(out) != 0 {
 		t.Errorf("tmux clients = %q (%v), want none", out, err)
 	}

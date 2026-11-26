@@ -9,10 +9,7 @@ import (
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 
-var (
-	eventually = apptest.Eventually
-	exists     = apptest.Exists
-)
+var eventually = apptest.Eventually
 
 func newHarness(t *testing.T) *apptest.Harness { return apptest.New(t) }
 

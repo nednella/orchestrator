@@ -334,7 +334,7 @@ func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort st
 	return nil
 }
 
-// AttachArgv is the command that shows a session in a terminal.
+// AttachArgv is the command that shows a shell in a terminal.
 func (t *Tmux) AttachArgv(name session.Name) []string {
 	return t.argv("attach-session", "-t", target(name))
 }

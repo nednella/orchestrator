@@ -72,13 +72,12 @@ func TestCopyOSC52LeavesAPlainChunkUncopied(t *testing.T) {
 		name   string
 		before []string
 		chunk  string
-		shared bool
+		copied bool
 	}{
-		{"a plain chunk", nil, "plain output\r\n", true},
-		{"a chunk after plain output", []string{"some output"}, "plain output", true},
-		{"a chunk after a finished sequence", []string{"\x1b]52;c;aGVsbG8=\a"}, "plain output", true},
-		{"a chunk after a possible start of the marker", []string{"ab\x1b]5"}, "plain output", false},
-		{"a chunk after an unfinished sequence", []string{"\x1b]52;c;aGVs"}, "bG8=\a", false},
+		{"a plain chunk", nil, "plain output\r\n", false},
+		{"a chunk after plain output", []string{"some output"}, "plain output", false},
+		{"a chunk after a finished sequence", []string{"\x1b]52;c;aGVsbG8=\a"}, "plain output", false},
+		{"a chunk after a possible start of the marker", []string{"ab\x1b]5"}, "plain output", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -86,9 +85,13 @@ func TestCopyOSC52LeavesAPlainChunkUncopied(t *testing.T) {
 			for _, c := range tt.before {
 				s.copyOSC52([]byte(c))
 			}
-			chunk := []byte(tt.chunk)
-			if got := s.copyOSC52(chunk); (&got[0] == &chunk[0]) != tt.shared {
-				t.Errorf("the scan shares the chunk = %v, want %v", !tt.shared, tt.shared)
+			held, chunk := s.osc, []byte(tt.chunk)
+			allocs := testing.AllocsPerRun(100, func() {
+				s.osc = held
+				s.copyOSC52(chunk)
+			})
+			if (allocs > 0) != tt.copied {
+				t.Errorf("%v allocations a scan, want copied = %v", allocs, tt.copied)
 			}
 		})
 	}

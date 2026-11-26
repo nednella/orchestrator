@@ -262,20 +262,18 @@ func flushNow(last, now time.Time, pending int) bool {
 }
 
 // copyOSC52 puts the text of any OSC 52 "set clipboard" sequence in b on the system clipboard. A sequence may be split
-// across reads. It returns the bytes it scanned: b itself, not a copy, when no earlier read left a tail. Only the pump
-// calls it.
-func (s *stream) copyOSC52(b []byte) []byte {
+// across reads. It scans b in place, with no copy, when no earlier read left a tail. Only the pump calls it.
+func (s *stream) copyOSC52(b []byte) {
 	data := b
 	if len(s.osc) > 0 {
 		data = append(s.osc, b...)
 	}
 	s.osc = nil
-	scanned := data
 	for {
 		start := bytes.Index(data, oscClipboard)
 		if start < 0 {
 			s.osc = markerStart(data)
-			return scanned
+			return
 		}
 		body := data[start+len(oscClipboard):]
 		end, termLen := oscEnd(body)
@@ -283,7 +281,7 @@ func (s *stream) copyOSC52(b []byte) []byte {
 			if len(body) < oscLimit {
 				s.osc = append([]byte(nil), data[start:]...)
 			}
-			return scanned
+			return
 		}
 		if _, b64, ok := bytes.Cut(body[:end], []byte(";")); ok && len(b64) <= oscLimit {
 			if text, err := base64.StdEncoding.DecodeString(string(b64)); err == nil && len(text) > 0 {
