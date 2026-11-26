@@ -41,6 +41,10 @@ func launch() error {
 	}
 	cfg, err := app.Load()
 	if err != nil {
+		if os.Getenv("ORCHESTRATOR_HTTP") == "" { // a check in a browser has a terminal to read
+			home, _ := os.UserHomeDir()
+			showAlert(alertTitle, configFailure(err, app.ConfigPath(home)))
+		}
 		return err
 	}
 	if err := app.RecordBundle(cfg.StateDir); err != nil {
@@ -101,6 +105,7 @@ func launch() error {
 			acceptFirstMouse()
 			if err := a.Start(c); err != nil {
 				log.Printf("orchestrator: %v", err)
+				_, _ = runtime.MessageDialog(c, runtime.MessageDialogOptions{Type: runtime.ErrorDialog, Title: alertTitle, Message: startFailure(err)})
 			}
 		},
 		OnDomReady: func(context.Context) { refreshKeyWindow() },
