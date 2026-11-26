@@ -50,7 +50,7 @@ func (v *Service) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 		return nil, fmt.Errorf("Could not read the chat of thread %s", id)
 	}
-	return events, nil
+	return shown(events), nil
 }
 
 // ChatWatch sends the thread's events from now on as chat:<id> events, deltas among them.

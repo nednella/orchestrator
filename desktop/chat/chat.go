@@ -671,7 +671,7 @@ func (f *follower) flush() {
 	if len(events) == 0 || !f.chats.isWatched(f.chat.ID) {
 		return
 	}
-	f.chats.emit("chat:"+f.chat.ID, Update{ID: f.chat.ID, Events: events})
+	f.chats.emit("chat:"+f.chat.ID, Update{ID: f.chat.ID, Events: shown(events)})
 }
 
 // pendingOf describes the approval e of the thread id.

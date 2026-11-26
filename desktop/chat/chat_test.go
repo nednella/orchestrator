@@ -573,3 +573,39 @@ func TestASubagentsApprovalStopsWaitingWhenClaudeListsNoTask(t *testing.T) {
 	eventually(t, "the subagent's approval after the turn's end", func() bool { return turnEnds(t, h, id) == 1 && len(h.ChatPending()) == 1 })
 	eventually(t, "nothing waiting once Claude lists no task", func() bool { return len(h.ChatPending()) == 0 })
 }
+
+func TestChatHistoryCutsAHugeToolResultAndTheLogKeepsIt(t *testing.T) {
+	h, id := newThread(t)
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread's host", func() bool { return apptest.Exists(ch.Socket) })
+	log, err := chatlog.OpenLog(ch.Log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	whole := strings.Repeat("0123456789", 20_000)
+	if _, err := log.Append(chatlog.Event{Kind: chatlog.KindToolResult, ID: "toolu_big", Text: whole}); err != nil {
+		t.Fatal(err)
+	}
+
+	var got chatlog.Event
+	for _, e := range history(t, h, id, 0) {
+		if e.Kind == chatlog.KindToolResult && e.ID == "toolu_big" {
+			got = e
+		}
+	}
+	if !got.Cut || len(got.Text) >= len(whole) || !strings.HasSuffix(got.Text, "(cut at 64 KB)") {
+		t.Errorf("the result in the history is %d bytes, cut %v", len(got.Text), got.Cut)
+	}
+	onDisk, err := chatlog.ReadLog(ch.Log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(onDisk, func(e chatlog.Event) bool { return e.ID == "toolu_big" })
+	if i < 0 || onDisk[i].Text != whole || onDisk[i].Cut {
+		t.Error("the log lost the whole text")
+	}
+}

@@ -468,6 +468,8 @@ export type ChatEvent = {
   cwd?: string
   origin?: string
   model?: string
+  // cut is set on a tool call or result whose text the app cut at 64 KB for the window; the text ends with "(cut at 64 KB)".
+  cut?: boolean
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

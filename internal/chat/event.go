@@ -128,6 +128,9 @@ type Event struct {
 	Cwd    string `json:"cwd,omitempty"`
 	Origin string `json:"origin,omitempty"`
 	Model  string `json:"model,omitempty"`
+	// Cut is set on a tool_use or tool_result that the app sent to the window with its text cut short; the log keeps the
+	// whole of it, and it is never written there.
+	Cut bool `json:"cut,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and
