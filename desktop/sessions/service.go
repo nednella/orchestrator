@@ -54,8 +54,8 @@ func (v *Service) ShellNew(thread string) (ShellInfo, error) {
 // ShellClose stops one shell of the current project.
 func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 
-// SettleThread stops the agent and the servers it started; its row stays, settled.
-func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
+// SettleThread stops the agent and the servers it started at the owner's word; its row stays, settled.
+func (v *Service) SettleThread(id string) error { return v.s.SettleAsOwner(id) }
 
 // DeleteThread stops the thread when it runs and removes it with its chat. With worktree, the worktree agentos made
 // for it goes too, unless a safety check keeps it, which refuses the delete; the branch always stays.

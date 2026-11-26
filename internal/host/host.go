@@ -137,8 +137,8 @@ type host struct {
 	// holding is set once the host answered a hold as idle, before a restart: it takes no more input.
 	holding bool
 	// plannedStop is why the app said it stops the host, chat.StopSettle or chat.StopRestart, "" until it says so; the
-	// exit is then logged as that stop and not as an error. restartAccess is the access a restart starts with.
-	plannedStop, restartAccess string
+	// exit is then logged as that stop, with stopText as its Text, and not as an error.
+	plannedStop, stopText string
 	// prompts are the user's messages that Claude's conversation holds, oldest first, as chat.Prompts folds the log.
 	prompts []string
 	// rewinding is set while a rewind runs: the host then takes no message and no mode change.
@@ -355,13 +355,11 @@ func (h *host) publishExit(err error) {
 	h.stopTasks()
 	e := chat.Event{Kind: chat.KindExit}
 	h.mu.Lock()
-	planned, access := h.plannedStop, h.restartAccess
+	planned, text := h.plannedStop, h.stopText
 	h.mu.Unlock()
 	switch {
-	case planned == chat.StopRestart:
-		e.Stop, e.Text = planned, access
 	case planned != "":
-		e.Stop = planned
+		e.Stop, e.Text = planned, text
 	case err != nil:
 		e.Text = err.Error()
 		e.Error = true
@@ -716,7 +714,7 @@ func (h *host) do(req request) (string, error) {
 	case opMode:
 		return "", h.setMode(req.Mode)
 	case opStop:
-		return "", h.planStop(req.Reason, req.Access)
+		return "", h.planStop(req.Reason, req.Text)
 	case opRelease:
 		h.release()
 		return "", nil
@@ -932,14 +930,18 @@ func (h *host) hold() (idle bool) {
 	return true
 }
 
-// planStop records that the app is about to stop the host for reason, with the access a restart starts with.
-func (h *host) planStop(reason, access string) error {
-	if reason != chat.StopSettle && reason != chat.StopRestart {
+// planStop records that the app is about to stop the host for reason, with the text its exit logs: chat.ByOwner or
+// none for a settle, the access a restart starts with.
+func (h *host) planStop(reason, text string) error {
+	switch {
+	case reason != chat.StopSettle && reason != chat.StopRestart:
 		return fmt.Errorf("a stop's reason is %s or %s, not %q", chat.StopSettle, chat.StopRestart, reason)
+	case reason == chat.StopSettle && text != "" && text != chat.ByOwner:
+		return fmt.Errorf("a settle's text is %s or none, not %q", chat.ByOwner, text)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.plannedStop, h.restartAccess = reason, access
+	h.plannedStop, h.stopText = reason, text
 	return nil
 }
 
@@ -947,7 +949,7 @@ func (h *host) planStop(reason, access string) error {
 func (h *host) release() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.holding, h.plannedStop, h.restartAccess = false, "", ""
+	h.holding, h.plannedStop, h.stopText = false, "", ""
 }
 
 // busyLocked needs h.mu. A task Claude runs in the background keeps the host busy as a turn does, but a shell does not.

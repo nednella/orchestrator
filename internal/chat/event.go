@@ -69,9 +69,12 @@ const (
 
 // The ways the host stops Claude itself, which an exit's Stop names.
 const (
-	StopSettle  = "settle"  // the thread settled
+	StopSettle  = "settle"  // the thread settled; the exit's Text is ByOwner when the owner put it to sleep
 	StopRestart = "restart" // the thread starts again with a new access, which the exit's Text names
 )
+
+// ByOwner is the Text of a settle's exit when the owner put the thread to sleep, not the app.
+const ByOwner = "owner"
 
 // TaskStopped is the Stop of a task_end for a task that was stopped.
 const TaskStopped = "stopped"

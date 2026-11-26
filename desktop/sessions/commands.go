@@ -123,7 +123,11 @@ func (c *Commands) Settle(_ context.Context, req ctl.Request) (string, error) {
 	if s.State == session.Settled {
 		return "", fmt.Errorf("thread %d is asleep", s.N)
 	}
-	if err := c.s.Settle(s.ID); err != nil {
+	settle := c.s.Settle
+	if req.Session == "" { // typed at a shell, not run by a thread
+		settle = c.s.SettleAsOwner
+	}
+	if err := settle(s.ID); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("put thread %d to sleep: %s", s.N, s.Title), nil

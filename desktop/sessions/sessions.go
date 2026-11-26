@@ -3481,8 +3481,15 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 
 // Settle stops the session's tmux session, whose host stops Claude, and then the servers it started; its row stays,
 // settled.
-func (s *Sessions) Settle(id string) error {
-	if err := s.settle(id, chat.StopSettle, ""); err != nil {
+func (s *Sessions) Settle(id string) error { return s.settleBy(id, "") }
+
+// SettleAsOwner is Settle at the owner's word, which the exit in the thread's log records: a parent hears that the
+// owner put its child to sleep.
+func (s *Sessions) SettleAsOwner(id string) error { return s.settleBy(id, chat.ByOwner) }
+
+// settleBy settles the thread, with by as its exit's text: chat.ByOwner or none.
+func (s *Sessions) settleBy(id, by string) error {
+	if err := s.settle(id, chat.StopSettle, by); err != nil {
 		return err
 	}
 	s.stopServers(false, id)
@@ -3528,9 +3535,10 @@ func (s *Sessions) SettleIdle(id string) (bool, error) {
 	return true, nil
 }
 
-// settle stops the thread for reason, chat.StopSettle or chat.StopRestart with the access it starts again with. Its host
-// is told first, so it logs Claude's exit as that stop and not as a crash; a kill that fails takes that back.
-func (s *Sessions) settle(id, reason string, access session.Access) error {
+// settle stops the thread for reason, with text as its exit's: chat.StopSettle with chat.ByOwner or none, or
+// chat.StopRestart with the access it starts again with. Its host is told first, so it logs Claude's exit as that stop
+// and not as a crash; a kill that fails takes that back.
+func (s *Sessions) settle(id, reason, text string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return err
@@ -3555,7 +3563,7 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	s.mu.Lock()
 	s.dropCommands(id)
 	s.mu.Unlock()
-	planned := s.planStop(name, reason, access)
+	planned := s.planStop(name, reason, text)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Kill(ctx, name); err != nil {
@@ -3573,12 +3581,12 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	return nil
 }
 
-// planStop tells the thread's host that the app stops it for reason, and says whether the host heard. A host that did
-// not logs the exit as it comes.
-func (s *Sessions) planStop(name session.Name, reason string, access session.Access) bool {
+// planStop tells the thread's host that the app stops it for reason, with text, and says whether the host heard. A
+// host that did not logs the exit as it comes.
+func (s *Sessions) planStop(name session.Name, reason, text string) bool {
 	socket, err := s.readyHost(name)
 	if err == nil {
-		err = host.PlanStop(s.context(), socket, reason, string(access))
+		err = host.PlanStop(s.context(), socket, reason, text)
 	}
 	if err != nil {
 		log.Printf("agentos: thread %s stops without telling its host: %v", name, err)
@@ -3690,7 +3698,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	s.mu.Lock()
 	s.restarting[id] = true
 	s.mu.Unlock()
-	if err := s.settle(id, chat.StopRestart, access); err != nil {
+	if err := s.settle(id, chat.StopRestart, string(access)); err != nil {
 		s.restarted(id)
 		s.release(name)
 		if undo := s.liveAccess(name, in.Access); undo != nil {

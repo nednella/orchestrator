@@ -310,6 +310,7 @@ type turn struct {
 	reply   string // the agent's last reply after the last user message, cut as read cuts it
 	ran     bool   // Claude exited after its last start: this run is over
 	settled bool   // that exit was the thread settling
+	byOwner bool   // the owner put the thread to sleep there
 	asks    bool   // an approval waits on the owner's answer
 	open    int    // the tasks Claude has open in the background, shells among them
 }
@@ -352,10 +353,11 @@ func turnIn(events []chatlog.Event) turn {
 		case chatlog.KindStart:
 			// A message queued in an earlier run never reaches this one.
 			clear(queued)
-			t.ran, t.settled, reporting = false, false, false
+			t.ran, t.settled, t.byOwner, reporting = false, false, false, false
 		case chatlog.KindExit:
 			clear(queued)
 			t.ran, t.settled, reporting = true, e.Stop == chatlog.StopSettle, false
+			t.byOwner = t.settled && e.Text == chatlog.ByOwner
 			t.exit = e.Seq
 		}
 	}

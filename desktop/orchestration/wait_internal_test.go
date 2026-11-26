@@ -39,6 +39,8 @@ func TestTurnInReadsTheLastTurn(t *testing.T) {
 		{"an approval answered", []chatlog.Event{user("u1"), {Kind: chatlog.KindApproval, ID: "ask-1"}, {Kind: chatlog.KindAnswer, ID: "ask-1", Text: "allow"}}, turn{user: 1, outcome: outcomeCompleted}},
 		{"claude exited", []chatlog.Event{user("u1"), {Kind: chatlog.KindExit, Error: true}}, turn{user: 1, exit: 2, outcome: outcomeCompleted, ran: true}},
 		{"the thread settled", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}}, turn{user: 1, exit: 3, end: 2, ended: true, outcome: outcomeCompleted, ran: true, settled: true}},
+		{"the owner put the thread to sleep", []chatlog.Event{user("u1"), {Kind: chatlog.KindExit, Stop: chatlog.StopSettle, Text: chatlog.ByOwner}}, turn{user: 1, exit: 2, outcome: outcomeCompleted, ran: true, settled: true, byOwner: true}},
+		{"the owner's sleep of an earlier run", []chatlog.Event{user("u1"), {Kind: chatlog.KindExit, Stop: chatlog.StopSettle, Text: chatlog.ByOwner}, {Kind: chatlog.KindStart}}, turn{user: 1, exit: 2, outcome: outcomeCompleted}},
 		{"a turn a thread stopped", []chatlog.Event{user("u1"), {Kind: chatlog.KindInterrupt, From: "main/parentaa"}, {Kind: chatlog.KindTurnEnd, Error: true}}, turn{user: 1, end: 3, ended: true, outcome: outcomeStopped, stopper: "main/parentaa"}},
 		{"a shell runs in the background", []chatlog.Event{user("u1"), {Kind: chatlog.KindTaskStart, Parent: "t1", ID: "b1", Tool: chatlog.TaskShell}, end}, turn{user: 1, end: 3, ended: true, outcome: outcomeCompleted, open: 1}},
 		{"a woken run", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}, {Kind: chatlog.KindStart}}, turn{user: 1, exit: 3, end: 2, ended: true, outcome: outcomeCompleted}},
@@ -136,5 +138,26 @@ func TestTurnInWaitsForTheBackgroundSubagents(t *testing.T) {
 	// end each end with no subagent working.
 	if want := []bool{false, true, true, true}; !slices.Equal(atEnds, want) {
 		t.Errorf("ended at each turn_end = %v, want %v", atEnds, want)
+	}
+}
+
+func TestOutcomeTextSaysWhoPutTheChildToSleep(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		t      turn
+		asleep bool
+		want   string
+	}{
+		{"the owner's sleep", turn{settled: true, byOwner: true}, true, "was put to sleep by the owner"},
+		{"the app's sleep", turn{settled: true}, true, "was put to sleep"},
+		{"a turn that ended before the sleep", turn{settled: true, byOwner: true, outcome: outcomeCompleted}, false, "completed"},
+		{"the owner's stop", turn{outcome: outcomeStopped}, false, "was stopped by the owner"},
+		{"a failure", turn{outcome: outcomeFailed, reason: "API Error: 529"}, false, "failed: API Error: 529"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := outcomeText(tc.t, tc.asleep); got != tc.want {
+				t.Errorf("outcomeText = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

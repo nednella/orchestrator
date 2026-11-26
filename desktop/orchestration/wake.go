@@ -192,8 +192,10 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 // sleep before it ended.
 func outcomeText(t turn, asleep bool) string {
 	switch {
-	case asleep:
+	case asleep && t.byOwner:
 		return "was put to sleep by the owner"
+	case asleep:
+		return "was put to sleep"
 	case t.outcome == outcomeStopped:
 		return "was stopped by the owner"
 	case t.outcome == outcomeFailed && t.reason != "":

@@ -501,12 +501,13 @@ func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
 		parent := newThread(t, h, "Plan the release").ID
 		c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
 		apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
-		if err := h.SettleThread(c); err != nil {
+		// The app's own settle, as at the end of a PR, says no more than that.
+		if err := h.Sessions().Settle(c); err != nil {
 			t.Fatal(err)
 		}
 		apptest.Eventually(t, "the sleep on the parent's stdin", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
-		if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep") {
-			t.Errorf("the parent read %q, want one result that says the child was put to sleep", lines)
+		if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep:") {
+			t.Errorf("the parent read %q, want one result that says the child was put to sleep, not by whom", lines)
 		}
 		noMoreResults(t, h, parent, c, 1)
 	})
@@ -545,8 +546,8 @@ func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
 		}
 		fresh := h.Restart(t)
 		apptest.Eventually(t, "the sleep on the parent's stdin after the restart", func() bool { return len(resultLines(t, fresh, parent, c)) > 0 })
-		if lines := resultLines(t, fresh, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep") {
-			t.Errorf("the parent read %q, want one result that says the child was put to sleep", lines)
+		if lines := resultLines(t, fresh, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep:") {
+			t.Errorf("the parent read %q, want one result that says the child was put to sleep, not by whom", lines)
 		}
 		noMoreResults(t, fresh, parent, c, 1)
 		fresh.App.Stop()

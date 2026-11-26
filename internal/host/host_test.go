@@ -2462,9 +2462,9 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 
 func TestOnlyAStopTheAppPlannedIsNoError(t *testing.T) {
 	t.Parallel()
-	planStop := func(reason, access string) func(*testing.T, *testHost) {
+	planStop := func(reason, text string) func(*testing.T, *testHost) {
 		return func(t *testing.T, h *testHost) {
-			if err := PlanStop(ctxT(t), h.socket, reason, access); err != nil {
+			if err := PlanStop(ctxT(t), h.socket, reason, text); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -2478,6 +2478,7 @@ func TestOnlyAStopTheAppPlannedIsNoError(t *testing.T) {
 		want chat.Event // Text is checked only when set
 	}{
 		{"a planned settle", planStop(chat.StopSettle, ""), cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}},
+		{"the owner's settle", planStop(chat.StopSettle, chat.ByOwner), cancel, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle, Text: chat.ByOwner}},
 		{"a planned restart", func(t *testing.T, h *testHost) {
 			if idle, err := Hold(ctxT(t), h.socket); err != nil || !idle {
 				t.Fatalf("Hold = %v, %v, want idle", idle, err)
@@ -2537,6 +2538,9 @@ func TestAStopNeedsAReason(t *testing.T) {
 	h := startHost(t)
 	if err := PlanStop(ctxT(t), h.socket, "nap", ""); err == nil || !strings.Contains(err.Error(), `not "nap"`) {
 		t.Errorf("PlanStop = %v, want the reason refused", err)
+	}
+	if err := PlanStop(ctxT(t), h.socket, chat.StopSettle, "full"); err == nil || !strings.Contains(err.Error(), `not "full"`) {
+		t.Errorf("PlanStop = %v, want a settle's text refused", err)
 	}
 }
 

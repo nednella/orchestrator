@@ -185,7 +185,7 @@ func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle})
+	assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle, Text: chatlog.ByOwner})
 }
 
 func TestAFailedRestartReleasesTheThread(t *testing.T) {
@@ -211,7 +211,7 @@ func TestAFailedRestartReleasesTheThread(t *testing.T) {
 			if err := h.SettleThread(s.ID); err != nil {
 				t.Fatal(err)
 			}
-			assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle})
+			assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle, Text: chatlog.ByOwner})
 		})
 	}
 }

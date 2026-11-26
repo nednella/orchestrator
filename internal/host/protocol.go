@@ -31,7 +31,6 @@ type request struct {
 	After   int64           `json:"after,omitempty"`
 	Mode    string          `json:"mode,omitempty"`
 	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
-	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
 	From    string          `json:"from,omitempty"`   // the send and interrupt ops': the thread that sends or stops, "" for the owner or the app
 	Body    string          `json:"body,omitempty"`   // the send op's: a thread's bare words, which Text frames for Claude
 	Result  bool            `json:"result,omitempty"` // the send op's: the message is a child's result

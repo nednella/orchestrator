@@ -117,10 +117,11 @@ func Hold(ctx context.Context, socket string) (idle bool, err error) {
 	return err == nil && !rep.Busy, err
 }
 
-// PlanStop tells the host that it is about to be stopped on purpose, for reason: chat.StopSettle, or chat.StopRestart
-// with the access the thread starts again with. The host then logs its exit as that stop and not as an error.
-func PlanStop(ctx context.Context, socket, reason, access string) error {
-	_, err := call(ctx, socket, request{Op: opStop, Reason: reason, Access: access})
+// PlanStop tells the host that it is about to be stopped on purpose, for reason: chat.StopSettle, with chat.ByOwner as
+// text when the owner put the thread to sleep, or chat.StopRestart with the access the thread starts again with. The
+// host then logs its exit as that stop, with text, and not as an error.
+func PlanStop(ctx context.Context, socket, reason, text string) error {
+	_, err := call(ctx, socket, request{Op: opStop, Reason: reason, Text: text})
 	return err
 }
 
