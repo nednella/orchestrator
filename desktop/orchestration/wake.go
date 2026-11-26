@@ -27,6 +27,7 @@ type report struct {
 	child, parent string
 	end           int64
 	waited        bool
+	turn          *turn // the child's last turn, when it was read from its log already
 }
 
 // ChildTurnEnded hears of each turn_end a thread's follower takes, and of the exit when the thread settles. When the
@@ -42,8 +43,13 @@ func (c *Commands) ChildTurnEnded(id string, e chatlog.Event) {
 	if parent == "" || e.Seq <= c.threads.Reported(id) {
 		return
 	}
-	w := waitOn{parent, id}
-	r := report{child: id, parent: parent, end: e.Seq, waited: c.Waits(parent, id) || c.givenByWait(w, e.Seq)}
+	c.queue(report{child: id, parent: parent, end: e.Seq})
+}
+
+// queue gives r in a goroutine of its own, after the result in hand for the same child.
+func (c *Commands) queue(r report) {
+	id := r.child
+	r.waited = c.Waits(r.parent, id) || c.givenByWait(waitOn{r.parent, id}, r.end)
 	c.reportMu.Lock()
 	defer c.reportMu.Unlock()
 	if c.reporting[id] {
@@ -56,17 +62,19 @@ func (c *Commands) ChildTurnEnded(id string, e chatlog.Event) {
 
 // ChildSlept hears that the thread id stopped running, or was found asleep as the app started. A child put to sleep
 // before its follower took the exit, or while the app was closed, gives its result as ChildTurnEnded would; one whose
-// result went already gives nothing.
+// result went already gives nothing. It reads the child's log once, and only a result still to give takes a goroutine.
 func (c *Commands) ChildSlept(id string) {
-	if c.threads.ParentOf(id) == "" {
+	parent := c.threads.ParentOf(id)
+	if parent == "" {
 		return
 	}
 	ch, err := c.threads.ChatOf(id)
-	if err != nil || ch.Live {
+	if err != nil || ch.Live || ch.Deleting {
 		return
 	}
-	if end := c.turnOf(ch).result(); end > 0 {
-		c.ChildTurnEnded(id, chatlog.Event{Kind: chatlog.KindExit, Seq: end})
+	t := c.turnOf(ch)
+	if end := t.result(); end > c.threads.Reported(id) {
+		c.queue(report{child: id, parent: parent, end: end, turn: &t})
 	}
 }
 
@@ -96,7 +104,12 @@ func (c *Commands) give(r report) {
 	if err != nil || ch.Deleting {
 		return
 	}
-	t := c.turnOf(ch)
+	var t turn
+	if r.turn != nil {
+		t = *r.turn
+	} else {
+		t = c.turnOf(ch)
+	}
 	end := t.result()
 	asleep := end != t.end
 	switch {

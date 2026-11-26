@@ -177,6 +177,7 @@ type Sessions struct {
 	afterTurn  map[string][]func()     // what waits for a session's turn to end or the session to go, oldest first: the settle after its PR merged or closed
 	slept      func(id string)         // hears of each thread that stopped running or was found asleep; OnSlept sets it before Run
 	onDelete   func(id string)         // hears of each thread deleted; OnDelete sets it before Run
+	found      []string                // the threads a Refresh took in as asleep, for slept to hear of once it ends
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -403,6 +404,11 @@ func (s *Sessions) Refresh() {
 	s.loaded = true
 	s.sync()
 	s.synced = true
+	if found := s.found; len(found) > 0 {
+		s.found = nil
+		slices.Sort(found)
+		go s.heardAsleep(found)
+	}
 }
 
 // fileStamp tells whether a file changed since it was read.
@@ -590,7 +596,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	e := &endedSession{info: info, rec: rec, at: at}
 	s.ended[name] = e
-	go s.heardSleep(name)
+	s.found = append(s.found, name)
 	if stale {
 		_ = bus.WriteState(s.stateDir, e.record())
 	}
@@ -988,11 +994,19 @@ func (s *Sessions) settleToDelete(name session.Name) error {
 
 // OnSlept has fn hear of each thread that stops running while the app runs, other than for a restart, once its host has
 // logged Claude's exit or hostWait has passed, and of each one the app finds asleep, as it starts. fn runs on a
-// goroutine of its own. It comes before Run.
+// goroutine of its own for a thread that stops, and on one for all the threads a Refresh found asleep, one after
+// another. It comes before Run.
 func (s *Sessions) OnSlept(fn func(id string)) { s.slept = fn }
 
 // OnDelete has fn hear of each thread once it is deleted. It comes before Run.
 func (s *Sessions) OnDelete(fn func(id string)) { s.onDelete = fn }
+
+// heardAsleep tells the function OnSlept set of each of the threads ids found asleep, in turn.
+func (s *Sessions) heardAsleep(ids []string) {
+	for _, id := range ids {
+		s.slept(id)
+	}
+}
 
 // heardSleep tells the thread's stop to the function OnSlept set, once the thread's host is gone.
 func (s *Sessions) heardSleep(id string) {
