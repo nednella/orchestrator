@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { sidebarBesidePx, sidebarFit } from './panelLayout.ts'
 import { closeTab, EMPTY_PANEL, openTab, panelFit, panelStateOf, panelWidth, stepTab, viewForKey } from './panelTabs.ts'
 import type { PanelState } from './panelTabs.ts'
 
@@ -41,7 +42,24 @@ test('the width keeps 360 px of chat', () => {
   assert.equal(panelFit(1512, 1100, null).width, 540, 'the default')
   assert.equal(panelFit(1512, 1100, 900).width, 740, 'a saved width that would leave the chat under 360 px')
   assert.equal(panelFit(1512, 1100, 200).width, 360, 'never under 360 px')
-  assert.equal(panelFit(1000, 660, null).width, 360, 'with no room for both, the panel keeps its least')
+  assert.deepEqual(panelFit(1000, 720, null), { docked: true, width: 360 }, 'room for both at their least')
+  assert.deepEqual(panelFit(1000, 719, null), { docked: false, width: 420 }, 'no room for both: a sheet')
+})
+
+test('the open sidebar sends the panel over the chat where the chat would get under 360 px', () => {
+  const row = (windowPx: number, sidebar: number) => windowPx - sidebarBesidePx(sidebarFit(windowPx, sidebar, 16), true, 16) - 1
+  assert.equal(panelFit(981, row(981, 18), null).docked, false, '981 px with an 18rem sidebar')
+  assert.equal(panelFit(1057, row(1057, 18), null).docked, false, '1057 px with an 18rem sidebar')
+  assert.deepEqual(panelFit(1058, row(1058, 18), null), { docked: true, width: 360 }, 'from 1058 px both fit')
+  assert.equal(panelFit(1281, row(1281, 32), null).docked, false, '1281 px with a 32rem sidebar')
+  assert.deepEqual(panelFit(1282, row(1282, 32), null), { docked: true, width: 360 })
+  for (const windowPx of [981, 1000, 1057, 1058, 1100, 1281, 1282, 1512]) {
+    for (const sidebar of [13, 18, 32]) {
+      const r = row(windowPx, sidebar)
+      const fit = panelFit(windowPx, r, null)
+      if (fit.docked) assert.equal(r - fit.width >= 360, true, `${windowPx} px, ${sidebar}rem: the chat keeps ${r - fit.width} px`)
+    }
+  }
 })
 
 test('a window of 980 px or less shows the panel as a sheet', () => {

@@ -32,6 +32,12 @@ export function sidebarMax(windowPx: number, rightPx: number, root: number): num
   return Math.floor(max * 100) / 100
 }
 
+// sidebarBesidePx is the room in px the sidebar takes from the row the chat and the right panel share: none while it is
+// closed or over the thread.
+export function sidebarBesidePx(sidebar: { width: number; docked: boolean }, open: boolean, root: number): number {
+  return sidebar.docked && open ? (RAIL_REM + sidebar.width) * root + 1 : 0
+}
+
 export function modeFor(width: number): LayoutMode {
   if (width < OVERLAY_BELOW) return 'narrow'
   if (width < COMPACT_BELOW) return 'compact'

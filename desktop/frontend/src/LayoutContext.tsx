@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
 import type { FocusTarget } from './AgentosContext'
 import { devFlags } from './api'
-import { closesPanel, modeFor, nextOverlay, RAIL_REM, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarFit, sidebarMax } from './panelLayout'
+import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { closeTab, openTab, panelFit, panelStateOf, panelWidth, stepTab } from './panelTabs'
 import type { PanelState, PanelViewId } from './panelTabs'
@@ -148,9 +148,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const root = 16 * scale
   // The right panel's rules are in px at the default text size, as the window would be at that size.
   const sidebar = sidebarFit(width, sidebarRem ?? SIDEBAR_DEFAULT_REM, root)
-  const sidebarBeside = sidebar.docked && prefs.sidebarOpen ? (RAIL_REM + sidebar.width) * root + 1 : 0
   const viewport = width / scale
-  const row = (width - sidebarBeside) / scale - 1
+  const rowBeside = (sidebarOpen: boolean) => (width - sidebarBesidePx(sidebar, sidebarOpen, root)) / scale - 1
+  const row = rowBeside(prefs.sidebarOpen)
+  const rowWithSidebar = rowBeside(true)
   const right = panelFit(viewport, row, prefs.right === null ? null : prefs.right * 16)
   const docked = { sidebar: sidebar.docked, right: right.docked }
   const overlay = openOverlay && !docked[openOverlay] ? openOverlay : null
@@ -203,9 +204,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const setSidebarOpen = useCallback(
     (open: boolean) => {
       if (!docked.sidebar) return moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
+      // A sidebar that leaves the chat and the panel no room beside each other sends the open panel over the chat.
+      if (open && docked.right && prefs.rightOpen && !panelFit(viewport, rowWithSidebar, null).docked) moveOverlay({ open: 'right' })
       updatePrefs({ sidebarOpen: open })
     },
-    [docked.sidebar, moveOverlay, updatePrefs],
+    [docked.sidebar, docked.right, prefs.rightOpen, viewport, rowWithSidebar, moveOverlay, updatePrefs],
   )
 
   // A panel closed another way (its close button, the other overlay) forgets where the focus was.
