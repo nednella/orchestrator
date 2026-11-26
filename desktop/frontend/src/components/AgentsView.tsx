@@ -1,15 +1,13 @@
 import { useAgentos } from '../AgentosContext'
 import { openAgent, useThreadAgents } from '../chatAgents'
-import type { AgentState } from '../chatTimeline'
 import { useLayout } from '../LayoutContext'
 import type { PanelViewProps } from '../panelViews'
+import { AGENT_STATE_LABEL } from '../stateMeta'
 import { agentRows } from '../threads'
 import { AgentThreadRow } from './AgentThreadRow'
 import { Ago } from './Ago'
 import { ClaudeMark } from './ClaudeMark'
 import { Notice } from './Notice'
-
-const stateLabel: Record<AgentState, string> = { running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped' }
 
 // AgentsView lists what works for the thread: the subagents Claude started in its chat, which open in the chat, then
 // the threads it delegated to, each under the thread that delegated it.
@@ -45,7 +43,7 @@ export function AgentsView({ session }: PanelViewProps) {
           </span>
           <span className="min-w-0 truncate">{agent.description}</span>
           <span className="ml-auto flex flex-none items-center gap-2 text-small text-dim tabular-nums">
-            <span className={agent.state === 'failed' ? 'text-danger' : undefined}>{stateLabel[agent.state]}</span>
+            <span className={agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE_LABEL[agent.state]}</span>
             <Ago at={agent.startedAt} />
           </span>
         </button>

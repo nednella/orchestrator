@@ -4,13 +4,12 @@ import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { splitBranch } from '../branchLabel'
 import { openAgent } from '../chatAgents'
-import type { AgentState } from '../chatTimeline'
 import { editorLabel, folderName } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import type { PanelViewId } from '../panelTabs'
-import { STATE_LABEL } from '../stateMeta'
+import { AGENT_STATE_LABEL, STATE_LABEL } from '../stateMeta'
 import type { PR } from '../types'
 import { useCardFacts } from '../useCardFacts'
 import { useCopied } from '../useCopied'
@@ -23,7 +22,6 @@ import { ServerMeta } from './ServerMeta'
 const PR_ICON = { open: GitPullRequestArrow, draft: GitPullRequestDraft, closed: GitPullRequestClosed, merged: GitMerge }
 const PR_STATE: Record<PR['state'], string> = { open: 'Open', draft: 'Draft', closed: 'Closed', merged: 'Merged' }
 const CHECKS: Record<PR['checks'], string> = { none: '', pending: 'Checks running', passing: 'Checks passed', failing: 'Checks failed' }
-const AGENT_STATE: Record<AgentState, string> = { running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped' }
 const RELATION_ICON = { parent: CornerLeftUp, child: Bot, fork: GitFork }
 
 type ThreadContextCardProps = { id: string; className: string }
@@ -95,7 +93,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
         return <ContextCardRow icon={<Globe size={16} aria-hidden="true" />} label={`localhost:${port}`} meta={<ServerMeta server={r.server} />} title={command} onClick={() => a.report(() => api.openServer(port))} stop={stop} />
       }
       case 'agent': {
-        const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE[r.agent.state]}</span>
+        const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE_LABEL[r.agent.state]}</span>
         return <ContextCardRow icon={<ClaudeMark size={16} />} label={r.agent.description} end={end} onClick={() => openAgent(session.id, r.agent.id)} />
       }
       case 'thread': {
