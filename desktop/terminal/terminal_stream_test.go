@@ -1,6 +1,7 @@
 package terminal_test
 
 import (
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -101,7 +102,8 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 
 func TestReopeningBeforeTheFirstDrawWorks(t *testing.T) {
 	h, id := newShell(t)
-	openRead(t, h, id, 80, 24)
+	first := openRead(t, h, id, 80, 24)
+	eventually(t, "the first reader attached", func() bool { return first.Status() == http.StatusOK })
 	out := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(out.String()) > 0 })
 }
