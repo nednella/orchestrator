@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -2858,7 +2859,7 @@ func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, held := range s.tokens {
-		if held == sum && !s.deleted[id] && slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
+		if subtle.ConstantTimeCompare([]byte(held), []byte(sum)) == 1 && !s.deleted[id] && slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id }) {
 			return id, true
 		}
 	}
