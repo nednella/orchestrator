@@ -1,20 +1,36 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
-import type { JSONContent, UseEditorOptions } from '@tiptap/react'
+import type { Editor, JSONContent, UseEditorOptions } from '@tiptap/react'
 import { Node as DocNode, Slice } from '@tiptap/pm/model'
+import { Selection } from '@tiptap/pm/state'
 import { composerSchema, draftOf, fromPlainText } from '../composerMarkdown'
 import type { ComposerDraft } from '../composerMarkdown'
 import { ComposerTyping } from '../composerTyping'
 import { MarkEdges } from '../markEdges'
 
 export type ComposerInput = {
-  focus(): void
+  focus(at?: 'end'): void
+  caretOnFirstLine(): boolean
+  caretOnLastLine(): boolean
   blur(): void
   insert(text: string): void
   insertLiteral(text: string): void
   insertDoc(doc: JSONContent): void
   deleteBefore(length: number): void
+}
+
+// onEdgeLine measures the caret against the first or last line box of the draft, so a wrapped line counts as several.
+function onEdgeLine(editor: Editor | null, edge: 'first' | 'last'): boolean {
+  if (!editor || editor.isEmpty) return true
+  const { doc, selection } = editor.state
+  const caret = editor.view.coordsAtPos(selection.head)
+  if (edge === 'first') {
+    const line = editor.view.coordsAtPos(Selection.atStart(doc).from)
+    return caret.top < line.bottom
+  }
+  const line = editor.view.coordsAtPos(Selection.atEnd(doc).to)
+  return caret.bottom > line.top
 }
 
 const PROMPT_PLACEHOLDER = 'Ask anything. @ files, / commands'
@@ -93,7 +109,9 @@ export function ComposerEditor({ inputRef, value, label, placeholder = PROMPT_PL
   useImperativeHandle(
     inputRef,
     () => ({
-      focus: () => editor?.commands.focus(),
+      focus: (at) => editor?.commands.focus(at),
+      caretOnFirstLine: () => onEdgeLine(editor, 'first'),
+      caretOnLastLine: () => onEdgeLine(editor, 'last'),
       blur: () => editor?.commands.blur(),
       insert: (text) => editor?.commands.insertContent({ type: 'text', text }),
       insertLiteral: (text) => editor?.commands.insertContent({ type: 'text', text, marks: [{ type: 'literal' }] }),

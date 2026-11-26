@@ -13,6 +13,7 @@ import { modelAlias } from '../model'
 import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
+import { usePromptHistory } from '../usePromptHistory'
 import { usePromptPicks } from '../usePromptPicks'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
@@ -79,6 +80,17 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     },
     [id, setThreadDraft, setDraftsSeen],
   )
+
+  const history = usePromptHistory({
+    input,
+    thread: id,
+    items: timeline.items,
+    value: current.draft,
+    pending: timeline.pending !== null,
+    attachments: pending.images.length,
+    menuOpen: pickList !== null,
+    onRecall: (draft) => update({ ...latest.current, draft }),
+  })
 
   useEffect(() => {
     const unseen = unseenDrafts(events, latest.current.seen)
@@ -151,7 +163,8 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
       else setCursor(step.move)
       return
     }
-    if (e.key !== 'Escape') return
+    history.onKeyDown(e)
+    if (e.defaultPrevented || e.key !== 'Escape') return
     const done = onEscape(pickList !== null)
     if (done === 'close-picker') {
       e.preventDefault()
@@ -216,6 +229,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
       sending={sending}
       stop={action === 'stop' && !sending ? { stopping, onStop } : undefined}
       onChange={(next) => {
+        history.edited(next.text)
         update({ ...latest.current, draft: next })
         setCursor(-1)
         setDismissed(false)
