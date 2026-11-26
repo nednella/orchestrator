@@ -965,22 +965,40 @@ func (s *Sessions) removeState(id string) error {
 
 // removeWorktrees removes the worktrees agentos made for the threads of a Delete, family, the deepest first and the
 // thread last, once every one has passed every check of a clean-up, so a worktree kept refuses the Delete before any
-// goes. A worktree of the thread that another thread or a shell works in refuses it with no check run; a descendant's
-// stays for that user. When the thread runs and its own
+// goes. A worktree that a shell or a thread outside the family works in refuses it with no check run, but for a
+// descendant's that a fork takes over (handOverWorktree), which stays for the fork. When the thread runs and its own
 // worktree is to go, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed
 // the worktree until it stopped; a refusal then says it is asleep.
 func (s *Sessions) removeWorktrees(family []string) error {
 	ctx := s.context()
 	top := family[len(family)-1]
+	type shared struct{ id, reason string }
 	var own []string
+	var kept []shared
 	for _, id := range family {
-		path, shared := s.ownWorktree(ctx, id)
+		path, _ := s.ownWorktree(ctx, id)
+		if path == "" {
+			continue
+		}
+		key := session.ProjectKey(id)
+		reason := s.life.shellIn(ctx, key, path)
+		if user := s.usersOf(path, true, family...); reason == "" && user != "" {
+			if id != top && s.heirOf(key, path, family) != "" {
+				continue
+			}
+			reason = fmt.Sprintf("Thread %s also works in this worktree", user)
+		}
 		switch {
-		case shared != "" && id == top:
-			return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(id), shared)
-		case path != "" && shared == "":
+		case reason != "" && id == top:
+			return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(id), reason)
+		case reason != "":
+			kept = append(kept, shared{id, reason})
+		default:
 			own = append(own, id)
 		}
+	}
+	if len(kept) > 0 {
+		return s.keptBy(kept[0].id, kept[0].reason, "", len(own)+len(kept))
 	}
 	if err := s.checkWorktrees(ctx, own, ""); err != nil {
 		return err

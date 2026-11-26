@@ -489,6 +489,56 @@ func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
 	})
 }
 
+func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
+	t.Run("a thread", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		pushWork(t, parent.Worktree)
+		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+		other := issueThread(h, t, 8)
+		h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		eventually(t, "the other thread seen in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
+		putToSleep(t, h, child.ID)
+		cleanupOf(t, h, child)
+
+		err := h.DeleteThread(parent.ID, true)
+		if want := fmt.Sprintf("Thread %d keeps its worktree: Thread %s also works in this worktree. Untick the box to keep the worktrees, or clean Thread %d up first", child.N, other.Title, child.N); err == nil || err.Error() != want {
+			t.Errorf("Delete = %v, want %q", err, want)
+		}
+		for _, s := range []sessions.Session{parent, child} {
+			if _, ok := h.Session(s.ID); !ok || !exists(s.Worktree) {
+				t.Errorf("thread %s: row there %v, worktree there %v; want both", s.Title, ok, exists(s.Worktree))
+			}
+		}
+	})
+
+	t.Run("a shell", func(t *testing.T) {
+		h := shellHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		pushWork(t, parent.Worktree)
+		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+		h.Hook(t, child.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		shell, err := h.ShellOpen(child.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = h.ShellClose(shell.ID) })
+		eventually(t, "the shell in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
+		putToSleep(t, h, child.ID)
+		cleanupOf(t, h, child)
+
+		err = h.DeleteThread(parent.ID, true)
+		if want := fmt.Sprintf("Thread %d keeps its worktree: a shell is open in this worktree. Untick the box to keep the worktrees, or clean Thread %d up first", child.N, child.N); err == nil || err.Error() != want {
+			t.Errorf("Delete = %v, want %q", err, want)
+		}
+		if _, ok := h.Session(child.ID); !ok || !exists(child.Worktree) || !exists(parent.Worktree) {
+			t.Errorf("the child's row there %v, its worktree there %v, the parent's there %v; want all", ok, exists(child.Worktree), exists(parent.Worktree))
+		}
+	})
+}
+
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
