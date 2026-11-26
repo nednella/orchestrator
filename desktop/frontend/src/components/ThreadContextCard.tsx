@@ -1,6 +1,6 @@
 import { Bot, CircleDot, CornerLeftUp, Folder, FolderGit2, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop } from 'lucide-react'
 import type { MouseEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { splitBranch } from '../branchLabel'
 import { editorLabel, folderName } from '../contextCard'
@@ -29,7 +29,7 @@ type ThreadContextCardProps = { id: string; className: string }
 // ThreadContextCard is what the thread works with, at a glance: where it runs, its branch, PR and issue, its servers
 // and the threads and subagents around it.
 export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
-  const a = useAgentos('select', 'report', 'openInEditor', 'openAgent')
+  const a = useOrchestrator('select', 'report', 'openInEditor', 'openAgent')
   const { showPanelView, focusPanel } = useLayout()
   const { session, sections, refreshServers } = useCardFacts(id)
   const [copied, copyBranch] = useCopied(session?.branch ?? '')

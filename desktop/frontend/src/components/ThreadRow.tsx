@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { GitBranch } from 'lucide-react'
-import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
@@ -28,14 +28,14 @@ type ThreadRowProps = { session: Session; needs: Session | undefined; selected: 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
 function ThreadRowView({ session, needs, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useAgentos('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'deleteThread', 'report')
-  const latest = useLatestAgentos()
+  const a = useOrchestrator('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'deleteThread', 'report')
+  const latest = useLatestOrchestrator()
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
   const asker = needs ?? session
-  const pending = useAgentosSelector((s) => s.pending[asker.id])
-  const open = useAgentosSelector((s) => s.selectedId === session.id)
+  const pending = useOrchestratorSelector((s) => s.pending[asker.id])
+  const open = useOrchestratorSelector((s) => s.selectedId === session.id)
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
   const card = useHoverCard(600)

@@ -1,5 +1,5 @@
-import { useAgentos } from './AgentosContext'
-import type { Agentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
+import type { Orchestrator } from './OrchestratorContext'
 import { useThreadAgents } from './chatAgents'
 import type { AgentItem } from './chatTimeline'
 import { cardLineage, cardSections } from './contextCard'
@@ -7,7 +7,7 @@ import type { CardFacts, CardSection } from './contextCard'
 import type { Server, Session } from './types'
 import { useThreadServers } from './useThreadServers'
 
-type Known = Pick<Agentos, 'machine' | 'sessions' | 'issues' | 'project' | 'settings'>
+type Known = Pick<Orchestrator, 'machine' | 'sessions' | 'issues' | 'project' | 'settings'>
 
 function factsOf(session: Session, a: Known, servers: Server[], agents: AgentItem[]): CardFacts {
   return {
@@ -25,7 +25,7 @@ function factsOf(session: Session, a: Known, servers: Server[], agents: AgentIte
 // again. The servers are read when the card opens and at each turn end, when a thread starts
 // or stops one.
 export function useCardFacts(id: string): { session: Session | undefined; sections: CardSection[]; refreshServers(): Promise<void> } {
-  const a = useAgentos('machine', 'sessions', 'issues', 'project', 'settings')
+  const a = useOrchestrator('machine', 'sessions', 'issues', 'project', 'settings')
   const session = a.sessions.find((s) => s.id === id)
   const agents = useThreadAgents(id)
   const { servers, refresh } = useThreadServers(id, session?.state, false)
@@ -33,9 +33,9 @@ export function useCardFacts(id: string): { session: Session | undefined; sectio
   return { session, sections, refreshServers: refresh }
 }
 
-// selectedCardHasRows says whether the open thread's card shows anything, for useAgentosSelector. It leaves out the
+// selectedCardHasRows says whether the open thread's card shows anything, for useOrchestratorSelector. It leaves out the
 // servers and subagents, which it would have to read: a thread that runs them has a folder, which is a row already.
-export function selectedCardHasRows(a: Agentos): boolean {
+export function selectedCardHasRows(a: Orchestrator): boolean {
   const session = a.sessions.find((s) => s.id === a.selectedId)
   return session !== undefined && cardSections(session, factsOf(session, a, [], [])).length > 0
 }

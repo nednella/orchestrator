@@ -1,14 +1,14 @@
 import { MessageSquare, StickyNote } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { commandToken } from '../chatComposer'
 import type { Command } from '../chatTimeline'
 import { EMPTY_DRAFT } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
-import type { ComposerMode } from '../AgentosContext'
+import type { ComposerMode } from '../OrchestratorContext'
 import type { Issue } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
@@ -36,7 +36,7 @@ const MODES: { value: ComposerMode; label: string; icon: ReactNode }[] = [
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const a = useAgentos('project', 'issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
+  const a = useOrchestrator('project', 'issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
   const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })

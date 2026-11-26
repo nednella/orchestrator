@@ -16,7 +16,7 @@ import { TerminalDrawer } from './components/TerminalDrawer'
 import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { useConfirming } from './confirm'
 import { useLayout } from './LayoutContext'
 import { useFocusedPanel } from './useFocusedPanel'
@@ -32,7 +32,7 @@ export function App() {
   useDigestToasts()
   useFocusedPanel()
   const fullscreen = useFullscreen()
-  const { selectedId } = useAgentos('selectedId')
+  const { selectedId } = useOrchestrator('selectedId')
   const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen, panelExpanded } = useLayout()
 
   return (

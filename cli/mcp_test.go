@@ -205,7 +205,7 @@ func TestMCPWaitPausesAfterAnEarlyAnswer(t *testing.T) {
 	}
 }
 
-func TestMCPIgnoresAgentosSession(t *testing.T) {
+func TestMCPIgnoresOrchestratorSession(t *testing.T) {
 	var got control.Request
 	fakeApp(t, func(_ context.Context, req control.Request) control.Response {
 		got = req

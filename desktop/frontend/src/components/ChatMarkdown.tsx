@@ -2,7 +2,7 @@ import { Children, createContext, isValidElement, memo, useContext } from 'react
 import type { ReactElement, ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import type { Components, UrlTransform } from 'react-markdown'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { codeLanguage, markdownProps, textCache } from '../chatMarkdown'
 import { filesKey, linkTarget, pickFile, planPath } from '../filesView'
@@ -23,7 +23,7 @@ const textOf = (node: ReactNode): string =>
 
 const components: Components = {
   a: function MarkdownLink({ href, children }) {
-    const { report, selectedId, project } = useAgentos('report', 'selectedId', 'project')
+    const { report, selectedId, project } = useOrchestrator('report', 'selectedId', 'project')
     const { showPanelView } = useLayout()
     const from = useContext(FileLinks)
     if (!href) return <>{children}</>

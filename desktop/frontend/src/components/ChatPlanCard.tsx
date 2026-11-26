@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useAnswering } from '../useAnswering'
 import { ChatAllowDeny } from './ChatAllowDeny'
 import { ChatMarkdown } from './ChatMarkdown'
@@ -29,7 +29,7 @@ export const ChatPlanCard = memo(function ChatPlanCard({ thread, request, input,
 type PlanAnswerProps = { thread: string; request: string }
 
 function PlanAnswer({ thread, request }: PlanAnswerProps) {
-  const a = useAgentos('answer')
+  const a = useOrchestrator('answer')
   const { busy, send } = useAnswering()
   return (
     <ChatAllowDeny

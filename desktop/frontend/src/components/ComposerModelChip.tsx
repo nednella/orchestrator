@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { ACCESS_NAME, showsAccessIcon } from '../access'
 import { api } from '../api'
 import { EFFORTS, modelAlias, modelShortName } from '../model'
@@ -23,9 +23,9 @@ type ComposerModelChipProps = {
 }
 
 export function ComposerModelChip({ model, effort, access, accessOff, onModel, onEffort, onAccess }: ComposerModelChipProps) {
-  const { report } = useAgentos('report')
-  const projectKey = useAgentosSelector((a) => a.project?.key ?? '')
-  const defaultAccess = useAgentosSelector((a) => a.settings.threadAccess)
+  const { report } = useOrchestrator('report')
+  const projectKey = useOrchestratorSelector((a) => a.project?.key ?? '')
+  const defaultAccess = useOrchestratorSelector((a) => a.settings.threadAccess)
   const [defaults, setDefaults] = useState<ModelChoice>({ model: '', effort: '' })
   const fixed = !onModel
 

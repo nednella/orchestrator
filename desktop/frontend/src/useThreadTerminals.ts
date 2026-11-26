@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { api } from './api'
 import { askConfirm } from './confirm'
 import { shellsOf } from './shells'
@@ -56,7 +56,7 @@ export type ThreadTerminals = {
 
 // useThreadTerminals is the thread's terminals, '' for Home's: its shells in the groups the owner made of them.
 export function useThreadTerminals(thread: string): ThreadTerminals {
-  const { shells: all } = useAgentos('shells')
+  const { shells: all } = useOrchestrator('shells')
   const ids = shellsOf(all, thread)
   useStartedShells()
   const terms = reconcile(useSavedTerms(thread), [...ids, ...startedShells(thread)])
@@ -75,7 +75,7 @@ export function useThreadTerminals(thread: string): ThreadTerminals {
 // useKeptTerminals keeps the terminals of the threads opened last alive, so going back to one shows its terminals at
 // once, and disposes the others'. Their shells run on in tmux. A shell just started is kept until Go announces it.
 export function useKeptTerminals(thread: string) {
-  const { shells } = useAgentos('shells')
+  const { shells } = useOrchestrator('shells')
   const started = useStartedShells()
   const recent = useRef<string[]>([])
   useEffect(() => {

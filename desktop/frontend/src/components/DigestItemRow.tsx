@@ -1,5 +1,5 @@
 import { BookmarkCheck, ExternalLink, FileText, NotebookPen, X } from 'lucide-react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { itemDate, itemHost } from '../digestFeed'
 import { useClock } from '../time'
@@ -9,7 +9,7 @@ import { DigestIconButton } from './DigestIconButton'
 type DigestItemRowProps = { item: DigestItem; fresh: boolean }
 
 export function DigestItemRow({ item, fresh }: DigestItemRowProps) {
-  const { digestToNote, dismissDigestItem, report } = useAgentos('digestToNote', 'dismissDigestItem', 'report')
+  const { digestToNote, dismissDigestItem, report } = useOrchestrator('digestToNote', 'dismissDigestItem', 'report')
   const date = useClock((now) => itemDate(item.at, now))
   const saved = item.noteId !== ''
   const host = itemHost(item.url)

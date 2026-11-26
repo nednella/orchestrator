@@ -1,6 +1,6 @@
 import { Pencil } from 'lucide-react'
 import { memo } from 'react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
 import { ChatActionButton, revealOnHover } from './ChatActionButton'
 import { ChatCopyButton } from './ChatCopyButton'
@@ -65,6 +65,6 @@ type SenderProps = { id: string }
 
 // Sender heads a message another thread sent, by that thread's title while the sessions list holds it.
 function Sender({ id }: SenderProps) {
-  const title = useAgentosSelector((a) => a.sessions.find((s) => s.id === id)?.title ?? id)
+  const title = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === id)?.title ?? id)
   return <p className="max-w-[80%] truncate pr-1 text-small text-dim">From {title}</p>
 }

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { matchesThread, sortThreads } from '../threads'
 import { useFocusRequest } from '../useFocusRequest'
@@ -13,7 +13,7 @@ import { ThreadRow } from './ThreadRow'
 export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
-  const { projectSessions, threadTree, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
+  const { projectSessions, threadTree, selectedId, select, focus, setComposerMode } = useOrchestrator('projectSessions', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
   const { widths, focusChat, showHome, focusPanel } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)

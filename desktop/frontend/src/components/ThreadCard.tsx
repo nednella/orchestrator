@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { EFFORTS, modelName } from '../model'
 import { threadCardLines } from '../threadCard'
 import type { Session } from '../types'
@@ -15,7 +15,7 @@ const MARGIN = 8
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
 export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
-  const { machine, issues } = useAgentos('machine', 'issues')
+  const { machine, issues } = useOrchestrator('machine', 'issues')
   const card = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
   const lines = threadCardLines(session, machine, issues.find((i) => i.number === session.issue)?.title ?? '')

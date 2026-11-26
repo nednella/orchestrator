@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLatestAgentos } from './AgentosContext'
+import { useLatestOrchestrator } from './OrchestratorContext'
 import { api, chatEvent, errorMessage, on } from './api'
 import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import { watchAgain } from './chatLive'
@@ -56,7 +56,7 @@ function later(run: () => void): () => void {
 // from. state is the thread's row state: a settled thread that wakes is watched again.
 export function useChat(id: string, state: State): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
-  const latest = useLatestAgentos()
+  const latest = useLatestOrchestrator()
   const seen = useRef<{ id: string; state: State }>({ id, state })
   const [wakes, setWakes] = useState(0)
   useEffect(() => {

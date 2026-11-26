@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { readStored, writeStored } from '../storage'
 import type { Session } from '../types'
 import { EvidenceCard } from './EvidenceCard'
@@ -12,7 +12,7 @@ type EvidenceTabProps = { session: Session }
 const ORDER_KEY = 'orchestrator.evidenceNewest'
 
 export function EvidenceTab({ session }: EvidenceTabProps) {
-  const { evidence } = useAgentos('evidence')
+  const { evidence } = useOrchestrator('evidence')
   const [newestFirst, setNewestFirst] = useState(() => readStored(ORDER_KEY, false))
   const [comparing, setComparing] = useState(false)
   const [picked, setPicked] = useState<string[]>([])

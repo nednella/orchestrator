@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { panelView } from '../panelViews'
 import { useFocusRequest } from '../useFocusRequest'
@@ -9,8 +9,8 @@ import { PanelTabStrip } from './PanelTabStrip'
 // RightPanel shows the open thread's views, or Home's: the list of views, or the tab picked, which fills the panel.
 // Expanded, it takes the chat's room as well.
 export function RightPanel() {
-  const session = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
-  const projectKey = useAgentosSelector((a) => a.project?.key)
+  const session = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const projectKey = useOrchestratorSelector((a) => a.project?.key)
   const { widths, panel, panelExpanded } = useLayout()
   const view = panel.active ? panelView(panel.active) : undefined
   const root = useRef<HTMLElement>(null)

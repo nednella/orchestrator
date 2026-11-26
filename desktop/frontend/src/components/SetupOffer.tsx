@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 
 export function SetupOffer() {
-  const { setUpProject, dismissSetup, report } = useAgentos('setUpProject', 'dismissSetup', 'report')
+  const { setUpProject, dismissSetup, report } = useOrchestrator('setUpProject', 'dismissSetup', 'report')
   const [pending, setPending] = useState(false)
   const run = (action: () => Promise<void>) =>
     report(async () => {

@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import type { Session } from '../types'
 
@@ -7,7 +7,7 @@ type BrowserRecentCapturesProps = { session: Session }
 const SHOWN = 3
 
 export function BrowserRecentCaptures({ session }: BrowserRecentCapturesProps) {
-  const { evidence } = useAgentos('evidence')
+  const { evidence } = useOrchestrator('evidence')
   const { showPanelView } = useLayout()
   const recent = (evidence[session.id] ?? [])
     .filter((item) => item.kind === 'image')

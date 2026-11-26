@@ -1,4 +1,4 @@
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { useThreadAgents } from '../chatAgents'
 import { useLayout } from '../LayoutContext'
 import { viewedAgent } from '../navHistory'
@@ -7,10 +7,10 @@ import { ThreadBreadcrumb } from './ThreadBreadcrumb'
 type TitleBreadcrumbProps = { showsThread: boolean }
 
 export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
-  const { project, projects, showHome, select } = useAgentos('project', 'projects', 'showHome', 'select')
-  const thread = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
-  const parent = useAgentosSelector((a) => (thread?.parent ? a.sessions.find((s) => s.id === thread.parent) : undefined))
-  const viewed = useAgentosSelector((a) => viewedAgent(a.viewHistory, thread?.id ?? ''))
+  const { project, projects, showHome, select } = useOrchestrator('project', 'projects', 'showHome', 'select')
+  const thread = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const parent = useOrchestratorSelector((a) => (thread?.parent ? a.sessions.find((s) => s.id === thread.parent) : undefined))
+  const viewed = useOrchestratorSelector((a) => viewedAgent(a.viewHistory, thread?.id ?? ''))
   const agent = useThreadAgents(thread?.id ?? '').find((a) => a.id === viewed)
   const { digestOpen } = useLayout()
 

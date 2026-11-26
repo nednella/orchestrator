@@ -1,4 +1,4 @@
-import type { PendingImage } from './AgentosContext'
+import type { PendingImage } from './OrchestratorContext'
 
 export type PreviewImage = PendingImage & { preview: string }
 

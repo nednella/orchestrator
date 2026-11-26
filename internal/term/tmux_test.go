@@ -216,7 +216,7 @@ func TestAccessTag(t *testing.T) {
 	}
 }
 
-func TestListSkipsSessionsAgentosDidNotMake(t *testing.T) {
+func TestListSkipsSessionsOrchestratorDidNotMake(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
 	if _, err := tmux.run(ctx, "new-session", "-d", "-s", "not-ours", "sleep", "60"); err != nil {

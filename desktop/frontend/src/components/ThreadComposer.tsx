@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { Ref, RefObject } from 'react'
-import { useAgentos } from '../AgentosContext'
-import type { ThreadDraft } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
+import type { ThreadDraft } from '../OrchestratorContext'
 import { accessDisabled } from '../access'
 import { api } from '../api'
 import { composerAction, replyLabel, replyPrefix, sendText, unseenDrafts } from '../chatComposer'
@@ -48,7 +48,7 @@ type ThreadComposerProps = {
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
 export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
-  const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useAgentos('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
+  const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { confirmed } from '../confirm'
 import { imageFiles, readImage } from '../images'
 import type { Note } from '../types'
@@ -22,7 +22,7 @@ const FOLD_LINES = 10
 const AUTOSAVE_MS = 700
 
 export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenImage }: NoteCardProps) {
-  const a = useAgentos('report', 'updateNote', 'setNotePinned', 'setNoteArchived', 'addNoteImage', 'removeNoteImage', 'deleteNote', 'noteToIssue', 'noteToSession')
+  const a = useOrchestrator('report', 'updateNote', 'setNotePinned', 'setNoteArchived', 'addNoteImage', 'removeNoteImage', 'deleteNote', 'noteToIssue', 'noteToSession')
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -30,7 +30,7 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
   const cancelled = useRef(false)
   const finishing = useRef(false)
   const title = note.text.split('\n')[0]
-  const hasRepo = useAgentosSelector((state) => Boolean(state.project?.repo))
+  const hasRepo = useOrchestratorSelector((state) => Boolean(state.project?.repo))
   const canFile = hasRepo && note.text.trim() !== ''
 
   useLayoutEffect(() => {

@@ -1,5 +1,5 @@
-import { useAgentos } from '../AgentosContext'
-import type { Toast } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
+import type { Toast } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { Icon } from './Icon'
 import { StateDot } from './StateDot'
@@ -18,7 +18,7 @@ const EDGE: Record<Toast['tone'], string> = {
 const ACTION_LABEL: Partial<Record<string, string>> = { replied: 'Open', opened: 'Open', evidence: 'View' }
 
 export function Toasts() {
-  const { toasts, select, dismissToast } = useAgentos('toasts', 'select', 'dismissToast')
+  const { toasts, select, dismissToast } = useOrchestrator('toasts', 'select', 'dismissToast')
   const { showPanelView } = useLayout()
   return (
     <div

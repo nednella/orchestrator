@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { RAIL_REM } from '../LayoutContext'
 import { waitingByProject } from '../threads'
 import type { Project } from '../types'
@@ -27,7 +27,7 @@ function tileLabels(projects: Project[]): string[] {
 }
 
 export function ProjectRail() {
-  const { projects, sessions, threadTree } = useAgentos('projects', 'sessions', 'threadTree')
+  const { projects, sessions, threadTree } = useOrchestrator('projects', 'sessions', 'threadTree')
   const waiting = useMemo(() => waitingByProject(sessions, threadTree), [sessions, threadTree])
   const labels = tileLabels(projects)
 

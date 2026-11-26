@@ -1,7 +1,7 @@
 import { ChartNoAxesColumn, CircleDot, Ellipsis, GitPullRequestArrow, Settings } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useAgentos, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor } from '../actions'
 import { barLayout } from '../bottomBar'
 import type { BarButtonId } from '../bottomBar'
@@ -25,9 +25,9 @@ const ICONS: Record<BarButtonId, ReactNode> = {
 // SidebarBottomBar sits under the thread list: the pages and views the owner opens from anywhere, and the update
 // button at the right. Buttons that do not fit beside it go into the More menu, the last ones first.
 export function SidebarBottomBar() {
-  const { report, digestUnseenCount } = useAgentos('report', 'digestUnseenCount')
+  const { report, digestUnseenCount } = useOrchestrator('report', 'digestUnseenCount')
   const layout = useLayout()
-  const latestAgentos = useLatestAgentos()
+  const latestOrchestrator = useLatestOrchestrator()
   const usageOpen = useUsageOpen()
   const bar = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(Infinity)
@@ -44,7 +44,7 @@ export function SidebarBottomBar() {
     return () => observer.disconnect()
   }, [])
 
-  const runAction = (id: string) => report(() => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!.run([]))
+  const runAction = (id: string) => report(() => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!.run([]))
   const open: Record<BarButtonId, () => void> = {
     settings: () => runAction('settings'),
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),

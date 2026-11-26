@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { DataDirChoice } from '../types'
 import { Icon } from './Icon'
@@ -9,7 +9,7 @@ type DataDirRowProps = { dir: string; fixed: boolean }
 type Busy = '' | 'copying' | 'relaunching'
 
 export function DataDirRow({ dir, fixed }: DataDirRowProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const [choice, setChoice] = useState<DataDirChoice | null>(null)
   const [busy, setBusy] = useState<Busy>('')
   const [target, setTarget] = useState('')

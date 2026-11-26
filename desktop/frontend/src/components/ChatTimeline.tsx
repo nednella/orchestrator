@@ -2,7 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
 import { ANCHOR_SLACK, followScroll, keepScroll, keptScroll, stillFollows } from '../chatScroll'
@@ -126,7 +126,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
 const headsSteps = (items: TimelineItem[], index: number) => items[index].kind === 'working' && items[index + 1]?.kind === 'work'
 
 export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork, edit }: ChatTimelineProps) {
-  const { select } = useAgentos('select')
+  const { select } = useOrchestrator('select')
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))

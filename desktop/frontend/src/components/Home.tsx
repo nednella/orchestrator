@@ -1,11 +1,11 @@
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { isTyping } from '../useListNav'
 import { useRefreshQueueOnShow } from '../useRefreshQueueOnShow'
 import { HomeComposer } from './HomeComposer'
 
 export function Home() {
-  const { project, focus } = useAgentos('project', 'focus')
+  const { project, focus } = useOrchestrator('project', 'focus')
 
   useRefreshQueueOnShow()
 

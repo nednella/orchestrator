@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Calendar, ChartColumn, Eraser } from 'lucide-react'
 import { api, errorMessage } from '../api'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { loadView } from '../loadView'
 import { rangeLabel } from '../statsChart'
@@ -34,7 +34,7 @@ const RANGE_KEY = 'orchestrator.statsWorkDays'
 const PROJECT_KEY = 'orchestrator.statsProject'
 
 export function Stats() {
-  const { focusRequest, projects, project: currentProject } = useAgentos('focusRequest', 'projects', 'project')
+  const { focusRequest, projects, project: currentProject } = useOrchestrator('focusRequest', 'projects', 'project')
   const { closeCentre } = useLayout()
   const [days, setDays] = useState(() => {
     const stored = readStored(RANGE_KEY, 30)

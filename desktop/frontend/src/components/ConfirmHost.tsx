@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { answerConfirm, checkConfirm, useConfirm } from '../confirm'
 import { answerFor, initialFocus } from '../confirmQueue'
 import { keepFocusIn } from '../focusTrap'
@@ -8,7 +8,7 @@ import { keepFocusIn } from '../focusTrap'
 // Esc cancels. Cancel has the focus in a danger confirm and the confirm button in the others; the element that had it
 // before the first gets it back after the last.
 export function ConfirmHost() {
-  const { focus } = useAgentos('focus')
+  const { focus } = useOrchestrator('focus')
   const { request, leaving, nudge } = useConfirm()
   const dialog = useRef<HTMLDivElement>(null)
   const no = useRef<HTMLButtonElement>(null)

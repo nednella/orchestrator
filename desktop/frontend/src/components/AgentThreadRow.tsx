@@ -1,7 +1,7 @@
 import { Bot } from 'lucide-react'
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { STATE_LABEL } from '../stateMeta'
 import { needsOwner } from '../threads'
 import type { Session } from '../types'
@@ -16,8 +16,8 @@ type AgentThreadRowProps = { child: Session; depth: number }
 // AgentThreadRow is a delegated child in the Agents view: a click opens it in the main view, a right-click gives its
 // menu. A child that waits, or has a child of its own that waits, shows as waiting.
 export function AgentThreadRow({ child, depth }: AgentThreadRowProps) {
-  const a = useAgentos('select', 'focus')
-  const waits = useAgentosSelector((s) => needsOwner(child, s.sessions) !== undefined)
+  const a = useOrchestrator('select', 'focus')
+  const waits = useOrchestratorSelector((s) => needsOwner(child, s.sessions) !== undefined)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const state = waits ? 'waiting' : child.state
   const indent = { '--depth': depth } as CSSProperties

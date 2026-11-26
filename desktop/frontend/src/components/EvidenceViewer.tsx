@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { confirmed } from '../confirm'
 import type { Evidence } from '../types'
@@ -17,7 +17,7 @@ type EvidenceViewerProps = {
 }
 
 export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceViewerProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const root = useRef<HTMLDivElement>(null)
   const [id, setId] = useState(startId)
   const [copied, setCopied] = useState(false)

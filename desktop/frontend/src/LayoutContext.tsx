@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useAgentos } from './AgentosContext'
-import type { FocusTarget } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
+import type { FocusTarget } from './OrchestratorContext'
 import { devFlags } from './api'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
@@ -102,7 +102,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, onFocus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'onFocus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, onFocus, report, pushToast, dismissToast } = useOrchestrator('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'onFocus', 'report', 'pushToast', 'dismissToast')
   const width = useWindowWidth()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode

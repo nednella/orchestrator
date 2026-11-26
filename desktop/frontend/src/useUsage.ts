@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, on } from './api'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import type { Ledger, Limits } from './types'
 
 // useUsage gives the plan limits and today's totals. It shows the last answer at once, then reads again; refresh is the
 // owner's ask, which Go answers with a probe when no thread is live.
 export function useUsage() {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const [limits, setLimits] = useState<Limits | null>(null)
   const [today, setToday] = useState<Ledger['totals'] | null>(null)
   const [reading, setReading] = useState(false)

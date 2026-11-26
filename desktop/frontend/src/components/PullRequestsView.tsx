@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import type { PanelViewProps } from '../panelViews'
 import { pullRows, pullsShown } from '../pullRows'
 import type { PullsRead } from '../pullRows'
@@ -42,7 +42,7 @@ function BackButton({ onBack }: { onBack(): void }) {
 type PullDetailProps = { pull: RepoPull; onBack(): void }
 
 function PullDetail({ pull, onBack }: PullDetailProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <header className="flex flex-none flex-col gap-2 border-b border-line px-3 pt-2 pb-3">
@@ -71,9 +71,9 @@ const known = new Map<string, RepoPull[]>()
 
 // PullRequestsView is the open thread's pull request and the repository's other open ones.
 export function PullRequestsView({ session }: PanelViewProps) {
-  const { projectSessions } = useAgentos('projectSessions')
-  const project = useAgentosSelector((a) => a.project?.name)
-  const repo = useAgentosSelector((a) => a.project?.repo ?? '')
+  const { projectSessions } = useOrchestrator('projectSessions')
+  const project = useOrchestratorSelector((a) => a.project?.name)
+  const repo = useOrchestratorSelector((a) => a.project?.repo ?? '')
   const key = project ?? ''
   const [found, setFound] = useState<PullsRead | null>(null)
   const [failed, setFailed] = useState<string | null>(null)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { Agentos } from '../AgentosContext.tsx'
+import type { Orchestrator } from '../OrchestratorContext.tsx'
 import type { Layout } from '../LayoutContext.tsx'
 import type { Session } from '../types.ts'
 import { OPEN_IN_EDITOR_LABEL, sessionActions } from './sessions.ts'
@@ -8,7 +8,7 @@ import { OPEN_IN_EDITOR_LABEL, sessionActions } from './sessions.ts'
 const thread = { id: 'shop/aaaaaaaa', n: 1, title: 'Fix cart' } as Session
 
 function openAction(current: Session | undefined, opened: string[]) {
-  const a = { openInEditor: async (id: string) => void opened.push(id) } as unknown as Agentos
+  const a = { openInEditor: async (id: string) => void opened.push(id) } as unknown as Orchestrator
   return sessionActions({ a, layout: {} as Layout, current }).find((x) => x.id === 'open-in-editor')
 }
 

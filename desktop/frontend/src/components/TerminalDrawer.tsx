@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { formatShortcut } from '../actions'
 import { NEW_TERMINAL_KEY } from '../actions/shell'
 import { termSession } from '../terminal/session'
@@ -15,7 +15,7 @@ import { TerminalSplit } from './TerminalSplit'
 
 // TerminalDrawer holds the open thread's terminals, or Home's, under the chat, at the height dragged on its top edge.
 export function TerminalDrawer() {
-  const { selectedId, project, report } = useAgentos('selectedId', 'project', 'report')
+  const { selectedId, project, report } = useOrchestrator('selectedId', 'project', 'report')
   const thread = selectedId ?? ''
   const open = useDrawerOpen(thread)
   const height = useDrawerHeight(thread)

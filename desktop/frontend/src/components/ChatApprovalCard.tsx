@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { toolSummary } from '../chatTools'
 import { useAnswering } from '../useAnswering'
 import { ChatAllowDeny } from './ChatAllowDeny'
@@ -17,7 +17,7 @@ export const ChatApprovalCard = memo(function ChatApprovalCard({ thread, request
 type WaitingApprovalProps = { thread: string; request: string; tool: string; input: unknown; folder: string }
 
 function WaitingApproval({ thread, request, tool, input, folder }: WaitingApprovalProps) {
-  const { answer } = useAgentos('answer')
+  const { answer } = useOrchestrator('answer')
   const { busy, send } = useAnswering()
   const { icon, title, detail } = toolSummary(tool, input, folder)
 

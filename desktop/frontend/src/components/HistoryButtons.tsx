@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, withShortcut } from '../actions'
 import { useLayout } from '../LayoutContext'
 import { titleBarButton } from './TitleBarButton'
@@ -11,11 +11,11 @@ const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 // HistoryButtons are Back and Forward through the views the owner went through, each off while no view is left that
 // way. The shortcuts never change, so the labels are read from the actions once.
 export function HistoryButtons() {
-  const { canGoBack, canGoForward, goBack, goForward } = useAgentos('canGoBack', 'canGoForward', 'goBack', 'goForward')
-  const latestAgentos = useLatestAgentos()
+  const { canGoBack, canGoForward, goBack, goForward } = useOrchestrator('canGoBack', 'canGoForward', 'goBack', 'goForward')
+  const latestOrchestrator = useLatestOrchestrator()
   const layout = useLayout()
   const [labels] = useState(() => {
-    const actions = actionsFor(latestAgentos(), layout)
+    const actions = actionsFor(latestOrchestrator(), layout)
     const shortcut = (id: string) => actions.find((a) => a.id === id)?.shortcut
     return { back: withShortcut('Back', shortcut('history-back')), forward: withShortcut('Forward', shortcut('history-forward')) }
   })

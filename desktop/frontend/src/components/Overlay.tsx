@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 
 type Size = 'default' | 'reading' | 'wide'
 
@@ -19,7 +19,7 @@ type OverlayProps = {
 }
 
 export function Overlay({ label, align, size = 'default', onClose, children }: OverlayProps) {
-  const { focus } = useAgentos('focus')
+  const { focus } = useOrchestrator('focus')
   const previous = useRef(document.activeElement)
   const dialog = useRef<HTMLDivElement>(null)
 

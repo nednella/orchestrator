@@ -1,5 +1,5 @@
 import { api } from '../api'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { workLink, workTitle } from '../statsFigures'
 import type { WorkRow } from '../types'
@@ -7,7 +7,7 @@ import type { WorkRow } from '../types'
 type StatsWorkTitleProps = { row: WorkRow; showProject: boolean }
 
 export function StatsWorkTitle({ row, showProject }: StatsWorkTitleProps) {
-  const { projects, sessions, select, report } = useAgentos('projects', 'sessions', 'select', 'report')
+  const { projects, sessions, select, report } = useOrchestrator('projects', 'sessions', 'select', 'report')
   const { closeCentre } = useLayout()
   const { ref, title } = workTitle(row)
   const repo = projects.find((p) => p.name === row.project)?.repo ?? ''

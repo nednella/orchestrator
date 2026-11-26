@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { activeValue, applyCompletion, completionAt, facet, TYPES, withToken } from '../issueFilter'
 import { useLayout } from '../LayoutContext'
 import { FacetMenu } from './FacetMenu'
@@ -8,7 +8,7 @@ import { Icon } from './Icon'
 type QueueSearchProps = { shown: number | null }
 
 export function QueueSearch({ shown }: QueueSearchProps) {
-  const { issues, issuesLoading, issueFilter, setIssueFilter, focusRequest, refreshIssues, focus, report } = useAgentos('issues', 'issuesLoading', 'issueFilter', 'setIssueFilter', 'focusRequest', 'refreshIssues', 'focus', 'report')
+  const { issues, issuesLoading, issueFilter, setIssueFilter, focusRequest, refreshIssues, focus, report } = useOrchestrator('issues', 'issuesLoading', 'issueFilter', 'setIssueFilter', 'focusRequest', 'refreshIssues', 'focus', 'report')
   const { panelExpanded } = useLayout()
   const input = useRef<HTMLInputElement>(null)
   const [cursor, setCursor] = useState(0)

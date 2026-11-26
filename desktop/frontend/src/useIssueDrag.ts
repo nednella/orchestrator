@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { api } from './api'
 import type { Issue } from './types'
 
@@ -16,7 +16,7 @@ export type IssueDrag = {
 type Placement = { section: string; settled: Issue[] | null }
 
 export function useIssueDrag(issues: Issue[]): IssueDrag {
-  const { report, pushToast, dismissToast } = useAgentos('report', 'pushToast', 'dismissToast')
+  const { report, pushToast, dismissToast } = useOrchestrator('report', 'pushToast', 'dismissToast')
   const [dragging, setDragging] = useState<Issue | null>(null)
   const [placements, setPlacements] = useState<Map<number, Placement>>(new Map())
   const latest = useRef(issues)

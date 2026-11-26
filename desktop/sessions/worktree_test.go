@@ -86,7 +86,7 @@ func systemPrompt(t *testing.T, h *apptest.Harness, id string) string {
 
 const worktreeText = "This thread runs in the worktree"
 
-func TestWriteThreadStartsInAWorktreeAgentosMade(t *testing.T) {
+func TestWriteThreadStartsInAWorktreeOrchestratorMade(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Fix the login button", "", "supervised", "")

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { filterCounts, groupByTool } from '../digestFeed'
 import type { DigestFilter } from '../digestFeed'
 import { runState } from '../digestStatus'
@@ -17,7 +17,7 @@ import { Notice } from './Notice'
 const NONE_LEFT: Record<DigestFilter, string> = { all: 'No items', new: 'No new items', saved: 'No saved items' }
 
 export function DigestView() {
-  const { digest, digestError, reloadDigest, digestSeen, runDigest, markDigestSeen, report, focusRequest, project } = useAgentos('digest', 'digestError', 'reloadDigest', 'digestSeen', 'runDigest', 'markDigestSeen', 'report', 'focusRequest', 'project')
+  const { digest, digestError, reloadDigest, digestSeen, runDigest, markDigestSeen, report, focusRequest, project } = useOrchestrator('digest', 'digestError', 'reloadDigest', 'digestSeen', 'runDigest', 'markDigestSeen', 'report', 'focusRequest', 'project')
   const loading = !digest
   const panel = useRef<HTMLElement>(null)
   const [filter, setFilter] = useState<DigestFilter>('all')

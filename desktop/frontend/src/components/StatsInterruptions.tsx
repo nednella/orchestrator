@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Hand, Hourglass, Timer } from 'lucide-react'
 import { api, on } from '../api'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { aDay, kindCounts, workTime } from '../statsFigures'
 import { KIND_COLOR, KIND_ICON, KIND_LABEL } from '../statsMeta'
 import type { Stats } from '../types'
@@ -13,7 +13,7 @@ type StatsInterruptionsProps = { days: number; project: string }
 const TOP_CAUSES = 5
 
 export function StatsInterruptions({ days, project }: StatsInterruptionsProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const [stats, setStats] = useState<Stats | null>(null)
 
   useEffect(() => {

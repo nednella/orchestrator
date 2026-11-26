@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import type { Session } from '../types'
 import { BrowserEmpty } from './BrowserEmpty'
 import { BrowserStatus } from './BrowserStatus'
@@ -7,7 +7,7 @@ import { BrowserStatus } from './BrowserStatus'
 type BrowserTabProps = { session: Session }
 
 export function BrowserTab({ session }: BrowserTabProps) {
-  const { browserStates, loadBrowserState } = useAgentos('browserStates', 'loadBrowserState')
+  const { browserStates, loadBrowserState } = useOrchestrator('browserStates', 'loadBrowserState')
   const state = browserStates[session.id]
   const known = Boolean(state)
 

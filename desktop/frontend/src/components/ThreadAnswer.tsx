@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { approvalLine } from '../chatQuestions'
 import type { Pending, Session } from '../types'
 import { useAnswering } from '../useAnswering'
@@ -8,7 +8,7 @@ import { useAnswering } from '../useAnswering'
 type ThreadAnswerProps = { session: Session; pending: Pending }
 
 export function ThreadAnswer({ session, pending }: ThreadAnswerProps) {
-  const a = useAgentos('answer', 'select', 'focus')
+  const a = useOrchestrator('answer', 'select', 'focus')
   const { busy, send } = useAnswering()
 
   if (pending.kind !== 'tool') {

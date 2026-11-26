@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import type { PR, Session } from '../types'
 import { BranchBar } from './BranchBar'
@@ -35,7 +35,7 @@ const PR_ACTION = {
 }
 
 export function PRTab({ session }: PRTabProps) {
-  const { report, focus, select, typeInto, ackPR, openPR } = useAgentos('report', 'focus', 'select', 'typeInto', 'ackPR', 'openPR')
+  const { report, focus, select, typeInto, ackPR, openPR } = useOrchestrator('report', 'focus', 'select', 'typeInto', 'ackPR', 'openPR')
   const { closeOverlay } = useLayout()
   const { pr, git } = session
   const live = pr?.state === 'draft' || pr?.state === 'open'

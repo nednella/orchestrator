@@ -1,5 +1,5 @@
 import { List, Maximize2, Minimize2, X } from 'lucide-react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { agentsWait, panelView } from '../panelViews'
 import type { PanelViewId } from '../panelTabs'
@@ -13,7 +13,7 @@ const stripButton = 'btn btn-ghost h-8 w-8 flex-none justify-center px-0 aria-pr
 // then Expand, offered only beside the chat, and Close.
 export function PanelTabStrip({ session }: PanelTabStripProps) {
   const { panel, panelExpanded, docked, showPanelList, showPanelView, closePanelTab, togglePanelExpanded, togglePanel } = useLayout()
-  const agentsWaiting = useAgentosSelector((a) => agentsWait(session, a.sessions))
+  const agentsWaiting = useOrchestratorSelector((a) => agentsWait(session, a.sessions))
   const expand = panelExpanded ? 'Restore panel size' : 'Expand panel'
 
   const tab = (id: PanelViewId) => {

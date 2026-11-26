@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
-import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
@@ -35,13 +35,13 @@ type ChatViewProps = { session: Session }
 const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
 export function ChatView({ session }: ChatViewProps) {
-  const { project, report, forkSession, threadDraft, setThreadDraft } = useAgentos('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
-  const latest = useLatestAgentos()
+  const { project, report, forkSession, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
+  const latest = useLatestOrchestrator()
   const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
-  const forks = useAgentosSelector((s) => forksKey(session.id, s.sessions))
+  const forks = useOrchestratorSelector((s) => forksKey(session.id, s.sessions))
   const { id: threadId, forkOf, forkAt, parent } = session
-  const parentTitle = useAgentosSelector((s) => (parent ? s.sessions.find((x) => x.id === parent)?.title : undefined))
+  const parentTitle = useOrchestratorSelector((s) => (parent ? s.sessions.find((x) => x.id === parent)?.title : undefined))
   const shown = useMemo(() => {
     const items = forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items)
     const lineage = lineageDivider({ parent }, parentTitle === undefined ? undefined : { id: parent, title: parentTitle })

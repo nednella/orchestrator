@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import type { Note } from '../types'
 import { useListNav, isTyping } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
@@ -14,7 +14,7 @@ import { Notice } from './Notice'
 const newestFirst = (x: Note, y: Note) => y.createdAt - x.createdAt
 
 export function NotesView() {
-  const a = useAgentos('notes', 'report', 'setNotePinned', 'setNoteArchived')
+  const a = useOrchestrator('notes', 'report', 'setNotePinned', 'setNoteArchived')
   const [query, setQuery] = useState('')
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import type { Project } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ProjectMenu } from './ProjectMenu'
@@ -7,7 +7,7 @@ import { ProjectMenu } from './ProjectMenu'
 type ProjectTileProps = { project: Project; label: string; waiting: number }
 
 export function ProjectTile({ project, label, waiting }: ProjectTileProps) {
-  const { project: current, switchProject, report } = useAgentos('project', 'switchProject', 'report')
+  const { project: current, switchProject, report } = useOrchestrator('project', 'switchProject', 'report')
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const selected = project.key === current?.key
   const needs = selected ? 0 : waiting

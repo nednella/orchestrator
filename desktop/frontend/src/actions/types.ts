@@ -1,4 +1,4 @@
-import type { Agentos } from '../AgentosContext'
+import type { Orchestrator } from '../OrchestratorContext'
 import type { Layout } from '../LayoutContext'
 import type { Session } from '../types'
 
@@ -22,4 +22,4 @@ export type Action = {
   run(args: string[]): string | void | Promise<string | void>
 }
 
-export type ActionContext = { a: Agentos; layout: Layout; current: Session | undefined }
+export type ActionContext = { a: Orchestrator; layout: Layout; current: Session | undefined }

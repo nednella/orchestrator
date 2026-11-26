@@ -1,4 +1,4 @@
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { descendantsOf } from '../threads'
 import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatPlanCard } from './ChatPlanCard'
@@ -10,7 +10,7 @@ type ChatChildApprovalsProps = { parent: string }
 // from here as the descendant's own.
 export function ChatChildApprovals({ parent }: ChatChildApprovalsProps) {
   // One string of ids, so the list renders again only when who waits changes.
-  const waiting = useAgentosSelector((a) =>
+  const waiting = useOrchestratorSelector((a) =>
     descendantsOf(parent, a.sessions)
       .filter((d) => a.pending[d.id])
       .map((d) => d.id)
@@ -32,10 +32,10 @@ type ChildApprovalProps = { id: string }
 // the descendant's. One whose input is not known, or too large to send, offers no answer, since the owner would not see
 // what it lets run: it opens the descendant, whose own chat has the full card. A question's picks are kept by the request, as the pending names no tool call.
 function ChildApproval({ id }: ChildApprovalProps) {
-  const { select } = useAgentos('select')
-  const child = useAgentosSelector((a) => a.sessions.find((s) => s.id === id))
-  const pending = useAgentosSelector((a) => a.pending[id])
-  const projectDir = useAgentosSelector((a) => a.projects.find((p) => p.key === child?.project)?.dir ?? '')
+  const { select } = useOrchestrator('select')
+  const child = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === id))
+  const pending = useOrchestratorSelector((a) => a.pending[id])
+  const projectDir = useOrchestratorSelector((a) => a.projects.find((p) => p.key === child?.project)?.dir ?? '')
   if (!pending || !child) return null
   const known = !pending.inputTooLarge && pending.input !== null && pending.input !== undefined
   return (

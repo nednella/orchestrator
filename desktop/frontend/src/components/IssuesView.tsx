@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
 import { filterIssues, isFiltering } from '../issueFilter'
 import { useIssueReadRequest } from '../issueReadRequest'
@@ -12,9 +12,9 @@ import { QueueSearch } from './QueueSearch'
 
 // IssuesView is the queue's list, and an issue read in its place, or beside it where the panel is 720 px wide or more.
 export function IssuesView() {
-  const { issues, issuesDisabled, issueFilter, report } = useAgentos('issues', 'issuesDisabled', 'issueFilter', 'report')
-  const projectName = useAgentosSelector((a) => a.project?.name)
-  const repo = useAgentosSelector((a) => a.project?.repo ?? '')
+  const { issues, issuesDisabled, issueFilter, report } = useOrchestrator('issues', 'issuesDisabled', 'issueFilter', 'report')
+  const projectName = useOrchestratorSelector((a) => a.project?.name)
+  const repo = useOrchestratorSelector((a) => a.project?.repo ?? '')
   const root = useRef<HTMLDivElement>(null)
   const [reading, setReading] = useState<number | null>(null)
 

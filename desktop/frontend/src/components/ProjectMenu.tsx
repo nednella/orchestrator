@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { Project } from '../types'
 import type { Point } from '../useFloatingAt'
@@ -7,7 +7,7 @@ import { ContextMenu } from './ContextMenu'
 type ProjectMenuProps = { project: Project; at: Point; onClose(): void }
 
 export function ProjectMenu({ project, at, onClose }: ProjectMenuProps) {
-  const { switchProject, setUpProject, report } = useAgentos('switchProject', 'setUpProject', 'report')
+  const { switchProject, setUpProject, report } = useOrchestrator('switchProject', 'setUpProject', 'report')
 
   const setUp = async () => {
     await switchProject(project.name)

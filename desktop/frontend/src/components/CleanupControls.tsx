@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { cleanupForced, cleanupRequest, passingReason } from '../cleanupConfirm'
 import { keptLine } from '../cleanupText'
 import { confirmed } from '../confirm'
@@ -11,7 +11,7 @@ type CleanupControlsProps = { session: Session }
 const KEPT_KEY = 'orchestrator.keptCleanups'
 
 export function CleanupControls({ session }: CleanupControlsProps) {
-  const { cleanupSession, report } = useAgentos('cleanupSession', 'report')
+  const { cleanupSession, report } = useOrchestrator('cleanupSession', 'report')
   const [kept, setKept] = useState(() => readStored<string[]>(KEPT_KEY, []).includes(session.id))
   const { cleanup, cleanupReason } = session
 

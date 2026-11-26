@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { BrowserState } from '../types'
 import { Ago } from './Ago'
@@ -9,7 +9,7 @@ import { Spinner } from './Spinner'
 type BrowserStatusHeaderProps = { id: string; state: BrowserState }
 
 export function BrowserStatusHeader({ id, state }: BrowserStatusHeaderProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
 
   return (
     <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-app px-4 py-3">

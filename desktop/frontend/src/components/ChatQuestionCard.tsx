@@ -1,5 +1,5 @@
 import { memo, useId, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { keepPicks, keptPicks, pickedAnswer, questionAnswer, questionsOf } from '../chatQuestions'
 import type { Pick, Question } from '../chatQuestions'
 import { useAnswering } from '../useAnswering'
@@ -41,7 +41,7 @@ function QuestionTitle({ question }: QuestionTitleProps) {
 type OpenQuestionsProps = { thread: string; id: string; request: string; input: unknown; questions: Question[] }
 
 function OpenQuestions({ thread, id, request, input, questions }: OpenQuestionsProps) {
-  const a = useAgentos('answerQuestion')
+  const a = useOrchestrator('answerQuestion')
   const { busy, send } = useAnswering()
   const [picks, setPicks] = useState<Pick[]>(() => keptPicks(thread, id) ?? questions.map(() => ({ labels: [], other: null })))
 

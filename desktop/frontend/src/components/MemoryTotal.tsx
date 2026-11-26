@@ -1,8 +1,8 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { gigabytes, memoryNote } from '../memory'
 
 export function MemoryTotal() {
-  const { memory } = useAgentos('memory')
+  const { memory } = useOrchestrator('memory')
   if (!memory || memory.total === 0) return null
   const machine = memory.machine > 0 ? `\nof ${Math.round(memory.machine / 2 ** 30)} GB` : ''
   const parts = [`orchestrator ${gigabytes(memory.app)}`, `Browsers ${gigabytes(memory.browsers)}`, `Sessions and shells ${gigabytes(memory.sessions)}`]

@@ -33,7 +33,7 @@ const storefrontSeeds: Seed[] = [
   [355, 'idea', '', 'Team leaderboard for best selling product', 'alex-r', []],
 ]
 
-const agentosSeeds: Seed[] = [
+const orchestratorSeeds: Seed[] = [
   [12, 'ready', 'feature', 'Persist the last selected session per project', 'nednella', []],
   [11, 'ready', 'bug', 'Terminal loses focus after a rename', 'nednella', []],
   [9, 'plan', 'feature', 'Notes sync between machines', 'nednella', []],
@@ -43,7 +43,7 @@ const agentosSeeds: Seed[] = [
 
 const seedsByRepo: Record<string, Seed[]> = {
   'acme/storefront': storefrontSeeds,
-  'nednella/orchestrator': agentosSeeds,
+  'nednella/orchestrator': orchestratorSeeds,
 }
 
 const labelFor = (lane: Lane) => ({ ready: 'ready', plan: 'needs-plan', you: 'needs-human', idea: 'idea', inbox: '' })[lane]

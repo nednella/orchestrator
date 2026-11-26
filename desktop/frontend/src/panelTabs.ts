@@ -1,4 +1,4 @@
-import type { FocusTarget } from './AgentosContext'
+import type { FocusTarget } from './OrchestratorContext'
 
 export type PanelViewId = 'agents' | 'servers' | 'pulls' | 'issues' | 'notes' | 'files' | 'evidence' | 'browser'
 

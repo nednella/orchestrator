@@ -1,11 +1,11 @@
 import { GitFork } from 'lucide-react'
 import { memo } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 
 type ChatForkDividerProps = { thread: string; label: string; hint: string }
 
 export const ChatForkDivider = memo(function ChatForkDivider({ thread, label, hint }: ChatForkDividerProps) {
-  const { select } = useAgentos('select')
+  const { select } = useOrchestrator('select')
   return (
     <div className="flex items-center gap-2 py-2 text-[11px] text-dim">
       <span className="h-px flex-1 bg-(--border-fork-divider)" />

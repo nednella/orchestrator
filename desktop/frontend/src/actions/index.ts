@@ -1,5 +1,5 @@
-import { useAgentos } from '../AgentosContext'
-import type { Agentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
+import type { Orchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import type { Layout } from '../LayoutContext'
 import { noteActions } from './notes'
@@ -14,10 +14,10 @@ export type { Action, ActionGroup, Shortcut } from './types'
 export { formatShortcut, LIST_KEYS, matchShortcut, withShortcut } from './shortcut'
 
 export function useActions(): Action[] {
-  return actionsFor(useAgentos(), useLayout())
+  return actionsFor(useOrchestrator(), useLayout())
 }
 
-export function actionsFor(a: Agentos, layout: Layout): Action[] {
+export function actionsFor(a: Orchestrator, layout: Layout): Action[] {
   const context = { a, layout, current: a.sessions.find((s) => s.id === a.selectedId) }
   return [
     ...sessionActions(context),

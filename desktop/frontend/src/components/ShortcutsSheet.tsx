@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { formatShortcut, LIST_KEYS, useActions } from '../actions'
 import type { Action } from '../actions'
 import { Icon } from './Icon'
@@ -45,13 +45,13 @@ function RowView({ row }: RowViewProps) {
 }
 
 export function ShortcutsSheet() {
-  const { overlay } = useAgentos('overlay')
+  const { overlay } = useOrchestrator('overlay')
   if (overlay !== 'shortcuts') return null
   return <ShortcutsSheetDialog />
 }
 
 function ShortcutsSheetDialog() {
-  const { setOverlay } = useAgentos('setOverlay')
+  const { setOverlay } = useOrchestrator('setOverlay')
   const actions = useActions()
   const [query, setQuery] = useState('')
 

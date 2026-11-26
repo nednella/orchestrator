@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from '../api'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { isTyping } from '../useListNav'
 import type { IssueDetail } from '../types'
 import { Ago } from './Ago'
@@ -16,7 +16,7 @@ const dateOf = (at: number) => new Date(at).toLocaleString()
 type IssueReaderProps = { number: number; onBack(): void }
 
 export function IssueReader({ number, onBack }: IssueReaderProps) {
-  const { issues, projectSessions: sessions, report } = useAgentos('issues', 'projectSessions', 'report')
+  const { issues, projectSessions: sessions, report } = useOrchestrator('issues', 'projectSessions', 'report')
   const body = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<IssueDetail | null>(null)
   const [error, setError] = useState('')

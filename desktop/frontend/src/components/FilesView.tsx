@@ -1,7 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronDown, CodeXml, Copy, Eye, FileText, WrapText } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
 import { editorLabel } from '../contextCard'
 import { FILES_MODE_KEY, fileLabel, filesKey, LATEST_PLAN, onPicked, pickedFile, pickerOrder, pickFile } from '../filesView'
@@ -27,8 +27,8 @@ const reason = (err: unknown) => (err instanceof Error ? err.message : String(er
 // FilesView shows one markdown file of the thread's folder, or on Home of the project's, rendered or as its source, to
 // read only. The picker lists the folder's markdown files, after the plan Claude last asked to have approved.
 export function FilesView({ session }: PanelViewProps) {
-  const { settings, report } = useAgentos('settings', 'report')
-  const project = useAgentosSelector((a) => a.project?.key ?? '')
+  const { settings, report } = useOrchestrator('settings', 'report')
+  const project = useOrchestratorSelector((a) => a.project?.key ?? '')
   const thread = session?.id
   const state = session?.state
   const key = filesKey(thread, project)

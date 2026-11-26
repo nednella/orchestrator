@@ -1,4 +1,4 @@
-import { useAgentos, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { confirmDelete } from '../confirm'
 import type { Session } from '../types'
@@ -9,8 +9,8 @@ type ChildMenuProps = { child: Session; at: Point; onClose(): void }
 
 // ChildMenu is the right-click menu of a delegated child, wherever its row shows.
 export function ChildMenu({ child, at, onClose }: ChildMenuProps) {
-  const a = useAgentos('select', 'settleThread', 'wakeThread', 'deleteThread', 'report')
-  const latest = useLatestAgentos()
+  const a = useOrchestrator('select', 'settleThread', 'wakeThread', 'deleteThread', 'report')
+  const latest = useLatestOrchestrator()
   const working = child.state === 'working' || child.state === 'waiting'
   const asleep = child.state === 'settled'
   return (

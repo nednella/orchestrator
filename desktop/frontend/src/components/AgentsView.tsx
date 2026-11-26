@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useThreadAgents } from '../chatAgents'
 import { useLayout } from '../LayoutContext'
 import type { PanelViewProps } from '../panelViews'
@@ -12,7 +12,7 @@ import { Notice } from './Notice'
 // AgentsView lists what works for the thread: the subagents Claude started in its chat, each of which opens in a view
 // of its own, then the threads it delegated to, each under the thread that delegated it.
 export function AgentsView({ session }: PanelViewProps) {
-  const { sessions, openAgent } = useAgentos('sessions', 'openAgent')
+  const { sessions, openAgent } = useOrchestrator('sessions', 'openAgent')
   const { focusPanel } = useLayout()
   const agents = useThreadAgents(session?.id ?? '')
   if (!session) return <Notice title="Available in a thread" hint="Open a thread to see its subagents and the threads it delegated to." centered />

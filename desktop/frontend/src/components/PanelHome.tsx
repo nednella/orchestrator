@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import { PANEL_KEYS, viewForKey } from '../panelTabs'
 import type { PanelViewId } from '../panelTabs'
@@ -33,7 +33,7 @@ function usePanelLetters(open: (view: PanelViewId) => void) {
 // PanelHome is the right panel's list of views. A view of one thread's things cannot open on Home.
 export function PanelHome({ session }: PanelHomeProps) {
   const { showPanelView } = useLayout()
-  const title = useAgentosSelector((a) => session?.title ?? a.project?.name ?? '')
+  const title = useOrchestratorSelector((a) => session?.title ?? a.project?.name ?? '')
   const meta = usePanelMeta(session)
   const opens = (id: PanelViewId) => session !== undefined || panelView(id)?.thread === false
   usePanelLetters((id) => opens(id) && showPanelView(id))

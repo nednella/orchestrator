@@ -1,7 +1,7 @@
 import { SquareMenu } from 'lucide-react'
 import { useRef } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, withShortcut } from '../actions'
 import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
@@ -15,18 +15,18 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 export function TopBar() {
-  const { selectedId, project, report } = useAgentos('selectedId', 'project', 'report')
+  const { selectedId, project, report } = useOrchestrator('selectedId', 'project', 'report')
   const layout = useLayout()
   const { docked, sidebarOpen, rightOpen, statsOpen, digestOpen, panelExpanded } = layout
   const terminalOpen = useDrawerOpen(selectedId ?? '') && !panelExpanded
-  const latestAgentos = useLatestAgentos()
-  const cardHasRows = useAgentosSelector(selectedCardHasRows)
+  const latestOrchestrator = useLatestOrchestrator()
+  const cardHasRows = useOrchestratorSelector(selectedCardHasRows)
   const card = useContextCard()
   const cardToggle = useRef<HTMLDivElement>(null)
   const popover = card.placement === 'popover' && card.popover
   const cardPressed = card.placement === 'inline' ? card.shown : popover
   useCardPopoverDismiss(cardToggle, popover)
-  const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
+  const find = (id: string) => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => withShortcut(label, find(id).shortcut)
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
   // With no sidebar beside it the bar starts after the window buttons.

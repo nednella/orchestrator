@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { useLayout } from './LayoutContext'
 
 export function useDigestToasts() {
-  const { digest, pushToast, dismissToast } = useAgentos('digest', 'pushToast', 'dismissToast')
+  const { digest, pushToast, dismissToast } = useOrchestrator('digest', 'pushToast', 'dismissToast')
   const { digestOpen, openDigest } = useLayout()
   const latest = useRef({ digestOpen, pushToast, dismissToast, openDigest })
   latest.current = { digestOpen, pushToast, dismissToast, openDigest }

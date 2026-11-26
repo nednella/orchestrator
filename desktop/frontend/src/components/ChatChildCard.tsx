@@ -2,7 +2,7 @@ import { Folder, GitBranch } from 'lucide-react'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { ACCESS_HINT, ACCESS_LABEL } from '../access'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { childFacts } from '../childCards'
 import type { ChildFacts } from '../childCards'
 import { STATE_LABEL } from '../stateMeta'
@@ -22,11 +22,11 @@ const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey &
 // is the button that does it from the keyboard, so nothing interactive nests in another. Its actions are in its
 // right-click menu.
 export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: ChatChildCardProps) {
-  const a = useAgentos('select')
-  const child = useAgentosSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
-  const parentProject = useAgentosSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
+  const a = useOrchestrator('select')
+  const child = useOrchestratorSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
+  const parentProject = useOrchestratorSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
   const facts = childFacts(child, title)
-  const projectName = useAgentosSelector((s) => s.projects.find((p) => p.key === facts.project)?.name ?? facts.project)
+  const projectName = useOrchestratorSelector((s) => s.projects.find((p) => p.key === facts.project)?.name ?? facts.project)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const card = useRef<HTMLDivElement>(null)
 

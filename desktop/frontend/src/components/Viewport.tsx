@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import { CARD_ROOM } from '../contextCard'
 import { useCardPlacement, useContextCard } from '../contextCardOpen'
 import { viewedAgent } from '../navHistory'
@@ -11,12 +11,12 @@ import { ThreadContextCard } from './ThreadContextCard'
 const clearOfCard = { paddingRight: CARD_ROOM }
 
 export function Viewport() {
-  const selected = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const selected = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
   const panel = useRef<HTMLElement>(null)
   const card = useContextCard()
   useCardPlacement(panel, selected !== undefined)
   const id = selected?.id ?? ''
-  const agent = useAgentosSelector((a) => viewedAgent(a.viewHistory, id))
+  const agent = useOrchestratorSelector((a) => viewedAgent(a.viewHistory, id))
 
   useFocusRequest('thread', panel, !selected)
   // The thread's chat takes the focus in its scroll area, or in the panel while the chat loads.

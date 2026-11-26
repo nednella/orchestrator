@@ -986,7 +986,7 @@ func TestApprovalRoundTrip(t *testing.T) {
 	}
 }
 
-func TestAgentosToolRunsWithoutAnApproval(t *testing.T) {
+func TestOrchestratorToolRunsWithoutAnApproval(t *testing.T) {
 	t.Parallel()
 	h := startHost(t, "AOS_FAKE_MODE=plan")
 	events := subscribe(t, h.socket, 0)
@@ -1015,7 +1015,7 @@ func TestAgentosToolRunsWithoutAnApproval(t *testing.T) {
 	}
 }
 
-func TestOtherToolOfAServerNamedAgentosAsks(t *testing.T) {
+func TestOtherToolOfAServerNamedOrchestratorAsks(t *testing.T) {
 	t.Parallel()
 	h := startHost(t, "AOS_FAKE_MODE=plan")
 	events := subscribe(t, h.socket, 0)

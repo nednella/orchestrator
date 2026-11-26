@@ -33,7 +33,7 @@ export type PendingImage = { base64: string; mime: string }
 // A thread's composer text, and the seq of the last draft orchestrator left in it that the composer has shown.
 export type ThreadDraft = { draft: ComposerDraft; seen: number }
 
-type AgentosState = {
+type OrchestratorState = {
   project: Project | null
   projects: Project[]
   sessions: Session[]
@@ -78,7 +78,7 @@ type AgentosState = {
 }
 
 // The actions keep their identity for the app's whole life, so picking one never renders a component again.
-type AgentosActions = {
+type OrchestratorActions = {
   select(id: string): void
   showHome(projectKey: string): void
   // openAgent shows the view of a subagent Claude started in the thread's chat, in place of that chat.
@@ -164,11 +164,11 @@ type AgentosActions = {
   dismissToast(key: number): void
 }
 
-export type Agentos = AgentosState & AgentosActions
+export type Orchestrator = OrchestratorState & OrchestratorActions
 
-type Store = { get(): Agentos; set(value: Agentos): void; subscribe(listener: () => void): () => void }
+type Store = { get(): Orchestrator; set(value: Orchestrator): void; subscribe(listener: () => void): () => void }
 
-function createStore(initial: Agentos): Store {
+function createStore(initial: Orchestrator): Store {
   let value = initial
   const listeners = new Set<() => void>()
   return {
@@ -185,38 +185,38 @@ function createStore(initial: Agentos): Store {
   }
 }
 
-const AgentosContext = createContext<Store | null>(null)
+const OrchestratorContext = createContext<Store | null>(null)
 
 function useStore(): Store {
-  const store = useContext(AgentosContext)
-  if (!store) throw new Error('useAgentos must be used inside AgentosProvider')
+  const store = useContext(OrchestratorContext)
+  if (!store) throw new Error('useOrchestrator must be used inside OrchestratorProvider')
   return store
 }
 
 // A component renders again only when one of the keys it names changes; naming none takes them all.
-export function useAgentos(): Agentos
-export function useAgentos<K extends keyof Agentos>(...keys: K[]): Pick<Agentos, K>
-export function useAgentos<K extends keyof Agentos>(...keys: K[]): Agentos | Pick<Agentos, K> {
+export function useOrchestrator(): Orchestrator
+export function useOrchestrator<K extends keyof Orchestrator>(...keys: K[]): Pick<Orchestrator, K>
+export function useOrchestrator<K extends keyof Orchestrator>(...keys: K[]): Orchestrator | Pick<Orchestrator, K> {
   const store = useStore()
-  const picked = useRef<Pick<Agentos, K> | null>(null)
+  const picked = useRef<Pick<Orchestrator, K> | null>(null)
   return useSyncExternalStore(store.subscribe, () => {
     const value = store.get()
     if (keys.length === 0) return value
     const last = picked.current
     if (last && keys.every((key) => Object.is(last[key], value[key]))) return last
-    picked.current = Object.fromEntries(keys.map((key) => [key, value[key]])) as Pick<Agentos, K>
+    picked.current = Object.fromEntries(keys.map((key) => [key, value[key]])) as Pick<Orchestrator, K>
     return picked.current
   })
 }
 
 // `select` must return a value the state holds, or a primitive: a new object on each call renders forever.
-export function useAgentosSelector<T>(select: (a: Agentos) => T): T {
+export function useOrchestratorSelector<T>(select: (a: Orchestrator) => T): T {
   const store = useStore()
   return useSyncExternalStore(store.subscribe, () => select(store.get()))
 }
 
 // For handlers that need the state at the moment they run, without rendering on each change.
-export function useLatestAgentos(): () => Agentos {
+export function useLatestOrchestrator(): () => Orchestrator {
   return useStore().get
 }
 
@@ -266,9 +266,9 @@ function keepUnchanged<T>(prev: T[], next: T[], keyOf: (item: T) => string | num
   return kept.length === prev.length && kept.every((item, i) => item === prev[i]) ? prev : kept
 }
 
-type AgentosProviderProps = { children: ReactNode }
+type OrchestratorProviderProps = { children: ReactNode }
 
-export function AgentosProvider({ children }: AgentosProviderProps) {
+export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -299,7 +299,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [composerDraft, setComposerDraftState] = useState(EMPTY_DRAFT)
   const [composerMode, setComposerModeState] = useState<ComposerMode>('thread')
   const [composerAccess, setComposerAccess] = useState<Access>('supervised')
-  const [focusRequest, setFocusRequest] = useState<Agentos['focusRequest']>({ target: 'thread', n: 0 })
+  const [focusRequest, setFocusRequest] = useState<Orchestrator['focusRequest']>({ target: 'thread', n: 0 })
 
   const threadTree = useMemo(() => threadTreeOf(sessions), [sessions])
   const sessionsRef = useRef(sessions)
@@ -840,7 +840,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     throw 'That request has already ended'
   }, [])
 
-  const actions = useMemo<AgentosActions>(
+  const actions = useMemo<OrchestratorActions>(
     () => ({
       select: selectSession,
       showHome(projectKey) {
@@ -1126,7 +1126,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const canGoBack = stepTo(viewHistory, back, live) !== viewHistory
   const canGoForward = stepTo(viewHistory, forward, live) !== viewHistory
 
-  const value = useMemo<Agentos>(
+  const value = useMemo<Orchestrator>(
     () => ({
       project,
       projects,
@@ -1172,5 +1172,5 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [store] = useState(() => createStore(value))
   useLayoutEffect(() => store.set(value), [store, value])
 
-  return <AgentosContext.Provider value={store}>{children}</AgentosContext.Provider>
+  return <OrchestratorContext.Provider value={store}>{children}</OrchestratorContext.Provider>
 }

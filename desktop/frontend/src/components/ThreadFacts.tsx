@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { gigabytes } from '../memory'
 import { threadFolder } from '../threadFolder'
 import { dollars, tokenCount } from '../spend'
@@ -11,7 +11,7 @@ import { StateBadge } from './StateBadge'
 type ThreadFactsProps = { session: Session }
 
 export function ThreadFacts({ session }: ThreadFactsProps) {
-  const { project } = useAgentos('project')
+  const { project } = useOrchestrator('project')
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-line px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">

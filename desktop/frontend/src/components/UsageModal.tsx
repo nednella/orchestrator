@@ -1,6 +1,6 @@
 import { RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { keepFocusIn } from '../focusTrap'
 import { dollars, tokenCount } from '../spend'
 import { closeUsage, useUsageOpen } from '../usageOpen'
@@ -16,7 +16,7 @@ export function UsageModal() {
 }
 
 function Usage() {
-  const { focus } = useAgentos('focus')
+  const { focus } = useOrchestrator('focus')
   const { limits, today, reading, error, refresh } = useUsage()
   const dialog = useRef<HTMLDivElement>(null)
   const close = useRef<HTMLButtonElement>(null)

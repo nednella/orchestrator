@@ -1,5 +1,5 @@
 import { sessionActions } from '../actions/sessions'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { cleanupForced, cleanupNowShown, cleanupRequest } from '../cleanupConfirm'
 import { confirmed } from '../confirm'
 import { useLayout } from '../LayoutContext'
@@ -23,7 +23,7 @@ const CLEANUP_LABEL: Record<Session['cleanup'], string> = { '': '', pending: '',
 const subagentsWorking = (n: number) => (n === 0 ? undefined : `${n} ${n === 1 ? 'subagent is' : 'subagents are'} still working`)
 
 export function ThreadMenu({ session, selected, at, onClose, onRename, onDelete }: ThreadMenuProps) {
-  const a = useAgentos()
+  const a = useOrchestrator()
   const layout = useLayout()
   const { rightOpen, setRightOpen, toggleRight } = layout
   const openInEditor = sessionActions({ a, layout, current: session }).find((x) => x.id === 'open-in-editor')

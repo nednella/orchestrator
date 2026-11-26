@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
@@ -7,7 +7,7 @@ import { InlineInput } from './InlineInput'
 type CaptureButtonProps = { id: string }
 
 export function CaptureButton({ id }: CaptureButtonProps) {
-  const { report, pushToast } = useAgentos('report', 'pushToast')
+  const { report, pushToast } = useOrchestrator('report', 'pushToast')
   const [capturing, setCapturing] = useState(false)
 
   if (capturing) {

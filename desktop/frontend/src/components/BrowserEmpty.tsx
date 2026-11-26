@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import type { Session } from '../types'
 
 type BrowserEmptyProps = { session: Session; error: string }
 
 export function BrowserEmpty({ session, error }: BrowserEmptyProps) {
-  const { openBrowser, report } = useAgentos('openBrowser', 'report')
+  const { openBrowser, report } = useOrchestrator('openBrowser', 'report')
   const [url, setUrl] = useState('')
 
   return (

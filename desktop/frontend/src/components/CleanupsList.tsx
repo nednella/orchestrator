@@ -1,9 +1,9 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { cleanupLine } from '../cleanupText'
 import { Ago } from './Ago'
 
 export function CleanupsList() {
-  const { cleanups } = useAgentos('cleanups')
+  const { cleanups } = useOrchestrator('cleanups')
   if (cleanups.length === 0) return <p className="text-small text-dim">Nothing cleaned up yet.</p>
   return (
     <div className="flex max-w-3xl flex-col">

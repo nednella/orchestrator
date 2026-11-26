@@ -1,6 +1,6 @@
 import { FolderGit2, GitBranch } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { ACCESSES, ACCESS_NAME, newThreadAccess } from '../access'
 import { useLayout } from '../LayoutContext'
 import { PLACE_LABEL, placeFor } from '../place'
@@ -59,7 +59,7 @@ function SettingRow({ label, hint, children }: SettingRowProps) {
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, setThreadPlace, setThreadAccess, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'setThreadPlace', 'setThreadAccess', 'report')
+  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, setThreadPlace, setThreadAccess, report } = useOrchestrator('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'setThreadPlace', 'setThreadAccess', 'report')
   const { scale, zoom } = useLayout()
   if (overlay !== 'settings') return null
 

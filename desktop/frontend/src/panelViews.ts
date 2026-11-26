@@ -1,7 +1,7 @@
 import { Bot, CircleDot, Files, GitPullRequestArrow, Globe, Image, Server, StickyNote } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { useAgentsRunning, useThreadAgents } from './chatAgents'
 import { AgentsView } from './components/AgentsView'
 import { BrowserView } from './components/BrowserView'
@@ -46,7 +46,7 @@ export function agentsWait(s: Session | undefined, sessions: Session[]): boolean
 
 // usePanelMeta is the short fact the list shows beside each view, '' for none.
 export function usePanelMeta(s: Session | undefined): Partial<Record<PanelViewId, string>> {
-  const { sessions, issues, notes, browserStates } = useAgentos('sessions', 'issues', 'notes', 'browserStates')
+  const { sessions, issues, notes, browserStates } = useOrchestrator('sessions', 'issues', 'notes', 'browserStates')
   const id = s?.id ?? ''
   const subagents = useThreadAgents(id)
   const subagentsRunning = useAgentsRunning(id) ?? 0

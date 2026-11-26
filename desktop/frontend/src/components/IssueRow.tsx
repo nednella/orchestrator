@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentosSelector } from '../AgentosContext'
+import { useOrchestratorSelector } from '../OrchestratorContext'
 import type { Issue } from '../types'
 import type { IssueDrag } from '../useIssueDrag'
 import { IssueThread } from './IssueThread'
@@ -11,7 +11,7 @@ import { TypeMark } from './TypeMark'
 type IssueRowProps = { issue: Issue; drag: IssueDrag; onRead(): void }
 
 export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
-  const session = useAgentosSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
+  const session = useOrchestratorSelector((a) => a.projectSessions.find((s) => s.id === issue.sessionId))
   const [menuOpen, setMenuOpen] = useState(false)
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
 

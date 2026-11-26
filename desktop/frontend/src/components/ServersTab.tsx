@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { Server, Session } from '../types'
 import { Icon } from './Icon'
@@ -10,7 +10,7 @@ type ServersTabProps = { session: Session; servers: Server[]; refresh(): Promise
 // ServersTab lists the ports the thread's servers listen on. A row opens its address in the default browser; its
 // button stops the server, with no confirm: the agent started it, and it stops anyway when the thread sleeps.
 export function ServersTab({ session, servers, refresh }: ServersTabProps) {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const [stopping, setStopping] = useState<number | null>(null)
 
   const stop = (pid: number) =>

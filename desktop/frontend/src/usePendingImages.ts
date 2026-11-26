@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAgentos } from './AgentosContext'
+import { useOrchestrator } from './OrchestratorContext'
 import { imageFiles, readImage } from './images'
 import type { PreviewImage } from './images'
 
@@ -14,7 +14,7 @@ export type PendingImages = {
 
 // The images pasted, dropped or picked for a note or a message, held until it is sent.
 export function usePendingImages(): PendingImages {
-  const { report } = useAgentos('report')
+  const { report } = useOrchestrator('report')
   const [images, setImages] = useState<PreviewImage[]>([])
   return {
     images,

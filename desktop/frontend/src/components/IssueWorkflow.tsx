@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { Issue } from '../types'
 import type { Point } from '../useFloatingAt'
@@ -11,7 +11,7 @@ type IssueWorkflowProps = { issue: Issue; onMenu?(open: boolean): void }
 
 // The section's actions as buttons: the first starts a thread at once, the second sits beside it, the rest wait in ⋯.
 export function IssueWorkflow({ issue, onMenu }: IssueWorkflowProps) {
-  const { startIssue, pushToast, report } = useAgentos('startIssue', 'pushToast', 'report')
+  const { startIssue, pushToast, report } = useOrchestrator('startIssue', 'pushToast', 'report')
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   // A press on ⋯ while the menu is open closes it on mousedown; the click that follows must not open it again.
   const closing = useRef(false)

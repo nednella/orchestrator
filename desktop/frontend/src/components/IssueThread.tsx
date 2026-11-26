@@ -1,4 +1,4 @@
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { STATE_LABEL } from '../stateMeta'
 import type { Session } from '../types'
 import { StateDot } from './StateDot'
@@ -6,7 +6,7 @@ import { StateDot } from './StateDot'
 type IssueThreadProps = { session: Session }
 
 export function IssueThread({ session }: IssueThreadProps) {
-  const { select } = useAgentos('select')
+  const { select } = useOrchestrator('select')
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-dim">
       <StateDot state={session.state} />

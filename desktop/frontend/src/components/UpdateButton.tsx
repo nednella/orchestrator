@@ -1,6 +1,6 @@
 import { Check, Download, RefreshCw, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { askConfirm } from '../confirm'
 import { installConfirm, updateAction, updateLook } from '../updateButton'
@@ -12,7 +12,7 @@ const RING_R = 14
 const RING_LENGTH = 2 * Math.PI * RING_R
 
 export function UpdateButton() {
-  const { update, report } = useAgentos('update', 'report')
+  const { update, report } = useOrchestrator('update', 'report')
   const look = updateLook(update)
   const action = updateAction(update)
   const { anchor, tipHandlers } = useDelayedTip()

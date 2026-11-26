@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useShowAgents } from '../chatAgents'
 import { COLUMN_KEY, storedColumn } from '../chatColumn'
 import { sameSteps } from '../chatTimeline'
@@ -21,7 +21,7 @@ type SubagentViewProps = { parent: Session; agent: string }
 // SubagentView shows a subagent Claude started in the parent's chat, read only: what it was asked, what it did and
 // what it reported. It follows the parent's chat, which holds every event of the subagent.
 export function SubagentView({ parent, agent }: SubagentViewProps) {
-  const { project, select, closeGoneAgent } = useAgentos('project', 'select', 'closeGoneAgent')
+  const { project, select, closeGoneAgent } = useOrchestrator('project', 'select', 'closeGoneAgent')
   const { timeline, loading } = useChat(parent.id, parent.state)
   useShowAgents(parent.id, timeline.items)
   const [column] = useState(() => storedColumn(readStored(COLUMN_KEY, null)))

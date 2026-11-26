@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import type { Issue } from '../types'
 import { isTyping } from '../useListNav'
 import { useProjectStored } from '../useProjectStored'
@@ -28,7 +28,7 @@ function moveFocus(list: HTMLElement, step: number) {
 type IssueListProps = { shown: Issue[]; filtering: boolean; onRead(number: number): void }
 
 export function IssueList({ shown: coreShown, filtering, onRead }: IssueListProps) {
-  const { issues: coreIssues, issuesLoading } = useAgentos('issues', 'issuesLoading')
+  const { issues: coreIssues, issuesLoading } = useOrchestrator('issues', 'issuesLoading')
   const drag = useIssueDrag(coreIssues)
   const issues = drag.place(coreIssues)
   const shown = drag.place(coreShown)

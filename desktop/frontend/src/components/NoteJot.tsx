@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
-import { useAgentos } from '../AgentosContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { AutoTextarea } from './AutoTextarea'
 import { NoteImages } from './NoteImages'
 
 export function NoteJot() {
-  const { addNote, report } = useAgentos('addNote', 'report')
+  const { addNote, report } = useOrchestrator('addNote', 'report')
   const pending = usePendingImages()
   const input = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')

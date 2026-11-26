@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useAgentos, useAgentosSelector } from './AgentosContext'
+import { useOrchestrator, useOrchestratorSelector } from './OrchestratorContext'
 
 const MIN_GAP_MS = 5000
 
@@ -10,8 +10,8 @@ let last = { at: 0, projectKey: undefined as string | undefined }
 // shown, when the project changes and when the window comes back into focus. The caller is mounted only
 // while it shows issues.
 export function useRefreshQueueOnShow() {
-  const { refreshIssues, report } = useAgentos('refreshIssues', 'report')
-  const projectKey = useAgentosSelector((a) => a.project?.key)
+  const { refreshIssues, report } = useOrchestrator('refreshIssues', 'report')
+  const projectKey = useOrchestratorSelector((a) => a.project?.key)
   const refresh = useRef<() => void>(() => {})
   refresh.current = () => {
     if (projectKey === undefined || (last.projectKey === projectKey && Date.now() - last.at < MIN_GAP_MS)) return

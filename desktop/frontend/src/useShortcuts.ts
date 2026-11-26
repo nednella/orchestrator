@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { useLatestAgentos } from './AgentosContext'
+import { useLatestOrchestrator } from './OrchestratorContext'
 import { actionsFor, matchShortcut } from './actions'
 import { useLayout } from './LayoutContext'
 import { isEditingText } from './useListNav'
 
 export function useShortcuts(enabled: boolean) {
-  const latestAgentos = useLatestAgentos()
+  const latestOrchestrator = useLatestOrchestrator()
   const layout = useLayout()
   const latest = useRef({ layout, enabled })
   latest.current = { layout, enabled }
@@ -13,7 +13,7 @@ export function useShortcuts(enabled: boolean) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!latest.current.enabled) return
-      const orchestrator = latestAgentos()
+      const orchestrator = latestOrchestrator()
       const action = actionsFor(orchestrator, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut) && !(x.shortcut.unlessTyping && isEditingText(e.target)))
       if (action) {
         e.preventDefault()
@@ -22,7 +22,7 @@ export function useShortcuts(enabled: boolean) {
     }
     const onEscape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !latest.current.enabled) return
-      const orchestrator = latestAgentos()
+      const orchestrator = latestOrchestrator()
       const lay = latest.current.layout
       if (orchestrator.overlay) {
         orchestrator.setOverlay(null)
@@ -50,5 +50,5 @@ export function useShortcuts(enabled: boolean) {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keydown', onEscape)
     }
-  }, [latestAgentos])
+  }, [latestOrchestrator])
 }

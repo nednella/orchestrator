@@ -455,8 +455,8 @@ func (h *host) handleLine(line []byte) {
 			h.modeIs(e.Text)
 			continue
 		case chat.KindApproval:
-			if h.allowsAgentosTool(e.Tool) {
-				h.allowAgentosTool(e)
+			if h.allowsOrchestratorTool(e.Tool) {
+				h.allowOrchestratorTool(e)
 				continue
 			}
 		}
@@ -466,11 +466,11 @@ func (h *host) handleLine(line []byte) {
 	}
 }
 
-// allowsAgentosTool says whether the host answers Claude's ask to run tool itself: in plan mode Claude asks for a tool
+// allowsOrchestratorTool says whether the host answers Claude's ask to run tool itself: in plan mode Claude asks for a tool
 // that changes things even when it is allowed. Every thread runs the orchestrator tools a Read thread may; the ones only a
 // thread that writes may run, it runs once Claude reports a mode other than plan, so a Read thread asks the owner for
 // them. Only the tools orchestrator serves are answered so, never another tool of a server that is also named orchestrator.
-func (h *host) allowsAgentosTool(tool string) bool {
+func (h *host) allowsOrchestratorTool(tool string) bool {
 	if slices.Contains(mcp.ReadNames(), tool) {
 		return true
 	}
@@ -482,8 +482,8 @@ func (h *host) allowsAgentosTool(tool string) bool {
 	return h.mode != "" && h.mode != "plan"
 }
 
-// allowAgentosTool answers Claude's ask to run an orchestrator tool with yes, and logs nothing.
-func (h *host) allowAgentosTool(e chat.Event) {
+// allowOrchestratorTool answers Claude's ask to run an orchestrator tool with yes, and logs nothing.
+func (h *host) allowOrchestratorTool(e chat.Event) {
 	if err := h.write(chat.Allow(e.ID, e.Input)); err != nil {
 		fmt.Fprintf(h.echo, "host: allowing %s: %v\n", e.Tool, err)
 	}
