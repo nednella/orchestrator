@@ -794,10 +794,7 @@ export function createMock(params: URLSearchParams) {
   function finishCleanup(s: Session) {
     const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
-    if (s.state !== 'settled') {
-      emit('term:exit', { id: s.id })
-      chats.end(s.id, 'settle')
-    }
+    if (s.state !== 'settled') chats.end(s.id, 'settle')
     Object.assign(s, { worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '', browser: false })
     setState(s, 'settled')
     emit('issues', { project: current.name, items: currentIssues() })
@@ -1031,10 +1028,7 @@ export function createMock(params: URLSearchParams) {
       }
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
-        if (x.state !== 'settled') {
-          emit('term:exit', { id: x.id })
-          chats.end(x.id, 'settle')
-        }
+        if (x.state !== 'settled') chats.end(x.id, 'settle')
         deleted.add(x.id)
         servers.delete(x.id)
         sessions.splice(sessions.indexOf(x), 1)
@@ -1076,7 +1070,6 @@ export function createMock(params: URLSearchParams) {
     SettleThread: async (id: string) => {
       const s = find(id)
       if (s.state === 'settled') throw `Thread ${id} is asleep`
-      emit('term:exit', { id })
       chats.end(id, 'settle')
       servers.delete(id)
       setState(s, 'settled')
@@ -1292,7 +1285,7 @@ export function createMock(params: URLSearchParams) {
     },
     TermOpen: async (id: string) => {
       const shell = findShell(id)
-      if (!shell) throw 'No such shell'
+      if (!shell) throw 'Only a shell has a terminal'
       shell.opened = true
       emit('term:data', { id, data: toBase64(`\x1bc${shell.buffer}`) })
     },

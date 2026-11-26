@@ -3291,7 +3291,6 @@ func (s *Sessions) settle(id, reason string, access session.Access) error {
 	case old:
 		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
-	s.closeTerm(id)
 	// Dropped before the kill, so a Refresh that sees the session gone first does not wake it for them. The messages
 	// threads told it are kept, and wake it once it has settled.
 	s.mu.Lock()

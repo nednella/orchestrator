@@ -1,9 +1,10 @@
-// Package terminal streams tmux sessions to the front end, one PTY per opened session.
+// Package terminal streams the project's shells to the front end, one PTY per opened shell.
 package terminal
 
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,9 +25,12 @@ const (
 	redrawGap  = 30 * time.Millisecond
 )
 
-var oscClipboard = []byte("\x1b]52;")
+var (
+	oscClipboard = []byte("\x1b]52;")
+	errNotShell  = errors.New("Only a shell has a terminal")
+)
 
-// Terms streams tmux sessions to the front end, one PTY per opened session.
+// Terms streams shells to the front end, one PTY per opened shell.
 type Terms struct {
 	tmux *term.Tmux
 	emit func(event string, payload any)
@@ -36,17 +40,17 @@ type Terms struct {
 	streams map[string]*stream
 }
 
-// New streams the sessions of tmux; emit sends the output and clip gets what an agent copies.
+// New streams the shells of tmux; emit sends the output and clip gets what a shell copies.
 func New(tmux *term.Tmux, emit func(string, any), clip func(string)) *Terms {
 	return &Terms{tmux: tmux, emit: emit, clip: clip, streams: map[string]*stream{}}
 }
 
-// Open attaches a PTY of the given size to the session. Opening an open session keeps its
+// Open attaches a PTY of the given size to the shell. Opening an open shell keeps its
 // stream, at the new size, and makes tmux redraw the whole screen.
 func (t *Terms) Open(id string, cols, rows int) error {
 	name, err := session.ParseName(id)
-	if err != nil {
-		return err
+	if err != nil || !name.IsShell() {
+		return errNotShell
 	}
 	t.mu.Lock()
 	if st := t.streams[id]; st != nil {
