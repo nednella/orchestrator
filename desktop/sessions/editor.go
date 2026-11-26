@@ -94,54 +94,72 @@ func (s *Sessions) threadFolder(id string) (string, error) {
 
 // OpenMarkdown opens the markdown file at path, relative to dir or absolute, and gives its real path. It refuses a file
 // whose real path, symlinks resolved, is not inside dir, and one that is not a regular .md or .markdown file by the
-// name given or by the name its symlinks lead to; of names whose folder dir is, for the error.
+// name given or by the name its symlinks lead to; of names whose folder dir is, for the error. Whether the path leaves
+// dir is judged before whether it exists, so a refusal never says whether a file outside dir is there. A hard link to a
+// file outside dir is read, since no path shows one.
 func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
+	gone := fmt.Errorf("The folder of %s is gone", of)
+	outside := fmt.Errorf("This file is outside %s's folder", of)
 	realDir, err := filepath.EvalSymlinks(dir)
 	if err != nil || !filepath.IsAbs(dir) {
-		return nil, "", fmt.Errorf("The folder of %s is gone", of)
+		return nil, "", gone
 	}
-	full := path
-	if !filepath.IsAbs(full) {
-		full = filepath.Join(dir, full)
+	rel, inside := filepath.Clean(path), filepath.IsLocal(path)
+	if filepath.IsAbs(path) {
+		if rel, inside = within(dir, path); !inside {
+			rel, inside = within(realDir, path)
+		}
 	}
-	real, err := filepath.EvalSymlinks(full)
-	missing := err != nil
-	if missing {
-		real = filepath.Clean(full)
+	if !inside {
+		return nil, "", outside
 	}
-	rel, inside := within(realDir, real)
-	if !inside && missing {
-		_, inside = within(dir, real)
-	}
-	switch {
-	case !inside:
-		return nil, "", fmt.Errorf("This file is outside %s's folder", of)
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, "", errors.New("This file does not exist")
-	case missing:
-		log.Printf("agentos: reading %s in the folder of %s: %v", path, of, err)
-		return nil, "", errors.New("Could not read this file")
-	case !IsMarkdown(path) || !IsMarkdown(real):
-		return nil, "", errNotMarkdown
-	}
-	// The folder's files can change between the check above and the open, so the open goes through a root, which
-	// refuses a path that has left the folder by then. Without O_NONBLOCK a named pipe would hold the open up.
+	// The root refuses a path whose symlinks lead out of the folder, whether or not their target exists.
 	root, err := os.OpenRoot(realDir)
 	if err != nil {
-		return nil, "", fmt.Errorf("The folder of %s is gone", of)
+		return nil, "", gone
 	}
 	defer root.Close()
+	checked, err := root.Stat(rel)
+	switch {
+	case errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR):
+		return nil, "", errors.New("This file does not exist")
+	case errors.Is(err, fs.ErrPermission):
+		return nil, "", errCannotRead
+	case err != nil:
+		return nil, "", outside
+	}
+	real, err := filepath.EvalSymlinks(filepath.Join(realDir, rel))
+	if err != nil {
+		log.Printf("agentos: reading %s in the folder of %s: %v", path, of, err)
+		return nil, "", errCannotRead
+	}
+	if _, inside := within(realDir, real); !inside {
+		return nil, "", outside
+	}
+	if !checked.Mode().IsRegular() || !IsMarkdown(path) || !IsMarkdown(real) {
+		return nil, "", errNotMarkdown
+	}
+	if beforeOpen != nil {
+		beforeOpen()
+	}
+	// Without O_NONBLOCK a named pipe put in the file's place would hold the open up.
 	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		log.Printf("agentos: opening %s in the folder of %s: %v", path, of, err)
-		return nil, "", errors.New("Could not read this file")
+		return nil, "", errCannotRead
 	}
-	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+	// The file can be swapped between the check and the open, as for a symlink to another file in the folder.
+	if opened, err := f.Stat(); err != nil || !os.SameFile(checked, opened) {
 		f.Close()
-		return nil, "", errNotMarkdown
+		return nil, "", errors.New("This file changed while it was opened")
 	}
 	return f, real, nil
 }
+
+// beforeOpen, when set, runs between OpenMarkdown's check of a file and its open, for a test to change the file there.
+var beforeOpen func()
+
+var errCannotRead = errors.New("Could not read this file")
 
 var errNotMarkdown = errors.New("This is not a markdown file")
 

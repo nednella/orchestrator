@@ -229,3 +229,40 @@ func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 		t.Errorf("ran %q for a file it refused", o.calls)
 	}
 }
+
+func TestOpenMarkdownRefusesAFileSwappedAfterTheCheck(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "secret.md")
+	for name, swap := range map[string]struct{ target, want string }{
+		"a file in the folder": {"other.md", "This file changed while it was opened"},
+		"a file outside":       {outside, "Could not read this file"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for file, text := range map[string]string{"plan.md": "# Plan", "other.md": "# Other", outside: "# Secret"} {
+				if !filepath.IsAbs(file) {
+					file = filepath.Join(dir, file)
+				}
+				if err := os.WriteFile(file, []byte(text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			beforeOpen = func() {
+				plan := filepath.Join(dir, "plan.md")
+				if err := os.Remove(plan); err != nil {
+					t.Error(err)
+				}
+				if err := os.Symlink(swap.target, plan); err != nil {
+					t.Error(err)
+				}
+			}
+			t.Cleanup(func() { beforeOpen = nil })
+			f, _, err := OpenMarkdown(dir, "plan.md", "thread 3")
+			if err == nil {
+				f.Close()
+			}
+			if err == nil || err.Error() != swap.want {
+				t.Errorf("OpenMarkdown of a file swapped after the check = %v, want %q", err, swap.want)
+			}
+		})
+	}
+}
