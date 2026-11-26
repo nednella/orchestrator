@@ -81,6 +81,8 @@ type Chats struct {
 	threads  Threads
 	emit     func(string, any)
 	commands *commandLists
+	// turnEnded hears of each turn_end a follower takes, after the threads do; OnTurnEnd sets it before Start.
+	turnEnded func(id string, e chatlog.Event)
 	// since is when this run of the app began, in unix milliseconds: a flag Claude refused before it was an earlier
 	// run's, which may have run another claude.
 	since int64
@@ -95,8 +97,13 @@ type Chats struct {
 
 // New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
 func New(t Threads, dir string, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}}
+	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}}
 }
+
+// OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.TurnEnded and before an AwaitTurn does: the
+// latest one of the log when the follower starts, and each one the host streams after it. fn runs on the follower, so
+// it must not block. It comes before Start.
+func (c *Chats) OnTurnEnd(fn func(id string, e chatlog.Event)) { c.turnEnded = fn }
 
 // Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
 func (c *Chats) Start(ctx context.Context) {
@@ -214,6 +221,20 @@ func (c *Chats) AwaitTurn(ctx context.Context, id string, after int64) (chatlog.
 	}
 }
 
+// TurnOver says whether the thread's follower has taken a turn_end, Claude's exit or a run's start after the seq after,
+// or has stopped. known is false while the thread has no follower that has read its log, which then holds the answer.
+func (c *Chats) TurnOver(id string, after int64) (over, known bool) {
+	c.mu.Lock()
+	f := c.followers[id]
+	c.mu.Unlock()
+	if f == nil || !f.hasRead() {
+		return false, false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.ended || f.turnEnd.Seq > after || f.exit.Seq > after || f.start > after, true
+}
+
 // followerOf is the thread's follower, started if the thread is live and has none.
 func (c *Chats) followerOf(ctx context.Context, id string) (*follower, error) {
 	select {
@@ -303,8 +324,9 @@ type follower struct {
 	flushing  bool            // a flush of batch is due
 	sent      time.Time       // when the last chat:<id> event went out
 	// turnEnd and exit are the latest of each the follower has taken, and ended says its run has returned: an await
-	// that comes after one of them is answered from them.
+	// that comes after one of them is answered from them. start is the seq of the latest run's start.
 	turnEnd, exit chatlog.Event
+	start         int64
 	ended         bool
 	awaits        []*await
 }
@@ -368,6 +390,7 @@ func (f *follower) run(ctx context.Context) {
 	// A turn interrupted while the app was closed ends now; the earlier turn_ends would change nothing after it.
 	if turnEnd != nil {
 		f.chats.threads.TurnEnded(f.chat.ID, *turnEnd)
+		f.chats.turnEnded(f.chat.ID, *turnEnd)
 		f.reached(*turnEnd)
 	}
 	if exit != nil {
@@ -416,8 +439,10 @@ func (f *follower) take(e chatlog.Event) {
 	}
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
-		// The sessions hear of the turn's end before an await does, so they see a wait on it still in flight.
+		// The sessions, and then OnTurnEnd's fn, hear of the turn's end before an await does, so they see a wait on it
+		// still in flight.
 		f.chats.threads.TurnEnded(f.chat.ID, e)
+		f.chats.turnEnded(f.chat.ID, e)
 		f.reached(e)
 	case chatlog.KindExit:
 		f.reached(e)
@@ -451,7 +476,10 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 	case chatlog.KindMode:
 		mode, planApproved = e.Text, f.planApproved
 		f.planApproved = false
-	case chatlog.KindTurnEnd, chatlog.KindExit, chatlog.KindStart:
+	case chatlog.KindStart:
+		f.start = e.Seq
+		f.planApproved, f.reporting = false, false
+	case chatlog.KindTurnEnd, chatlog.KindExit:
 		f.planApproved, f.reporting = false, false
 	}
 	return mode, planApproved
@@ -461,7 +489,7 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 func (f *follower) backgroundNow() sessions.Background {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return sessions.Background{Subagents: f.tasks.Working(), Reporting: f.reporting}
+	return sessions.Background{Subagents: f.tasks.Working(), Reporting: f.reporting, Asks: len(f.approvals) > 0}
 }
 
 func (f *follower) hasRead() bool {

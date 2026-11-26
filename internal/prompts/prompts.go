@@ -40,6 +40,14 @@ var (
 	delegated string
 	//go:embed from-thread.md
 	fromThread string
+	//go:embed child-done.md
+	childDone string
+	//go:embed child-later.md
+	childLater string
+	//go:embed child-cut.md
+	childCut string
+	//go:embed child-no-reply.md
+	childNoReply string
 	//go:embed handover.md
 	handover string
 	//go:embed denied.md
@@ -96,6 +104,24 @@ func Delegated(parent, task string) string {
 // FromThread is a message that the thread called title, of that id, sends to another thread with the send tool.
 func FromThread(title, id, text string) string {
 	return strings.NewReplacer("{title}", quotable(title), "{id}", id, "{text}", text).Replace(body(fromThread))
+}
+
+// ChildDone tells a thread the result of a turn of its child, the thread of that id that does the task called title:
+// how the turn ended, as outcome says ("completed", "failed: <why>" or "was stopped by the owner"), and the child's last
+// reply, result. later marks a turn after the one whose result came first, so the result is not taken for a copy, and
+// cut a result cut short, which read gives whole.
+func ChildDone(title, id, outcome, result string, later, cut bool) string {
+	text := childDone
+	if later {
+		text = childLater
+	}
+	if result == "" {
+		result = body(childNoReply)
+	}
+	if cut {
+		result += "\n\n" + strings.Replace(body(childCut), "{id}", id, 1)
+	}
+	return strings.NewReplacer("{title}", quotable(title), "{id}", id, "{outcome}", outcome, "{result}", result).Replace(body(text))
 }
 
 // quotable is a thread's title as a text may quote it. A title is the owner's to edit, and a thread may set its child's,

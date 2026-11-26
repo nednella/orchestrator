@@ -99,12 +99,13 @@ func turnEnded(t *testing.T, h *apptest.Harness, id string) bool {
 	return slices.ContainsFunc(logOf(t, h, id), func(e chat.Event) bool { return e.Kind == chat.KindTurnEnd })
 }
 
-// busyChild is a child of a new thread that, once its task is done, keeps a turn open until an interrupt.
+// busyChild is a child of a new thread that, once its task's result went to the thread and it slept, is woken to keep a
+// turn open until an interrupt.
 func busyChild(t *testing.T, h *apptest.Harness) (parent, id string) {
 	t.Helper()
 	parent = newThread(t, h, "Plan the release").ID
 	id = mustDelegate(t, h, parent, `{"task":"Count the files","access":"read"}`).ID
-	apptest.Eventually(t, "the task done", func() bool { return turnEnded(t, h, id) })
+	quiet(t, h, id)
 	working(t, h, id)
 	return parent, id
 }
@@ -307,6 +308,7 @@ func TestAWaitIsKeptUntilItEnds(t *testing.T) {
 		t.Error("the wait is kept after a slice answered it done")
 	}
 
+	quiet(t, h, c)
 	busyAgain(t, h, c)
 	if r := waitResultOf(t, slice(time.Second, time.Now().Add(1500*time.Millisecond)), 5*time.Second); r.a.Done || !waits() {
 		t.Fatalf("a slice before the deadline answered %+v, kept %v; want not done and kept", r, waits())

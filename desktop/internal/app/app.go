@@ -137,7 +137,8 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	proj := projects.NewService(c.Registry, sess, store, iss, a.updates, runner, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
 	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err }, h.Emit)
-	a.tools = orchestration.NewCommands(sess, chats, a.router)
+	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)
+	chats.OnTurnEnd(a.tools.ChildTurnEnded)
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}
 	digests, sc, ic := digest.NewCommands(mgr, a.router), sessions.NewCommands(sess, a.router), issues.NewCommands(iss, sessSvc)
 	a.handle(map[string]control.Handler{

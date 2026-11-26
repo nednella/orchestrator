@@ -1456,7 +1456,8 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 	parent := issueThread(h, t, 7)
 	wt := parent.Worktree
 	pushWork(t, wt)
-	child, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "Read the code", Title: "Helper", Access: parent.Access, Where: sessions.WhereFolder})
+	// The child works until stopped: one that finishes goes to sleep once its result went.
+	child, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "keep working", Title: "Helper", Access: parent.Access, Where: sessions.WhereFolder})
 	if err != nil {
 		t.Fatal(err)
 	}

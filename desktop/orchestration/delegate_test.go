@@ -383,8 +383,9 @@ func TestLiveChildrenLimit(t *testing.T) {
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	var children []string
+	// Each child works until stopped: one that finishes gives its result and goes to sleep.
 	for range 8 {
-		children = append(children, mustDelegate(t, h, parent.ID, `{"task":"one of many","where":"folder","access":"read"}`).ID)
+		children = append(children, mustDelegate(t, h, parent.ID, `{"task":"keep working","where":"folder","access":"read"}`).ID)
 	}
 	want := "This thread has 8 children running, the most it may have: wait for one to finish or stop one"
 	if _, err := delegateAs(t, h, parent.ID, `{"task":"one more","where":"folder","access":"read"}`); err != want {
@@ -435,7 +436,7 @@ func TestWokenChildKeepsItsAccess(t *testing.T) {
 func TestParentLinkSurvivesARestart(t *testing.T) {
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
-	running := mustDelegate(t, h, parent.ID, `{"task":"keep going","where":"folder"}`)
+	running := mustDelegate(t, h, parent.ID, `{"task":"keep working","where":"folder"}`)
 	settled := mustDelegate(t, h, parent.ID, `{"task":"stop soon","where":"folder"}`)
 	if err := h.SettleThread(settled.ID); err != nil {
 		t.Fatal(err)

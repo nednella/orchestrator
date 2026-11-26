@@ -446,9 +446,7 @@ func newTree(t *testing.T, h *apptest.Harness) tree {
 	tr.child = mustDelegate(t, h, tr.top, `{"task":"check the docs"}`).ID
 	tr.sibling = mustDelegate(t, h, tr.top, `{"task":"check the tests"}`).ID
 	tr.grandchild = mustDelegate(t, h, tr.child, `{"task":"check the links"}`).ID
-	for _, id := range []string{tr.child, tr.sibling, tr.grandchild} {
-		apptest.Eventually(t, "the task's turn to end", func() bool { return !turnOpen(t, h, id) })
-	}
+	quiet(t, h, tr.grandchild, tr.child, tr.sibling)
 	return tr
 }
 
@@ -505,7 +503,7 @@ func TestStopDropsTheMessagesHeldForAThread(t *testing.T) {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
-	if a := sendAs(t, h, tr.sibling, `{"thread":"`+tr.child+`","text":"also check the index"}`); !a.Held {
+	if a := sendAs(t, h, tr.top, `{"thread":"`+tr.child+`","text":"also check the index"}`); !a.Held {
 		t.Fatalf("send answered %+v, want it held", a)
 	}
 
@@ -529,6 +527,12 @@ func TestStopRefusesAThreadThatIsNotADescendant(t *testing.T) {
 	h := apptest.New(t)
 	tr := newTree(t, h)
 	stranger := threadWith(t, h, "Someone else", session.Read).ID
+	// The children slept once their results went; the callers are woken to call.
+	for _, id := range []string{tr.child, tr.grandchild} {
+		if _, err := h.WakeThread(id); err != nil {
+			t.Fatal(err)
+		}
+	}
 	working(t, h, tr.top)
 	working(t, h, tr.sibling)
 	working(t, h, stranger)

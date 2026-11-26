@@ -179,6 +179,7 @@ type Sessions struct {
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
 	delivering map[string]bool         // the threads whose held prompts, or a message told to them, are being sent now
+	idling     map[string]bool         // the threads SettleIdle puts to sleep now: what they are told waits until they sleep
 	tokens     map[string]string       // the SHA-256, in hex, of the token each thread's host was last started with
 	refused    map[string]bool         // the flags Claude did not know in this run of the app, which it now starts without
 	restarting map[string]bool         // the threads settled for a change of access until they wake again: they keep their servers
@@ -284,6 +285,7 @@ func newSessions(o Options) *Sessions {
 		history:    map[string][]session.Change{},
 		wakes:      map[string][]heldPrompt{},
 		delivering: map[string]bool{},
+		idling:     map[string]bool{},
 		afterTurn:  map[string][]func(){},
 		readers:    map[string]*reader{},
 		spent:      map[string]usage.Tokens{},
@@ -490,11 +492,13 @@ func identityOf(in term.Info) session.Identity {
 	return id
 }
 
-// keptFrom is id with the number and the first and latest start rec holds: tmux knows no number, a wake leaves the
-// first start where it was and sets the latest itself, and tmux dates a session only to the second.
+// keptFrom is id with the number, the first and latest start and the result reported that rec holds: tmux knows no
+// number and no result, a wake leaves the first start where it was and sets the latest itself, and tmux dates a
+// session only to the second.
 func keptFrom(id session.Identity, rec session.Record) session.Identity {
 	id.N, id.ForkAt = cmp.Or(rec.N, id.N), rec.ForkAt
 	id.Created, id.Woke = cmp.Or(rec.Created, id.Created), cmp.Or(rec.Woke, id.Woke)
+	id.Reported = max(rec.Reported, id.Reported)
 	return id
 }
 
@@ -611,6 +615,10 @@ func (s *Sessions) endSession(id string, at time.Time) {
 		rec = session.Record{Session: id, At: at}
 	}
 	rec.N = cmp.Or(rec.N, s.nums[id]) // no hook may have come since the number was saved
+	// Nor since SetReported wrote the file.
+	if cur, err := bus.ReadState(s.stateDir, id); err == nil {
+		rec.Reported = max(rec.Reported, cur.Reported)
+	}
 	if rec.State == session.Settled && !rec.At.IsZero() {
 		at = rec.At
 	}
@@ -1249,9 +1257,12 @@ func (s *Sessions) take(rec session.Record) {
 	if _, ended := s.ended[rec.Session]; ended || s.deleted[rec.Session] {
 		return
 	}
-	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
+	prev, ok := s.records[rec.Session]
+	if ok && !rec.At.After(prev.At) {
 		return
 	}
+	// A hook that read the state file before SetReported wrote it does not take the seq back.
+	rec.Reported = max(rec.Reported, prev.Reported)
 	s.records[rec.Session] = rec
 	s.followBranch(rec)
 	// Each hook moves the row's cost. The event log gets a turn's usage once the turn is over, and the
@@ -1332,7 +1343,8 @@ func (s *Sessions) sync() {
 			s.history[id] = session.AddChange(h, session.Change{State: state, At: at.UnixMilli()})
 		}
 		rec := s.records[id]
-		replied := known && prev == session.Working && state == session.Idle && rec.Event == "Stop"
+		// A child's reply goes to its parent, which reads it; the owner hears of the parent's.
+		replied := known && prev == session.Working && state == session.Idle && rec.Event == "Stop" && in.Parent == ""
 		if s.loaded {
 			switch {
 			case state == session.Waiting:
@@ -3009,6 +3021,12 @@ func awaitsOwner(rec session.Record) bool {
 	return rec.State == session.Waiting && !endsTurn(rec.Event)
 }
 
+// asks says whether an approval of the thread waits on the owner's answer, which a message from a thread would deny:
+// in the middle of its turn, as its hooks say, or a subagent's after its turn ended, as its chat log says. It needs mu.
+func (s *Sessions) asks(id string) bool {
+	return awaitsOwner(s.records[id]) || s.background[id].Asks
+}
+
 func holdsPrompts(state session.State) bool {
 	return state == session.Working || state == session.Waiting
 }
@@ -3040,13 +3058,12 @@ func (s *Sessions) deliverWakes() {
 			continue
 		}
 		_, live := s.seen[id]
-		rec := s.records[id]
 		var now, later []heldPrompt
 		for _, h := range all {
-			if !live || !holdsPrompts(s.stateOf(id)) || !h.command && !awaitsOwner(rec) {
-				now = append(now, h)
-			} else {
+			if live && s.holds(id, h) {
 				later = append(later, h)
+			} else {
+				now = append(now, h)
 			}
 		}
 		if len(now) == 0 {
@@ -3111,6 +3128,19 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 	}
 }
 
+// holds says whether the live thread id keeps the prompt h held: a command while the thread works or waits on the owner,
+// a message a thread told it while an approval of the thread waits on the owner, whose answer the message would be
+// taken for, and either while SettleIdle puts it to sleep. It needs mu.
+func (s *Sessions) holds(id string, h heldPrompt) bool {
+	if s.idling[id] {
+		return true
+	}
+	if h.command {
+		return holdsPrompts(s.stateOf(id))
+	}
+	return s.asks(id)
+}
+
 // doneDelivering ends the sending of the thread's held prompts. What was held meanwhile goes now, unless the host
 // refused a message, which then waits for the next change of the thread's state. It takes mu.
 func (s *Sessions) doneDelivering(id string, refused bool) {
@@ -3122,12 +3152,14 @@ func (s *Sessions) doneDelivering(id string, refused bool) {
 	}
 }
 
-// Told is a message for a thread: its text and the thread it is from, "" for the app. Steer stops the turn that runs
-// so the thread takes it in now. Ranked holds a message a thread sends of its own accord to the rank rule: it may reach
-// no thread whose access is above its own, when it is told and again when it goes, also after being held.
+// Told is a message for a thread: its text and the thread it is from, "" for the app. Body is the sender's bare words,
+// which Text frames for Claude, and Result marks a child's result; the log keeps both for the chat to show. Steer stops
+// the turn that runs so the thread takes it in now. Ranked holds a message a thread sends of its own accord to the rank
+// rule: it may reach no thread whose access is above its own, when it is told and again when it goes, also after being
+// held.
 type Told struct {
-	From, Text    string
-	Steer, Ranked bool
+	From, Text, Body      string
+	Result, Steer, Ranked bool
 }
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
@@ -3151,7 +3183,7 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 		return "", err
 	}
 	s.mu.Lock()
-	if s.delivering[id] || awaitsOwner(s.records[id]) || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+	if s.delivering[id] || s.asks(id) || s.idling[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
 		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m})
 		s.mu.Unlock()
 		return "", nil
@@ -3257,6 +3289,47 @@ func (s *Sessions) HoldsTold(id string) bool {
 	return s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command })
 }
 
+// Reported is the seq of the child's latest turn_end whose result went to its parent, 0 when none did, as its state
+// file says: a thread no hook has reported on yet has no record in the app.
+func (s *Sessions) Reported(id string) int64 {
+	rec, err := bus.ReadState(s.stateDir, id)
+	if err != nil {
+		log.Printf("agentos: reading the state of thread %s: %v", id, err)
+	}
+	return rec.Reported
+}
+
+// SetReported records that the result of the child's turn that ended at the seq went to its parent, in the records the
+// app holds and in the child's state file, so the app never sends it again, also after a restart. It takes mu.
+func (s *Sessions) SetReported(id string, seq int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rec, ok := s.records[id]; ok && rec.Reported < seq {
+		rec.Reported = seq
+		s.records[id] = rec
+	}
+	if e, ok := s.ended[id]; ok && e.rec.Reported < seq {
+		e.rec.Reported = seq
+	}
+	unlock, err := bus.LockState(s.stateDir, id)
+	if err != nil {
+		return fmt.Errorf("locking the state of thread %s: %w", id, err)
+	}
+	defer unlock()
+	rec, err := bus.ReadState(s.stateDir, id)
+	if err != nil {
+		return fmt.Errorf("reading the state of thread %s: %w", id, err)
+	}
+	if rec.Session == "" || rec.Reported >= seq {
+		return nil
+	}
+	rec.Reported = seq
+	if err := bus.WriteState(s.stateDir, rec); err != nil {
+		return fmt.Errorf("saving the state of thread %s: %w", id, err)
+	}
+	return nil
+}
+
 // DropTold drops the messages threads told the thread id that are held for it, and says how many: a thread stopped
 // at another thread's ask must not start a new turn for them once its approval ends. It takes mu.
 func (s *Sessions) DropTold(id string) int {
@@ -3297,7 +3370,7 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 	socket, err := s.readyHost(name)
 	var msg string
 	if err == nil {
-		msg, err = host.SendMessage(s.context(), socket, host.Message{Text: m.Text, From: m.From})
+		msg, err = host.SendMessage(s.context(), socket, host.Message{Text: m.Text, From: m.From, Body: m.Body, Result: m.Result})
 	}
 	if errors.Is(err, host.ErrApprovalWaits) {
 		return "", err
@@ -3325,6 +3398,45 @@ func (s *Sessions) Settle(id string) error {
 	}
 	s.stopServers(false, id)
 	return nil
+}
+
+// SettleIdle settles the live thread if its host is idle: no turn open or message queued, no approval waiting and no
+// subagent at work. It says whether it settled. A message a thread tells it meanwhile is held, and wakes it once it
+// sleeps; the host takes no other message from its check until it stops, so none is cut off. It takes mu.
+func (s *Sessions) SettleIdle(id string) (bool, error) {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
+	}
+	s.mu.Lock()
+	if s.idling[id] || s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+		s.mu.Unlock()
+		return false, nil
+	}
+	s.idling[id] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.idling, id)
+		s.sync()
+		s.mu.Unlock()
+	}()
+	socket, err := s.readyHost(name)
+	idle := false
+	if err == nil {
+		idle, err = host.Hold(s.context(), socket)
+	}
+	if err != nil {
+		return false, fmt.Errorf("holding the host of thread %s: %w", id, err)
+	}
+	if !idle {
+		return false, nil
+	}
+	if err := s.Settle(id); err != nil {
+		s.release(name)
+		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
+	}
+	return true, nil
 }
 
 // settle stops the thread for reason, chat.StopSettle or chat.StopRestart with the access it starts again with. Its host
@@ -3880,10 +3992,13 @@ func (s *Sessions) TurnEnded(id string, e chat.Event) {
 }
 
 // Background is what a thread's Claude does beside its turns: subagents in the background, which go on after the turn
-// that started them, and the turn Claude then starts itself to tell of one's end.
+// that started them, and the turn Claude then starts itself to tell of one's end. Asks is an approval that waits on the
+// owner as the chat log shows it: a subagent's waits past the end of the turn that started it, when the hooks say the
+// thread is idle.
 type Background struct {
 	Subagents int  // the tasks other than shells it runs in the background
 	Reporting bool // a task of its own ended, and Claude tells of it in a turn of its own that has not ended yet
+	Asks      bool
 	At        time.Time
 }
 

@@ -29,6 +29,9 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"setup checks", SetupChecks(), "e9a02eb963d84ac6f5638782a59dff307d11ced02b795140dee356c475c347a7"},
 		{"setup conflict", SetupConflict(), "5622f11bb34997100d3673942a0827aa104afc57290f6555416d3d7fad3b04f9"},
 		{"denied without reason", DeniedWithoutReason(), "589c34db5ffac761f6d79cf17be4d888c8857cd2ebaff301343a4b4c863f132e"},
+		{"child done", ChildDone("{title}", "{id}", "{outcome}", "{result}", false, false), "ffb409488534b8efa4f2ff1cc348fe9b1f2931242082a4f95e37ad445865429a"},
+		{"child later", ChildDone("{title}", "{id}", "{outcome}", "{result}", true, false), "15bd641bbdaa4ae24ad04deb33cbcbaa0936ca7725666162af5c019af5793711"},
+		{"child cut", ChildDone("{title}", "{id}", "{outcome}", "", false, true), "684e2c488b02e6f98320414d950ec8b4372071ef27ab02910981c87da4dbb976"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,6 +70,35 @@ func TestFromThreadNamesTheSenderAndEndsWithTheText(t *testing.T) {
 	got := FromThread("Plan \"the\"\nrelease", "main/abcdefgh", "Stop {id}\nand {title} wait")
 	if !strings.HasPrefix(got, `Thread "Plan 'the' release" (main/abcdefgh) sends you`) || !strings.Contains(got, "`send` to thread main/abcdefgh") || !strings.HasSuffix(got, "\n\nStop {id}\nand {title} wait") {
 		t.Errorf("FromThread = %q", got)
+	}
+}
+
+func TestChildDoneSaysHowTheTurnEnded(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		title, outcome string
+		result         string
+		later, cut     bool
+		prefix, suffix string
+		has, hasNot    string
+	}{
+		{name: "completed", title: "Count \"the\"\nfiles", outcome: "completed", result: "12 files {id}",
+			prefix: "Task Count 'the' files in thread main/abcdefgh completed:\n\n", suffix: "\n\n12 files {id}", hasNot: "`read`"},
+		{name: "failed", title: "Count", outcome: "failed: API Error 500", result: "half done",
+			prefix: "Task Count in thread main/abcdefgh failed: API Error 500:\n\n", suffix: "half done"},
+		{name: "no reply", title: "Count", outcome: "was stopped by the owner",
+			prefix: "Task Count in thread main/abcdefgh was stopped by the owner:\n\n", suffix: "It ended with no reply."},
+		{name: "cut", title: "Count", outcome: "completed", result: "a long … (cut)", cut: true,
+			has: "a long … (cut)\n\n", suffix: "Call `read` on thread main/abcdefgh for the rest."},
+		{name: "later", title: "Count", outcome: "completed", result: "13 files", later: true,
+			prefix: "Task Count in thread main/abcdefgh ran a later turn, which completed. This is a new result, not a copy", suffix: ":\n\n13 files"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ChildDone(tt.title, "main/abcdefgh", tt.outcome, tt.result, tt.later, tt.cut)
+			if !strings.HasPrefix(got, tt.prefix) || !strings.HasSuffix(got, tt.suffix) || !strings.Contains(got, tt.has) || tt.hasNot != "" && strings.Contains(got, tt.hasNot) {
+				t.Errorf("ChildDone = %q", got)
+			}
+		})
 	}
 }
 

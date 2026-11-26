@@ -876,9 +876,14 @@ func CLIPath(t *testing.T) string {
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
 // mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
-// once answered, one that ends in "slow", such as a task delegated as "slow", replies a second later, "stream" streams 200 deltas, "0 " to "199 ", before its reply, "plan"
+// once answered, one that ends in "slow", such as a task delegated as "slow", replies a second later, one that ends in
+// "fails" replies "half done" and ends its turn with the error "API Error: 500", one that ends in "background shell"
+// starts a shell in the background and replies a second later, and a second after that tells of the shell's end in a
+// turn of its own, which replies "shell done", "stream" streams 200 deltas, "0 " to
+// "199 ", before its reply, "plan"
 // asks to exit plan mode and, once allowed, reports the mode default before its reply, as Claude does, "leave plan"
-// reports the mode default before its reply with no plan approved, "work" keeps its turn open until an interrupt: it
+// reports the mode default before its reply with no plan approved, "work", or a text that ends in "keep working", such
+// as a task delegated so, keeps its turn open until an interrupt: it
 // holds each message read meanwhile, and after the interrupt takes them in and replies to them in a turn of their own,
 // as Claude does, and "serve <port>" starts a listener on 127.0.0.1:<port> in a session of its own, which writes its
 // pid to <dir>/<session id, "/" as "_">.serve<port>, and "exit" ends it, as Claude ending by itself. It answers a rewind
@@ -986,6 +991,20 @@ while IFS= read -r line; do
 		printf '%s\n' "$init"
 		sleep 1
 		reply ;;
+	*'"type":"user"'*'background shell"}]}'*)
+		printf '%s\n' "$init" '{"type":"assistant","message":{"id":"msg_sh","content":[{"type":"tool_use","id":"toolu_sh","name":"Bash","input":{"command":"sleep 2","run_in_background":true}}]}}' \
+			'{"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"toolu_sh","description":"sleep 2","is_backgrounded":true,"task_type":"local_bash"}' \
+			'{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_sh","content":"Running in the background"}]}}'
+		sleep 1
+		reply
+		(
+			sleep 1
+			printf '%s\n' '{"type":"system","subtype":"task_notification","task_id":"b1","tool_use_id":"toolu_sh","status":"completed","summary":"slept"}' \
+				'{"type":"assistant","message":{"id":"msg_shell","content":[{"type":"text","text":"shell done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
+		) & ;;
+	*'"type":"user"'*'fails"}]}'*)
+		printf '%s\n' "$init" '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"half done"}]}}' \
+			'{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["API Error: 500"],"total_cost_usd":0.01}' ;;
 	*'"type":"user"'*'"text":"stream"'*)
 		printf '%s\n' "$init"
 		i=0
@@ -1036,7 +1055,7 @@ while IFS= read -r line; do
 	*'"type":"user"'*'"text":"leave plan"'*)
 		printf '%s\n' "$init" '{"type":"system","subtype":"status","status":null,"permissionMode":"default"}'
 		reply ;;
-	*'"type":"user"'*'"text":"work"'*)
+	*'"type":"user"'*'"text":"work"'*|*'"type":"user"'*'keep working"}]}'*)
 		printf '%s\n' "$init"
 		working=1 held= ;;
 	*'"type":"user"'*)

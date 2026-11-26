@@ -40,10 +40,12 @@ type waitInput struct {
 }
 
 // waited is what one slice of a wait answers. Text is what the agent is given: the thread's last reply once its turn
-// ended, else a sentence that says how it stands.
+// ended, else a sentence that says how it stands. end is the seq of the thread's last turn_end when it is done, which
+// the agent is not given.
 type waited struct {
 	Done bool   `json:"done"`
 	Text string `json:"text"`
+	end  int64
 }
 
 // waitOn is a wait: the thread waiter waits on thread.
@@ -78,11 +80,15 @@ func (c *Commands) Waits(waiter, thread string) bool {
 	return false
 }
 
-// inTurn says whether the thread runs and its log has no turn's end, nor Claude's exit or start, after the seq from.
+// inTurn says whether the thread runs and its log has no turn's end, nor Claude's exit or start, after the seq from: as
+// its follower has taken them, which a child's turn end asks at once, else as the log says.
 func (c *Commands) inTurn(id string, from int64) bool {
 	ch, err := c.threads.ChatOf(id)
 	if err != nil || !ch.Live {
 		return false
+	}
+	if over, known := c.chats.TurnOver(id, from); known {
+		return !over
 	}
 	events, err := chatlog.ReadLog(ch.Log, from)
 	if err != nil {
@@ -110,10 +116,23 @@ func (c *Commands) hold(w waitOn, until time.Time, newest int64) {
 	c.waiting[w] = h
 }
 
-func (c *Commands) release(w waitOn) {
+// release ends the wait once a slice answered it done with the thread's turn that ended at the seq end. A parent's wait
+// keeps that seq, so the child's result is not also sent to it.
+func (c *Commands) release(w waitOn, end int64) {
+	parent := c.threads.ParentOf(w.thread) == w.waiter
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
+	if parent && end > c.answered[w] {
+		c.answered[w] = end
+	}
 	delete(c.waiting, w)
+}
+
+// answeredWith is the seq of the child's latest turn_end that its parent's wait on it answered with, 0 for none.
+func (c *Commands) answeredWith(w waitOn) int64 {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	return c.answered[w]
 }
 
 // wait answers one slice of the wait tool: it returns once the thread's turn has ended, it settles or is deleted, or
@@ -167,7 +186,7 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 	go c.cancelAtTurnEnd(ctx, cancel, caller, newest)
 	got := c.waitFor(ctx, ch)
 	if got.Done {
-		c.release(w)
+		c.release(w, got.end)
 	}
 	data, err := json.Marshal(got)
 	if err != nil {
@@ -244,16 +263,19 @@ func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 // turn is how a thread's last turn stands in its chat log.
 type turn struct {
 	newest int64 // the seq of the log's last event
+	end    int64 // the seq of the log's last turn_end
 	// ended says the last turn_end comes after the last user message, no queued message waits to be taken in, no
 	// subagent works in the background and no turn Claude runs to tell of a task's end is due: Claude runs one after
 	// a task of its own ends.
 	ended   bool
 	outcome string // completed, failed or stopped, once ended
 	reason  string // why a failed turn failed, as Claude said
+	stopper string // the thread that asked for the interrupt that stopped the turn, "" for the owner
 	reply   string // the agent's last reply after the last user message, cut as read cuts it
 	ran     bool   // Claude exited after its last start: this run is over
 	settled bool   // that exit was the thread settling
 	asks    bool   // an approval waits on the owner's answer
+	open    int    // the tasks Claude has open in the background, shells among them
 }
 
 // turnOf reads the thread's last turn from its log; a log that cannot be read is an empty one.
@@ -267,8 +289,8 @@ func (c *Commands) turnOf(ch sessions.Chat) turn {
 
 func turnIn(events []chatlog.Event) turn {
 	var t turn
-	var user, interrupt int64
-	var end chatlog.Event
+	var user int64
+	var end, interrupt chatlog.Event
 	var approvals []chatlog.Event
 	var tasks chatlog.Tasks
 	reporting := false
@@ -288,7 +310,7 @@ func turnIn(events []chatlog.Event) turn {
 		case chatlog.KindUnsent:
 			delete(queued, e.ID)
 		case chatlog.KindInterrupt:
-			interrupt = e.Seq
+			interrupt = e
 		case chatlog.KindTurnEnd:
 			end, reporting = e, false
 		case chatlog.KindStart:
@@ -300,11 +322,11 @@ func turnIn(events []chatlog.Event) turn {
 			t.ran, t.settled, reporting = true, e.Stop == chatlog.StopSettle, false
 		}
 	}
-	t.asks = len(approvals) > 0
+	t.asks, t.open, t.end = len(approvals) > 0, len(tasks.Open()), end.Seq
 	t.ended = end.Seq > user && len(queued) == 0 && tasks.Working() == 0 && !reporting
 	switch {
-	case interrupt > user && interrupt < end.Seq:
-		t.outcome = outcomeStopped
+	case interrupt.Seq > user && interrupt.Seq < end.Seq:
+		t.outcome, t.stopper = outcomeStopped, interrupt.From
 	case end.Error:
 		t.outcome, t.reason = outcomeFailed, end.Text
 	default:
@@ -320,7 +342,7 @@ func turnIn(events []chatlog.Event) turn {
 
 // answer is the slice's answer for the thread id with its turn t and the outcome, "" while it runs.
 func answer(id string, t turn, outcome string) waited {
-	w := waited{Done: outcome != ""}
+	w := waited{Done: outcome != "", end: t.end}
 	var head string
 	switch outcome {
 	case "":

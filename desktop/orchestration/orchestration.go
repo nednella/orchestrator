@@ -28,6 +28,9 @@ type Threads interface {
 	ParentOf(id string) string
 	DropTold(id string) int
 	HoldsTold(id string) bool
+	Reported(id string) int64
+	SetReported(id string, seq int64) error
+	SettleIdle(id string) (bool, error)
 }
 
 // tool runs one agentos tool as the caller, the thread the call's token names.
@@ -42,10 +45,19 @@ type Commands struct {
 
 	waitMu  sync.Mutex
 	waiting map[waitOn]held // each wait, and how long it lasts
+	// answered is, for a parent's wait on its child, the seq of the child's latest turn_end a slice answered done with.
+	answered map[waitOn]int64
+
+	ctx        func() context.Context // the app's, for the reports to stop with it
+	reportMu   sync.Mutex
+	reporting  map[string]bool   // the children whose results are being given to their parents now
+	reportNext map[string]report // the next result to give for each of them, once the one in hand is given
 }
 
-func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router) *Commands {
-	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}}
+// NewCommands answers the agentos tools as the threads s, and gives each child's result to its parent until the context
+// ctx gives ends.
+func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
+	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, answered: map[waitOn]int64{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	return c
 }

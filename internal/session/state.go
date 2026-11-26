@@ -60,6 +60,9 @@ type Identity struct {
 	Branch  string `json:"branch,omitempty"`  // the branch the thread works on, in the worktree it started in; "" in the project folder
 	Created int64  `json:"created,omitempty"` // unix ms of the first start
 	Woke    int64  `json:"woke,omitempty"`    // unix ms of the latest start: the first one or a wake
+	// Reported is the seq, in the child's chat log, of the latest turn_end whose result went to its parent, so a restart
+	// never sends it again.
+	Reported int64 `json:"reported,omitempty"`
 }
 
 // Access is what a thread may do without asking the owner.
