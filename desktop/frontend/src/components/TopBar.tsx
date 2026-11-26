@@ -5,6 +5,7 @@ import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosCont
 import { actionsFor, withShortcut } from '../actions'
 import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
+import { useDrawerOpen } from '../terminalDrawer'
 import { selectedCardHasRows } from '../useCardFacts'
 import { ThreadContextCard } from './ThreadContextCard'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
@@ -14,9 +15,10 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 export function TopBar() {
-  const { selectedId, report } = useAgentos('selectedId', 'report')
+  const { selectedId, project, report } = useAgentos('selectedId', 'project', 'report')
   const layout = useLayout()
-  const { docked, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
+  const { docked, sidebarOpen, rightOpen, statsOpen, digestOpen, panelExpanded } = layout
+  const terminalOpen = useDrawerOpen(selectedId ?? '') && !panelExpanded
   const latestAgentos = useLatestAgentos()
   const cardHasRows = useAgentosSelector(selectedCardHasRows)
   const card = useContextCard()
@@ -52,7 +54,13 @@ export function TopBar() {
           </div>
         )}
         <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
-        <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
+        <TitleBarButton
+          label={project ? named('Toggle terminal', 'toggle-shell') : 'The terminal is unavailable'}
+          icon="panel-bottom"
+          pressed={terminalOpen}
+          disabled={!project}
+          onClick={() => report(() => find('toggle-shell').run([]))}
+        />
         <TitleBarButton
           label={named(rightOpen ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
           icon="panel-right"

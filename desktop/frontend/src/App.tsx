@@ -12,9 +12,9 @@ import { RightPanel } from './components/RightPanel'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
-import { ShellStrip } from './components/ShellStrip'
 import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
+import { TerminalDrawer } from './components/TerminalDrawer'
 import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
@@ -61,7 +61,8 @@ export function App() {
           {docked.sidebar && sidebarOpen && <Divider panel="sidebar" />}
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
-            <main className="relative flex min-h-0 min-w-0 flex-1">
+            {/* isolate: the terminal drawer's z-index ranks it inside main, under the app's overlays. */}
+            <main className="relative isolate flex min-h-0 min-w-0 flex-1">
               {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
               <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
                 <div className="relative min-h-0 flex-1">
@@ -70,7 +71,7 @@ export function App() {
                   {digestOpen && <DigestView />}
                   {overlay && <PanelOverlay panel={overlay} />}
                 </div>
-                <ShellStrip />
+                <TerminalDrawer />
               </div>
               {docked.right && rightOpen && !panelExpanded && <Divider panel="right" />}
               {docked.right && rightOpen && <RightPanel />}

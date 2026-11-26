@@ -14,15 +14,16 @@ function toRgb(color: string): string {
   return `rgb(${r}, ${g}, ${b})`
 }
 
-// terminalThemeFrom reads the shell colours from the CSS variables in effect at el, so each named theme's shell matches it.
+// terminalThemeFrom reads the terminal colours from the CSS variables in effect at el, so each named theme's terminal
+// matches it: the page's own background and text, and the ANSI colours of a light or a dark theme.
 export function terminalThemeFrom(el: Element): ITheme {
   const style = getComputedStyle(el)
   const get = (name: string) => toRgb(style.getPropertyValue(name).trim())
-  const background = get('--bg-term')
+  const background = get('--bg-app')
   const theme: ITheme = {
     background,
     foreground: get('--text'),
-    cursor: get('--accent'),
+    cursor: get('--term-cursor'),
     cursorAccent: background,
     selectionBackground: get('--term-selection'),
   }
@@ -33,5 +34,6 @@ export function terminalThemeFrom(el: Element): ITheme {
   return theme
 }
 
-// The Nerd Font first, for the glyphs shell prompts draw; the mono stack covers the rest.
+// The Nerd Font after the mono stack, for the glyphs shell prompts draw that the others lack.
+export const TERMINAL_FONT = `"SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "JetBrainsMono Nerd Font Mono", monospace`
 export const terminalFontFrom = (el: Element) => `"JetBrainsMono Nerd Font Mono", ${getComputedStyle(el).getPropertyValue('--font-mono').trim()}`

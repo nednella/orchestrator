@@ -104,23 +104,33 @@
   --type-refactor: #b794f6;
   --type-chore: #8b93a5;
 
-  --term-selection: rgba(255, 255, 255, 0.2);
-  --term-black: #1a1f36;
-  --term-red: #ff5c70;
-  --term-green: #3de08f;
-  --term-yellow: #ffc247;
-  --term-blue: #5a8dff;
-  --term-magenta: #d27cff;
-  --term-cyan: #3fd2f0;
-  --term-white: #cfd5ee;
-  --term-bright-black: #5b6488;
-  --term-bright-red: #ff8794;
-  --term-bright-green: #7af0b4;
-  --term-bright-yellow: #ffd879;
-  --term-bright-blue: #8fb0ff;
-  --term-bright-magenta: #e5a8ff;
-  --term-bright-cyan: #8fe6f8;
-  --term-bright-white: #f4f6ff;
+  --term-cursor: rgb(180, 203, 255);
+  --term-selection: rgba(180, 203, 255, 0.25);
+  --term-black: #000000;
+  --term-red: #cd3131;
+  --term-green: #0dbc79;
+  --term-yellow: #e5e510;
+  --term-blue: #2472c8;
+  --term-magenta: #bc3fbc;
+  --term-cyan: #11a8cd;
+  --term-white: #e5e5e5;
+  --term-bright-black: #666666;
+  --term-bright-red: #f14c4c;
+  --term-bright-green: #23d18b;
+  --term-bright-yellow: #f5f543;
+  --term-bright-blue: #3b8eea;
+  --term-bright-magenta: #d670d6;
+  --term-bright-cyan: #29b8db;
+  --term-bright-white: #e5e5e5;
+
+  /* The terminal drawer and its list of terminals. */
+  --border-terminal: color-mix(in srgb, var(--border) 80%, transparent);
+  --border-terminal-soft: color-mix(in srgb, var(--border) 70%, transparent);
+  --bg-terminal-list: color-mix(in srgb, var(--text-dim) 10%, transparent);
+  --bg-terminal-group: color-mix(in srgb, var(--bg-hover) 50%, transparent);
+  --bg-terminal-row-hover: color-mix(in srgb, var(--bg-hover) 60%, transparent);
+  --text-terminal-button: color-mix(in srgb, var(--text) 90%, transparent);
+  --text-terminal-count: color-mix(in srgb, var(--text-dim) 70%, transparent);
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -151,6 +161,7 @@
   --z-panel-overlay: 25;
   --z-popup: 30;
   --z-overlay: 40;
+  --z-terminal: 45;
   --z-toast: 50;
   --z-dialog: 50;
   --z-splash: 60;
@@ -179,7 +190,6 @@
   --border-thread-waiting: rgba(255, 90, 74, 0.24);
   --bg-thread-question: rgba(255, 255, 255, 0.04);
 
-  --term-selection: rgba(167, 139, 250, 0.35);
   --composer-selection: rgba(167, 139, 250, 0.35);
 
   --bg-ghost-hover: rgba(255, 255, 255, 0.04);
@@ -259,21 +269,22 @@
   --text-note: #3a3425;
   --text-note-dim: #8a826c;
 
-  --term-selection: rgba(124, 92, 224, 0.25);
-  --term-black: #23272f;
-  --term-red: #c8283c;
-  --term-green: #1a8a55;
-  --term-yellow: #9a6a00;
-  --term-blue: #2a5fd0;
-  --term-magenta: #9a3fd0;
-  --term-cyan: #12829c;
-  --term-white: #8b93a5;
-  --term-bright-black: #5b6488;
-  --term-bright-red: #e0485a;
-  --term-bright-green: #2aa86c;
-  --term-bright-yellow: #b8820a;
-  --term-bright-blue: #4a7de8;
-  --term-bright-magenta: #b05ee8;
-  --term-bright-cyan: #2aa0ba;
-  --term-bright-white: #c4c9d6;
+  --term-cursor: rgb(38, 56, 78);
+  --term-selection: rgba(37, 63, 99, 0.2);
+  --term-black: #000000;
+  --term-red: #cd3131;
+  --term-green: #107c10;
+  --term-yellow: #949800;
+  --term-blue: #0451a5;
+  --term-magenta: #bc05bc;
+  --term-cyan: #0598bc;
+  --term-white: #555555;
+  --term-bright-black: #666666;
+  --term-bright-red: #cd3131;
+  --term-bright-green: #14ce14;
+  --term-bright-yellow: #b5ba00;
+  --term-bright-blue: #0451a5;
+  --term-bright-magenta: #bc05bc;
+  --term-bright-cyan: #0598bc;
+  --term-bright-white: #a5a5a5;
 }

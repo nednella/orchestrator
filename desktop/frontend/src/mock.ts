@@ -1429,6 +1429,7 @@ export function createMock(params: URLSearchParams) {
     ShellClose: async (id: string) => {
       const at = shells.findIndex((x) => x.id === id)
       if (at >= 0) shells.splice(at, 1)
+      endTermStream(id)
       publishShells()
     },
     TermOpen: async (id: string) => {

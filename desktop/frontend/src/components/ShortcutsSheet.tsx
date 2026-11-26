@@ -16,8 +16,8 @@ const GROUPS: Group[] = [
   { title: 'Notes', ids: ['show-notes'] },
   { title: 'Views', ids: ['stats', 'digest', 'show-thread', 'show-browser', 'show-evidence', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
   {
-    title: 'Shell',
-    ids: [],
+    title: 'Terminal',
+    ids: ['new-terminal', 'split-terminal'],
     extra: [
       { id: 'shell-keys', label: 'Back to the terminal', keys: 'Esc Esc' },
       { id: 'shell-ex-1', label: 'agentos issue 394 393', mono: true },
@@ -30,7 +30,7 @@ const GROUPS: Group[] = [
 ]
 
 const LEFT = ['Sessions', 'Queue', 'In a list']
-const RIGHT = ['Navigate', 'Notes', 'Views', 'Shell']
+const RIGHT = ['Navigate', 'Notes', 'Views', 'Terminal']
 const listed = new Set(GROUPS.flatMap((g) => g.ids))
 
 function toRow(action: Action): Row {
