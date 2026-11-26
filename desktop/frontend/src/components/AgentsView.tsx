@@ -9,8 +9,8 @@ import { Ago } from './Ago'
 import { ClaudeMark } from './ClaudeMark'
 import { Notice } from './Notice'
 
-// AgentsView lists what works for the thread: the subagents Claude started in its chat, which open in the chat, then
-// the threads it delegated to, each under the thread that delegated it.
+// AgentsView lists what works for the thread: the subagents Claude started in its chat, each of which opens in a view
+// of its own, then the threads it delegated to, each under the thread that delegated it.
 export function AgentsView({ session }: PanelViewProps) {
   const { sessions } = useAgentos('sessions')
   const { focusPanel } = useLayout()

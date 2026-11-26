@@ -1,6 +1,6 @@
 import { Bot, ChevronDown, ChevronRight } from 'lucide-react'
-import { memo, useEffect, useState } from 'react'
-import { onAgentOpen } from '../chatAgents'
+import { memo, useState } from 'react'
+import { openAgent } from '../chatAgents'
 import { isOpened, setOpened } from '../chatOpen'
 import { sameSteps } from '../chatTimeline'
 import type { AgentState, WorkStep } from '../chatTimeline'
@@ -20,35 +20,41 @@ const unchanged = (a: ChatAgentRowProps, b: ChatAgentRowProps) =>
   a.thread === b.thread && a.id === b.id && a.description === b.description && a.type === b.type && a.state === b.state && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.tools === b.tools && a.result === b.result && a.folder === b.folder && sameSteps(a.steps, b.steps)
 
 // ChatAgentRow is a subagent Claude started, on one line: what it does, its type, how long it has worked and how many
-// tools it ran. Opened, it shows what the subagent did, under the line, and its report.
+// tools it ran. The line opens the subagent's own view; its chevron shows what the subagent did, under the line, and
+// its report.
 export const ChatAgentRow = memo(function ChatAgentRow({ thread, id, description, type, state, startedAt, endedAt, tools, steps, result, folder }: ChatAgentRowProps) {
   const [open, setOpen] = useState(() => isOpened(thread, id))
-  useEffect(() => onAgentOpen(thread, (agent) => agent === id && setOpen(true)), [thread, id])
   const running = state === 'running'
   const Chevron = open ? ChevronDown : ChevronRight
 
   return (
     <div>
-      <button
-        className="group flex w-full min-w-0 items-center gap-2 py-1 text-left text-small text-soft hover:text-ink"
-        aria-expanded={open}
-        onClick={() => {
-          setOpened(thread, id, !open)
-          setOpen(!open)
-        }}
-      >
-        <span className={`flex flex-none ${state === 'failed' ? 'text-danger' : 'text-dim'}`}>
-          <Bot size={12} strokeWidth={2} aria-hidden />
-        </span>
-        {running ? <ChatShimmer text={description} /> : <span className="min-w-0 truncate">{description}</span>}
-        {type && <span className="flex-none text-dim">{type}</span>}
-        <span className="ml-auto flex flex-none items-center gap-2 text-dim tabular-nums">
-          {!running && <span className={state === 'failed' ? 'text-danger' : undefined}>{stateLabel[state]}</span>}
-          <Worked startedAt={startedAt} endedAt={endedAt} />
-          {tools > 0 && <span>{tools === 1 ? '1 tool' : `${tools} tools`}</span>}
+      <div className="flex min-w-0 items-center gap-2 text-small text-soft">
+        <button className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left hover:text-ink" title={`Open ${description}`} onClick={() => openAgent(thread, id)}>
+          <span className={`flex flex-none ${state === 'failed' ? 'text-danger' : 'text-dim'}`}>
+            <Bot size={12} strokeWidth={2} aria-hidden />
+          </span>
+          {running ? <ChatShimmer text={description} /> : <span className="min-w-0 truncate">{description}</span>}
+          {type && <span className="flex-none text-dim">{type}</span>}
+          <span className="ml-auto flex flex-none items-center gap-2 text-dim tabular-nums">
+            {!running && <span className={state === 'failed' ? 'text-danger' : undefined}>{stateLabel[state]}</span>}
+            <Worked startedAt={startedAt} endedAt={endedAt} />
+            {tools > 0 && <span>{tools === 1 ? '1 tool' : `${tools} tools`}</span>}
+          </span>
+        </button>
+        <button
+          className="-mr-1 flex flex-none rounded-sm p-1 text-dim hover:text-ink"
+          aria-expanded={open}
+          aria-label={open ? 'Hide its steps' : 'Show its steps'}
+          title={open ? 'Hide its steps' : 'Show its steps'}
+          onClick={() => {
+            setOpened(thread, id, !open)
+            setOpen(!open)
+          }}
+        >
           <Chevron size={12} aria-hidden />
-        </span>
-      </button>
+        </button>
+      </div>
       {open && (
         <div className="mb-2 ml-1.5 border-l border-line pl-3.5">
           <ChatSteps thread={thread} steps={steps} running={running} folder={folder} />

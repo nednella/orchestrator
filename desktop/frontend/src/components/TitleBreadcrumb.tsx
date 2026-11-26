@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { closeAgent, useThreadAgents, useViewedAgent } from '../chatAgents'
 import { useLayout } from '../LayoutContext'
 
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
@@ -10,6 +11,8 @@ export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
   const { project, projects, showHome, select } = useAgentos('project', 'projects', 'showHome', 'select')
   const thread = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
   const parent = useAgentosSelector((a) => (thread?.parent ? a.sessions.find((s) => s.id === thread.parent) : undefined))
+  const viewed = useViewedAgent(thread?.id ?? '')
+  const agent = useThreadAgents(thread?.id ?? '').find((a) => a.id === viewed)
   const { digestOpen } = useLayout()
 
   if (digestOpen) {
@@ -54,9 +57,23 @@ export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
           </span>
         </>
       )}
-      <span className="min-w-0 truncate" aria-current="page" title={thread.title}>
-        {thread.title}
-      </span>
+      {agent ? (
+        <>
+          <button className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink" style={noDrag} title={`Open ${thread.title}`} onClick={() => closeAgent(thread.id)}>
+            {thread.title}
+          </button>
+          <span className="flex-none text-dim" aria-hidden="true">
+            /
+          </span>
+          <span className="min-w-0 truncate" aria-current="page" title={agent.description}>
+            {agent.description}
+          </span>
+        </>
+      ) : (
+        <span className="min-w-0 truncate" aria-current="page" title={thread.title}>
+          {thread.title}
+        </span>
+      )}
     </nav>
   )
 }

@@ -1,9 +1,11 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAgentosSelector } from '../AgentosContext'
+import { closeAgent, useViewedAgent } from '../chatAgents'
 import { CARD_ROOM } from '../contextCard'
 import { useCardPlacement, useContextCard } from '../contextCardOpen'
 import { useFocusRequest } from '../useFocusRequest'
 import { ChatView } from './ChatView'
+import { SubagentView } from './SubagentView'
 import { ThreadContextCard } from './ThreadContextCard'
 
 const clearOfCard = { paddingRight: CARD_ROOM }
@@ -13,6 +15,10 @@ export function Viewport() {
   const panel = useRef<HTMLElement>(null)
   const card = useContextCard()
   useCardPlacement(panel, selected !== undefined)
+  const id = selected?.id ?? ''
+  const agent = useViewedAgent(id)
+  // A thread opens on its chat: leaving it closes the subagent view it showed.
+  useEffect(() => () => closeAgent(id), [id])
 
   useFocusRequest('thread', panel, !selected)
   // The thread's chat takes the focus in its scroll area, or in the panel while the chat loads.
@@ -31,7 +37,7 @@ export function Viewport() {
     <section ref={panel} data-panel="thread" data-state={selected.state} tabIndex={-1} className="relative h-full min-h-0 min-w-0 overflow-hidden bg-app">
       {/* The chat keeps clear of the card, so the card never covers a message. */}
       <div className="h-full" style={cardInline ? clearOfCard : undefined}>
-        <ChatView key={selected.id} session={selected} />
+        {agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} session={selected} />}
       </div>
       {cardInline && <ThreadContextCard id={selected.id} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
     </section>
