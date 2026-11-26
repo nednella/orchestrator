@@ -6,6 +6,7 @@
 
 ```yaml
 data_dir: ~/Library/Mobile Documents/com~apple~CloudDocs/orchestrator   # optional; default ~/.local/share/orchestrator. The settings panel writes it; the app reads it when it starts
+projects_dir: ~/code           # the folder a new project is made in, and where the folder browser of Add project starts; default ~/code (the browser starts in ~/ while unset). The settings panel writes it
 keep_mac_awake: true           # stop the Mac idle-sleeping while a session works; a project may set its own. The settings panel writes it
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
 app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
@@ -39,6 +40,8 @@ projects:
     pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
     setup_dismissed: false     # the app no longer writes it
 ```
+
+*Add project* in the project rail makes a new project or opens a folder. *New project* makes `<projects_dir>/<name>` from the typed name (lower case letters and digits, other runs turned into one `-`; `-2`, `-3` and so on when the folder is there), runs `git init` on the branch of git's `init.defaultBranch` (`main` when unset), writes a `README.md` with the name and commits it as `Initial commit`. A commit that fails, for example without a git user, still adds the project and warns. With *Create private repository on GitHub* ticked (shown while `gh` is signed in) it then runs `gh repo create <folder> --private --source . --push` in the background.
 
 `editor_app` is the app the thread menu's, the palette's and the thread details card's *Open in VS Code* opens a thread's folder with: `open -a <editor_app> <folder>`, run without a shell. The card names the app: *Open in Zed* for `editor_app: Zed`. The folder is the thread's own worktree when it has one, else the project folder; a thread whose worktree is gone opens nothing and says so.
 

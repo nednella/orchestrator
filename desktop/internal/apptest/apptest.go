@@ -1436,6 +1436,9 @@ func (h *Harness) NoteToSession(id string) (sessions.Session, error) {
 }
 
 func (h *Harness) Settings() settings.Settings { return h.settings.Settings() }
+func (h *Harness) SetProjectsDir(dir string) (settings.Settings, error) {
+	return h.settings.SetProjectsDir(dir)
+}
 func (h *Harness) SetTheme(theme string) (settings.Settings, error) {
 	return h.settings.SetTheme(theme)
 }

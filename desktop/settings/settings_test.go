@@ -270,3 +270,26 @@ func TestSettingsNameTheEditorApp(t *testing.T) {
 		t.Errorf("editor_app: Zed = %q", got)
 	}
 }
+
+func TestProjectsDir(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{TopExtra: "# mine\n"})
+	if got := h.Settings().ProjectsDir; got != "" {
+		t.Fatalf("default projects dir = %q", got)
+	}
+	got, err := h.SetProjectsDir("~/work")
+	if err != nil || got.ProjectsDir != "~/work" {
+		t.Fatalf("SetProjectsDir = %+v, %v", got, err)
+	}
+	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# mine") || !strings.Contains(string(data), "projects_dir: ~/work") {
+		t.Errorf("config lost its comment or the folder:\n%s", data)
+	}
+	if _, err := h.SetProjectsDir("work"); err == nil {
+		t.Error("a relative folder was accepted")
+	}
+	if got, err := h.SetProjectsDir(""); err != nil || got.ProjectsDir != "" {
+		t.Errorf("SetProjectsDir(\"\") = %+v, %v", got, err)
+	}
+	if data, _ := os.ReadFile(h.Conf); strings.Contains(string(data), "projects_dir") {
+		t.Errorf("unsetting left the key in the file:\n%s", data)
+	}
+}

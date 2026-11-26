@@ -178,6 +178,28 @@ func (r *Registry) SetDataDir(dir string) error {
 	})
 }
 
+// ProjectsDir is the folder the config names for new projects, "" when it names none.
+func (r *Registry) ProjectsDir() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.ProjectsDir
+}
+
+// ProjectsRoot is the folder a new project is made in.
+func (r *Registry) ProjectsRoot() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.ProjectsRoot()
+}
+
+// SetProjectsDir saves the folder new projects are made in; "" unsets it.
+func (r *Registry) SetProjectsDir(dir string) error {
+	return r.edit(func(c *project.Config) error {
+		c.ProjectsDir = dir
+		return nil
+	})
+}
+
 // KeepsAwake is the config's own choice on idle sleep, which a project may override.
 func (r *Registry) KeepsAwake() bool {
 	r.mu.Lock()

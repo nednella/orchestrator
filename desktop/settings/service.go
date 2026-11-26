@@ -38,6 +38,8 @@ type Store interface {
 	ThreadAccess() session.Access
 	SetThreadAccess(access session.Access) error
 	SetDataDir(dir string) error
+	ProjectsDir() string
+	SetProjectsDir(dir string) error
 	EditorApp() string
 }
 
@@ -62,6 +64,7 @@ type Settings struct {
 	DataDir      string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
 	DataFixed    bool            `json:"dataDirFixed"`   // ORCHESTRATOR_DEV_DATA_DIR sets the folder, so it cannot change here
 	EditorApp    string          `json:"editorApp"`      // the macOS app that opens a thread's folder
+	ProjectsDir  string          `json:"projectsDir"`    // the folder a new project is made in; "" is unset, ~/code
 }
 
 // Service is bound to the front end.
@@ -105,6 +108,7 @@ func (s *Service) Settings() Settings {
 		DataDir:      s.dataDir,
 		DataFixed:    s.dataFixed,
 		EditorApp:    s.store.EditorApp(),
+		ProjectsDir:  project.AbbreviateHome(s.store.ProjectsDir()),
 	}
 }
 
@@ -180,6 +184,15 @@ func (s *Service) SetThreadAccess(access string) (Settings, error) {
 		return Settings{}, err
 	}
 	return s.saved(s.store.SetThreadAccess(session.Access(access)))
+}
+
+// SetProjectsDir saves the folder a new project is made in, an absolute path or one that starts with ~; "" unsets it.
+func (s *Service) SetProjectsDir(dir string) (Settings, error) {
+	dir = strings.TrimSpace(dir)
+	if dir != "" && dir != "~" && !strings.HasPrefix(dir, "~/") && !strings.HasPrefix(dir, "/") {
+		return Settings{}, fmt.Errorf("the projects folder must be an absolute path or start with ~, not %q", dir)
+	}
+	return s.saved(s.store.SetProjectsDir(dir))
 }
 
 func (s *Service) saved(err error) (Settings, error) {

@@ -62,6 +62,7 @@ func (p Project) Present() bool {
 // Config is the optional ~/.config/orchestrator/config.yaml.
 type Config struct {
 	DataDir      string         `yaml:"data_dir,omitempty"`          // where notes, stats and digests live; may sit in a synced folder
+	ProjectsDir  string         `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
 	KeepAwake    *bool          `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a session works; on unless false
 	Theme        string         `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
 	ThemeDark    string         `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default) or violet
@@ -83,6 +84,12 @@ func CheckThreadPlace(place string) error {
 	}
 	return nil
 }
+
+// DefaultProjectsDir is the folder a new project is made in when the config names none.
+const DefaultProjectsDir = "~/code"
+
+// ProjectsRoot is the folder a new project is made in.
+func (c Config) ProjectsRoot() string { return ExpandHome(cmp.Or(c.ProjectsDir, DefaultProjectsDir)) }
 
 // DefaultEditorApp is the editor that opens a thread's folder when the config names none.
 const DefaultEditorApp = "Visual Studio Code"
@@ -154,6 +161,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.DataDir != "" {
 		cfg.DataDir = ExpandHome(cfg.DataDir)
+	}
+	if cfg.ProjectsDir != "" {
+		cfg.ProjectsDir = ExpandHome(cfg.ProjectsDir)
 	}
 	if cfg.Theme != "" && !slices.Contains(Themes, cfg.Theme) {
 		return Config{}, fmt.Errorf("%s: app_theme must be %s, not %q", path, strings.Join(Themes, " or "), cfg.Theme)
@@ -236,6 +246,21 @@ func ExpandHome(p string) string {
 	return filepath.Join(home, p[1:])
 }
 
+// AbbreviateHome turns a leading home folder into ~.
+func AbbreviateHome(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+"/") {
+		return "~" + p[len(home):]
+	}
+	return p
+}
+
 // Save writes the config file, creating its folder. An existing file is edited, not
 // rewritten: projects and settings that did not change keep their comments, their
 // layout and their "~" paths.
@@ -261,6 +286,7 @@ func encode(path string, c Config) ([]byte, error) {
 	root := doc.Content[0]
 	dropRetiredKeys(root)
 	syncScalar(root, "data_dir", c.DataDir, ExpandHome)
+	syncScalar(root, "projects_dir", c.ProjectsDir, ExpandHome)
 	syncScalar(root, "app_theme", c.Theme, nil)
 	syncScalar(root, "app_theme_dark", c.ThemeDark, nil)
 	syncScalar(root, "app_theme_light", c.ThemeLight, nil)
