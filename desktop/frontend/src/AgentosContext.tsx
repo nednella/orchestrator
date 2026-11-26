@@ -774,7 +774,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         await api.setAccess(id, access)
       },
       async openInEditor(id) {
-        await api.openInEditor(id)
+        await api.openInEditor(id, '')
       },
       async forkSession(id, at, draft = '') {
         const fork = await api.forkSession(id, at)

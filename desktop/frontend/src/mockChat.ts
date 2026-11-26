@@ -5,7 +5,7 @@ type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 // What the mock knows of a thread: whether it has settled, its worktree, '' for a thread in the project folder, a way
 // to move its row's state as hooks would, a way to wake it when it has settled, and ways to follow the permission mode
 // its Claude reports and the subagents it runs in the background, as the sessions do.
-export type MockThread = { settled: boolean; worktree: string; filesReason(): string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
+export type MockThread = { n: number; settled: boolean; worktree: string; filesReason(): string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
 
@@ -26,7 +26,10 @@ const commands = [
 ]
 // The files of every mock thread's folder, as git lists them.
 const files = [
+  'AGENTS.md',
   'README.md',
+  'docs/config.md',
+  'docs/testing.md',
   'package.json',
   'app-frontend/package.json',
   'app-frontend/src/js/routes.tsx',
@@ -44,6 +47,13 @@ const files = [
   'app-backend/internal/cart/cart_test.go',
 ]
 const fileLimit = 30
+// The text of the markdown files among them.
+const markdown: Record<string, string> = {
+  'AGENTS.md': '# AGENTS.md\n\nstorefront: the shop\'s web app and its API.\n\n## Hard rules\n\n- Tests run against a throwaway database, never the shared one.\n- Never push to `main`; one issue, one branch, one draft PR.\n\n## Commands\n\n| What | Command |\n| --- | --- |\n| Front end tests | `npm test` |\n| API tests | `go test ./...` |\n\nThe settings are in [docs/config.md](docs/config.md).',
+  'README.md': '# storefront\n\nThe shop\'s web app (`app-frontend`) and its API (`app-backend`).\n\nSee [AGENTS.md](AGENTS.md) for how to work on it.',
+  'docs/config.md': '# Config\n\nstorefront reads `config.yaml` at start.\n\n## Checkout\n\n- `checkout_steps`: the steps of the checkout, in order\n- `cart_rounding`: how the cart rounds a total, `half-up` or `bankers`\n\n| Key | Default |\n| --- | --- |\n| checkout_steps | address, payment, review |\n| cart_rounding | half-up |\n\n```yaml\ncheckout_steps:\n  - address\n  - payment\n  - review\n```\n\nHow to test a change to these is in [testing.md](testing.md).',
+  'docs/testing.md': '# Testing\n\nRun `npm test` in `app-frontend` and `go test ./...` in `app-backend`.\n\nThe checkout tests start a fake payment provider on port 18080.',
+}
 
 // subsequence says whether s has the letters of sub in order, not always side by side.
 function subsequence(s: string, sub: string) {
@@ -440,7 +450,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       { kind: 'tool_result', parent: 'toolu_2b', text: 'cat: src/js/missing.tsx: No such file or directory', error: true, at: ago(36) },
       { kind: 'tool_use', id: 'toolu_2c', tool: 'Grep', input: { pattern: 'Checkout' }, at: ago(36) },
       { kind: 'tool_result', parent: 'toolu_2c', text: 'app-frontend/src/js/routes.tsx', at: ago(36) },
-      { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Checkout now has its own route at `/checkout`. The cart page is unchanged.', at: ago(35) },
+      { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Checkout now has its own route at `/checkout`. The cart page is unchanged. Its steps are set in [docs/config.md](docs/config.md).', at: ago(35) },
       { kind: 'turn_end', cost: 0.21, at: ago(35) },
       { kind: 'user', id: 'u-2', text: 'Run the tests, and install whatever they need.', at: ago(5) },
       { kind: 'init', id: 'mock-session', at: ago(5) },
@@ -678,10 +688,49 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       known(project)
       return rankFiles(files, query)
     },
+    ChatReadFile: async (id: string, path: string) => {
+      const t = thread(id)
+      return readMarkdown(path, t.worktree, `thread ${t.n}`)
+    },
+    ProjectReadFile: async (project: string, path: string) => {
+      known(project)
+      return readMarkdown(path, '', `project ${project}`)
+    },
+    ChatMarkdownFiles: async (id: string) => {
+      thread(id)
+      return Object.keys(markdown).sort()
+    },
+    ProjectMarkdownFiles: async (project: string) => {
+      known(project)
+      return Object.keys(markdown).sort()
+    },
+    ChatLatestPlan: async (id: string) => {
+      thread(id)
+      const asked = logOf(id).findLast((e) => e.kind === 'approval' && e.tool === 'ExitPlanMode')
+      return (asked?.input as { plan?: string } | undefined)?.plan ?? ''
+    },
     ProjectCommands: async (project: string) => {
       known(project)
       return (projectCommands.get(project)?.list ?? []).map((c) => ({ ...c }))
     },
+  }
+
+  // readMarkdown is the text of the markdown file at path in folder, the thread's worktree or '' for the project's, as
+  // the service reads it: only inside the folder.
+  function readMarkdown(path: string, folder: string, of: string): string {
+    const outside = `This file is outside ${of}'s folder`
+    if (path.startsWith('/') && (folder === '' || !path.startsWith(`${folder}/`))) throw outside
+    const parts: string[] = []
+    for (const step of (path.startsWith('/') ? path.slice(folder.length + 1) : path).split('/')) {
+      if (step === '..' && parts.length === 0) throw outside
+      if (step === '..') parts.pop()
+      else if (step !== '' && step !== '.') parts.push(step)
+    }
+    const rel = parts.join('/')
+    if (!/\.(md|markdown)$/i.test(rel)) throw 'This is not a markdown file'
+    const text = markdown[rel]
+    if (text === undefined) throw 'This file does not exist'
+    return text
   }
 
   // rewindable throws why the thread cannot rewind to before message now, as the host refuses it.

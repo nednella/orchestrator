@@ -5,8 +5,8 @@ export type PanelViewId = 'agents' | 'servers' | 'pulls' | 'issues' | 'notes' | 
 // The letter that opens each view from the panel's list.
 export const PANEL_KEYS: Record<PanelViewId, string> = { agents: 'A', servers: 'S', pulls: 'P', issues: 'I', notes: 'N', files: 'F', evidence: 'E', browser: 'B' }
 
-// The views the panel lists, in its order. Files joins them with its view.
-export const PANEL_ORDER: PanelViewId[] = ['agents', 'servers', 'pulls', 'issues', 'notes', 'evidence', 'browser']
+// The views the panel lists, in its order.
+export const PANEL_ORDER: PanelViewId[] = ['agents', 'servers', 'pulls', 'issues', 'notes', 'files', 'evidence', 'browser']
 
 // What the right panel shows for one thread, or for Home: the views open as tabs, the one shown (null for the list of
 // views), and whether it takes the chat's room too.

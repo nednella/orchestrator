@@ -31,9 +31,9 @@ test('closing the last tab shows the list and restores the size', () => {
 })
 
 test('letters open their views', () => {
-  const keys: [string, string][] = [['a', 'agents'], ['S', 'servers'], ['p', 'pulls'], ['i', 'issues'], ['N', 'notes'], ['e', 'evidence'], ['b', 'browser']]
+  const keys: [string, string][] = [['a', 'agents'], ['S', 'servers'], ['p', 'pulls'], ['i', 'issues'], ['N', 'notes'], ['f', 'files'], ['e', 'evidence'], ['b', 'browser']]
   for (const [key, view] of keys) assert.equal(viewForKey(key), view, key)
-  for (const key of ['f', 'x', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view, Files comes with its view`)
+  for (const key of ['x', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
 })
 
 test('the width keeps 360 px of chat', () => {
@@ -95,7 +95,7 @@ test('the tab keys step through the open tabs, round the ends', () => {
 
 test('a saved panel keeps only the views it knows', () => {
   assert.deepEqual(panelStateOf(undefined), EMPTY_PANEL)
-  assert.deepEqual(panelStateOf({ tabs: ['agents', 'details', 'agents', 'files'], active: 'details', expanded: true }), { tabs: ['agents'], active: null, expanded: true })
+  assert.deepEqual(panelStateOf({ tabs: ['agents', 'details', 'agents', 'diff', 'files'], active: 'details', expanded: true }), { tabs: ['agents', 'files'], active: null, expanded: true })
   assert.deepEqual(panelStateOf({ tabs: ['issues'], active: 'issues', expanded: false }), { tabs: ['issues'], active: 'issues', expanded: false })
   assert.deepEqual(panelStateOf({ tabs: 'issues', active: 7, expanded: 'yes' }), EMPTY_PANEL)
 })

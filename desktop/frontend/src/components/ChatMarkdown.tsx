@@ -1,14 +1,20 @@
-import { Children, isValidElement, memo } from 'react'
+import { Children, createContext, isValidElement, memo, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import Markdown from 'react-markdown'
-import type { Components } from 'react-markdown'
+import type { Components, UrlTransform } from 'react-markdown'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { codeLanguage, markdownProps, textCache } from '../chatMarkdown'
+import { filesKey, linkTarget, pickFile, planPath } from '../filesView'
+import { useLayout } from '../LayoutContext'
 import { markdownBlocks, steadyBlock } from '../markdownBlocks'
 import { ChatCodeBlock } from './ChatCodeBlock'
 
-type ChatMarkdownProps = { text: string; streaming?: boolean }
+// file is the file the text is, when the Files view shows it: its Files view's key, and its path, which its relative
+// links start from. Without one, a link opens in the open thread's Files view, from its folder.
+type ChatMarkdownProps = { text: string; streaming?: boolean; file?: { key: string; path: string } }
+
+const FileLinks = createContext<{ key: string; path: string } | null>(null)
 
 const textOf = (node: ReactNode): string =>
   Children.toArray(node)
@@ -17,14 +23,28 @@ const textOf = (node: ReactNode): string =>
 
 const components: Components = {
   a: function MarkdownLink({ href, children }) {
-    const { report } = useAgentos('report')
+    const { report, selectedId, project } = useAgentos('report', 'selectedId', 'project')
+    const { showPanelView } = useLayout()
+    const from = useContext(FileLinks)
     if (!href) return <>{children}</>
+    const file = planPath(href)
     return (
       <a
         href={href}
         onClick={(e) => {
           e.preventDefault()
-          report(() => api.openURL(href))
+          if (file === null) {
+            report(() => api.openURL(href))
+            return
+          }
+          const path = linkTarget(from?.path ?? '', file)
+          const thread = selectedId ?? undefined
+          if (e.metaKey && thread) {
+            report(() => api.openInEditor(thread, path))
+            return
+          }
+          pickFile(from?.key ?? filesKey(thread, project?.key ?? ''), path)
+          showPanelView('files')
         }}
         onAuxClick={(e) => e.preventDefault()}
       >
@@ -39,7 +59,10 @@ const components: Components = {
   },
 }
 
-const parse = (text: string) => Markdown({ ...markdownProps, components, children: text })
+// A link to a markdown file keeps its address, for the Files view to open; any other address goes as the chat's rules say.
+const urlTransform: UrlTransform = (url, key, node) => (planPath(url) !== null ? url : (markdownProps.urlTransform?.(url, key, node) ?? ''))
+
+const parse = (text: string) => Markdown({ ...markdownProps, urlTransform, components, children: text })
 
 // A row the virtualised list mounts again finds its blocks here instead of parsing them again.
 const parsed = textCache<ReactElement>(500_000)
@@ -61,12 +84,14 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, writing }: MarkdownBlo
 
 // A reply renders block by block: a streaming update parses only its last block, and the finished reply takes its other
 // blocks from the cache, with the same markup a parse of the whole text gives.
-export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false }: ChatMarkdownProps) {
+export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false, file }: ChatMarkdownProps) {
   const blocks = markdownBlocks(text)
   const last = blocks.length - 1
   return (
-    <div className="markdown text-body">
-      {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} writing /> : <MarkdownBlock key={i} text={block} writing={false} />))}
-    </div>
+    <FileLinks.Provider value={file ?? null}>
+      <div className="markdown text-body">
+        {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} writing /> : <MarkdownBlock key={i} text={block} writing={false} />))}
+      </div>
+    </FileLinks.Provider>
   )
 })

@@ -47,7 +47,7 @@ func TestOpenInEditorOpensTheWorktreeOfAThread(t *testing.T) {
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
 	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7", Hosted: true}}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	want := [][]string{{"open", "-a", "Visual Studio Code", wt}}
@@ -62,7 +62,7 @@ func TestOpenInEditorPrefersTheWorktreeTheBranchIsReadIn(t *testing.T) {
 	s, name := editorSessions(t, o, nil, projectDir)
 	s.info = []term.Info{{Name: name, Path: started, Hosted: true}}
 	s.life.tracks[name.String()] = &track{worktree: followed}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := o.calls[0][3]; got != followed {
@@ -75,7 +75,7 @@ func TestOpenInEditorOpensTheProjectFolderOfAThreadWithoutAWorktree(t *testing.T
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
 	s.info = []term.Info{{Name: name, Hosted: true}}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := o.calls[0][3]; got != projectDir {
@@ -90,7 +90,7 @@ func TestOpenInEditorOpensTheFolderOfAThreadOfAnotherProject(t *testing.T) {
 	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Run: o.run, Projects: fixedProjects{current, other}, Current: current, Emit: func(string, any) {}})
 	name := session.Name{Project: other.Key(), Token: "bbbbbbbb"}
 	s.info = []term.Info{{Name: name, Hosted: true}}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := o.calls[0][3]; got != otherDir {
@@ -103,7 +103,7 @@ func TestOpenInEditorNeverFallsBackToTheProjectFolderForARemovedWorktree(t *test
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
 	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7", Hosted: true}}
-	err := s.OpenInEditor(name.String())
+	err := s.OpenInEditor(name.String(), "")
 	if err == nil || err.Error() != "This thread's folder is gone" {
 		t.Errorf("err = %v, want the folder is gone", err)
 	}
@@ -117,7 +117,7 @@ func TestOpenInEditorWorksForASettledThread(t *testing.T) {
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
 	s.ended[name.String()] = &endedSession{info: term.Info{Name: name, Path: wt, Hosted: true}}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := o.calls[0][3]; got != wt {
@@ -129,7 +129,7 @@ func TestOpenInEditorUsesTheConfiguredApp(t *testing.T) {
 	o := &opened{}
 	s, name := editorSessions(t, o, func() string { return "Cursor" }, t.TempDir())
 	s.info = []term.Info{{Name: name, Hosted: true}}
-	if err := s.OpenInEditor(name.String()); err != nil {
+	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := o.calls[0][2]; got != "Cursor" {
@@ -151,7 +151,7 @@ func TestOpenInEditorSaysWhyItFailed(t *testing.T) {
 			o := &opened{err: tt.err}
 			s, name := editorSessions(t, o, nil, t.TempDir())
 			s.info = []term.Info{{Name: name, Hosted: true}}
-			if err := s.OpenInEditor(name.String()); err == nil || err.Error() != tt.want {
+			if err := s.OpenInEditor(name.String(), ""); err == nil || err.Error() != tt.want {
 				t.Errorf("err = %v, want %q", err, tt.want)
 			}
 		})
@@ -162,11 +162,70 @@ func TestOpenInEditorRefusesWhatIsNotAThread(t *testing.T) {
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
 	for _, id := range []string{name.String(), "../../etc", session.Name{Project: "shop", Shell: 1}.String(), ""} {
-		if err := s.OpenInEditor(id); err == nil {
+		if err := s.OpenInEditor(id, ""); err == nil {
 			t.Errorf("OpenInEditor(%q) = nil, want an error", id)
 		}
 	}
 	if len(o.calls) != 0 {
 		t.Errorf("ran %q", o.calls)
+	}
+}
+
+func TestOpenInEditorOpensAFileInTheFolder(t *testing.T) {
+	wt := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(wt, "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, "docs", "plan.md"), []byte("# Plan"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"docs/plan.md", filepath.Join(wt, "docs", "plan.md")} {
+		o := &opened{}
+		s, name := editorSessions(t, o, nil, t.TempDir())
+		s.info = []term.Info{{Name: name, Path: wt, Hosted: true}}
+		if err := s.OpenInEditor(name.String(), path); err != nil {
+			t.Fatalf("OpenInEditor(%q): %v", path, err)
+		}
+		want := [][]string{{"open", "-a", "Visual Studio Code", filepath.Join(real, "docs", "plan.md")}}
+		if !reflect.DeepEqual(o.calls, want) {
+			t.Errorf("OpenInEditor(%q) ran %q, want %q", path, o.calls, want)
+		}
+	}
+}
+
+func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
+	parent := t.TempDir()
+	wt := filepath.Join(parent, "issue-7")
+	if err := os.MkdirAll(wt, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, text := range map[string]string{filepath.Join(parent, "secret.md"): "# Secret", filepath.Join(wt, "notes.txt"): "notes"} {
+		if err := os.WriteFile(name, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(parent, "secret.md"), filepath.Join(wt, "out.md")); err != nil {
+		t.Fatal(err)
+	}
+	o := &opened{}
+	s, name := editorSessions(t, o, nil, t.TempDir())
+	s.info = []term.Info{{Name: name, Path: wt, Hosted: true}}
+	s.nums[name.String()] = 3
+	for path, want := range map[string]string{
+		"../secret.md":                     "This file is outside thread 3's folder",
+		filepath.Join(parent, "secret.md"): "This file is outside thread 3's folder",
+		"out.md":                           "This file is outside thread 3's folder",
+		"notes.txt":                        "This is not a markdown file",
+	} {
+		if err := s.OpenInEditor(name.String(), path); err == nil || err.Error() != want {
+			t.Errorf("OpenInEditor(%q) = %v, want %q", path, err, want)
+		}
+	}
+	if len(o.calls) != 0 {
+		t.Errorf("ran %q for a file it refused", o.calls)
 	}
 }

@@ -15,7 +15,7 @@ type Backend = {
   OpenServer(port: number): Promise<void>
   WakeThread(id: string): Promise<Session>
   SetAccess(id: string, access: Access): Promise<void>
-  OpenInEditor(id: string): Promise<void>
+  OpenInEditor(id: string, path: string): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
@@ -68,6 +68,11 @@ type Backend = {
   RewindTo(id: string, message: string, files: boolean): Promise<string>
   RewindOff(): Promise<string>
   ProjectFiles(project: string, query: string): Promise<string[]>
+  ChatReadFile(id: string, path: string): Promise<string>
+  ProjectReadFile(project: string, path: string): Promise<string>
+  ChatMarkdownFiles(id: string): Promise<string[]>
+  ProjectMarkdownFiles(project: string): Promise<string[]>
+  ChatLatestPlan(id: string): Promise<string>
   ProjectCommands(project: string): Promise<Command[]>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
@@ -128,7 +133,7 @@ declare global {
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
   sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -175,7 +180,8 @@ export const api = {
   openServer: (port: number) => backend.OpenServer(port),
   wakeThread: (id: string) => backend.WakeThread(id),
   setAccess: (id: string, access: Access) => backend.SetAccess(id, access),
-  openInEditor: (id: string) => backend.OpenInEditor(id),
+  // A path opens that markdown file in the thread's folder, '' the folder itself.
+  openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
@@ -236,6 +242,12 @@ export const api = {
   rewindOff: () => backend.RewindOff(),
   projectFiles: (project: string, query: string) => backend.ProjectFiles(project, query),
   projectCommands: (project: string) => backend.ProjectCommands(project),
+  // The Go side reads only a markdown file of at most 1 MB inside the folder, symlinks resolved.
+  chatReadFile: (id: string, path: string) => backend.ChatReadFile(id, path),
+  projectReadFile: (project: string, path: string) => backend.ProjectReadFile(project, path),
+  chatMarkdownFiles: (id: string) => backend.ChatMarkdownFiles(id),
+  projectMarkdownFiles: (project: string) => backend.ProjectMarkdownFiles(project),
+  chatLatestPlan: (id: string) => backend.ChatLatestPlan(id),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),

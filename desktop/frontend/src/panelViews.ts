@@ -1,4 +1,4 @@
-import { Bot, CircleDot, GitPullRequestArrow, Globe, Image, Server, StickyNote } from 'lucide-react'
+import { Bot, CircleDot, Files, GitPullRequestArrow, Globe, Image, Server, StickyNote } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useAgentos } from './AgentosContext'
@@ -6,6 +6,7 @@ import { useAgentsRunning, useThreadAgents } from './chatAgents'
 import { AgentsView } from './components/AgentsView'
 import { BrowserView } from './components/BrowserView'
 import { EvidenceView } from './components/EvidenceView'
+import { FilesView } from './components/FilesView'
 import { IssuesView } from './components/IssuesView'
 import { NotesView } from './components/NotesView'
 import { PullRequestsView } from './components/PullRequestsView'
@@ -28,6 +29,7 @@ const VIEWS: Partial<Record<PanelViewId, PanelView>> = {
   pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: true, Component: PullRequestsView },
   issues: { id: 'issues', label: 'Issues', icon: CircleDot, thread: false, Component: IssuesView },
   notes: { id: 'notes', label: 'Notes', icon: StickyNote, thread: false, Component: NotesView },
+  files: { id: 'files', label: 'Files', icon: Files, thread: false, Component: FilesView },
   evidence: { id: 'evidence', label: 'Evidence', icon: Image, thread: true, Component: EvidenceView },
   browser: { id: 'browser', label: 'Browser', icon: Globe, thread: true, Component: BrowserView },
 }

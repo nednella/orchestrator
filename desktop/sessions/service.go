@@ -121,5 +121,6 @@ func (v *Service) Cleanups() []Cleanup { return v.s.life.Cleanups(v.s.Current().
 // Memory is what agentos and its agents held at the last sample.
 func (v *Service) Memory() Memory { return v.s.Memory() }
 
-// OpenInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app.
-func (v *Service) OpenInEditor(id string) error { return v.s.OpenInEditor(id) }
+// OpenInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app; a path
+// opens that markdown file in the folder instead.
+func (v *Service) OpenInEditor(id, path string) error { return v.s.OpenInEditor(id, path) }

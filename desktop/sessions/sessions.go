@@ -4204,6 +4204,7 @@ func (s *Sessions) stateOf(id string) session.State {
 // folder that holds the images sent in it and the folder it works in.
 type Chat struct {
 	ID, Project, Log, Socket, Media, Dir string
+	N                                    int  // the number the thread shows
 	Live                                 bool // the session runs; an ended one has only its log
 	Deleting                             bool // a delete of the thread runs
 }
@@ -4249,7 +4250,7 @@ func (s *Sessions) Chats() []Chat {
 func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 	name := in.Name
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, Live: live, Deleting: s.deleting[name.String()]}
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live, Deleting: s.deleting[name.String()]}
 }
 
 // isOld says whether the session runs in a terminal it was started in before sessions ran under a host. The app

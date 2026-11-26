@@ -452,6 +452,7 @@ export function createMock(params: URLSearchParams) {
     const s = find(id)
     if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return {
+      n: s.n,
       settled: s.state === 'settled',
       worktree: s.worktree,
       filesReason: () => filesReason(s),
@@ -1464,9 +1465,11 @@ export function createMock(params: URLSearchParams) {
       publish()
     },
     // A thread with a branch and no worktree lost its worktree to a clean-up; Go does not fall back to the project folder.
-    OpenInEditor: async (id: string) => {
+    // A path opens that file, under the rule the Files view reads by.
+    OpenInEditor: async (id: string, path: string) => {
       const s = find(id)
       if (s.branch !== '' && s.worktree === '') throw "This thread's folder is gone"
+      if (path !== '') await chats.backend.ChatReadFile(id, path)
     },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
