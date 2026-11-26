@@ -46,7 +46,7 @@ func TestOpenInEditorOpensTheWorktreeOfAThread(t *testing.T) {
 	}
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
-	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7", Hosted: true}}
+	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7"}}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestOpenInEditorPrefersTheWorktreeTheBranchIsReadIn(t *testing.T) {
 	projectDir, started, followed := t.TempDir(), t.TempDir(), t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
-	s.info = []term.Info{{Name: name, Path: started, Hosted: true}}
+	s.info = []term.Info{{Name: name, Path: started}}
 	s.life.tracks[name.String()] = &track{worktree: followed}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestOpenInEditorOpensTheProjectFolderOfAThreadWithoutAWorktree(t *testing.T
 	projectDir := t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
-	s.info = []term.Info{{Name: name, Hosted: true}}
+	s.info = []term.Info{{Name: name}}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestOpenInEditorOpensTheFolderOfAThreadOfAnotherProject(t *testing.T) {
 	current, other := project.Project{Name: "shop", Dir: currentDir}, project.Project{Name: "blog", Dir: otherDir}
 	s := New(Options{LocalDir: t.TempDir(), StateDir: t.TempDir(), Run: o.run, Projects: fixedProjects{current, other}, Current: current, Emit: func(string, any) {}})
 	name := session.Name{Project: other.Key(), Token: "bbbbbbbb"}
-	s.info = []term.Info{{Name: name, Hosted: true}}
+	s.info = []term.Info{{Name: name}}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestOpenInEditorNeverFallsBackToTheProjectFolderForARemovedWorktree(t *test
 	projectDir, wt := t.TempDir(), filepath.Join(t.TempDir(), "gone")
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
-	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7", Hosted: true}}
+	s.info = []term.Info{{Name: name, Path: wt, Branch: "issue-7"}}
 	err := s.OpenInEditor(name.String(), "")
 	if err == nil || err.Error() != "This thread's folder is gone" {
 		t.Errorf("err = %v, want the folder is gone", err)
@@ -116,7 +116,7 @@ func TestOpenInEditorWorksForASettledThread(t *testing.T) {
 	wt := t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
-	s.ended[name.String()] = &endedSession{info: term.Info{Name: name, Path: wt, Hosted: true}}
+	s.ended[name.String()] = &endedSession{info: term.Info{Name: name, Path: wt}}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestOpenInEditorWorksForASettledThread(t *testing.T) {
 func TestOpenInEditorUsesTheConfiguredApp(t *testing.T) {
 	o := &opened{}
 	s, name := editorSessions(t, o, func() string { return "Cursor" }, t.TempDir())
-	s.info = []term.Info{{Name: name, Hosted: true}}
+	s.info = []term.Info{{Name: name}}
 	if err := s.OpenInEditor(name.String(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestOpenInEditorSaysWhyItFailed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			o := &opened{err: tt.err}
 			s, name := editorSessions(t, o, nil, t.TempDir())
-			s.info = []term.Info{{Name: name, Hosted: true}}
+			s.info = []term.Info{{Name: name}}
 			if err := s.OpenInEditor(name.String(), ""); err == nil || err.Error() != tt.want {
 				t.Errorf("err = %v, want %q", err, tt.want)
 			}
@@ -186,7 +186,7 @@ func TestOpenInEditorOpensAFileInTheFolder(t *testing.T) {
 	for _, path := range []string{"docs/plan.md", filepath.Join(wt, "docs", "plan.md")} {
 		o := &opened{}
 		s, name := editorSessions(t, o, nil, t.TempDir())
-		s.info = []term.Info{{Name: name, Path: wt, Hosted: true}}
+		s.info = []term.Info{{Name: name, Path: wt}}
 		if err := s.OpenInEditor(name.String(), path); err != nil {
 			t.Fatalf("OpenInEditor(%q): %v", path, err)
 		}
@@ -213,7 +213,7 @@ func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 	}
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
-	s.info = []term.Info{{Name: name, Path: wt, Hosted: true}}
+	s.info = []term.Info{{Name: name, Path: wt}}
 	s.nums[name.String()] = 3
 	for path, want := range map[string]string{
 		"../secret.md":                     "This file is outside thread 3's folder",

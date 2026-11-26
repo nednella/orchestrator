@@ -57,6 +57,11 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for _, n := range []session.Name{name, other} {
+		if err := tmux.SetAccess(ctx, n, session.Supervised); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := tmux.SetIssue(ctx, name, 394); err != nil {
 		t.Fatal(err)
 	}
@@ -184,8 +189,8 @@ func gone(pid int) bool {
 func TestAccessTag(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	full, olderChat, olderTask := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}, session.Name{Project: "demo", Token: "c3"}
-	for _, n := range []session.Name{full, olderChat, olderTask} {
+	full, read, untagged := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}, session.Name{Project: "demo", Token: "c3"}
+	for _, n := range []session.Name{full, read, untagged} {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
@@ -193,21 +198,21 @@ func TestAccessTag(t *testing.T) {
 	if err := tmux.SetAccess(ctx, full, session.Full); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tmux.run(ctx, "set-option", "-t", target(olderChat), chatOption, "1"); err != nil {
+	if err := tmux.SetAccess(ctx, read, session.Read); err != nil {
 		t.Fatal(err)
 	}
 	infos, err := list(tmux, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[session.Name]session.Access{full: session.Full, olderChat: session.Read, olderTask: session.Supervised}
+	want := map[session.Name]session.Access{full: session.Full, read: session.Read}
 	for _, in := range infos {
 		if in.Access != want[in.Name] {
 			t.Errorf("%s: access = %q, want %q", in.Name, in.Access, want[in.Name])
 		}
 	}
 	if len(infos) != len(want) {
-		t.Errorf("listed %d sessions, want %d", len(infos), len(want))
+		t.Errorf("listed %d sessions, want %d: the one with no access tag is not a thread of this build", len(infos), len(want))
 	}
 }
 
@@ -233,6 +238,9 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := tmux.SetAccess(ctx, agent, session.Supervised); err != nil {
+		t.Fatal(err)
 	}
 	infos, shells, err := tmux.ListAll(ctx)
 	if err != nil || len(infos) != 1 || infos[0].Name != agent || len(shells) != 1 || shells[0].Name != shell {
@@ -286,6 +294,9 @@ func TestListGivesThePanesProcessUnderTheServer(t *testing.T) {
 	}
 	name := session.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	infos, err := list(tmux, ctx)
@@ -347,6 +358,9 @@ func TestTrailingSemicolonSurvives(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := tmux.Rename(ctx, name, "then b;"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	infos, _ := list(tmux, ctx)

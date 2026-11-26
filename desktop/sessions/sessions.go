@@ -55,12 +55,10 @@ const (
 	startRows    = 32
 	hostWait     = 10 * time.Second // for a new session's host to listen
 	hostStarting = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
-	oldDetail    = "Ran in a terminal before chats"
 )
 
 var (
 	errNotSession = errors.New("the shell is not a session")
-	errOldChat    = errors.New("This thread ran in a terminal before agentos showed chats")
 )
 
 // Session is one agent as the front end sees it.
@@ -152,14 +150,13 @@ type Sessions struct {
 	editorApp  func() string
 	newPlace   func() string
 	info       []term.Info              // the live sessions under a host
-	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []term.Shell             // every project's shell sessions
 	sentShells map[string][]Shell       // by project key, the shells last sent
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until deleted
-	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
+	nums       map[string]int           // the number each session shows: its state file's
 	lastNum    map[string]int           // the highest number given or recorded in each project
-	deleted    map[string]bool          // the threads the owner deleted in this run, and those whose state files say archived: nothing brings them back
+	deleted    map[string]bool          // the threads the owner deleted in this run: nothing brings them back
 	deleting   map[string]bool          // the threads a delete runs for: they are not woken, forked or given children
 	waking     map[string]bool          // the threads a wake runs for: no clean-up starts on them
 	records    map[string]session.Record
@@ -366,7 +363,7 @@ func (s *Sessions) Refresh() {
 	s.warn.Clear("tmux")
 	stamps := map[string]fileStamp{}
 	records := bus.ReadAll(s.stateDir, func(name string, info fs.FileInfo) bool {
-		// An older build could write a state file for a shell, which is no thread.
+		// A shell is no thread.
 		if n, err := session.ParseName(name); err == nil && n.IsShell() {
 			return true
 		}
@@ -375,14 +372,7 @@ func (s *Sessions) Refresh() {
 	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.info, s.old = nil, nil
-	for _, in := range infos {
-		if in.Hosted {
-			s.info = append(s.info, in)
-		} else {
-			s.old = append(s.old, in)
-		}
-	}
+	s.info = infos
 	s.shells = shells
 	s.announceShells()
 	for _, in := range s.info {
@@ -393,9 +383,6 @@ func (s *Sessions) Refresh() {
 	for name, rec := range records {
 		s.holdNumber(name, rec)
 		switch {
-		case rec.State == session.Archived:
-			s.deleted[name] = true
-		case s.isOld(name): // its hooks are dropped; once it is gone, its file makes its settled row
 		case slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name.String() == name }):
 			s.take(rec)
 		default:
@@ -424,8 +411,8 @@ type fileStamp struct {
 func stampOf(info fs.FileInfo) fileStamp { return fileStamp{info.ModTime(), info.Size()} }
 
 // markRead keeps the stamps the state files had when they were read, so the next refresh reads a file again only once
-// it changes. A file of a session that is neither live under a host, ended nor deleted, such as one still settling or
-// an old terminal session's, is read each time. It needs createMu and mu.
+// it changes. A file of a session that is neither live, ended nor deleted, such as one still settling, is read each
+// time. It needs createMu and mu.
 func (s *Sessions) markRead(records map[string]session.Record, stamps map[string]fileStamp, infos []term.Info) {
 	for name := range records {
 		if s.ended[name] != nil || s.deleted[name] || slices.ContainsFunc(infos, func(i term.Info) bool { return i.Name.String() == name }) {
@@ -497,7 +484,7 @@ func (e *endedSession) record() session.Record {
 
 // identityOf is what the session was started as, with its tmux session's start as both its first and latest start.
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Access: in.Access, Hosted: in.Hosted, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch, Parent: in.Parent}
+	id := session.Identity{Title: in.Title, Access: in.Access, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch, Parent: in.Parent}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -569,8 +556,7 @@ func (s *Sessions) saveIdentity(in term.Info) {
 	}
 }
 
-// adoptEnded takes in a state file whose tmux session is gone, as a settled row. One that says ended, an older
-// build's, is written back as settled. A deleted thread has no row. It needs mu.
+// adoptEnded takes in a state file whose tmux session is gone, as a settled row. A deleted thread has no row. It needs mu.
 func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	n, err := session.ParseName(name)
 	if err != nil || s.deleted[name] {
@@ -590,8 +576,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		return
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
-	rec.Changes = session.SettledChanges(rec.Changes)
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Hosted: rec.Hosted, Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch, Parent: rec.Parent}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch, Parent: rec.Parent}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -648,10 +633,10 @@ func (s *Sessions) endSession(id string, at time.Time) {
 }
 
 // number gives each session that has no number the next one of its project, oldest first, and saves it in its state
-// file. An old terminal session with no state file gets one for this run of the app only. It needs mu.
+// file. It needs mu.
 func (s *Sessions) number() {
 	var fresh []term.Info
-	for _, in := range slices.Concat(s.info, s.old) {
+	for _, in := range s.info {
 		if _, ok := s.nums[in.Name.String()]; !ok {
 			fresh = append(fresh, in)
 		}
@@ -670,11 +655,6 @@ func (s *Sessions) number() {
 	})
 	for _, in := range fresh {
 		id, key := in.Name.String(), in.Name.Project
-		if s.isOld(id) && !s.hasState(id) {
-			s.lastNum[key] = max(s.lastNum[key], s.savedLastNumber(key)) + 1
-			s.nums[id] = s.lastNum[key]
-			continue
-		}
 		s.nums[id] = s.nextNumber(key)
 		s.saveNumber(id, s.nums[id])
 	}
@@ -688,7 +668,7 @@ func (s *Sessions) holdNumber(id string, rec session.Record) {
 	}
 	key := session.ProjectKey(id)
 	s.lastNum[key] = max(s.lastNum[key], rec.N)
-	if rec.State != session.Archived && !s.deleted[id] && s.nums[id] == 0 {
+	if !s.deleted[id] && s.nums[id] == 0 {
 		s.nums[id] = rec.N
 	}
 }
@@ -742,12 +722,6 @@ func (s *Sessions) saveNumber(id string, n int) {
 	}
 }
 
-// hasState says whether the session has a state file.
-func (s *Sessions) hasState(id string) bool {
-	rec, err := bus.ReadState(s.stateDir, id)
-	return err == nil && rec.Session != ""
-}
-
 // tmpDir is the session's own TMPDIR, and Claude's scratchpad. It sits in a folder the agent may use
 // without asking, so the screenshots and scratch files it makes there need no approval. It goes at the thread's
 // clean-up or delete. A shell's name has no token, and would name the folder of every thread's.
@@ -796,9 +770,7 @@ func (s *Sessions) handoverOf(id string) string {
 // with the thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the
 // deepest first, so none is left without the parent that reaches it. With worktree their worktrees go with the
 // thread's, all or none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over
-// to that thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused, and so
-// is an old terminal session whose pane still runs: the owner ends it there, and until then it keeps its row, so no
-// second thread claims its issue's branch. While the delete runs, neither the thread nor a descendant can be woken or
+// to that thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused. While the delete runs, neither the thread nor a descendant can be woken or
 // forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
@@ -881,8 +853,8 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 }
 
 // startDelete marks the thread id and its descendants as being deleted and returns them, the deepest first and id
-// last, or says why they cannot be: it was deleted, a delete of it or of a descendant runs, it runs in an old terminal,
-// one of its descendants runs, or a clean-up of one of them runs. It takes childMu, so a child whose start passed its
+// last, or says why they cannot be: it was deleted, a delete of it or of a descendant runs, one of its
+// descendants runs, or a clean-up of one of them runs. It takes childMu, so a child whose start passed its
 // checks is running before the descendants are looked at, and createMu, under which a child's clean-up at its sleep
 // decides too, so only one of the two goes on. Any other clean-up marks itself before it looks for a delete.
 func (s *Sessions) startDelete(id string) ([]string, error) {
@@ -921,8 +893,6 @@ func (s *Sessions) markDeleting(id string) ([]string, error) {
 		return nil, fmt.Errorf("Thread %s was deleted", id)
 	case s.deleting[id]:
 		return nil, fmt.Errorf("Thread %d is being deleted", s.nums[id])
-	case s.isOld(id):
-		return nil, fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
 	family := s.familyOf(id)
 	for _, d := range family[:len(family)-1] {
@@ -1300,14 +1270,10 @@ func (s *Sessions) madeWorktree(id string) string {
 	return w.Path
 }
 
-// observe folds in a hook's record. The hooks of an old terminal session are dropped before anything is recorded, so
-// it raises nothing.
+// observe folds in a hook's record.
 func (s *Sessions) observe(rec session.Record) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.isOld(rec.Session) {
-		return
-	}
 	if rec.Event == "UserPromptSubmit" {
 		s.record(rec.Session, activity.Event{At: rec.At.UnixMilli(), Kind: activity.Prompt})
 	}
@@ -1630,10 +1596,6 @@ func (s *Sessions) list() []Session {
 		byName[e.info.Name] = e.info
 		rail = append(rail, session.Session{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: session.Settled, At: e.at})
 	}
-	for _, in := range s.old {
-		byName[in.Name] = in
-		rail = append(rail, session.Session{Name: in.Name, N: s.nums[in.Name.String()], State: session.Settled, At: in.Created})
-	}
 	session.Sort(rail)
 	out := make([]Session, 0, len(rail))
 	for _, ss := range rail {
@@ -1644,7 +1606,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: in.Hosted, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: true, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt:  s.forkAtOf(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
@@ -1654,16 +1616,12 @@ func (s *Sessions) list() []Session {
 		if ss.State == session.Settled {
 			view.SettledAt = ss.At.UnixMilli()
 		}
-		if in.Hosted {
-			f := s.life.fields(id)
-			view.Branch, view.PR, view.Git = in.Branch, f.pr, f.git
-			if w, ok := s.made.Of(ss.Name.Project, id); ok && w.Removed == 0 {
-				view.Worktree = w.Path
-			}
-			view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
-		} else {
-			view.Detail = oldDetail
+		f := s.life.fields(id)
+		view.Branch, view.PR, view.Git = in.Branch, f.pr, f.git
+		if w, ok := s.made.Of(ss.Name.Project, id); ok && w.Removed == 0 {
+			view.Worktree = w.Path
 		}
+		view.PRAttention, view.Cleanup, view.CleanupReason = f.attention, f.cleanup, f.reason
 		if spent, ok := s.spent[id]; ok {
 			view.Tokens, view.Cost = spent.Total(), spent.Dollars()
 		}
@@ -1692,7 +1650,7 @@ func (s *Sessions) ListOf(key string) []Session {
 func (s *Sessions) Title(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, in := range slices.Concat(s.info, s.old) {
+	for _, in := range s.info {
 		if in.Name.String() == id {
 			return cmp.Or(in.Title, defaultTitle)
 		}
@@ -1733,7 +1691,7 @@ func (s *Sessions) projects() []project.Project {
 	if !slices.ContainsFunc(out, func(p project.Project) bool { return p.Key() == s.project.Key() }) {
 		out = append(out, s.project)
 	}
-	for _, in := range slices.Concat(s.info, s.old) {
+	for _, in := range s.info {
 		if !slices.ContainsFunc(out, func(p project.Project) bool { return p.Key() == in.Name.Project }) {
 			out = append(out, project.Project{Name: in.Name.Project, Dir: in.Path})
 		}
@@ -1852,12 +1810,11 @@ func (s *Sessions) liveIssueSessions(key string) []string {
 }
 
 // liveIssueSession is the id of the running thread of the project for the issue, whatever its access, "" when none. A
-// fork only shows its source's issue. An old terminal session counts: a second session would claim the branch it works
-// on, and clean it up under it. It takes mu.
+// fork only shows its source's issue. It takes mu.
 func (s *Sessions) liveIssueSession(key string, issue int) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, in := range slices.Concat(s.info, s.old) {
+	for _, in := range s.info {
 		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Fork == "" {
 			return in.Name.String()
 		}
@@ -2113,7 +2070,6 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		in = e.info
 	}
 	deleted, deleting := s.deleted[id], s.deleting[id]
-	old := s.isOld(id) || settled && !in.Hosted
 	proj, known := s.projectOf(in)
 	conversation := s.conversationOf(id)
 	source, _ := s.infoOf(in.Fork)
@@ -2125,8 +2081,6 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		return fmt.Errorf("Thread %s was deleted", id)
 	case deleting:
 		return fmt.Errorf("Thread %d is being deleted", n)
-	case old:
-		return fmt.Errorf("Thread %s ran in a terminal and cannot be woken", id)
 	case !settled:
 		return fmt.Errorf("Thread %s is not asleep", id)
 	case !known:
@@ -2387,17 +2341,11 @@ func (s *Sessions) depthOf(id string) int {
 	return depth
 }
 
-// parentOf is the thread that delegated to the thread id, "" for one the owner started. A thread whose state file says
-// archived keeps its parent there; a deleted one has no state file, and so no parent. It needs mu.
+// parentOf is the thread that delegated to the thread id, "" for one the owner started or one that is deleted. It
+// needs mu.
 func (s *Sessions) parentOf(id string) string {
-	if in, ok := s.infoOf(id); ok {
-		return in.Parent
-	}
-	if !s.deleted[id] {
-		return ""
-	}
-	rec, _ := bus.ReadState(s.stateDir, id)
-	return rec.Parent
+	in, _ := s.infoOf(id)
+	return in.Parent
 }
 
 // ParentOf is the thread that delegated to the thread id, "" for one the owner started. It takes mu.
@@ -2513,7 +2461,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 	return view, Created, err
 }
 
-// settledIssueThread is the id and access of the settled thread of the project for the issue that ran under a host,
+// settledIssueThread is the id and access of the settled thread of the project for the issue,
 // the one that settled last, "" when none. A fork only shows its source's issue. It takes mu.
 func (s *Sessions) settledIssueThread(key string, issue int) (string, session.Access) {
 	s.mu.Lock()
@@ -2521,7 +2469,7 @@ func (s *Sessions) settledIssueThread(key string, issue int) (string, session.Ac
 	id, access, at := "", session.Access(""), time.Time{}
 	for name, e := range s.ended {
 		in := e.info
-		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Fork == "" && in.Hosted && (id == "" || e.at.After(at)) {
+		if in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Fork == "" && (id == "" || e.at.After(at)) {
 			id, access, at = name, in.Access, e.at
 		}
 	}
@@ -2631,8 +2579,6 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 		return Session{}, fmt.Errorf("No thread %s", id)
 	case deleting:
 		return Session{}, fmt.Errorf("Thread %d is being deleted", s.Number(id))
-	case !in.Hosted:
-		return Session{}, errors.New("Only a thread with a chat can be forked")
 	case conversation == "":
 		return Session{}, errors.New("This thread has no conversation to fork yet")
 	case !known:
@@ -2696,7 +2642,7 @@ func (s *Sessions) copyChat(fork forkStart, to session.Name) (restore func(), er
 }
 
 // copyEvents appends the events and a turn's end to the fork's log, and copies each image they show from the source's
-// folder, by its name: a log an older build carried over on a resume names the folder of the thread that sent it.
+// folder, by its name.
 func (s *Sessions) copyEvents(chatLog *chat.Log, events []chat.Event, from, to session.Name) error {
 	for _, e := range events {
 		switch e.Kind {
@@ -2924,7 +2870,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 		}
 		s.records[rec.Session] = rec
 	}
-	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Parent: parent, Created: created}
+	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Action: action, Fork: forkOf, Parent: parent, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
@@ -2961,9 +2907,6 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, bra
 		}
 	}
 	if err := tag(s.tmux.SetAccess(ctx, name, access)); err != nil {
-		return err
-	}
-	if err := tag(s.tmux.SetHosted(ctx, name)); err != nil {
 		return err
 	}
 	if action != "" {
@@ -3284,7 +3227,7 @@ func (m Told) gone(err error) {
 // woken for it, but for a child's result while a clean-up of it is due or runs: that waits for its next wake. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
 // the approval, and one whose host is held for a restart until it runs again; one with messages held, or being sent,
 // holds it after them. A working thread's host queues it, for the
-// turn's next step or, with Steer, at once. A thread that is deleted, or being deleted, or ran in a terminal takes none.
+// turn's next step or, with Steer, at once. A thread that is deleted or being deleted takes none.
 func (s *Sessions) Tell(id string, m Told) (string, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -3377,7 +3320,7 @@ func (s *Sessions) deliverRanked(name session.Name, m Told) (string, error) {
 }
 
 // awaken makes sure the thread id runs, waking it when it has settled, once a clean-up of it that runs now has ended. A
-// thread that is deleted or being deleted, ran in a terminal or is unknown is an error.
+// thread that is deleted or being deleted or is unknown is an error.
 func (s *Sessions) awaken(id string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -3389,7 +3332,7 @@ func (s *Sessions) awaken(id string) error {
 	s.mu.Lock()
 	_, settled := s.ended[id]
 	_, live := s.liveInfo(id)
-	deleted, deleting, old := s.deleted[id], s.deleting[id], s.isOld(id)
+	deleted, deleting := s.deleted[id], s.deleting[id]
 	n := s.nums[id]
 	s.mu.Unlock()
 	switch {
@@ -3397,8 +3340,6 @@ func (s *Sessions) awaken(id string) error {
 		return fmt.Errorf("Thread %s was deleted", id)
 	case deleting:
 		return fmt.Errorf("Thread %d is being deleted", n)
-	case old:
-		return fmt.Errorf("Thread %s ran in a terminal, so it takes no messages", id)
 	case settled:
 		s.awaitCleanup(id)
 		_, err := s.wakeOrJoin(id, "")
@@ -3688,8 +3629,8 @@ func (e errAsleep) Error() string { return fmt.Sprintf("Thread %s is asleep", e.
 
 // startSettle marks a settle of the thread as running, once any other settle of it has ended, and gives the func that
 // ends the mark. Two at once, as the owner's Sleep and the one after a child's result, would both kill the session, and
-// the one that lost would fail and take back the planned stop of the one that won. It refuses a thread that is deleted,
-// asleep or in an old terminal. It takes mu.
+// the one that lost would fail and take back the planned stop of the one that won. It refuses a thread that is deleted
+// or asleep. It takes mu.
 func (s *Sessions) startSettle(id string) (func(), error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -3704,8 +3645,6 @@ func (s *Sessions) startSettle(id string) (func(), error) {
 		return nil, fmt.Errorf("Thread %s was deleted", id)
 	case ended:
 		return nil, errAsleep{id}
-	case s.isOld(id):
-		return nil, fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
 	running := make(chan struct{})
 	s.settling[id] = running
@@ -3820,16 +3759,14 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
 		in, live = s.info[i], true
 	}
-	e, settled := s.ended[id]
-	old, deleted := s.isOld(id), s.deleted[id]
+	_, settled := s.ended[id]
+	deleted := s.deleted[id]
 	// The hooks of a subagent's tool calls say the thread works, so they cannot tell its own turn from its subagents'.
 	subagents := s.background[id].Subagents > 0
 	s.mu.Unlock()
 	switch {
 	case deleted:
 		return accessDone, fmt.Errorf("Thread %s was deleted", id)
-	case old || settled && !e.info.Hosted:
-		return accessDone, fmt.Errorf("Thread %s ran in a terminal; its access cannot change", id)
 	case settled:
 		return accessDone, s.settledAccess(id, access)
 	case !live:
@@ -4032,12 +3969,6 @@ func (s *Sessions) Rename(id, title string) error {
 	if name.IsShell() {
 		return errNotSession
 	}
-	s.mu.Lock()
-	old := s.isOld(id)
-	s.mu.Unlock()
-	if old {
-		return fmt.Errorf("Thread %s runs in an old terminal; it keeps its title", id)
-	}
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
@@ -4121,7 +4052,7 @@ func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 // the branch of its record. It needs mu.
 func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 	proj, ok := projectIn(s.projects(), in)
-	if !ok || in.Fork == "" || !in.Hosted {
+	if !ok || in.Fork == "" {
 		return target{}, false
 	}
 	id := in.Name.String()
@@ -4133,11 +4064,10 @@ func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 	return target{id: id, title: cmp.Or(in.Title, defaultTitle), branch: w.Branch, dir: w.Path, proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke, made: true}, true
 }
 
-// targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork, an old terminal
-// session and a thread started before agentos recorded branches have none. It needs mu.
+// targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork and a thread started before agentos recorded branches have none. It needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
-	if !ok || in.Fork != "" || !in.Hosted || in.Branch == "" {
+	if !ok || in.Fork != "" || in.Branch == "" {
 		return target{}, false
 	}
 	issue, _ := strconv.Atoi(in.Issue)
@@ -4194,20 +4124,17 @@ func (s *Sessions) TypeInto(id, text string) error {
 	return nil
 }
 
-// refuseSettled is an error for a session that has settled or been deleted, or that runs in an old terminal. It
-// takes mu.
+// refuseSettled is an error for a session that has settled or been deleted. It takes mu.
 func (s *Sessions) refuseSettled(id string) error {
 	s.mu.Lock()
 	_, ended := s.ended[id]
-	old, deleted := s.isOld(id), s.deleted[id]
+	deleted := s.deleted[id]
 	s.mu.Unlock()
 	switch {
 	case deleted:
 		return fmt.Errorf("Thread %s was deleted", id)
 	case ended:
 		return fmt.Errorf("Thread %s is asleep", id)
-	case old:
-		return fmt.Errorf("Thread %s runs in an old terminal", id)
 	}
 	return nil
 }
@@ -4301,8 +4228,7 @@ type Chat struct {
 	Deleting                             bool // a delete of the thread runs
 }
 
-// ChatOf is the chat of the session id, live or ended. An old terminal session has none, and a deleted thread gives
-// none. It takes mu.
+// ChatOf is the chat of the session id, live or ended. A deleted thread gives none. It takes mu.
 func (s *Sessions) ChatOf(id string) (Chat, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -4318,11 +4244,8 @@ func (s *Sessions) ChatOf(id string) (Chat, error) {
 		in = e.info
 	} else if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i >= 0 {
 		in, live = s.info[i], true
-	} else if !s.isOld(id) {
+	} else {
 		return Chat{}, fmt.Errorf("No thread %s", id)
-	}
-	if !in.Hosted {
-		return Chat{}, errOldChat
 	}
 	return s.chatOf(in, live), nil
 }
@@ -4343,12 +4266,6 @@ func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 	name := in.Name
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
 	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live, Deleting: s.deleting[name.String()]}
-}
-
-// isOld says whether the session runs in a terminal it was started in before sessions ran under a host. The app
-// shows it settled and leaves it alone: it takes no message, hook or PR, and the owner ends it there. It needs mu.
-func (s *Sessions) isOld(id string) bool {
-	return slices.ContainsFunc(s.old, func(in term.Info) bool { return in.Name.String() == id })
 }
 
 // SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default; 0 or less turns the
@@ -4469,7 +4386,7 @@ func (s *Sessions) usersIn(dir string, asleep bool, except ...string) []term.Inf
 		return users
 	}
 	for id, e := range s.ended {
-		if !slices.Contains(except, id) && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
+		if !slices.Contains(except, id) && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
 			users = append(users, e.info)
 		}
 	}
@@ -4577,7 +4494,7 @@ func (s *Sessions) pending(id string) string {
 func (s *Sessions) Has(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.isOld(id) || slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id })
+	return slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name.String() == id })
 }
 
 func (s *Sessions) closeBrowser(id string) {

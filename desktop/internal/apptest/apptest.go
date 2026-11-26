@@ -808,16 +808,6 @@ func (h *Harness) HookReply(t *testing.T, id, event, stdin string, env ...string
 	return h.hook(t, id, event, stdin, env)
 }
 
-// Pane is what the session's terminal shows now.
-func (h *Harness) Pane(t *testing.T, id string) string {
-	t.Helper()
-	out, err := exec.Command("tmux", "-L", h.Socket, "capture-pane", "-p", "-t", id).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
-}
-
 // Session is the session with that id in the current project's list.
 func (h *Harness) Session(id string) (sessions.Session, bool) {
 	for _, s := range h.Sessions().List() {

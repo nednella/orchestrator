@@ -22,9 +22,7 @@ const (
 	modelOption  = "@agentos-model"
 	effortOption = "@agentos-effort"
 	accessOption = "@agentos-access"
-	chatOption   = "@agentos-chat" // an older build's tag of a read-only session
 	actionOption = "@agentos-action"
-	hostedOption = "@agentos-hosted"
 	forkOption   = "@agentos-fork"
 	branchOption = "@agentos-branch"
 	parentOption = "@agentos-parent"
@@ -74,7 +72,6 @@ type Info struct {
 	Model   string // the model the agent runs: the start choice until its first turn, then what it used last, or ""
 	Effort  string // the effort the agent runs, kept like Model, or ""
 	Access  session.Access
-	Hosted  bool   // the agent runs under agentos host, which takes its messages over a socket
 	Action  string // the queue action the session was started with, or ""
 	Fork    string // the session a fork was forked from, or ""
 	Branch  string // the branch the thread works on, in the worktree it started in, or ""
@@ -131,9 +128,9 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
-	const fields = 17
+	const fields = 15
 	// The process name comes last, so a tab in it stays in its own field.
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}\t#{pane_current_command}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -153,15 +150,19 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 			continue
 		}
 		if name.IsShell() {
-			pid, _ := strconv.Atoi(f[12])
-			shells = append(shells, Shell{Name: name, Thread: f[15], Command: f[16], PID: pid})
+			pid, _ := strconv.Atoi(f[10])
+			shells = append(shells, Shell{Name: name, Thread: f[13], Command: f[14], PID: pid})
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10], Branch: f[13], Parent: f[14]}
-		if secs, err := strconv.ParseInt(f[11], 10, 64); err == nil {
+		// Every thread of this build has an access tag; a session with none is not one of its threads.
+		if f[6] == "" {
+			continue
+		}
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: session.StoredAccess(f[6]), Action: f[7], Fork: f[8], Branch: f[11], Parent: f[12]}
+		if secs, err := strconv.ParseInt(f[9], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
-		info.PID, _ = strconv.Atoi(f[12])
+		info.PID, _ = strconv.Atoi(f[10])
 		infos = append(infos, info)
 	}
 	return infos, shells, nil
@@ -191,14 +192,6 @@ func (t *Tmux) ShellPaths(ctx context.Context) ([]Shell, error) {
 		}
 	}
 	return shells, nil
-}
-
-// accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag.
-func accessOf(tag, chat string) session.Access {
-	if tag == "" && chat != "" {
-		return session.Read
-	}
-	return session.StoredAccess(tag)
 }
 
 // ServerPID is the tmux server's process, or 0 when no server runs.
@@ -297,14 +290,6 @@ func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error
 func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.Access) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), accessOption, string(access)); err != nil {
 		return fmt.Errorf("recording the access of session %s: %w", name, err)
-	}
-	return nil
-}
-
-// SetHosted records that a session's agent runs under agentos host.
-func (t *Tmux) SetHosted(ctx context.Context, name session.Name) error {
-	if _, err := t.run(ctx, "set-option", "-t", target(name), hostedOption, "1"); err != nil {
-		return fmt.Errorf("tagging hosted session %s: %w", name, err)
 	}
 	return nil
 }

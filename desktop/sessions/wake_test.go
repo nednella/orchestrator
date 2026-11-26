@@ -139,7 +139,7 @@ func TestWakeAfterTheAppRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Session != before.ID || rec.Title != "work" || !rec.Hosted || rec.Created != saved.Created || rec.Woke <= rec.Created || rec.Conversation != "fake-session" {
+	if rec.Session != before.ID || rec.Title != "work" || rec.Created != saved.Created || rec.Woke <= rec.Created || rec.Conversation != "fake-session" {
 		t.Errorf("state file = %+v, before the wake %+v", rec, saved)
 	}
 	if n := len(saved.Changes); len(rec.Changes) <= n || !slices.Equal(rec.Changes[:n-1], saved.Changes[:n-1]) || rec.Changes[len(rec.Changes)-1].State != session.Idle {
@@ -390,38 +390,6 @@ func TestWokenThreadKeepsItsCost(t *testing.T) {
 	}
 	if led.Usage.Totals.Tokens != 1111 || len(led.Work) != 1 || led.Work[0].Tokens != 1111 {
 		t.Errorf("usage = %+v, work = %+v: a turn was counted twice or lost", led.Usage.Totals, led.Work)
-	}
-}
-
-func TestOldTerminalSessionIsNotWoken(t *testing.T) {
-	h := apptest.New(t)
-	live := "main/aaaaaaaa"
-	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", live, "-c", h.Dir, "sleep", "600")
-	tmuxRun(t, h, "set-option", "-t", live, "@agentos-name", "#12 work")
-	gone := "main/bbbbbbbb"
-	old := time.Now().Add(-time.Hour)
-	if err := bus.WriteState(h.State, session.Record{Session: gone, State: session.Settled, At: old, SettledAt: old.UnixMilli(), Identity: session.Identity{Title: "old", Created: old.UnixMilli()}}); err != nil {
-		t.Fatal(err)
-	}
-	h.Sessions().Refresh()
-
-	for _, id := range []string{live, gone} {
-		want := "Thread " + id + " ran in a terminal and cannot be woken"
-		if _, err := h.WakeThread(id); err == nil || err.Error() != want {
-			t.Errorf("wake of %s = %v, want %q", id, err, want)
-		}
-		if _, err := h.ChatSend(id, "hi"); err == nil || err.Error() != oldChat {
-			t.Errorf("a message to %s = %v, want %q", id, err, oldChat)
-		}
-		if row, _ := h.Session(id); row.State != session.Settled || row.Hosted {
-			t.Errorf("row of %s after the wake = %+v", id, row)
-		}
-	}
-	if out, err := exec.Command("tmux", "-L", h.Socket, "list-panes", "-t", "="+live, "-F", "#{pane_current_command}").Output(); err != nil || strings.TrimSpace(string(out)) != "sleep" {
-		t.Errorf("the old session's pane runs %q, %v", out, err)
-	}
-	if out, _ := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", "="+gone).CombinedOutput(); !strings.Contains(string(out), "can't find") {
-		t.Errorf("a tmux session started for the settled old one: %s", out)
 	}
 }
 

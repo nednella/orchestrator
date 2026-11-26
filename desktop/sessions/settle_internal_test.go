@@ -39,7 +39,7 @@ func TestSettleClosesNoTerminal(t *testing.T) {
 	if err := tmux.NewSession(t.Context(), name, "a thread", dir, nil, []string{"sleep", "60"}, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	s.info = append(s.info, term.Info{Name: name, Hosted: true, Path: dir})
+	s.info = append(s.info, term.Info{Name: name, Path: dir})
 
 	if err := s.settle(name.String(), chat.StopSettle, ""); err != nil {
 		t.Fatal(err)

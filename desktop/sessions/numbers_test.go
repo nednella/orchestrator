@@ -119,32 +119,6 @@ func TestADeletedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
 	}
 }
 
-func TestAnOldTerminalSessionTakesNoRecordedNumber(t *testing.T) {
-	h := newHarness(t)
-	a, err := h.NewSession("a", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.SettleThread(a.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.DeleteThread(a.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	h.App.Stop()
-	// A session from a release before the host, with no state file: it is numbered for this run only.
-	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", "main/aaaaaaaa", "-c", h.Dir, "sleep", "600")
-	tmuxRun(t, h, "set-option", "-t", "main/aaaaaaaa", "@agentos-name", "old")
-	second := h.Restart(t)
-	b, err := second.NewSession("b", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := numbers(second), map[string]int{"old": 2, "b": 3}; !maps.Equal(got, want) {
-		t.Errorf("numbers = %v, want %v (b is %s)", got, want, b.ID)
-	}
-}
-
 // numbers is the number of each thread on the list, by title.
 func numbers(h *apptest.Harness) map[string]int {
 	got := map[string]int{}

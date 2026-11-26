@@ -923,33 +923,6 @@ func TestSettledSessionsSurviveARestart(t *testing.T) {
 	}
 }
 
-func TestOldEndedStateShowsSettled(t *testing.T) {
-	h := newHarness(t)
-	long := time.Now().Add(-time.Hour)
-	ms := long.UnixMilli()
-	// What an older build wrote for a session that had ended.
-	old := fmt.Sprintf(`{"session":"main/old1","state":"ended","event":"SessionEnd","at":%q,"title":"old","endedAt":%d,"changes":[{"state":"working","at":%d},{"state":"ended","at":%d}]}`, long.Format(time.RFC3339Nano), ms, ms-1000, ms)
-	file := filepath.Join(h.State, "sessions", "main", "old1.json")
-	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(file, []byte(old), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.Sessions().Refresh()
-	got, ok := h.Session("main/old1")
-	if !ok || got.State != session.Settled || got.Title != "old" || got.SettledAt != ms {
-		t.Fatalf("the old ended row = %+v, %v; want it settled", got, ok)
-	}
-	want := []session.Change{{State: session.Working, At: ms - 1000}, {State: session.Settled, At: ms}}
-	if !slices.Equal(got.History, want) {
-		t.Errorf("history = %+v, want %+v", got.History, want)
-	}
-	if rec, err := bus.ReadState(h.State, "main/old1"); err != nil || rec.State != session.Settled || !slices.Equal(rec.Changes, want) {
-		t.Errorf("the state file was written back as %+v, %v; want it settled", rec, err)
-	}
-}
-
 func TestProjectCountsFollowTheSessions(t *testing.T) {
 	h := newHarness(t)
 	counts := func() sessions.Project { return h.Snapshot().Project }

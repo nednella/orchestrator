@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -541,80 +540,6 @@ func TestDeleteRefusesAShell(t *testing.T) {
 	}
 	if !exists(filepath.Join(project, "tmp")) || !exists(tmpOf(h, thread.ID)) || !exists(image) || !exists(filepath.Join(project, "chats")) {
 		t.Error("the project's tmp, a thread's temp folder, the chat images or the chat logs went with a shell's delete")
-	}
-}
-
-func TestDeleteLeavesAnOldTerminalAlone(t *testing.T) {
-	h := newHarness(t)
-	id := "main/aaaaaaaa"
-	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "600")
-	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
-	// What the old session keeps of its own: a temp folder an older build gave it.
-	scratch := filepath.Join(tmpOf(h, id), "notes.txt")
-	if err := os.MkdirAll(filepath.Dir(scratch), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(scratch, []byte("mine"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.Sessions().Refresh()
-	if _, ok := h.Session(id); !ok {
-		t.Fatal("the old session has no row")
-	}
-
-	for _, worktree := range []bool{false, true} {
-		if err, want := h.DeleteThread(id, worktree), "Thread "+id+" runs in an old terminal; end it there"; err == nil || err.Error() != want {
-			t.Errorf("Delete of a live old session, with the worktree %v = %v, want %q", worktree, err, want)
-		}
-	}
-	h.Sessions().Refresh()
-	if _, ok := h.Session(id); !ok {
-		t.Error("the refused delete took the old session's row")
-	}
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_current_command}#{@agentos-name}").Output()
-	if err != nil || strings.TrimSpace(string(out)) != "sleep#12 work" {
-		t.Errorf("old session's pane runs and is named %q (%v), want sleep#12 work", out, err)
-	}
-	if !exists(scratch) {
-		t.Error("the old session's own temp folder went")
-	}
-
-	got, did, err := h.Sessions().CreateIssue("#12 work", "/ship 12", 12, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{})
-	if err != nil || did != sessions.Kept || got.ID != id {
-		t.Errorf("CreateIssue = %+v, %v, %v; want the old session %s kept", got, did, err, id)
-	}
-	if names := tmuxNames(t, h); names != id {
-		t.Errorf("tmux sessions = %q, want only the old one", names)
-	}
-}
-
-func TestDeleteOfAnEndedOldSessionRemovesIt(t *testing.T) {
-	h := newHarness(t)
-	id := "main/bbbbbbbb"
-	rec := session.Record{Session: id, State: session.Idle, Event: "Stop", At: time.Now().Add(-time.Hour), Identity: session.Identity{Title: "old work"}}
-	if err := bus.WriteState(h.State, rec); err != nil {
-		t.Fatal(err)
-	}
-	scratch := filepath.Join(tmpOf(h, id), "notes.txt")
-	if err := os.MkdirAll(filepath.Dir(scratch), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(scratch, []byte("mine"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.Sessions().Refresh()
-	if row, ok := h.Session(id); !ok || row.State != session.Settled || row.Hosted {
-		t.Fatalf("ended old session's row = %+v (%v), want settled, not hosted", row, ok)
-	}
-
-	if err := h.DeleteThread(id, false); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := h.Session(id); ok {
-		t.Error("the deleted old session still has a row")
-	}
-	if exists(tmpOf(h, id)) || hasState(t, h, id) {
-		t.Errorf("temp folder there %v, state file there %v; want both gone", exists(tmpOf(h, id)), hasState(t, h, id))
 	}
 }
 

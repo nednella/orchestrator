@@ -306,7 +306,7 @@ func TestThreadThatWakesDuringTheCleanupKeepsWhatIsLeft(t *testing.T) {
 			}
 			l.sessions.nums[id] = 3
 			// The clean-up read the thread as settled; it has woken since.
-			l.sessions.info = append(l.sessions.info, term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir})
+			l.sessions.info = append(l.sessions.info, term.Info{Name: name, Branch: "issue-7", Path: dir})
 
 			removed, reason := l.removeAll(t.Context(), target{id: id, branch: "issue-7", proj: project.Project{Name: "p", Dir: dir}, ended: true}, nil, false)
 			if reason != "Thread 3 woke during the clean-up" || len(removed) != 0 {
@@ -337,7 +337,7 @@ func asleepAndKept(t *testing.T) (*Sessions, session.Name) {
 	name := session.Name{Project: "p", Token: "abcdefgh"}
 	id := name.String()
 	s.nums[id] = 3
-	s.ended[id] = &endedSession{info: term.Info{Name: name, Hosted: true, Branch: "issue-7", Path: dir}}
+	s.ended[id] = &endedSession{info: term.Info{Name: name, Branch: "issue-7", Path: dir}}
 	s.life.tracks[id] = &track{branch: "issue-7", cleanup: "blocked", reason: "a shell is open in this worktree", pr: &PR{Number: 12, State: "merged"}}
 	return s, name
 }

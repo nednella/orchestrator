@@ -28,7 +28,7 @@ type Server struct {
 }
 
 // Servers are the ports the servers thread id started listen on, one row per port, by port: the processes that carry
-// its marker and listen on TCP, without its host and Claude. An old terminal session has none: the app leaves it alone.
+// its marker and listen on TCP, without its host and Claude.
 func (s *Sessions) Servers(id string) ([]Server, error) {
 	list, err := s.serversOf(s.context(), id)
 	if err != nil {
@@ -85,12 +85,9 @@ func (s *Sessions) serversOf(ctx context.Context, id string) ([]procs.Server, er
 	s.mu.Lock()
 	in, live := s.liveInfo(id)
 	_, ended := s.ended[id]
-	known, old := live || ended || s.deleted[id], s.isOld(id)
+	known := live || ended || s.deleted[id]
 	s.mu.Unlock()
-	switch {
-	case old:
-		return nil, nil
-	case !known:
+	if !known {
 		return nil, fmt.Errorf("No thread %s", id)
 	}
 	host := 0
@@ -128,10 +125,8 @@ func (s *Sessions) stopServers(guarded bool, ids ...string) {
 func (s *Sessions) sweepServers() {
 	s.mu.Lock()
 	var ids []string
-	for id, e := range s.ended {
-		if e.info.Hosted {
-			ids = append(ids, id)
-		}
+	for id := range s.ended {
+		ids = append(ids, id)
 	}
 	for id := range s.deleted {
 		ids = append(ids, id)
