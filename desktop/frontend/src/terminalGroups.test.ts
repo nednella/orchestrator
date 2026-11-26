@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { addGroup, closePane, keepRecent, MAX_PANES, reconcile, select, showsGroupHeaders, showsList, split, terminalLabel } from './terminalGroups.ts'
+import { addGroup, closePane, keepRecent, MAX_PANES, prune, reconcile, select, showsGroupHeaders, showsList, split, terminalLabel, withShells } from './terminalGroups.ts'
 import type { ThreadTerms } from './terminalGroups.ts'
 
 const two: ThreadTerms = {
@@ -84,4 +84,22 @@ test('keepRecent keeps the ten newest', () => {
   assert.deepEqual(order, ['t12', 't11', 't10', 't9', 't8', 't7', 't6', 't5', 't4', 't3'])
   assert.deepEqual(keepRecent(order, 't5').slice(0, 2), ['t5', 't12'])
   assert.equal(keepRecent(order, 't5').length, 10)
+})
+
+test('two quick splits both land in the group, with an older shells event between them', () => {
+  let t = withShells(undefined, ['p/shell'])
+  t = split(t, 'p/shell-2')
+  // Sent before shell-2 started, it lists only the first shell; shell-2 is kept as just started.
+  t = prune(t, 'p', new Set(['p/shell', 'p/shell-2']))
+  t = split(withShells(t, ['p/shell']), 'p/shell-3')
+  assert.deepEqual(t, { groups: [{ id: 'g1', panes: ['p/shell', 'p/shell-2', 'p/shell-3'], active: 'p/shell-3' }], active: 'g1' })
+})
+
+test("prune drops the project's gone shells and keeps other projects'", () => {
+  const saved = { groups: [{ id: 'g1', panes: ['p/shell', 'q/shell', 'p/shell-2'], active: 'p/shell-2' }], active: 'g1' }
+  assert.deepEqual(prune(saved, 'p', new Set(['p/shell'])), { groups: [{ id: 'g1', panes: ['p/shell', 'q/shell'], active: 'q/shell' }], active: 'g1' })
+})
+
+test('withShells adds new shells and drops none', () => {
+  assert.deepEqual(withShells(two, ['c', 'd']), { groups: [...two.groups, { id: 'g3', panes: ['d'], active: 'd' }], active: 'g1' })
 })

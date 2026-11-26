@@ -3,10 +3,10 @@ import type { ReactNode } from 'react'
 import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
-import { shellsOf } from './shells'
 import { back, current, forward, goneAgent, goneFrom, NO_HISTORY, projectOf, prune, push, stepTo, threadOf } from './navHistory'
 import type { History, Known, View } from './navHistory'
 import { forgetPanel } from './panelStore'
+import { forgetTerminals, shellsChanged } from './terminalDrawer'
 import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
@@ -69,7 +69,6 @@ type AgentosState = {
   composerAccess: Access
   focusRequest: { target: FocusTarget; n: number }
   shells: Shell[]
-  shellId: string
   version: string
   machine: string
   update: UpdateState
@@ -78,9 +77,6 @@ type AgentosState = {
 
 // The actions keep their identity for the app's whole life, so picking one never renders a component again.
 type AgentosActions = {
-  newShell(): Promise<void>
-  closeShell(id: string): Promise<void>
-  selectShell(id: string): void
   select(id: string): void
   showHome(projectKey: string): void
   // openAgent shows the view of a subagent Claude started in the thread's chat, in place of that chat.
@@ -240,11 +236,12 @@ const composerModeKey = (project: string) => `agentos.composerMode.${project}`
 const threadDraftKey = (id: string) => `agentos.thread.draft.${id}`
 const draftSeenKey = (id: string) => `agentos.thread.draftSeen.${id}`
 
-// forgetThread drops what the app keeps of a thread that is gone: its draft and its right panel.
+// forgetThread drops what the app keeps of a thread that is gone: its draft, its right panel and its terminal drawer.
 function forgetThread(id: string) {
   removeStored(threadDraftKey(id))
   removeStored(draftSeenKey(id))
   forgetPanel(id)
+  forgetTerminals(id)
 }
 
 // viewOf is the view that shows the thread, or with none the project's home.
@@ -289,9 +286,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [memory, setMemory] = useState<Memory | null>(null)
   const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '' })
   const [shells, setShells] = useState<Shell[]>([])
-  const [pickedShell, setPickedShell] = useState('')
-  const threadShells = useMemo(() => shellsOf(shells, selectedId ?? ''), [shells, selectedId])
-  const shellId = threadShells.includes(pickedShell) ? pickedShell : (threadShells[0] ?? '')
   const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })
@@ -488,6 +482,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setProjects(snap.projects)
       setNotes(snap.notes)
       setShells(snap.shells)
+      shellsChanged(snap.project.key, snap.shells)
       setVersion(snap.version)
       setMachine(snap.machine)
       setRawIssues([])
@@ -589,7 +584,17 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     }
 
   useEffect(() => on('sessions', ({ project: key, items }) => applySessions(key, items)), [applySessions])
-  useEffect(() => on('shells', ifCurrent(setShells)), [])
+  useEffect(
+    () =>
+      on(
+        'shells',
+        ifCurrent((items: Shell[]) => {
+          setShells(items)
+          shellsChanged(projectRef.current!.key, items)
+        }),
+      ),
+    [],
+  )
   useEffect(() => on('term:exit', ({ id }) => setShells((list) => list.filter((x) => x.id !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
   useEffect(() => on('awake', setAwake), [])
@@ -826,17 +831,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const actions = useMemo<AgentosActions>(
     () => ({
-      async newShell() {
-        const thread = selectedRef.current ?? ''
-        const { id } = await api.shellNew(thread)
-        setShells((list) => (list.some((x) => x.id === id) ? list : [...list, { id, thread, command: '', busy: false }]))
-        setPickedShell(id)
-      },
-      async closeShell(id) {
-        await api.shellClose(id)
-        setShells((list) => list.filter((x) => x.id !== id))
-      },
-      selectShell: setPickedShell,
       select: selectSession,
       showHome(projectKey) {
         const owner = projectsRef.current.find((p) => p.key === projectKey)
@@ -1151,14 +1145,13 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       composerAccess,
       focusRequest,
       shells,
-      shellId,
       version,
       machine,
       update,
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

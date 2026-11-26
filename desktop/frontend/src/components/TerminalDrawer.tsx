@@ -4,7 +4,7 @@ import { useAgentos } from '../AgentosContext'
 import { formatShortcut } from '../actions'
 import { NEW_TERMINAL_KEY } from '../actions/shell'
 import { termSession } from '../terminal/session'
-import { useDrawerDrag, useDrawerHeight, useDrawerOpen } from '../terminalDrawer'
+import { useDrawerCap, useDrawerDrag, useDrawerHeight, useDrawerOpen } from '../terminalDrawer'
 import { activeShell, MAX_PANES, showsList } from '../terminalGroups'
 import { useFocusRequest } from '../useFocusRequest'
 import { useKeptTerminals, useThreadTerminals } from '../useThreadTerminals'
@@ -23,6 +23,7 @@ export function TerminalDrawer() {
   const drawer = useRef<HTMLDivElement>(null)
   const resize = useDrawerDrag(thread, drawer)
   useKeptTerminals(thread)
+  useDrawerCap(drawer, !!project && open)
   useFocusRequest('shell', () => termSession(activeShell(t.terms)).focus(), open && t.terms.groups.length > 0)
 
   if (!project || !open) return null
@@ -30,8 +31,7 @@ export function TerminalDrawer() {
   const shown = t.terms.groups.find((g) => g.id === t.terms.active)
   const active = activeShell(t.terms)
   const closeActive = () => {
-    const shell = t.shells.find((s) => s.id === active)
-    if (shell) report(() => t.close(shell))
+    if (active) report(() => t.close(active))
   }
   const buttons = (floating: boolean) => (
     <TerminalButtons
@@ -48,8 +48,8 @@ export function TerminalDrawer() {
       ref={drawer}
       data-panel="shell"
       tabIndex={-1}
-      className="relative z-(--z-terminal) flex max-h-[75vh] flex-none border-t border-(--border-terminal) bg-app"
-      style={{ '--terminal-height': `${height}px`, height: 'max(var(--terminal-height), 180px)' } as CSSProperties}
+      className="relative isolate flex flex-none border-t border-(--border-terminal) bg-app"
+      style={{ '--terminal-height': `${height}px`, height: 'max(var(--terminal-height), 180px)', maxHeight: 'var(--terminal-max, 75vh)' } as CSSProperties}
     >
       <div
         className="absolute inset-x-0 -top-[3px] z-30 h-[6px] cursor-row-resize touch-none pointer-coarse:-top-2 pointer-coarse:h-4"
@@ -68,7 +68,7 @@ export function TerminalDrawer() {
                 t.select(id)
                 termSession(id).focus()
               }}
-              onClose={(id) => report(() => t.close(t.shells.find((s) => s.id === id)!))}
+              onClose={(id) => report(() => t.close(id))}
             />
           ) : (
             buttons(true)

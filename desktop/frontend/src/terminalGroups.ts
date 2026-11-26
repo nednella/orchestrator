@@ -35,10 +35,29 @@ export function reconcile(saved: ThreadTerms | undefined, shells: string[]): Thr
     panes.forEach((p) => placed.add(p))
     if (panes.length > 0) groups.push({ id: g.id, panes, active: panes.includes(g.active) ? g.active : nearestKept(g.panes, g.active, panes) })
   }
-  for (const shell of shells) if (!placed.has(shell)) groups.push({ id: nextGroupId(groups), panes: [shell], active: shell })
+  for (const shell of shells) {
+    if (placed.has(shell)) continue
+    placed.add(shell)
+    groups.push({ id: nextGroupId(groups), panes: [shell], active: shell })
+  }
   const ids = groups.map((g) => g.id)
   const wanted = saved?.active ?? ''
   return { groups, active: ids.includes(wanted) ? wanted : nearestKept(before.map((g) => g.id), wanted, ids) }
+}
+
+function panesOf(saved: ThreadTerms | undefined): string[] {
+  return Array.isArray(saved?.groups) ? saved.groups.flatMap((g) => (Array.isArray(g.panes) ? g.panes : [])) : []
+}
+
+// withShells is the saved terminals, with each shell in no group given a group of its own at the end; no pane goes.
+export function withShells(saved: ThreadTerms | undefined, shells: string[]): ThreadTerms {
+  return reconcile(saved, [...panesOf(saved), ...shells])
+}
+
+// prune drops the panes of project's shells that are not in keep. Shell ids start with their project's key, and the
+// panes of other projects' shells stay.
+export function prune(saved: ThreadTerms | undefined, project: string, keep: Set<string>): ThreadTerms {
+  return reconcile(saved, panesOf(saved).filter((p) => !p.startsWith(`${project}/`) || keep.has(p)))
 }
 
 // without takes shell out of every group, and drops a group it leaves empty.

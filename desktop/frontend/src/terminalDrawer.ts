@@ -1,8 +1,10 @@
-import { useRef, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { PointerEvent, RefObject } from 'react'
+import { shellsOf } from './shells'
 import { readStored, writeStored } from './storage'
-import { reconcile, TERMINALS_KEY } from './terminalGroups'
+import { prune, TERMINALS_KEY, withShells } from './terminalGroups'
 import type { ThreadTerms } from './terminalGroups'
+import type { Shell } from './types'
 
 // Each thread's drawer, '' for Home's: whether it is open, the height it was dragged to in px, and its terminals.
 const OPEN_KEY = 'agentos.terminalOpen'
@@ -16,6 +18,10 @@ type Saved<T> = Record<string, T>
 let opened = readStored<Saved<boolean>>(OPEN_KEY, {})
 let heights = readStored<Saved<number>>(HEIGHT_KEY, {})
 let terms = readStored<Saved<ThreadTerms>>(TERMINALS_KEY, {})
+// live are the current project's shells as Go last announced them; started are shells whose start returned before
+// their first announce, which an announce sent before the start can come ahead of.
+let live: Shell[] = []
+const started = new Map<string, string>()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void) {
@@ -64,20 +70,72 @@ export function savedTerms(thread: string): ThreadTerms | undefined {
   return terms[thread]
 }
 
-// changeTerms changes the thread's terminals as the shells running now show them, and saves them.
-export function changeTerms(thread: string, shells: string[], change: (t: ThreadTerms) => ThreadTerms) {
-  const next = change(reconcile(terms[thread], shells))
+// changeTerms changes the thread's terminals and saves them. Only an announce of the shells takes a pane out.
+export function changeTerms(thread: string, change: (t: ThreadTerms) => ThreadTerms) {
+  const next = change(withShells(terms[thread], shellsOf(live, thread)))
   terms = put(terms, TERMINALS_KEY, thread, next.groups.length > 0 ? next : undefined)
+  changed()
+}
+
+// shellStarted keeps a new shell's pane until Go announces the shell.
+export function shellStarted(thread: string, id: string) {
+  if (!live.some((s) => s.id === id)) started.set(id, thread)
+}
+
+// shellClosed forgets a started shell closed before Go announced it.
+export function shellClosed(id: string) {
+  started.delete(id)
+}
+
+// startedShells are the shells started that Go has not announced yet: the thread's, or with no thread every one.
+export function startedShells(thread?: string): string[] {
+  return [...started].filter(([, of]) => thread === undefined || of === thread).map(([id]) => id)
+}
+
+// shellsChanged takes the project's shells as Go announces them, and takes the panes of the gone ones out.
+export function shellsChanged(project: string, shells: Shell[]) {
+  live = shells
+  for (const s of shells) started.delete(s.id)
+  const keep = new Set([...shells.map((s) => s.id), ...started.keys()])
+  let next: Saved<ThreadTerms> = {}
+  for (const [thread, saved] of Object.entries(terms)) {
+    const pruned = prune(saved, project, keep)
+    if (pruned.groups.length > 0) next[thread] = JSON.stringify(pruned) === JSON.stringify(saved) ? saved : pruned
+  }
+  if (JSON.stringify(next) === JSON.stringify(terms)) return
+  terms = next
+  writeStored(TERMINALS_KEY, terms)
+  changed()
+}
+
+// forgetTerminals drops what the drawer keeps of a thread that is gone.
+export function forgetTerminals(thread: string) {
+  if (!(thread in opened || thread in heights || thread in terms)) return
+  opened = put(opened, OPEN_KEY, thread, undefined)
+  heights = put(heights, HEIGHT_KEY, thread, undefined)
+  terms = put(terms, TERMINALS_KEY, thread, undefined)
   changed()
 }
 
 const MAX_WINDOW_SHARE = 0.75
 
-// The tallest the drawer gets: three quarters of the window, and never over the composer above it.
+// The tallest the drawer gets: three quarters of the window, and never over the composer above it, with its padding.
 function maxHeight(drawer: HTMLElement): number {
   const column = drawer.parentElement!
-  const composer = column.querySelector('.composer-box')?.getBoundingClientRect().height ?? 0
+  const box = column.querySelector('.composer-box')
+  const composer = (box?.closest('.chat-over') ?? box)?.getBoundingClientRect().height ?? 0
   return Math.max(MIN_HEIGHT_PX, Math.min(MAX_WINDOW_SHARE * window.innerHeight, column.clientHeight - composer))
+}
+
+// useDrawerCap keeps the drawer under its tallest as the column's size changes, as when the window resizes.
+export function useDrawerCap(drawer: RefObject<HTMLDivElement>, shown: boolean) {
+  useEffect(() => {
+    const el = drawer.current
+    if (!shown || !el) return
+    const observer = new ResizeObserver(() => el.style.setProperty('--terminal-max', `${maxHeight(el)}px`))
+    observer.observe(el.parentElement!)
+    return () => observer.disconnect()
+  }, [drawer, shown])
 }
 
 // useDrawerDrag resizes the drawer from a strip on its top edge. The drag sets only the drawer's --terminal-height, so
