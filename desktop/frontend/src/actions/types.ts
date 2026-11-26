@@ -16,6 +16,8 @@ export type Action = {
   id: string
   label: string
   shortcut?: Shortcut
+  // terminalShortcut runs the action instead of what the shortcut of another action does, while a terminal has the focus.
+  terminalShortcut?: Shortcut
   run(): void | Promise<void>
 }
 

@@ -6,7 +6,7 @@ import { answeredLate } from './chatQuestions'
 import { back, current, forward, goneAgent, goneFrom, NO_HISTORY, projectOf, prune, push, stepTo, threadOf } from './navHistory'
 import type { History, Known, View } from './navHistory'
 import { forgetPanel } from './panelStore'
-import { forgetTerminals, shellsChanged } from './terminalDrawer'
+import { shellsChanged } from './projectTerminals'
 import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
@@ -27,7 +27,7 @@ export type Toast = {
 }
 
 export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'patch-notes' | 'changelog' | null
-export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
+export type FocusTarget = 'thread' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
 // A thread's composer text, and the seq of the last draft orchestrator left in it that the composer has shown.
@@ -241,12 +241,11 @@ const composerModeKey = (project: string) => `orchestrator.composerMode.${projec
 const threadDraftKey = (id: string) => `orchestrator.thread.draft.${id}`
 const draftSeenKey = (id: string) => `orchestrator.thread.draftSeen.${id}`
 
-// forgetThread drops what the app keeps of a thread that is gone: its draft, its right panel and its terminal drawer.
+// forgetThread drops what the app keeps of a thread that is gone: its draft, and its right panel.
 function forgetThread(id: string) {
   removeStored(threadDraftKey(id))
   removeStored(draftSeenKey(id))
   forgetPanel(id)
-  forgetTerminals(id)
 }
 
 // viewOf is the view that shows the thread, or with none the project's home.

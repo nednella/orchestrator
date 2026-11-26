@@ -124,12 +124,11 @@
   --term-bright-cyan: #29b8db;
   --term-bright-white: #e5e5e5;
 
-  /* The terminal drawer and its list of terminals. */
+  /* The terminal surface and its list of terminals. */
   --border-terminal: color-mix(in srgb, var(--border) 80%, transparent);
   --border-terminal-soft: color-mix(in srgb, var(--border) 70%, transparent);
   --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   --bg-terminal-list: color-mix(in srgb, var(--text-dim) 10%, transparent);
-  --bg-terminal-group: color-mix(in srgb, var(--bg-hover) 50%, transparent);
   --bg-terminal-row-hover: color-mix(in srgb, var(--bg-hover) 60%, transparent);
   --text-terminal-button: color-mix(in srgb, var(--text) 90%, transparent);
   --text-terminal-count: color-mix(in srgb, var(--text-dim) 70%, transparent);

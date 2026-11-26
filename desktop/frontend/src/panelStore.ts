@@ -31,7 +31,7 @@ export function updatePanel(key: string, change: (st: PanelState) => PanelState)
   const st = change(before)
   if (st === before) return
   const { [key]: _, ...rest } = panels
-  save(st.tabs.length === 0 && !st.expanded ? rest : { ...rest, [key]: st })
+  save(st.tabs.length === 0 && st.active === null && !st.expanded ? rest : { ...rest, [key]: st })
 }
 
 export function forgetPanel(thread: string) {

@@ -38,7 +38,6 @@ export type IconName =
   | 'trash'
   | 'panel-left'
   | 'panel-right'
-  | 'panel-bottom'
   | 'pin'
   | 'archive'
   | 'broom'
@@ -158,7 +157,6 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'trash') return <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5" />
   if (name === 'panel-left') return <path d="M2.5 3h11v10h-11ZM6.5 3v10" />
   if (name === 'panel-right') return <path d="M2.5 3h11v10h-11ZM9.5 3v10" />
-  if (name === 'panel-bottom') return <path d="M2.5 3h11v10h-11ZM2.5 9.5h11" />
   if (name === 'pin') return <path d="M9.5 2.5 13.5 6.5 11 7l-2 3-.5 3-5-5 3-.5 3-2ZM5.5 10.5 2.5 13.5" />
   if (name === 'archive') return <path d="M2 3.5h12v3H2ZM3 6.5V13h10V6.5M6.5 9h3" />
   if (name === 'broom') return <path d="M9.5 2.5 13 6M8 5l3 3-4.5 5.5H2.5V9.5ZM5 8l3 3" />

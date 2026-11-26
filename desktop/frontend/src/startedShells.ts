@@ -3,7 +3,7 @@
 // listing it.
 export const START_GRACE_MS = 5000
 
-export type Started = Map<string, { thread: string; project: string; at: number }>
+export type Started = Map<string, { project: string; at: number }>
 
 // stillStarted is the started shells left after an announce of project's shells (listed) at time now.
 export function stillStarted(started: Started, project: string, listed: Set<string>, now: number): Started {

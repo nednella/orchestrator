@@ -13,9 +13,13 @@ export function useShortcuts(enabled: boolean) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!latest.current.enabled) return
       const orchestrator = latestOrchestrator()
-      const action = actionsFor(orchestrator, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut))
+      const actions = actionsFor(orchestrator, latest.current.layout)
+      const inTerminal = e.target instanceof Element && e.target.closest('.xterm') !== null
+      const ofTerminal = inTerminal ? actions.find((x) => x.terminalShortcut && matchShortcut(e, x.terminalShortcut)) : undefined
+      const action = ofTerminal ?? actions.find((x) => x.shortcut && matchShortcut(e, x.shortcut))
       if (action) {
         e.preventDefault()
+        if (ofTerminal) e.stopPropagation()
         orchestrator.report(() => action.run())
       }
     }

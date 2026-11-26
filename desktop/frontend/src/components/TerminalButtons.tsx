@@ -1,13 +1,14 @@
-import { Plus, SquareSplitHorizontal, Trash2 } from 'lucide-react'
+import { Plus, SquareSplitHorizontal, SquareSplitVertical, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Fragment, useState } from 'react'
-import { formatShortcut } from '../actions'
-import { NEW_TERMINAL_KEY, SPLIT_TERMINAL_KEY } from '../actions/shell'
+import { withShortcut } from '../actions'
+import { CLOSE_TERMINAL_KEY, NEW_TERMINAL_IN_TERMINAL_KEY, SPLIT_STACKED_KEY, SPLIT_TERMINAL_KEY } from '../actions/shell'
 import { MAX_PANES } from '../terminalGroups'
+import type { SplitDir } from '../terminalGroups'
 import { useDelayedTip } from '../useDelayedTip'
 import { FloatingTip } from './FloatingTip'
 
-type TerminalButtonsProps = { floating: boolean; full: boolean; onSplit(): void; onNew(): void; onClose(): void }
+type TerminalButtonsProps = { floating: boolean; full: boolean; onSplit(dir: SplitDir): void; onNew(): void; onClose(): void }
 
 type Button = { id: string; icon: LucideIcon; label: string; off?: boolean; run(): void }
 
@@ -18,16 +19,12 @@ const HEADER = 'flex h-[22px] flex-none items-stretch [&>button+button]:border-l
 export function TerminalButtons({ floating, full, onSplit, onNew, onClose }: TerminalButtonsProps) {
   const { anchor, tipHandlers } = useDelayedTip()
   const [tip, setTip] = useState('')
+  const limit = full ? ` (${MAX_PANES} at most per group)` : ''
   const buttons: Button[] = [
-    {
-      id: 'split',
-      icon: SquareSplitHorizontal,
-      label: `Split terminal side by side (${formatShortcut(SPLIT_TERMINAL_KEY)})${full ? ` (${MAX_PANES} at most per group)` : ''}`,
-      off: full,
-      run: onSplit,
-    },
-    { id: 'new', icon: Plus, label: `New terminal (${formatShortcut(NEW_TERMINAL_KEY)})`, run: onNew },
-    { id: 'close', icon: Trash2, label: 'Close terminal', run: onClose },
+    { id: 'split-row', icon: SquareSplitHorizontal, label: `${withShortcut('Split side by side', SPLIT_TERMINAL_KEY)}${limit}`, off: full, run: () => onSplit('row') },
+    { id: 'split-column', icon: SquareSplitVertical, label: `${withShortcut('Split stacked', SPLIT_STACKED_KEY)}${limit}`, off: full, run: () => onSplit('column') },
+    { id: 'new', icon: Plus, label: withShortcut('New terminal', NEW_TERMINAL_IN_TERMINAL_KEY), run: onNew },
+    { id: 'close', icon: Trash2, label: withShortcut('Close terminal', CLOSE_TERMINAL_KEY), run: onClose },
   ]
 
   return (

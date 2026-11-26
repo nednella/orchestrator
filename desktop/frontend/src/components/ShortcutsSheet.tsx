@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { formatShortcut, LIST_KEYS, useActions } from '../actions'
+import { CLOSE_TERMINAL_KEY, NEW_TERMINAL_IN_TERMINAL_KEY, SPLIT_STACKED_KEY } from '../actions/shell'
 import type { Action } from '../actions'
 import { Icon } from './Icon'
 import { Keycap } from './Keycap'
@@ -11,13 +12,18 @@ type Group = { title: string; ids: string[]; extra?: Row[] }
 
 const GROUPS: Group[] = [
   { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session'] },
-  { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-shell', 'toggle-right', 'search-threads', 'shortcuts'] },
+  { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-right', 'search-threads', 'shortcuts'] },
   { title: 'Queue', ids: ['refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
   { title: 'Views', ids: ['digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
   {
     title: 'Terminal',
-    ids: ['new-terminal', 'split-terminal'],
-    extra: [{ id: 'shell-keys', label: 'Back to the chat', keys: 'Esc Esc' }],
+    ids: ['open-terminal', 'new-terminal', 'split-terminal'],
+    extra: [
+      { id: 'terminal-new', label: 'New terminal, with a terminal in focus', keys: formatShortcut(NEW_TERMINAL_IN_TERMINAL_KEY) },
+      { id: 'terminal-stacked', label: 'Split terminal stacked, with a terminal in focus', keys: formatShortcut(SPLIT_STACKED_KEY) },
+      { id: 'terminal-close', label: 'Close terminal, with a terminal in focus', keys: formatShortcut(CLOSE_TERMINAL_KEY) },
+      { id: 'shell-keys', label: 'Back to the chat', keys: 'Esc Esc' },
+    ],
   },
   { title: 'In a list', ids: [], extra: LIST_KEYS.map((k) => ({ id: k.keys, label: k.summary, keys: k.keys })) },
 ]

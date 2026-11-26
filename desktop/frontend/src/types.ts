@@ -170,9 +170,9 @@ export type IssueDetail = {
   comments: IssueComment[]
 }
 
-// Shell is one shell of the current project: a thread's, or with thread '' the project's. command is the process in
+// Shell is one shell of the current project, with the folder it started in. command is the process in
 // front in it, such as zsh, vim or node; busy says it is not the login shell.
-export type Shell = { id: string; thread: string; command: string; busy: boolean }
+export type Shell = { id: string; folder: string; command: string; busy: boolean }
 
 export type Snapshot = {
   project: Project

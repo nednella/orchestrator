@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { START_GRACE_MS, stillStarted } from './startedShells.ts'
 import type { Started } from './startedShells.ts'
 
-const started: Started = new Map([['p/shell-2', { thread: 't', project: 'p', at: 1000 }]])
+const started: Started = new Map([['p/shell-2', { project: 'p', at: 1000 }]])
 
 test('a started shell stays while no announce lists it and the grace has not passed', () => {
   assert.deepEqual([...stillStarted(started, 'p', new Set(['p/shell']), 1000 + START_GRACE_MS - 1).keys()], ['p/shell-2'])

@@ -1,46 +1,51 @@
-import { List, Maximize2, Minimize2, X } from 'lucide-react'
+import { List, Maximize2, Minimize2, SquareTerminal, X } from 'lucide-react'
 import { useLayout } from '../LayoutContext'
+import { useOrchestrator } from '../OrchestratorContext'
 import { panelView } from '../panelViews'
 import type { PanelViewId } from '../panelTabs'
+import { closeTab, labelOf, selectTab } from '../projectTerminalOps'
+import { folderName } from '../terminalGroups'
+import type { TermGroup } from '../terminalGroups'
+import { useProjectTerminals } from '../useProjectTerminals'
+import { PanelTab } from './PanelTab'
 import { titleBarButton } from './TitleBarButton'
 
 
 const iconProps = { size: 14, strokeWidth: 2.25, 'aria-hidden': true } as const
 const pressedColor = (pressed: boolean) => ({ color: pressed ? 'var(--text)' : undefined })
 
-// PanelTabStrip heads the right panel: the list of views, a tab for each view open, marked while it waits on the owner,
-// then Expand, offered only beside the chat, and Close. Its buttons are the top bar's, in the same box and at the same
+// PanelTabStrip heads the right panel: the list of views, a tab for each view open and one for each group of the
+// project's terminals, then Expand, offered only beside the chat, and Close. Its buttons are the top bar's, in the same box and at the same
 // right edge, so the two rows read as one column.
 export function PanelTabStrip() {
+  const { report } = useOrchestrator('report')
+  const { terms, shells } = useProjectTerminals()
   const { panel, panelExpanded, docked, showPanelList, showPanelView, closePanelTab, togglePanelExpanded, togglePanel } = useLayout()
   const expand = panelExpanded ? 'Restore panel size' : 'Expand panel'
 
-  const tab = (id: PanelViewId) => {
+  const viewTab = (id: PanelViewId) => {
     const view = panelView(id)
     if (!view) return null
-    const active = panel.active === id
+    return <PanelTab key={id} label={view.label} icon={view.icon} active={panel.active === id} onSelect={() => showPanelView(id)} onClose={() => closePanelTab(id)} />
+  }
+
+  const terminalTab = (g: TermGroup) => {
+    const shell = shells.find((s) => s.id === g.active)
+    const label = labelOf(shells, g.active)
     return (
-      <div
-        key={id}
-        role="presentation"
-        className={`group relative flex h-6 max-w-36 flex-none items-center rounded-md text-small ${active ? 'bg-(--bg-segment-on) text-ink' : 'text-soft hover:bg-(--bg-row-hover) hover:text-ink'}`}
-        onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-        onAuxClick={(e) => e.button === 1 && closePanelTab(id)}
-      >
-        <button role="tab" aria-selected={active} className="flex h-full min-w-0 items-center rounded-md pr-2 pl-[1.375rem]" onClick={() => showPanelView(id)}>
-          <span className="truncate">{view.label}</span>
-        </button>
-        <span className="pointer-events-none absolute top-1/2 left-1 grid size-4 -translate-y-1/2 place-items-center group-focus-within:opacity-0 group-hover:opacity-0">
-          <view.icon size={12} aria-hidden="true" />
-        </span>
-        <button
-          className="absolute top-1/2 left-1 grid size-4 -translate-y-1/2 place-items-center rounded-sm text-soft opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-(--bg-segment-on) hover:text-ink"
-          aria-label={`Close ${view.label}`}
-          onClick={() => closePanelTab(id)}
-        >
-          <X size={12} aria-hidden="true" />
-        </button>
-      </div>
+      <PanelTab
+        key={g.id}
+        label={label}
+        note={shell?.folder ? folderName(shell.folder) : undefined}
+        tip={shell?.folder || undefined}
+        icon={SquareTerminal}
+        active={panel.active === 'terminal' && terms.active === g.id}
+        onSelect={() => {
+          selectTab(g.id)
+          showPanelView('terminal')
+        }}
+        onClose={() => report(() => closeTab(shells, terms, g.id))}
+      />
     )
   }
 
@@ -50,7 +55,8 @@ export function PanelTabStrip() {
         <List {...iconProps} />
       </button>
       <div role="tablist" aria-label="Open views" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-        {panel.tabs.map(tab)}
+        {panel.tabs.map(viewTab)}
+        {terms.groups.map(terminalTab)}
       </div>
       <div className="flex flex-none items-center gap-0.5">
         {docked.right && (

@@ -264,7 +264,7 @@ export function createMock(params: URLSearchParams) {
     }))
   }
 
-  type Shell = { id: string; project: string; thread: string; command: string; dir: string; buffer: string; line: string; opened: boolean }
+  type Shell = { id: string; project: string; command: string; dir: string; buffer: string; line: string; opened: boolean }
   const shells: Shell[] = []
   const LOGIN = 'zsh'
   // What a line typed in a mock shell keeps running until Ctrl-C, so the shell reports it.
@@ -295,27 +295,20 @@ export function createMock(params: URLSearchParams) {
 
   const shellsOf = (project: string) => shells.filter((x) => x.project === project)
   const findShell = (id: string) => shells.find((x) => x.id === id)
-  const shellView = (x: Shell) => ({ id: x.id, thread: x.thread, command: x.command, busy: x.command !== LOGIN })
+  const shellView = (x: Shell) => ({ id: x.id, folder: x.dir, command: x.command, busy: x.command !== LOGIN })
   const publishShells = () => emit('shells', { project: current.name, items: shellsOf(current.name).map(shellView) })
 
-  // startShell starts a shell of the thread in its worktree, or with thread '' a shell of the project in its folder.
+  // startShell starts a shell of the project, in the thread's worktree, or with thread '' in the project's folder.
   function startShell(thread: string): Shell {
     if (thread && sessions.find((x) => x.id === thread)?.cleanup === 'pending') throw `Thread ${find(thread).n} is being cleaned up; open a shell when that ends`
     const dir = sessions.find((x) => x.id === thread)?.worktree || current.dir
     const taken = shellsOf(current.name).map((x) => x.id)
     let n = 1
     while (taken.includes(shellName(current.name, n))) n++
-    const shell: Shell = { id: shellName(current.name, n), project: current.name, thread, command: LOGIN, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
+    const shell: Shell = { id: shellName(current.name, n), project: current.name, command: LOGIN, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
     shells.push(shell)
     publishShells()
     return shell
-  }
-
-  // closeShellsOf stops the thread's shells, as a clean-up or a delete of it does.
-  function closeShellsOf(thread: string) {
-    if (!shells.some((x) => x.thread === thread)) return
-    shells.splice(0, shells.length, ...shells.filter((x) => x.thread !== thread))
-    publishShells()
   }
 
   function snapshot(): Snapshot {
@@ -795,7 +788,6 @@ export function createMock(params: URLSearchParams) {
   function finishCleanup(s: Session) {
     const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
-    if (s.worktree) closeShellsOf(s.id)
     if (s.state !== 'settled') chats.end(s.id, 'settle')
     Object.assign(s, { worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '', browser: false })
     setState(s, 'settled')
@@ -1141,7 +1133,6 @@ export function createMock(params: URLSearchParams) {
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
         if (x.state !== 'settled') chats.end(x.id, 'settle')
-        closeShellsOf(x.id)
         deleted.add(x.id)
         servers.delete(x.id)
         sessions.splice(sessions.indexOf(x), 1)

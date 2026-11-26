@@ -12,7 +12,6 @@ import { RightPanel } from './components/RightPanel'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
-import { TerminalDrawer } from './components/TerminalDrawer'
 import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
@@ -55,7 +54,6 @@ export function App() {
                   <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
                   {overlay && <PanelOverlay panel={overlay} />}
                 </div>
-                <TerminalDrawer />
               </div>
               {docked.right && rightOpen && !panelExpanded && <Divider panel="right" />}
               {docked.right && rightOpen && <RightPanel />}

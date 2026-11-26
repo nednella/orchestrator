@@ -31,9 +31,9 @@ test('closing the last tab shows the list and restores the size', () => {
 })
 
 test('letters open their views', () => {
-  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media'], ['w', 'news']]
+  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media'], ['w', 'news'], ['t', 'terminal']]
   for (const [key, view] of keys) assert.equal(viewForKey(key), view, key)
-  for (const key of ['a', 'e', 's', 't', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
+  for (const key of ['a', 'e', 's', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
 })
 
 test('the width keeps 360 px of chat', () => {
@@ -64,7 +64,7 @@ test('the open sidebar sends the panel over the chat where the chat would get un
 
 test('a focus in the chat column, or News opening there, gives it its room back', () => {
   const expanded = state({ tabs: ['issues'], active: 'issues', expanded: true })
-  for (const target of ['thread', 'composer', 'shell'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
+  for (const target of ['thread', 'composer'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
   for (const target of ['right', 'sidebar', 'thread-search', 'queue-filter'] as const) assert.equal(panelOnFocus(expanded, target), expanded, target)
   const restored = state({ tabs: ['issues'], active: 'issues' })
   assert.equal(panelOnFocus(restored, 'thread'), restored, 'a panel at its own size stays as it is')
@@ -100,4 +100,20 @@ test('a saved panel keeps only the views it knows', () => {
   assert.deepEqual(panelStateOf({ tabs: ['evidence'], active: 'evidence', expanded: false }), { tabs: ['media'], active: 'media', expanded: false }, 'Evidence was saved as Media')
   assert.deepEqual(panelStateOf({ tabs: ['issues'], active: 'issues', expanded: false }), { tabs: ['issues'], active: 'issues', expanded: false })
   assert.deepEqual(panelStateOf({ tabs: 'issues', active: 7, expanded: 'yes' }), EMPTY_PANEL)
+})
+
+test('the Terminal view is shown with no tab of its own, since its tabs are the project terminals', () => {
+  const st = state({ tabs: ['notes'], active: 'notes', expanded: true })
+  assert.deepEqual(openTab(st, 'terminal'), { tabs: ['notes'], active: 'terminal', expanded: true })
+  assert.deepEqual(panelStateOf({ tabs: ['notes', 'terminal'], active: 'terminal', expanded: false }), { tabs: ['notes'], active: 'terminal', expanded: false })
+})
+
+test('closing the last view tab keeps the Terminal view shown', () => {
+  assert.deepEqual(closeTab(state({ tabs: ['notes'], active: 'terminal' }), 'notes'), { tabs: [], active: 'terminal', expanded: false })
+})
+
+test('stepping from the terminal tabs goes to the first or the last view', () => {
+  const st = state({ tabs: ['notes', 'files', 'issues'], active: 'terminal' })
+  assert.equal(stepTab(st, 1).active, 'notes')
+  assert.equal(stepTab(st, -1).active, 'issues')
 })

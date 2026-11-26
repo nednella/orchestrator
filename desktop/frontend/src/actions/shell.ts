@@ -1,45 +1,50 @@
-import { shellsOf } from '../shells'
-import { drawerOpen, setDrawerOpen } from '../terminalDrawer'
-import { openTerminal } from '../useThreadTerminals'
+import { closeTerminal, termsOf } from '../projectTerminalOps'
+import { activeShell } from '../terminalGroups'
+import { showTerminal, splitTerminal } from '../terminalSurface'
 import type { Action, ActionContext, Shortcut } from './types'
 
 export const NEW_TERMINAL_KEY: Shortcut = { key: 't' }
 export const SPLIT_TERMINAL_KEY: Shortcut = { key: 'd' }
+// The keys the terminal takes while it has the focus, in the place of the app's own on the same keys.
+export const NEW_TERMINAL_IN_TERMINAL_KEY: Shortcut = { key: 'n' }
+export const SPLIT_STACKED_KEY: Shortcut = { key: 'd', shift: true }
+export const CLOSE_TERMINAL_KEY: Shortcut = { key: 'w' }
 
-export const shellActions = ({ a, layout }: ActionContext): Action[] => {
-  const thread = a.selectedId ?? ''
-  const open = async (beside: boolean) => {
-    if (!a.project) throw 'The terminal is unavailable'
-    a.focus('shell')
-    await openTerminal(thread, shellsOf(a.shells, thread), beside)
-  }
-  return [
-    {
-      id: 'toggle-shell',
-      label: 'Toggle terminal',
-      shortcut: { key: 'j' },
-      run() {
-        if (!a.project) throw 'The terminal is unavailable'
-        // The expanded right panel hides the chat column and the drawer in it; the focus gives the column back.
-        if (drawerOpen(thread) && !layout.panelExpanded) {
-          if (document.activeElement?.closest('[data-panel="shell"]')) a.focus('thread')
-          return setDrawerOpen(thread, false)
-        }
-        setDrawerOpen(thread, true)
-        a.focus('shell')
-      },
+export const shellActions = ({ a, layout }: ActionContext): Action[] => [
+  {
+    id: 'open-terminal',
+    label: 'Open terminal',
+    shortcut: { key: 'j' },
+    run: () => showTerminal(a, layout, false),
+  },
+  {
+    id: 'new-terminal',
+    label: 'New terminal',
+    shortcut: NEW_TERMINAL_KEY,
+    terminalShortcut: NEW_TERMINAL_IN_TERMINAL_KEY,
+    run: () => showTerminal(a, layout, true),
+  },
+  {
+    id: 'split-terminal',
+    label: 'Split terminal side by side',
+    shortcut: SPLIT_TERMINAL_KEY,
+    run: () => splitTerminal(a, layout, 'row'),
+  },
+  {
+    id: 'split-terminal-stacked',
+    label: 'Split terminal stacked',
+    terminalShortcut: SPLIT_STACKED_KEY,
+    run: () => splitTerminal(a, layout, 'column'),
+  },
+  {
+    id: 'close-terminal',
+    label: 'Close terminal',
+    terminalShortcut: CLOSE_TERMINAL_KEY,
+    async run() {
+      if (!a.project) throw 'The terminal is unavailable'
+      const active = activeShell(termsOf(a.project.key, a.shells))
+      if (!active) throw 'No terminal is open'
+      await closeTerminal(a.shells, active)
     },
-    {
-      id: 'new-terminal',
-      label: 'New terminal',
-      shortcut: NEW_TERMINAL_KEY,
-      run: () => open(false),
-    },
-    {
-      id: 'split-terminal',
-      label: 'Split terminal side by side',
-      shortcut: SPLIT_TERMINAL_KEY,
-      run: () => open(true),
-    },
-  ]
-}
+  },
+]
