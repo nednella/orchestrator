@@ -222,7 +222,7 @@ func TestWaitGoesOnWhenTheAppStops(t *testing.T) {
 	parent, c := busyChild(t, h)
 	got := waitInBackground(t, h, parent, c, 30*time.Second)
 	// The quit ends the followers before the control socket closes.
-	h.EndContext()
+	h.BeginQuit()
 	if r := waitResultOf(t, got, 5*time.Second); r.err != nil || r.refused != "" || r.a.Done {
 		t.Errorf("wait answered %+v while the app stopped, want not done", r)
 	}

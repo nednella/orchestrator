@@ -775,8 +775,8 @@ func (h *Harness) Restart(t *testing.T) *Harness {
 	return second
 }
 
-// EndContext ends the context the app started with, as the app's quit does before it stops answering commands.
-func (h *Harness) EndContext() { h.cancel() }
+// BeginQuit ends the context the app started with, as the app's quit does before it stops answering commands.
+func (h *Harness) BeginQuit() { h.cancel() }
 
 // Sessions is the session list behind the bound service.
 func (h *Harness) Sessions() *sessions.Sessions { return h.App.Sessions() }
