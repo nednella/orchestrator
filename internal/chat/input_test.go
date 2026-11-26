@@ -57,6 +57,10 @@ func TestControlRequestShapes(t *testing.T) {
 		`{"type":"control_request","request_id":"req_2","request":{"subtype":"interrupt","spare_background_tasks":true}}`)
 }
 
+func TestGetUsageShape(t *testing.T) {
+	assertLine(t, GetUsage("aos-4"), `{"type":"control_request","request_id":"aos-4","request":{"subtype":"get_usage"}}`)
+}
+
 func TestSetPermissionModeShape(t *testing.T) {
 	assertLine(t, SetPermissionMode("aos-3", "plan"),
 		`{"type":"control_request","request_id":"aos-3","request":{"subtype":"set_permission_mode","mode":"plan"}}`)

@@ -158,6 +158,16 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"mode": l.Request.Mode}}})
 		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": l.Request.Mode})
 	}
+	// usage answers get_usage as Claude Code 2.1.332 does, shortened; with AOS_FAKE_UNSUPPORTED set it does not know it.
+	usage := func(l fakeLine) {
+		if os.Getenv("AOS_FAKE_UNSUPPORTED") == "1" {
+			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID, "error": "Unsupported control request subtype: get_usage"}})
+			return
+		}
+		print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{
+			"rate_limits": map[string]any{"seven_day": map[string]any{"utilization": 96, "resets_at": "2026-11-30T22:59:59+00:00"}},
+		}}})
+	}
 	// rewind answers the rewind requests as Claude Code 2.1.332 does. Its files are the comma-separated paths in
 	// AOS_FAKE_REWIND_FILES, into each of which a rewind that is not a dry run writes "before"; without the checkpoint
 	// setting it kept no checkpoints. With AOS_FAKE_UNSUPPORTED set it knows neither request, with AOS_FAKE_HELD_ELSEWHERE
@@ -240,6 +250,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				case "user":
 					held = append(held, l)
 				case "control_request":
+					if l.Request.Subtype == "get_usage" {
+						usage(l)
+						continue
+					}
 					still := []string{}
 					held = slices.DeleteFunc(held, func(h fakeLine) bool { return h.text() == "lost" })
 					for _, h := range held {
@@ -265,6 +279,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 			}
 			if strings.HasPrefix(l.Request.Subtype, "rewind_") {
 				rewind(l)
+				continue
+			}
+			if l.Request.Subtype == "get_usage" {
+				usage(l)
 				continue
 			}
 			if l.Request.Subtype != "interrupt" {
@@ -2958,5 +2976,90 @@ func TestPreviewNamesAFileOutsideTheFolder(t *testing.T) {
 	}
 	if changes, err := PreviewRewind(ctxT(t), h.socket, ids[0], ""); err != nil || changes.Reason != "" || len(changes.Files) != 2 {
 		t.Errorf("PreviewRewind with no folder = %+v, %v", changes, err)
+	}
+}
+
+func TestUsageAsksClaude(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	got, err := Usage(ctxT(t), h.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answer struct {
+		RateLimits struct {
+			SevenDay struct {
+				Utilization float64 `json:"utilization"`
+			} `json:"seven_day"`
+		} `json:"rate_limits"`
+	}
+	if err := json.Unmarshal(got, &answer); err != nil || answer.RateLimits.SevenDay.Utilization != 96 {
+		t.Fatalf("usage = %s, %v; want Claude's answer", got, err)
+	}
+	asked := 0
+	for _, line := range stdinLines(t, h.stdin) {
+		if strings.Contains(line, `"subtype":"get_usage"`) {
+			asked++
+		}
+	}
+	if asked != 1 {
+		t.Errorf("get_usage written %d times, want once", asked)
+	}
+	if all := logged(t, h.log); len(logged(t, h.log, chat.KindStart, chat.KindInit)) != len(all) {
+		t.Errorf("log = %+v, want only the run's start and Claude's init", all)
+	}
+}
+
+func TestUsageUnsupportedIsSaid(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_UNSUPPORTED=1")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	_, err := Usage(ctxT(t), h.socket)
+	if !errors.Is(err, ErrNoUsage) {
+		t.Fatalf("err = %v, want ErrNoUsage", err)
+	}
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "This version of Claude Code does not report plan usage" {
+		t.Errorf("err = %#v, want the refusal in words", err)
+	}
+}
+
+func TestUsageDuringATurnDoesNotHoldIt(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	if _, err := Usage(ctxT(t), h.socket); err != nil {
+		t.Fatalf("usage during a turn: %v", err)
+	}
+	if ended := logged(t, h.log, chat.KindTurnEnd); len(ended) != 0 {
+		t.Fatalf("usage came back after the turn ended: %+v", ended)
+	}
+	if e := waitKind(t, events, chat.KindTurnEnd); e.Error {
+		t.Errorf("turn_end = %+v, want the turn to end as it would", e)
+	}
+}
+
+func TestUnknownRequest(t *testing.T) {
+	for _, tt := range []struct {
+		text string
+		want bool
+	}{
+		{"Unsupported control request subtype: get_usage", true},
+		{"Claude does not handle control_request subtype get_usage", true},
+		{"get_usage is not supported in this context", true},
+		{"rate limited", false},
+		{"", false},
+	} {
+		if got := UnknownRequest(tt.text); got != tt.want {
+			t.Errorf("UnknownRequest(%q) = %v, want %v", tt.text, got, tt.want)
+		}
 	}
 }

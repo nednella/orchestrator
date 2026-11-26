@@ -18,6 +18,8 @@ const (
 	// rewindTimeout covers the control requests a rewind writes, each of which waits up to the host's requestTimeout.
 	rewindTimeout = 4 * requestTimeout
 	readyPoll     = 50 * time.Millisecond
+	// usageTimeout outlasts the host's own wait for Claude's answer, so a late answer comes back as the host's refusal.
+	usageTimeout = requestTimeout + callTimeout
 )
 
 // Refused is the host's own reason for not doing what it was asked, in words for the user. An error that wraps no
@@ -147,6 +149,22 @@ func PreviewRewind(ctx context.Context, socket, id, within string) (FileChanges,
 func Rewind(ctx context.Context, socket, id, within string) (string, error) {
 	rep, err := callWithin(ctx, socket, request{Op: opRewind, ID: id, Within: within}, rewindTimeout)
 	return rep.Prefill, err
+}
+
+// ErrNoUsage is what Usage returns when the thread's Claude Code does not know the get_usage control request.
+var ErrNoUsage = &Refused{Reason: "This version of Claude Code does not report plan usage", Unsupported: true}
+
+// Usage asks the thread's Claude for the plan's usage and limits, as its /usage shows them, and returns Claude's answer
+// to the get_usage control request. It never waits on the thread's turn.
+func Usage(ctx context.Context, socket string) (json.RawMessage, error) {
+	rep, err := callWithin(ctx, socket, request{Op: opUsage}, usageTimeout)
+	if refused := (*Refused)(nil); errors.As(err, &refused) && refused.Unsupported {
+		return nil, fmt.Errorf("host at %s: %w", socket, ErrNoUsage)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("ask for usage: %w", err)
+	}
+	return rep.Usage, nil
 }
 
 // Subscribe calls fn with each logged event after `after`, then with live events, until ctx ends or the host goes away. A host drops a subscriber that falls too far behind, so fn should not block for long; subscribe again after the last Seq seen to go on.

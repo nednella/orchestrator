@@ -122,6 +122,11 @@ func SetPermissionMode(id, mode string) []byte {
 	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "set_permission_mode", Mode: mode}})
 }
 
+// GetUsage asks claude for the plan's usage and limits, which it reads from the account with no turn.
+func GetUsage(id string) []byte {
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "get_usage"}})
+}
+
 // RewindFiles asks claude to put the files that its turns edited back as they were before the user message: with
 // dryRun it only says what that would change.
 func RewindFiles(id, message string, dryRun bool) []byte {

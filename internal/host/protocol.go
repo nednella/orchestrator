@@ -18,6 +18,8 @@ const (
 	// opRewindPreview says what a rewind of the files to before a user message would change; opRewind rewinds.
 	opRewindPreview = "rewind_preview"
 	opRewind        = "rewind"
+	// opUsage asks Claude for the plan's usage and limits.
+	opUsage = "usage"
 )
 
 type request struct {
@@ -45,9 +47,10 @@ type reply struct {
 	ID    string `json:"id,omitempty"`
 	Busy  bool   `json:"busy,omitempty"` // the hold op's answer: the host was busy, so it is not held
 	// Unsupported says that the Claude Code the host runs does not know a control request the op needs.
-	Unsupported bool         `json:"unsupported,omitempty"`
-	Changes     *FileChanges `json:"changes,omitempty"` // the rewind_preview op's answer
-	Prefill     string       `json:"prefill,omitempty"` // the rewind op's answer: the text of the message rewound to
+	Unsupported bool            `json:"unsupported,omitempty"`
+	Changes     *FileChanges    `json:"changes,omitempty"` // the rewind_preview op's answer
+	Prefill     string          `json:"prefill,omitempty"` // the rewind op's answer: the text of the message rewound to
+	Usage       json.RawMessage `json:"usage,omitempty"`   // the usage op's answer: Claude's answer to get_usage
 	// Approval is the send op's refusal of a message from a thread while an approval waits, which the message would deny.
 	Approval bool `json:"approval,omitempty"`
 	// Restarting is a refusal while the host is held for a restart, as for a change of access.

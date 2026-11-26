@@ -689,6 +689,10 @@ func (h *host) handle(conn net.Conn) {
 		prefill, err := h.rewind(req.ID, req.Within)
 		writeAnswer(conn, reply{Prefill: prefill}, err)
 		return
+	case opUsage:
+		usage, err := h.usage()
+		writeAnswer(conn, reply{Usage: usage}, err)
+		return
 	}
 	id, err := h.do(req)
 	writeReply(conn, id, err)
@@ -907,6 +911,7 @@ var (
 	errAnswerLate         = errors.New("Claude has not answered yet; the chat updates when it does")
 	errFilesUnknown       = errors.New("The files may have been put back; check them before you edit again")
 	errApprovalWaits      = errors.New("This thread waits on an approval")
+	errNoUsage            = errors.New("This version of Claude Code does not report plan usage")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
 	// or after the one agentos was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
@@ -1054,10 +1059,32 @@ func (h *host) ask(line func(id string) []byte, late func(chat.Event)) (chat.Eve
 // known is Claude's reply r, or errUnsupported when it says Claude does not know the request.
 func known(r chat.Event) (chat.Event, error) {
 	switch {
-	case r.Error && slices.ContainsFunc(unsupportedWords, func(w string) bool { return strings.Contains(r.Text, w) }):
+	case r.Error && UnknownRequest(r.Text):
 		return chat.Event{}, errUnsupported
 	}
 	return r, nil
+}
+
+// UnknownRequest says whether Claude's error text for a control request says it does not know the request.
+func UnknownRequest(text string) bool {
+	return slices.ContainsFunc(unsupportedWords, func(w string) bool { return strings.Contains(text, w) })
+}
+
+// usage asks Claude for the plan's usage and limits and returns its answer. It holds no lock while it waits, so a turn,
+// a send or an approval goes on meanwhile, and nothing of it is logged.
+func (h *host) usage() (json.RawMessage, error) {
+	r, err := h.ask(chat.GetUsage, nil)
+	switch {
+	case errors.Is(err, errUnsupported):
+		return nil, errNoUsage
+	case err != nil:
+		return nil, err
+	case r.Error:
+		return nil, errors.New(cmp.Or(r.Text, "Claude did not report its usage"))
+	case len(r.Input) == 0:
+		return nil, errors.New("Claude's usage answer was empty")
+	}
+	return r.Input, nil
 }
 
 // rewindableLocked says why the host cannot rewind to before the user message id now, nil when it can. It needs h.mu.
@@ -1480,7 +1507,7 @@ func writeReply(conn net.Conn, id string, err error) error {
 // writeAnswer writes rep, or in its place a refusal with err, which says so when Claude did not know a request.
 func writeAnswer(conn net.Conn, rep reply, err error) error {
 	if err != nil {
-		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported), Approval: errors.Is(err, errApprovalWaits), Restarting: errors.Is(err, errRestarting)}
+		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported) || errors.Is(err, errNoUsage), Approval: errors.Is(err, errApprovalWaits), Restarting: errors.Is(err, errRestarting)}
 	}
 	rep.OK = err == nil
 	return writeJSON(conn, rep)
