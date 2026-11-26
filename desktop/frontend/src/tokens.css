@@ -134,6 +134,9 @@
   --text-terminal-button: color-mix(in srgb, var(--text) 90%, transparent);
   --text-terminal-count: color-mix(in srgb, var(--text-dim) 70%, transparent);
 
+  /* The off track of a switch. */
+  --bg-switch-off: color-mix(in srgb, var(--text) 22%, transparent);
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 
