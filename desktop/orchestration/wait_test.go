@@ -406,6 +406,7 @@ func TestWaitReportsWaitingOnOwner(t *testing.T) {
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","access":"supervised"}`).ID
 	apptest.Eventually(t, "the task done", func() bool { return turnEnded(t, h, c) })
+	quiet(t, h, c) // the child goes to sleep once its result went, and the message wakes it
 	if _, err := h.ChatSend(c, "ask"); err != nil {
 		t.Fatal(err)
 	}

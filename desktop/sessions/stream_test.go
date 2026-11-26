@@ -139,8 +139,31 @@ func afterStart(t *testing.T, h *apptest.Harness, id string) time.Time {
 		rec, err := bus.ReadState(h.State, id)
 		return err == nil && rec.Observed > 0
 	})
-	time.Sleep(50 * time.Millisecond)
+	var rec session.Record
+	eventually(t, "a time after the record's", func() bool {
+		rec, _ = bus.ReadState(h.State, id)
+		return time.Now().After(rec.At.Add(time.Millisecond))
+	})
 	return time.Now()
+}
+
+// steady waits until get gives the same value for a while, and returns it.
+func steady(t *testing.T, get func() int64) int64 {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	last, same := get(), 0
+	for same < 25 {
+		if time.Now().After(deadline) {
+			t.Fatal("the value never settled")
+		}
+		time.Sleep(10 * time.Millisecond)
+		if now := get(); now == last {
+			same++
+		} else {
+			last, same = now, 0
+		}
+	}
+	return last
 }
 
 // observe gives the thread the events as its follower does.
@@ -181,11 +204,16 @@ func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
 	observe(h, s.ID, session.Event{Name: "Stop", Seq: 101, At: at.Add(10 * time.Millisecond)})
 	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 
-	time.Sleep(50 * time.Millisecond) // an event with no time is dated now, which must come after the Stop
+	before, err := bus.ReadState(h.State, s.ID)
+	if err != nil || before.Observed != 101 {
+		t.Fatalf("record = %+v, %v; want the seq 101", before, err)
+	}
+	// An event with no time is dated now, which must come after the Stop.
+	eventually(t, "a time after the record's", func() bool { return time.Now().After(before.At.Add(time.Millisecond)) })
 	observe(h, s.ID, session.Event{Name: "PreToolUse", Tool: "Edit"})
 	eventually(t, "working at an event with no seq and no time", func() bool { return stateOf(h, s.ID) == "working" })
-	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Observed != 101 || rec.Tool != "Edit" {
-		t.Errorf("record = %+v, %v; want the seq 101 kept and the tool", rec, err)
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Observed != before.Observed || rec.Tool != "Edit" {
+		t.Errorf("record = %+v, %v; want Observed %d as before the event, and the tool", rec, err, before.Observed)
 	}
 	// An event the record holds already, by its seq, changes nothing.
 	observe(h, s.ID, session.Event{Name: "Notification", NotificationType: "permission_prompt", Seq: 101, At: time.Now()})
@@ -210,11 +238,72 @@ func TestABatchOfEventsReadsUsageOnce(t *testing.T) {
 	before := h.Sessions().UsageReads()
 	observe(h, s.ID, batch...)
 	eventually(t, "the usage read", func() bool { return h.Sessions().UsageReads() > before })
-	time.Sleep(300 * time.Millisecond)
-	if got := h.Sessions().UsageReads() - before; got != 1 {
+	if got := steady(t, h.Sessions().UsageReads) - before; got != 1 {
 		t.Errorf("%d events read the usage %d times, want once", len(batch), got)
 	}
 	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Observed != int64(213) || rec.Transcript != transcript {
 		t.Errorf("record = %+v, %v; want every event of the batch taken in", rec, err)
+	}
+}
+
+func TestABatchThatEndsATurnAndStartsAnotherRecordsItsUsageAndLooksUpThePR(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	transcript := writtenTranscript(t)
+	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
+	h.GH.SetPRFor("issue-7", "[]")
+	at := afterStart(t, h, s.ID)
+	batch := []session.Event{
+		{Name: "UserPromptSubmit", Seq: 300, At: at},
+		{Name: session.Init, Seq: 301, At: at, Conversation: "c1", Transcript: transcript},
+		{Name: "Stop", Seq: 302, At: at.Add(time.Millisecond)},
+		{Name: "UserPromptSubmit", Seq: 303, At: at.Add(2 * time.Millisecond)},
+	}
+	before := h.GH.Calls("pr list --head issue-7")
+	observe(h, s.ID, batch...)
+	eventually(t, "the turn's usage in the event log", func() bool {
+		events := h.Events(t, "usage")
+		return len(events) == 1 && events[0].Tokens.Input == 1000
+	})
+	eventually(t, "the PR looked up", func() bool { return h.GH.Calls("pr list --head issue-7") > before })
+	steady(t, func() int64 { return int64(h.GH.Calls("pr list --head issue-7")) })
+	if got := h.GH.Calls("pr list --head issue-7") - before; got != 1 {
+		t.Errorf("the PR was looked up %d times, want once", got)
+	}
+	if got := stateOf(h, s.ID); got != "working" {
+		t.Errorf("state = %s, want the next turn's work", got)
+	}
+}
+
+func TestABatchWithAToolResultReadsTheBranch(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		then session.Event
+	}{
+		{"then the turn's end", session.Event{Name: "Stop", Seq: 402}},
+		{"then the next prompt", session.Event{Name: "UserPromptSubmit", Seq: 402}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			repoFixture(t, h)
+			s := issueThread(h, t, 7)
+			pushWork(t, s.Worktree)
+			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+			h.RefreshPRs()
+			if got := gitStatus(t, h, s.ID); got != (sessions.BranchStatus{Base: "main", Ahead: 1}) {
+				t.Fatalf("a pushed branch = %+v", got)
+			}
+			if err := os.WriteFile(filepath.Join(s.Worktree, "README"), []byte("changed\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			at := afterStart(t, h, s.ID)
+			tt.then.At = at.Add(time.Millisecond)
+			observe(h, s.ID,
+				session.Event{Name: "PreToolUse", Seq: 400, At: at, Tool: "Edit"},
+				session.Event{Name: "PostToolUse", Seq: 401, At: at, Tool: "Edit"},
+				tt.then)
+			eventually(t, "the branch read again", func() bool { got, _ := h.Session(s.ID); return got.Git != nil && got.Git.Uncommitted == 1 })
+		})
 	}
 }

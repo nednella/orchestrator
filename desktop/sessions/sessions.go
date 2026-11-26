@@ -1241,16 +1241,16 @@ func (s *Sessions) take(rec session.Record) {
 		return
 	}
 	s.records[rec.Session] = rec
-	s.follow(rec)
+	s.follow(rec, endsTurn(rec.Event), rec.Event == "PostToolUse")
 }
 
 // follow does what a record that is the thread's latest calls for: the branch, the PR and the usage. It needs mu.
-func (s *Sessions) follow(rec session.Record) {
-	s.followBranch(rec)
+func (s *Sessions) follow(rec session.Record, turnEnded, toolDone bool) {
+	s.followBranch(rec, turnEnded, toolDone)
 	// Each event moves the row's cost. The event log gets a turn's usage once the turn is over, and the
 	// first refresh's usage at once: it catches up on turns while the app was closed.
 	if rec.Transcript != "" {
-		if endsTurn(rec.Event) {
+		if turnEnded {
 			time.AfterFunc(stopSettle, func() { s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, true) })
 		} else {
 			go s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, !s.loaded)
@@ -1263,7 +1263,7 @@ func endsTurn(event string) bool { return event == "Stop" || event == session.Tu
 
 // followBranch has the lifecycle look up the PR of the thread's branch when its turn ends, since the agent may just
 // have opened it, and read the branch's git status again after each tool call. It needs mu.
-func (s *Sessions) followBranch(rec session.Record) {
+func (s *Sessions) followBranch(rec session.Record, turnEnded, toolDone bool) {
 	if rec.Cwd != "" {
 		s.cwds[rec.Session] = rec.Cwd
 	}
@@ -1275,10 +1275,10 @@ func (s *Sessions) followBranch(rec session.Record) {
 		if !ok {
 			continue
 		}
-		if endsTurn(rec.Event) {
+		if turnEnded {
 			go s.life.track(s.ctx, rec.Session, proj, in.Branch)
 		}
-		if rec.Event == "PostToolUse" {
+		if toolDone {
 			go s.life.restatus(s.ctx, rec.Session, proj)
 		}
 	}
@@ -4080,15 +4080,18 @@ func (s *Sessions) refuseSettled(id string) error {
 func (s *Sessions) Observe(id string, evs ...session.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	changed := false
+	changed, turnEnded, toolDone := false, false, false
 	for _, ev := range evs {
 		if s.observe(id, ev) {
 			changed = true
+			turnEnded = turnEnded || endsTurn(ev.Name)
+			toolDone = toolDone || ev.Name == "PostToolUse"
 		}
 	}
 	if changed {
-		// A catch-up on many events looks at the branch and reads the usage once, for the last of them.
-		s.follow(s.records[id])
+		// A catch-up on many events does what they call for once: the PR lookup if one ended a turn, the branch read if
+		// one was a tool's result, and one read of the usage, which records the turns' if one ended a turn.
+		s.follow(s.records[id], turnEnded, toolDone)
 		s.sync()
 	}
 }
