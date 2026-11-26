@@ -11,8 +11,9 @@ import { markdownBlocks, steadyBlock } from '../markdownBlocks'
 import { ChatCodeBlock } from './ChatCodeBlock'
 
 // file is the file the text is, when the Files view shows it: its Files view's key, and its path, which its relative
-// links start from. Without one, a link opens in the open thread's Files view, from its folder.
-type ChatMarkdownProps = { text: string; streaming?: boolean; file?: { key: string; path: string } }
+// links start from. Without one, a link opens in the open thread's Files view, from its folder. A page is set in the
+// larger type of a document to read, not of a chat reply.
+type ChatMarkdownProps = { text: string; streaming?: boolean; file?: { key: string; path: string }; page?: boolean }
 
 const FileLinks = createContext<{ key: string; path: string } | null>(null)
 
@@ -84,12 +85,12 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, writing }: MarkdownBlo
 
 // A reply renders block by block: a streaming update parses only its last block, and the finished reply takes its other
 // blocks from the cache, with the same markup a parse of the whole text gives.
-export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false, file }: ChatMarkdownProps) {
+export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false, file, page = false }: ChatMarkdownProps) {
   const blocks = markdownBlocks(text)
   const last = blocks.length - 1
   return (
     <FileLinks.Provider value={file ?? null}>
-      <div className="markdown text-body">
+      <div className={page ? 'markdown markdown-page' : 'markdown text-body'}>
         {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} writing /> : <MarkdownBlock key={i} text={block} writing={false} />))}
       </div>
     </FileLinks.Provider>

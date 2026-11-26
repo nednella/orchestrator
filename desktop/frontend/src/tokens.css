@@ -167,6 +167,28 @@
   --text-note: #ebe5d8;
   --text-note-dim: #9a927f;
 
+  /* The Files view: its tree rows, the notice for a file it shows cut short, and the icons of the file types the tree
+     library has none for. */
+  --bg-file-hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --bg-file-selected: color-mix(in srgb, var(--text) 12%, transparent);
+  --border-file: color-mix(in srgb, var(--text) 14%, transparent);
+  --bg-warning: color-mix(in srgb, var(--idle) 10%, transparent);
+  --border-warning: color-mix(in srgb, var(--idle) 25%, transparent);
+  --text-warning: var(--idle);
+  --file-icon-pdf: #ff6762;
+  --file-icon-word: #69b1ff;
+  --file-icon-sheet: #5ecc71;
+  --file-icon-slides: #ffa359;
+  --file-icon-epub: #9d6afb;
+  --file-icon-video: #c466d9;
+  --file-icon-diff: #5ecc71;
+  --file-icon-xml: #ffa359;
+  --file-icon-test: #ff6762;
+  --file-icon-agent: #e0875f;
+  --file-icon-pnpm: #f9ad00;
+  --file-icon-vitest: #6cc24a;
+  --file-icon-language: #9aa3b5;
+
   --z-panel-overlay: 25;
   --z-popup: 30;
   --z-overlay: 40;
@@ -278,6 +300,20 @@
   --border-note: #e6dcc3;
   --text-note: #3a3425;
   --text-note-dim: #8a826c;
+
+  --file-icon-pdf: #d52c36;
+  --file-icon-word: #1a85d4;
+  --file-icon-sheet: #199f43;
+  --file-icon-slides: #d47628;
+  --file-icon-epub: #693acf;
+  --file-icon-video: #a631be;
+  --file-icon-diff: #199f43;
+  --file-icon-xml: #d47628;
+  --file-icon-test: #d52c36;
+  --file-icon-agent: #c15f3c;
+  --file-icon-pnpm: #c98200;
+  --file-icon-vitest: #3d8b1f;
+  --file-icon-language: #5f677b;
 
   --term-cursor: rgb(38, 56, 78);
   --term-selection: rgba(37, 63, 99, 0.2);

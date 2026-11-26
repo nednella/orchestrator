@@ -1,0 +1,34 @@
+import { useEffect, useState } from 'react'
+import { api } from './api'
+import type { FileContent } from './types'
+
+const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
+type Read = { key: string; path: string; content: FileContent } | { key: string; path: string; error: string }
+
+export type OpenFile = { status: 'loading' } | { status: 'error'; error: string; retry(): void } | { status: 'ready'; content: FileContent }
+
+// useOpenFile reads the file at path in the thread's folder, or in the project's with no thread. It reads the file again
+// when the thread's state moves, as at a turn's end, when its agent may have written it, or when retry is called.
+export function useOpenFile(key: string, thread: string | undefined, project: string, path: string | null, state: string | undefined): OpenFile | null {
+  const [read, setRead] = useState<Read | null>(null)
+  const [round, setRound] = useState(0)
+
+  useEffect(() => {
+    if (path === null) return
+    let stale = false
+    const file = thread ? api.chatReadFile(thread, path) : api.projectReadFile(project, path)
+    file.then(
+      (content) => !stale && setRead({ key, path, content }),
+      (err) => !stale && setRead({ key, path, error: reason(err) }),
+    )
+    return () => {
+      stale = true
+    }
+  }, [key, thread, project, path, state, round])
+
+  if (path === null) return null
+  if (read?.key !== key || read.path !== path) return { status: 'loading' }
+  if ('error' in read) return { status: 'error', error: read.error, retry: () => setRound((n) => n + 1) }
+  return { status: 'ready', content: read.content }
+}

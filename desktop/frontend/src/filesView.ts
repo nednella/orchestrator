@@ -1,9 +1,9 @@
-// Where the Files view keeps whether it shows a file rendered or as its source.
-export const FILES_MODE_KEY = 'orchestrator.filesMode'
-export type FilesMode = 'rendered' | 'source'
-
-// The picker's entry for the plan Claude last asked to have approved; no file path can be this, as each ends in .md.
-export const LATEST_PLAN = ':latest-plan'
+// Where the Files view keeps whether it shows a markdown file rendered, how it wraps lines, whether its tree shows and
+// how wide.
+export const FILES_RENDERED_KEY = 'orchestrator.filesRendered'
+export const FILES_WRAP_KEY = 'orchestrator.filesWrap'
+export const FILES_TREE_KEY = 'orchestrator.filesTree'
+export const FILES_TREE_WIDTH_KEY = 'orchestrator.filesTreeWidth'
 
 const MARKDOWN = /\.(md|markdown)$/i
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i
@@ -47,21 +47,6 @@ export function linkTarget(from: string, path: string): string {
     else parts.push(step)
   }
   return parts.join('/')
-}
-
-// fileLabel is how the picker names a file: its folders, '' for none, and its name.
-export function fileLabel(path: string): { folders: string; name: string } {
-  if (path === LATEST_PLAN) return { folders: '', name: 'Latest plan' }
-  const parts = path.split('/').filter(Boolean)
-  const name = parts.pop() ?? ''
-  return { folders: parts.join(' / '), name }
-}
-
-// pickerOrder is the order the picker lists files in: AGENTS.md, README.md, then the files under docs/, then the rest,
-// each alphabetical.
-export function pickerOrder(files: string[]): string[] {
-  const rank = (f: string) => (f === 'AGENTS.md' ? 0 : f === 'README.md' ? 1 : f.startsWith('docs/') ? 2 : 3)
-  return [...files].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
 }
 
 // The file each Files view was asked to show, by its thread's id or by filesKey for Home, while the app runs.

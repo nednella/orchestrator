@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -17,6 +17,7 @@ type Backend = {
   WakeThread(id: string): Promise<Session>
   SetAccess(id: string, access: Access): Promise<void>
   OpenInEditor(id: string, path: string): Promise<void>
+  OpenProjectInEditor(project: string, path: string): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
@@ -68,11 +69,12 @@ type Backend = {
   RewindTo(id: string, message: string, files: boolean): Promise<string>
   RewindOff(): Promise<string>
   ProjectFiles(project: string, query: string): Promise<string[]>
-  ChatReadFile(id: string, path: string): Promise<string>
-  ProjectReadFile(project: string, path: string): Promise<string>
-  ChatMarkdownFiles(id: string): Promise<string[]>
-  ProjectMarkdownFiles(project: string): Promise<string[]>
-  ChatLatestPlan(id: string): Promise<LatestPlan>
+  ChatReadFile(id: string, path: string): Promise<FileContent>
+  ProjectReadFile(project: string, path: string): Promise<FileContent>
+  ChatFileTree(id: string): Promise<FileListing>
+  ProjectFileTree(project: string): Promise<FileListing>
+  ChatFileDir(id: string, dir: string): Promise<FileListing>
+  ProjectFileDir(project: string, dir: string): Promise<FileListing>
   ProjectCommands(project: string): Promise<Command[]>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>
@@ -133,8 +135,8 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -184,6 +186,7 @@ export const api = {
   setAccess: (id: string, access: Access) => backend.SetAccess(id, access),
   // A path opens that markdown file in the thread's folder, '' the folder itself.
   openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
+  openProjectInEditor: (project: string, path: string) => backend.OpenProjectInEditor(project, path),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
@@ -246,12 +249,13 @@ export const api = {
   rewindOff: () => backend.RewindOff(),
   projectFiles: (project: string, query: string) => backend.ProjectFiles(project, query),
   projectCommands: (project: string) => backend.ProjectCommands(project),
-  // The Go side reads only a markdown file of at most 1 MB inside the folder, symlinks resolved.
+  // The Go side reads only a regular file inside the folder, symlinks resolved: the first 1 MB of text, an image of at most 8 MB.
   chatReadFile: (id: string, path: string) => backend.ChatReadFile(id, path),
   projectReadFile: (project: string, path: string) => backend.ProjectReadFile(project, path),
-  chatMarkdownFiles: (id: string) => backend.ChatMarkdownFiles(id),
-  projectMarkdownFiles: (project: string) => backend.ProjectMarkdownFiles(project),
-  chatLatestPlan: (id: string) => backend.ChatLatestPlan(id),
+  chatFileTree: (id: string) => backend.ChatFileTree(id),
+  projectFileTree: (project: string) => backend.ProjectFileTree(project),
+  chatFileDir: (id: string, dir: string) => backend.ChatFileDir(id, dir),
+  projectFileDir: (project: string, dir: string) => backend.ProjectFileDir(project, dir),
   cleanup: (id: string, force: boolean) => backend.Cleanup(id, force),
   cleanups: () => backend.Cleanups(),
   memory: () => backend.Memory(),

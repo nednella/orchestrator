@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fileLabel, LATEST_PLAN, linkTarget, pickerOrder, planPath } from './filesView.ts'
+import { linkTarget, planPath } from './filesView.ts'
 
 test('a relative markdown link is a file', () => {
   assert.equal(planPath('docs/plan.md'), 'docs/plan.md')
@@ -34,17 +34,4 @@ test('a link in a file points from its folder', () => {
   assert.equal(linkTarget('README.md', '../../x.md'), '../../x.md', 'past the top stays')
   assert.equal(linkTarget('', 'docs/plan.md'), 'docs/plan.md', 'from the chat')
   assert.equal(linkTarget('docs/config.md', '/tmp/plan.md'), '/tmp/plan.md')
-})
-
-test('AGENTS.md and README.md come first', () => {
-  const files = ['src/z.md', 'docs/testing.md', 'README.md', 'CHANGELOG.md', 'docs/config.md', 'AGENTS.md', 'desktop/AGENTS.md']
-  assert.deepEqual(pickerOrder(files), ['AGENTS.md', 'README.md', 'docs/config.md', 'docs/testing.md', 'CHANGELOG.md', 'desktop/AGENTS.md', 'src/z.md'])
-  assert.deepEqual(files[0], 'src/z.md', 'the list given is left as it was')
-})
-
-test('the picker names a file by its folders and its name', () => {
-  assert.deepEqual(fileLabel('docs/guides/setup.md'), { folders: 'docs / guides', name: 'setup.md' })
-  assert.deepEqual(fileLabel('AGENTS.md'), { folders: '', name: 'AGENTS.md' })
-  assert.deepEqual(fileLabel('/tmp/plan.md'), { folders: 'tmp', name: 'plan.md' })
-  assert.deepEqual(fileLabel(LATEST_PLAN), { folders: '', name: 'Latest plan' })
 })

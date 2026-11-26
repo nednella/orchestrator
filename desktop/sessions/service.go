@@ -125,5 +125,10 @@ func (v *Service) PullRequests() RepoPulls { return v.s.PullRequests() }
 func (v *Service) Memory() Memory { return v.s.Memory() }
 
 // OpenInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app; a path
-// opens that markdown file in the folder instead.
+// opens that file in the folder instead.
 func (v *Service) OpenInEditor(id, path string) error { return v.s.OpenInEditor(id, path) }
+
+// OpenProjectInEditor is OpenInEditor for the project's folder, where no thread is open.
+func (v *Service) OpenProjectInEditor(project, path string) error {
+	return v.s.OpenProjectInEditor(project, path)
+}

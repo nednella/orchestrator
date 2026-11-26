@@ -1020,6 +1020,102 @@
     border-top: 1px solid var(--border);
   }
 
+  .markdown-page {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .markdown-page h1 { font-size: 1.25rem; }
+  .markdown-page h2 { font-size: 1.125rem; }
+  .markdown-page h3 { font-size: 1rem; }
+  .markdown-page h4,
+  .markdown-page h5,
+  .markdown-page h6 { font-size: 0.875rem; }
+  .markdown-page h6 { color: var(--text-soft); }
+
+  .markdown-page p,
+  .markdown-page ul,
+  .markdown-page ol,
+  .markdown-page pre,
+  .markdown-page table,
+  .markdown-page blockquote,
+  .markdown-page .chat-code {
+    margin: 0.65rem 0;
+  }
+
+  .markdown-page ul,
+  .markdown-page ol { padding-left: 1.25rem; }
+
+  .markdown-page blockquote {
+    padding-left: 0.8rem;
+    border-left: 2px solid color-mix(in srgb, var(--text) 35%, transparent);
+  }
+
+  .markdown-page table {
+    width: 100%;
+    font-size: 0.875rem;
+  }
+
+  .markdown-page th,
+  .markdown-page td {
+    max-width: 24rem;
+    padding: 0.45rem 0.75rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+
+  .markdown-page th { border-bottom-color: var(--border-rule); font-weight: 600; }
+  .markdown-page th:first-child,
+  .markdown-page td:first-child { padding-left: 0; }
+  .markdown-page th:last-child,
+  .markdown-page td:last-child { padding-right: 0; }
+
+  .markdown-page a {
+    text-decoration: none;
+  }
+
+  .markdown-page a:is(:hover, :focus-visible) {
+    background: radial-gradient(circle, currentColor 1px, transparent 1.5px) repeat-x left bottom / 4px 2px;
+    padding-bottom: 2px;
+  }
+
+  .markdown-page code {
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+  }
+
+  .file-crumbs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 calc(100% - 0.75rem), transparent);
+  }
+
+  .file-crumbs::-webkit-scrollbar { display: none; }
+
+  .file-code,
+  .file-code * {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  file-tree-container {
+    display: block;
+    height: 100%;
+    --trees-bg-override: transparent;
+    --trees-fg-override: var(--text);
+    --trees-fg-muted-override: var(--text-dim);
+    --trees-bg-muted-override: var(--bg-file-hover);
+    --trees-selected-bg-override: var(--bg-file-selected);
+    --trees-border-color-override: var(--border-file);
+    --trees-border-radius-override: var(--radius-md);
+    --trees-font-family-override: var(--font-ui);
+    --trees-font-size-override: var(--fs-small);
+    --trees-focus-ring-color-override: var(--accent);
+    --trees-status-ignored-override: var(--text-dim);
+    --trees-git-ignored-color-override: var(--text-dim);
+    --trees-scrollbar-thumb-override: var(--scrollbar-thumb);
+  }
+
   .chat-code {
     min-width: 0;
     max-width: 100%;

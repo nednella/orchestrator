@@ -1442,6 +1442,9 @@ export function createMock(params: URLSearchParams) {
       if (s.branch !== '' && s.worktree === '') throw "This thread's folder is gone"
       if (path !== '') await chats.backend.ChatReadFile(id, path)
     },
+    OpenProjectInEditor: async (project: string, path: string) => {
+      if (path !== '') await chats.backend.ProjectReadFile(project, path)
+    },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
       if (s.state === 'settled') throw `Thread ${id} is asleep`

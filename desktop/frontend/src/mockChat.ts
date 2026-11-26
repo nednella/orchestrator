@@ -1,4 +1,4 @@
-import type { Access, ChatEvent, ChatImage, EventMap, FilesRewind, LatestPlan, Pending, State } from './types'
+import type { Access, ChatEvent, ChatImage, EventMap, FileContent, FileEntry, FileListing, FilesRewind, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
@@ -26,6 +26,7 @@ const commands = [
 ]
 // The files of every mock thread's folder, as git lists them.
 const files = [
+  '.gitignore',
   'AGENTS.md',
   'README.md',
   'docs/config.md',
@@ -45,8 +46,31 @@ const files = [
   'app-backend/cmd/server/main.go',
   'app-backend/internal/cart/cart.go',
   'app-backend/internal/cart/cart_test.go',
+  'app-frontend/public/logo.svg',
+  'app-backend/server.log',
+  'app-backend/data.bin',
 ]
 const fileLimit = 30
+// What git ignores: a file and a folder it lists whole, and what the folders hold.
+const ignoredRoot = ['.env', 'node_modules']
+const ignoredFolders: Record<string, string[]> = {
+  node_modules: ['node_modules/left-pad', 'node_modules/react', 'node_modules/.package-lock.json'],
+  'node_modules/left-pad': ['node_modules/left-pad/index.js', 'node_modules/left-pad/package.json'],
+  'node_modules/react': ['node_modules/react/index.js'],
+}
+const source: Record<string, string> = {
+  '.gitignore': 'node_modules/\n.env\n*.log\n',
+  '.env': 'STRIPE_KEY=sk_test_demo\n',
+  'package.json': '{\n  "name": "storefront",\n  "private": true,\n  "scripts": {\n    "test": "npm --prefix app-frontend test"\n  }\n}\n',
+  'app-frontend/src/js/cart.ts':
+    "import { money } from './money'\n\nexport type Line = { sku: string; quantity: number; price: number }\n\n// total is what the cart costs, rounded as the config says.\nexport function total(lines: Line[]): string {\n  const sum = lines.reduce((all, line) => all + line.quantity * line.price, 0)\n  return money(sum)\n}\n",
+  'app-frontend/src/js/money.ts': 'export const money = (cents: number) => `$${(cents / 100).toFixed(2)}`\n',
+  'app-backend/cmd/server/main.go': 'package main\n\nimport (\n\t"log"\n\t"net/http"\n)\n\nfunc main() {\n\tlog.Fatal(http.ListenAndServe(":8080", nil))\n}\n',
+  'node_modules/left-pad/index.js': 'module.exports = (s, n) => String(s).padStart(n)\n',
+}
+const logo =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect width="240" height="120" rx="12" fill="#5b6ee1"/><text x="120" y="70" font-family="sans-serif" font-size="30" text-anchor="middle" fill="#fff">storefront</text></svg>'
+const maxText = 1 << 20
 // The text of the markdown files among them.
 const markdown: Record<string, string> = {
   'AGENTS.md': '# AGENTS.md\n\nstorefront: the shop\'s web app and its API.\n\n## Hard rules\n\n- Tests run against a throwaway database, never the shared one.\n- Never push to `main`; one issue, one branch, one draft PR.\n\n## Commands\n\n| What | Command |\n| --- | --- |\n| Front end tests | `npm test` |\n| API tests | `go test ./...` |\n\nThe settings are in [docs/config.md](docs/config.md).',
@@ -705,31 +729,27 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     },
     ChatReadFile: async (id: string, path: string) => {
       const t = thread(id)
-      return readMarkdown(path, t.worktree, `thread ${t.n}`)
+      return readFile(path, t.worktree, `thread ${t.n}`)
     },
     ProjectReadFile: async (project: string, path: string) => {
       known(project)
-      return readMarkdown(path, '', `project ${project}`)
+      return readFile(path, '', `project ${project}`)
     },
-    ChatMarkdownFiles: async (id: string) => {
+    ChatFileTree: async (id: string) => {
       thread(id)
-      return Object.keys(markdown).sort()
+      return fileTree()
     },
-    ProjectMarkdownFiles: async (project: string) => {
+    ProjectFileTree: async (project: string) => {
       known(project)
-      return Object.keys(markdown).sort()
+      return fileTree()
     },
-    // The thread's own latest plan that the owner did not deny, as the service reads it from the log.
-    ChatLatestPlan: async (id: string): Promise<LatestPlan> => {
+    ChatFileDir: async (id: string, dir: string) => {
       thread(id)
-      const log = logOf(id)
-      const asked = log.findLast((e) => {
-        const plan = (e.input as { plan?: unknown } | undefined)?.plan
-        const answered = log.find((a) => a.kind === 'answer' && a.id === e.id && a.seq > e.seq)
-        return e.kind === 'approval' && e.tool === 'ExitPlanMode' && !e.agent && typeof plan === 'string' && plan !== '' && answered?.text !== 'deny'
-      })
-      if (!asked) return { text: '', waiting: false }
-      return { text: (asked.input as { plan: string }).plan, waiting: pending.get(id)?.request === asked.id }
+      return listing(dir)
+    },
+    ProjectFileDir: async (project: string, dir: string) => {
+      known(project)
+      return listing(dir)
     },
     ProjectCommands: async (project: string) => {
       known(project)
@@ -737,10 +757,9 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     },
   }
 
-  // readMarkdown is the text of the markdown file at path in folder, the thread's worktree or '' for the project's, as
-  // the service reads it: only inside the folder.
-  function readMarkdown(path: string, folder: string, of: string): string {
-    const outside = `This file is outside ${of}'s folder`
+  // relative is path inside folder, the thread's worktree or '' for the project's, as the service resolves it.
+  function relative(path: string, folder: string, of: string, what: string): string {
+    const outside = `This ${what} is outside ${of}'s folder`
     if (path.startsWith('/') && (folder === '' || !path.startsWith(`${folder}/`))) throw outside
     const parts: string[] = []
     for (const step of (path.startsWith('/') ? path.slice(folder.length + 1) : path).split('/')) {
@@ -748,11 +767,50 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       if (step === '..') parts.pop()
       else if (step !== '' && step !== '.') parts.push(step)
     }
-    const rel = parts.join('/')
-    if (!/\.(md|markdown)$/i.test(rel)) throw 'This is not a markdown file'
-    const text = markdown[rel]
-    if (text === undefined) throw 'This file does not exist'
-    return text
+    return parts.join('/')
+  }
+
+  function fileTree(): FileListing {
+    const entries: FileEntry[] = [
+      ...files.map((path) => ({ path, dir: false, ignored: false })),
+      ...ignoredRoot.map((path) => ({ path, dir: path in ignoredFolders, ignored: true })),
+    ]
+    return { entries: entries.sort((a, b) => (a.path < b.path ? -1 : 1)), truncated: false }
+  }
+
+  // listing is a folder's entries after the wait a folder takes to list.
+  const listing = (dir: string) =>
+    new Promise<FileListing>((resolve, reject) =>
+      setTimeout(() => {
+        try {
+          resolve(fileDir(dir))
+        } catch (err) {
+          reject(err)
+        }
+      }, 400),
+    )
+
+  function fileDir(dir: string): FileListing {
+    const rel = relative(dir, '', 'the folder', 'folder')
+    const children = ignoredFolders[rel]
+    if (children === undefined) throw 'This folder does not exist'
+    return { entries: children.map((path) => ({ path, dir: path in ignoredFolders, ignored: true })), truncated: false }
+  }
+
+  // readFile is the file at path in folder as the service reads it: any regular file inside the folder.
+  function readFile(path: string, folder: string, of: string): FileContent {
+    const rel = relative(path, folder, of, 'file')
+    const known = files.includes(rel) || ignoredRoot.includes(rel) || Object.values(ignoredFolders).some((children) => children.includes(rel))
+    if (!known) throw 'This file does not exist'
+    if (rel in ignoredFolders) throw 'This is not a file'
+    const text = (content: string): FileContent => {
+      const cut = content.length > maxText
+      return { kind: 'text', text: cut ? content.slice(0, maxText) : content, size: content.length, truncated: cut, mime: '', data: '' }
+    }
+    if (rel.endsWith('.svg')) return { kind: 'image', text: '', size: logo.length, truncated: false, mime: 'image/svg+xml', data: btoa(logo) }
+    if (rel.endsWith('.bin')) return { kind: 'binary', text: '', size: 48213, truncated: false, mime: '', data: '' }
+    if (rel.endsWith('.log')) return text(Array.from({ length: 40_000 }, (_, i) => `2026-01-01T00:00:${String(i % 60).padStart(2, '0')}Z GET /cart 200 ${i}ms`).join('\n'))
+    return text(markdown[rel] ?? source[rel] ?? `// ${rel}\n`)
   }
 
   // rewindable throws why the thread cannot rewind to before message now, as the host refuses it.

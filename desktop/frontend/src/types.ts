@@ -45,9 +45,17 @@ export type BranchStatus = {
   notInMain: number
 }
 
-// LatestPlan is the plan a thread's own Claude last asked to have approved, '' for none, and whether it still waits on
-// the owner (desktop/chat.Plan).
-export type LatestPlan = { text: string; waiting: boolean }
+// FileEntry is a file or folder of the Files view's tree: its path, relative to the folder, and whether git ignores it
+// (desktop/chat.FileEntry).
+export type FileEntry = { path: string; dir: boolean; ignored: boolean }
+
+// FileListing is entries of a folder, sorted by path; truncated says there are more (desktop/chat.FileListing).
+export type FileListing = { entries: FileEntry[]; truncated: boolean }
+
+// FileContent is a file as the Files view shows it (desktop/chat.FileContent). A text file has its first 1 MiB at most
+// in text, and truncated says it was cut; size is its own size in bytes. An image has its mime type and its bytes as
+// base64 in data. A binary file has neither.
+export type FileContent = { kind: 'text' | 'image' | 'binary'; text: string; size: number; truncated: boolean; mime: string; data: string }
 
 export type Session = {
   id: string
