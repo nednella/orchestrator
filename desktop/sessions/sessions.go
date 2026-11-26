@@ -2570,6 +2570,9 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	if cut < compacted {
 		return Session{}, errors.New("This message is from before the chat was compacted, so a fork cannot start there")
 	}
+	if _, err := os.Stat(in.Path); err != nil {
+		return Session{}, fmt.Errorf("%s is gone, so this thread cannot be forked there", in.Path)
+	}
 	issue, _ := strconv.Atoi(in.Issue)
 	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
 	fork := forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: at, events: events[:cut+1]}

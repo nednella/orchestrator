@@ -481,3 +481,26 @@ func TestForkIsToldNotToTrack(t *testing.T) {
 		t.Error("the source is told it is a fork")
 	}
 }
+
+func TestForkOfAThreadWhoseFolderIsGoneIsRefused(t *testing.T) {
+	h := apptest.New(t)
+	repoFixture(t, h)
+	src, err := h.NewThreadIn("work", "", "supervised", "worktree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	ended(t, h, src)
+	if err := os.RemoveAll(src.Worktree); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = h.ForkSession(src.ID, "r1b")
+	if want := src.Worktree + " is gone, so this thread cannot be forked there"; err == nil || err.Error() != want {
+		t.Errorf("fork = %v, want %q", err, want)
+	}
+	if rows := h.Sessions().List(); len(rows) != 1 {
+		t.Errorf("rows = %+v, want only the source", rows)
+	}
+}
