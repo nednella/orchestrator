@@ -53,6 +53,7 @@ func flagsOf(t *testing.T, dir, id string) (model, effort string) {
 }
 
 func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 
 	tests := []struct {
@@ -81,6 +82,7 @@ func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
 }
 
 func TestSessionWithoutAnIssueGetsNoModelFlags(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewSession("plain", "")
 	if err != nil {
@@ -92,6 +94,7 @@ func TestSessionWithoutAnIssueGetsNoModelFlags(t *testing.T) {
 }
 
 func TestSessionsGetClaudesOwnSettings(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	user := h.ClaudeConfigDir()
 	if err := os.MkdirAll(user, 0o700); err != nil {
@@ -122,6 +125,7 @@ func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 }
 
 func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.StartIssue(8)
 	if err != nil {
@@ -149,6 +153,7 @@ func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
 }
 
 func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 
 	s, err := h.StartIssueOwn(7, "", "be careful", "haiku", "low")
@@ -170,6 +175,7 @@ func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
 }
 
 func TestOwnersPromptDoesNotReachALiveSession(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	first, err := h.StartIssueOwn(7, "", "", "", "")
 	if err != nil {

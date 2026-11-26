@@ -17,6 +17,7 @@ import (
 )
 
 func TestIssueCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	tests := []struct {
 		name string
@@ -41,6 +42,7 @@ func TestIssueCommand(t *testing.T) {
 }
 
 func TestIssueCommandHandsThePromptOver(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}})
 	if !resp.OK {
@@ -61,6 +63,7 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 }
 
 func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	gitRepo(t, h)
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
@@ -85,6 +88,7 @@ func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 }
 
 func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
@@ -121,6 +125,7 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 }
 
 func TestLongestPromptStartsTheSession(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most orchestrator issue --prompt takes
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": handover}}); !resp.OK {
@@ -132,6 +137,7 @@ func TestLongestPromptStartsTheSession(t *testing.T) {
 }
 
 func TestRefreshCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.Issues(false); err != nil {
 		t.Fatal(err)
@@ -153,6 +159,7 @@ const fullActionQueue = `    queue_sections:
 `
 
 func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		asker         session.Access
 		full, regular session.Access // what issue 7, whose action is Full, and issue 11, whose action is Supervised, get
@@ -186,6 +193,7 @@ func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) 
 }
 
 func TestIssueCommandRefusesAnAskerThatIsNotARunningThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
 	for from, asker := range map[string]string{"a session that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"} {
 		for _, issue := range []string{"7", "11"} {
@@ -201,6 +209,7 @@ func TestIssueCommandRefusesAnAskerThatIsNotARunningThread(t *testing.T) {
 }
 
 func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
 	supervised, err := h.NewSession("supervised", "")
 	if err != nil {
@@ -259,6 +268,7 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 }
 
 func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -313,6 +323,7 @@ func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
 }
 
 func TestIssueCommandRefusesWakingAThreadWithMoreAccess(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("read", "", "", "", "read")
 	if err != nil {

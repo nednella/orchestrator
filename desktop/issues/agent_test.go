@@ -16,6 +16,7 @@ const agentQueue = `    queue_sections:
 `
 
 func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	h.GH.SetIssues(`[
 		{"number":7,"title":"No labels","url":"https://x/7","labels":[{"name":"ready"}]},
@@ -55,6 +56,7 @@ func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 }
 
 func TestTheQueueSaysWhichLabelsClaudeIgnores(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	h.GH.SetIssues(`[
 		{"number":7,"title":"Labels claude takes","url":"https://x/7","labels":[{"name":"ready"},{"name":"model:opus"},{"name":"effort:medium"}]},

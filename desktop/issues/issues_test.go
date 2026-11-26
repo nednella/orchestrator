@@ -23,6 +23,7 @@ import (
 type noSessions struct{ issues.Sessions }
 
 func TestAnIssueSaysTheAccessItsActionStartsWith(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: `    queue_sections:
       - name: Ready
         labels: [ready]
@@ -49,6 +50,7 @@ func TestAnIssueSaysTheAccessItsActionStartsWith(t *testing.T) {
 }
 
 func TestIssues(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 
 	got, err := h.Issues(false)
@@ -125,6 +127,7 @@ func TestIssues(t *testing.T) {
 }
 
 func TestStartReadsTheListAgainForANewIssue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.Issues(false); err != nil {
 		t.Fatal(err)
@@ -143,6 +146,7 @@ func TestStartReadsTheListAgainForANewIssue(t *testing.T) {
 }
 
 func TestStartsAtOnceMakeOneSession(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ids := make([]string, 4)
 	var wg sync.WaitGroup
@@ -167,6 +171,7 @@ func TestStartsAtOnceMakeOneSession(t *testing.T) {
 }
 
 func TestIssuesWithoutRepo(t *testing.T) {
+	t.Parallel()
 	gh := &apptest.FakeGH{Repo: errors.New("gh repo view: exit status 1: not a git repository")}
 	is := issues.New(gh.Run, noSessions{}, func(string, any) {})
 	list, err := is.List(context.Background(), project.Project{Dir: "/x"}, false)
@@ -179,6 +184,7 @@ func TestIssuesWithoutRepo(t *testing.T) {
 }
 
 func TestIssuesDisabled(t *testing.T) {
+	t.Parallel()
 	gh := &apptest.FakeGH{IssuesErr: errors.New("gh issue list: exit status 1: the 'acme/widgets' repository has disabled issues")}
 	is := issues.New(gh.Run, noSessions{}, func(string, any) {})
 	if _, err := is.List(context.Background(), project.Project{Dir: "/x"}, false); err != issues.ErrIssuesDisabled {
@@ -187,6 +193,7 @@ func TestIssuesDisabled(t *testing.T) {
 }
 
 func TestStartSendsTheChosenActionsCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	inbox, err := h.StartIssue(11)
 	if err != nil {
@@ -204,6 +211,7 @@ func TestStartSendsTheChosenActionsCommand(t *testing.T) {
 }
 
 func TestReadActionGivesTheIssueItsOneThread(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	plan, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
@@ -224,6 +232,7 @@ func TestReadActionGivesTheIssueItsOneThread(t *testing.T) {
 }
 
 func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	work, err := h.StartIssue(11)
 	if err != nil {
@@ -249,6 +258,7 @@ func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 }
 
 func TestIssueOfNoSectionSendsTheStartLine(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.StartIssue(10)
 	if err != nil {
@@ -260,6 +270,7 @@ func TestIssueOfNoSectionSendsTheStartLine(t *testing.T) {
 }
 
 func TestStartLineNamesTheDefaultBranchWhenProjectNamesNone(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{NoBranch: true})
 	s, err := h.StartIssue(10)
 	if err != nil {
@@ -271,6 +282,7 @@ func TestStartLineNamesTheDefaultBranchWhenProjectNamesNone(t *testing.T) {
 }
 
 func TestManualPromptSendDraftsWithoutSending(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	s, err := h.StartIssue(7)
 	if err != nil {
@@ -284,6 +296,7 @@ func TestManualPromptSendDraftsWithoutSending(t *testing.T) {
 }
 
 func TestRepoFailureIsWarnedAboutAndNotRemembered(t *testing.T) {
+	t.Parallel()
 	gh := &apptest.FakeGH{Repo: errors.New("gh repo view: exit status 1: error connecting to api.github.com\nsecond line")}
 	var warnings []warn.Warning
 	is := issues.New(gh.Run, noSessions{}, func(event string, payload any) {
@@ -319,6 +332,7 @@ func TestRepoFailureIsWarnedAboutAndNotRemembered(t *testing.T) {
 
 // A refresh asks gh for the repo again; the one it knows must not vanish from the project list meanwhile.
 func TestRefreshKeepsTheKnownRepo(t *testing.T) {
+	t.Parallel()
 	gh := &apptest.FakeGH{}
 	var repoCalls atomic.Int32
 	asked, answer := make(chan struct{}), make(chan struct{})
@@ -365,6 +379,7 @@ func TestRefreshKeepsTheKnownRepo(t *testing.T) {
 }
 
 func TestIssueDetail(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 
 	got, err := h.IssueDetail(7)
@@ -399,6 +414,7 @@ func TestIssueDetail(t *testing.T) {
 }
 
 func TestIssueMoves(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	got, err := h.Issues(false)
 	if err != nil {
@@ -420,6 +436,7 @@ func TestIssueMoves(t *testing.T) {
 }
 
 func TestMoveIssue(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		number  int
@@ -460,6 +477,7 @@ func TestMoveIssue(t *testing.T) {
 }
 
 func TestUndoMove(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		number  int
