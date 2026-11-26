@@ -1224,6 +1224,11 @@
     }
   }
 
+  /* A side chat's chat sits in the right panel, which is narrow at any window width. */
+  [data-chat][data-embedded] {
+    --chat-side: 0.75rem;
+  }
+
   .chat-scroll {
     --chat-fade: calc(1.5rem + 1px);
     padding-inline: var(--chat-side) calc(var(--chat-side) + var(--card-room, 0px));

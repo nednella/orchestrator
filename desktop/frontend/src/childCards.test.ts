@@ -31,6 +31,7 @@ const session = (over: Partial<Session>): Session => ({
   forkOf: '',
   forkAt: '',
   parent: 'shop/lead2345',
+  side: false,
   tokens: 0,
   cost: 0,
   memory: 0,

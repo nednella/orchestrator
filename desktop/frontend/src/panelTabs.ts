@@ -8,21 +8,37 @@ export const PANEL_KEYS: Record<PanelViewId, string> = { notes: 'N', files: 'F',
 // The views the panel lists, in its order.
 export const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media', 'news', 'terminal']
 
-// What the right panel shows for one thread, or for Home: the views open as tabs, the one shown (null for the list of
-// views), and whether it takes the chat's room too. The Terminal view has no tab of its own here: its tabs are the
-// project's terminal groups, the same in every thread, so it is shown without being in tabs.
-export type PanelState = { tabs: PanelViewId[]; active: PanelViewId | null; expanded: boolean }
+// What a row of the panel's list does: open a view, or start a side chat of the open thread.
+export type PanelRowTarget = PanelViewId | 'sideChat'
+export const SIDE_CHAT_KEY = 'S'
+
+// A tab of the right panel: a view, or a side chat of the thread by its id.
+export type SideChatTab = `side:${string}`
+export type PanelTabId = PanelViewId | SideChatTab
+
+export const sideChatTab = (id: string): SideChatTab => `side:${id}`
+
+// sideChatOf is the id of the side chat the tab shows, null for a view's tab.
+export const sideChatOf = (tab: PanelTabId | null): string | null => (tab?.startsWith('side:') ? tab.slice('side:'.length) : null)
+
+// viewOfTab is the view the tab shows, null for a side chat's tab.
+export const viewOfTab = (tab: PanelTabId | null): PanelViewId | null => (tab === null || sideChatOf(tab) !== null ? null : (tab as PanelViewId))
+
+// What the right panel shows for one thread, or for Home: the tabs open, the one shown (null for the list of views),
+// and whether it takes the chat's room too. The Terminal view has no tab of its own here: its tabs are the project's
+// terminal groups, the same in every thread, so it is shown without being in tabs.
+export type PanelState = { tabs: PanelTabId[]; active: PanelTabId | null; expanded: boolean }
 
 export const EMPTY_PANEL: PanelState = { tabs: [], active: null, expanded: false }
 
-export function openTab(st: PanelState, view: PanelViewId): PanelState {
+export function openTab(st: PanelState, view: PanelTabId): PanelState {
   if (view === 'terminal') return { ...st, active: view }
   return { ...st, tabs: st.tabs.includes(view) ? st.tabs : [...st.tabs, view], active: view }
 }
 
 // closeTab closes the view's tab. A closed active tab hands over to its left neighbour, else to the tab after it; with
 // no tab left the list shows, at the panel's own size.
-export function closeTab(st: PanelState, view: PanelViewId): PanelState {
+export function closeTab(st: PanelState, view: PanelTabId): PanelState {
   const at = st.tabs.indexOf(view)
   if (at < 0) return st
   const tabs = st.tabs.filter((tab) => tab !== view)
@@ -47,7 +63,9 @@ export function panelOnFocus(st: PanelState, target: FocusTarget): PanelState {
   return st.expanded && CHAT_COLUMN.includes(target) ? { ...st, expanded: false } : st
 }
 
-export function viewForKey(key: string): PanelViewId | null {
+// targetForKey is what the letter key does from the panel's list, null for a letter that does nothing.
+export function targetForKey(key: string): PanelRowTarget | null {
+  if (key.toUpperCase() === SIDE_CHAT_KEY) return 'sideChat'
   return PANEL_ORDER.find((view) => PANEL_KEYS[view] === key.toUpperCase()) ?? null
 }
 
@@ -56,9 +74,9 @@ export function viewForKey(key: string): PanelViewId | null {
 export function panelStateOf(saved: unknown): PanelState {
   if (typeof saved !== 'object' || saved === null) return EMPTY_PANEL
   const { tabs, active, expanded } = saved as Record<string, unknown>
-  const known = (view: unknown): view is PanelViewId => PANEL_ORDER.includes(view as PanelViewId)
+  const known = (tab: unknown): tab is PanelTabId => PANEL_ORDER.includes(tab as PanelViewId) || (typeof tab === 'string' && sideChatOf(tab as PanelTabId) !== null && tab.length > 'side:'.length)
   const renamed = (view: unknown) => (view === 'evidence' ? 'media' : view)
-  const kept: PanelViewId[] = Array.isArray(tabs) ? [...new Set(tabs.map(renamed).filter(known))].filter((view) => view !== 'terminal') : []
+  const kept: PanelTabId[] = Array.isArray(tabs) ? [...new Set(tabs.map(renamed).filter(known))].filter((view) => view !== 'terminal') : []
   const shown = renamed(active)
   return { tabs: kept, active: known(shown) && (kept.includes(shown) || shown === 'terminal') ? shown : null, expanded: expanded === true }
 }

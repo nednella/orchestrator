@@ -19,6 +19,7 @@ type Backend = {
   OpenInEditor(id: string, path: string): Promise<void>
   OpenProjectInEditor(project: string, path: string): Promise<void>
   ForkSession(id: string, at: string): Promise<Session>
+  SideChatDelete(id: string, unused: boolean): Promise<void>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
   PickFolder(): Promise<string>
@@ -58,6 +59,7 @@ type Backend = {
   ChatWatch(id: string): Promise<void>
   ChatUnwatch(id: string): Promise<void>
   ChatSend(id: string, text: string, images: ChatImage[], sideChats: string[]): Promise<ChatSent>
+  SideChatStart(parent: string, text: string, images: ChatImage[]): Promise<Session>
   ChatInterrupt(id: string): Promise<void>
   ChatSendNow(id: string, message: string): Promise<void>
   ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
@@ -135,8 +137,8 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'SideChatDelete', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -188,6 +190,8 @@ export const api = {
   openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
   openProjectInEditor: (project: string, path: string) => backend.OpenProjectInEditor(project, path),
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
+  // With unused the side chat goes only when nobody sent it a message, as when its tab closes.
+  sideChatDelete: (id: string, unused = false) => backend.SideChatDelete(id, unused),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
   // pickFolder is the native folder picker; '' when the user cancels it.
@@ -234,7 +238,10 @@ export const api = {
   chatHistory: (id: string, after = 0) => backend.ChatHistory(id, after),
   chatWatch: (id: string) => backend.ChatWatch(id),
   chatUnwatch: (id: string) => backend.ChatUnwatch(id),
+  // Each of sideChats, side chats of the thread, goes with the message as a block of its questions and answers.
   chatSend: (id: string, text: string, images: ChatImage[] = [], sideChats: string[] = []) => backend.ChatSend(id, text, images, sideChats),
+  // A side chat forks the thread's conversation at its latest finished reply; text and images, if any, are its first message.
+  sideChatStart: (parent: string, text = '', images: ChatImage[] = []) => backend.SideChatStart(parent, text, images),
   // The mock keeps the images it was sent in memory and has its own address for each.
   chatMediaURL: (thread: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(thread, path),
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),

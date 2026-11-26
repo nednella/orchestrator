@@ -2,31 +2,34 @@ import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useLayout } from '../LayoutContext'
 import { useOrchestrator } from '../OrchestratorContext'
-import { viewForKey } from '../panelTabs'
-import type { PanelViewId } from '../panelTabs'
+import { targetForKey } from '../panelTabs'
+import type { PanelRowTarget } from '../panelTabs'
 import { PANEL_GROUPS, panelView } from '../panelViews'
 import type { PanelRow } from '../panelViews'
+import { sideChatReason } from '../sideChat'
+import { useSideChatReason } from '../sideChatStore'
 import type { Session } from '../types'
 import { showTerminal } from '../terminalSurface'
 import { isTyping } from '../useListNav'
+import { useSideChat } from '../useSideChat'
 import { PanelHomeRow } from './PanelHomeRow'
 
 type PanelHomeProps = { session: Session | undefined }
 
 const POPUP = '[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]'
 
-// usePanelLetters opens the view of each bare letter pressed anywhere in the window, but not while the owner types or a
-// popup is open, or once something else took the key.
-function usePanelLetters(open: (view: PanelViewId) => void) {
+// usePanelLetters does what each bare letter pressed anywhere in the window does from the list, but not while the owner
+// types or a popup is open, or once something else took the key.
+function usePanelLetters(open: (target: PanelRowTarget) => void) {
   const latest = useRef(open)
   latest.current = open
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.defaultPrevented || e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTyping(e.target) || document.querySelector(POPUP)) return
-      const view = viewForKey(e.key)
-      if (!view) return
+      const target = targetForKey(e.key)
+      if (!target) return
       e.preventDefault()
-      latest.current(view)
+      latest.current(target)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -36,20 +39,28 @@ function usePanelLetters(open: (view: PanelViewId) => void) {
 const FORWARD = ['ArrowDown', 'ArrowRight']
 const BACK = ['ArrowUp', 'ArrowLeft']
 
-// PanelHome is the right panel's list of surfaces to open. A view of one thread's things cannot open on Home.
+// PanelHome is the right panel's list of surfaces to open. A view of one thread's things cannot open on Home, and a
+// side chat starts only from a thread that can fork.
 export function PanelHome({ session }: PanelHomeProps) {
   const layout = useLayout()
   const orchestrator = useOrchestrator('project', 'selectedId', 'shells', 'report')
+  const sideChat = useSideChat()
+  const chatReason = useSideChatReason(session?.id ?? '')
+  const sideReason = sideChatReason(session) || chatReason
   const reasonShut = (row: PanelRow) => {
-    if (row.view === null) return 'Not built yet'
-    if (row.view === 'terminal' && !orchestrator.project) return 'Terminals are available from a project.'
-    return session === undefined && panelView(row.view)?.thread ? 'Available from a thread.' : null
+    if (row.target === 'sideChat') return sideReason || null
+    if (row.target === 'terminal' && !orchestrator.project) return 'Terminals are available from a project.'
+    return session === undefined && panelView(row.target)?.thread ? 'Available from a thread.' : null
   }
   // A new terminal for the Terminal row, as it makes its tab with each press.
-  const open = (view: PanelViewId) => (view === 'terminal' ? orchestrator.report(() => showTerminal(orchestrator, layout, true)) : layout.showPanelView(view))
-  usePanelLetters((id) => {
-    const row = PANEL_GROUPS.flatMap((g) => g.rows).find((r) => r.view === id)
-    if (row && reasonShut(row) === null) open(id)
+  const open = (target: PanelRowTarget) => {
+    if (target === 'sideChat') return session && orchestrator.report(() => sideChat.start(session.id))
+    if (target === 'terminal') return orchestrator.report(() => showTerminal(orchestrator, layout, true))
+    layout.showPanelView(target)
+  }
+  usePanelLetters((target) => {
+    const row = PANEL_GROUPS.flatMap((g) => g.rows).find((r) => r.target === target)
+    if (row && reasonShut(row) === null) open(target)
   })
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -70,7 +81,7 @@ export function PanelHome({ session }: PanelHomeProps) {
             <section key={group.heading} className="flex flex-col gap-0.5 not-first:mt-1">
               <h4 className="flex min-h-8 items-center px-2.5 text-label font-medium text-soft">{group.heading}</h4>
               {group.rows.map((row) => (
-                <PanelHomeRow key={row.label} row={row} reason={reasonShut(row)} onOpen={() => row.view && open(row.view)} />
+                <PanelHomeRow key={row.label} row={row} reason={reasonShut(row)} onOpen={() => open(row.target)} />
               ))}
             </section>
           ))}

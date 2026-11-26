@@ -32,7 +32,8 @@ export type ChatTimelineEnd = { scrollToEnd(): void }
 export type ChatEdit = { blocked(uuid: string): string; onOpen(uuid: string): void }
 
 // inset is the height at the bottom that the composer covers, which the last row scrolls clear of. onFollowing says
-// whether the chat follows its end, as the reader scrolls away from it and back.
+// whether the chat follows its end, as the reader scrolls away from it and back. onFork is left out where no reply
+// forks, as in a side chat.
 type ChatTimelineProps = {
   id: string
   items: TimelineItem[]
@@ -42,13 +43,13 @@ type ChatTimelineProps = {
   onFollowing(following: boolean): void
   onReply(text: string): void
   onQuote(text: string): void
-  onFork(at: string, draft: string): Promise<void>
+  onFork?(at: string, draft: string): Promise<void>
   edit?: ChatEdit
 }
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void, onOpenThread: (id: string) => void, edit?: ChatEdit) {
+function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: ((at: string, draft: string) => Promise<void>) | undefined, onOpenImage: (url: string) => void, onOpenThread: (id: string) => void, edit?: ChatEdit) {
   const item = items[index]
   switch (item.kind) {
     case 'user':
@@ -88,7 +89,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return (
         <>
           {work}
-          <ChatMessageActions text={reply.text} at={reply.at} streaming={reply.streaming} ended={reply.ended} shown onReply={onReply} onFork={reply.uuid ? () => onFork(reply.uuid, '') : undefined} />
+          <ChatMessageActions text={reply.text} at={reply.at} streaming={reply.streaming} ended={reply.ended} shown onReply={onReply} onFork={reply.uuid && onFork ? () => onFork(reply.uuid, '') : undefined} />
         </>
       )
     }

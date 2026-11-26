@@ -74,6 +74,9 @@
   --update-ring-track: color-mix(in srgb, currentColor 22%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
   --border-fork-divider: color-mix(in srgb, var(--border) 70%, transparent);
+  /* A side chat's tab dot: grey while it works, the info blue while it needs the owner. */
+  --side-chat-busy: var(--text-dim);
+  --side-chat-asks: #3b82f6;
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);
   /* Dropdown glass: the composer surface at 80%, tinted with 18% more of it, over the blurred chat. */
   --bg-dropdown: color-mix(in srgb, var(--bg-composer) 80%, transparent);

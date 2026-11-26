@@ -5,6 +5,7 @@ import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import { watchAgain } from './chatLive'
 import type { ChatState } from './chatEvents'
 import { buildTimeline } from './chatTimeline'
+import { ownStart } from './sideChat'
 import type { Timeline } from './chatTimeline'
 import type { ChatEvent, State } from './types'
 
@@ -53,8 +54,9 @@ function later(run: () => void): () => void {
 }
 
 // useChat is the thread's chat: its history, then its live events, as a timeline, and the logged events it is built
-// from. state is the thread's row state: a settled thread that wakes is watched again.
-export function useChat(id: string, state: State): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
+// from. state is the thread's row state: a settled thread that wakes is watched again. A side chat's timeline leaves
+// out the chat it was forked with, which is its thread's.
+export function useChat(id: string, state: State, side = false): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
   const latest = useLatestOrchestrator()
   const seen = useRef<{ id: string; state: State }>({ id, state })
@@ -65,7 +67,10 @@ export function useChat(id: string, state: State): { timeline: Timeline; events:
     if (watchAgain(before, state)) setWakes((n) => n + 1)
   }, [id, state])
   const shown = view.id === id ? view : startOf(id)
-  const timeline = useMemo(() => buildTimeline(shown.state.events, shown.state.live, id, shown.state.thinking), [shown.state, id])
+  const timeline = useMemo(() => {
+    const { events } = shown.state
+    return buildTimeline(side ? events.slice(ownStart(events)) : events, shown.state.live, id, shown.state.thinking)
+  }, [shown.state, id, side])
 
   useEffect(() => {
     const start = startOf(id)
@@ -84,7 +89,8 @@ export function useChat(id: string, state: State): { timeline: Timeline; events:
     inTurn(id, () => api.chatWatch(id))
       .catch((err) => {
         // A settled thread cannot be watched, and its history is all there is.
-        if (gone || latest().sessions.find((s) => s.id === id)?.state === 'settled') return
+        const { sessions, sideChats } = latest()
+        if (gone || (sessions.find((s) => s.id === id) ?? sideChats.find((s) => s.id === id))?.state === 'settled') return
         setView((v) => ({ ...v, error: errorMessage(err) }))
       })
       .then(() => feed.load())

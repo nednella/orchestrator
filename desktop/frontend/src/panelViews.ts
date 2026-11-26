@@ -9,8 +9,8 @@ import { IssuesView } from './components/IssuesView'
 import { NotesView } from './components/NotesView'
 import { PullRequestsView } from './components/PullRequestsView'
 import { TerminalView } from './components/TerminalView'
-import { PANEL_KEYS } from './panelTabs'
-import type { PanelViewId } from './panelTabs'
+import { PANEL_KEYS, SIDE_CHAT_KEY } from './panelTabs'
+import type { PanelRowTarget, PanelViewId } from './panelTabs'
 import type { Session } from './types'
 
 // session is the open thread, none on Home.
@@ -32,15 +32,14 @@ const VIEWS: Record<PanelViewId, PanelView> = {
 
 export const panelView = (id: PanelViewId): PanelView | undefined => VIEWS[id]
 
-// A row of the panel's list. A row with no view is one that no surface is built for yet: it shows, shut, to keep the
-// list's order, and the surface that comes takes the view's place.
-export type PanelRow = { label: string; icon: LucideIcon; key: string; view: PanelViewId | null }
+// A row of the panel's list, and what it does.
+export type PanelRow = { label: string; icon: LucideIcon; key: string; target: PanelRowTarget }
 export type PanelGroup = { heading: string; rows: PanelRow[] }
 
-const rowOf = (id: PanelViewId): PanelRow => ({ label: VIEWS[id].label, icon: VIEWS[id].icon, key: PANEL_KEYS[id], view: id })
+const rowOf = (id: PanelViewId): PanelRow => ({ label: VIEWS[id].label, icon: VIEWS[id].icon, key: PANEL_KEYS[id], target: id })
 
 export const PANEL_GROUPS: PanelGroup[] = [
   { heading: 'This project', rows: [rowOf('notes'), rowOf('files'), rowOf('issues'), rowOf('pulls'), rowOf('terminal')] },
-  { heading: 'This thread', rows: [rowOf('browser'), rowOf('media'), { label: 'Side chat', icon: MessagesSquare, key: 'S', view: null }] },
+  { heading: 'This thread', rows: [rowOf('browser'), rowOf('media'), { label: 'Side chat', icon: MessagesSquare, key: SIDE_CHAT_KEY, target: 'sideChat' }] },
   { heading: 'Everywhere', rows: [rowOf('news')] },
 ]

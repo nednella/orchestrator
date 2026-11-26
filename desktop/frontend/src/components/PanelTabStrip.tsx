@@ -1,8 +1,11 @@
-import { List, Maximize2, Minimize2, SquareTerminal, X } from 'lucide-react'
+import { List, Maximize2, MessagesSquare, Minimize2, SquareTerminal, X } from 'lucide-react'
 import { useLayout } from '../LayoutContext'
 import { useOrchestrator } from '../OrchestratorContext'
 import { panelView } from '../panelViews'
-import type { PanelViewId } from '../panelTabs'
+import { sideChatOf, viewOfTab } from '../panelTabs'
+import type { PanelTabId } from '../panelTabs'
+import { SIDE_CHAT_TITLE, sideChatDot } from '../sideChat'
+import { useSideChat } from '../useSideChat'
 import { closeTab, labelOf, selectTab } from '../projectTerminalOps'
 import { folderName } from '../terminalGroups'
 import type { TermGroup } from '../terminalGroups'
@@ -18,13 +21,20 @@ const pressedColor = (pressed: boolean) => ({ color: pressed ? 'var(--text)' : u
 // project's terminals, then Expand, offered only beside the chat, and Close. Its buttons are the top bar's, in the same box and at the same
 // right edge, so the two rows read as one column.
 export function PanelTabStrip() {
-  const { report } = useOrchestrator('report')
+  const { report, sideChats } = useOrchestrator('report', 'sideChats')
   const { terms, shells } = useProjectTerminals()
   const { panel, panelExpanded, docked, showPanelList, showPanelView, closePanelTab, togglePanelExpanded, togglePanel } = useLayout()
+  const sideChat = useSideChat()
   const expand = panelExpanded ? 'Restore panel size' : 'Expand panel'
 
-  const viewTab = (id: PanelViewId) => {
-    const view = panelView(id)
+  const viewTab = (id: PanelTabId) => {
+    const side = sideChatOf(id)
+    if (side !== null) {
+      const s = sideChats.find((x) => x.id === side)
+      return <PanelTab key={id} label={s?.title ?? SIDE_CHAT_TITLE} icon={MessagesSquare} dot={s && sideChatDot(s.state)} active={panel.active === id} onSelect={() => showPanelView(id)} onClose={() => sideChat.close(side)} />
+    }
+    const shown = viewOfTab(id)
+    const view = shown && panelView(shown)
     if (!view) return null
     return <PanelTab key={id} label={view.label} icon={view.icon} active={panel.active === id} onSelect={() => showPanelView(id)} onClose={() => closePanelTab(id)} />
   }

@@ -31,6 +31,7 @@ const sendWait = 15_000
 export type ThreadComposerDraft = { empty(): boolean; replace(text: string): void; append(text: string): void }
 
 // onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
+// embedded is a side chat's composer in its tab, which takes no focus asked for the composer.
 type ThreadComposerProps = {
   inputRef: RefObject<ComposerInput | null>
   draftRef: Ref<ThreadComposerDraft>
@@ -39,6 +40,7 @@ type ThreadComposerProps = {
   session: Session
   timeline: Timeline
   events: ChatEvent[]
+  embedded?: boolean
   stopping: boolean
   onStop(): void
   onSendNow(id: string): void
@@ -47,7 +49,7 @@ type ThreadComposerProps = {
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
-export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
+export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, embedded = false, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
   const [current, setCurrent] = useState(() => threadDraft(id))
@@ -99,7 +101,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   }, [events, update])
 
   const focusInput = useCallback(() => input.current?.focus(), [])
-  useFocusRequest('composer', focusInput)
+  useFocusRequest('composer', focusInput, !embedded)
 
   useImperativeHandle(
     draftRef,

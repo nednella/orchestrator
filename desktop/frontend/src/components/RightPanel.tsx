@@ -1,10 +1,12 @@
 import { useRef } from 'react'
 import { useOrchestratorSelector } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
+import { sideChatOf, viewOfTab } from '../panelTabs'
 import { panelView } from '../panelViews'
 import { useFocusRequest } from '../useFocusRequest'
 import { PanelHome } from './PanelHome'
 import { PanelTabStrip } from './PanelTabStrip'
+import { SideChatPane } from './SideChatPane'
 
 // RightPanel shows the open thread's views, or Home's: the list of views, or the tab picked, which fills the panel.
 // Expanded, it takes the chat's room as well.
@@ -12,7 +14,9 @@ export function RightPanel() {
   const session = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
   const projectKey = useOrchestratorSelector((a) => a.project?.key)
   const { widths, panel, panelExpanded } = useLayout()
-  const view = panel.active ? panelView(panel.active) : undefined
+  const sideChat = sideChatOf(panel.active)
+  const shown = viewOfTab(panel.active)
+  const view = shown ? panelView(shown) : undefined
   const root = useRef<HTMLElement>(null)
 
   useFocusRequest('right', () => (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [data-panel-view]:not([aria-disabled="true"])') ?? root.current)?.focus())
@@ -26,7 +30,9 @@ export function RightPanel() {
       style={panelExpanded ? undefined : { width: `${widths.right}rem` }}
     >
       <PanelTabStrip />
-      <div className="@container relative min-h-0 flex-1">{view ? <view.Component key={`${projectKey} ${view.id}`} session={session} /> : <PanelHome session={session} />}</div>
+      <div className="@container relative min-h-0 flex-1">
+        {sideChat !== null && session ? <SideChatPane key={sideChat} id={sideChat} /> : view ? <view.Component key={`${projectKey} ${view.id}`} session={session} /> : <PanelHome session={session} />}
+      </div>
     </aside>
   )
 }

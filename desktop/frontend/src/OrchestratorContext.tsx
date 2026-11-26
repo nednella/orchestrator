@@ -11,7 +11,7 @@ import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
-import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
+import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
@@ -36,7 +36,9 @@ export type ThreadDraft = { draft: ComposerDraft; seen: number }
 type OrchestratorState = {
   project: Project | null
   projects: Project[]
+  // The threads of every project, without the side chats, which show only in their threads' right panels.
   sessions: Session[]
+  sideChats: Session[]
   projectSessions: Session[]
   // Each thread's top-level thread and what each top-level thread needs the owner for, built once per sessions change.
   threadTree: ThreadTree
@@ -104,6 +106,11 @@ type OrchestratorActions = {
   // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
   forkSession(id: string, at: string, draft?: string): Promise<Session>
+  // startSideChat starts a side chat of the thread, a fork of it at its latest finished reply, with text and images as
+  // its first message when there are any. One start runs at a time.
+  startSideChat(parent: string, text: string, images: PendingImage[]): Promise<Session>
+  // deleteSideChat deletes the side chat; with unused, only when nobody sent it a message.
+  deleteSideChat(id: string, unused: boolean): Promise<void>
   renameSession(id: string, title: string): Promise<void>
   startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
   switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
@@ -273,6 +280,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
+  const [sideChats, setSideChats] = useState<Session[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [viewHistory, setViewHistory] = useState(NO_HISTORY)
   const [rawIssues, setRawIssues] = useState<Issue[]>([])
@@ -304,6 +312,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
 
   const threadTree = useMemo(() => threadTreeOf(sessions), [sessions])
   const sessionsRef = useRef(sessions)
+  const sideChatsRef = useRef(sideChats)
+  const sideStarting = useRef(false)
   const treeRef = useRef(threadTree)
   const projectsRef = useRef(projects)
   const selectedRef = useRef(selectedId)
@@ -327,6 +337,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const browserStatesRef = useRef(browserStates)
   const issuesRef = useRef<Issue[]>([])
   sessionsRef.current = sessions
+  sideChatsRef.current = sideChats
   treeRef.current = threadTree
   projectsRef.current = projects
   projectRef.current = project
@@ -460,8 +471,17 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     [selectId],
   )
 
+  const applySideChats = useCallback((projectKey: string | null, items: Session[]) => {
+    const before = sideChatsRef.current
+    const kept = (s: Session) => projectKey !== null && s.project !== projectKey
+    before.filter((s) => !kept(s) && !items.some((x) => x.id === s.id)).forEach((s) => forgetThread(s.id))
+    setSideChats((prev) => keepUnchanged(prev, [...prev.filter(kept), ...items], (s) => s.id))
+  }, [])
+
   const applySessions = useCallback(
-    (projectKey: string, items: Session[]) => {
+    (projectKey: string, rows: Session[]) => {
+      const { threads: items, sideChats } = splitSideChats(rows)
+      applySideChats(projectKey, sideChats)
       goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThread)
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
       const all = [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items]
@@ -469,7 +489,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       threadsRead.current.add(projectKey)
       forgetGone(all, projectsRef.current)
     },
-    [selectAmong, forgetGone],
+    [selectAmong, forgetGone, applySideChats],
   )
 
   const loadDigest = useCallback(async (epoch: number) => {
@@ -502,7 +522,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
 
   // record adds the view the project opens on to history; a step through history shows its own view instead.
   const enterProject = useCallback(
-    (snap: Snapshot, epoch: number, homeUnlessRemembered = false, record = true) => {
+    (whole: Snapshot, epoch: number, homeUnlessRemembered = false, record = true) => {
+      const { threads, sideChats } = splitSideChats(whole.sessions)
+      const snap = { ...whole, sessions: threads }
+      applySideChats(null, sideChats)
       projectEpoch.current = epoch
       if (projectRef.current && selectedRef.current) lastSelected.current.set(projectRef.current.name, selectedRef.current)
       projectRef.current = snap.project
@@ -537,7 +560,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       forgetGone(snap.sessions, snap.projects)
       report(() => loadIssues(false))
     },
-    [selectAmong, loadIssues, loadDigest, report, selectId, remember, quietly, forgetGone],
+    [selectAmong, loadIssues, loadDigest, report, selectId, remember, quietly, forgetGone, applySideChats],
   )
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
@@ -899,6 +922,23 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         if (draft.trim()) writeStored(threadDraftKey(fork.id), saveDraft(draftOf(fromMarkdown(draft))))
         return addSession(fork)
       },
+      async startSideChat(parent, text, images) {
+        if (sideStarting.current) throw 'Another side chat is still starting. Try again in a moment.'
+        sideStarting.current = true
+        try {
+          const side = await api.sideChatStart(parent, text, images.map(({ base64, mime }) => ({ base64, mime })))
+          setSideChats((list) => [...list.filter((s) => s.id !== side.id), side])
+          return side
+        } finally {
+          sideStarting.current = false
+        }
+      },
+      async deleteSideChat(id, unused) {
+        await api.sideChatDelete(id, unused)
+        if (unused) return
+        forgetThread(id)
+        setSideChats((list) => list.filter((s) => s.id !== id))
+      },
       async renameSession(id, title) {
         const trimmed = title.trim()
         if (!trimmed) throw 'A title cannot be empty'
@@ -1120,6 +1160,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       project,
       projects,
       sessions,
+      sideChats,
       projectSessions,
       threadTree,
       selectedId,
@@ -1155,7 +1196,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

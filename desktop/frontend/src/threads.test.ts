@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -34,6 +34,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session
     forkOf: '',
     forkAt: '',
     parent,
+    side: false,
     tokens: 0,
     cost: 0,
     memory: 0,
@@ -203,4 +204,12 @@ test('the thread opened after a sleep is the next live top-level thread in sideb
 test('a kept clean-up says kept and why', () => {
   const s = { ...thread('a', 'settled'), cleanup: 'blocked' as const, cleanupReason: 'a shell is open in this worktree' }
   assert.equal(cleanupNote(s), 'Kept: a shell is open in this worktree')
+})
+
+test('side chats are kept apart from the threads', () => {
+  const side = { ...thread('shop/side2345', 'working'), forkOf: 'shop/a', side: true }
+  const rows = [thread('shop/a', 'idle'), side, thread('shop/b', 'waiting')]
+  const { threads, sideChats } = splitSideChats(rows)
+  assert.deepEqual(threads.map((s) => s.id), ['shop/a', 'shop/b'])
+  assert.deepEqual(sideChats, [side])
 })

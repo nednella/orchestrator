@@ -4,7 +4,7 @@ import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { folderName } from './projectPath'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
+import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -213,6 +213,7 @@ export function createMock(params: URLSearchParams) {
       forkOf: s.forkOf,
       forkAt: s.forkAt,
       parent: s.parent,
+      side: s.side,
       tokens: s.tokens,
       cost: s.cost,
       memory: s.state === 'settled' ? 0 : s.memory,
@@ -235,7 +236,7 @@ export function createMock(params: URLSearchParams) {
   }
 
   function projectView(p: ProjectData): Project {
-    const own = sessions.filter((s) => s.project === p.name)
+    const own = sessions.filter((s) => s.project === p.name && !s.side)
     return {
       key: p.name,
       name: p.name,
@@ -383,6 +384,7 @@ export function createMock(params: URLSearchParams) {
       forkOf: '',
       forkAt: '',
       parent: '',
+      side: false,
       ...usageFor(createdAt),
       memory: (4 + (nextN % 5) * 3) * tenthGB,
       subagents: 0,
@@ -412,6 +414,28 @@ export function createMock(params: URLSearchParams) {
       },
     }
   }, (key) => data.some((p) => p.name === key), slow)
+
+  // Whether a side chat is starting: the sessions start one at a time.
+  let sideStarting = false
+
+  // sendTo sends the message as the chat service does: each of sideChats, side chats of the thread, goes with it as a
+  // block of its questions and answers after the words, which the chat shows alone, and a side chat's first message
+  // names it.
+  async function sendTo(id: string, text: string, images: ChatImage[], sideChats: string[]) {
+    const blocks = sideChats.map((side) => {
+      const s = sessions.find((x) => x.id === side)
+      if (!s || deleted.has(side) || !s.side || s.forkOf !== id) throw `${side} is not a side chat of this thread`
+      return chats.sideChatBlock(s.title, side)
+    })
+    const sent = blocks.length > 0 ? await chats.backend.ChatSend(id, [text, ...blocks].filter(Boolean).join('\n\n'), images, text) : await chats.backend.ChatSend(id, text, images)
+    const s = sessions.find((x) => x.id === id)
+    const title = titleFromPrompt(text)
+    if (s?.side && s.title === 'Side chat' && title) {
+      s.title = title
+      publish()
+    }
+    return sent
+  }
 
   // followMode records the access Claude's permission mode gives, as the sessions do.
   function followMode(s: Session, mode: string) {
@@ -578,7 +602,7 @@ export function createMock(params: URLSearchParams) {
     s.lastEventAt = at
     s.history = [...s.history, { state, at }].slice(-200)
     publish()
-    if (state === 'waiting' || state === 'idle') {
+    if ((state === 'waiting' || state === 'idle') && !s.side) {
       if (s.project === current.name) emit('attention', { id: s.id, state: state === 'idle' ? 'replied' : 'waiting' })
     }
   }
@@ -789,6 +813,7 @@ export function createMock(params: URLSearchParams) {
     const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
     if (s.state !== 'settled') chats.end(s.id, 'settle')
+    dropSideChats(s)
     Object.assign(s, { worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '', browser: false })
     setState(s, 'settled')
     emit('issues', { project: current.name, items: currentIssues() })
@@ -806,7 +831,21 @@ export function createMock(params: URLSearchParams) {
   // worktreeUser is another thread that works in the thread's worktree, as far as the mock can tell: a fork of it, or a
   // child in its folder. The threads of a delete's family do not count.
   const worktreeUser = (s: Session, family: Session[]) =>
-    sessions.find((x) => x.id !== s.id && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+    sessions.find((x) => x.id !== s.id && !x.side && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+
+  // dropSideChats deletes the side chats of the thread s, as the sessions do when it is deleted, put to sleep or cleaned
+  // up: they serve only it while it runs.
+  function dropSideChats(s: Session) {
+    for (const side of sessions.filter((x) => x.side && x.forkOf === s.id)) removeSideChat(side)
+  }
+
+  function removeSideChat(side: Session) {
+    if (side.state !== 'settled') chats.end(side.id, 'settle')
+    deleted.add(side.id)
+    servers.delete(side.id)
+    sessions.splice(sessions.indexOf(side), 1)
+    publish()
+  }
 
   // filesReason says why Edit from here cannot put the thread's files back, as the sessions do: a fork works in a
   // worktree orchestrator did not make for it, and another thread may work in the thread's own.
@@ -1132,6 +1171,7 @@ export function createMock(params: URLSearchParams) {
       }
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
+        dropSideChats(x)
         if (x.state !== 'settled') chats.end(x.id, 'settle')
         deleted.add(x.id)
         servers.delete(x.id)
@@ -1180,11 +1220,49 @@ export function createMock(params: URLSearchParams) {
       publish()
       return view(s)
     },
+    // SideChatStart acts as the sessions do: a fork of the thread at its latest finished reply, in its folder with its
+    // model, effort and access, titled "Side chat" until its first message names it. A first message that does not go
+    // deletes it.
+    SideChatStart: async (parent: string, text: string, images: ChatImage[]) => {
+      if (sideStarting) throw 'Another side chat is still starting. Try again in a moment.'
+      if (deleted.has(parent)) throw `No thread ${parent}`
+      const from = find(parent)
+      if (from.side) throw 'Side chats cannot start side chats.'
+      if (from.parent) throw 'Subagent threads cannot start side chats.'
+      if (from.cleanup === 'pending') throw `Thread ${from.n} is being cleaned up; start a side chat when that ends`
+      const at = chats.latestReply(parent)
+      sideStarting = true
+      try {
+        const s = create('Side chat', 0, 'idle', [], Date.now(), data.find((p) => p.name === from.project) ?? current, from.access)
+        Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, forkAt: at, branch: '', worktree: '', side: true })
+        chats.fork(from.id, s.id, at)
+        chats.start(s.id)
+        publish()
+        if (text.trim() === '' && images.length === 0) return view(s)
+        try {
+          await sendTo(s.id, text, images, [])
+        } catch (err) {
+          removeSideChat(s)
+          throw err
+        }
+        return view(s)
+      } finally {
+        sideStarting = false
+      }
+    },
+    // SideChatDelete deletes the side chat; with unused, only when nobody sent it a message.
+    SideChatDelete: async (id: string, unused: boolean) => {
+      const s = sessions.find((x) => x.id === id)
+      if (!s || deleted.has(id) || !s.side) throw `No side chat ${id}`
+      if (unused && chats.sideChatAsked(id)) return
+      removeSideChat(s)
+    },
     SettleThread: async (id: string) => {
       const s = find(id)
       if (s.state === 'settled') throw `Thread ${id} is asleep`
       chats.end(id, 'settle')
       servers.delete(id)
+      dropSideChats(s)
       setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
     },
@@ -1451,6 +1529,7 @@ export function createMock(params: URLSearchParams) {
       return chats.backend.ChatDraft(id, text)
     },
     ...chats.backend,
+    ChatSend: (id: string, text: string, images: ChatImage[], sideChats: string[]) => sendTo(id, text, images, sideChats),
     Cleanup: async (id: string, force: boolean) => {
       const s = find(id)
       if (s.cleanup === 'pending') throw 'clean-up is already running'

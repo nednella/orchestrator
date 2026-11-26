@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { sidebarBesidePx, sidebarFit } from './panelLayout.ts'
-import { closeTab, EMPTY_PANEL, openTab, panelFit, panelOnFocus, panelStateOf, panelWidth, stepTab, viewForKey } from './panelTabs.ts'
+import { closeTab, EMPTY_PANEL, openTab, panelFit, panelOnFocus, panelStateOf, panelWidth, sideChatOf, sideChatTab, stepTab, targetForKey } from './panelTabs.ts'
 import type { PanelState } from './panelTabs.ts'
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({ ...EMPTY_PANEL, ...over })
@@ -30,10 +30,21 @@ test('closing the last tab shows the list and restores the size', () => {
   assert.deepEqual(closeTab(state({ tabs: ['issues'], active: null, expanded: true }), 'issues'), EMPTY_PANEL, 'from the list too')
 })
 
-test('letters open their views', () => {
-  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media'], ['w', 'news'], ['t', 'terminal']]
-  for (const [key, view] of keys) assert.equal(viewForKey(key), view, key)
-  for (const key of ['a', 'e', 's', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
+test('a side chat opens as a tab of its own, beside the views', () => {
+  const tab = sideChatTab('main/abcdefgh')
+  const st = openTab(state({ tabs: ['notes'], active: 'notes' }), tab)
+  assert.deepEqual(st, { tabs: ['notes', 'side:main/abcdefgh'], active: tab, expanded: false })
+  assert.equal(sideChatOf(st.active), 'main/abcdefgh')
+  assert.equal(sideChatOf('notes'), null, 'a view is no side chat')
+  assert.deepEqual(closeTab(st, tab), { tabs: ['notes'], active: 'notes', expanded: false })
+  assert.deepEqual(panelStateOf(st), st, 'a saved side chat tab is kept')
+  assert.deepEqual(panelStateOf({ tabs: ['side:', 'notes'], active: 'side:' }), { tabs: ['notes'], active: null, expanded: false }, 'one with no id is dropped')
+})
+
+test('letters open their views, and S starts a side chat', () => {
+  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media'], ['w', 'news'], ['t', 'terminal'], ['s', 'sideChat'], ['S', 'sideChat']]
+  for (const [key, view] of keys) assert.equal(targetForKey(key), view, key)
+  for (const key of ['a', 'e', 'Enter', 'ArrowDown', '1', '']) assert.equal(targetForKey(key), null, `${key}: no view`)
 })
 
 test('the width keeps 360 px of chat', () => {

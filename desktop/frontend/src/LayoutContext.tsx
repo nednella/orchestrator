@@ -6,7 +6,7 @@ import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { updatePanel, usePanel } from './panelStore'
 import { closeTab, openTab, panelFit, panelOnFocus, panelWidth, stepTab } from './panelTabs'
-import type { PanelState, PanelViewId } from './panelTabs'
+import type { PanelState, PanelTabId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
 import type { ThemeName } from './types'
@@ -50,12 +50,12 @@ export type Layout = {
   setRightOpen(open: boolean): void
   toggleRight(): void
   togglePanel(panel: TogglePanel): void
-  // showPanelView opens the right panel on the view, in the panel of thread, else of the open thread; expanded sets the
-  // panel's size too, except on a sheet, which has one size.
-  showPanelView(view: PanelViewId, opts?: { expanded?: boolean; thread?: string }): void
+  // showPanelView opens the right panel on the view or side chat, in the panel of thread, else of the open thread;
+  // expanded sets the panel's size too, except on a sheet, which has one size.
+  showPanelView(view: PanelTabId, opts?: { expanded?: boolean; thread?: string }): void
   togglePanelExpanded(): void
   showPanelList(): void
-  closePanelTab(view: PanelViewId): void
+  closePanelTab(view: PanelTabId): void
   stepPanelTab(delta: -1 | 1): void
   setSidebarOpen(open: boolean): void
   showHome(): void
@@ -223,7 +223,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   useEffect(() => onFocus((target) => updatePanel(panelKeyRef.current, (st) => panelOnFocus(st, target))), [onFocus])
 
   const showPanelView = useCallback(
-    (view: PanelViewId, opts: { expanded?: boolean; thread?: string } = {}) => {
+    (view: PanelTabId, opts: { expanded?: boolean; thread?: string } = {}) => {
       setRightOpen(true)
       updatePanel(opts.thread ?? panelKey, (st) => {
         const next = openTab(st, view)

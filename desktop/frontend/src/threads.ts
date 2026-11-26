@@ -99,6 +99,11 @@ export function nextThread(sessions: Session[], projectKey: string | undefined, 
 }
 
 // goneThreads is the ids of the project's threads in before that its new list, after, no longer holds.
+// splitSideChats parts a list of rows into the threads and the side chats, which show only in their threads' panels.
+export function splitSideChats(rows: Session[]): { threads: Session[]; sideChats: Session[] } {
+  return { threads: rows.filter((s) => !s.side), sideChats: rows.filter((s) => s.side) }
+}
+
 export function goneThreads(before: Session[], projectKey: string, after: Session[]): string[] {
   const kept = new Set(after.map((s) => s.id))
   return before.filter((s) => s.project === projectKey && !kept.has(s.id)).map((s) => s.id)

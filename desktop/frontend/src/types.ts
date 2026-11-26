@@ -85,6 +85,7 @@ export type Session = {
   forkOf: string // the thread this one was forked from, '' when none
   forkAt: string // the uuid of the reply the fork's chat was cut at, '' when none
   parent: string // the thread that delegated to this one, '' for a thread the owner started
+  side: boolean // a side chat of the thread forkOf, which shows only in that thread's right panel
   tokens: number
   cost: number
   memory: number
@@ -464,7 +465,8 @@ export type ChatEvent = {
   // from is the thread that sent a user or queued message, or that asked for an interrupt; left out for the owner or
   // the app.
   from?: string
-  // body is the bare words of a message from a thread, which text frames for Claude, and result marks a child's result.
+  // body is the bare words of a message that text frames for Claude, one from a thread or one that carries side chats,
+  // and result marks a child's result.
   body?: string
   result?: boolean
   // cwd, origin and model are an init's: the folder Claude works in, the folder it started in and the model it runs.

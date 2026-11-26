@@ -586,8 +586,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     turns.forEach((e) => append(id, e))
   }
 
-  // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts and queued
-  // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
+  // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts, queued messages
+  // and the host's starts left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
   // or the block is from before the last compaction.
   function fork(from: string, to: string, at: string) {
     const log = logOf(from)
@@ -596,9 +596,52 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     if (cut < log.findLastIndex((e) => e.kind === 'compact')) throw 'This message is from before the chat was compacted, so a fork cannot start there'
     log
       .slice(0, cut + 1)
-      .filter((e) => e.kind !== 'draft' && e.kind !== 'queued' && e.kind !== 'unsent')
+      .filter((e) => e.kind !== 'draft' && e.kind !== 'queued' && e.kind !== 'unsent' && e.kind !== 'start')
       .forEach(({ seq: _, ...e }) => append(to, e))
     append(to, { kind: 'turn_end', at: log[cut].at })
+  }
+
+  // latestReply is the uuid of the last block of the thread's latest reply that a turn's end follows, where a side chat
+  // forks it, as the sessions find it: a rewind takes its message back, and it throws when there is none or it is from
+  // before the last compaction.
+  function latestReply(id: string): string {
+    const log = logOf(id)
+    let ended = false
+    for (let i = log.length - 1; i >= 0; i--) {
+      const e = log[i]
+      if (e.kind === 'compact') {
+        if (log.slice(0, i).some((m) => m.kind === 'message' && m.uuid)) throw "This thread's last reply is from before its chat was compacted. Side chats start after its next reply."
+        break
+      }
+      if (e.kind === 'rewind') {
+        const from = log.slice(0, i).findIndex((u) => u.kind === 'user' && u.id === e.id)
+        if (from >= 0) i = from
+      } else if (e.kind === 'turn_end') ended = true
+      else if (ended && e.kind === 'message' && e.uuid && !e.agent) return e.uuid
+    }
+    throw 'Side chats start after the first message.'
+  }
+
+  // sideChatAsked says whether the side chat was sent a message of its own, after its host first started.
+  function sideChatAsked(id: string): boolean {
+    const log = logOf(id)
+    const started = log.findIndex((e) => e.kind === 'start')
+    return started >= 0 && log.slice(started).some((e) => e.kind === 'user' && !e.parent)
+  }
+
+  // sideChatBlock is the side chat's questions and answers as a message that carries it gives them to Claude, in the
+  // words of internal/prompts/side-chat.md.
+  function sideChatBlock(title: string, id: string): string {
+    const log = logOf(id)
+    const started = log.findIndex((e) => e.kind === 'start')
+    const turns: { question: string; answer: string[] }[] = []
+    for (const e of started < 0 ? [] : log.slice(started)) {
+      if (e.kind === 'user' && !e.parent) turns.push({ question: e.body ?? e.text ?? '', answer: [] })
+      else if (e.kind === 'message' && !e.agent && e.text?.trim()) turns.at(-1)?.answer.push(e.text)
+    }
+    const exchange = turns.map((t) => `Question:\n${t.question}\n\nAnswer:\n${t.answer.join('\n\n') || '(no answer yet)'}`).join('\n\n')
+    const quoted = title.trim().split(/\s+/).join(' ').replaceAll('"', "'")
+    return `The owner attaches the side chat "${quoted}" to this message. A side chat is a fork of this thread where the owner asked questions on the side; below are its questions and answers, oldest first. They are context for this message, not a task of their own.\n\n${exchange}`
   }
 
   // forget stops the turn that waits, as an interrupt from elsewhere does, but the app hears of neither the pending
@@ -626,7 +669,8 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     ChatUnwatch: async (id: string) => {
       watched.delete(id)
     },
-    ChatSend: async (id: string, text: string, images: ChatImage[]) => {
+    // body is the bare words of a text that frames them for Claude, which the chat shows.
+    ChatSend: async (id: string, text: string, images: ChatImage[], body?: string) => {
       const t = awake(id)
       const files = save(id, images)
       const message = crypto.randomUUID()
@@ -652,7 +696,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
         queued.set(id, [...(queued.get(id) ?? []), { id: message, text, files }])
         return { id: message }
       }
-      append(id, { kind: 'user', id: message, text, files })
+      append(id, { kind: 'user', id: message, text, files, ...(body !== undefined ? { body } : {}) })
       if (text === 'exit') {
         end(id)
         t.setState('settled')
@@ -896,5 +940,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // mode logs Claude's new permission mode, as the host does once Claude changes it.
   const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
 
-  return { backend, seed, ask, delegations, task, fork, forget, end, start, busy, turnRuns, mode, breakLog, mediaURL }
+  return { backend, seed, ask, delegations, task, fork, latestReply, sideChatAsked, sideChatBlock, forget, end, start, busy, turnRuns, mode, breakLog, mediaURL }
 }

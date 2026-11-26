@@ -10,6 +10,8 @@ import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdi
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
 import { appendText, fromMarkdown } from '../composerMarkdown'
+import { sideChatReason } from '../sideChat'
+import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Session } from '../types'
 import { useChat } from '../useChat'
@@ -30,23 +32,31 @@ const stopWait = 10_000
 // The gap between the chat's last row, scrolled to the end, and the composer over it: wider from this window width.
 const insetGap = { narrow: 12, wide: 16, from: 640 }
 
-type ChatViewProps = { session: Session }
+// embedded is a side chat's chat in its tab: the timeline of its own messages and the composer, with no fork from a
+// message and no side chat of its own.
+type ChatViewProps = { session: Session; embedded?: boolean }
 
 const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
-export function ChatView({ session }: ChatViewProps) {
+export function ChatView({ session, embedded = false }: ChatViewProps) {
   const { project, report, forkSession, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
   const latest = useLatestOrchestrator()
-  const { timeline, events, loading, error } = useChat(session.id, session.state)
+  const { timeline, events, loading, error } = useChat(session.id, session.state, embedded)
   const empty = timeline.items.length === 0
   const forks = useOrchestratorSelector((s) => forksKey(session.id, s.sessions))
   const { id: threadId, forkOf, forkAt, parent } = session
   const parentTitle = useOrchestratorSelector((s) => (parent ? s.sessions.find((x) => x.id === parent)?.title : undefined))
   const shown = useMemo(() => {
+    if (embedded) return timeline.items
     const items = forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items)
     const lineage = lineageDivider({ parent }, parentTitle === undefined ? undefined : { id: parent, title: parentTitle })
     return lineage ? [lineage, ...items] : items
-  }, [threadId, forkOf, forkAt, forks, timeline.items, parent, parentTitle])
+  }, [embedded, threadId, forkOf, forkAt, forks, timeline.items, parent, parentTitle])
+
+  // The right panel's Side chat row says why this thread cannot start one, which only its chat tells.
+  useEffect(() => {
+    if (!embedded && !loading) noteSideChatReason(threadId, sideChatReason(session, events))
+  }, [embedded, loading, threadId, session, events])
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)
@@ -190,7 +200,7 @@ export function ChatView({ session }: ChatViewProps) {
   }
 
   return (
-    <div ref={pane} data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties} onKeyDown={onKeyDown}>
+    <div ref={pane} data-chat data-embedded={embedded || undefined} className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties} onKeyDown={onKeyDown}>
       {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && (loading || !error) && <div className="flex-1" />}
       {!empty && (
@@ -203,7 +213,7 @@ export function ChatView({ session }: ChatViewProps) {
           onFollowing={setFollowing}
           onReply={replyTo}
           onQuote={quote}
-          onFork={fork}
+          onFork={embedded ? undefined : fork}
           edit={edit}
         />
       )}
@@ -217,12 +227,12 @@ export function ChatView({ session }: ChatViewProps) {
                 <ChatNotice text={error} error />
               </div>
             )}
-            <ChatChildApprovals parent={session.id} />
-            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+            {!embedded && <ChatChildApprovals parent={session.id} />}
+            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} embedded={embedded} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
       </div>
-      {room > COLUMN_DEFAULT_REM && (
+      {!embedded && room > COLUMN_DEFAULT_REM && (
         <div className="chat-over pointer-events-none absolute inset-0 z-21">
           <div className="chat-column relative h-full">
             <ChatColumnHandle side="left" pane={pane} room={room} column={column} onColumn={keepColumn} />
