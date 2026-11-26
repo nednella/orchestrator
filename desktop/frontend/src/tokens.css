@@ -65,6 +65,12 @@
   --bg-card: var(--bg-raised);
   --bg-tile: var(--bg-segment);
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --bg-row-active: color-mix(in srgb, var(--text) 9%, transparent);
+  /* The sidebar's bottom bar: its icons, and the update button's fill while an update is in play, which its marks
+     are ringed with. */
+  --sidebar-icon: var(--text-soft);
+  --bg-update: color-mix(in srgb, var(--text) 7%, var(--bg-app));
+  --update-ring-track: color-mix(in srgb, currentColor 22%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
   --border-fork-divider: color-mix(in srgb, var(--border) 70%, transparent);
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);

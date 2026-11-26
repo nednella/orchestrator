@@ -48,8 +48,6 @@ export function ProjectRail() {
         <ProjectTile key={p.key} project={p} label={labels[i]} waiting={waiting.get(p.key) ?? 0} />
       ))}
       <RailButton id="add-project" label="Add project…" icon="plus" />
-      <span className="flex-1" />
-      <RailButton id="settings" label="Settings" icon="settings" />
     </nav>
   )
 }

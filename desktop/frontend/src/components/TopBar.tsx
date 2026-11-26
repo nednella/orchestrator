@@ -6,7 +6,6 @@ import { actionsFor, formatShortcut } from '../actions'
 import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import { selectedCardHasRows } from '../useCardFacts'
-import { Icon } from './Icon'
 import { ThreadContextCard } from './ThreadContextCard'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
@@ -15,7 +14,7 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
 export function TopBar() {
-  const { selectedId, report, update, updating, applyUpdate, digestUnseenCount } = useAgentos('selectedId', 'report', 'update', 'updating', 'applyUpdate', 'digestUnseenCount')
+  const { selectedId, report } = useAgentos('selectedId', 'report')
   const layout = useLayout()
   const { docked, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
@@ -40,27 +39,6 @@ export function TopBar() {
         <TitleBreadcrumb showsThread={showsThread} />
       </div>
       <div className="flex flex-none items-center gap-0.5" style={noDrag}>
-        <TitleBarButton label={named('Stats', 'stats')} icon="chart" pressed={statsOpen} onClick={() => find('stats').run([])} />
-        <TitleBarButton label={named('News', 'digest')} icon="digest" pressed={digestOpen} unseen={digestUnseenCount} onClick={() => find('digest').run([])} />
-        {update && (
-          <button
-            className={`${titleBarButton} relative`}
-            style={{ color: 'var(--accent)' }}
-            disabled={updating}
-            title={updating ? `Installing agentos v${update}…` : `Install agentos v${update} and relaunch`}
-            aria-label={updating ? 'Updating' : `Update to v${update}`}
-            onClick={() => report(applyUpdate)}
-          >
-            {updating ? (
-              <span className="spinner" role="status" />
-            ) : (
-              <>
-                <Icon name="update" fixed />
-                <span className="absolute top-[5px] right-[5px] h-[7px] w-[7px] rounded-full bg-accent" />
-              </>
-            )}
-          </button>
-        )}
         {showsThread && cardHasRows && (
           <div ref={cardToggle} className="relative flex">
             <button

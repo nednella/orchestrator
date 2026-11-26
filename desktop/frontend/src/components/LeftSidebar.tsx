@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useLayout } from '../LayoutContext'
 import { ProjectRail } from './ProjectRail'
+import { SidebarBottomBar } from './SidebarBottomBar'
 import { ThreadSidebar } from './ThreadSidebar'
 
 const drag = { '--wails-draggable': 'drag' } as CSSProperties
@@ -20,7 +21,11 @@ export function LeftSidebar() {
       )}
       <div className="flex min-h-0 flex-1">
         <ProjectRail />
-        <ThreadSidebar />
+        {/* The grid row stretches the thread list down to the bar, whose width it follows. */}
+        <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+          <ThreadSidebar />
+          <SidebarBottomBar />
+        </div>
       </div>
     </div>
   )

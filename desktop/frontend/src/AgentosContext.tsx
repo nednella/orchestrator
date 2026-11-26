@@ -11,7 +11,7 @@ import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
-import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -65,8 +65,7 @@ type AgentosState = {
   shellId: string
   version: string
   machine: string
-  update: string
-  updating: boolean
+  update: UpdateState
   patchNotes: Release[]
 }
 
@@ -75,7 +74,6 @@ type AgentosActions = {
   newShell(): Promise<void>
   closeShell(id: string): Promise<void>
   selectShell(id: string): void
-  applyUpdate(): Promise<void>
   select(id: string): void
   showHome(projectKey: string): void
   detach(): void
@@ -275,8 +273,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const shellId = threadShells.includes(pickedShell) ? pickedShell : (threadShells[0] ?? '')
   const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
-  const [update, setUpdate] = useState('')
-  const [updating, setUpdating] = useState(false)
+  const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })
   const [patchNotes, setPatchNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
@@ -419,7 +416,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setShells(snap.shells)
       setVersion(snap.version)
       setMachine(snap.machine)
-      setUpdate(snap.update)
       setRawIssues([])
       setIssuesDisabled(false)
       setIssueFilterState(readStored(filterKey(snap.project.name), ''))
@@ -524,7 +520,19 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   useEffect(() => on('awake', setAwake), [])
   useEffect(() => on('memory', setMemory), [])
   useEffect(() => on('issues', ifCurrent(setRawIssues)), [])
-  useEffect(() => on('update', ({ version }) => setUpdate(version)), [])
+  useEffect(() => {
+    // An update event that comes before the first read is newer than what the read gives.
+    let heard = false
+    const off = on('update', (state) => {
+      heard = true
+      setUpdate(state)
+    })
+    report(async () => {
+      const state = await api.updateState()
+      if (!heard) setUpdate(state)
+    })
+    return off
+  }, [report])
   useEffect(() => on('evidence', ({ id, items }) => setEvidence((map) => ({ ...map, [id]: items }))), [])
   useEffect(() => on('browser:state', (state) => setBrowserStates((map) => ({ ...map, [state.id]: state }))), [])
   useEffect(() => {
@@ -705,15 +713,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const actions = useMemo<AgentosActions>(
     () => ({
-      async applyUpdate() {
-        setUpdating(true)
-        try {
-          await api.update()
-        } catch (err) {
-          setUpdating(false)
-          throw err
-        }
-      },
       async newShell() {
         const thread = selectedRef.current ?? ''
         const { id } = await api.shellNew(thread)
@@ -1025,11 +1024,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       version,
       machine,
       update,
-      updating,
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, updating, patchNotes, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

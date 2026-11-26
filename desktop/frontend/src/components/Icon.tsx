@@ -49,7 +49,6 @@ export type IconName =
   | 'digest'
   | 'machine'
   | 'model'
-  | 'settings'
   | 'back'
   | 'forward'
   | 'camera'
@@ -57,7 +56,6 @@ export type IconName =
   | 'issue'
   | 'chat'
   | 'branch'
-  | 'update'
   | 'more'
   | 'compose'
   | 'needs-you'
@@ -159,12 +157,10 @@ function IconShape({ name }: IconShapeProps) {
   if (name === 'panel-left') return <path d="M2.5 3h11v10h-11ZM6.5 3v10" />
   if (name === 'panel-right') return <path d="M2.5 3h11v10h-11ZM9.5 3v10" />
   if (name === 'panel-bottom') return <path d="M2.5 3h11v10h-11ZM2.5 9.5h11" />
-  if (name === 'settings') return <path d="M6.6 3.2 6.9 1.6h2.2l.3 1.6 1 .4 1.3-.9 1.6 1.6-.9 1.3.4 1 1.6.3v2.2l-1.6.3-.4 1 .9 1.3-1.6 1.6-1.3-.9-1 .4-.3 1.6H6.9l-.3-1.6-1-.4-1.3.9-1.6-1.6.9-1.3-.4-1-1.6-.3V6.9l1.6-.3.4-1-.9-1.3 1.6-1.6 1.3.9ZM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
   if (name === 'chart') return <path d="M2.5 2.5v11h11M5 10.5l2.5-3.5 2.5 2 3.5-4.5" />
   if (name === 'pin') return <path d="M9.5 2.5 13.5 6.5 11 7l-2 3-.5 3-5-5 3-.5 3-2ZM5.5 10.5 2.5 13.5" />
   if (name === 'archive') return <path d="M2 3.5h12v3H2ZM3 6.5V13h10V6.5M6.5 9h3" />
   if (name === 'broom') return <path d="M9.5 2.5 13 6M8 5l3 3-4.5 5.5H2.5V9.5ZM5 8l3 3" />
-  if (name === 'update') return <path d="M8 10V2.5M5 5.5l3-3 3 3M2.5 9.5v4h11v-4" />
   if (name === 'queue') return <path d="M2.5 4h11M2.5 8h11M2.5 12h7" />
   if (name === 'x') return <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
   if (name === 'image') return <path d="M2.5 3h11v10h-11ZM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.2v.01" />
