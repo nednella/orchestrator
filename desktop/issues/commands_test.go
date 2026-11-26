@@ -3,6 +3,8 @@ package issues_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -139,8 +141,7 @@ func TestRefreshCommand(t *testing.T) {
 	}
 }
 
-func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{Queue: `    queue_sections:
+const fullActionQueue = `    queue_sections:
       - name: Ready
         labels: [ready]
         actions:
@@ -148,7 +149,58 @@ func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
       - name: Inbox
         actions:
           - {name: Investigate, command: "/investigate {n}"}
-`})
+`
+
+func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) {
+	tests := []struct {
+		asker         session.Access
+		full, regular session.Access // what issue 7, whose action is Full, and issue 11, whose action is Supervised, get
+	}{
+		{session.Read, session.Read, session.Read},
+		{session.Supervised, session.Supervised, session.Supervised},
+		{session.Full, session.Full, session.Supervised},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.asker), func(t *testing.T) {
+			h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
+			asker, err := h.NewThread("asker", "", "", "", string(tt.asker))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for issue, want := range map[string]session.Access{"7": tt.full, "11": tt.regular} {
+				if resp := h.Ask(t, ctl.Request{Cmd: "issue", Session: asker.ID, Args: []string{issue}}); !resp.OK {
+					t.Fatalf("issue %s from a %s thread = %+v", issue, tt.asker, resp)
+				}
+				n, _ := strconv.Atoi(issue)
+				i := slices.IndexFunc(h.Sessions().List(), func(s sessions.Session) bool { return s.Issue == n })
+				if i < 0 {
+					t.Fatalf("issue %s started no thread", issue)
+				}
+				if got := h.Sessions().List()[i].Access; got != want {
+					t.Errorf("issue %s from a %s thread: access %q, want %q", issue, tt.asker, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestIssueCommandRefusesAnAskerThatIsNotARunningThread(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
+	for from, asker := range map[string]string{"a session that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"} {
+		for _, issue := range []string{"7", "11"} {
+			resp := h.Ask(t, ctl.Request{Cmd: "issue", Session: asker, Args: []string{issue}})
+			if resp.OK || !strings.Contains(resp.Error, "Only a running thread can start an issue's thread") {
+				t.Errorf("issue %s from %s = %+v", issue, from, resp)
+			}
+		}
+	}
+	if list := h.Sessions().List(); len(list) != 0 {
+		t.Errorf("a refused asker started %+v", list)
+	}
+}
+
+func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
 	supervised, err := h.NewSession("supervised", "")
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +209,7 @@ func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	askers := map[string]string{"a Supervised thread": supervised.ID, "a Read thread": read.ID, "a session that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"}
+	askers := map[string]string{"a Supervised thread": supervised.ID, "a Read thread": read.ID}
 	refused := func(what string) {
 		t.Helper()
 		for from, asker := range askers {
@@ -174,11 +226,6 @@ func TestIssueCommandRefusesFullFromAThreadThatIsNot(t *testing.T) {
 			}
 		}
 		return sessions.Session{}, false
-	}
-
-	refused("with a Full action")
-	if s, ok := issueThread(); ok {
-		t.Fatalf("a thread that is not Full started %+v", s)
 	}
 
 	if resp := h.Ask(t, ctl.Request{Cmd: "issue", Session: read.ID, Args: []string{"11"}}); !resp.OK {

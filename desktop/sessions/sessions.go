@@ -1787,7 +1787,21 @@ func (s *Sessions) settleProject(key string) error {
 	return errors.Join(errs...)
 }
 
+var errAskerNotLive = errors.New("Only a running thread can start an issue's thread")
+
 var errFullFromThread = errors.New("A thread that is not Full access cannot start one that is")
+
+// liveAccessOf is the access of the running thread id, and whether it runs. It takes mu.
+func (s *Sessions) liveAccessOf(id string) (session.Access, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, in := range s.info {
+		if in.Name.String() == id {
+			return in.Access, true
+		}
+	}
+	return "", false
+}
 
 // mayGive refuses a thread the asker starts or wakes Full access unless the asker is a live Full thread, so a thread
 // cannot give itself every tool without the owner. An asker that names no live thread is not Full. It takes mu.
@@ -1992,7 +2006,17 @@ func (s *Sessions) CreateIssue(title, text string, issue int, action project.Act
 	if err != nil {
 		return Session{}, Kept, err
 	}
-	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, action.ThreadAccess(), action.Name, o.Asker, place)
+	access := action.ThreadAccess()
+	if o.Asker != "" {
+		asker, live := s.liveAccessOf(o.Asker)
+		if !live {
+			return Session{}, Kept, errAskerNotLive
+		}
+		if asker = cmp.Or(asker, session.Read); asker.Rank() < access.Rank() {
+			access = asker
+		}
+	}
+	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, access, action.Name, o.Asker, place)
 	if err != nil || did == Created {
 		return view, did, err
 	}

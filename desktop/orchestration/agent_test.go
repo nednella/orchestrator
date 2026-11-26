@@ -219,12 +219,29 @@ func TestIssueToolStartsTheIssueThread(t *testing.T) {
 	if !resp.OK || !ok || resp.Out != fmt.Sprintf("started 1 session: #7 (%d)", s.N) {
 		t.Fatalf("issue 7 = %+v, thread %+v", resp, s)
 	}
+	if s.Access != session.Read {
+		t.Errorf("the issue thread's access = %q, want Read, the caller's, since the action's is Supervised", s.Access)
+	}
 	if got := systemPrompt(t, h, s.ID); !strings.Contains(got, prompts.Handover("the patch is in /tmp/x")) {
 		t.Errorf("the issue thread's system prompt lacks the handover:\n%s", got)
 	}
 	again := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, caller.ID), Args: []string{"issue"}, Opts: map[string]string{"input": `{"number":7,"prompt":"more"}`}})
 	if want := fmt.Sprintf("already running: #7 (%d, the prompt was not given to it)", s.N); !again.OK || again.Out != want {
 		t.Errorf("issue 7 again = %+v, want %q", again, want)
+	}
+}
+
+func TestIssueToolGivesTheLowerOfTheActionsAndTheCallersAccess(t *testing.T) {
+	h := apptest.New(t)
+	caller := threadWith(t, h, "boss", session.Full)
+	mustUse(t, h, caller.ID, "issue", `{"number":7}`, nil)
+	list := h.Sessions().List()
+	i := slices.IndexFunc(list, func(s sessions.Session) bool { return s.Issue == 7 })
+	if i < 0 {
+		t.Fatal("no thread for #7")
+	}
+	if list[i].Access != session.Supervised {
+		t.Errorf("a Full caller's issue thread has %q access, want Supervised, the action's", list[i].Access)
 	}
 }
 
