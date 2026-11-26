@@ -261,17 +261,21 @@ func flushNow(last, now time.Time, pending int) bool {
 	return now.Sub(last) >= flushEvery || pending >= flushSize
 }
 
-// copyOSC52 puts the text of any OSC 52 "set clipboard" sequence in b on the
-// system clipboard. A sequence may be split across reads. Only the pump calls it.
-func (s *stream) copyOSC52(b []byte) {
-	data := append(s.osc, b...)
+// copyOSC52 puts the text of any OSC 52 "set clipboard" sequence in b on the system clipboard. A sequence may be split
+// across reads. It returns the bytes it scanned: b itself, not a copy, when no earlier read left a tail. Only the pump
+// calls it.
+func (s *stream) copyOSC52(b []byte) []byte {
+	data := b
+	if len(s.osc) > 0 {
+		data = append(s.osc, b...)
+	}
 	s.osc = nil
+	scanned := data
 	for {
 		start := bytes.Index(data, oscClipboard)
 		if start < 0 {
-			// Keep a possible start of the marker that the next read completes.
-			s.osc = append([]byte(nil), data[max(len(data)-len(oscClipboard)+1, 0):]...)
-			return
+			s.osc = markerStart(data)
+			return scanned
 		}
 		body := data[start+len(oscClipboard):]
 		end, termLen := oscEnd(body)
@@ -279,7 +283,7 @@ func (s *stream) copyOSC52(b []byte) {
 			if len(body) < oscLimit {
 				s.osc = append([]byte(nil), data[start:]...)
 			}
-			return
+			return scanned
 		}
 		if _, b64, ok := bytes.Cut(body[:end], []byte(";")); ok && len(b64) <= oscLimit {
 			if text, err := base64.StdEncoding.DecodeString(string(b64)); err == nil && len(text) > 0 {
@@ -288,6 +292,16 @@ func (s *stream) copyOSC52(b []byte) {
 		}
 		data = body[end+termLen:]
 	}
+}
+
+// markerStart is a copy of the end of data that the next read could complete into the OSC 52 marker, or nil.
+func markerStart(data []byte) []byte {
+	tail := data[max(len(data)-len(oscClipboard)+1, 0):]
+	i := bytes.LastIndexByte(tail, oscClipboard[0])
+	if i < 0 || !bytes.HasPrefix(oscClipboard, tail[i:]) {
+		return nil
+	}
+	return append([]byte(nil), tail[i:]...)
 }
 
 // oscEnd finds the BEL or ESC \ that ends an OSC body.

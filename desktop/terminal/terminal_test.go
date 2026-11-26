@@ -41,6 +41,8 @@ func TestCopyOSC52(t *testing.T) {
 		{"bel", []string{"x\x1b]52;c;" + b64 + "\ay"}, []string{"hello"}},
 		{"string terminator", []string{"\x1b]52;;" + b64 + "\x1b\\"}, []string{"hello"}},
 		{"split across reads", []string{"ab\x1b]5", "2;c;aGVs", "bG8=\a"}, []string{"hello"}},
+		{"split after the escape", []string{"ab\x1b", "]52;c;" + b64 + "\a"}, []string{"hello"}},
+		{"split after two escapes", []string{"ab\x1b\x1b]", "52;c;" + b64 + "\a"}, []string{"hello"}},
 		{"two sequences", []string{"\x1b]52;c;" + b64 + "\a\x1b]52;c;" + b64 + "\a"}, []string{"hello", "hello"}},
 		{"query is ignored", []string{"\x1b]52;c;?\a"}, nil},
 		{"other osc", []string{"\x1b]0;title\a"}, nil},
@@ -60,6 +62,33 @@ func TestCopyOSC52(t *testing.T) {
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("clipboard = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCopyOSC52LeavesAPlainChunkUncopied(t *testing.T) {
+	tests := []struct {
+		name   string
+		before []string
+		chunk  string
+		shared bool
+	}{
+		{"a plain chunk", nil, "plain output\r\n", true},
+		{"a chunk after plain output", []string{"some output"}, "plain output", true},
+		{"a chunk after a finished sequence", []string{"\x1b]52;c;aGVsbG8=\a"}, "plain output", true},
+		{"a chunk after a possible start of the marker", []string{"ab\x1b]5"}, "plain output", false},
+		{"a chunk after an unfinished sequence", []string{"\x1b]52;c;aGVs"}, "bG8=\a", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &stream{clip: func(string) {}}
+			for _, c := range tt.before {
+				s.copyOSC52([]byte(c))
+			}
+			chunk := []byte(tt.chunk)
+			if got := s.copyOSC52(chunk); (&got[0] == &chunk[0]) != tt.shared {
+				t.Errorf("the scan shares the chunk = %v, want %v", !tt.shared, tt.shared)
 			}
 		})
 	}
