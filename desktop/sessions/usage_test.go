@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/usage"
@@ -159,44 +158,6 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 		row, _ := second.Session(s.ID)
 		return row.Tokens == 1221
 	})
-}
-
-func TestSessionThatContinuedAnotherInAnOlderBuildShowsBothsUsage(t *testing.T) {
-	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.App.Stop()
-	before := "main/aaaaaaaa"
-	at := time.Now().Add(-time.Minute).UnixMilli()
-	var lines []string
-	for _, e := range []activity.Event{
-		{At: at, Kind: activity.SessionStart, Session: before, Issue: 4},
-		{At: at, Kind: activity.Usage, Session: before, Issue: 4, Tokens: usage.Tokens{Input: 1000, Output: 100}},
-		{At: at, Kind: activity.SessionStart, Session: s.ID, Issue: 4, Label: activity.Resumed, From: before},
-	} {
-		line, err := json.Marshal(e)
-		if err != nil {
-			t.Fatal(err)
-		}
-		lines = append(lines, string(line)+"\n")
-	}
-	appendLines(t, filepath.Join(h.State, "data", "main", "events", time.Now().Format(time.DateOnly)+".jsonl"), lines...)
-
-	second := h.Restart(t)
-	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
-	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 10, 1))
-	second.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
-	eventually(t, "both sessions' tokens on the row", func() bool { row, _ := second.Session(s.ID); return row.Tokens == 1111 })
-	eventually(t, "the turn's usage in the event log", func() bool { return len(second.Events(t, activity.Usage)) == 2 })
-	led, err := second.Ledger(30, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if led.Usage.Totals.Tokens != 1111 {
-		t.Errorf("usage = %+v: the stats count a session's usage again in the one that continues it", led.Usage.Totals)
-	}
 }
 
 func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {

@@ -121,7 +121,7 @@ func TestWokenThreadIsLabelled(t *testing.T) {
 	h.RefreshPRs()
 	eventually(t, "the woken thread's start", func() bool { return len(h.Events(t, activity.SessionStart)) == 2 })
 	got := h.Events(t, activity.SessionStart)
-	if got[0].Label != "" || got[1].Label != activity.Resumed || got[1].Session != s.ID || got[1].From != "" || got[1].Issue != 12 {
+	if got[0].Label != "" || got[1].Label != activity.Resumed || got[1].Session != s.ID || got[1].Issue != 12 {
 		t.Errorf("session_start = %+v, want the wake labelled resumed under the thread's id", got)
 	}
 }

@@ -312,8 +312,6 @@ func apply(days map[string]*Day, e activity.Event) {
 	switch e.Kind {
 	case activity.Prompt:
 		d.Prompts++
-	case activity.ChatStart:
-		d.Chats++
 	case activity.SessionStart:
 		d.Sessions++
 		if e.Issue > 0 {
@@ -336,7 +334,7 @@ func apply(days map[string]*Day, e activity.Event) {
 		d.PRsClosed++
 	case activity.IssueFiled:
 		d.IssuesFiled++
-	case activity.Usage, activity.ChatUsage:
+	case activity.Usage:
 		d.spending.count(e)
 	case activity.Wait:
 		d.waits.count(waitOf(e))

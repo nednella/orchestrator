@@ -114,38 +114,24 @@ func TestParseAccess(t *testing.T) {
 }
 
 func TestStoredAccess(t *testing.T) {
-	for in, want := range map[string]Access{"": Supervised, "read": Read, "supervised": Supervised, "full": Full, "root": Read, "Full": Read} {
+	for in, want := range map[string]Access{"": Read, "read": Read, "supervised": Supervised, "full": Full, "root": Read, "Full": Read} {
 		if got := StoredAccess(in); got != want {
 			t.Errorf("StoredAccess(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
-func TestRecordReadsAnOlderBuildsChatAsRead(t *testing.T) {
-	tests := []struct {
-		name, file string
-		want       Access
-	}{
-		{"an older build's chat", `{"session":"p/abcdefgh","state":"idle","title":"ask","chat":true}`, Read},
-		{"an older build's task", `{"session":"p/abcdefgh","state":"idle","title":"work"}`, ""},
-		{"a thread", `{"session":"p/abcdefgh","state":"idle","title":"work","access":"full"}`, Full},
-		{"access wins over the chat flag", `{"session":"p/abcdefgh","state":"idle","access":"supervised","chat":true}`, Supervised},
+func TestStateFileSavesSettledAt(t *testing.T) {
+	data, err := json.Marshal(Record{Session: "p/abcdefgh", State: Settled, SettledAt: 1234})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		var rec Record
-		if err := json.Unmarshal([]byte(tt.file), &rec); err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
-		if rec.Access != tt.want || rec.Session != "p/abcdefgh" || rec.State != Idle {
-			t.Errorf("%s: record = %+v, want access %q", tt.name, rec, tt.want)
-		}
-		data, err := json.Marshal(rec)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(data), `"chat"`) {
-			t.Errorf("%s: written back as %s, still with the chat flag", tt.name, data)
-		}
+	if !strings.Contains(string(data), `"settledAt":1234`) || strings.Contains(string(data), "endedAt") {
+		t.Errorf("record written as %s, want settledAt and no endedAt", data)
+	}
+	var back Record
+	if err := json.Unmarshal(data, &back); err != nil || back.SettledAt != 1234 {
+		t.Errorf("record read back as %+v, %v", back, err)
 	}
 }
 

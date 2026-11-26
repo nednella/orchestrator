@@ -31,9 +31,7 @@ type reader struct {
 // what it used last. model is the one the agent reports, for a transcript that names none. With record, it also
 // records all that is not in the event log yet, one event for each model. The first count of a run of the app starts
 // after the latest usage the event log holds for the session, so a restart reads again what was not recorded, and
-// counts nothing twice. A woken thread's count goes on under its one id from its first start. The row of a session
-// that an older build started to continue a conversation also shows what the sessions before it in that conversation
-// used; the event log keeps each session's own.
+// counts nothing twice. A woken thread's count goes on under its one id from its first start.
 func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	s.mu.Lock()
 	in, ok := s.infoOf(id)
@@ -55,22 +53,15 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	var before usage.Tokens
 	name, nameErr := session.ParseName(id)
 	if r.cursor == nil {
-		after, from := created, ""
+		after := created
 		s.activity.Since(session.ProjectKey(id), created.In(time.Local).Format(time.DateOnly), func(e activity.Event) {
-			switch {
-			case e.Session != id:
-			case e.Kind == activity.SessionStart || e.Kind == activity.ChatStart:
-				from = cmp.Or(e.From, from)
-			case isUsage(e.Kind):
+			if e.Session == id && e.Kind == activity.Usage {
 				before.Add(e.Tokens)
 				if at := time.UnixMilli(e.At); at.After(after) {
 					after = at
 				}
 			}
 		})
-		if from != "" {
-			before.Add(s.usedBefore(session.ProjectKey(id), from))
-		}
 		mark := usage.Mark{After: after}
 		if nameErr == nil {
 			mark = s.loadUsageMark(name, after)
@@ -145,31 +136,6 @@ func (s *Sessions) saveUsageMark(name session.Name, m usage.Mark) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "agentos: saving the usage mark of %s: %v\n", name, err)
 	}
-}
-
-// isUsage says whether an event of the log records usage: an older build recorded a chat's as chat_usage.
-func isUsage(kind string) bool { return kind == activity.Usage || kind == activity.ChatUsage }
-
-// usedBefore is what the session from and each session it continues used, as the event log of the project holds it.
-func (s *Sessions) usedBefore(projectKey, from string) usage.Tokens {
-	used := map[string]usage.Tokens{}
-	continues := map[string]string{}
-	s.activity.Since(projectKey, "", func(e activity.Event) {
-		switch e.Kind {
-		case activity.SessionStart, activity.ChatStart:
-			continues[e.Session] = cmp.Or(e.From, continues[e.Session])
-		case activity.Usage, activity.ChatUsage:
-			t := used[e.Session]
-			t.Add(e.Tokens)
-			used[e.Session] = t
-		}
-	})
-	var total usage.Tokens
-	for seen := map[string]bool{}; from != "" && !seen[from]; from = continues[from] {
-		seen[from] = true
-		total.Add(used[from])
-	}
-	return total
 }
 
 // ran shows on the row the model and effort the agent used last, and keeps them where the start choice is kept, the

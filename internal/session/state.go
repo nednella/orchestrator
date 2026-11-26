@@ -1,7 +1,6 @@
 package session
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -11,15 +10,11 @@ import (
 type State string
 
 const (
-	Idle     State = "idle"     // started, or a turn ended: the user's move
-	Working  State = "working"  // the agent is running
-	Waiting  State = "waiting"  // blocked on the user
-	Settled  State = "settled"  // the agent's session is gone; the row stays until deleted
-	Archived State = "archived" // a thread taken off the list by a build that archived threads instead of deleting them: it has no row
+	Idle    State = "idle"    // started, or a turn ended: the user's move
+	Working State = "working" // the agent is running
+	Waiting State = "waiting" // blocked on the user
+	Settled State = "settled" // the agent's session is gone; the row stays until deleted
 )
-
-// endedBefore is what older builds wrote for a settled session.
-const endedBefore State = "ended"
 
 // Record is what a hook leaves behind: in a state file and on the bus.
 type Record struct {
@@ -38,7 +33,7 @@ type Record struct {
 	Changes      []Change  `json:"changes,omitempty"`      // the latest state changes, oldest first, so the timeline outlives the app
 
 	Identity
-	SettledAt int64 `json:"endedAt,omitempty"` // unix ms, set by the desktop app when it sees the session end; the key is the one older builds wrote
+	SettledAt int64 `json:"settledAt,omitempty"` // unix ms, set by the desktop app when it sees the session end
 }
 
 // Identity is what the desktop app started a session as. The app writes it when the session starts and wakes, so a
@@ -49,7 +44,6 @@ type Identity struct {
 	Title   string `json:"title,omitempty"`
 	Issue   int    `json:"issue,omitempty"`
 	Access  Access `json:"access,omitempty"`
-	Hosted  bool   `json:"hosted,omitempty"` // the agent ran under agentos host, which keeps its chat log
 	Action  string `json:"action,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`
@@ -85,14 +79,14 @@ func ParseAccess(s string) (Access, error) {
 	return "", fmt.Errorf("access must be %s, %s or %s, not %q", Read, Supervised, Full, s)
 }
 
-// StoredAccess is the access a tag or state file holds: Supervised for none, as a build before access ran a task, and
-// Read for a value this build does not know, so a thread never gains access it was not given.
+// StoredAccess is the access a tag or state file holds: Read for none or for a value this build does not know, so a
+// thread never gains access it was not given.
 func StoredAccess(s string) Access {
-	a, err := ParseAccess(s)
-	if err != nil {
-		return Read
+	switch a := Access(s); a {
+	case Supervised, Full:
+		return a
 	}
-	return a
+	return Read
 }
 
 // Rank orders the levels by what they allow: Read, then Supervised, then Full.
@@ -106,23 +100,6 @@ func (a Access) Rank() int {
 	return 0
 }
 
-// UnmarshalJSON reads a record, and takes the chat flag an older build wrote for a read-only thread as Read.
-func (r *Record) UnmarshalJSON(data []byte) error {
-	type plain Record
-	var v struct {
-		plain
-		Chat bool `json:"chat"`
-	}
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	*r = Record(v.plain)
-	if r.Access == "" && v.Chat {
-		r.Access = Read
-	}
-	return nil
-}
-
 // Change is one entry of a session's state timeline.
 type Change struct {
 	State State `json:"state"`
@@ -131,20 +108,6 @@ type Change struct {
 
 // ChangesCap is how many changes a timeline keeps.
 const ChangesCap = 200
-
-// SettledChanges is changes with the ended state of an older build read as settled. It never writes into the array of changes.
-func SettledChanges(changes []Change) []Change {
-	if !slices.ContainsFunc(changes, func(c Change) bool { return c.State == endedBefore }) {
-		return changes
-	}
-	out := slices.Clone(changes)
-	for i := range out {
-		if out[i].State == endedBefore {
-			out[i].State = Settled
-		}
-	}
-	return out
-}
 
 // AddChange appends c to changes and keeps the latest ChangesCap of them. It never writes into the array of changes.
 func AddChange(changes []Change, c Change) []Change {

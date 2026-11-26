@@ -185,9 +185,6 @@ func TestReadThreadCountsInStats(t *testing.T) {
 			return slices.ContainsFunc(h.Events(t, kind), func(e activity.Event) bool { return e.Session == read.ID })
 		})
 	}
-	if starts := h.Events(t, activity.ChatStart); len(starts) != 0 {
-		t.Errorf("chat_start events = %+v", starts)
-	}
 	eventually(t, "the Read thread's wait", func() bool {
 		st, _ := h.Stats(7, "")
 		return slices.ContainsFunc(st.Recent, func(w stats.Wait) bool { return w.SessionTitle == read.Title })
@@ -204,9 +201,6 @@ func TestReadThreadCountsInStats(t *testing.T) {
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(time.Second), 1000, 100))
 	h.Hook(t, read.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
 	eventually(t, "the Read thread's usage", func() bool { return len(h.Events(t, activity.Usage)) == 1 })
-	if got := h.Events(t, activity.ChatUsage); len(got) != 0 {
-		t.Errorf("chat_usage events = %+v, want the usage under usage", got)
-	}
 }
 
 func TestIssueHasOneThread(t *testing.T) {

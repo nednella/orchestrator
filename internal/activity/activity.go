@@ -6,9 +6,8 @@ import "github.com/nednella/agentos/internal/usage"
 // The kinds of event.
 const (
 	Prompt       = "prompt"
-	SessionStart = "session_start" // label "resumed" when a wake starts the thread again; from, in older logs, the session whose conversation it continued
+	SessionStart = "session_start" // label "resumed" when a wake starts the thread again
 	SessionEnd   = "session_end"   // ms is how long the session ran
-	ChatStart    = "chat_start"    // an older build's start of a chat, which it recorded only with its usage; no longer written
 	Worked       = "worked"        // ms is how long a session worked
 	Wait         = "wait"          // ms is how long a session waited on the user; label is its kind (permission, question or idle)
 	PROpened     = "pr_opened"
@@ -20,8 +19,7 @@ const (
 	IssueFiled   = "issue_filed"
 	Cleanup      = "cleanup" // label done or blocked
 	Evidence     = "evidence"
-	Usage        = "usage"      // the tokens one model used since the last count; label "subagent" for a session's subagents
-	ChatUsage    = "chat_usage" // an older build's usage of a chat, kept apart so it counts only in the cost; no longer written
+	Usage        = "usage" // the tokens one model used since the last count; label "subagent" for a session's subagents
 )
 
 // Subagent is the label of usage by a session's subagents.
@@ -43,7 +41,6 @@ type Event struct {
 	Label   string `json:"label,omitempty"`
 	Title   string `json:"title,omitempty"` // the session title, on a wait and on usage
 	Cause   string `json:"cause,omitempty"` // why a session waited, in the words the Stats view groups by
-	From    string `json:"from,omitempty"`  // on a start an older build recorded, the session whose conversation it continues
 
 	usage.Tokens // on usage; At is the time of the latest message counted
 }

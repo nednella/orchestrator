@@ -58,8 +58,7 @@ func (w *work) merge(o work) {
 
 type modelEffort struct{ model, effort string }
 
-// spending is the usage of a day or of a range of days, in all and split up. Chats count in all and
-// by model, not in tasks or by work.
+// spending is the usage of a day or of a range of days, in all and split up.
 type spending struct {
 	all     spend
 	tasks   spend
@@ -77,9 +76,6 @@ func (s *spending) count(e activity.Event) {
 		s.byModel[key] = &spend{}
 	}
 	s.byModel[key].count(e.Session, e.Tokens)
-	if e.Kind == activity.ChatUsage {
-		return
-	}
 	s.tasks.count(e.Session, e.Tokens)
 	one := work{issue: e.Issue, title: e.Title, lastAt: e.At}
 	one.count(e.Session, e.Tokens)

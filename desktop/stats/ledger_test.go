@@ -135,7 +135,6 @@ func TestLedgerPullRequestsAndIssues(t *testing.T) {
 		{At: at(1), Kind: activity.IssueFiled},
 		{At: at(1), Kind: activity.SessionEnd, Ms: 100},
 		{At: at(1), Kind: activity.SessionEnd, Ms: 300},
-		{At: at(1), Kind: activity.ChatStart},
 		{At: at(50), Kind: activity.PRMerged, Issue: 6, Ms: 5000},
 	} {
 		log.Record("alpha", e)
@@ -146,7 +145,7 @@ func TestLedgerPullRequestsAndIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	alpha := led.Projects[0]
-	want := LedgerRow{Project: "Alpha", Chats: 1, PRsOpened: 1, PRsMerged: 3, PRsClosed: 1, IssuesFiled: 1, IssuesClosed: 1, SessionMs: 400, AvgSessionMs: 200, AvgLeadMs: 2000}
+	want := LedgerRow{Project: "Alpha", PRsOpened: 1, PRsMerged: 3, PRsClosed: 1, IssuesFiled: 1, IssuesClosed: 1, SessionMs: 400, AvgSessionMs: 200, AvgLeadMs: 2000}
 	if alpha != want {
 		t.Errorf("alpha = %+v, want %+v", alpha, want)
 	}
@@ -197,43 +196,6 @@ func TestLedgerUsage(t *testing.T) {
 	}
 }
 
-func TestLedgerChatUsage(t *testing.T) {
-	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
-	log := loaded(t, t.TempDir())
-	for _, e := range []activity.Event{
-		{Kind: activity.Usage, Session: "alpha/aaaaaaaa", Issue: 7, Model: "claude-opus-5-5", Title: "#7 work", Tokens: usage.Tokens{Input: 100, Cost: 2_000_000}},
-		{Kind: activity.ChatStart, Session: "alpha/cccccccc"},
-		{Kind: activity.ChatUsage, Session: "alpha/cccccccc", Model: "claude-opus-5-5", Title: "ask", Tokens: usage.Tokens{Input: 30, Cost: 500_000}},
-		{Kind: activity.ChatUsage, Session: "alpha/cccccccc", Model: "claude-haiku-5-5", Label: activity.Subagent, Title: "ask", Tokens: usage.Tokens{Input: 5, Cost: 10_000}},
-	} {
-		e.At = now.UnixMilli()
-		log.Record("alpha", e)
-	}
-	led, err := NewBooks(log, fakeProjects{{Name: "Alpha", Dir: "/a"}}).Ledger(30, "", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a := led.Projects[0]; a.Tokens != 135 || a.Cost != 2.51 || a.Chats != 1 || a.Sessions != 0 {
-		t.Errorf("alpha = %+v, want the chat's cost in the project's", a)
-	}
-	if tot := led.Usage.Totals; tot.Sessions != 2 || tot.Tokens != 135 || tot.Cost != 2.51 {
-		t.Errorf("usage totals = %+v, want the task and the chat", tot)
-	}
-	if task := led.Usage.Tasks; task.Sessions != 1 || task.Tokens != 100 || task.Cost != 2 {
-		t.Errorf("tasks = %+v", task)
-	}
-	var models []string
-	for _, r := range led.Usage.ByModel {
-		models = append(models, fmt.Sprintf("%s:%d:%d", r.Model, r.Sessions, r.Tokens))
-	}
-	if want := []string{"claude-opus-5-5:2:130", "claude-haiku-5-5:1:5"}; !slices.Equal(models, want) {
-		t.Errorf("by model = %v, want the task and the chat", models)
-	}
-	if len(led.Work) != 1 || led.Work[0].Issue != 7 {
-		t.Errorf("work = %+v, want the task only", led.Work)
-	}
-}
-
 func TestLedgerPerDay(t *testing.T) {
 	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
 	at := func(ago int) int64 { return now.AddDate(0, 0, -ago).UnixMilli() }
@@ -251,7 +213,7 @@ func TestLedgerPerDay(t *testing.T) {
 		{"beta", 0, activity.Prompt, 0, 0},
 		{"beta", 0, activity.Usage, 0, 1_500_000},
 		{"alpha", 2, activity.Prompt, 0, 0},
-		{"alpha", 2, activity.ChatUsage, 0, 250_000},
+		{"alpha", 2, activity.Usage, 0, 250_000},
 		{"alpha", 6, activity.Prompt, 0, 0},
 		{"alpha", 6, activity.Worked, 3000, 0},
 		{"alpha", 7, activity.Prompt, 0, 0},
