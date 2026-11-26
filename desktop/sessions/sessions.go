@@ -136,6 +136,8 @@ type Sessions struct {
 	issueMu   sync.Mutex           // one issue check-and-create at a time: two starts at once would both find no session and start two
 	childMu   sync.Mutex           // one child check-and-create at a time: two delegations at once would both pass the limits
 
+	settling map[string]chan struct{} // under mu, the threads a settle stops now, each closed once that settle ends: one settle of a thread at a time
+
 	mu         sync.Mutex
 	ctx        context.Context
 	project    project.Project
@@ -290,6 +292,7 @@ func newSessions(o Options) *Sessions {
 		wakes:      map[string][]heldPrompt{},
 		delivering: map[string]bool{},
 		idling:     map[string]bool{},
+		settling:   map[string]chan struct{}{},
 		afterTurn:  map[string][]func(){},
 		slept:      func(string) {},
 		onDelete:   func(string) {},
@@ -3592,8 +3595,9 @@ func (s *Sessions) settleBy(id, by string) error {
 }
 
 // SettleIdle settles the live thread if its host is idle: no turn open or message queued, no approval waiting and no
-// subagent at work. It says whether it settled. A message a thread tells it meanwhile is held, and wakes it once it
-// sleeps; the host takes no other message from its check until it stops, so none is cut off. It takes mu.
+// subagent at work. It says whether the thread sleeps now: a thread another settle, as the owner's Sleep, put to sleep
+// first is no error. A message a thread tells it meanwhile is held, and wakes it once it sleeps; the host takes no
+// other message from its check until it stops, so none is cut off. It takes mu.
 func (s *Sessions) SettleIdle(id string) (bool, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -3612,6 +3616,14 @@ func (s *Sessions) SettleIdle(id string) (bool, error) {
 		s.sync()
 		s.mu.Unlock()
 	}()
+	done, err := s.startSettle(id)
+	if errors.As(err, new(errAsleep)) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
+	}
+	defer done()
 	socket, err := s.readyHost(name)
 	idle := false
 	if err == nil {
@@ -3623,10 +3635,11 @@ func (s *Sessions) SettleIdle(id string) (bool, error) {
 	if !idle {
 		return false, nil
 	}
-	if err := s.Settle(id); err != nil {
+	if err := s.stop(name, chat.StopSettle, ""); err != nil {
 		s.release(name)
 		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
 	}
+	s.stopServers(false, id)
 	return true, nil
 }
 
@@ -3641,18 +3654,53 @@ func (s *Sessions) settle(id, reason, text string) error {
 	if name.IsShell() {
 		return errNotSession
 	}
-	s.mu.Lock()
-	_, ended := s.ended[id]
-	old, deleted := s.isOld(id), s.deleted[id]
-	s.mu.Unlock()
-	switch {
-	case deleted:
-		return fmt.Errorf("Thread %s was deleted", id)
-	case ended:
-		return fmt.Errorf("Thread %s is asleep", id)
-	case old:
-		return fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
+	done, err := s.startSettle(id)
+	if err != nil {
+		return err
 	}
+	defer done()
+	return s.stop(name, reason, text)
+}
+
+// errAsleep refuses a settle of a thread that sleeps already.
+type errAsleep struct{ id string }
+
+func (e errAsleep) Error() string { return fmt.Sprintf("Thread %s is asleep", e.id) }
+
+// startSettle marks a settle of the thread as running, once any other settle of it has ended, and gives the func that
+// ends the mark. Two at once, as the owner's Sleep and the one after a child's result, would both kill the session, and
+// the one that lost would fail and take back the planned stop of the one that won. It refuses a thread that is deleted,
+// asleep or in an old terminal. It takes mu.
+func (s *Sessions) startSettle(id string) (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for running := s.settling[id]; running != nil; running = s.settling[id] {
+		s.mu.Unlock()
+		<-running
+		s.mu.Lock()
+	}
+	_, ended := s.ended[id]
+	switch {
+	case s.deleted[id]:
+		return nil, fmt.Errorf("Thread %s was deleted", id)
+	case ended:
+		return nil, errAsleep{id}
+	case s.isOld(id):
+		return nil, fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
+	}
+	running := make(chan struct{})
+	s.settling[id] = running
+	return func() {
+		s.mu.Lock()
+		delete(s.settling, id)
+		s.mu.Unlock()
+		close(running)
+	}, nil
+}
+
+// stop stops the thread a settle marked as running, as settle says. It takes mu.
+func (s *Sessions) stop(name session.Name, reason, text string) error {
+	id := name.String()
 	// Dropped before the kill, so a Refresh that sees the session gone first does not wake it for them. The messages
 	// threads told it are kept, and wake it once it has settled.
 	s.mu.Lock()

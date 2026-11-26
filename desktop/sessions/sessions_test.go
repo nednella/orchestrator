@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -849,6 +850,38 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 	eventually(t, "working again", func() bool { return state() == "working" })
 	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Label != "Question in reply" {
 		t.Errorf("the question did not count as a wait: %+v", st.ByCause)
+	}
+}
+
+func TestTheOwnersSleepAndTheAutomaticSleepAtOnceStopTheThreadOnce(t *testing.T) {
+	h := apptest.New(t)
+	for i := range 12 {
+		s, err := h.Sessions().Create(fmt.Sprintf("race %d", i), "", false, 0, session.Supervised)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := h.ChatSend(s.ID, "hi"); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+
+		var idle, owner error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); _, idle = h.Sessions().SettleIdle(s.ID) }()
+		go func() { defer wg.Done(); owner = h.SettleThread(s.ID) }()
+		wg.Wait()
+		if idle != nil {
+			t.Errorf("run %d: the automatic sleep = %v, want no error", i, idle)
+		}
+		exit := chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle}
+		switch {
+		case owner == nil:
+			exit.Text = chat.ByOwner
+		case owner.Error() != "Thread "+s.ID+" is asleep":
+			t.Errorf("run %d: the owner's sleep = %v, want none or %q", i, owner, "Thread "+s.ID+" is asleep")
+		}
+		assertExits(t, h, s.ID, exit)
 	}
 }
 
