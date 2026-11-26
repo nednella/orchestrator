@@ -57,7 +57,13 @@ make -o desktop-frontend desktop-app          # or: make desktop-app (rebuilds t
 curl -s -XPOST -H 'X-Agentos: 1' 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
 ```
 
-Agents' commands reach the same app: `AGENTOS_SESSION=<id> AGENTOS_SOCKET=$S/agentos.sock agentos note "x"`. A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with SIGTERM so it stops its browsers.
+A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with SIGTERM so it stops its browsers.
+
+## The agent tools
+
+A thread calls the agentos tools (`note`, `issue`, `new_thread`, `show`, `track`, `refresh`, `browser` and the orchestration tools) through the `agentos mcp` server its `<id>.mcp.json` starts, which sends each call as `orchestrate` with the thread's token. The stand-in `claude` calls no tool, so the tests in `desktop/orchestration` make the calls themselves: `useTool` sends `orchestrate` with the token read from the thread's MCP config, and `TestMCPServerServesTheAgentToolsAsTheThread` runs the built `agentos mcp` from that config and speaks JSON-RPC to it. A test of a tool checks the effect as the caller (the note in the caller's project, the branch on the caller's row) and that a call whose request or input names another thread still acts as the caller. `internal/host` tests which tool asks the owner: a Read thread asks for `show` and `track`.
+
+Claude signs in through its own config folder, so a check with a real Claude writes its transcript into `~/.claude`; a throwaway `CLAUDE_CONFIG_DIR` is not signed in. To check with one, run the app in a browser as above, with the isolation env, and a demo project whose `.claude/settings.local.json` is `{"model": "haiku"}`; start a Read thread and send "note that the build is slow". The chat shows an `mcp__agentos__note` call with no approval card, and the note shows in the Notes view. Ask the same thread to show some text as evidence: the chat shows an approval card for `mcp__agentos__show`.
 
 ## Driving the page
 
