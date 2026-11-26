@@ -26,8 +26,9 @@ func newShell(t *testing.T) (*apptest.Harness, string) {
 	}
 	// What is typed before the shell reads it is shown twice, once by the terminal and once by the shell's line editor,
 	// and a shell on a slow machine starts late: the tests type once it has run a command.
-	ready := filepath.Join(t.TempDir(), "ready")
-	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+shell.ID+":", "touch '"+ready+"'", "Enter").Run(); err != nil {
+	// The command names the file by a path with no digits, which the tests look for in what they read.
+	ready := filepath.Join(h.Dir, ".shell-ready")
+	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+shell.ID+":", "touch .shell-ready", "Enter").Run(); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the shell to run a command", func() bool { return apptest.Exists(ready) })
