@@ -5,7 +5,30 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestFlushRule(t *testing.T) {
+	last := time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		last, now time.Time
+		pending   int
+		want      bool
+	}{
+		{"idle for 16 ms", last, last.Add(16 * time.Millisecond), 10, true},
+		{"3 ms after a flush", last, last.Add(3 * time.Millisecond), 10, false},
+		{"32 KB pending", last, last.Add(3 * time.Millisecond), 32 << 10, true},
+		{"the stream's first output", time.Time{}, last, 1, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := flushNow(tt.last, tt.now, tt.pending); got != tt.want {
+				t.Errorf("flushNow(%v after, %d bytes) = %v, want %v", tt.now.Sub(tt.last), tt.pending, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestCopyOSC52(t *testing.T) {
 	b64 := base64.StdEncoding.EncodeToString([]byte("hello"))

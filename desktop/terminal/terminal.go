@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	flushEvery = 8 * time.Millisecond
+	flushEvery = 16 * time.Millisecond
 	flushSize  = 32 << 10
 	oscLimit   = 1 << 20 // the most base64 text of one OSC 52 sequence that reaches the clipboard
 	tmuxWait   = 5 * time.Second
@@ -162,6 +162,7 @@ type stream struct {
 	mu      sync.Mutex
 	pending []byte
 	timer   *time.Timer
+	flushed time.Time // when output last went out
 	done    bool
 	drawn   bool   // tmux has sent output, so it knows the client
 	osc     []byte // the unfinished tail of an OSC 52 sequence
@@ -226,11 +227,12 @@ func (s *stream) add(b []byte) {
 	defer s.mu.Unlock()
 	s.drawn = true
 	s.pending = append(s.pending, b...)
+	now := time.Now()
 	switch {
-	case len(s.pending) >= flushSize:
+	case flushNow(s.flushed, now, len(s.pending)):
 		s.flush()
 	case s.timer == nil:
-		s.timer = time.AfterFunc(flushEvery, func() {
+		s.timer = time.AfterFunc(flushEvery-now.Sub(s.flushed), func() {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.flush()
@@ -250,6 +252,13 @@ func (s *stream) flush() {
 	}
 	s.emit("term:data", map[string]string{"id": s.id, "data": base64.StdEncoding.EncodeToString(s.pending)})
 	s.pending = s.pending[:0]
+	s.flushed = time.Now()
+}
+
+// flushNow says whether pending output goes out at once: the first after a pause, so an echo waits for nothing, or a
+// full batch. Any other waits for the batch to end, flushEvery after the last flush.
+func flushNow(last, now time.Time, pending int) bool {
+	return now.Sub(last) >= flushEvery || pending >= flushSize
 }
 
 // copyOSC52 puts the text of any OSC 52 "set clipboard" sequence in b on the
