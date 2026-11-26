@@ -983,8 +983,14 @@ type familyTrees struct {
 type keptTree struct{ id, reason string }
 
 // count is how many worktrees the box offers: the thread's own worktree when only the family works in it, and every
-// descendant's but one a fork takes over. A thread whose own worktree is shared gets no box for it, as without children.
-func (t familyTrees) count() int { return len(t.own) + len(t.kept) }
+// descendant's but one a fork takes over. A thread whose own worktree is shared gets no box, as without children, since
+// a Delete with it would always be refused.
+func (t familyTrees) count() int {
+	if t.topKept != "" {
+		return 0
+	}
+	return len(t.own) + len(t.kept)
+}
 
 // familyWorktrees sorts the worktrees of family, the deepest first and the thread last, by who else works in them: no
 // one outside the family, a fork outside it that takes a descendant's over (heirOf), or a shell or another thread,
@@ -1083,11 +1089,24 @@ func (s *Sessions) checkWorktrees(ctx context.Context, family, own []string, asl
 }
 
 // handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to heir, the fork outside the
-// family that works in it, so the record does not go with id and the worktree is still agentos's to remove.
+// family that works in it, so the record does not go with id and the worktree is still agentos's to remove. The heir was
+// found before the Delete's checks, so it gets the worktree only while it is still a fork, live or asleep, with no
+// worktree agentos made for it.
 func (s *Sessions) handOverWorktree(id, heir string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
 	if !ok || w.Removed != 0 || gone(w.Path) {
+		return
+	}
+	s.mu.Lock()
+	in, live := s.liveInfo(heir)
+	e, asleep := s.ended[heir]
+	if asleep {
+		in = e.info
+	}
+	going := s.deleting[heir] || s.deleted[heir]
+	s.mu.Unlock()
+	if _, made := s.made.Of(key, heir); !live && !asleep || going || in.Fork == "" || made {
 		return
 	}
 	if err := s.life.handOver(s.context(), key, w.Path, id, heir); err != nil {

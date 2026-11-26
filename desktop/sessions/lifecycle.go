@@ -1338,7 +1338,7 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 	if reason := l.sessions.pending(t.id); reason != "" {
 		return p, reason
 	}
-	if user := l.sessions.usersOf(w.Path, false, append(family, t.id)...); user != "" {
+	if user := l.sessions.usersOf(w.Path, false, slices.Concat(family, []string{t.id})...); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	return p, l.shellIn(ctx, t.proj.Key(), w.Path)

@@ -564,6 +564,26 @@ func TestDeletePlanCountsAWorktreeAnAncestorWorksIn(t *testing.T) {
 	}
 }
 
+func TestDeletePlanOffersNoBoxWhenTheThreadsOwnWorktreeIsShared(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	commitIn(t, child.Worktree, "work.txt")
+	putToSleep(t, h, child.ID)
+	cleanupOf(t, h, child)
+	other := issueThread(h, t, 8)
+	h.Hook(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
+	eventually(t, "the other thread seen in the parent's worktree", func() bool { return h.OwnWorktree(parent.ID) == "" })
+
+	if !exists(child.Worktree) {
+		t.Fatal("the child's worktree went at its sleep")
+	}
+	if got := h.DeletePlan(parent.ID).Worktrees; got != 0 {
+		t.Errorf("the box offers %d worktrees, want none", got)
+	}
+}
+
 func TestDeleteGivesAChildsWorktreeToItsNewestFork(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
