@@ -4,6 +4,7 @@ package prompts
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 )
 
@@ -28,6 +29,8 @@ var (
 	session string
 	//go:embed thread.md
 	thread string
+	//go:embed issue.md
+	issue string
 	//go:embed worktree.md
 	worktree string
 	//go:embed fork.md
@@ -93,6 +96,11 @@ func Session() string { return body(session) }
 
 // Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
 func Thread() string { return body(thread) }
+
+// Issue follows Thread in the system prompt of a thread that works on the GitHub issue number.
+func Issue(number int) string {
+	return strings.Replace(body(issue), "{number}", strconv.Itoa(number), 1)
+}
 
 // Worktree follows Thread in the system prompt of a thread that agentos started in the worktree it made, on branch.
 func Worktree(branch, dir string) string {

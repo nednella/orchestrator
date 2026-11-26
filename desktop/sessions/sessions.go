@@ -2647,9 +2647,6 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 		"AGENTOS_SESSION=" + name.String(),
 		mcp.ControlEnv + "=" + control.SocketPath(s.stateDir),
 	}
-	if issue > 0 {
-		env = append(env, "AGENTOS_ISSUE="+strconv.Itoa(issue))
-	}
 	tmp := s.tmpDir(name)
 	if err := os.MkdirAll(tmp, 0o700); err != nil {
 		return fmt.Errorf("making the session's temp folder: %w", err)
@@ -2677,7 +2674,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if parent != "" {
 		parentTitle = s.titleOf(parent)
 	}
-	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree, parentTitle)
+	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree, parentTitle, issue)
 	l.TmpDir, l.ForkAt, l.MCPConfig = tmp, fork.at, s.mcpConfigPath(name)
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -4694,14 +4691,18 @@ type workTree struct{ branch, dir string }
 
 // launchFor is what the session's agent starts with. The agent learns where it runs and the commands that reach the
 // app, and about the browser when it has one; a session with a brief learns only the brief. A child learns the title
-// of its parent, the thread it works for. A task started by another session gets that session's handover last.
-func launchFor(model project.Model, conversation, brief, handover string, access session.Access, browser bool, fork forkStart, tree workTree, parent string) agent.Launch {
+// of its parent, the thread it works for. A thread for an issue learns the issue's number. A task started by another
+// session gets that session's handover last.
+func launchFor(model project.Model, conversation, brief, handover string, access session.Access, browser bool, fork forkStart, tree workTree, parent string, issue int) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Resume: conversation, Access: access}
 	if brief != "" {
 		l.Prompt = brief
 		return l
 	}
 	l.Prompt = prompts.Session() + "\n\n" + prompts.Thread()
+	if issue > 0 {
+		l.Prompt += "\n\n" + prompts.Issue(issue)
+	}
 	if tree.branch != "" {
 		l.Prompt += "\n\n" + prompts.Worktree(tree.branch, tree.dir)
 	}

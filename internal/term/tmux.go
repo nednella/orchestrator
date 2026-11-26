@@ -115,7 +115,7 @@ func (t *Tmux) runWith(ctx context.Context, env []string, args ...string) (strin
 // inherited are dropped from the environment the tmux server starts with: TMUX so an app started
 // inside another tmux can still attach, and a session's identity so an app or test started inside
 // an agentos session does not pass it on to every session and shell it starts.
-var inherited = []string{"TMUX", "AGENTOS_SESSION", "AGENTOS_ISSUE", "AGENTOS_PROJECT", "AGENTOS_CONTROL"}
+var inherited = []string{"TMUX", "AGENTOS_SESSION", "AGENTOS_CONTROL", "AGENTOS_PROJECT"}
 
 func cleanEnv() []string {
 	return slices.DeleteFunc(os.Environ(), func(kv string) bool {

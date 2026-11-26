@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/mcp"
 )
 
 func sessionWithoutIssue(h *apptest.Harness, t *testing.T) sessions.Session {
@@ -131,11 +133,60 @@ func TestSessionReportsItsBranch(t *testing.T) {
 	}
 }
 
-func TestIssueSessionKnowsItsIssue(t *testing.T) {
+func TestNoIssueInTheEnvironment(t *testing.T) {
 	h := newHarness(t)
 	s := issueSession(h, t, 9)
-	if env := claudeEnv(t, h, s.ID); env["AGENTOS_ISSUE"] != "9" || env["AGENTOS_SESSION"] != s.ID {
-		t.Errorf("claude was started with %v, want AGENTOS_ISSUE=9 and AGENTOS_SESSION=%s", env, s.ID)
+	env := claudeEnv(t, h, s.ID)
+	// Another app's thread that started this one would have given it its own, which the app drops.
+	if v, ok := env["AGENTOS_ISSUE"]; ok {
+		t.Errorf("claude was started with AGENTOS_ISSUE=%s", v)
+	}
+	if want := filepath.Join(h.State, "control.sock"); env["AGENTOS_SESSION"] != s.ID || env[mcp.ControlEnv] != want {
+		t.Errorf("claude was started with AGENTOS_SESSION=%s and %s=%s, want %s and %s", env["AGENTOS_SESSION"], mcp.ControlEnv, env[mcp.ControlEnv], s.ID, want)
+	}
+}
+
+// promptOf is the system prompt claude was started with.
+func promptOf(t *testing.T, args []string) string {
+	t.Helper()
+	i := slices.Index(args, "--append-system-prompt")
+	if i < 0 {
+		t.Fatalf("claude has no system prompt: %q", args)
+	}
+	return strings.Join(args[i+1:], "\n")
+}
+
+func TestIssueThreadIsToldItsIssue(t *testing.T) {
+	h := newHarness(t)
+	s := issueSession(h, t, 42)
+	const told = "This thread works on GitHub issue #42."
+	if prompt := promptOf(t, claudeArgs(t, h, s.ID)); !strings.Contains(prompt, told) || strings.Index(prompt, told) < strings.Index(prompt, "Stay on this thread's topic.") {
+		t.Errorf("the prompt does not tell the issue after the thread's text: %q", prompt)
+	}
+
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to sleep", func() bool {
+		ch, err := h.Sessions().ChatOf(s.ID)
+		return err == nil && !ch.Live
+	})
+	if err := os.Remove(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(s.ID, "/", "_")+".args")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.WakeThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if prompt := promptOf(t, claudeArgs(t, h, s.ID)); !strings.Contains(prompt, told) {
+		t.Errorf("after a wake the prompt does not tell the issue: %q", prompt)
+	}
+
+	plain, err := h.NewSession("no issue", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prompt := promptOf(t, claudeArgs(t, h, plain.ID)); strings.Contains(prompt, "works on GitHub issue") {
+		t.Errorf("a thread with no issue is told of one: %q", prompt)
 	}
 }
 

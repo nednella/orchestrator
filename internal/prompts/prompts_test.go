@@ -19,7 +19,8 @@ func TestPromptsKeepTheirText(t *testing.T) {
 	}{
 		{"browser", Browser(), "eaa2c696c1572510d631edd9644c5635af7848e1f885bc230cfa1d8baeae1a21"},
 		{"session", Session(), "69dc352f3cb4f88d83faf22a1c411b17ca6c16b8724aee370ba1a78276a1464a"},
-		{"thread", Thread(), "6fe85b8d2f1b3210c0996a3e232a4447046d4e4eca5b1da2d3bf5cc68e1a1f0c"},
+		{"thread", Thread(), "aea7d89f2a4fd7a426806a11a24fdc06f7227347e78f23562d05d5d640564c69"},
+		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
 		{"fork", Fork("{title}"), "5134e8f39ae74781ddf512e2e91cfef6d7e198cc2f7a2787518e1468582cf62e"},
 		{"child", Child("{parent}"), "86bf6448ba50c747ee084c5ae934f71c5cad61a0447fba09e7fbdf49cc251874"},
@@ -44,6 +45,15 @@ func TestPromptsKeepTheirText(t *testing.T) {
 				t.Errorf("text keeps its file framing: %q", tt.text)
 			}
 		})
+	}
+}
+
+func TestIssueNamesItsNumber(t *testing.T) {
+	if got, want := Issue(42), "This thread works on GitHub issue #42."; got != want {
+		t.Errorf("Issue(42) = %q, want %q", got, want)
+	}
+	if strings.Contains(Thread(), "AGENTOS_ISSUE") {
+		t.Error("the thread text still names the variable")
 	}
 }
 

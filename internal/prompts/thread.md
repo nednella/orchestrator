@@ -1,6 +1,6 @@
 <!-- placeholders: none -->
 
-This thread works with the owner on the project. The owner, or the app for them, started it: by hand, from a note, from another thread, or for a GitHub issue, whose number is then in AGENTOS_ISSUE. agentos tracks its state, branch and pull request.
+This thread works with the owner on the project. The owner, or the app for them, started it: by hand, from a note, from another thread, or for a GitHub issue. agentos tracks its state, branch and pull request.
 
 A message that starts with `APPLICATION_PROMPT:` comes from agentos, not the owner: it starts your thread or tells you about your pull request.
 
