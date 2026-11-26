@@ -3,10 +3,12 @@ import type { CSSProperties } from 'react'
 import { useOrchestratorSelector } from '../OrchestratorContext'
 import { CARD_ROOM } from '../contextCard'
 import { useCardPlacement, useContextCard } from '../contextCardOpen'
+import { useLayout } from '../LayoutContext'
 import { viewedAgent } from '../navHistory'
 import { useFocusRequest } from '../useFocusRequest'
 import { ChatView } from './ChatView'
 import { SubagentView } from './SubagentView'
+import { ThreadCardToggle } from './ThreadCardToggle'
 import { ThreadContextCard } from './ThreadContextCard'
 
 const clearOfCard = { '--card-room': `${CARD_ROOM}px` } as CSSProperties
@@ -15,6 +17,7 @@ export function Viewport() {
   const selected = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
   const panel = useRef<HTMLElement>(null)
   const card = useContextCard()
+  const { docked, rightOpen } = useLayout()
   useCardPlacement(panel, selected !== undefined)
   const id = selected?.id ?? ''
   const agent = useOrchestratorSelector((a) => viewedAgent(a.viewHistory, id))
@@ -30,6 +33,7 @@ export function Viewport() {
   useFocusRequest('thread', focusChat)
 
   if (!selected) return null
+  const besidePanel = docked.right && rightOpen
   const cardInline = card.shown && card.placement === 'inline'
 
   return (
@@ -38,7 +42,8 @@ export function Viewport() {
       <div className="h-full" style={cardInline ? clearOfCard : undefined}>
         {agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} session={selected} />}
       </div>
-      {cardInline && <ThreadContextCard id={selected.id} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
+      <ThreadCardToggle place="column" />
+      {cardInline && <ThreadContextCard id={selected.id} className={`absolute right-3 z-20 ${besidePanel ? 'top-[52px] max-h-[calc(100%-4rem)]' : 'top-3 max-h-[calc(100%-1.5rem)]'}`} />}
     </section>
   )
 }

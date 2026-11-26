@@ -1,14 +1,10 @@
-import { SquareMenu } from 'lucide-react'
-import { useRef } from 'react'
 import type { CSSProperties } from 'react'
-import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
+import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, withShortcut } from '../actions'
-import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import { useDrawerOpen } from '../terminalDrawer'
-import { selectedCardHasRows } from '../useCardFacts'
-import { ThreadContextCard } from './ThreadContextCard'
-import { TitleBarButton, titleBarButton } from './TitleBarButton'
+import { ThreadCardToggle } from './ThreadCardToggle'
+import { TitleBarButton } from './TitleBarButton'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
 
 const drag = { '--wails-draggable': 'drag' } as CSSProperties
@@ -20,12 +16,6 @@ export function TopBar() {
   const { docked, sidebarOpen, rightOpen, statsOpen, digestOpen, panelExpanded } = layout
   const terminalOpen = useDrawerOpen(selectedId ?? '') && !panelExpanded
   const latestOrchestrator = useLatestOrchestrator()
-  const cardHasRows = useOrchestratorSelector(selectedCardHasRows)
-  const card = useContextCard()
-  const cardToggle = useRef<HTMLDivElement>(null)
-  const popover = card.placement === 'popover' && card.popover
-  const cardPressed = card.placement === 'inline' ? card.shown : popover
-  useCardPopoverDismiss(cardToggle, popover)
   const find = (id: string) => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => withShortcut(label, find(id).shortcut)
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
@@ -38,21 +28,7 @@ export function TopBar() {
         <TitleBreadcrumb showsThread={showsThread} />
       </div>
       <div className="flex flex-none items-center gap-0.5" style={noDrag}>
-        {showsThread && cardHasRows && (
-          <div ref={cardToggle} className="relative flex">
-            <button
-              className={titleBarButton}
-              style={{ color: cardPressed ? 'var(--text)' : undefined }}
-              title={named('Toggle thread details', 'toggle-context-card')}
-              aria-label={named('Toggle thread details', 'toggle-context-card')}
-              aria-pressed={cardPressed}
-              onClick={() => report(() => find('toggle-context-card').run())}
-            >
-              <SquareMenu size={14} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-            {popover && <ThreadContextCard id={selectedId} className="absolute top-full right-0 z-(--z-popup) mt-1 max-h-[calc(100vh-var(--topbar-h)-1rem)]" />}
-          </div>
-        )}
+        <ThreadCardToggle place="bar" />
         <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run()} />
         <TitleBarButton
           label={project ? named('Toggle terminal', 'toggle-shell') : 'The terminal is unavailable'}
