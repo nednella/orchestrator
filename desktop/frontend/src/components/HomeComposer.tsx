@@ -124,6 +124,7 @@ export function HomeComposer() {
   const send = () => {
     if (sending.current || !canSend) return
     sending.current = true
+    const sentFrom = a.project?.name
     a.report(async () => {
       try {
         if (note) {
@@ -135,7 +136,7 @@ export function HomeComposer() {
           else await a.newThread(start, a.composerAccess, '')
           setPicked(null)
         }
-        a.setComposerDraft(EMPTY_DRAFT)
+        a.setComposerDraft(EMPTY_DRAFT, sentFrom)
       } finally {
         sending.current = false
       }

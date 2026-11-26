@@ -137,7 +137,7 @@ type OrchestratorActions = {
   noteToIssue(id: string): Promise<void>
   noteToSession(id: string): Promise<void>
   nextAttention(): void
-  setComposerDraft(draft: ComposerDraft): void
+  setComposerDraft(draft: ComposerDraft, project?: string): void
   threadDraft(id: string): ThreadDraft
   setThreadDraft(id: string, draft: ComposerDraft): void
   setDraftsSeen(id: string, seq: number): void
@@ -760,7 +760,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const addSession = useCallback(
     (created: Session, background = false) => {
       setSessions((list) => (list.some((s) => s.id === created.id) ? list.map((s) => (s.id === created.id ? created : s)) : [...list, created]))
-      if (!background) {
+      if (!background && created.project === projectRef.current?.key) {
         selectId(created.id)
         focus('thread')
       }
@@ -1058,9 +1058,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         const at = urgent.findIndex((s) => s.id === selected?.id)
         selectSession(urgent[(at + 1) % urgent.length].id)
       },
-      setComposerDraft(draft) {
-        setComposerDraftState(draft)
-        if (projectRef.current) writeStored(draftKey(projectRef.current.name), saveDraft(draft))
+      setComposerDraft(draft, project = projectRef.current?.name) {
+        if (!project) return
+        if (project === projectRef.current?.name) setComposerDraftState(draft)
+        writeStored(draftKey(project), saveDraft(draft))
       },
       threadDraft(id) {
         return { draft: readDraft(readStored<unknown>(threadDraftKey(id), '')), seen: readStored(draftSeenKey(id), 0) }
