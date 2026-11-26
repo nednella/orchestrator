@@ -1,10 +1,8 @@
-import type { CSSProperties } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { useThreadAgents } from '../chatAgents'
 import { useLayout } from '../LayoutContext'
 import { viewedAgent } from '../navHistory'
-
-const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
+import { ThreadBreadcrumb } from './ThreadBreadcrumb'
 
 type TitleBreadcrumbProps = { showsThread: boolean }
 
@@ -35,46 +33,16 @@ export function TitleBreadcrumb({ showsThread }: TitleBreadcrumbProps) {
   }
 
   const owner = projects.find((p) => p.key === thread.project)?.name ?? thread.project
+  // Above a subagent's view is its thread; above a thread, the thread that delegated to it. A grandchild shows only its
+  // own parent.
+  const above = agent ? thread : parent
   return (
-    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-body">
-      <button
-        className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink"
-        style={noDrag}
-        title={`Show ${owner} home`}
-        onClick={() => showHome(thread.project)}
-      >
-        {owner}
-      </button>
-      <span className="flex-none text-dim" aria-hidden="true">
-        /
-      </span>
-      {parent && (
-        <>
-          <button className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink" style={noDrag} title={`Open ${parent.title}`} onClick={() => select(parent.id)}>
-            {parent.title}
-          </button>
-          <span className="flex-none text-dim" aria-hidden="true">
-            /
-          </span>
-        </>
-      )}
-      {agent ? (
-        <>
-          <button className="max-w-[12rem] min-w-8 shrink truncate rounded-sm text-soft hover:text-ink" style={noDrag} title={`Open ${thread.title}`} onClick={() => select(thread.id)}>
-            {thread.title}
-          </button>
-          <span className="flex-none text-dim" aria-hidden="true">
-            /
-          </span>
-          <span className="min-w-0 truncate" aria-current="page" title={agent.description}>
-            {agent.description}
-          </span>
-        </>
-      ) : (
-        <span className="min-w-0 truncate" aria-current="page" title={thread.title}>
-          {thread.title}
-        </span>
-      )}
-    </nav>
+    <ThreadBreadcrumb
+      project={owner}
+      onShowProject={() => showHome(thread.project)}
+      parent={above ? above.title : null}
+      onOpenParent={() => above && select(above.id)}
+      title={agent ? agent.description : thread.title}
+    />
   )
 }

@@ -55,6 +55,8 @@ export type TimelineItem =
   | ChildItem
   | { kind: 'forkedFrom'; key: string; source: string }
   | { kind: 'forked'; key: string; fork: string; title: string }
+  // lineage heads a delegated child's chat with the thread that started it.
+  | { kind: 'lineage'; key: string; parent: string; title: string }
 
 // TurnEnd is how a turn ended that did not finish: stopped by the owner or Claude's exit, or failed.
 export type TurnEnd = 'stopped' | 'failed'

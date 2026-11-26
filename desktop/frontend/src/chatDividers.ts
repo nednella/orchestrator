@@ -37,3 +37,10 @@ export function forkDividers(s: Thread, forks: Fork[], items: TimelineItem[]): T
   out.push(...marks)
   return s.forkOf && !found ? [from, ...out] : out
 }
+
+// lineageDivider is the mark at the top of a delegated child's timeline, with the way back to the thread that started
+// it; null for a thread the owner started, or a child whose parent is gone.
+export function lineageDivider(s: Pick<Session, 'parent'>, parent: Pick<Session, 'id' | 'title'> | undefined): TimelineItem | null {
+  if (!s.parent || !parent) return null
+  return { kind: 'lineage', key: 'lineage', parent: parent.id, title: parent.title }
+}

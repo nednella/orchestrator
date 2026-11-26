@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { forkDividers } from './chatDividers.ts'
+import { forkDividers, lineageDivider } from './chatDividers.ts'
 import type { TimelineItem } from './chatTimeline.ts'
 
 const reply = (uuid: string): TimelineItem => ({ kind: 'reply', key: `reply-${uuid}`, at: 0, id: uuid, uuid, text: uuid, streaming: false })
@@ -49,4 +49,14 @@ test('a fork of a fork shows both its own source mark and the marks of its forks
   const middle = thread('p/b', 'p/a', 'r1')
   const out = forkDividers(middle, [thread('p/c', 'p/b', 'r2')], [user('u1'), reply('r1'), user('u2'), reply('r2')])
   assert.deepEqual(shape(out), ['u1', 'r1', 'from:p/a', 'u2', 'r2', 'forked:p/c'])
+})
+
+test('a delegated child starts with the divider', () => {
+  const lead = { id: 'p/lead', title: 'Fix login redirect' }
+  assert.deepEqual(lineageDivider({ parent: 'p/lead' }, lead), { kind: 'lineage', key: 'lineage', parent: 'p/lead', title: 'Fix login redirect' })
+  assert.equal(lineageDivider({ parent: 'p/gone' }, undefined), null, 'a child whose parent is gone has no way back')
+})
+
+test('a top-level thread has none', () => {
+  assert.equal(lineageDivider({ parent: '' }, undefined), null)
 })

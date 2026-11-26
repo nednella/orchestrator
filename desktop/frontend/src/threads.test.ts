@@ -128,6 +128,14 @@ test('children are not in the sidebar', () => {
   assert.equal(isTopLevel(sessions[1], byId), false)
 })
 
+test('the sidebar selects the root of an open child', () => {
+  const sessions = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child'), thread('other', 'idle')]
+  const top = threadTreeOf(sessions).top
+  assert.equal(top.get('grandchild')?.id, 'lead')
+  assert.equal(top.get('child')?.id, 'lead')
+  assert.equal(top.get('other')?.id, 'other')
+})
+
 test('a lost child shows', () => {
   const sessions = [thread('lead', 'idle'), thread('orphan', 'working', 0, 'deleted-lead')]
   assert.equal(isTopLevel(sessions[1], new Map(sessions.map((s) => [s.id, s]))), true)

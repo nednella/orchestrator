@@ -5,7 +5,7 @@ import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
-import { forkDividers, forksKey } from '../chatDividers'
+import { forkDividers, forksKey, lineageDivider } from '../chatDividers'
 import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
@@ -41,8 +41,13 @@ export function ChatView({ session }: ChatViewProps) {
   const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
   const forks = useAgentosSelector((s) => forksKey(session.id, s.sessions))
-  const { id: threadId, forkOf, forkAt } = session
-  const shown = useMemo(() => forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items), [threadId, forkOf, forkAt, forks, timeline.items])
+  const { id: threadId, forkOf, forkAt, parent } = session
+  const parentTitle = useAgentosSelector((s) => (parent ? s.sessions.find((x) => x.id === parent)?.title : undefined))
+  const shown = useMemo(() => {
+    const items = forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items)
+    const lineage = lineageDivider({ parent }, parentTitle === undefined ? undefined : { id: parent, title: parentTitle })
+    return lineage ? [lineage, ...items] : items
+  }, [threadId, forkOf, forkAt, forks, timeline.items, parent, parentTitle])
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)

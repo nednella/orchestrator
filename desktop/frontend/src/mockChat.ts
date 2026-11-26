@@ -548,6 +548,20 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     turns.forEach((e) => append(id, e))
   }
 
+  // task fills a delegated child's log with its task, as its first message, and its first reply, with the turn still
+  // open.
+  function task(id: string, text: string) {
+    const at = Date.now() - 9 * minute
+    const turns: Draft[] = [
+      { kind: 'start', at },
+      { kind: 'commands', input: commands, at },
+      { kind: 'user', id: 'u-1', text, at },
+      { kind: 'init', id: 'mock-session', at },
+      { kind: 'message', id: 'msg_1', uuid: 'r-1', text: 'I will run the checkout tests one at a time until one fails.', at: at + 20_000 },
+    ]
+    turns.forEach((e) => append(id, e))
+  }
+
   // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts and queued
   // messages left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
   // or the block is from before the last compaction.
@@ -823,5 +837,5 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   // mode logs Claude's new permission mode, as the host does once Claude changes it.
   const mode = (id: string, text: string) => append(id, { kind: 'mode', text })
 
-  return { backend, seed, ask, delegations, fork, forget, end, start, busy, turnRuns, mode, breakLog, mediaURL }
+  return { backend, seed, ask, delegations, task, fork, forget, end, start, busy, turnRuns, mode, breakLog, mediaURL }
 }

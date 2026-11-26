@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
+import { useAgentos } from '../AgentosContext'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
 import { ANCHOR_SLACK, followScroll, keepScroll, keptScroll, stillFollows } from '../chatScroll'
@@ -10,6 +11,7 @@ import { ChatAgentRow } from './ChatAgentRow'
 import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatChildCard } from './ChatChildCard'
 import { ChatForkDivider } from './ChatForkDivider'
+import { ChatLineageDivider } from './ChatLineageDivider'
 import { ChatMessageActions } from './ChatMessageActions'
 import { ChatMinimap } from './ChatMinimap'
 import { ChatNotice } from './ChatNotice'
@@ -46,7 +48,7 @@ type ChatTimelineProps = {
 
 // rowOf gives each row only the plain values it shows, so that a memoised row renders again only when they change:
 // the timeline is built anew on every streamed delta, and only the streaming reply's text is new.
-function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void, edit?: ChatEdit) {
+function rowOf(items: TimelineItem[], index: number, thread: string, folder: string, onReply: (text: string) => void, onFork: (at: string, draft: string) => Promise<void>, onOpenImage: (url: string) => void, onOpenThread: (id: string) => void, edit?: ChatEdit) {
   const item = items[index]
   switch (item.kind) {
     case 'user':
@@ -110,6 +112,8 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatForkDivider thread={item.source} label="Forked from conversation" hint="Open source conversation" />
     case 'forked':
       return <ChatForkDivider thread={item.fork} label={`Conversation forked · ${item.title}`} hint="Open fork" />
+    case 'lineage':
+      return <ChatLineageDivider parent={item.title} onOpenParent={() => onOpenThread(item.parent)} />
     case 'childResult': {
       const title = items.find((i): i is ChildItem => i.kind === 'child' && i.child === item.child)?.title ?? 'Child thread'
       return <ChatChildCard id={item.child} title={title} result={item.text} />
@@ -122,6 +126,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
 const headsSteps = (items: TimelineItem[], index: number) => items[index].kind === 'working' && items[index + 1]?.kind === 'work'
 
 export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork, edit }: ChatTimelineProps) {
+  const { select } = useAgentos('select')
   const scroller = useRef<HTMLDivElement>(null)
   const lane = useRef<HTMLDivElement>(null)
   const [kept] = useState(() => keptScroll(id))
@@ -208,7 +213,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
         <div ref={lane} className="chat-column relative" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
             <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className={`absolute top-0 left-0 w-full ${headsSteps(items, row.index) ? '' : 'pb-5'}`} style={{ transform: `translateY(${row.start}px)` }}>
-              {rowOf(items, row.index, id, folder, onReply, onFork, setViewing, edit)}
+              {rowOf(items, row.index, id, folder, onReply, onFork, setViewing, select, edit)}
             </div>
           ))}
         </div>

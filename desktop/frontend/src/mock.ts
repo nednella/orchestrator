@@ -562,7 +562,8 @@ export function createMock(params: URLSearchParams) {
     }
     const notesCheck = seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read')
     notesCheck.parent = lead.id
-    // With lineage, the finder delegates in turn, for a family three deep.
+    // With lineage, the finder has its task in its chat, and delegates in turn, for a family three deep.
+    if (flags.lineage && flags.childAsk === null) chats.task(finder.id, 'Find which checkout test fails now and then, and why.')
     if (flags.lineage) seed('Run the checkout test 50 times', 0, 'working', [['working', 3]], data[0], 'read').parent = finder.id
     const sender = byIssue(444)
     chats.delegations(
