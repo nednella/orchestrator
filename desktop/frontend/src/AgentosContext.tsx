@@ -4,8 +4,8 @@ import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
 import { shellsOf } from './shells'
-import { back, current, forward, goneAgent, NO_HISTORY, prune, push, stepTo, threadOf } from './navHistory'
-import type { History, View } from './navHistory'
+import { back, current, forward, goneAgent, goneFrom, NO_HISTORY, projectOf, prune, push, stepTo, threadOf } from './navHistory'
+import type { History, Known, View } from './navHistory'
 import { forgetPanel } from './panelStore'
 import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
@@ -250,14 +250,8 @@ function forgetThread(id: string) {
 // viewOf is the view that shows the thread, or with none the project's home.
 const viewOf = (id: string | null, project: string): View => (id ? { kind: 'thread', id } : { kind: 'home', project })
 
-// projectOf is the project the view is in, undefined when its thread is gone.
-const projectOf = (view: View, sessions: Session[]) => (view.kind === 'home' ? view.project : sessions.find((s) => s.id === threadOf(view))?.project)
-
-// liveIn is whether a view's thread and project are still among sessions and projects.
-const liveIn = (sessions: Session[], projects: Project[]) => (view: View) => {
-  const key = projectOf(view, sessions)
-  return projects.some((p) => p.key === key)
-}
+// shownIn is whether Back or Forward can show the view now: its project and its thread are among projects and sessions.
+const shownIn = (sessions: Session[], projects: Project[]) => (view: View) => projects.some((p) => p.key === projectOf(view)) && (view.kind === 'home' || sessions.some((s) => s.id === threadOf(view)))
 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -316,6 +310,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const selectedRef = useRef(selectedId)
   const historyRef = useRef(viewHistory)
   const quiet = useRef(false)
+  // Whether the project list is read, and the projects whose thread lists are read, so history forgets only views
+  // known to be gone. A step through history counts the owner's moves, so one made while it waits on a project wins.
+  const projectsRead = useRef(false)
+  const threadsRead = useRef(new Set<string>())
+  const moves = useRef(0)
   const projectRef = useRef(project)
   const lastSelected = useRef(new Map<string, string>())
   const toastKey = useRef(0)
@@ -343,13 +342,25 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const remember = useCallback(
     (view: View) => {
-      if (!quiet.current) moveHistory(push(historyRef.current, view))
+      if (quiet.current) return
+      const next = push(historyRef.current, view)
+      if (next === historyRef.current) return
+      moves.current++
+      moveHistory(next)
     },
     [moveHistory],
   )
 
-  // forgetGone drops from history the views whose thread or project is no longer among sessions and projects.
-  const forgetGone = useCallback((sessions: Session[], projects: Project[]) => moveHistory(prune(historyRef.current, liveIn(sessions, projects))), [moveHistory])
+  // forgetGone drops from history the views whose project, or whose thread in a project whose threads are read, is not
+  // among projects and sessions.
+  const forgetGone = useCallback(
+    (sessions: Session[], projects: Project[]) => {
+      const threads = new Map([...threadsRead.current].map((key) => [key, new Set(sessions.filter((s) => s.project === key).map((s) => s.id))]))
+      const known: Known = { projects: projectsRead.current ? new Set(projects.map((p) => p.key)) : null, threads }
+      moveHistory(prune(historyRef.current, (view) => !goneFrom(known, view)))
+    },
+    [moveHistory],
+  )
 
   // quietly makes the selections in run without adding them to history.
   const quietly = useCallback((run: () => void) => {
@@ -441,6 +452,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
       const all = [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items]
       if (projectKey === projectRef.current?.key) selectAmong(items, all)
+      threadsRead.current.add(projectKey)
       forgetGone(all, projectsRef.current)
     },
     [selectAmong, forgetGone],
@@ -497,6 +509,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
       quietly(() => selectAmong(snap.sessions.filter((s) => s.project === snap.project.key), snap.sessions, homeUnlessRemembered))
       if (record) remember(viewOf(selectedRef.current, snap.project.key))
+      // The snapshot holds the threads of every project.
+      projectsRead.current = true
+      snap.projects.forEach((p) => threadsRead.current.add(p.key))
       forgetGone(snap.sessions, snap.projects)
       report(() => loadIssues(false))
     },
@@ -649,6 +664,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     () =>
       on('projects', (list) => {
         setProjects((prev) => keepUnchanged(prev, list, (p) => p.name))
+        projectsRead.current = true
         forgetGone(sessionsRef.current, list)
         setProject((p) => {
           const next = list.find((x) => x.name === p?.name)
@@ -767,12 +783,16 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const goThrough = useCallback(
     (step: (h: History) => History) => {
       const from = historyRef.current
-      const to = stepTo(from, step, liveIn(sessionsRef.current, projectsRef.current))
+      const to = stepTo(from, step, shownIn(sessionsRef.current, projectsRef.current))
       if (to === from) return
       const view = current(to)!
-      const owner = projectsRef.current.find((p) => p.key === projectOf(view, sessionsRef.current))!
+      const owner = projectsRef.current.find((p) => p.key === projectOf(view))!
+      const move = ++moves.current
+      // Entering the project can prune the history, so the step lands on the view's entry in the history as it is then.
       const show = () => {
-        moveHistory(to)
+        const at = historyRef.current.views.indexOf(view)
+        if (at < 0) return
+        moveHistory({ ...historyRef.current, at })
         quietly(() => {
           if (view.kind === 'home') {
             detached.current = true
@@ -786,7 +806,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       if (owner.key === projectRef.current?.key) return show()
       report(async () => {
         await enterFrom(api.switchProject(owner.name), false, false)
-        if (current(historyRef.current) === current(from) && projectRef.current?.key === owner.key) show()
+        if (moves.current === move && projectRef.current?.key === owner.key) show()
       })
     },
     [moveHistory, quietly, selectId, focus, report, enterFrom],
@@ -1094,7 +1114,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
-  const live = liveIn(sessions, projects)
+  const live = shownIn(sessions, projects)
   const canGoBack = stepTo(viewHistory, back, live) !== viewHistory
   const canGoForward = stepTo(viewHistory, forward, live) !== viewHistory
 

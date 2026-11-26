@@ -55,6 +55,22 @@ export function prune(h: History, live: (view: View) => boolean): History {
 // threadOf is the thread the view shows, '' for a home.
 export const threadOf = (view: View): string => (view.kind === 'thread' ? view.id : view.kind === 'agent' ? view.thread : '')
 
+// projectOf is the key of the project the view is in; a thread's id starts with its project's key.
+export const projectOf = (view: View): string => (view.kind === 'home' ? view.project : threadOf(view).slice(0, threadOf(view).indexOf('/')))
+
+// Known is what the app has read: the keys of the projects, null until their list is read, and the threads of each
+// project whose thread list is read, by project key.
+export type Known = { projects: Set<string> | null; threads: Map<string, Set<string>> }
+
+// goneFrom is whether the view's project or thread is known to be gone. A view of a project whose list is not read yet
+// is kept, so a project that has not loaded loses none of its views.
+export function goneFrom(known: Known, view: View): boolean {
+  const project = projectOf(view)
+  if (known.projects && !known.projects.has(project)) return true
+  const threads = known.threads.get(project)
+  return view.kind !== 'home' && threads !== undefined && !threads.has(threadOf(view))
+}
+
 // viewedAgent is the subagent whose view shows in place of the thread's chat, null while the thread shows its chat or is
 // not on screen.
 export function viewedAgent(h: History, thread: string): string | null {

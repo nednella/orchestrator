@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { back, closeAgent, current, forward, goneAgent, NO_HISTORY, prune, push, stepTo, viewedAgent } from './navHistory.ts'
+import { back, closeAgent, current, forward, goneAgent, goneFrom, NO_HISTORY, prune, push, stepTo, viewedAgent } from './navHistory.ts'
 import type { History, View } from './navHistory.ts'
 
 const home: View = { kind: 'home', project: 'p' }
@@ -63,6 +63,16 @@ test('gone views leave history and take no room', () => {
   assert.deepEqual(prune(of(thread('p/gone')), alive('p/gone')), NO_HISTORY)
   const full = of(...Array.from({ length: 50 }, (_, i) => thread(i % 2 ? 'p/gone' : `p/${i}`)))
   assert.equal(push(prune(full, alive('p/gone')), thread('p/new')).views.length, 26, 'the gone half no longer counts')
+})
+
+test('a view of a project not loaded survives a prune', () => {
+  const h = of({ kind: 'home', project: 'q' }, thread('q/x'), agent('q/x', 'a1'), thread('p/a'), thread('p/gone'))
+  const unread = { projects: null, threads: new Map([['p', new Set(['p/a'])]]) }
+  assert.deepEqual(prune(h, (v) => !goneFrom(unread, v)).views, h.views.slice(0, 4), "q's threads are not read yet, so its views stay")
+  const read = { projects: new Set(['p', 'q']), threads: new Map([['p', new Set(['p/a'])]]) }
+  assert.equal(prune(h, (v) => !goneFrom(read, v)).views.length, 4, 'a project whose threads are not read keeps its views')
+  const removed = { projects: new Set(['p']), threads: new Map([['p', new Set(['p/a'])]]) }
+  assert.deepEqual(prune(h, (v) => !goneFrom(removed, v)).views, [thread('p/a')], 'a project gone from the read list takes its views')
 })
 
 const viewing = of(thread('p/a'), agent('p/a', 'a1'))
