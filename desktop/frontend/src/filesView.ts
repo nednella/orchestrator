@@ -68,3 +68,11 @@ export function onPicked(listener: () => void) {
     listeners.delete(listener)
   }
 }
+
+// imageTarget is the path of the image a markdown file at from names by src, without its #fragment or ?query: a relative
+// path, from the file's folder. A web address, any other scheme and an absolute path give null.
+export function imageTarget(from: string, src: string): string | null {
+  if (SCHEME.test(src) || src.startsWith('/')) return null
+  const path = decoded(src.replace(/[?#].*$/, ''))
+  return path === null || path === '' ? null : linkTarget(from, path)
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { linkTarget, planPath } from './filesView.ts'
+import { imageTarget, linkTarget, planPath } from './filesView.ts'
 
 test('a relative markdown link is a file', () => {
   assert.equal(planPath('docs/plan.md'), 'docs/plan.md')
@@ -34,4 +34,17 @@ test('a link in a file points from its folder', () => {
   assert.equal(linkTarget('README.md', '../../x.md'), '../../x.md', 'past the top stays')
   assert.equal(linkTarget('', 'docs/plan.md'), 'docs/plan.md', 'from the chat')
   assert.equal(linkTarget('docs/config.md', '/tmp/plan.md'), '/tmp/plan.md')
+})
+
+test('an image of a markdown file is a path in its folder', () => {
+  assert.equal(imageTarget('docs/guide.md', 'logo.svg'), 'docs/logo.svg')
+  assert.equal(imageTarget('docs/guide.md', '../assets/my%20logo.png?raw=1#x'), 'assets/my logo.png')
+  assert.equal(imageTarget('README.md', './assets/logo.svg'), 'assets/logo.svg')
+  assert.equal(imageTarget('README.md', '../../out.png'), '../../out.png', 'past the top stays, for the app to refuse')
+})
+
+test('a web, data or absolute image is not one', () => {
+  for (const src of ['https://example.com/a.png', 'http://example.com/a.png', '//example.com/a.png', 'data:image/png;base64,AAAA', 'file:///tmp/a.png', '/tmp/a.png', '', '#x']) {
+    assert.equal(imageTarget('README.md', src), null, src)
+  }
 })

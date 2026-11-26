@@ -4,9 +4,9 @@ import { useColorScheme } from '../useColorScheme'
 
 type FileCodeViewProps = { path: string; text: string; wrap: boolean }
 
-const THEMES = { dark: 'pierre-dark', light: 'pierre-light' } as const
+export const CODE_THEMES = { dark: 'pierre-dark', light: 'pierre-light' } as const
 
-const LOOK = {
+export const CODE_LOOK = {
   '--diffs-bg': 'transparent',
   '--diffs-fg': 'var(--text)',
   '--diffs-fg-number': 'var(--text-dim)',
@@ -23,8 +23,8 @@ export function FileCodeView({ path, text, wrap }: FileCodeViewProps) {
     <Virtualizer className="file-code min-h-0 flex-1 overflow-auto" contentClassName="min-w-0">
       <File
         file={{ name: path, contents: text, cacheKey: `${path}:${text.length}` }}
-        options={{ theme: THEMES, themeType: scheme, disableFileHeader: true, overflow: wrap ? 'wrap' : 'scroll' }}
-        style={LOOK}
+        options={{ theme: CODE_THEMES, themeType: scheme, disableFileHeader: true, overflow: wrap ? 'wrap' : 'scroll' }}
+        style={CODE_LOOK}
       />
     </Virtualizer>
   )
