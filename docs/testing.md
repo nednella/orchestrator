@@ -39,14 +39,15 @@ Each `desktop/<pkg>` service has its tests beside it. They build the whole app t
 
 ## The real front end, in a browser
 
-`ORCHESTRATOR_HTTP` serves the embedded front end over HTTP with a shim for `window.go` and `window.runtime`: `POST /__call/<pkg>.Service/<Method>` with a JSON array of arguments and the header `X-Orchestrator: 1`, and server-sent events at `/__events`. The server answers only requests addressed to its own listen address (`127.0.0.1:PORT`, not `localhost`) and refuses a foreign `Origin` with 403.
+`ORCHESTRATOR_HTTP` serves the embedded front end over HTTP with a shim for `window.go` and `window.runtime`: `POST /__call/<pkg>.Service/<Method>` with a JSON array of arguments and the header `X-Orchestrator: 1`, and server-sent events at `/__events`. The address must be a loopback one (`127.0.0.1:PORT`, `[::1]:PORT` or `localhost:PORT`); any other is refused at start. The server answers only requests addressed to its own listen address and refuses a foreign `Origin` with 403. Each run makes a random token and prints it once on stderr, as the address to open (`http://127.0.0.1:PORT/?k=<token>`). `/__call/`, `/__events` and `/term/` answer 403 without it, in the header `X-Orchestrator-Token` or the query value `k`; the page reads it from its address and the shim sends it. A thread that opens the plain address in its own browser gets a page that cannot call anything.
 
 ```sh
 make -o desktop-frontend desktop-app          # or: make desktop-app (rebuilds the front end)
 cp bin/orchestrator-dev.app/Contents/MacOS/orchestrator $S/orchestrator   # a bare copy: it is never the .app, so nothing opens a second app
-(cd / && ORCHESTRATOR_HTTP=127.0.0.1:18772 $S/orchestrator) &
+(cd / && ORCHESTRATOR_HTTP=127.0.0.1:18772 $S/orchestrator 2> $S/app.log) &
 APP=$!
-curl -s -XPOST -H 'X-Orchestrator: 1' 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
+sleep 2; K=$(sed -n 's/.*[?]k=\([0-9a-f]*\).*/\1/p' $S/app.log | head -1)
+curl -s -XPOST -H 'X-Orchestrator: 1' -H "X-Orchestrator-Token: $K" 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
 ```
 
 A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with `kill $APP` (SIGTERM) so it stops its browsers, and never by name. Use a port of your own, from 18000 to 18999.
@@ -63,7 +64,7 @@ Claude signs in through its own config folder, so a check with a real Claude wri
 
 ```sh
 sed -e 's/const port = 9333/const port = 9411/' -e "s/orchestrator-cdp-profile/orchestrator-cdp-profile-9411/" scripts/cdp.mjs > $S/cdp.mjs
-node $S/cdp.mjs http://127.0.0.1:18772/ 1400 900 \
+ORCHESTRATOR_HTTP_TOKEN=$K node $S/cdp.mjs http://127.0.0.1:18772/ 1400 900 \
   '[{"wait":1500},{"eval":"document.title"},{"click":[700,400]},{"wait":300},{"shot":"aos-shot.png"}]'
 ```
 

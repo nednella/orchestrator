@@ -4,18 +4,26 @@ package devhttp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/nednella/orchestrator/desktop/internal/media"
-	"github.com/nednella/orchestrator/desktop/terminal"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/netip"
+	"os"
 	"path"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/nednella/orchestrator/desktop/internal/media"
+	"github.com/nednella/orchestrator/desktop/terminal"
 )
 
 // devShim gives a plain browser the same window.go / window.runtime the Wails
@@ -23,8 +31,16 @@ import (
 const devShim = `
 const listeners = {}
 const proxy = (get) => new Proxy({}, { get: (_, name) => get(name) })
+const token = new URLSearchParams(location.search).get('k') ?? sessionStorage.getItem('orchestrator-token') ?? ''
+sessionStorage.setItem('orchestrator-token', token)
+const plainFetch = window.fetch.bind(window)
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input.url
+  if (!url.startsWith('/term/')) return plainFetch(input, init)
+  return plainFetch(input, { ...init, headers: { ...init?.headers, '` + tokenHeader + `': token } })
+}
 window.go = proxy((pkg) => proxy((type) => proxy((method) => async (...args) => {
-  const res = await fetch('/__call/' + pkg + '.' + type + '/' + method, { method: 'POST', headers: { 'X-Orchestrator': '1' }, body: JSON.stringify(args) })
+  const res = await fetch('/__call/' + pkg + '.' + type + '/' + method, { method: 'POST', headers: { 'X-Orchestrator': '1', '` + tokenHeader + `': token }, body: JSON.stringify(args) })
   const text = await res.text()
   if (!res.ok) throw text.trimEnd()
   return text ? JSON.parse(text) : undefined
@@ -33,7 +49,7 @@ window.runtime = { EventsOn: (name, handler) => {
   (listeners[name] ??= []).push(handler)
   return () => { listeners[name] = listeners[name].filter((h) => h !== handler) }
 } }
-new EventSource('/__events').onmessage = (e) => {
+new EventSource('/__events?k=' + encodeURIComponent(token)).onmessage = (e) => {
   const { event, payload } = JSON.parse(e.data)
   for (const handler of listeners[event] ?? []) handler(payload)
 }
@@ -146,11 +162,63 @@ type Options struct {
 	Hub      *Hub
 	Assets   fs.FS
 	Handler  http.Handler // serves /media/ and /term/
-	Addr     string
+	Addr     string       // a loopback address
+	Token    string       // what /__call/, /__events and /term/ require; Serve makes one when it is empty
+}
+
+// tokenHeader carries the run's token on a call and a terminal read; an event stream cannot set a header, so it takes
+// the token as the query value k.
+const tokenHeader = "X-Orchestrator-Token"
+
+// loopback refuses a listen address that is not on this machine alone: the check mode has no other protection than
+// its token, which would then cross the network.
+func loopback(addr string) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("the address %q is not host:port: %w", addr, err)
+	}
+	if host == "localhost" {
+		return nil
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil || !ip.IsLoopback() {
+		return fmt.Errorf("the address %q is not a loopback address, so the app would answer other machines", addr)
+	}
+	return nil
+}
+
+func newToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("making the token: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// withToken refuses a request that lacks the run's token, in the header or the query value k.
+func withToken(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := cmp.Or(r.Header.Get(tokenHeader), r.URL.Query().Get("k"))
+		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+			http.Error(w, "missing or wrong token", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Serve runs the app in a browser.
 func Serve(o Options) error {
+	if err := loopback(o.Addr); err != nil {
+		return err
+	}
+	if o.Token == "" {
+		token, err := newToken()
+		if err != nil {
+			return err
+		}
+		o.Token = token
+	}
 	if err := o.Start(context.Background()); err != nil {
 		return err
 	}
@@ -168,10 +236,10 @@ func Serve(o Options) error {
 		w.Header().Set("Content-Type", "text/javascript")
 		io.WriteString(w, devShim)
 	})
-	mux.HandleFunc("/__events", o.Hub.serve)
+	mux.Handle("/__events", withToken(o.Token, http.HandlerFunc(o.Hub.serve)))
 	mux.Handle(media.Prefix, o.Handler)
-	mux.Handle(terminal.Prefix, o.Handler) // the terminal handler checks the shim's header itself
-	mux.Handle("/__call/", fromShim(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle(terminal.Prefix, withToken(o.Token, o.Handler)) // the terminal handler checks the shim's header itself
+	mux.Handle("/__call/", withToken(o.Token, fromShim(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -186,7 +254,7 @@ func Serve(o Options) error {
 		if result != nil {
 			json.NewEncoder(w).Encode(result)
 		}
-	})))
+	}))))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 			w.Header().Set("Content-Type", "text/html")
@@ -196,6 +264,7 @@ func Serve(o Options) error {
 		files.ServeHTTP(w, r)
 	})
 	fmt.Println("orchestrator: serving on http://" + o.Addr)
+	fmt.Fprintf(os.Stderr, "orchestrator: open http://%s/?k=%s (or set ORCHESTRATOR_HTTP_TOKEN=%s for scripts/cdp.mjs)\n", o.Addr, o.Token, o.Token)
 	return http.ListenAndServe(o.Addr, sameOrigin(o.Addr, mux))
 }
 

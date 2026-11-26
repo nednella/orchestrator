@@ -168,5 +168,5 @@ A Read thread runs every tool but `show` and `track` without asking; for those t
 | `ORCHESTRATOR_DIR` | the project folder to start in, instead of the current folder |
 | `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` | the tmux socket, the state folder, and one folder in place of both data folders; for tests |
 | `ORCHESTRATOR_BROWSER_HEADLESS` | `1` starts the browser with no windows; for tests |
-| `ORCHESTRATOR_HTTP` | `127.0.0.1:PORT` serves the real front end over HTTP instead of opening the window; for checks, see `docs/testing.md` |
+| `ORCHESTRATOR_HTTP` | `127.0.0.1:PORT` serves the real front end over HTTP instead of opening the window, on a loopback address only and behind a token printed at start; for checks, see `docs/testing.md` |
 | `ORCHESTRATOR_SESSION`, `ORCHESTRATOR_CONTROL`, `ORCHESTRATOR_MCP_TOKEN`, `ORCHESTRATOR_PROJECT` | set by the app, never by you: a thread's processes get the first two (its id and the control socket's path), its tools' server also gets the token that names the thread, and a shell gets `ORCHESTRATOR_PROJECT`. Tests unset them, since a thread of a running app has them |

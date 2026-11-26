@@ -111,6 +111,8 @@ func TestEventHubReachesEveryTab(t *testing.T) {
 	}
 }
 
+const testToken = "test-token"
+
 // serve runs a new app in browser mode and returns the harness and the address it serves on.
 func serve(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
@@ -124,7 +126,7 @@ func serve(t *testing.T) (*apptest.Harness, string) {
 	assets := fstest.MapFS{"index.html": {Data: []byte("<!doctype html><html><head></head><body>stub</body></html>")}}
 	addr := "127.0.0.1:" + freePort(t)
 	go func() {
-		_ = Serve(Options{Services: a.Services(), Start: a.Start, Stop: a.Stop, Hub: hub, Assets: assets, Handler: a.Assets(), Addr: addr})
+		_ = Serve(Options{Services: a.Services(), Start: a.Start, Stop: a.Stop, Hub: hub, Assets: assets, Handler: a.Assets(), Addr: addr, Token: testToken})
 	}()
 	base := "http://" + addr
 	eventually(t, "the server", func() bool {
@@ -181,6 +183,8 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 		{"a null origin", map[string]string{"Origin": "null"}, "", http.StatusForbidden},
 		{"a foreign host name", nil, "evil.example", http.StatusForbidden},
 		{"no marker header", map[string]string{callHeader: ""}, "", http.StatusForbidden},
+		{"no token", map[string]string{tokenHeader: ""}, "", http.StatusForbidden},
+		{"a wrong token", map[string]string{tokenHeader: "guess"}, "", http.StatusForbidden},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, err := post(base+"/__call/projects.Service/Snapshot", tt.headers, withHost(tt.host))
@@ -218,6 +222,8 @@ func TestTermStreamNeedsTheAppHeader(t *testing.T) {
 		want    int
 	}{
 		{"no marker header", map[string]string{callHeader: ""}, http.StatusForbidden},
+		{"no token", map[string]string{tokenHeader: ""}, http.StatusForbidden},
+		{"a wrong token", map[string]string{tokenHeader: "guess"}, http.StatusForbidden},
 		{"another origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
 		{"the shim's read", map[string]string{"Origin": base}, http.StatusOK},
 	} {
@@ -229,6 +235,7 @@ func TestTermStreamNeedsTheAppHeader(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Header.Set(callHeader, "1")
+			req.Header.Set(tokenHeader, testToken)
 			for k, v := range tt.headers {
 				if v == "" {
 					req.Header.Del(k)
@@ -265,6 +272,7 @@ func callJSON(t *testing.T, base, method, args string, out any) {
 		t.Fatal(err)
 	}
 	req.Header.Set(callHeader, "1")
+	req.Header.Set(tokenHeader, testToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -296,6 +304,7 @@ func post(url string, headers map[string]string, edits ...func(*http.Request)) (
 		return nil, err
 	}
 	req.Header.Set(callHeader, "1")
+	req.Header.Set(tokenHeader, testToken)
 	for k, v := range headers {
 		if v == "" {
 			req.Header.Del(k)
@@ -327,3 +336,66 @@ func freePort(t *testing.T) string {
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 
 func eventually(t *testing.T, what string, cond func() bool) { apptest.Eventually(t, what, cond) }
+
+func TestEventStreamNeedsTheToken(t *testing.T) {
+	_, base := serve(t)
+	for _, tt := range []struct {
+		name, query string
+		want        int
+	}{
+		{"no token", "", http.StatusForbidden},
+		{"a wrong token", "?k=guess", http.StatusForbidden},
+		{"the token", "?k=" + testToken, http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, "GET", base+"/__events"+tt.query, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Errorf("status %d, want %d", resp.StatusCode, tt.want)
+			}
+		})
+	}
+}
+
+func TestShimSendsTheToken(t *testing.T) {
+	_, base := serve(t)
+	resp, err := http.Get(base + "/__shim.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shim, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	for _, want := range []string{"'" + tokenHeader + "': token", "/__events?k=", "startsWith('/term/')"} {
+		if !strings.Contains(string(shim), want) {
+			t.Errorf("the shim lacks %q", want)
+		}
+	}
+}
+
+func TestServeRefusesAnAddressThatIsNotLoopback(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:34000", ":34000", "192.168.1.5:34000", "example.com:34000", "[::]:34000", "34000"} {
+		t.Run(addr, func(t *testing.T) {
+			err := Serve(Options{Addr: addr, Start: func(context.Context) error {
+				t.Error("the app started on an address it refuses")
+				return nil
+			}})
+			if err == nil {
+				t.Fatal("Serve took the address")
+			}
+		})
+	}
+	for _, addr := range []string{"127.0.0.1:34000", "[::1]:34000", "localhost:34000"} {
+		if err := loopback(addr); err != nil {
+			t.Errorf("loopback(%q) = %v", addr, err)
+		}
+	}
+}

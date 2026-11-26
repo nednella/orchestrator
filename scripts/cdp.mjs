@@ -6,7 +6,10 @@ import { spawn } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-const [url, w, h, stepsJson] = process.argv.slice(2)
+const [target_url, w, h, stepsJson] = process.argv.slice(2)
+// The app served over ORCHESTRATOR_HTTP prints its token at start; the page needs it in the address (?k=).
+const token = process.env.ORCHESTRATOR_HTTP_TOKEN
+const url = token ? `${target_url}${target_url.includes('?') ? '&' : '?'}k=${encodeURIComponent(token)}` : target_url
 const port = 9333
 // Never the owner's browser app: macOS sends a clicked link to any running copy of the default browser, windowless or not.
 const app = 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
