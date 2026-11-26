@@ -502,18 +502,40 @@ func TestLaunchPortReplacesAPortSomethingElseHolds(t *testing.T) {
 func TestBrowserListensOnItsSavedPort(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
-	port := b.Port("p")
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
 		t.Fatal(err)
 	}
+	// A port that is saved is not held, so another browser may take it before this one starts: the start then saves
+	// another, which is the one the browser listens on.
+	port := b.Port("p")
 	resp, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/json/version")
 	if err != nil {
 		t.Fatalf("nothing listens on the saved port %d: %v", port, err)
 	}
 	resp.Body.Close()
-	if b.Port("p") != port {
-		t.Errorf("the port changed from %d to %d once the browser ran", port, b.Port("p"))
+}
+
+func TestBrowserListensOnTheNewPortWhenTheSavedOneIsTaken(t *testing.T) {
+	t.Parallel()
+	b, ctx := newTestBrowsers(t)
+	saved := b.Port("p")
+	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(saved)))
+	if err != nil {
+		t.Skipf("port %d taken before the test could take it: %v", saved, err)
 	}
+	defer l.Close()
+	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
+		t.Fatal(err)
+	}
+	port := b.Port("p")
+	if port == saved {
+		t.Fatalf("the browser took the port %d that something else holds", saved)
+	}
+	resp, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/json/version")
+	if err != nil {
+		t.Fatalf("nothing listens on the port %d the start saved: %v", port, err)
+	}
+	resp.Body.Close()
 }
 
 func TestAgentOpenPrintsThePageWithoutTheLabel(t *testing.T) {
