@@ -60,7 +60,7 @@ type Settings struct {
 	ThreadPlace  string          `json:"threadPlace"`    // where a new thread with no issue starts: worktree or project; "" is unset, a worktree
 	ThreadAccess string          `json:"threadAccess"`   // the access a new thread starts with: read, supervised or full; "" is unset, supervised
 	DataDir      string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
-	DataFixed    bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
+	DataFixed    bool            `json:"dataDirFixed"`   // ORCHESTRATOR_DEV_DATA_DIR sets the folder, so it cannot change here
 	EditorApp    string          `json:"editorApp"`      // the macOS app that opens a thread's folder
 }
 

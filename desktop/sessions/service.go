@@ -19,7 +19,7 @@ func NewService(s *Sessions, ctx func() context.Context) *Service { return &Serv
 
 // NewThread starts a thread in the current project with the access given, read, supervised or full, and sends it the
 // prompt once it is ready. A blank title is the first line of the prompt. A model or effort that is not empty is
-// passed to the agent; a blank access is supervised. place is worktree, a worktree agentos makes on a branch named
+// passed to the agent; a blank access is supervised. place is worktree, a worktree orchestrator makes on a branch named
 // from the title, or project, the project folder; blank is a worktree for a thread that writes and the project folder
 // for a read one.
 func (v *Service) NewThread(title, prompt, model, effort, access, place string) (Session, error) {
@@ -57,11 +57,11 @@ func (v *Service) ShellClose(id string) error { return v.s.CloseShell(id) }
 // SettleThread stops the agent and the servers it started at the owner's word; its row stays, settled.
 func (v *Service) SettleThread(id string) error { return v.s.SettleAsOwner(id) }
 
-// DeleteThread stops the thread when it runs and removes it with its chat. With worktree, the worktree agentos made
+// DeleteThread stops the thread when it runs and removes it with its chat. With worktree, the worktree orchestrator made
 // for it goes too, unless a safety check keeps it, which refuses the delete; the branch always stays.
 func (v *Service) DeleteThread(id string, worktree bool) error { return v.s.Delete(id, worktree) }
 
-// DeletePlan is what DeleteThread of the thread would take with it, for its confirm: how many worktrees agentos made for
+// DeletePlan is what DeleteThread of the thread would take with it, for its confirm: how many worktrees orchestrator made for
 // it and its descendants may go, and whether they must.
 func (v *Service) DeletePlan(id string) DeletePlan { return v.s.DeletePlan(id) }
 
@@ -118,7 +118,7 @@ func (v *Service) Cleanup(id string, force bool) error { return v.s.life.Cleanup
 // Cleanups is the current project's clean-up log, newest first.
 func (v *Service) Cleanups() []Cleanup { return v.s.life.Cleanups(v.s.Current().Key()) }
 
-// Memory is what agentos and its agents held at the last sample.
+// Memory is what orchestrator and its agents held at the last sample.
 func (v *Service) Memory() Memory { return v.s.Memory() }
 
 // OpenInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app; a path

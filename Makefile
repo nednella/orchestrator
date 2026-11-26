@@ -28,7 +28,7 @@ $(AGENT_BROWSER):
 	chmod +x $@.part
 	mv $@.part $@
 
-# bin/agent-browser is the pinned binary for tests: AGENTOS_AGENT_BROWSER=bin/agent-browser.
+# bin/agent-browser is the pinned binary for tests: ORCHESTRATOR_AGENT_BROWSER=bin/agent-browser.
 agent-browser: $(AGENT_BROWSER)
 	cp $(AGENT_BROWSER) bin/agent-browser
 

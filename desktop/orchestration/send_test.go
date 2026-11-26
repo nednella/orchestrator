@@ -369,7 +369,7 @@ func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 	if err := h.ChatAnswer(target, "ask-1", true, ""); err != nil {
 		t.Fatal(err)
 	}
-	want := fmt.Sprintf("agentos: dropped a message held for thread %s from %s: A thread with read access cannot message a thread with supervised access", target, sender)
+	want := fmt.Sprintf("orchestrator: dropped a message held for thread %s from %s: A thread with read access cannot message a thread with supervised access", target, sender)
 	apptest.Eventually(t, "the drop logged", func() bool { return strings.Contains(logged.String(), want) })
 	h.Sessions().Refresh()
 	time.Sleep(300 * time.Millisecond)

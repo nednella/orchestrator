@@ -9,8 +9,8 @@ import type { Started } from './startedShells'
 import type { Shell } from './types'
 
 // Each thread's drawer, '' for Home's: whether it is open, the height it was dragged to in px, and its terminals.
-const OPEN_KEY = 'agentos.terminalOpen'
-const HEIGHT_KEY = 'agentos.terminalHeight'
+const OPEN_KEY = 'orchestrator.terminalOpen'
+const HEIGHT_KEY = 'orchestrator.terminalHeight'
 
 export const DEFAULT_HEIGHT_PX = 280
 export const MIN_HEIGHT_PX = 180

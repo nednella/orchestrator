@@ -15,7 +15,7 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// mcpServerOf is the command and the environment the thread's MCP config starts the agentos tools' server with.
+// mcpServerOf is the command and the environment the thread's MCP config starts the orchestrator tools' server with.
 func mcpServerOf(t *testing.T, args []string) (command string, env map[string]string) {
 	t.Helper()
 	i := slices.Index(args, "--mcp-config")
@@ -35,15 +35,15 @@ func mcpServerOf(t *testing.T, args []string) (command string, env map[string]st
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	server := config.Servers["agentos"]
+	server := config.Servers["orchestrator"]
 	return server.Command, server.Env
 }
 
 func TestThreadStartsWithoutTheCommandOnPath(t *testing.T) {
-	t.Setenv("PATH", apptest.PathWithout("agentos"))
+	t.Setenv("PATH", apptest.PathWithout("orchestrator"))
 	h := newHarness(t)
-	if _, err := exec.LookPath("agentos"); err == nil {
-		t.Fatal("an agentos command is still on PATH")
+	if _, err := exec.LookPath("orchestrator"); err == nil {
+		t.Fatal("an orchestrator command is still on PATH")
 	}
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -103,7 +103,7 @@ func TestNoBusSocket(t *testing.T) {
 			t.Errorf("the state folder holds %s", e.Name())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(h.State, "agentos.sock")); err == nil {
+	if _, err := os.Stat(filepath.Join(h.State, "orchestrator.sock")); err == nil {
 		t.Error("the state folder holds the bus socket")
 	}
 }

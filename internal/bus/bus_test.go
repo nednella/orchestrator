@@ -64,12 +64,12 @@ func TestStateFiles(t *testing.T) {
 }
 
 func TestDefaultDirHonoursTheOverride(t *testing.T) {
-	t.Setenv("AGENTOS_STATE_DIR", "/somewhere")
+	t.Setenv("ORCHESTRATOR_STATE_DIR", "/somewhere")
 	if dir, err := DefaultDir(); err != nil || dir != "/somewhere" {
 		t.Errorf("DefaultDir = %q, %v", dir, err)
 	}
-	t.Setenv("AGENTOS_STATE_DIR", "")
-	if dir, err := DefaultDir(); err != nil || !strings.HasSuffix(dir, filepath.Join(".local", "state", "agentos")) {
+	t.Setenv("ORCHESTRATOR_STATE_DIR", "")
+	if dir, err := DefaultDir(); err != nil || !strings.HasSuffix(dir, filepath.Join(".local", "state", "orchestrator")) {
 		t.Errorf("DefaultDir = %q, %v", dir, err)
 	}
 }

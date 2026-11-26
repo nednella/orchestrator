@@ -7,7 +7,7 @@ const VS_CODE =
 
 type EditorMarkProps = { editor: string; size?: number }
 
-// EditorMark is the editor's own mark where agentos has it, else a plain open-outside icon, as for an editor not known.
+// EditorMark is the editor's own mark where orchestrator has it, else a plain open-outside icon, as for an editor not known.
 export function EditorMark({ editor, size = 16 }: EditorMarkProps) {
   if (editor !== VS_CODE_APP) return <SquareArrowOutUpRight size={size} aria-hidden="true" />
   return (

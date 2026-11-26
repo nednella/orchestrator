@@ -1,4 +1,4 @@
-// Command desktop is agentos: the app, and the hidden commands its host and tools' server run.
+// Command desktop is orchestrator: the app, and the hidden commands its host and tools' server run.
 package main
 
 import (
@@ -29,7 +29,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	if err := cli.Execute(ctx, launch); err != nil {
-		fmt.Fprintln(os.Stderr, "agentos:", err)
+		fmt.Fprintln(os.Stderr, "orchestrator:", err)
 		os.Exit(1)
 	}
 }
@@ -37,20 +37,20 @@ func main() {
 func launch() error {
 	fixLocale()
 	if err := fixPath(); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 	}
 	cfg, err := app.Load()
 	if err != nil {
 		return err
 	}
 	if err := app.RecordBundle(cfg.StateDir); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 	}
 	assets, err := fs.Sub(assetsFS, assetsRoot)
 	if err != nil {
 		return err
 	}
-	if addr := os.Getenv("AGENTOS_HTTP"); addr != "" {
+	if addr := os.Getenv("ORCHESTRATOR_HTTP"); addr != "" {
 		hub := devhttp.NewHub()
 		a := app.New(cfg, app.Host{
 			Emit: hub.Emit, Clipboard: func(string) {}, PickDir: func() (string, error) { return "", nil },
@@ -100,7 +100,7 @@ func launch() error {
 			compactTitleBar()
 			acceptFirstMouse()
 			if err := a.Start(c); err != nil {
-				log.Printf("agentos: %v", err)
+				log.Printf("orchestrator: %v", err)
 			}
 		},
 		OnDomReady: func(context.Context) { refreshKeyWindow() },

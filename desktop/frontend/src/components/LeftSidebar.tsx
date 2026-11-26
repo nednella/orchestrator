@@ -16,7 +16,7 @@ export function LeftSidebar() {
       {docked.sidebar && (
         <div className="flex flex-none items-center border-b border-line text-ink" style={{ ...drag, height: 'var(--topbar-h)' }}>
           <span className="flex-1" style={{ minWidth: 'var(--title-inset)' }} />
-          <span className="min-w-0 truncate text-title font-semibold tracking-wide">agentos</span>
+          <span className="min-w-0 truncate text-title font-semibold tracking-wide">orchestrator</span>
           <span className="flex flex-1 justify-end pr-1.5">
             <HistoryButtons />
           </span>

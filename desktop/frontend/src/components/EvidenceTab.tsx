@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 
 type EvidenceTabProps = { session: Session }
 
-const ORDER_KEY = 'agentos.evidenceNewest'
+const ORDER_KEY = 'orchestrator.evidenceNewest'
 
 export function EvidenceTab({ session }: EvidenceTabProps) {
   const { evidence } = useAgentos('evidence')

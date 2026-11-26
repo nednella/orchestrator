@@ -104,7 +104,7 @@ func TestMadeTreesRecord(t *testing.T) {
 			want: Made{Path: folder.Canonical(filepath.Join(trees, "b")), Thread: "p/t1"},
 		},
 		{
-			name:    "the newest record at a path agentos used twice",
+			name:    "the newest record at a path orchestrator used twice",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1", Removed: 9}, {Path: filepath.Join(trees, "a"), Thread: "p/t2"}},
 			thread:  "p/t2", path: filepath.Join(trees, "a"),
 			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t2"},
@@ -137,7 +137,7 @@ func TestMadeTreesRecord(t *testing.T) {
 			want: Made{Path: folder.Canonical(filepath.Join(trees, "a")), Thread: "p/t1"},
 		},
 		{
-			name:    "a change at a path agentos never used",
+			name:    "a change at a path orchestrator never used",
 			records: []Made{{Path: filepath.Join(trees, "a"), Thread: "p/t1"}},
 			change:  func(m *madeTrees) error { return m.Removed("p", filepath.Join(trees, "elsewhere"), at) },
 			thread:  "p/t1", path: filepath.Join(trees, "a"),
@@ -362,7 +362,7 @@ func TestHumanWorktreeAtARecordedPathIsNotOurs(t *testing.T) {
 			l, dir, _ := madeRepo(t)
 			wt := madeTree(t, l, dir, "issue-7", "p/t1")
 			if !l.ours(t.Context(), "p", wt, "p/t1") {
-				t.Fatal("the worktree agentos made is not ours")
+				t.Fatal("the worktree orchestrator made is not ours")
 			}
 			tt.again(t, dir, wt)
 			if _, ok := l.sessions.made.At("p", wt); !ok {

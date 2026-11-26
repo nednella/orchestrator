@@ -94,7 +94,7 @@ func (f *files) read(ctx context.Context, dir string) ([]string, error) {
 	text := string(out)
 	if !strings.HasSuffix(text, "\x00") && text != "" {
 		// The runner keeps only the first part of a long output, so the last path may be cut.
-		log.Printf("agentos: git listed more files in %s than the app reads; the list is cut short", dir)
+		log.Printf("orchestrator: git listed more files in %s than the app reads; the list is cut short", dir)
 		text = text[:strings.LastIndex(text, "\x00")+1]
 	}
 	paths := []string{}

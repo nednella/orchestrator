@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	// sliceMost is the longest one call of wait waits, in milliseconds: the agentos command waits in slices, so no
+	// sliceMost is the longest one call of wait waits, in milliseconds: the orchestrator command waits in slices, so no
 	// control call outlasts control.MaxTimeout.
 	sliceMost = 60000
-	// waitMost is the longest a whole wait lasts, as the agentos command limits it.
+	// waitMost is the longest a whole wait lasts, as the orchestrator command limits it.
 	waitMost = time.Hour
 )
 
@@ -36,7 +36,7 @@ const (
 
 type waitInput struct {
 	Thread string `json:"thread"`
-	// TimeoutSeconds is the agentos command's: it stops calling once it passes.
+	// TimeoutSeconds is the orchestrator command's: it stops calling once it passes.
 	TimeoutSeconds int `json:"timeout_seconds"`
 }
 
@@ -52,7 +52,7 @@ type waited struct {
 // waitOn is a wait: the thread waiter waits on thread.
 type waitOn struct{ waiter, thread string }
 
-// held is how long a wait lasts: until the deadline the agentos command gave, and while the turn of the waiter's that
+// held is how long a wait lasts: until the deadline the orchestrator command gave, and while the turn of the waiter's that
 // called it runs, the turn that had logged up to seq from when the wait began.
 type held struct {
 	until time.Time
@@ -93,7 +93,7 @@ func (c *Commands) inTurn(id string, from int64) bool {
 	}
 	events, err := chatlog.ReadLog(ch.Log, from)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 		return false
 	}
 	return !slices.ContainsFunc(events, func(e chatlog.Event) bool {
@@ -191,7 +191,7 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 		return "", fmt.Errorf("slice_ms is 1 to %d, not %q", sliceMost, req.Opts["slice_ms"])
 	}
 	now, slice := time.Now(), time.Duration(ms)*time.Millisecond
-	// until_ms is when the agentos command stops calling; without it the wait lasts the slice.
+	// until_ms is when the orchestrator command stops calling; without it the wait lasts the slice.
 	until := now.Add(slice)
 	if s := req.Opts["until_ms"]; s != "" {
 		n, err := strconv.ParseInt(s, 10, 64)
@@ -328,7 +328,7 @@ type turn struct {
 func (c *Commands) turnOf(ch sessions.Chat) turn {
 	events, err := chatlog.ReadLog(ch.Log, 0)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", ch.ID, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", ch.ID, err)
 	}
 	return turnIn(events)
 }

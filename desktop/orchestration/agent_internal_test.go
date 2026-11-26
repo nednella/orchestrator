@@ -62,7 +62,7 @@ func TestAgentRequestRefusesABadInput(t *testing.T) {
 		{"refresh", `{"project":"other"}`, "The tool's input is not what its schema asks for"},
 		{"browser", `{"action":"open","url":" "}`, "open needs a url"},
 		{"browser", `{"action":"help"}`, `action is open, screenshot or close, not "help"`},
-		{"delegate", `{"task":"x"}`, `agentos has no tool "delegate"`},
+		{"delegate", `{"task":"x"}`, `orchestrator has no tool "delegate"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool+" "+tt.input, func(t *testing.T) {

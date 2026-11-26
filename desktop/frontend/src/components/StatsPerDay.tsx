@@ -13,7 +13,7 @@ type StatsPerDayProps = { days: DayFigures[] }
 
 type MetricText = { name: string; total(sum: number): string; tip(value: number): string; axis(value: number, top: number): string }
 
-const METRIC_KEY = 'agentos.statsMetric'
+const METRIC_KEY = 'orchestrator.statsMetric'
 
 const OPTIONS: { value: Metric; label: string }[] = [
   { value: 'prompts', label: 'Prompts' },

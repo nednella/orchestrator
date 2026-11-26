@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// startHost runs agentos host on argv and waits for its socket. It returns the host's folder and a channel that gets
+// startHost runs orchestrator host on argv and waits for its socket. It returns the host's folder and a channel that gets
 // the command's result.
 func startHost(t *testing.T, argv ...string) (dir string, done <-chan error) {
 	t.Helper()

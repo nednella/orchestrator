@@ -81,8 +81,8 @@ test('a count takes the noun for one or many', () => {
 })
 
 test('a work row leads to its issue, or to its thread while the thread is there', () => {
-  assert.deepEqual(workLink({ issue: 549, session: '' }, 'nednella/agentos', []), { url: 'https://github.com/nednella/agentos/issues/549' })
+  assert.deepEqual(workLink({ issue: 549, session: '' }, 'nednella/orchestrator', []), { url: 'https://github.com/nednella/orchestrator/issues/549' })
   assert.equal(workLink({ issue: 549, session: '' }, '', []), null)
-  assert.deepEqual(workLink({ issue: 0, session: 'agentos/abcdefgh' }, 'nednella/agentos', ['agentos/abcdefgh']), { thread: 'agentos/abcdefgh' })
-  assert.equal(workLink({ issue: 0, session: 'agentos/abcdefgh' }, 'nednella/agentos', []), null)
+  assert.deepEqual(workLink({ issue: 0, session: 'orchestrator/abcdefgh' }, 'nednella/orchestrator', ['orchestrator/abcdefgh']), { thread: 'orchestrator/abcdefgh' })
+  assert.equal(workLink({ issue: 0, session: 'orchestrator/abcdefgh' }, 'nednella/orchestrator', []), null)
 })

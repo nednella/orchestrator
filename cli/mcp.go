@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	notInAThread = "agentos tools work only inside an agentos thread"
+	notInAThread = "orchestrator tools work only inside an orchestrator thread"
 	waitSlice    = time.Minute
 	// A slice's control call outlasts the slice, so the app answers before the call times out.
 	waitSliceCall    = 65 * time.Second
@@ -30,11 +30,11 @@ const (
 	waitPauseMost  = 8 * time.Second
 )
 
-// newMCPCmd serves the agentos tools to the agent that started it, over stdin and stdout.
+// newMCPCmd serves the orchestrator tools to the agent that started it, over stdin and stdout.
 func newMCPCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "mcp",
-		Short:  "Serve the agentos tools over MCP (called by Claude)",
+		Short:  "Serve the orchestrator tools over MCP (called by Claude)",
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -54,7 +54,7 @@ func newMCPCmd() *cobra.Command {
 				}
 				return orchestrate(ctx, socket, token, tool, input, nil, 0)
 			}
-			return mcp.Serve(cmd.Context(), mcp.Info{Name: "agentos", Version: version.Version}, mcp.Tools(), call, cmd.InOrStdin(), cmd.OutOrStdout())
+			return mcp.Serve(cmd.Context(), mcp.Info{Name: "orchestrator", Version: version.Version}, mcp.Tools(), call, cmd.InOrStdin(), cmd.OutOrStdout())
 		},
 	}
 }

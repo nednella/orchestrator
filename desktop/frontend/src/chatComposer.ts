@@ -22,7 +22,7 @@ export function composerAction({ turnOpen, pending }: Pick<Timeline, 'turnOpen' 
   return turnOpen ? 'queue' : 'send'
 }
 
-// unseenDrafts is the drafts agentos left in the thread's composer that it has not shown yet: those after the seen
+// unseenDrafts is the drafts orchestrator left in the thread's composer that it has not shown yet: those after the seen
 // mark and after the last message the user sent, which took in any draft before it.
 export function unseenDrafts(events: ChatEvent[], seenSeq: number): ChatEvent[] {
   const after = Math.max(seenSeq, events.findLast((e) => e.kind === 'user')?.seq ?? 0)

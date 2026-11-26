@@ -87,7 +87,7 @@ func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (st
 		}
 		events, err := chatlog.ReadLog(ch.Log, 0)
 		if err != nil {
-			log.Printf("agentos: reading the chat log of %s: %v", id, err)
+			log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 			continue
 		}
 		if !turnRuns(events) {
@@ -95,7 +95,7 @@ func (c *Commands) stop(ctx context.Context, caller string, req ctl.Request) (st
 		}
 		dropped += c.threads.DropTold(id)
 		if err := host.InterruptFrom(ctx, ch.Socket, caller); err != nil {
-			log.Printf("agentos: thread %s did not stop thread %s: %v", caller, id, err)
+			log.Printf("orchestrator: thread %s did not stop thread %s: %v", caller, id, err)
 			continue
 		}
 		stopped = append(stopped, id)

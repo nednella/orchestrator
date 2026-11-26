@@ -316,15 +316,15 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				}})
 			case "delegate":
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
-					"subtype": "can_use_tool", "tool_name": "mcp__agentos__delegate", "input": map[string]any{"task": "fix it"},
+					"subtype": "can_use_tool", "tool_name": "mcp__orchestrator__delegate", "input": map[string]any{"task": "fix it"},
 				}})
 			case "show":
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
-					"subtype": "can_use_tool", "tool_name": "mcp__agentos__show", "input": map[string]any{"text": "done"},
+					"subtype": "can_use_tool", "tool_name": "mcp__orchestrator__show", "input": map[string]any{"text": "done"},
 				}})
-			case "not agentos":
+			case "not orchestrator":
 				print(map[string]any{"type": "control_request", "request_id": "r1", "request": map[string]any{
-					"subtype": "can_use_tool", "tool_name": "mcp__agentos__delete_files", "input": map[string]any{},
+					"subtype": "can_use_tool", "tool_name": "mcp__orchestrator__delete_files", "input": map[string]any{},
 				}})
 			case "slow":
 				reply("slow")
@@ -996,7 +996,7 @@ func TestAgentosToolRunsWithoutAnApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	if e := waitKind(t, events, chat.KindTurnEnd); e.Error {
-		t.Fatal("turn ended with an error: the agentos tool was not allowed")
+		t.Fatal("turn ended with an error: the orchestrator tool was not allowed")
 	}
 	if got := modes(t, h.log); !slices.Equal(got, []string{"plan"}) {
 		t.Fatalf("modes = %q, want the stand-in in plan mode", got)
@@ -1021,11 +1021,11 @@ func TestOtherToolOfAServerNamedAgentosAsks(t *testing.T) {
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
-	if err := Send(ctxT(t), h.socket, "not agentos"); err != nil {
+	if err := Send(ctxT(t), h.socket, "not orchestrator"); err != nil {
 		t.Fatal(err)
 	}
-	if e := waitKind(t, events, chat.KindApproval); e.Tool != "mcp__agentos__delete_files" {
-		t.Fatalf("approval for %q, want the owner asked for mcp__agentos__delete_files", e.Tool)
+	if e := waitKind(t, events, chat.KindApproval); e.Tool != "mcp__orchestrator__delete_files" {
+		t.Fatalf("approval for %q, want the owner asked for mcp__orchestrator__delete_files", e.Tool)
 	}
 	for _, l := range stdinLines(t, h.stdin) {
 		if strings.Contains(l, `"control_response"`) {
@@ -1044,8 +1044,8 @@ func TestWriteToolOfAReadThreadAsksTheOwner(t *testing.T) {
 		if err := Send(ctxT(t), h.socket, "show"); err != nil {
 			t.Fatal(err)
 		}
-		if e := waitKind(t, events, chat.KindApproval); e.Tool != "mcp__agentos__show" {
-			t.Fatalf("%v: approval for %q, want the owner asked for mcp__agentos__show", env, e.Tool)
+		if e := waitKind(t, events, chat.KindApproval); e.Tool != "mcp__orchestrator__show" {
+			t.Fatalf("%v: approval for %q, want the owner asked for mcp__orchestrator__show", env, e.Tool)
 		}
 		for _, l := range stdinLines(t, h.stdin) {
 			if strings.Contains(l, `"control_response"`) {

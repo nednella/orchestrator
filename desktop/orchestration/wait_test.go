@@ -23,13 +23,13 @@ type waitAnswer struct {
 	Text string `json:"text"`
 }
 
-// waitCall runs one slice of wait over the control socket with the caller's token, as the agentos command does. It
+// waitCall runs one slice of wait over the control socket with the caller's token, as the orchestrator command does. It
 // gives the answer, or the error the tool gave; it calls no t method, so it may run in its own goroutine.
 func waitCall(h *apptest.Harness, token, thread string, slice time.Duration) (waitAnswer, string, error) {
 	return waitCallUntil(h, token, thread, slice, time.Time{})
 }
 
-// waitCallUntil is waitCall for a wait whose agentos command stops calling at until, which it sends unless it is zero.
+// waitCallUntil is waitCall for a wait whose orchestrator command stops calling at until, which it sends unless it is zero.
 func waitCallUntil(h *apptest.Harness, token, thread string, slice time.Duration, until time.Time) (waitAnswer, string, error) {
 	ms := slice.Milliseconds()
 	opts := map[string]string{"input": `{"thread":"` + thread + `","timeout_seconds":600}`, "slice_ms": strconv.FormatInt(ms, 10)}

@@ -10,7 +10,7 @@ export function cleanupForced(cleanup: Session['cleanup']): boolean {
 }
 
 // cleanupNowShown says whether the thread menu offers Clean up now, a clean-up with every check: for every kept one,
-// whatever kept it, and for a thread whose worktree agentos made when no clean-up runs or asks.
+// whatever kept it, and for a thread whose worktree orchestrator made when no clean-up runs or asks.
 export function cleanupNowShown({ cleanup, worktree }: Pick<Session, 'cleanup' | 'worktree'>): boolean {
   return cleanup === 'blocked' || (cleanup === '' && worktree !== '')
 }

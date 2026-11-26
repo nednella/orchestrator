@@ -191,7 +191,7 @@ func (t *tab) attach(ctx context.Context, pg *page) error {
 }
 
 // refreshMeta reads the title, address and visibility from the page: the browser reports a title only as the
-// address until the page has loaded, and not when a script changes it. A page that loaded before agentos listened
+// address until the page has loaded, and not when a script changes it. A page that loaded before orchestrator listened
 // (a tab a script opened) gets its load time from here.
 func (pg *page) refreshMeta(ctx context.Context) {
 	raw, err := pg.eval(ctx, `document.title + "\n" + location.href + "\n" + document.visibilityState + "\n" + document.readyState`)

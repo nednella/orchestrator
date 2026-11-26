@@ -1,5 +1,5 @@
 // The message column's width, in rem, is the app's: every thread shows its chat at the width last dragged to.
-export const COLUMN_KEY = 'agentos.chatColumn'
+export const COLUMN_KEY = 'orchestrator.chatColumn'
 export const COLUMN_DEFAULT_REM = 46
 
 // A drag under the default still moves the column by this share of the pointer, up to MAX_GIVE_REM, and the column

@@ -18,7 +18,7 @@ const (
 	NotesFolder    = "notes-media"
 	EvidenceFolder = "evidence"
 	ChatFolder     = "chat-media"
-	// MaxImageSize is the largest picture agentos stores.
+	// MaxImageSize is the largest picture orchestrator stores.
 	MaxImageSize = 10 << 20
 )
 
@@ -26,7 +26,7 @@ var imageTypes = map[string]string{
 	"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp",
 }
 
-// Ext is the file extension for a picture type, and whether the type is one agentos stores.
+// Ext is the file extension for a picture type, and whether the type is one orchestrator stores.
 func Ext(mime string) (string, bool) {
 	ext, ok := imageTypes[mime]
 	return ext, ok

@@ -10,7 +10,7 @@ const Prefix = "/term/"
 
 // appHeader marks a read the front end sends. A page loads a same-origin <img> or <script> without it, so such a tag
 // cannot take the stream over, in the window or in the browser mode.
-const appHeader = "X-Agentos"
+const appHeader = "X-Orchestrator"
 
 // Handler serves the output of each open shell as one long response of raw bytes, written as it comes. A shell has
 // one reader: a second GET ends the first. The body ends when the shell exits or its terminal closes.

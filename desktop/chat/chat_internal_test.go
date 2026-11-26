@@ -17,7 +17,7 @@ func TestToolSummaryMatchesPending(t *testing.T) {
 		{"a URL", "WebFetch", `{"url":"https://example.com/docs","prompt":"read it"}`, "https://example.com/docs"},
 		{"a question", "AskUserQuestion", `{"questions":[{"question":"Which one?"},{"question":"Why?"}]}`, "Which one?"},
 		{"a plan", "ExitPlanMode", `{"plan":"\n  Add made.txt\nThen test"}`, "Add made.txt"},
-		{"no field it knows", "mcp__agentos__threads", `{"project":"all"}`, ""},
+		{"no field it knows", "mcp__orchestrator__threads", `{"project":"all"}`, ""},
 		{"input that is not JSON", "Bash", `not json`, ""},
 	}
 	for _, tt := range tests {

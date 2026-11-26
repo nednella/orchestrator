@@ -130,7 +130,7 @@ func repoFixture(t *testing.T, h *apptest.Harness) string {
 	return origin
 }
 
-// issueThread starts the thread of issue n in the worktree agentos makes for it; repoFixture comes first.
+// issueThread starts the thread of issue n in the worktree orchestrator makes for it; repoFixture comes first.
 func issueThread(h *apptest.Harness, t *testing.T, n int) sessions.Session {
 	t.Helper()
 	s := issueSession(h, t, n)
@@ -517,7 +517,7 @@ func TestFailedFetchKeepsTheWorktree(t *testing.T) {
 	gitIn(t, h.Dir, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 
 	openThenMerge(h)
-	keptFor(t, h, s.ID, wt, "Could not fetch origin, so agentos cannot tell whether every commit is pushed")
+	keptFor(t, h, s.ID, wt, "Could not fetch origin, so orchestrator cannot tell whether every commit is pushed")
 }
 
 func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
@@ -1498,7 +1498,7 @@ func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
 			wt := parent.Worktree
 			pushWork(t, wt)
 			// The worktree is the parent's own, so nothing but the hold keeps a wake from taking it back.
-			marker := filepath.Join(gitIn(t, wt, "rev-parse", "--path-format=absolute", "--git-dir"), "agentos-thread")
+			marker := filepath.Join(gitIn(t, wt, "rev-parse", "--path-format=absolute", "--git-dir"), "orchestrator-thread")
 			if err := os.WriteFile(marker, []byte(parent.ID+"\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}

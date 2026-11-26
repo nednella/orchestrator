@@ -14,34 +14,34 @@ import (
 
 const changelog = `# Changelog
 
-## [0.14.0](https://github.com/nednella/agentos/compare/v0.13.0...v0.14.0) (2026-10-07)
+## [0.14.0](https://github.com/nednella/orchestrator/compare/v0.13.0...v0.14.0) (2026-10-07)
 
 
 ### Features
 
-* **desktop:** let agents close their browser window ([a796cf6](https://github.com/nednella/agentos/commit/a796cf6)), closes [#218](https://github.com/nednella/agentos/issues/218)
+* **desktop:** let agents close their browser window ([a796cf6](https://github.com/nednella/orchestrator/commit/a796cf6)), closes [#218](https://github.com/nednella/orchestrator/issues/218)
 
 
 ### Bug Fixes
 
-* widen settings panel so every row shows ([29a0500](https://github.com/nednella/agentos/commit/29a0500))
-* keep the Mac awake while sessions work ([#88](https://github.com/nednella/agentos/issues/88)) ([0313ac2](https://github.com/nednella/agentos/commit/0313ac2))
+* widen settings panel so every row shows ([29a0500](https://github.com/nednella/orchestrator/commit/29a0500))
+* keep the Mac awake while sessions work ([#88](https://github.com/nednella/orchestrator/issues/88)) ([0313ac2](https://github.com/nednella/orchestrator/commit/0313ac2))
 
 ## 0.1.0 (2026-10-05)
 
 
 ### Features
 
-* **ui:** first window ([1111111](https://github.com/nednella/agentos/commit/1111111))
+* **ui:** first window ([1111111](https://github.com/nednella/orchestrator/commit/1111111))
 `
 
 func TestParseChangelogReadsEachReleaseAndItsChanges(t *testing.T) {
 	want := []update.Release{
 		{Version: "0.14.0", Date: "2026-10-07", Sections: []update.Section{
-			{Title: "Features", Changes: []update.Change{{Scope: "desktop", Text: "let agents close their browser window", Issue: 218, URL: "https://github.com/nednella/agentos/issues/218"}}},
+			{Title: "Features", Changes: []update.Change{{Scope: "desktop", Text: "let agents close their browser window", Issue: 218, URL: "https://github.com/nednella/orchestrator/issues/218"}}},
 			{Title: "Bug Fixes", Changes: []update.Change{
 				{Text: "widen settings panel so every row shows"},
-				{Text: "keep the Mac awake while sessions work", Issue: 88, URL: "https://github.com/nednella/agentos/issues/88"},
+				{Text: "keep the Mac awake while sessions work", Issue: 88, URL: "https://github.com/nednella/orchestrator/issues/88"},
 			}},
 		}},
 		{Version: "0.1.0", Date: "2026-10-05", Sections: []update.Section{

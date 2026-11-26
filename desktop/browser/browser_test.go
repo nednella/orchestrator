@@ -237,7 +237,7 @@ func TestNoBrowserFound(t *testing.T) {
 func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("AGENTOS_BROWSER", "")
+	t.Setenv("ORCHESTRATOR_BROWSER", "")
 	install := func(app string) string {
 		p := filepath.Join(home, "Applications", app)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -256,9 +256,9 @@ func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
 	if got := findBrowser(); got != cft {
 		t.Errorf("findBrowser = %q, want %q", got, cft)
 	}
-	t.Setenv("AGENTOS_BROWSER", brave)
+	t.Setenv("ORCHESTRATOR_BROWSER", brave)
 	if got := findBrowser(); got != brave {
-		t.Errorf("findBrowser = %q, want the AGENTOS_BROWSER %q", got, brave)
+		t.Errorf("findBrowser = %q, want the ORCHESTRATOR_BROWSER %q", got, brave)
 	}
 }
 

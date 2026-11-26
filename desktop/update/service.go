@@ -30,4 +30,4 @@ func (s *Service) InstallUpdate() error { return s.u.Install(s.ctx()) }
 func (s *Service) PatchNotes() ([]Release, error) { return s.u.PatchNotes() }
 
 // Changelog is every release the app shipped with, newest first.
-func (s *Service) Changelog() []Release { return ParseChangelog(agentos.Changelog) }
+func (s *Service) Changelog() []Release { return ParseChangelog(orchestrator.Changelog) }

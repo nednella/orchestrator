@@ -44,7 +44,7 @@ func inToolCall(h *apptest.Harness, t *testing.T, s sessions.Session, dir string
 	h.Observe(t, s.ID, "PostToolUse", string(cwd))
 }
 
-// worktreeThread starts a Supervised thread with no issue in the worktree agentos makes for it, on my-work.
+// worktreeThread starts a Supervised thread with no issue in the worktree orchestrator makes for it, on my-work.
 func worktreeThread(h *apptest.Harness, t *testing.T) sessions.Session {
 	t.Helper()
 	s, err := h.NewThreadIn("my work", "", "supervised", "worktree")
@@ -138,11 +138,11 @@ func TestNoIssueInTheEnvironment(t *testing.T) {
 	s := issueSession(h, t, 9)
 	env := claudeEnv(t, h, s.ID)
 	// Another app's thread that started this one would have given it its own, which the app drops.
-	if v, ok := env["AGENTOS_ISSUE"]; ok {
-		t.Errorf("claude was started with AGENTOS_ISSUE=%s", v)
+	if v, ok := env["ORCHESTRATOR_ISSUE"]; ok {
+		t.Errorf("claude was started with ORCHESTRATOR_ISSUE=%s", v)
 	}
-	if want := filepath.Join(h.State, "control.sock"); env["AGENTOS_SESSION"] != s.ID || env[mcp.ControlEnv] != want {
-		t.Errorf("claude was started with AGENTOS_SESSION=%s and %s=%s, want %s and %s", env["AGENTOS_SESSION"], mcp.ControlEnv, env[mcp.ControlEnv], s.ID, want)
+	if want := filepath.Join(h.State, "control.sock"); env["ORCHESTRATOR_SESSION"] != s.ID || env[mcp.ControlEnv] != want {
+		t.Errorf("claude was started with ORCHESTRATOR_SESSION=%s and %s=%s, want %s and %s", env["ORCHESTRATOR_SESSION"], mcp.ControlEnv, env[mcp.ControlEnv], s.ID, want)
 	}
 }
 
@@ -221,7 +221,7 @@ func TestThreadBranchComesFromItsRecord(t *testing.T) {
 // branchTag is the branch tmux keeps for the thread.
 func branchTag(t *testing.T, h *apptest.Harness, id string) string {
 	t.Helper()
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@agentos-branch}").Output()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@orchestrator-branch}").Output()
 	if err != nil {
 		t.Fatalf("reading the branch tag of %s: %v", id, err)
 	}

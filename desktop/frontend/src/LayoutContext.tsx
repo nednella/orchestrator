@@ -22,8 +22,8 @@ export type TogglePanel = 'sidebar' | 'right'
 const PANEL_SELECTOR: Record<TogglePanel, string> = { sidebar: '[data-sidebar]', right: '[data-panel="right"]' }
 const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', right: 'right' }
 
-const LAYOUT_KEY = 'agentos.layout.v3'
-const SIDEBAR_WIDTH_KEY = 'agentos.sidebarWidth'
+const LAYOUT_KEY = 'orchestrator.layout.v3'
+const SIDEBAR_WIDTH_KEY = 'orchestrator.sidebarWidth'
 type BandPrefs = { sidebarOpen: boolean; rightOpen: boolean; right: number | null }
 type AllPrefs = Record<Band, BandPrefs>
 

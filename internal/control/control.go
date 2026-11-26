@@ -1,4 +1,4 @@
-// Package control carries tool calls from the agentos mcp server to the running
+// Package control carries tool calls from the orchestrator mcp server to the running
 // desktop app: one JSON request line, one JSON response line, over a unix socket.
 package control
 
@@ -60,7 +60,7 @@ type Response struct {
 func SocketPath(stateDir string) string { return filepath.Join(stateDir, socketFile) }
 
 // ErrNotRunning means no app is listening.
-var ErrNotRunning = errors.New("agentos is not running: open the app and try again")
+var ErrNotRunning = errors.New("orchestrator is not running: open the app and try again")
 
 // Call sends req and waits for the answer.
 func Call(parent context.Context, socket string, req Request) (Response, error) {
@@ -121,7 +121,7 @@ func Listen(socket string, handle Handler) (*Server, error) {
 	}
 	if conn, err := net.DialTimeout("unix", socket, 100*time.Millisecond); err == nil {
 		conn.Close()
-		return nil, errors.New("another agentos answers commands on this socket")
+		return nil, errors.New("another orchestrator answers commands on this socket")
 	}
 	_ = os.Remove(socket)
 	ln, err := net.Listen("unix", socket)

@@ -5,7 +5,7 @@ export type ThreadTerms = { groups: TermGroup[]; active: string }
 
 export const MAX_PANES = 4
 // Each thread's terminals by thread id, '' for the project's shells.
-export const TERMINALS_KEY = 'agentos.terminals.v1'
+export const TERMINALS_KEY = 'orchestrator.terminals.v1'
 
 // Go numbers shells from the lowest free number, so a shell id can come back: a group id is never a shell id.
 function nextGroupId(groups: TermGroup[]): string {

@@ -429,7 +429,7 @@ func (s *Sessions) revive(name string, in term.Info) session.Record {
 	rec := s.woken(name, in)
 	delete(s.ended, name)
 	if err := bus.WriteState(s.stateDir, rec); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving a thread that runs again: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: saving a thread that runs again: %v\n", err)
 	}
 	return rec
 }
@@ -531,7 +531,7 @@ func (s *Sessions) saveIdentity(in term.Info) {
 	}
 	rec.Identity = want
 	if err := bus.WriteState(s.stateDir, rec); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving a session's identity: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: saving a session's identity: %v\n", err)
 	}
 }
 
@@ -604,7 +604,7 @@ func (s *Sessions) endSession(id string, at time.Time) {
 	e := &endedSession{info: info, rec: rec, at: at}
 	s.ended[id] = e
 	if err := bus.WriteState(s.stateDir, e.record()); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving a settled session: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: saving a settled session: %v\n", err)
 	}
 	if h := s.history[id]; len(h) == 0 || h[len(h)-1].State != session.Settled {
 		s.history[id] = append(h, session.Change{State: session.Settled, At: at.UnixMilli()})
@@ -657,7 +657,7 @@ func (s *Sessions) holdNumber(id string, rec session.Record) {
 func (s *Sessions) nextNumber(key string) int {
 	n := max(s.lastNum[key], s.savedLastNumber(key)) + 1
 	if err := atomicfile.Write(s.lastNumberPath(key), []byte(strconv.Itoa(n)+"\n"), 0o600); err != nil {
-		log.Printf("agentos: saving the last thread number of %s: %v", key, err)
+		log.Printf("orchestrator: saving the last thread number of %s: %v", key, err)
 	}
 	s.lastNum[key] = n
 	return n
@@ -691,7 +691,7 @@ func (s *Sessions) saveNumber(id string, n int) {
 	}
 	rec.N = n
 	if err := bus.WriteState(s.stateDir, rec); err != nil {
-		log.Printf("agentos: saving the number of thread %s: %v", id, err)
+		log.Printf("orchestrator: saving the number of thread %s: %v", id, err)
 	}
 }
 
@@ -737,9 +737,9 @@ func (s *Sessions) handoverOf(id string) string {
 
 // Delete stops the thread when it runs, as a settle does, and removes it for good: its row, state file, chat log, chat
 // images, evidence, handover, usage mark, temp folder, browser window, host socket and shells. Its clean-up log entries
-// and its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-
+// and its events stay, and so does its branch. With worktree, the worktree orchestrator made for it goes first, by a clean-
 // up with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete,
-// and no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
+// and no thread goes. Without, the worktree stays on disk as it is, and the record that orchestrator made it goes with the
 // thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
 // first, so none is left without the parent that reaches it. With worktree their worktrees go with the thread's, all or
 // none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over to that thread,
@@ -813,13 +813,13 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 	s.browsers.Forget(ctx, id)
 	s.evidence.Purge(id)
 	if err := s.made.Forget(name.Project, id); err != nil {
-		log.Printf("agentos: forgetting the worktree of deleted thread %s: %v", id, err)
+		log.Printf("orchestrator: forgetting the worktree of deleted thread %s: %v", id, err)
 	}
 	s.awaitHostExit(name)
 	s.stopServers(true, id) // before its host socket goes, which says whether it runs elsewhere
 	for _, path := range []string{s.chatLogPath(name), s.chatMediaDir(name), s.handoverPath(name), s.usageMarkPath(name), s.tmpDir(name), s.hostSocket(name)} {
 		if err := os.RemoveAll(path); err != nil {
-			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
+			log.Printf("orchestrator: removing %s of deleted thread %s: %v", path, id, err)
 		}
 	}
 	return live, nil
@@ -981,7 +981,7 @@ func (s *Sessions) heardSleep(id string) {
 	ctx, cancel := context.WithTimeout(s.context(), hostWait)
 	defer cancel()
 	if err := host.Gone(ctx, s.hostSocket(name)); err != nil {
-		log.Printf("agentos: the host of thread %s still runs after it stopped: %v", id, err)
+		log.Printf("orchestrator: the host of thread %s still runs after it stopped: %v", id, err)
 	}
 	s.slept(id)
 }
@@ -992,11 +992,11 @@ func (s *Sessions) awaitHostExit(name session.Name) {
 	ctx, cancel := context.WithTimeout(s.context(), hostWait)
 	defer cancel()
 	if err := host.Gone(ctx, s.hostSocket(name)); err != nil {
-		log.Printf("agentos: deleting thread %s while its host runs: %v", name, err)
+		log.Printf("orchestrator: deleting thread %s while its host runs: %v", name, err)
 	}
 }
 
-// familyTrees are the worktrees agentos made for the threads of a Delete's family that are on disk, as a Delete with the
+// familyTrees are the worktrees orchestrator made for the threads of a Delete's family that are on disk, as a Delete with the
 // box would take them. The box offers count of them, and a refusal counts the same.
 type familyTrees struct {
 	own     []string          // the threads whose worktrees only the family works in, the deepest first
@@ -1114,10 +1114,10 @@ func (s *Sessions) checkWorktrees(ctx context.Context, family, own []string, asl
 	return nil
 }
 
-// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to heir, the fork outside the
-// family that works in it, so the record does not go with id and the worktree is still agentos's to remove. The heir was
+// handOverWorktree gives the worktree orchestrator made for the thread id of a Delete's family to heir, the fork outside the
+// family that works in it, so the record does not go with id and the worktree is still orchestrator's to remove. The heir was
 // found before the Delete's checks, so it gets the worktree only while it is still a fork, live or asleep, with no
-// worktree agentos made for it.
+// worktree orchestrator made for it.
 func (s *Sessions) handOverWorktree(id, heir string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
@@ -1136,7 +1136,7 @@ func (s *Sessions) handOverWorktree(id, heir string) {
 		return
 	}
 	if err := s.life.handOver(s.context(), key, w.Path, id, heir); err != nil {
-		log.Printf("agentos: giving the worktree %s of %s to %s: %v", w.Path, id, heir, err)
+		log.Printf("orchestrator: giving the worktree %s of %s to %s: %v", w.Path, id, heir, err)
 	}
 }
 
@@ -1177,7 +1177,7 @@ func (s *Sessions) isLive(id string) bool {
 
 // DeletePlan is what a Delete of a thread would take with it, for its confirm.
 type DeletePlan struct {
-	Worktrees int      `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that the box would take, as a Delete counts them
+	Worktrees int      `json:"worktrees"` // the worktrees orchestrator made for the thread and its descendants that are on disk and that the box would take, as a Delete counts them
 	Children  []string `json:"children"`  // the titles of the asleep descendants that go with the thread, nearest first
 }
 
@@ -1196,7 +1196,7 @@ func (s *Sessions) DeletePlan(id string) DeletePlan {
 	return p
 }
 
-// OwnWorktree is the worktree agentos made for the thread id that only it uses, which a Delete may take with it; ""
+// OwnWorktree is the worktree orchestrator made for the thread id that only it uses, which a Delete may take with it; ""
 // when there is none.
 func (s *Sessions) OwnWorktree(id string) string {
 	path, shared := s.ownWorktree(s.context(), id)
@@ -1206,7 +1206,7 @@ func (s *Sessions) OwnWorktree(id string) string {
 	return path
 }
 
-// ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
+// ownWorktree is the worktree orchestrator made for the thread id that is on disk, "" when there is none or the thread's
 // clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
 // it, as a fork does, or a shell is open in it. Its descendants and the shells of the thread and its descendants do not
 // count, as a Delete takes them with it.
@@ -1222,7 +1222,7 @@ func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared str
 	return path, s.life.shellIn(ctx, session.ProjectKey(id), path, family...)
 }
 
-// madeWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
+// madeWorktree is the worktree orchestrator made for the thread id that is on disk, "" when there is none or the thread's
 // clean-up finished.
 func (s *Sessions) madeWorktree(id string) string {
 	w, ok := s.made.Of(session.ProjectKey(id), id)
@@ -1792,7 +1792,7 @@ func (s *Sessions) threadOn(key, branch, except string) (int, bool) {
 	return 0, false
 }
 
-// threadIn is the number of a thread of the project other than except whose folder, or the worktree agentos made for
+// threadIn is the number of a thread of the project other than except whose folder, or the worktree orchestrator made for
 // it, is dir, live or settled, and whether there is one. A fork and a child with no worktree run in a folder that is
 // not theirs alone and are left out. It takes mu.
 func (s *Sessions) threadIn(key, dir, except string) (int, bool) {
@@ -1976,7 +1976,7 @@ func (s *Sessions) wakeWith(id, handover string) (Chat, error) {
 	err = host.Ready(ctx, s.hostSocket(name))
 	cancel()
 	if err != nil {
-		log.Printf("agentos: the host of thread %s did not listen: %v", id, err)
+		log.Printf("orchestrator: the host of thread %s did not listen: %v", id, err)
 		return Chat{}, fmt.Errorf("Thread %s did not start", id)
 	}
 	return s.ChatOf(id)
@@ -2119,7 +2119,7 @@ func (s *Sessions) CreateChild(ctx context.Context, o ChildOptions) (Session, er
 	}
 	name, _ := session.ParseName(view.ID)
 	if err := toHost(s.context(), s.hostSocket(name), FromApp(prompts.Delegated(parentTitle, task)), true, hostWait); err != nil {
-		log.Printf("agentos: child %s did not take its task: %v", view.ID, err)
+		log.Printf("orchestrator: child %s did not take its task: %v", view.ID, err)
 		return Session{}, fmt.Errorf("Thread %s started but did not take its task: send it again", view.ID)
 	}
 	return view, nil
@@ -2220,7 +2220,7 @@ func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, str
 	view, err := s.createIn(proj, title, "", false, o.Issue, "", "", "", forkStart{}, start)
 	if err == nil && !own {
 		// The owner may not have that project on screen, so the log says who started work there.
-		log.Printf("agentos: thread %s %q in project %s started child %s %q in project %s", o.Parent, parentTitle, home.Name, view.ID, title, proj.Name)
+		log.Printf("orchestrator: thread %s %q in project %s started child %s %q in project %s", o.Parent, parentTitle, home.Name, view.ID, title, proj.Name)
 	}
 	return view, parentTitle, err
 }
@@ -2390,7 +2390,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 		}
 		if text != "" {
 			if err := toHost(s.context(), ch.Socket, text, send, hostWait); err != nil {
-				log.Printf("agentos: thread %s did not get the issue's command: %v", settled, err)
+				log.Printf("orchestrator: thread %s did not get the issue's command: %v", settled, err)
 				return Session{}, Woken, fmt.Errorf("Thread %s woke but did not take the issue's command", settled)
 			}
 		}
@@ -2525,7 +2525,7 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 	}
 	events, err := chat.ReadLog(s.chatLogPath(in.Name), 0)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 		return Session{}, errors.New("Could not read the thread's chat")
 	}
 	cut, compacted := -1, -1
@@ -2630,7 +2630,7 @@ func (s *Sessions) reserve(proj project.Project) (session.Name, context.Context)
 // thread it works for.
 func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart, parent string) (err error) {
 	env := []string{
-		"AGENTOS_SESSION=" + name.String(),
+		"ORCHESTRATOR_SESSION=" + name.String(),
 		mcp.ControlEnv + "=" + control.SocketPath(s.stateDir),
 	}
 	tmp := s.tmpDir(name)
@@ -2647,7 +2647,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 	if browser {
 		agentEnv, err := s.browsers.AgentEnv(name.String(), tmp)
 		if err != nil {
-			log.Printf("agentos: session %s starts without its browser: %v", name, err)
+			log.Printf("orchestrator: session %s starts without its browser: %v", name, err)
 			browser = false
 		}
 		env = append(env, agentEnv...)
@@ -2700,7 +2700,7 @@ func (s *Sessions) hosted(name session.Name, argv []string) ([]string, error) {
 	return append([]string{s.binary, "host", "--log", s.chatLogPath(name), "--socket", socket, "--"}, argv...), nil
 }
 
-// mcpConfig is the MCP config a thread's Claude starts the agentos server with.
+// mcpConfig is the MCP config a thread's Claude starts the orchestrator server with.
 type mcpConfig struct {
 	Servers map[string]mcpServer `json:"mcpServers"`
 }
@@ -2716,7 +2716,7 @@ func (s *Sessions) mcpConfigPath(name session.Name) string {
 	return filepath.Join(filepath.Dir(s.hostSocket(name)), name.Token+".mcp.json")
 }
 
-// mintToken makes a new token for the session's host and writes the MCP config that hands it to the agentos server,
+// mintToken makes a new token for the session's host and writes the MCP config that hands it to the orchestrator server,
 // in the host's private folder, so it is in no command line and in no environment but the server's. It takes mu.
 func (s *Sessions) mintToken(name session.Name) error {
 	raw := make([]byte, 32)
@@ -2741,7 +2741,7 @@ func (s *Sessions) mintToken(name session.Name) error {
 func (s *Sessions) forgetToken(name session.Name) {
 	delete(s.tokens, name.String())
 	if err := os.Remove(s.mcpConfigPath(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		log.Printf("agentos: removing the MCP config of thread %s: %v", name, err)
+		log.Printf("orchestrator: removing the MCP config of thread %s: %v", name, err)
 	}
 }
 
@@ -2800,7 +2800,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 		// session only to the second: a delete's heir is the fork that started last.
 		rec.ForkAt, rec.Created, rec.Woke = forkAt, created.UnixMilli(), created.UnixMilli()
 		if err := bus.WriteState(s.stateDir, rec); err != nil {
-			log.Printf("agentos: saving where %s was forked: %v", name, err)
+			log.Printf("orchestrator: saving where %s was forked: %v", name, err)
 		}
 		s.records[rec.Session] = rec
 	}
@@ -2873,7 +2873,7 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, bra
 // else left as a draft in the chat.
 func (s *Sessions) giveHost(ctx context.Context, name session.Name, text string, send bool) {
 	if err := toHost(ctx, s.hostSocket(name), text, send, hostWait); err != nil {
-		log.Printf("agentos: session %s did not get its first prompt: %v", name, err)
+		log.Printf("orchestrator: session %s did not get its first prompt: %v", name, err)
 	}
 }
 
@@ -2895,7 +2895,7 @@ func toHost(ctx context.Context, socket, text string, submit bool, wait time.Dur
 // send gives text to the session through its host: sent when submit is set, else left as a draft in its chat.
 func (s *Sessions) send(ctx context.Context, name session.Name, text string, submit bool) {
 	if err := toHost(ctx, s.hostSocket(name), text, submit, hostStarting); err != nil {
-		log.Printf("agentos: session %s did not get a prompt: %v", name, err)
+		log.Printf("orchestrator: session %s did not get a prompt: %v", name, err)
 	}
 }
 
@@ -2939,7 +2939,7 @@ func (s *Sessions) wakeFor(t target) bool {
 		return live == t.id
 	}
 	if _, err := s.wakeOrJoin(t.id, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: waking thread %s for #%d: %v\n", t.id, t.issue, err)
+		fmt.Fprintf(os.Stderr, "orchestrator: waking thread %s for #%d: %v\n", t.id, t.issue, err)
 		return false
 	}
 	return true
@@ -3081,7 +3081,7 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 			return
 		}
 		if err := s.awaken(id); err != nil {
-			log.Printf("agentos: thread %s did not get %d messages held for it: %v", id, len(told), err)
+			log.Printf("orchestrator: thread %s did not get %d messages held for it: %v", id, len(told), err)
 			for _, h := range told {
 				h.gone(err)
 			}
@@ -3102,9 +3102,9 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 			refused = true
 			return
 		case errors.As(err, &ranked):
-			log.Printf("agentos: dropped a message held for thread %s from %s: %v", id, h.From, err)
+			log.Printf("orchestrator: dropped a message held for thread %s from %s: %v", id, h.From, err)
 		case err != nil:
-			log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
+			log.Printf("orchestrator: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "orchestrator"), err)
 		}
 		h.gone(err)
 	}
@@ -3313,7 +3313,7 @@ func (s *Sessions) HoldsTold(id string) bool {
 func (s *Sessions) Reported(id string) int64 {
 	rec, err := bus.ReadState(s.stateDir, id)
 	if err != nil {
-		log.Printf("agentos: reading the state of thread %s: %v", id, err)
+		log.Printf("orchestrator: reading the state of thread %s: %v", id, err)
 	}
 	return rec.Reported
 }
@@ -3407,7 +3407,7 @@ func (s *Sessions) dropTold(id string, why error) int {
 	} else {
 		delete(s.wakes, id)
 	}
-	log.Printf("agentos: dropped %d messages held for thread %s: %v", dropped, id, why)
+	log.Printf("orchestrator: dropped %d messages held for thread %s: %v", dropped, id, why)
 	return dropped
 }
 
@@ -3454,7 +3454,7 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 		return "", err
 	}
 	if err != nil {
-		log.Printf("agentos: thread %s did not take a message from %s: %v", name, cmp.Or(m.From, "agentos"), err)
+		log.Printf("orchestrator: thread %s did not take a message from %s: %v", name, cmp.Or(m.From, "orchestrator"), err)
 		if refused := (*host.Refused)(nil); errors.As(err, &refused) {
 			return "", errors.New(refused.Reason)
 		}
@@ -3462,7 +3462,7 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 	}
 	if m.Steer {
 		if err := host.SendNowFrom(s.context(), socket, msg, m.From); err != nil && !errors.As(err, new(*host.Refused)) {
-			log.Printf("agentos: steering thread %s: %v", name, err)
+			log.Printf("orchestrator: steering thread %s: %v", name, err)
 		}
 	}
 	return msg, nil
@@ -3622,7 +3622,7 @@ func (s *Sessions) planStop(name session.Name, reason, text string) bool {
 		err = host.PlanStop(s.context(), socket, reason, text)
 	}
 	if err != nil {
-		log.Printf("agentos: thread %s stops without telling its host: %v", name, err)
+		log.Printf("orchestrator: thread %s stops without telling its host: %v", name, err)
 		return false
 	}
 	return true
@@ -3631,7 +3631,7 @@ func (s *Sessions) planStop(name session.Name, reason, text string) bool {
 // release takes back the hold and the planned stop of the thread's host, for a restart or a settle that did not happen.
 func (s *Sessions) release(name session.Name) {
 	if err := host.Release(s.context(), s.hostSocket(name)); err != nil {
-		log.Printf("agentos: releasing the host of thread %s: %v", name, err)
+		log.Printf("orchestrator: releasing the host of thread %s: %v", name, err)
 	}
 }
 
@@ -3733,7 +3733,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 		s.restarted(id)
 		s.release(name)
 		if undo := s.liveAccess(name, in.Access); undo != nil {
-			log.Printf("agentos: putting back the access of thread %s: %v", id, undo)
+			log.Printf("orchestrator: putting back the access of thread %s: %v", id, undo)
 		}
 		return accessDone, err
 	}
@@ -3758,7 +3758,7 @@ func (s *Sessions) readyHost(name session.Name) (string, error) {
 // accessFailed is the host's own reason for not changing the thread's access, or a plain sentence when the host could
 // not be reached, whose cause goes to the log.
 func accessFailed(name session.Name, access session.Access, err error) error {
-	log.Printf("agentos: thread %s did not change its access to %s: %v", name, access, err)
+	log.Printf("orchestrator: thread %s did not change its access to %s: %v", name, access, err)
 	if refused := (*host.Refused)(nil); errors.As(err, &refused) {
 		return errors.New(refused.Reason)
 	}
@@ -3805,7 +3805,7 @@ func (s *Sessions) changeMode(name session.Name, access session.Access) error {
 	}
 	if err != nil {
 		if undo := s.liveAccess(name, before); undo != nil {
-			log.Printf("agentos: putting back the access of thread %s: %v", name, undo)
+			log.Printf("orchestrator: putting back the access of thread %s: %v", name, undo)
 		}
 		return accessFailed(name, access, err)
 	}
@@ -3820,7 +3820,7 @@ func (s *Sessions) FlagRefused(flag string) {
 		return
 	}
 	s.refused[flag] = true
-	log.Printf("agentos: claude does not know %s, so threads start without it", flag)
+	log.Printf("orchestrator: claude does not know %s, so threads start without it", flag)
 }
 
 // withoutRefused is argv without the flags Claude did not know.
@@ -3841,7 +3841,7 @@ func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 	access, ok := agent.AccessOfMode(mode)
 	name, err := session.ParseName(id)
 	if !ok || err != nil {
-		log.Printf("agentos: thread %s reports a permission mode agentos does not know: %q", id, mode)
+		log.Printf("orchestrator: thread %s reports a permission mode orchestrator does not know: %q", id, mode)
 		return
 	}
 	// A delegation checks the parent's access under childMu and starts the child under it.
@@ -3859,11 +3859,11 @@ func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 	}
 	planDone := planApproved && have == session.Read && access == session.Supervised
 	if access.Rank() > have.Rank() && !planDone {
-		log.Printf("agentos: thread %s reports the mode %s, which gives more than its access %s; the access stays", id, mode, have)
+		log.Printf("orchestrator: thread %s reports the mode %s, which gives more than its access %s; the access stays", id, mode, have)
 		return
 	}
 	if err := s.liveAccess(name, access); err != nil {
-		log.Printf("agentos: recording the access of thread %s: %v", id, err)
+		log.Printf("orchestrator: recording the access of thread %s: %v", id, err)
 	}
 }
 
@@ -3980,7 +3980,7 @@ func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 	return t, nil
 }
 
-// handedTarget is the target of a fork that holds a worktree agentos made, which a Delete gave it: the worktree and
+// handedTarget is the target of a fork that holds a worktree orchestrator made, which a Delete gave it: the worktree and
 // the branch of its record. It needs mu.
 func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 	proj, ok := projectIn(s.projects(), in)
@@ -3997,7 +3997,7 @@ func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 }
 
 // targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork and a thread started
-// before agentos recorded branches have none. It needs mu.
+// before orchestrator recorded branches have none. It needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
 	if !ok || in.Fork != "" || in.Branch == "" {
@@ -4051,7 +4051,7 @@ func (s *Sessions) TypeInto(id, text string) error {
 		return err
 	}
 	if err := toHost(s.context(), s.hostSocket(name), text, false, hostStarting); err != nil {
-		log.Printf("agentos: session %s did not take a message: %v", id, err)
+		log.Printf("orchestrator: session %s did not take a message: %v", id, err)
 		return fmt.Errorf("session %s did not take the text", id)
 	}
 	return nil
@@ -4132,7 +4132,7 @@ func (s *Sessions) observe(id string, ev session.Event) bool {
 		prev.Observed = max(prev.Observed, ev.Seq)
 		if prev.Session != "" {
 			if err := bus.WriteState(s.stateDir, prev); err != nil {
-				log.Printf("agentos: saving the state of thread %s: %v", id, err)
+				log.Printf("orchestrator: saving the state of thread %s: %v", id, err)
 			}
 		}
 		if held.Session != "" {
@@ -4143,7 +4143,7 @@ func (s *Sessions) observe(id string, ev session.Event) bool {
 	}
 	rec := session.Apply(id, prev, ev, at)
 	if err := bus.WriteState(s.stateDir, rec); err != nil {
-		log.Printf("agentos: saving the state of thread %s: %v", id, err)
+		log.Printf("orchestrator: saving the state of thread %s: %v", id, err)
 		return false
 	}
 	if ev.Name == "UserPromptSubmit" {
@@ -4380,7 +4380,7 @@ func (s *Sessions) worksIn(id, dir string) bool {
 	return dir != "" && slices.ContainsFunc(s.usersIn(dir, false), func(in term.Info) bool { return in.Name.String() == id })
 }
 
-// heirOf is the fork outside family that works in the worktree dir, live or asleep, and has no worktree agentos made
+// heirOf is the fork outside family that works in the worktree dir, live or asleep, and has no worktree orchestrator made
 // for it, so a Delete of family may give it the worktree; "" when there is none. A thread with a worktree of its own
 // never gets a second one, and a thread that is not a fork works on a branch of its own. Of several, it is the one that
 // started last, then the one made last, whose number is the higher, then the first by id, so a refusal and the Delete
@@ -4410,7 +4410,7 @@ func (s *Sessions) heirOf(key, dir string, family []string) string {
 	}).id
 }
 
-// FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
+// FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree orchestrator
 // made for the thread, while no other live thread and no shell but the thread's own works there, and none of the
 // thread's own shells runs a command. inProject is set for a thread that runs in the project folder, whose files a
 // rewind never touches. reason says why the files cannot be rewound, "" when dir is where they may be.
@@ -4428,7 +4428,7 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	ctx := s.context()
 	w, made := s.made.Of(proj.Key(), id)
 	if !made || w.Removed != 0 || !folder.Inside(in.Path, w.Path) || !s.life.ours(ctx, proj.Key(), w.Path, id) {
-		return "", false, "Files are rewound only in a worktree agentos made for this thread"
+		return "", false, "Files are rewound only in a worktree orchestrator made for this thread"
 	}
 	if user := s.usersOf(w.Path, true, id); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
@@ -4594,14 +4594,14 @@ func (s *Sessions) startShell(proj project.Project, thread, dir string) (string,
 	name := session.Name{Project: proj.Key(), Shell: session.NextN(used)}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	env := []string{"AGENTOS_PROJECT=" + proj.Key()}
+	env := []string{"ORCHESTRATOR_PROJECT=" + proj.Key()}
 	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{loginShell(), "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}
 	if thread != "" {
 		if err := s.tmux.SetThread(tctx, name, thread); err != nil {
 			if err := s.tmux.Kill(tctx, name); err != nil {
-				log.Printf("agentos: stopping the untagged shell %s: %v", name, err)
+				log.Printf("orchestrator: stopping the untagged shell %s: %v", name, err)
 			}
 			return "", err
 		}
@@ -4639,7 +4639,7 @@ func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
 	defer cancel()
 	shells, err := s.tmux.ShellPaths(ctx)
 	if err != nil {
-		log.Printf("agentos: listing the shells of thread %s: %v", thread, err)
+		log.Printf("orchestrator: listing the shells of thread %s: %v", thread, err)
 		return
 	}
 	for _, sh := range shells {
@@ -4648,7 +4648,7 @@ func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
 			continue
 		}
 		if err := s.stopShell(sh.Name); err != nil {
-			log.Printf("agentos: closing shell %s of thread %s: %v", sh.Name, thread, err)
+			log.Printf("orchestrator: closing shell %s of thread %s: %v", sh.Name, thread, err)
 		}
 	}
 }
@@ -4674,7 +4674,7 @@ func (s *Sessions) hasBrowser(proj project.Project, brief string) bool {
 	return brief == "" && proj.BrowserOn() && s.browsers.AgentReady()
 }
 
-// workTree is the worktree agentos made for a thread, and the branch it holds. The zero value is a thread in the
+// workTree is the worktree orchestrator made for a thread, and the branch it holds. The zero value is a thread in the
 // project folder.
 type workTree struct{ branch, dir string }
 

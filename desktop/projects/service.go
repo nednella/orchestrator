@@ -78,7 +78,7 @@ func (s *Service) Snapshot() Snapshot {
 	}
 	var err error
 	if snap.Notes, err = s.notes.List(cur.Key()); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 		snap.Notes = []notes.Note{}
 	}
 	return snap
@@ -96,7 +96,7 @@ func (s *Service) SwitchProject(name string) (Snapshot, error) {
 
 func (s *Service) remember(p project.Project) {
 	if err := WriteLast(s.stateDir, p.Name); err != nil {
-		log.Printf("agentos: remembering the project: %v", err)
+		log.Printf("orchestrator: remembering the project: %v", err)
 	}
 }
 
@@ -131,7 +131,7 @@ func (s *Service) RemoveProject(name string) (Snapshot, error) {
 	return s.Snapshot(), nil
 }
 
-// SetUpProject writes a basic agentos block into the current project's config and starts a Supervised thread that
+// SetUpProject writes a basic orchestrator block into the current project's config and starts a Supervised thread that
 // sets up the repository with the user. A project that has queue sections keeps its config: only the session starts.
 func (s *Service) SetUpProject() (sessions.Session, error) {
 	key, err := s.configure()
@@ -143,7 +143,7 @@ func (s *Service) SetUpProject() (sessions.Session, error) {
 			return sessions.Session{}, err
 		}
 	}
-	return s.sessions.CreateBriefed("agentos setup", prompts.SetupStart(), prompts.SetupBrief())
+	return s.sessions.CreateBriefed("orchestrator setup", prompts.SetupStart(), prompts.SetupBrief())
 }
 
 // DismissSetup stops offering to set up the current project.

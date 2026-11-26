@@ -153,11 +153,11 @@ func TestLoadDataDir(t *testing.T) {
 		t.Skip("no home dir")
 	}
 	path := filepath.Join(t.TempDir(), "c.yaml")
-	if err := os.WriteFile(path, []byte("data_dir: ~/Notes/agentos\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("data_dir: ~/Notes/orchestrator\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := Load(path)
-	if err != nil || cfg.DataDir != filepath.Join(home, "Notes/agentos") {
+	if err != nil || cfg.DataDir != filepath.Join(home, "Notes/orchestrator") {
 		t.Errorf("data_dir = %q, %v", cfg.DataDir, err)
 	}
 }
@@ -186,8 +186,8 @@ func TestSaveKeepsCommentsAndTildePaths(t *testing.T) {
 		t.Skip("no home dir")
 	}
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := `# my agentos setup
-data_dir: ~/Notes/agentos # synced
+	original := `# my orchestrator setup
+data_dir: ~/Notes/orchestrator # synced
 projects:
   # the main one
   - name: api
@@ -209,7 +209,7 @@ projects:
 			t.Fatal(err)
 		}
 		got, _ := os.ReadFile(path)
-		for _, want := range []string{"# my agentos setup", "~/Notes/agentos # synced", "# the main one", "~/code/api", "# work", "{name: web, directory: ~/code/web}", "/srv/new"} {
+		for _, want := range []string{"# my orchestrator setup", "~/Notes/orchestrator # synced", "# the main one", "~/code/api", "# work", "{name: web, directory: ~/code/web}", "/srv/new"} {
 			if !strings.Contains(string(got), want) {
 				t.Errorf("the saved file lost %q:\n%s", want, got)
 			}
@@ -229,7 +229,7 @@ projects:
 			t.Fatal(err)
 		}
 		got, _ := os.ReadFile(path)
-		if strings.Contains(string(got), "name: api") || !strings.Contains(string(got), "# my agentos setup") || !strings.Contains(string(got), "~/code/web") {
+		if strings.Contains(string(got), "name: api") || !strings.Contains(string(got), "# my orchestrator setup") || !strings.Contains(string(got), "~/code/web") {
 			t.Errorf("saved file:\n%s", got)
 		}
 		reloaded, err := Load(path)

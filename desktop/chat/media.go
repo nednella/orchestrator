@@ -46,7 +46,7 @@ func saveImages(dir string, images []Image) ([]string, error) {
 	}
 	for path, data := range files {
 		if err := atomicfile.Write(path, data, 0o600); err != nil {
-			log.Printf("agentos: saving a chat image: %v", err)
+			log.Printf("orchestrator: saving a chat image: %v", err)
 			return nil, errors.New("Could not save the images")
 		}
 	}

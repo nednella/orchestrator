@@ -389,7 +389,7 @@ func TestSetAccessRefusesWhatCannotChange(t *testing.T) {
 		t.Errorf("deleted: err = %v", err)
 	}
 	if err := h.SetAccess(s.ID, "write"); err == nil {
-		t.Error("an access agentos does not know was taken")
+		t.Error("an access orchestrator does not know was taken")
 	}
 	if err := h.SetAccess(s.ID, ""); err == nil || err.Error() != "Pick an access level" {
 		t.Errorf("blank: err = %v", err)

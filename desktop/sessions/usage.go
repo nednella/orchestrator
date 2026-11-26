@@ -71,7 +71,7 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	}
 	parts, cur, err := r.cursor.Read(transcript, model)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: reading the usage of %s: %v\n", id, err)
+		fmt.Fprintf(os.Stderr, "orchestrator: reading the usage of %s: %v\n", id, err)
 	}
 	if live && cur.Model != "" && (in.Model != cur.Model || in.Effort != cur.Effort) {
 		in.Model, in.Effort = cur.Model, cur.Effort
@@ -135,7 +135,7 @@ func (s *Sessions) saveUsageMark(name session.Name, m usage.Mark) {
 		err = atomicfile.Write(s.usageMarkPath(name), data, 0o600)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving the usage mark of %s: %v\n", name, err)
+		fmt.Fprintf(os.Stderr, "orchestrator: saving the usage mark of %s: %v\n", name, err)
 	}
 }
 
@@ -145,7 +145,7 @@ func (s *Sessions) ran(ctx context.Context, in term.Info) {
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.SetModel(ctx, in.Name, in.Model, in.Effort); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: %v\n", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

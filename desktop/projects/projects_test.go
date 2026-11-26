@@ -103,16 +103,16 @@ func TestProjects(t *testing.T) {
 		if _, err := h.SwitchProject("other-2"); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("AGENTOS_DIR", "/")
+		t.Setenv("ORCHESTRATOR_DIR", "/")
 		cfg, err := app.Load()
 		if err != nil || cfg.Project.Name != "other-2" {
 			t.Errorf("from Finder: %+v, %v", cfg.Project, err)
 		}
-		t.Setenv("AGENTOS_DIR", h.Dir)
+		t.Setenv("ORCHESTRATOR_DIR", h.Dir)
 		if cfg, _ = app.Load(); cfg.Project.Name != "main" {
 			t.Errorf("inside a known folder: %q", cfg.Project.Name)
 		}
-		t.Setenv("AGENTOS_DIR", "/")
+		t.Setenv("ORCHESTRATOR_DIR", "/")
 		if err := projects.WriteLast(h.State, "gone"); err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +152,7 @@ func TestRemoveCurrentProjectOutsideTheConfig(t *testing.T) {
 	if err := os.Mkdir(home, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTOS_DIR", home)
+	t.Setenv("ORCHESTRATOR_DIR", home)
 	h = h.Restart(t)
 	if got := h.Snapshot().Project.Name; got != "home" {
 		t.Fatalf("current project = %q, want the unlisted home", got)

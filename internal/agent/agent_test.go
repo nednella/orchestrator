@@ -13,7 +13,7 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// headlessFlags are what claude needs to run under agentos host.
+// headlessFlags are what claude needs to run under orchestrator host.
 var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--thinking-display", "summarized", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
 
 func TestClaudeCommand(t *testing.T) {
@@ -144,7 +144,7 @@ func TestAccessOfModeUndoesPermissionMode(t *testing.T) {
 		t.Errorf("acceptEdits = %q, %v, want Supervised", got, ok)
 	}
 	if got, ok := AccessOfMode("auto"); ok {
-		t.Errorf("a mode agentos does not know gave %q", got)
+		t.Errorf("a mode orchestrator does not know gave %q", got)
 	}
 }
 
@@ -176,20 +176,20 @@ func allowedTools(t *testing.T, argv []string) []string {
 }
 
 func TestMCPConfigFlag(t *testing.T) {
-	const orchestration = "mcp__agentos__delegate,mcp__agentos__threads,mcp__agentos__read,mcp__agentos__send,mcp__agentos__wait,mcp__agentos__stop"
-	const readTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__refresh,mcp__agentos__browser"
-	const writeTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__show,mcp__agentos__track,mcp__agentos__refresh,mcp__agentos__browser"
-	for access, agentos := range map[session.Access]string{session.Read: readTools, session.Supervised: writeTools, session.Full: writeTools} {
+	const orchestration = "mcp__orchestrator__delegate,mcp__orchestrator__threads,mcp__orchestrator__read,mcp__orchestrator__send,mcp__orchestrator__wait,mcp__orchestrator__stop"
+	const readTools = orchestration + ",mcp__orchestrator__note,mcp__orchestrator__issue,mcp__orchestrator__new_thread,mcp__orchestrator__refresh,mcp__orchestrator__browser"
+	const writeTools = orchestration + ",mcp__orchestrator__note,mcp__orchestrator__issue,mcp__orchestrator__new_thread,mcp__orchestrator__show,mcp__orchestrator__track,mcp__orchestrator__refresh,mcp__orchestrator__browser"
+	for access, orchestrator := range map[session.Access]string{session.Read: readTools, session.Supervised: writeTools, session.Full: writeTools} {
 		argv := Claude{}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
 		if n := slices.Index(argv, "--mcp-config"); n < 0 || argv[n+1] != "/state/hosts/ab/tok.mcp.json" || slices.Index(argv[n+1:], "--mcp-config") >= 0 {
 			t.Errorf("%s: argv = %q, want --mcp-config and its path once", access, argv)
 		}
-		if got := strings.Join(allowedTools(t, argv), ","); got != tools+","+agentos {
-			t.Errorf("%s: --allowedTools = %q, want the thread tools and %s", access, got, agentos)
+		if got := strings.Join(allowedTools(t, argv), ","); got != tools+","+orchestrator {
+			t.Errorf("%s: --allowedTools = %q, want the thread tools and %s", access, got, orchestrator)
 		}
 	}
 	argv := Claude{}.Command(Launch{})
-	if slices.Contains(argv, "--mcp-config") || strings.Contains(strings.Join(argv, " "), "mcp__agentos__") {
+	if slices.Contains(argv, "--mcp-config") || strings.Contains(strings.Join(argv, " "), "mcp__orchestrator__") {
 		t.Errorf("without a config: argv = %q", argv)
 	}
 }
@@ -207,19 +207,19 @@ func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(string(tt.access), func(t *testing.T) {
 			allowed := allowedTools(t, Claude{}.Command(Launch{Access: tt.access, Browser: true, MCPConfig: "/m.json"}))
-			for _, tool := range []string{"mcp__agentos__show", "mcp__agentos__track"} {
+			for _, tool := range []string{"mcp__orchestrator__show", "mcp__orchestrator__track"} {
 				if slices.Contains(allowed, tool) != tt.showTrack {
 					t.Errorf("%s allowed = %v, want %v: %q", tool, !tt.showTrack, tt.showTrack, allowed)
 				}
 			}
 			n := 0
 			for _, rule := range allowed {
-				if strings.HasPrefix(rule, "mcp__agentos__") {
+				if strings.HasPrefix(rule, "mcp__orchestrator__") {
 					n++
 				}
 			}
-			if n != tt.agentTools || !slices.Contains(allowed, "mcp__agentos__note") || !slices.Contains(allowed, "Bash(agent-browser:*)") {
-				t.Errorf("allowed = %q, want %d agentos tools, note among them, and agent-browser", allowed, tt.agentTools)
+			if n != tt.agentTools || !slices.Contains(allowed, "mcp__orchestrator__note") || !slices.Contains(allowed, "Bash(agent-browser:*)") {
+				t.Errorf("allowed = %q, want %d orchestrator tools, note among them, and agent-browser", allowed, tt.agentTools)
 			}
 		})
 	}
@@ -229,8 +229,8 @@ func TestNoAllowRuleNamesTheCommand(t *testing.T) {
 	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
 		for _, l := range []Launch{{Access: access}, {Access: access, Browser: true, MCPConfig: "/m.json"}} {
 			for _, rule := range allowedTools(t, Claude{}.Command(l)) {
-				if strings.Contains(rule, "agentos ") || strings.Contains(rule, "agentos:") {
-					t.Errorf("%s: the allow rule %q runs the agentos command", access, rule)
+				if strings.Contains(rule, "orchestrator ") || strings.Contains(rule, "orchestrator:") {
+					t.Errorf("%s: the allow rule %q runs the orchestrator command", access, rule)
 				}
 			}
 		}
@@ -297,7 +297,7 @@ func TestClaudeHeadless(t *testing.T) {
 	if want := []string{"claude", "-p", "find things", "--allowedTools", "WebSearch WebFetch"}; !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
-	env := ClaudeHeadless.Env([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "DEPLOY_TOKEN=s", "AGENTOS_SESSION=main/9"})
+	env := ClaudeHeadless.Env([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "DEPLOY_TOKEN=s", "ORCHESTRATOR_SESSION=main/9"})
 	if want := []string{"PATH=/bin", "ANTHROPIC_API_KEY=k"}; !slices.Equal(env, want) {
 		t.Errorf("env = %q, want %q", env, want)
 	}

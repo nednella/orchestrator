@@ -19,7 +19,7 @@ const (
 	memoryStep = (1 << 30) / 10
 )
 
-// Memory is what agentos and its agents use, in bytes, rounded up to memoryStep. It is each process's
+// Memory is what orchestrator and its agents use, in bytes, rounded up to memoryStep. It is each process's
 // footprint summed over the processes, so memory two processes share is not counted: an estimate.
 type Memory struct {
 	App      int64 `json:"app"`      // the app and the commands it runs, without its browsers

@@ -191,7 +191,7 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 		{"the project folder", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			recordProjectFolder(t, l, dir)
 			return dir, dir
-		}, "holds the project's own checkout, which agentos never removes"},
+		}, "holds the project's own checkout, which orchestrator never removes"},
 		{"the repo's checkout around a project in a folder of it", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			recordProjectFolder(t, l, dir)
 			sub := filepath.Join(dir, "sub")
@@ -199,8 +199,8 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 				t.Fatal(err)
 			}
 			return sub, dir
-		}, "holds the project's own checkout, which agentos never removes"},
-		{"a human's worktree at a path agentos removed", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+		}, "holds the project's own checkout, which orchestrator never removes"},
+		{"a human's worktree at a path orchestrator removed", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			wt := madeTree(t, l, dir, "issue-7", "p/t1")
 			gitT(t, dir, "worktree", "remove", wt)
 			if err := l.sessions.made.Removed("p", wt, time.Now()); err != nil {
@@ -208,10 +208,10 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 			}
 			gitT(t, dir, "worktree", "add", wt, "issue-7")
 			return dir, wt
-		}, "is not the worktree agentos made for this thread"},
+		}, "is not the worktree orchestrator made for this thread"},
 		{"another thread's", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			return dir, madeTree(t, l, dir, "issue-7", "p/t2")
-		}, "is not the worktree agentos made for this thread"},
+		}, "is not the worktree orchestrator made for this thread"},
 		{"the thread's own, once the thread woke", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			l.sessions.info = append(l.sessions.info, term.Info{Name: session.Name{Project: "p", Token: "t1"}})
 			return dir, madeTree(t, l, dir, "issue-7", "p/t1")
@@ -286,7 +286,7 @@ func TestThreadThatWakesDuringTheCleanupKeepsWhatIsLeft(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		removed bool
-	}{{"no worktree agentos made", false}, {"a worktree agentos removed", true}} {
+	}{{"no worktree orchestrator made", false}, {"a worktree orchestrator removed", true}} {
 		t.Run(tt.name, func(t *testing.T) {
 			l, dir, _ := madeRepo(t)
 			name := session.Name{Project: "p", Token: "abcdefgh"}
@@ -325,7 +325,7 @@ func (noEvidence) Count(string) int { return 0 }
 func (noEvidence) Purge(string) int { return 0 }
 
 // asleepAndKept is an app with one asleep thread whose clean-up the checks kept after its PR merged. The thread has no
-// worktree agentos made, so a clean-up that goes on runs no git, and every command fails.
+// worktree orchestrator made, so a clean-up that goes on runs no git, and every command fails.
 func asleepAndKept(t *testing.T) (*Sessions, session.Name) {
 	t.Helper()
 	dir := t.TempDir()

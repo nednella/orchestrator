@@ -39,7 +39,7 @@ func realDir(t *testing.T, path string) string {
 	return real
 }
 
-// madeRecords are the main project's records of the worktrees agentos made.
+// madeRecords are the main project's records of the worktrees orchestrator made.
 func madeRecords(t *testing.T, h *apptest.Harness) []sessions.Made {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(h.State, "data", "main", "worktrees.json"))
@@ -109,7 +109,7 @@ func TestWriteThreadStartsInAWorktreeAgentosMade(t *testing.T) {
 		t.Errorf("records = %+v", records)
 	}
 	gitDir := gitIn(t, dir, "rev-parse", "--path-format=absolute", "--git-dir")
-	if marker, err := os.ReadFile(filepath.Join(gitDir, "agentos-thread")); err != nil || strings.TrimSpace(string(marker)) != s.ID {
+	if marker, err := os.ReadFile(filepath.Join(gitDir, "orchestrator-thread")); err != nil || strings.TrimSpace(string(marker)) != s.ID {
 		t.Errorf("marker = %q, %v; want %s", marker, err, s.ID)
 	}
 	if s.Branch != branch || s.Worktree != dir {
@@ -462,7 +462,7 @@ func TestWorktreesStayOutOfTheOwnersGitStatus(t *testing.T) {
 		t.Errorf("exclude = %q, want %q", data, want)
 	}
 	if exists(filepath.Join(h.Dir, ".gitignore")) {
-		t.Error("agentos wrote a .gitignore")
+		t.Error("orchestrator wrote a .gitignore")
 	}
 }
 
@@ -549,7 +549,7 @@ func TestWakeRestoresTheWorktree(t *testing.T) {
 		t.Errorf("records = %+v", records)
 	}
 	gitDir := gitIn(t, wt, "rev-parse", "--path-format=absolute", "--git-dir")
-	if marker, err := os.ReadFile(filepath.Join(gitDir, "agentos-thread")); err != nil || strings.TrimSpace(string(marker)) != s.ID {
+	if marker, err := os.ReadFile(filepath.Join(gitDir, "orchestrator-thread")); err != nil || strings.TrimSpace(string(marker)) != s.ID {
 		t.Errorf("marker = %q, %v; want %s", marker, err, s.ID)
 	}
 	if got, _ := h.Session(s.ID); got.Worktree != wt || got.Branch != "issue-7" {
@@ -686,7 +686,7 @@ func TestWakeNeverTakesOverAnotherThreadsWorktree(t *testing.T) {
 	s := issueThread(h, t, 7)
 	cleanedUpAfterAMerge(t, h, s)
 	gitIn(t, h.Dir, "worktree", "add", "--quiet", "-b", "other", s.Worktree, "origin/main")
-	marker := filepath.Join(gitIn(t, s.Worktree, "rev-parse", "--path-format=absolute", "--git-dir"), "agentos-thread")
+	marker := filepath.Join(gitIn(t, s.Worktree, "rev-parse", "--path-format=absolute", "--git-dir"), "orchestrator-thread")
 	if err := os.WriteFile(marker, []byte("main/aaaaaaaa\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

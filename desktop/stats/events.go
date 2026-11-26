@@ -57,14 +57,14 @@ func (l *Log) folder(key string) string { return filepath.Join(l.dir, key, event
 func (l *Log) Record(key string, e activity.Event) {
 	line, err := json.Marshal(e)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: encoding an event: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: encoding an event: %v\n", err)
 		return
 	}
 	l.appending.Lock()
 	defer l.appending.Unlock()
 	name := localDay(time.Now()) + "." + l.machine + ".jsonl"
 	if err := appendLine(filepath.Join(l.folder(key), name), line); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: recording an event: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: recording an event: %v\n", err)
 	}
 }
 
@@ -174,7 +174,7 @@ func (l *Log) compress(key, before string) {
 			continue
 		}
 		if err := gzipFile(f.path); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: compressing events: %v\n", err)
+			fmt.Fprintf(os.Stderr, "orchestrator: compressing events: %v\n", err)
 		}
 	}
 }
@@ -204,7 +204,7 @@ func (l *Log) Since(key, from string, each func(activity.Event)) {
 	defer l.mu.Unlock()
 	for _, f := range l.files(key, func(day string) bool { return day >= from }) {
 		if err := readFile(f.path, f.zipped, each); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: reading events: %v\n", err)
+			fmt.Fprintf(os.Stderr, "orchestrator: reading events: %v\n", err)
 		}
 	}
 }
@@ -221,7 +221,7 @@ func (l *Log) refresh(key string) {
 		}
 		days := map[string]*Day{}
 		if err := readFile(f.path, f.zipped, func(e activity.Event) { apply(days, e) }); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: reading events: %v\n", err)
+			fmt.Fprintf(os.Stderr, "orchestrator: reading events: %v\n", err)
 			continue
 		}
 		cur[f.path] = fileDays{size: f.info.Size(), mod: f.info.ModTime(), days: days}

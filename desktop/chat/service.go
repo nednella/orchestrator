@@ -47,7 +47,7 @@ func (v *Service) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 	}
 	events, err := chatlog.ReadLog(ch.Log, after)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 		return nil, fmt.Errorf("Could not read the chat of thread %s", id)
 	}
 	return events, nil
@@ -173,7 +173,7 @@ func (v *Service) filesIn(dir, query, of string) ([]string, error) {
 	}
 	paths, err := v.files.list(v.ctx(), dir)
 	if err != nil {
-		log.Printf("agentos: listing the files of %s in %s: %v", of, dir, err)
+		log.Printf("orchestrator: listing the files of %s in %s: %v", of, dir, err)
 		return nil, fmt.Errorf("Could not list the files of %s", of)
 	}
 	return rankFiles(paths, query, fileLimit), nil
@@ -186,7 +186,7 @@ func (v *Service) ProjectCommands(project string) ([]Command, error) {
 	}
 	commands, err := v.c.commands.list(project)
 	if err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 		return []Command{}, nil
 	}
 	return commands, nil
@@ -242,7 +242,7 @@ func (v *Service) RewindPreview(id, message string) (FilesRewind, error) {
 
 // RewindTo takes the thread's conversation back to before its user message and returns that message's text, for the
 // composer. With files it first puts back the files Claude's turns edited since, which it does only in the worktree
-// agentos made for the thread while nobody else works there. A settled thread is woken first, as a message would wake
+// orchestrator made for the thread while nobody else works there. A settled thread is woken first, as a message would wake
 // it. When anything fails, the chat log and the files are left as they were, unless the files were put back and the
 // conversation then was not, which the error says.
 func (v *Service) RewindTo(id, message string, files bool) (string, error) {
@@ -285,10 +285,10 @@ func (v *Service) rewindFailed(id, what string, err error) error {
 	case refused.Unsupported:
 		off := sentence(refused.Reason)
 		v.noRewind.CompareAndSwap(nil, &off)
-		log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+		log.Printf("orchestrator: thread %s did not take %s: %v", id, what, err)
 		return errors.New(off)
 	case strings.HasPrefix(refused.Reason, "unknown op"):
-		log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+		log.Printf("orchestrator: thread %s did not take %s: %v", id, what, err)
 		return fmt.Errorf("Thread %s runs under a host from before Edit from here; put it to sleep and wake it to edit", id)
 	}
 	return v.failed(id, what, err)
@@ -335,7 +335,7 @@ func (v *Service) failed(id, what string, err error) error {
 	if err == nil {
 		return nil
 	}
-	log.Printf("agentos: thread %s did not take %s: %v", id, what, err)
+	log.Printf("orchestrator: thread %s did not take %s: %v", id, what, err)
 	if refused := (*host.Refused)(nil); errors.As(err, &refused) {
 		return errors.New(sentence(refused.Reason))
 	}

@@ -16,8 +16,8 @@ import (
 // Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.
 // Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
 // continues the conversation up to there under a new id. Access is what the agent may do without asking. Prompt is
-// the text agentos adds to the agent's system prompt. Browser says the session drives its browser tab with
-// agent-browser. TmpDir is the session's own temp folder. MCPConfig is the file that starts the agentos tools' server
+// the text orchestrator adds to the agent's system prompt. Browser says the session drives its browser tab with
+// agent-browser. TmpDir is the session's own temp folder. MCPConfig is the file that starts the orchestrator tools' server
 // with the thread's token, "" for none.
 type Launch struct {
 	Model, Effort, Resume string
@@ -29,7 +29,7 @@ type Launch struct {
 	MCPConfig             string
 }
 
-// Provider is one agent CLI as agentos runs it: the command and environment a session starts with, and the way its
+// Provider is one agent CLI as orchestrator runs it: the command and environment a session starts with, and the way its
 // transcripts are read.
 type Provider interface {
 	Name() string

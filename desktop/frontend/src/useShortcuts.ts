@@ -13,19 +13,19 @@ export function useShortcuts(enabled: boolean) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!latest.current.enabled) return
-      const agentos = latestAgentos()
-      const action = actionsFor(agentos, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut) && !(x.shortcut.unlessTyping && isEditingText(e.target)))
+      const orchestrator = latestAgentos()
+      const action = actionsFor(orchestrator, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut) && !(x.shortcut.unlessTyping && isEditingText(e.target)))
       if (action) {
         e.preventDefault()
-        agentos.report(() => action.run([]))
+        orchestrator.report(() => action.run([]))
       }
     }
     const onEscape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !latest.current.enabled) return
-      const agentos = latestAgentos()
+      const orchestrator = latestAgentos()
       const lay = latest.current.layout
-      if (agentos.overlay) {
-        agentos.setOverlay(null)
+      if (orchestrator.overlay) {
+        orchestrator.setOverlay(null)
         return
       }
       if (lay.overlay) {
@@ -35,13 +35,13 @@ export function useShortcuts(enabled: boolean) {
       }
       if (lay.statsOpen || lay.digestOpen) {
         lay.closeCentre()
-        agentos.focus('thread')
+        orchestrator.focus('thread')
         return
       }
       const el = document.activeElement
       if (el instanceof HTMLElement && el.matches('input, textarea') && !el.closest('.xterm')) {
         el.blur()
-        agentos.focus(lay.panelExpanded && el.closest('[data-panel="right"]') ? 'right' : 'thread')
+        orchestrator.focus(lay.panelExpanded && el.closest('[data-panel="right"]') ? 'right' : 'thread')
       }
     }
     window.addEventListener('keydown', onKeyDown, true)

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const testSocket = "/state/agentos.sock"
+const testSocket = "/state/orchestrator.sock"
 
 func marked(id string) []string {
 	return []string{"HOME=/h", sessionVar + "=" + id, socketVar + "=" + testSocket}
@@ -141,7 +141,7 @@ func TestMarker(t *testing.T) {
 	}{
 		{"the thread", marked("p/ab"), "p/ab", true},
 		{"a longer id is its own", marked("p/ab2"), "p/ab2", true},
-		{"another app's socket", []string{sessionVar + "=p/ab", socketVar + "=/other/agentos.sock"}, "", false},
+		{"another app's socket", []string{sessionVar + "=p/ab", socketVar + "=/other/orchestrator.sock"}, "", false},
 		{"no socket", []string{sessionVar + "=p/ab"}, "", false},
 		{"no session", []string{socketVar + "=" + testSocket}, "", false},
 		{"an empty session", []string{sessionVar + "=", socketVar + "=" + testSocket}, "", false},
@@ -186,7 +186,7 @@ func TestParseLsof(t *testing.T) {
 
 // thread is a running thread: its host 100 and Claude 101 under it, each in a group of its own.
 var thread = []fakeProc{
-	{process: process{pid: 100, ppid: 1, pgid: 100, start: 1}, argv: []string{"/bin/agentos", "host"}, env: marked("p/ab")},
+	{process: process{pid: 100, ppid: 1, pgid: 100, start: 1}, argv: []string{"/bin/orchestrator", "host"}, env: marked("p/ab")},
 	{process: process{pid: 101, ppid: 100, pgid: 101, start: 1}, argv: []string{"claude", "-p"}, env: marked("p/ab")},
 }
 

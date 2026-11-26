@@ -12,15 +12,15 @@ const (
 )
 
 const (
-	// Server is the name a thread's MCP config gives the agentos server.
-	Server = "agentos"
+	// Server is the name a thread's MCP config gives the orchestrator server.
+	Server = "orchestrator"
 	// ToolPrefix starts the name Claude gives each of the server's tools.
 	ToolPrefix = "mcp__" + Server + "__"
 	// TokenEnv holds the thread's token, in the server's environment only.
-	TokenEnv = "AGENTOS_MCP_TOKEN"
+	TokenEnv = "ORCHESTRATOR_MCP_TOKEN"
 	// ControlEnv holds the path of the app's control socket, in the server's environment and in the thread's, which
 	// it names to the app that started it.
-	ControlEnv = "AGENTOS_CONTROL"
+	ControlEnv = "ORCHESTRATOR_CONTROL"
 )
 
 // spec is one tool as the server lists it. writes marks a tool that only a thread that writes runs without asking.
@@ -95,7 +95,7 @@ func specs() []spec {
 	}
 }
 
-// Tools are the agentos tools a thread calls: the orchestration tools, which start, watch and stop other threads, and
+// Tools are the orchestrator tools a thread calls: the orchestration tools, which start, watch and stop other threads, and
 // the agent tools, which note, start threads, show evidence, track a branch, refresh the queue and drive the browser.
 func Tools() []Tool {
 	all := specs()
@@ -106,10 +106,10 @@ func Tools() []Tool {
 	return out
 }
 
-// ClaudeNames are the agentos tools as Claude names them: ToolPrefix, then the tool's name.
+// ClaudeNames are the orchestrator tools as Claude names them: ToolPrefix, then the tool's name.
 func ClaudeNames() []string { return names(false) }
 
-// ReadNames are the agentos tools that a Read thread runs without asking, as Claude names them: every one but those
+// ReadNames are the orchestrator tools that a Read thread runs without asking, as Claude names them: every one but those
 // that file evidence of work or claim a branch.
 func ReadNames() []string { return names(true) }
 

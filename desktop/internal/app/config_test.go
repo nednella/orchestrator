@@ -13,7 +13,7 @@ func useConfig(t *testing.T, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTOS_CONFIG", path)
+	t.Setenv("ORCHESTRATOR_CONFIG", path)
 }
 
 func TestLoadConfigPicksTheProject(t *testing.T) {
@@ -38,7 +38,7 @@ func TestLoadConfigPicksTheProject(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("AGENTOS_DIR", tt.dir)
+			t.Setenv("ORCHESTRATOR_DIR", tt.dir)
 			cfg, err := Load()
 			if err != nil || cfg.Project.Name != tt.want {
 				t.Errorf("project = %q, %v; want %q", cfg.Project.Name, err, tt.want)
@@ -48,7 +48,7 @@ func TestLoadConfigPicksTheProject(t *testing.T) {
 
 	t.Run("Finder with no projects falls back to the home folder", func(t *testing.T) {
 		useConfig(t, "projects: []\n")
-		t.Setenv("AGENTOS_DIR", "/")
+		t.Setenv("ORCHESTRATOR_DIR", "/")
 		cfg, err := Load()
 		if err != nil || cfg.Project.Dir != home {
 			t.Errorf("project = %+v, %v; want the home folder %s", cfg.Project, err, home)
@@ -65,12 +65,12 @@ func TestLoadConfigRejectsABrokenFile(t *testing.T) {
 
 func TestLoadConfigRunsHooksWithTheAppsOwnBinary(t *testing.T) {
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "agentos"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "orchestrator"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("AGENTOS_DIR", t.TempDir())
+	t.Setenv("ORCHESTRATOR_DIR", t.TempDir())
 	useConfig(t, "projects: []\n")
 	cfg, err := Load()
 	if err != nil {
@@ -84,6 +84,6 @@ func TestLoadConfigRunsHooksWithTheAppsOwnBinary(t *testing.T) {
 		own = real
 	}
 	if cfg.Binary != own {
-		t.Errorf("binary = %q, want the app's own %q and not %q", cfg.Binary, own, filepath.Join(bin, "agentos"))
+		t.Errorf("binary = %q, want the app's own %q and not %q", cfg.Binary, own, filepath.Join(bin, "orchestrator"))
 	}
 }

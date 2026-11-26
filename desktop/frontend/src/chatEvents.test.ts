@@ -144,8 +144,8 @@ test('a failed first read stops the feed', async () => {
 })
 
 test('chatMediaURL maps a saved path', () => {
-  assert.equal(chatMediaURL('main/k3x9q0ab', '/Users/me/.local/share/agentos/main/chat-media/k3x9q0ab/0123456789abcdef.png'), '/media/main/chat-media/k3x9q0ab/0123456789abcdef.png')
-  assert.equal(chatMediaURL('main/zz22yy33', '/Users/me/.local/share/agentos/main/chat-media/k3x9q0ab/0123456789abcdef.png'), '/media/main/chat-media/zz22yy33/0123456789abcdef.png', 'a resumed thread finds the images it carried over in its own folder')
+  assert.equal(chatMediaURL('main/k3x9q0ab', '/Users/me/.local/share/orchestrator/main/chat-media/k3x9q0ab/0123456789abcdef.png'), '/media/main/chat-media/k3x9q0ab/0123456789abcdef.png')
+  assert.equal(chatMediaURL('main/zz22yy33', '/Users/me/.local/share/orchestrator/main/chat-media/k3x9q0ab/0123456789abcdef.png'), '/media/main/chat-media/zz22yy33/0123456789abcdef.png', 'a resumed thread finds the images it carried over in its own folder')
   assert.equal(chatMediaURL('my project/k3x9q0ab', '/data/my project/chat-media/k3x9q0ab/a.png'), '/media/my%20project/chat-media/k3x9q0ab/a.png')
   assert.equal(chatMediaURL('main/k3x9q0ab', '/Users/me/Desktop/shot.png'), null, 'a file outside the chat images has no address')
   assert.equal(chatMediaURL('main/k3x9q0ab', 'chat-media/a.png'), null)

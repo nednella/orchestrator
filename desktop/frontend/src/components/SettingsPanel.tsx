@@ -71,7 +71,7 @@ export function SettingsPanel() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <h3 className="label pb-1">App</h3>
-        <SettingRow label="Version" hint={version ? `agentos ${version}` : 'A development build'}>
+        <SettingRow label="Version" hint={version ? `orchestrator ${version}` : 'A development build'}>
           <button className="btn h-7 flex-none px-2.5" onClick={() => setOverlay('changelog')}>
             Patch notes
           </button>
@@ -109,7 +109,7 @@ export function SettingsPanel() {
         {project && (
           <>
           <h3 className="label mt-6 pb-1">{project.name}</h3>
-          <SettingRow label="Clean up after a merge" hint="Auto removes the worktree agentos made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks.">
+          <SettingRow label="Clean up after a merge" hint="Auto removes the worktree orchestrator made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks.">
             <SegmentedControl label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />
           </SettingRow>
           <SettingRow label="Clean up after a close" hint="Auto cleans up when you close the pull request. Manual asks first.">

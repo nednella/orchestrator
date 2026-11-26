@@ -19,7 +19,7 @@ const samples = {
   link: 'see [the docs](https://example.com/docs) now',
   bareUrl: 'open https://example.com/a_b_c?x=1 please',
   literals: 'snake_case and 2 * 3 and a_b, ok? no: 4 * x',
-  path: 'look in ~/code/agentos',
+  path: 'look in ~/code/orchestrator',
   newline: 'first line\nsecond line',
   paragraphs: 'one\n\ntwo',
   html: 'a Vec<String> and a < b and AT&T',

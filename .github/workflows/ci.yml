@@ -39,7 +39,7 @@ jobs:
     runs-on: macos-latest
     # The runner has no Chrome for Testing; its Google Chrome is no one's default browser.
     env:
-      AGENTOS_BROWSER: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+      ORCHESTRATOR_BROWSER: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
     strategy:
       fail-fast: false
       # sessions and browser take most of the time, so each gets a runner of its own;
@@ -64,7 +64,7 @@ jobs:
       - run: brew install tmux bash
       # orchestrator writes a file of agent-browser's own, so the pinned version must pass the agent-browser test.
       - if: matrix.name == 'browser'
-        run: make agent-browser && echo "AGENTOS_AGENT_BROWSER=$PWD/bin/agent-browser" >> "$GITHUB_ENV"
+        run: make agent-browser && echo "ORCHESTRATOR_AGENT_BROWSER=$PWD/bin/agent-browser" >> "$GITHUB_ENV"
       - if: matrix.vet
         run: go vet -tags stub ./...
       # -p limits builds too, so compile every package in parallel first, running no tests;

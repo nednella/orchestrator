@@ -40,7 +40,7 @@ func configOf(t *testing.T, h *apptest.Harness, id string) string {
 	return strings.TrimSuffix(c.Socket, ".sock") + ".mcp.json"
 }
 
-// tokenOf is the token the thread's host was last started with, as its MCP config gives it to the agentos server.
+// tokenOf is the token the thread's host was last started with, as its MCP config gives it to the orchestrator server.
 func tokenOf(t *testing.T, h *apptest.Harness, id string) string {
 	t.Helper()
 	data, err := os.ReadFile(configOf(t, h, id))
@@ -53,7 +53,7 @@ func tokenOf(t *testing.T, h *apptest.Harness, id string) string {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	token := config.MCPServers["agentos"].Env["AGENTOS_MCP_TOKEN"]
+	token := config.MCPServers["orchestrator"].Env["ORCHESTRATOR_MCP_TOKEN"]
 	if token == "" {
 		t.Fatalf("no token in %s", data)
 	}
@@ -87,7 +87,7 @@ func TestTokenNamesItsThread(t *testing.T) {
 
 	// Through the control socket the caller is found first, and the tool after it.
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Args: []string{"nope"}})
-	if resp.OK || resp.Error != `agentos has no tool "nope"` {
+	if resp.OK || resp.Error != `orchestrator has no tool "nope"` {
 		t.Errorf("an unknown tool = %+v", resp)
 	}
 }
@@ -98,11 +98,11 @@ func TestTokenIgnoresTheSessionField(t *testing.T) {
 	if got, err := callerOf(h, tokenOf(t, h, a.ID), b.ID); err != nil || got != a.ID {
 		t.Errorf("A's token with session B: caller = %q, %v; want A, %s", got, err, a.ID)
 	}
-	if got, err := callerOf(h, "", b.ID); err == nil || err.Error() != "This call carries no agentos thread token" {
+	if got, err := callerOf(h, "", b.ID); err == nil || err.Error() != "This call carries no orchestrator thread token" {
 		t.Errorf("no token with session B: caller = %q, %v", got, err)
 	}
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Session: b.ID, Project: "main", Args: []string{"threads"}})
-	if resp.OK || resp.Error != "This call carries no agentos thread token" {
+	if resp.OK || resp.Error != "This call carries no orchestrator thread token" {
 		t.Errorf("a call with a session and no token = %+v", resp)
 	}
 }
@@ -165,7 +165,7 @@ func TestTokenSurvivesAppRestart(t *testing.T) {
 	fresh := h.Restart(t)
 	wantCaller(t, fresh, token, a.ID)
 	resp := fresh.Ask(t, ctl.Request{Cmd: "orchestrate", Token: token, Args: []string{"nope"}})
-	if resp.OK || resp.Error != `agentos has no tool "nope"` {
+	if resp.OK || resp.Error != `orchestrator has no tool "nope"` {
 		t.Errorf("the token after a restart = %+v, want it to name its thread", resp)
 	}
 }

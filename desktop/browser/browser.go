@@ -33,7 +33,7 @@ const (
 	browserStartLimit = 15 * time.Second
 	callLimit         = 15 * time.Second
 	stopLimit         = 5 * time.Second
-	// dialogWait is how long a JavaScript dialog may stay open before agentos dismisses it: a dialog blocks every
+	// dialogWait is how long a JavaScript dialog may stay open before orchestrator dismisses it: a dialog blocks every
 	// call to its page, including the ones that would answer it.
 	dialogWait  = 5 * time.Second
 	dialogShown = 80
@@ -53,17 +53,17 @@ type BrowserState struct {
 	Console []string `json:"console"`
 }
 
-// chromeForTesting is the browser agentos drives, relative to an Applications folder. Its bundle ID is its own: macOS
-// sends a clicked link to any running copy of the default browser's app, so a copy agentos runs would catch the
+// chromeForTesting is the browser orchestrator drives, relative to an Applications folder. Its bundle ID is its own: macOS
+// sends a clicked link to any running copy of the default browser's app, so a copy orchestrator runs would catch the
 // owner's links.
 const chromeForTesting = "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
 
-var errNoBrowser = errors.New("no Chrome for Testing found: run install.sh again, or set AGENTOS_BROWSER")
+var errNoBrowser = errors.New("no Chrome for Testing found: run install.sh again, or set ORCHESTRATOR_BROWSER")
 
-// findBrowser returns the browser to drive: AGENTOS_BROWSER, else Chrome for Testing in ~/Applications or
+// findBrowser returns the browser to drive: ORCHESTRATOR_BROWSER, else Chrome for Testing in ~/Applications or
 // /Applications.
 func findBrowser() string {
-	if p := os.Getenv("AGENTOS_BROWSER"); p != "" {
+	if p := os.Getenv("ORCHESTRATOR_BROWSER"); p != "" {
 		return p
 	}
 	dirs := []string{"/Applications"}
@@ -79,7 +79,7 @@ func findBrowser() string {
 	return ""
 }
 
-// Browsers runs one browser per project and one window per session. AGENTOS_BROWSER_HEADLESS=1 starts the
+// Browsers runs one browser per project and one window per session. ORCHESTRATOR_BROWSER_HEADLESS=1 starts the
 // browser without windows, for tests. agentBrowser is the command the sessions' agents drive their tab with.
 type Browsers struct {
 	dataDir      string
@@ -103,7 +103,7 @@ type Browsers struct {
 // New runs the browsers with their profiles under dataDir.
 func New(dataDir string, emit func(string, any)) *Browsers {
 	return &Browsers{
-		dataDir: dataDir, binary: findBrowser(), agentBrowser: findAgentBrowser(), headless: os.Getenv("AGENTOS_BROWSER_HEADLESS") == "1",
+		dataDir: dataDir, binary: findBrowser(), agentBrowser: findAgentBrowser(), headless: os.Getenv("ORCHESTRATOR_BROWSER_HEADLESS") == "1",
 		emit: emit, dialogWait: dialogWait,
 		urlFor: func(string) string { return "" }, labelFor: func(string) string { return "" }, onTabs: func() {},
 		procs: map[string]*browserProc{}, tabs: map[string]*tab{}, opening: map[string]*sync.Mutex{},
@@ -277,7 +277,7 @@ func (b *Browsers) reclaim(ctx context.Context, key, profile string) *browserPro
 	}
 	p := &browserProc{key: key, pid: pid, port: port, gone: make(chan struct{})}
 	if err := b.connect(ctx, p); err != nil {
-		log.Printf("agentos: the browser of %s (pid %d) answers on port %d but could not be reconnected: %v", key, pid, port, err)
+		log.Printf("orchestrator: the browser of %s (pid %d) answers on port %d but could not be reconnected: %v", key, pid, port, err)
 		return nil
 	}
 	go func() {
@@ -287,7 +287,7 @@ func (b *Browsers) reclaim(ctx context.Context, key, profile string) *browserPro
 		close(p.gone)
 		b.exited(p)
 	}()
-	log.Printf("agentos: reconnected to the browser of %s (pid %d) that was left running", key, pid)
+	log.Printf("orchestrator: reconnected to the browser of %s (pid %d) that was left running", key, pid)
 	return p
 }
 
@@ -351,7 +351,7 @@ func (b *Browsers) reconnect(p *browserProc, dropped *cdp) {
 		select {
 		case <-p.gone:
 		default:
-			log.Printf("agentos: forgetting the browser of %s (pid %d): its connection dropped and %v", p.key, p.pid, err)
+			log.Printf("orchestrator: forgetting the browser of %s (pid %d): its connection dropped and %v", p.key, p.pid, err)
 			b.exited(p)
 		}
 		for _, t := range tabs {
@@ -374,11 +374,11 @@ func (b *Browsers) reconnect(p *browserProc, dropped *cdp) {
 		t.refreshAll(ctx)
 		t.change(func() {})
 	}
-	log.Printf("agentos: reconnected to the browser of %s (pid %d) after its connection dropped", p.key, p.pid)
+	log.Printf("orchestrator: reconnected to the browser of %s (pid %d) after its connection dropped", p.key, p.pid)
 }
 
 func (b *Browsers) launchArgs(profile string, port int) []string {
-	// macOS blocks a child of agentos that writes into an app bundle and reports it as "agentos was prevented from
+	// macOS blocks a child of orchestrator that writes into an app bundle and reports it as "orchestrator was prevented from
 	// modifying apps". Brave's updater installs into Brave's bundle, and the code sign clone that Chromium makes at
 	// each start hard-links the bundle's executable. Other browsers ignore the Brave flag.
 	// A new profile asks the login keychain for its key, which a browser under the tmux server cannot reach, so macOS
@@ -621,7 +621,7 @@ func (b *Browsers) Open(ctx context.Context, id, url string) (BrowserState, erro
 		}
 	}
 	if err := b.bindAgent(ctx, id, targets[0]); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 	}
 	go t.watch()
 	if url == "" {
@@ -775,7 +775,7 @@ func (b *Browsers) Show(ctx context.Context, id string) error {
 // session's agent-browser is left bound to no tab.
 func (b *Browsers) Close(ctx context.Context, id string) {
 	if err := b.bindAgent(ctx, id, ""); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 	}
 	b.mu.Lock()
 	t := b.tabs[id]

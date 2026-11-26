@@ -49,7 +49,7 @@ test('every kept clean-up offers Clean up now, whatever kept it', () => {
   assert.equal(cleanupNowShown({ cleanup: 'blocked', worktree: '' }), true)
 })
 
-test('Clean up now waits while a clean-up runs or asks, and needs a worktree agentos made otherwise', () => {
+test('Clean up now waits while a clean-up runs or asks, and needs a worktree orchestrator made otherwise', () => {
   assert.equal(cleanupNowShown({ cleanup: '', worktree: '/repo/trees/issue-7' }), true)
   assert.equal(cleanupNowShown({ cleanup: '', worktree: '' }), false)
   assert.equal(cleanupNowShown({ cleanup: 'pending', worktree: '/repo/trees/issue-7' }), false)

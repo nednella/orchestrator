@@ -8,7 +8,7 @@ import type { Session } from '../types'
 
 type CleanupControlsProps = { session: Session }
 
-const KEPT_KEY = 'agentos.keptCleanups'
+const KEPT_KEY = 'orchestrator.keptCleanups'
 
 export function CleanupControls({ session }: CleanupControlsProps) {
   const { cleanupSession, report } = useAgentos('cleanupSession', 'report')

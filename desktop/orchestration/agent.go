@@ -19,12 +19,12 @@ const (
 	maxCaption = 1 << 10  // the most a caption of evidence may hold
 )
 
-// agentTools are the agent tools, each with the control command it sends: the one its agentos command sent.
+// agentTools are the agent tools, each with the control command it sends: the one its orchestrator command sent.
 func agentTools() map[string]string {
 	return map[string]string{"note": "note", "issue": "issue", "new_thread": "new", "show": "show", "track": "track", "refresh": "refresh", "browser": "browser"}
 }
 
-// agentTool runs the agent tool name as the caller, through the handler its agentos command reached.
+// agentTool runs the agent tool name as the caller, through the handler its orchestrator command reached.
 func (c *Commands) agentTool(name string) tool {
 	return func(ctx context.Context, caller string, req ctl.Request) (string, error) {
 		r, err := agentRequest(name, json.RawMessage(req.Opts["input"]), caller, session.ProjectKey(caller))
@@ -63,12 +63,12 @@ func (c *Commands) newThreadAccess(caller, asked string) (session.Access, error)
 	return want, nil
 }
 
-// agentRequest is the control request that an agent tool's input makes: the args and options its agentos command
+// agentRequest is the control request that an agent tool's input makes: the args and options its orchestrator command
 // sent, asked by the caller in project. Nothing in the input can name another thread or project.
 func agentRequest(tool string, input json.RawMessage, caller, project string) (ctl.Request, error) {
 	cmd, ok := agentTools()[tool]
 	if !ok {
-		return ctl.Request{}, fmt.Errorf("agentos has no tool %q", tool)
+		return ctl.Request{}, fmt.Errorf("orchestrator has no tool %q", tool)
 	}
 	args, opts, err := agentArgs(tool, string(input))
 	if err != nil {
@@ -161,7 +161,7 @@ func agentArgs(tool, input string) ([]string, map[string]string, error) {
 	case "browser":
 		return browserArgs(input)
 	}
-	return nil, nil, fmt.Errorf("agentos has no tool %q", tool)
+	return nil, nil, fmt.Errorf("orchestrator has no tool %q", tool)
 }
 
 // browserArgs reads the browser tool's input into the words and flags the browser command reads.

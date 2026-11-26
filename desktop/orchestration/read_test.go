@@ -131,7 +131,7 @@ func TestReadSaysWhoEachMessageIsFrom(t *testing.T) {
 	}
 	want := []string{
 		"owner: fix the login",
-		"agentos: APPLICATION_PROMPT: PR #4 has a review",
+		"orchestrator: APPLICATION_PROMPT: PR #4 has a review",
 		"main/abcdefgh: APPLICATION_PROMPT: Thread \"Plan\" (main/abcdefgh) sends you",
 		"agent: first block\n\nsecond block",
 		"agent: another reply",

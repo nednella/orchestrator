@@ -108,7 +108,7 @@ func (s *Sessions) stopServers(guarded bool, ids ...string) {
 	ctx := s.context()
 	list, err := s.procs.Servers(ctx, threads)
 	if err != nil {
-		log.Printf("agentos: finding the servers of %s: %v", strings.Join(ids, ", "), err)
+		log.Printf("orchestrator: finding the servers of %s: %v", strings.Join(ids, ", "), err)
 		return
 	}
 	if guarded {

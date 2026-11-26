@@ -155,7 +155,7 @@ func TestNewThreadToolRefusesMoreAccessThanTheCaller(t *testing.T) {
 		{"supervised asks read", session.Supervised, "read", session.Read, ""},
 		{"supervised gets supervised by default", session.Supervised, "", session.Supervised, ""},
 		{"full asks full", session.Full, "full", session.Full, ""},
-		{"an access agentos does not know", session.Full, "write", "", `access must be read, supervised or full, not "write"`},
+		{"an access orchestrator does not know", session.Full, "write", "", `access must be read, supervised or full, not "write"`},
 	}
 	h := apptest.New(t)
 	for i, tt := range tests {
@@ -444,13 +444,13 @@ func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	server := config.MCPServers["agentos"]
+	server := config.MCPServers["orchestrator"]
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, server.Command, server.Args...)
 	// The server runs with Claude's environment, which names the app's socket, and the config's, which holds the token.
 	// A session and a project set there name another thread; the call still acts as the token's.
-	cmd.Env = append(os.Environ(), "AGENTOS_SESSION=main/bbbbbbbb", "AGENTOS_PROJECT=elsewhere")
+	cmd.Env = append(os.Environ(), "ORCHESTRATOR_SESSION=main/bbbbbbbb", "ORCHESTRATOR_PROJECT=elsewhere")
 	for k, v := range server.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

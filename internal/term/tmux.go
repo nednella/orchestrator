@@ -17,16 +17,16 @@ import (
 )
 
 const (
-	titleOption  = "@agentos-name"
-	issueOption  = "@agentos-issue"
-	modelOption  = "@agentos-model"
-	effortOption = "@agentos-effort"
-	accessOption = "@agentos-access"
-	actionOption = "@agentos-action"
-	forkOption   = "@agentos-fork"
-	branchOption = "@agentos-branch"
-	parentOption = "@agentos-parent"
-	threadOption = "@agentos-thread"
+	titleOption  = "@orchestrator-name"
+	issueOption  = "@orchestrator-issue"
+	modelOption  = "@orchestrator-model"
+	effortOption = "@orchestrator-effort"
+	accessOption = "@orchestrator-access"
+	actionOption = "@orchestrator-action"
+	forkOption   = "@orchestrator-fork"
+	branchOption = "@orchestrator-branch"
+	parentOption = "@orchestrator-parent"
+	threadOption = "@orchestrator-thread"
 )
 
 const conf = `
@@ -45,7 +45,7 @@ set -g set-clipboard on
 set -g history-limit 50000
 `
 
-// Tmux drives the private tmux server that keeps agents alive while agentos is closed.
+// Tmux drives the private tmux server that keeps agents alive while orchestrator is closed.
 type Tmux struct {
 	socket string
 	conf   string
@@ -114,8 +114,8 @@ func (t *Tmux) runWith(ctx context.Context, env []string, args ...string) (strin
 
 // inherited are dropped from the environment the tmux server starts with: TMUX so an app started
 // inside another tmux can still attach, and a session's identity so an app or test started inside
-// an agentos session does not pass it on to every session and shell it starts.
-var inherited = []string{"TMUX", "AGENTOS_SESSION", "AGENTOS_CONTROL", "AGENTOS_PROJECT"}
+// an orchestrator session does not pass it on to every session and shell it starts.
+var inherited = []string{"TMUX", "ORCHESTRATOR_SESSION", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}
 
 func cleanEnv() []string {
 	return slices.DeleteFunc(os.Environ(), func(kv string) bool {

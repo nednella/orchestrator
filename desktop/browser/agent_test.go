@@ -18,7 +18,7 @@ import (
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
-// browserCmd runs an agentos browser command the way the cli sends it: flags become options.
+// browserCmd runs an orchestrator browser command the way the cli sends it: flags become options.
 func browserCmd(t *testing.T, h *apptest.Harness, session string, args ...string) (string, error) {
 	t.Helper()
 	var pos []string
@@ -45,7 +45,7 @@ func mustBrowser(t *testing.T, h *apptest.Harness, session string, args ...strin
 	t.Helper()
 	out, err := browserCmd(t, h, session, args...)
 	if err != nil {
-		t.Fatalf("agentos browser %s: %v", strings.Join(args, " "), err)
+		t.Fatalf("orchestrator browser %s: %v", strings.Join(args, " "), err)
 	}
 	return out
 }
@@ -120,7 +120,7 @@ func TestBrowserAgentCLI(t *testing.T) {
 			{"eval", "1"},
 		} {
 			if out, err := browserCmd(t, h, s.ID, args...); err == nil {
-				t.Errorf("agentos browser %s succeeded: %q", strings.Join(args, " "), out)
+				t.Errorf("orchestrator browser %s succeeded: %q", strings.Join(args, " "), out)
 			}
 		}
 		if _, err := browserCmd(t, h, s.ID, "click", "e1"); err == nil || !strings.Contains(err.Error(), "unknown browser action") {

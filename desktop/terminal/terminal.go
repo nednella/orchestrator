@@ -95,7 +95,7 @@ func (t *Terms) repaint(st *stream) {
 	ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
 	defer cancel()
 	if err := t.tmux.Redraw(ctx, st.client); err != nil {
-		log.Printf("agentos: redrawing %s: %v", st.id, err)
+		log.Printf("orchestrator: redrawing %s: %v", st.id, err)
 	}
 }
 

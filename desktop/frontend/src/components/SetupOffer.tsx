@@ -16,7 +16,7 @@ export function SetupOffer() {
   return (
     <div className="mb-8 flex flex-col gap-2.5 rounded-md border border-line bg-raised p-3">
       <div className="flex flex-col gap-1">
-        <p className="text-body font-medium">Set up this project for agentos</p>
+        <p className="text-body font-medium">Set up this project for orchestrator</p>
         <p className="text-small text-dim">
           Adds an Inbox whose Work action runs <code className="mono">/work</code>, then starts a task to write the command, the issue template and AGENTS.md with you.
         </p>

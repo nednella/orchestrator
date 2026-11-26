@@ -63,7 +63,7 @@ func (s *Service) emitNotes() {
 	key := s.project.Current().Key()
 	notes, err := s.notes.List(key)
 	if err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 		return
 	}
 	s.emit("notes", scoped.Of(key, notes))

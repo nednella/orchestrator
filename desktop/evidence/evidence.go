@@ -217,7 +217,7 @@ func (e *Store) Purge(id string) int {
 	items, _ := e.load(id)
 	delete(e.items, id)
 	if err := os.RemoveAll(dir); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: removing evidence: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: removing evidence: %v\n", err)
 	}
 	return len(items)
 }

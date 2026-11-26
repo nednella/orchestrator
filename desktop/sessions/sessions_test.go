@@ -361,11 +361,11 @@ func TestARefusedFlagIsLeftOutOnlyInTheAppRunThatSawIt(t *testing.T) {
 
 func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	first := apptest.New(t)
-	older := filepath.Join(t.TempDir(), "agentos")
+	older := filepath.Join(t.TempDir(), "orchestrator")
 	if err := os.WriteFile(older, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// An agentos earlier on PATH is no one's: the app starts again with it there and still runs its own binary.
+	// An orchestrator earlier on PATH is no one's: the app starts again with it there and still runs its own binary.
 	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	first.App.Stop()
 	h := first.Restart(t)
@@ -417,10 +417,10 @@ func TestEachHostGetsItsOwnToken(t *testing.T) {
 		if err := json.Unmarshal(data, &config); err != nil {
 			t.Fatal(err)
 		}
-		server := config.MCPServers["agentos"]
-		token := server.Env["AGENTOS_MCP_TOKEN"]
+		server := config.MCPServers["orchestrator"]
+		token := server.Env["ORCHESTRATOR_MCP_TOKEN"]
 		if len(config.MCPServers) != 1 || server.Command != apptest.CLIPath(t) || !slices.Equal(server.Args, []string{"mcp"}) || len(token) != 43 {
-			t.Errorf("%s: MCP config = %s, want the agentos mcp command with a token of 32 bytes in base64url", title, data)
+			t.Errorf("%s: MCP config = %s, want the orchestrator mcp command with a token of 32 bytes in base64url", title, data)
 		}
 		tokens[token] = true
 
@@ -436,8 +436,8 @@ func TestEachHostGetsItsOwnToken(t *testing.T) {
 			t.Errorf("%s: the token is on a command line", title)
 		}
 		env := claudeEnv(t, h, s.ID)
-		if _, ok := env["AGENTOS_MCP_TOKEN"]; ok {
-			t.Errorf("%s: claude's environment holds AGENTOS_MCP_TOKEN", title)
+		if _, ok := env["ORCHESTRATOR_MCP_TOKEN"]; ok {
+			t.Errorf("%s: claude's environment holds ORCHESTRATOR_MCP_TOKEN", title)
 		}
 		if env["MCP_TOOL_TIMEOUT"] != "3700000" {
 			t.Errorf("%s: MCP_TOOL_TIMEOUT = %q, want 3700000", title, env["MCP_TOOL_TIMEOUT"])

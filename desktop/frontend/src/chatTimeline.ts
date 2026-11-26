@@ -97,8 +97,8 @@ const agentTools = new Set(['Agent', 'Task'])
 // A subagent of the general type is not named by its type.
 const defaultAgentType = 'general-purpose'
 
-// delegateTool is the agentos tool that starts a child thread.
-const delegateTool = 'mcp__agentos__delegate'
+// delegateTool is the orchestrator tool that starts a child thread.
+const delegateTool = 'mcp__orchestrator__delegate'
 // The app starts each text it writes to Claude with this, so Claude does not take it for the owner's.
 const appPrompt = 'APPLICATION_PROMPT: '
 

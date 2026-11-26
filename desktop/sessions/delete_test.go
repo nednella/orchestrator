@@ -388,7 +388,7 @@ func TestDeleteWithoutTheWorktreeLeavesItOnDisk(t *testing.T) {
 		t.Errorf("clean-up runs %q, log %+v; want none", runs, log)
 	}
 
-	// No longer agentos's: a new thread of the issue runs in it as in one a human made, and no clean-up removes it.
+	// No longer orchestrator's: a new thread of the issue runs in it as in one a human made, and no clean-up removes it.
 	again := issueSession(h, t, 7)
 	if again.Branch != "issue-7" || again.Worktree != "" || realDir(t, panePath(t, h, again.ID)) != realDir(t, wt) {
 		t.Errorf("the new thread of #7 = %+v in %s, want it in %s, unrecorded", again, panePath(t, h, again.ID), wt)

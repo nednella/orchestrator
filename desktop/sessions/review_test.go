@@ -34,8 +34,8 @@ case " $* " in
   *" list-sessions "*)
     if [ -e %[1]s/fail-list ]; then echo "error connecting to /tmp/x (Permission denied)" >&2; exit 1; fi
     if [ -e %[1]s/fail-slow-list ]; then out=$(%[2]s "$@"); rc=$?; sleep 0.4; printf '%%s\n' "$out"; exit $rc; fi ;;
-  *"@agentos-issue"*) if [ -e %[1]s/fail-issue ]; then echo "no space for the option" >&2; exit 1; fi ;;
-  *"@agentos-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
+  *"@orchestrator-issue"*) if [ -e %[1]s/fail-issue ]; then echo "no space for the option" >&2; exit 1; fi ;;
+  *"@orchestrator-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
   *" kill-session "*) if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi ;;
 esac
 exec %[2]s "$@"
@@ -120,7 +120,7 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 	if got := stateOf(h, s.ID); got != "settled" {
 		t.Fatalf("a killed session is %s", got)
 	}
-	tmuxRun(t, h, "new-session", "-d", "-s", s.ID, "sleep", "60", ";", "set-option", "-t", s.ID, "@agentos-access", "supervised")
+	tmuxRun(t, h, "new-session", "-d", "-s", s.ID, "sleep", "60", ";", "set-option", "-t", s.ID, "@orchestrator-access", "supervised")
 	h.Sessions().Refresh()
 	if got := stateOf(h, s.ID); got != "idle" {
 		t.Errorf("a session tmux lists again is %s, want idle", got)

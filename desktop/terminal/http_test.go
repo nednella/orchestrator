@@ -114,7 +114,7 @@ func read(t *testing.T, h *apptest.Harness, id string) *reading {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &reading{header: http.Header{}, done: make(chan struct{})}
 	req := httptest.NewRequestWithContext(ctx, "GET", terminal.Prefix+url.PathEscape(id), nil)
-	req.Header.Set("X-Agentos", "1")
+	req.Header.Set("X-Orchestrator", "1")
 	go func() {
 		defer close(r.done)
 		h.App.Assets().ServeHTTP(r, req)
@@ -195,13 +195,13 @@ func TestStreamNeedsTheAppHeader(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second) // a GET it takes would stream on
 		req := httptest.NewRequestWithContext(ctx, "GET", terminal.Prefix+url.PathEscape(id), nil)
 		if header != "" {
-			req.Header.Set("X-Agentos", header)
+			req.Header.Set("X-Orchestrator", header)
 		}
 		rec := httptest.NewRecorder()
 		h.App.Assets().ServeHTTP(rec, req)
 		cancel()
 		if rec.Code != http.StatusForbidden {
-			t.Errorf("X-Agentos %q: status %d, want 403", header, rec.Code)
+			t.Errorf("X-Orchestrator %q: status %d, want 403", header, rec.Code)
 		}
 	}
 	if out.ended() {

@@ -1,5 +1,5 @@
-// Package agentos holds the files at the root of the repository that the app ships with.
-package agentos
+// Package orchestrator holds the files at the root of the repository that the app ships with.
+package orchestrator
 
 import _ "embed"
 

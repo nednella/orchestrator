@@ -1,3 +1,3 @@
 <!-- placeholders: none -->
 
-Set up this project for agentos with me.
+Set up this project for orchestrator with me.

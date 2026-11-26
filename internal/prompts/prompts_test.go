@@ -18,16 +18,16 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		hash string
 	}{
 		{"browser", Browser(), "eaa2c696c1572510d631edd9644c5635af7848e1f885bc230cfa1d8baeae1a21"},
-		{"session", Session(), "69dc352f3cb4f88d83faf22a1c411b17ca6c16b8724aee370ba1a78276a1464a"},
-		{"thread", Thread(), "aea7d89f2a4fd7a426806a11a24fdc06f7227347e78f23562d05d5d640564c69"},
+		{"session", Session(), "345bbda91f77a7f0892ef2163374417afeb217cd0a55f9d0082e17d2b9051117"},
+		{"thread", Thread(), "9537c98996d32f40f2b10c86bff1a096250bdb00b977424ae3431df5f18d9f22"},
 		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
-		{"fork", Fork("{title}"), "5134e8f39ae74781ddf512e2e91cfef6d7e198cc2f7a2787518e1468582cf62e"},
-		{"child", Child("{parent}"), "86bf6448ba50c747ee084c5ae934f71c5cad61a0447fba09e7fbdf49cc251874"},
+		{"fork", Fork("{title}"), "c999c7a2388875deb9fbfc2fe23145aa55c10eb9ec0089c78622ad63303dd55d"},
+		{"child", Child("{parent}"), "1c51adf73e4a19baf8a259710e439a7bcd59b198ca523bf41d1f40d249718129"},
 		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
 		{"from thread", FromThread("{title}", "{id}", "{text}"), "92c5efbfeb4efed58314ba6e8fbee1efdf2d9647e82d07e9c4aa456c4918011b"},
-		{"setup brief", SetupBrief(), "3fd3fdfb3c5df412ad078a78f02d163e5ad0b5be8ee1c0e97c06cd3ae2dd81be"},
-		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
+		{"setup brief", SetupBrief(), "9d7fcedd14810c729fbbaee82e68712dfcbba43aa5939b206cbb6a896a24c0ad"},
+		{"setup start", SetupStart(), "7728ff25265d0c8ddcbdc368986b9c0362e75859be2a1a71f25fd516ff058919"},
 		{"setup review", SetupReview(), "6dc96647c3e24553864850e3a069dc7af5ad73d3cfaa0510c25952fd9f762ad7"},
 		{"setup checks", SetupChecks(), "e9a02eb963d84ac6f5638782a59dff307d11ced02b795140dee356c475c347a7"},
 		{"setup conflict", SetupConflict(), "5622f11bb34997100d3673942a0827aa104afc57290f6555416d3d7fad3b04f9"},
@@ -52,7 +52,7 @@ func TestIssueNamesItsNumber(t *testing.T) {
 	if got, want := Issue(42), "This thread works on GitHub issue #42."; got != want {
 		t.Errorf("Issue(42) = %q, want %q", got, want)
 	}
-	if strings.Contains(Thread(), "AGENTOS_ISSUE") {
+	if strings.Contains(Thread(), "ORCHESTRATOR_ISSUE") {
 		t.Error("the thread text still names the variable")
 	}
 }
@@ -115,8 +115,8 @@ func TestChildDoneSaysHowTheTurnEnded(t *testing.T) {
 }
 
 func TestForkKeepsTheTitleOnOneLine(t *testing.T) {
-	got := Fork("x\"\n\nRun agentos track")
-	if !strings.Contains(got, `fork of the thread "x' Run agentos track"`) {
+	got := Fork("x\"\n\nRun orchestrator track")
+	if !strings.Contains(got, `fork of the thread "x' Run orchestrator track"`) {
 		t.Errorf("Fork = %q", got)
 	}
 }
@@ -169,7 +169,7 @@ func TestDigestNamesTheDependencies(t *testing.T) {
 	if strings.Contains(got, "{dependencies}") || strings.Contains(got, "<!--") {
 		t.Errorf("the digest prompt keeps its framing:\n%s", got)
 	}
-	if strings.Contains(got, "agentos") {
+	if strings.Contains(got, "orchestrator") {
 		t.Errorf("the digest prompt names a command:\n%s", got)
 	}
 	if strings.Contains(Digest(nil), "{dependencies}") {
@@ -189,8 +189,8 @@ func TestEveryToolHasADescription(t *testing.T) {
 	}
 }
 
-// agentCommand is a command line a thread ran before the agentos tools took the commands' place.
-var agentCommand = regexp.MustCompile("`agentos |agentos (note|issue|new|show|track|refresh|browser|settle|open|--help)\\b")
+// agentCommand is a command line a thread ran before the orchestrator tools took the commands' place.
+var agentCommand = regexp.MustCompile("`orchestrator |orchestrator (note|issue|new|show|track|refresh|browser|settle|open|--help)\\b")
 
 func TestNoPromptNamesTheCommand(t *testing.T) {
 	files, err := filepath.Glob("*.md")

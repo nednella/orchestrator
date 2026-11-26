@@ -98,7 +98,7 @@ func (u *Updater) Loop(ctx context.Context) {
 		}
 		if err := u.begin(ctx, "check"); err == nil {
 			if err := u.check(ctx, false); err != nil {
-				log.Printf("agentos: checking for a newer release: %v", err)
+				log.Printf("orchestrator: checking for a newer release: %v", err)
 			}
 			u.end()
 		}
@@ -137,7 +137,7 @@ func (u *Updater) Download(ctx context.Context) error {
 // new bundle is in place, Install only relaunches.
 func (u *Updater) Install(ctx context.Context) error {
 	if u.bundle == "" {
-		return errors.New("agentos runs from no .app bundle, so it cannot replace itself")
+		return errors.New("orchestrator runs from no .app bundle, so it cannot replace itself")
 	}
 	if err := u.begin(ctx, "install"); err != nil {
 		return err
@@ -154,7 +154,7 @@ func (u *Updater) Install(ctx context.Context) error {
 		return err
 	}
 	if rel.Version == "" {
-		return errors.New("agentos is up to date")
+		return errors.New("orchestrator is up to date")
 	}
 	if err := u.download(ctx); err != nil {
 		return err
@@ -336,7 +336,7 @@ func (u *Updater) set(s State) {
 // Relaunch arranges for the app to open again, then quits it shortly after.
 func (u *Updater) Relaunch() error {
 	if u.bundle == "" {
-		return errors.New("agentos runs from no .app bundle, so it cannot relaunch")
+		return errors.New("orchestrator runs from no .app bundle, so it cannot relaunch")
 	}
 	if err := u.relaunch(u.bundle); err != nil {
 		return err

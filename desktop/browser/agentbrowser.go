@@ -14,10 +14,10 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// findAgentBrowser returns the agent-browser that sessions drive their tab with: AGENTOS_AGENT_BROWSER, else the one
+// findAgentBrowser returns the agent-browser that sessions drive their tab with: ORCHESTRATOR_AGENT_BROWSER, else the one
 // the app bundle carries beside this binary, else "".
 func findAgentBrowser() string {
-	if p := os.Getenv("AGENTOS_AGENT_BROWSER"); p != "" {
+	if p := os.Getenv("ORCHESTRATOR_AGENT_BROWSER"); p != "" {
 		return p
 	}
 	exe, err := os.Executable()
@@ -81,7 +81,7 @@ func (b *Browsers) AgentEnv(id, tmpDir string) ([]string, error) {
 // <socket dir>/<session>.target (agent-browser 0.43.0). Pinned, the daemon stays on that tab and fails with tab_gone
 // when it is not there, rather than take another. It reads the file only when it attaches to the browser.
 //
-// agentos writes this file because agent-browser has no command that binds a session to a tab of a browser it shares
+// orchestrator writes this file because agent-browser has no command that binds a session to a tab of a browser it shares
 // without bringing Chrome in front of the owner's windows: tab <id> does, and so does --pin-tab with no binding.
 type agentBinding struct {
 	TargetID string `json:"targetId"`

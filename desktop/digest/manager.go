@@ -116,7 +116,7 @@ func (m *Manager) runAgent(ctx context.Context, key string, deps []string) error
 	if err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp("", "agentos-digest")
+	dir, err := os.MkdirTemp("", "orchestrator-digest")
 	if err != nil {
 		return fmt.Errorf("making the digest folder: %w", err)
 	}

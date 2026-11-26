@@ -30,7 +30,7 @@ export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | n
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
-// A thread's composer text, and the seq of the last draft agentos left in it that the composer has shown.
+// A thread's composer text, and the seq of the last draft orchestrator left in it that the composer has shown.
 export type ThreadDraft = { draft: ComposerDraft; seen: number }
 
 type AgentosState = {
@@ -93,7 +93,7 @@ type AgentosActions = {
   // place '' leaves it to new_thread_place.
   newThread(start: ThreadStart, access: Access, place: Place | ''): Promise<Session>
   settleThread(id: string): Promise<void>
-  // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree agentos made
+  // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree orchestrator made
   // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays.
   deleteThread(id: string, worktree: boolean): Promise<void>
   wakeThread(id: string): Promise<Session>
@@ -231,13 +231,13 @@ const cleanupToast = (entry: Cleanup): Omit<Toast, 'key'> => {
 
 const WARNING_SOURCES: Record<Warning['source'], string> = { tmux: 'tmux', github: 'GitHub', 'pull requests': 'Pull requests', worktrees: 'Worktrees', config: 'Config', agent: 'Agent' }
 
-const digestKey = (project: string) => `agentos.digestSeen.${project}`
+const digestKey = (project: string) => `orchestrator.digestSeen.${project}`
 
-const filterKey = (project: string) => `agentos.filter.${project}`
-const draftKey = (project: string) => `agentos.draft.${project}`
-const composerModeKey = (project: string) => `agentos.composerMode.${project}`
-const threadDraftKey = (id: string) => `agentos.thread.draft.${id}`
-const draftSeenKey = (id: string) => `agentos.thread.draftSeen.${id}`
+const filterKey = (project: string) => `orchestrator.filter.${project}`
+const draftKey = (project: string) => `orchestrator.draft.${project}`
+const composerModeKey = (project: string) => `orchestrator.composerMode.${project}`
+const threadDraftKey = (id: string) => `orchestrator.thread.draft.${id}`
+const draftSeenKey = (id: string) => `orchestrator.thread.draftSeen.${id}`
 
 // forgetThread drops what the app keeps of a thread that is gone: its draft, its right panel and its terminal drawer.
 function forgetThread(id: string) {

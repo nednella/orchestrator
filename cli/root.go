@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const noCommandLine = "agentos has no command line"
+const noCommandLine = "orchestrator has no command line"
 
 // Execute runs the binary. With no arguments it runs the app through window; the only commands are the hidden
 // ones the app and Claude start.
@@ -19,7 +19,7 @@ func Execute(ctx context.Context, window func() error) error {
 
 func newRootCmd(window func() error) *cobra.Command {
 	root := &cobra.Command{
-		Use: "agentos",
+		Use: "orchestrator",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return errors.New(noCommandLine)

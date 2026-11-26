@@ -1,5 +1,5 @@
-// Package orchestration answers the agentos tools a thread's Claude calls: the orchestration tools, and the agent tools
-// that do what the agentos commands did. Each call acts as the thread its token names.
+// Package orchestration answers the orchestrator tools a thread's Claude calls: the orchestration tools, and the agent tools
+// that do what the orchestrator commands did. Each call acts as the thread its token names.
 package orchestration
 
 import (
@@ -33,10 +33,10 @@ type Threads interface {
 	SettleIdle(id string) (bool, error)
 }
 
-// tool runs one agentos tool as the caller, the thread the call's token names.
+// tool runs one orchestrator tool as the caller, the thread the call's token names.
 type tool func(ctx context.Context, caller string, req ctl.Request) (string, error)
 
-// Commands answers the orchestrate command, which carries every agentos tool call.
+// Commands answers the orchestrate command, which carries every orchestrator tool call.
 type Commands struct {
 	threads Threads
 	chats   *chat.Chats
@@ -55,7 +55,7 @@ type Commands struct {
 	reportNext map[string]report // the next result to give for each of them, once the one in hand is given
 }
 
-// NewCommands answers the agentos tools as the threads s, and gives each child's result to its parent until the context
+// NewCommands answers the orchestrator tools as the threads s, and gives each child's result to its parent until the context
 // ctx gives ends.
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
 	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
@@ -73,11 +73,11 @@ func (c *Commands) Orchestrate(ctx context.Context, req ctl.Request) (string, er
 		return "", err
 	}
 	if len(req.Args) == 0 {
-		return "", errors.New("This call names no agentos tool")
+		return "", errors.New("This call names no orchestrator tool")
 	}
 	run, ok := c.tools[req.Args[0]]
 	if !ok {
-		return "", fmt.Errorf("agentos has no tool %q", req.Args[0])
+		return "", fmt.Errorf("orchestrator has no tool %q", req.Args[0])
 	}
 	return run(ctx, caller, req)
 }

@@ -134,13 +134,13 @@ const PATCH_NOTES: Release[] = [
     version: '0.14.0',
     date: '2026-10-07',
     sections: [
-      { title: 'Features', changes: [{ scope: 'desktop', text: 'let agents close their browser window', issue: 218, url: 'https://github.com/nednella/agentos/issues/218' }] },
+      { title: 'Features', changes: [{ scope: 'desktop', text: 'let agents close their browser window', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' }] },
       {
         title: 'Bug Fixes',
         changes: [
-          { scope: 'desktop', text: 'forget browser whose connection dropped', issue: 218, url: 'https://github.com/nednella/agentos/issues/218' },
-          { scope: 'desktop', text: "start browser without last run's pages", issue: 218, url: 'https://github.com/nednella/agentos/issues/218' },
-          { scope: 'desktop', text: 'stop browser once its last window closes', issue: 218, url: 'https://github.com/nednella/agentos/issues/218' },
+          { scope: 'desktop', text: 'forget browser whose connection dropped', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
+          { scope: 'desktop', text: "start browser without last run's pages", issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
+          { scope: 'desktop', text: 'stop browser once its last window closes', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
         ],
       },
     ],
@@ -152,7 +152,7 @@ const PATCH_NOTES: Release[] = [
       {
         title: 'Features',
         changes: [
-          { scope: 'cli', text: 'add --prompt to agentos new', issue: 0, url: '' },
+          { scope: 'cli', text: 'add --prompt to orchestrator new', issue: 0, url: '' },
           { scope: 'desktop', text: 'tell claude sessions how to start a session', issue: 0, url: '' },
         ],
       },
@@ -202,7 +202,7 @@ export function createMock(params: URLSearchParams) {
   const sessions: Session[] = []
   const data: ProjectData[] = [
     { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 2 * 3_600_000, sessionTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
-    { name: 'agentos', dir: '~/code/agentos', repo: 'nednella/agentos', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/agentos')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
+    { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
     { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], waits: [], cleanups: [] },
   ]
   let current = data[0]
@@ -723,7 +723,7 @@ export function createMock(params: URLSearchParams) {
       tokens: Math.round(prompts * scale * 61_000),
       cost: prompts * scale * 0.083,
     })
-    const all = [row('storefront', 3104), row('agentos', 1209), row('scratch', 38)]
+    const all = [row('storefront', 3104), row('orchestrator', 1209), row('scratch', 38)]
     const projects = all.filter((r) => !project || r.project === project)
     const span = days === 0 ? 121 : days
     const shape = Array.from({ length: span }, (_, i) => {
@@ -774,10 +774,10 @@ export function createMock(params: URLSearchParams) {
     const older: WorkRow[] = titles.map((title, i) => ({ project: 'storefront', issue: 400 + i, session: '', title: `#${400 + i} ${title}`, sessions: 1 + (i % 3), tokens: (i + 1) * 1_300_000, cost: (i + 1) * 0.64, lastAt: hoursAgo(60 + i * 20) }))
     const work: WorkRow[] = [
       ...older,
-      { project: 'agentos', issue: 320, session: '', title: '#320 Token usage and estimated cost per issue', sessions: 2, tokens: 18_400_000, cost: 9.12, lastAt: hoursAgo(0.2) },
-      { project: 'agentos', issue: 316, session: '', title: '#316 Switch task and chat shortcuts', sessions: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
+      { project: 'orchestrator', issue: 320, session: '', title: '#320 Token usage and estimated cost per issue', sessions: 2, tokens: 18_400_000, cost: 9.12, lastAt: hoursAgo(0.2) },
+      { project: 'orchestrator', issue: 316, session: '', title: '#316 Switch task and chat shortcuts', sessions: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
       { project: 'storefront', issue: 0, session: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', sessions: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
-      { project: 'agentos', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
+      { project: 'orchestrator', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
     const usage = { totals: usageRow('', '', 1, totals.sessions), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
     const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
@@ -834,9 +834,9 @@ export function createMock(params: URLSearchParams) {
     sessions.find((x) => x.id !== s.id && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
 
   // filesReason says why Edit from here cannot put the thread's files back, as the sessions do: a fork works in a
-  // worktree agentos did not make for it, and another thread may work in the thread's own.
+  // worktree orchestrator did not make for it, and another thread may work in the thread's own.
   const filesReason = (s: Session) => {
-    if (s.forkOf) return 'Files are rewound only in a worktree agentos made for this thread'
+    if (s.forkOf) return 'Files are rewound only in a worktree orchestrator made for this thread'
     const user = worktreeUser(s, [])
     return user ? `Thread ${user.title} also works in this worktree` : ''
   }
@@ -1097,7 +1097,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/agentos', dataDirFixed: false, editorApp: 'Visual Studio Code' }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code' }
 
   // limitsNow are the plan limits as the Go side would read them at the time.
   const limitsNow = (): Limits => {
@@ -1281,7 +1281,7 @@ export function createMock(params: URLSearchParams) {
       if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], access: actionAccess('Work'), moves: movesFrom('Inbox') }))
       current.needsSetup = false
       emit('projects', data.map(projectView))
-      return startSessionFor('agentos setup', 0, 'Set up this project for agentos with me.')
+      return startSessionFor('orchestrator setup', 0, 'Set up this project for orchestrator with me.')
     },
     DismissSetup: async () => {
       current.setupDismissed = true
@@ -1612,7 +1612,7 @@ export function createMock(params: URLSearchParams) {
       settings = { ...settings, threadAccess }
       return settings
     },
-    PickDataDir: async () => delay({ dir: '~/Library/Mobile Documents/com~apple~CloudDocs/agentos', empty: !flags.fullDataDir }),
+    PickDataDir: async () => delay({ dir: '~/Library/Mobile Documents/com~apple~CloudDocs/orchestrator', empty: !flags.fullDataDir }),
     SetDataDir: async (_dir: string, withData: boolean) => {
       await delay(undefined, withData ? 2500 : 400)
     },

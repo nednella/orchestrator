@@ -4,7 +4,7 @@ import type { PanelState } from './panelTabs'
 import { readStored, writeStored } from './storage'
 
 // Each thread's right panel, and Home's under ''.
-const PANEL_KEY = 'agentos.panel.v2'
+const PANEL_KEY = 'orchestrator.panel.v2'
 
 let panels = readStored<Record<string, unknown>>(PANEL_KEY, {})
 const listeners = new Set<() => void>()

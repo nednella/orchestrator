@@ -302,7 +302,7 @@ func (c *Chats) pending() []Pending {
 func waitingIn(ch sessions.Chat) *Pending {
 	logged, err := chatlog.ReadLog(ch.Log, 0)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", ch.ID, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", ch.ID, err)
 		return nil
 	}
 	var approvals []chatlog.Event
@@ -358,12 +358,12 @@ func (f *follower) run(ctx context.Context) {
 	defer f.end()
 	ready, cancel := context.WithTimeout(ctx, hostStartWait)
 	if err := host.Ready(ready, f.chat.Socket); err != nil {
-		log.Printf("agentos: the host of thread %s does not listen; reading its chat log: %v", f.chat.ID, err)
+		log.Printf("orchestrator: the host of thread %s does not listen; reading its chat log: %v", f.chat.ID, err)
 	}
 	cancel()
 	logged, err := chatlog.ReadLog(f.chat.Log, 0)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", f.chat.ID, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", f.chat.ID, err)
 	}
 	var last int64
 	var turnEnd, exit, commands *chatlog.Event

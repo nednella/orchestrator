@@ -37,7 +37,7 @@ func (c *Commands) Note(_ context.Context, req control.Request) (string, error) 
 		if list, err := c.notes.List(key); err == nil {
 			c.emit("notes", scoped.Of(key, list))
 		} else {
-			log.Printf("agentos: %v", err)
+			log.Printf("orchestrator: %v", err)
 		}
 	}
 	return "note saved: " + n.title(), nil

@@ -85,7 +85,7 @@ export type Session = {
 
 // What a delete of a thread would take with it, as DeletePlan says.
 export type DeletePlan = {
-  worktrees: number // the worktrees agentos made for the thread and its descendants that no other thread and no shell works in
+  worktrees: number // the worktrees orchestrator made for the thread and its descendants that no other thread and no shell works in
   children: string[] // the titles of the asleep descendants that go with the thread, nearest first
 }
 

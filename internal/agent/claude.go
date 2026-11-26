@@ -21,7 +21,7 @@ var threadTools = []string{"Bash(gh issue create:*)", "Bash(gh issue comment:*)"
 // browserTool drives the session's browser tab. A session with a browser may run it without asking.
 const browserTool = "Bash(agent-browser:*)"
 
-// toolTimeout is how long, in milliseconds, Claude lets an MCP tool call run: a little over the hour an agentos wait
+// toolTimeout is how long, in milliseconds, Claude lets an MCP tool call run: a little over the hour an orchestrator wait
 // may take.
 const toolTimeout = "3700000"
 
@@ -51,7 +51,7 @@ func WithoutFlag(argv []string, flag string) []string {
 	return slices.Concat(argv[:i], argv[min(i+2, len(argv)):])
 }
 
-// Command is claude's command line, run headless for agentos host.
+// Command is claude's command line, run headless for orchestrator host.
 func (c Claude) Command(l Launch) []string {
 	type permissions struct {
 		AdditionalDirectories []string `json:"additionalDirectories,omitempty"`
@@ -78,11 +78,11 @@ func (c Claude) Command(l Launch) []string {
 	}
 	if l.MCPConfig != "" {
 		argv = append(argv, "--mcp-config", l.MCPConfig)
-		agentos := mcp.ClaudeNames()
+		orchestrator := mcp.ClaudeNames()
 		if l.Access == session.Read {
-			agentos = mcp.ReadNames()
+			orchestrator = mcp.ReadNames()
 		}
-		allowed = append(slices.Clip(allowed), agentos...)
+		allowed = append(slices.Clip(allowed), orchestrator...)
 	}
 	argv = append(argv, "--permission-mode", PermissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {
@@ -112,7 +112,7 @@ func PermissionMode(a session.Access) string {
 	return "default"
 }
 
-// AccessOfMode is the access claude's permission mode gives, false for a mode agentos does not know.
+// AccessOfMode is the access claude's permission mode gives, false for a mode orchestrator does not know.
 func AccessOfMode(mode string) (session.Access, bool) {
 	switch mode {
 	case "plan":
@@ -125,7 +125,7 @@ func AccessOfMode(mode string) (session.Access, bool) {
 	return "", false
 }
 
-// Env sets claude's temp folder to the session's own, lets an agentos tool call run as long as a wait may, and keeps a
+// Env sets claude's temp folder to the session's own, lets an orchestrator tool call run as long as a wait may, and keeps a
 // checkpoint of the files each message's turn edits, which claude records only while it runs with the setting.
 func (c Claude) Env(l Launch) []string {
 	return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir, "MCP_TOOL_TIMEOUT=" + toolTimeout, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"}
@@ -138,7 +138,7 @@ var claudeAliases = []string{"default", "best", "fable", "opus", "sonnet", "haik
 var claudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 
 // Models are claude's aliases. claude has no command that lists its models, so a full id, which starts with
-// "claude-", is taken without a list: a new model works before agentos knows of it.
+// "claude-", is taken without a list: a new model works before orchestrator knows of it.
 func (c Claude) Models() []Model {
 	models := make([]Model, len(claudeAliases))
 	for i, alias := range claudeAliases {

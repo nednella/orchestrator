@@ -86,7 +86,7 @@ func (l *Lifecycle) openPulls(ctx context.Context, proj project.Project) RepoPul
 		keepETag := !l.polling[key]
 		l.mu.Unlock()
 		if _, _, err := l.listPulls(ctx, proj, repo, keepETag); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: %v\n", err)
+			fmt.Fprintf(os.Stderr, "orchestrator: %v\n", err)
 			failed = pullsFailed
 			l.mu.Lock()
 			kept = l.lists[key]

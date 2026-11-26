@@ -1,4 +1,4 @@
-// Package host runs one thread's Claude headless, keeps its chat log and serves a unix socket the app and the agentos command talk to.
+// Package host runs one thread's Claude headless, keeps its chat log and serves a unix socket the app and the orchestrator command talk to.
 package host
 
 import (
@@ -467,9 +467,9 @@ func (h *host) handleLine(line []byte) {
 }
 
 // allowsAgentosTool says whether the host answers Claude's ask to run tool itself: in plan mode Claude asks for a tool
-// that changes things even when it is allowed. Every thread runs the agentos tools a Read thread may; the ones only a
+// that changes things even when it is allowed. Every thread runs the orchestrator tools a Read thread may; the ones only a
 // thread that writes may run, it runs once Claude reports a mode other than plan, so a Read thread asks the owner for
-// them. Only the tools agentos serves are answered so, never another tool of a server that is also named agentos.
+// them. Only the tools orchestrator serves are answered so, never another tool of a server that is also named orchestrator.
 func (h *host) allowsAgentosTool(tool string) bool {
 	if slices.Contains(mcp.ReadNames(), tool) {
 		return true
@@ -482,7 +482,7 @@ func (h *host) allowsAgentosTool(tool string) bool {
 	return h.mode != "" && h.mode != "plan"
 }
 
-// allowAgentosTool answers Claude's ask to run an agentos tool with yes, and logs nothing.
+// allowAgentosTool answers Claude's ask to run an orchestrator tool with yes, and logs nothing.
 func (h *host) allowAgentosTool(e chat.Event) {
 	if err := h.write(chat.Allow(e.ID, e.Input)); err != nil {
 		fmt.Fprintf(h.echo, "host: allowing %s: %v\n", e.Tool, err)
@@ -930,7 +930,7 @@ var (
 	errApprovalWaits      = errors.New("This thread waits on an approval")
 	errNoUsage            = errors.New("This version of Claude Code does not report plan usage")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
-	// or after the one agentos was built for may.
+	// or after the one orchestrator was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
 )
 

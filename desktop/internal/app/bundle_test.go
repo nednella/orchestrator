@@ -9,10 +9,10 @@ import (
 
 func TestBundleOf(t *testing.T) {
 	for exe, want := range map[string]string{
-		"/Applications/agentos.app/Contents/MacOS/agentos": "/Applications/agentos.app",
-		"/repo/bin/agentos.app/Contents/MacOS/agentos":     "/repo/bin/agentos.app",
-		"/repo/bin/agentos-desktop":                        "",
-		"/agentos":                                         "",
+		"/Applications/orchestrator.app/Contents/MacOS/orchestrator": "/Applications/orchestrator.app",
+		"/repo/bin/orchestrator.app/Contents/MacOS/orchestrator":     "/repo/bin/orchestrator.app",
+		"/repo/bin/orchestrator-desktop":                             "",
+		"/orchestrator":                                              "",
 	} {
 		if got := bundleOf(exe); got != want {
 			t.Errorf("bundleOf(%q) = %q, want %q", exe, got, want)
@@ -22,13 +22,13 @@ func TestBundleOf(t *testing.T) {
 
 func TestRecordBundle(t *testing.T) {
 	dir := t.TempDir()
-	if err := recordBundleOf(bundleOf("/repo/bin/agentos-desktop"), dir); err != nil || exists(bus.AppPath(dir)) {
+	if err := recordBundleOf(bundleOf("/repo/bin/orchestrator-desktop"), dir); err != nil || exists(bus.AppPath(dir)) {
 		t.Errorf("a binary outside a bundle recorded a path: %v", err)
 	}
-	if err := recordBundleOf(bundleOf("/Apps/agentos.app/Contents/MacOS/agentos"), dir); err != nil {
+	if err := recordBundleOf(bundleOf("/Apps/orchestrator.app/Contents/MacOS/orchestrator"), dir); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := os.ReadFile(bus.AppPath(dir)); string(got) != "/Apps/agentos.app\n" {
+	if got, _ := os.ReadFile(bus.AppPath(dir)); string(got) != "/Apps/orchestrator.app\n" {
 		t.Errorf("recorded %q", got)
 	}
 }

@@ -121,7 +121,7 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 
 func TestLongestPromptStartsTheSession(t *testing.T) {
 	h := apptest.New(t)
-	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most agentos issue --prompt takes
+	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most orchestrator issue --prompt takes
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": handover}}); !resp.OK {
 		t.Fatalf("issue 7 with the longest prompt = %+v", resp)
 	}

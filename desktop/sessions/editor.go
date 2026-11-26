@@ -55,7 +55,7 @@ func (s *Sessions) OpenInEditor(id, path string) error {
 	ctx, cancel := context.WithTimeout(s.context(), editorTimeout)
 	defer cancel()
 	if _, err := s.run(ctx, "", "open", "-a", app, target); err != nil {
-		log.Printf("agentos: opening %s in %s: %v", target, app, err)
+		log.Printf("orchestrator: opening %s in %s: %v", target, app, err)
 		if strings.Contains(err.Error(), "Unable to find application") {
 			return fmt.Errorf("%s is not installed", label)
 		}
@@ -130,7 +130,7 @@ func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
 	}
 	real, err := filepath.EvalSymlinks(filepath.Join(realDir, rel))
 	if err != nil {
-		log.Printf("agentos: reading %s in the folder of %s: %v", path, of, err)
+		log.Printf("orchestrator: reading %s in the folder of %s: %v", path, of, err)
 		return nil, "", errCannotRead
 	}
 	if _, inside := within(realDir, real); !inside {
@@ -145,7 +145,7 @@ func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
 	// Without O_NONBLOCK a named pipe put in the file's place would hold the open up.
 	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		log.Printf("agentos: opening %s in the folder of %s: %v", path, of, err)
+		log.Printf("orchestrator: opening %s in the folder of %s: %v", path, of, err)
 		return nil, "", errCannotRead
 	}
 	// The file can be swapped between the check and the open, as for a symlink to another file in the folder.

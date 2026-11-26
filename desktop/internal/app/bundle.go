@@ -23,7 +23,7 @@ func Bundle() string {
 }
 
 // RecordBundle writes the path of the .app bundle the app runs from to the state dir, where the
-// agentos command looks for it. An app that runs from no bundle records nothing.
+// orchestrator command looks for it. An app that runs from no bundle records nothing.
 func RecordBundle(stateDir string) error {
 	if _, err := os.Executable(); err != nil {
 		return fmt.Errorf("finding the app: %w", err)

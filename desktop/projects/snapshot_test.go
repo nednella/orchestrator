@@ -16,7 +16,7 @@ func useConfig(t *testing.T, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTOS_CONFIG", path)
+	t.Setenv("ORCHESTRATOR_CONFIG", path)
 }
 
 func snapshot(cfg app.Config) projects.Snapshot {
@@ -38,7 +38,7 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 	useConfig(t, "projects:\n  - {name: api, directory: "+api+"}\n")
 
 	t.Run("a configured project is current", func(t *testing.T) {
-		t.Setenv("AGENTOS_DIR", api)
+		t.Setenv("ORCHESTRATOR_DIR", api)
 		cfg, err := app.Load()
 		if err != nil {
 			t.Fatal(err)
@@ -54,7 +54,7 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 		if err := os.MkdirAll(scratch, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("AGENTOS_DIR", scratch)
+		t.Setenv("ORCHESTRATOR_DIR", scratch)
 		cfg, err := app.Load()
 		if err != nil {
 			t.Fatal(err)
@@ -69,7 +69,7 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 func TestSnapshotNamesTheMachineFromOneRead(t *testing.T) {
 	dir := t.TempDir()
 	useConfig(t, "projects:\n  - {name: api, directory: "+dir+"}\n")
-	t.Setenv("AGENTOS_DIR", dir)
+	t.Setenv("ORCHESTRATOR_DIR", dir)
 	cfg, err := app.Load()
 	if err != nil {
 		t.Fatal(err)

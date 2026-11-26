@@ -29,7 +29,7 @@ const (
 // Who an entry is from, besides a thread's id.
 const (
 	fromOwner = "owner"
-	fromApp   = "agentos"
+	fromApp   = "orchestrator"
 	fromAgent = "agent"
 )
 
@@ -77,7 +77,7 @@ func (c *Commands) read(_ context.Context, _ string, req ctl.Request) (string, e
 	}
 	events, err := chatlog.ReadLog(ch.Log, 0)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", in.Thread, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", in.Thread, err)
 		return "", fmt.Errorf("Could not read the chat of thread %s", in.Thread)
 	}
 	data, err := json.Marshal(pageOf(entries(events, in.View == viewActivity), in.Before, cmp.Or(in.Limit, readLimit)))
@@ -125,7 +125,7 @@ func entries(events []chatlog.Event, activity bool) []entry {
 	return out
 }
 
-// senderOf says who sent the user message e: the thread it is from, agentos for a text the app wrote, else the owner.
+// senderOf says who sent the user message e: the thread it is from, orchestrator for a text the app wrote, else the owner.
 func senderOf(e chatlog.Event) string {
 	switch {
 	case e.From != "":

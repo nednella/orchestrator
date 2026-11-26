@@ -34,7 +34,7 @@ func fakeApp(t *testing.T, handle control.Handler) {
 	t.Setenv(mcp.ControlEnv, control.SocketPath(dir))
 }
 
-// callTool runs agentos mcp, sends one tools/call and returns the result's text and error flag.
+// callTool runs orchestrator mcp, sends one tools/call and returns the result's text and error flag.
 func callTool(t *testing.T, tool, input string) (string, bool) {
 	t.Helper()
 	inR, inW := io.Pipe()
@@ -76,7 +76,7 @@ func TestMCPCallCarriesTheToken(t *testing.T) {
 		got = req
 		return control.Response{OK: true, Out: "started demo/x1"}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	text, isErr := callTool(t, "delegate", `{"task":"fix it"}`)
 	if text != "started demo/x1" || isErr {
 		t.Errorf("result = %q, error %v", text, isErr)
@@ -102,7 +102,7 @@ func TestMCPBrowserCallGetsTheBrowsersTime(t *testing.T) {
 				got = req
 				return control.Response{OK: true, Out: "ok"}
 			})
-			t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+			t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 			if text, isErr := callTool(t, tt.tool, tt.input); text != "ok" || isErr {
 				t.Fatalf("result = %q, error %v", text, isErr)
 			}
@@ -119,9 +119,9 @@ func TestMCPWithoutTokenRefusesCalls(t *testing.T) {
 		calls.Add(1)
 		return control.Response{OK: true}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "")
 	text, isErr := callTool(t, "threads", `{}`)
-	if text != "agentos tools work only inside an agentos thread" || !isErr || calls.Load() != 0 {
+	if text != "orchestrator tools work only inside an orchestrator thread" || !isErr || calls.Load() != 0 {
 		t.Errorf("result = %q, error %v, app calls %d", text, isErr, calls.Load())
 	}
 }
@@ -136,7 +136,7 @@ func TestMCPWaitIsSliced(t *testing.T) {
 		}
 		return control.Response{OK: true, Out: `{"done":true,"text":"finished"}`}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	text, isErr := callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":600}`)
 	if text != "finished" || isErr || calls.Load() != 3 {
 		t.Errorf("result = %q, error %v, app calls %d", text, isErr, calls.Load())
@@ -158,7 +158,7 @@ func TestMCPWaitStopsAtItsLimit(t *testing.T) {
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 		return control.Response{OK: true, Out: `{"done":false,"text":"still running"}`}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	text, _ := callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":1}`)
 	if text != "still running" || calls.Load() != 1 {
 		t.Errorf("result = %q, app calls %d", text, calls.Load())
@@ -172,7 +172,7 @@ func TestMCPWaitStopsAtItsTimeout(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		return control.Response{OK: true, Out: `{"done":false,"text":"Thread demo/x1 still runs."}`}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	begin := time.Now()
 	text, isErr := callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":2}`)
 	if took := time.Since(begin); took < 2*time.Second || took > 3*time.Second {
@@ -192,7 +192,7 @@ func TestMCPWaitPausesAfterAnEarlyAnswer(t *testing.T) {
 		mu.Unlock()
 		return control.Response{OK: true, Out: `{"done":false,"text":"The chat service has not started"}`}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":3}`)
 	mu.Lock()
 	defer mu.Unlock()
@@ -211,9 +211,9 @@ func TestMCPIgnoresAgentosSession(t *testing.T) {
 		got = req
 		return control.Response{OK: true, Out: "ok"}
 	})
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
-	t.Setenv("AGENTOS_SESSION", "demo/other")
-	t.Setenv("AGENTOS_PROJECT", "other")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_SESSION", "demo/other")
+	t.Setenv("ORCHESTRATOR_PROJECT", "other")
 	callTool(t, "threads", `{}`)
 	if got.Cmd != "orchestrate" || got.Session != "" || got.Project != "" {
 		t.Errorf("request = %+v", got)
@@ -226,7 +226,7 @@ func TestMCPServerFindsTheControlSocket(t *testing.T) {
 		got = req
 		return control.Response{OK: true, Out: "ok"}
 	})
-	t.Setenv("AGENTOS_STATE_DIR", t.TempDir()) // the state folder says nothing: the app names its socket
+	t.Setenv("ORCHESTRATOR_STATE_DIR", t.TempDir()) // the state folder says nothing: the app names its socket
 	t.Setenv(mcp.TokenEnv, "tok-1")
 	if text, isErr := callTool(t, "threads", `{}`); isErr || text != "ok" || got.Token != "tok-1" {
 		t.Errorf("result = %q, error %v, request %+v", text, isErr, got)
@@ -243,7 +243,7 @@ func TestMCPWithoutTheControlSocketIsNotInAThread(t *testing.T) {
 
 func TestMCPWaitRefusesMoreThanAnHour(t *testing.T) {
 	fakeApp(t, func(context.Context, control.Request) control.Response { return control.Response{OK: true} })
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	text, isErr := callTool(t, "wait", `{"thread":"demo/x1","timeout_seconds":3601}`)
 	if !isErr || text != "timeout_seconds is at most 3600" {
 		t.Errorf("result = %q, error %v", text, isErr)
@@ -257,7 +257,7 @@ func TestMCPWithTheAppDownReportsIt(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	t.Setenv(mcp.ControlEnv, control.SocketPath(dir))
-	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
 	text, isErr := callTool(t, "threads", `{}`)
 	if !isErr || text != control.ErrNotRunning.Error() {
 		t.Errorf("result = %q, error %v", text, isErr)

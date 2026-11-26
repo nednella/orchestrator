@@ -12,7 +12,7 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// useTool calls the agentos tool over the control socket as the thread whose token it sends, and reads its answer
+// useTool calls the orchestrator tool over the control socket as the thread whose token it sends, and reads its answer
 // into out. It returns the error the tool gave, "" for none.
 func useTool(t *testing.T, h *apptest.Harness, caller, tool, input string, out any) string {
 	t.Helper()

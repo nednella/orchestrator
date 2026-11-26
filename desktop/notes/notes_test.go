@@ -348,17 +348,17 @@ func TestMediaServedInHTTPMode(t *testing.T) {
 
 func TestNotesLiveInTheDataDir(t *testing.T) {
 	root := t.TempDir()
-	synced := filepath.Join(root, "cloud", "agentos")
+	synced := filepath.Join(root, "cloud", "orchestrator")
 	t.Setenv("HOME", filepath.Join(root, "home"))
-	t.Setenv("AGENTOS_DEV_DATA_DIR", "")
+	t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", "")
 	conf := filepath.Join(root, "config.yaml")
 	if err := os.WriteFile(conf, []byte("data_dir: "+synced+"\nprojects:\n  - {name: p, directory: "+root+"}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AGENTOS_CONFIG", conf)
-	t.Setenv("AGENTOS_STATE_DIR", filepath.Join(root, "state"))
-	t.Setenv("AGENTOS_DIR", root)
-	t.Setenv("AGENTOS_TMUX_SOCKET", "aostest-unused")
+	t.Setenv("ORCHESTRATOR_CONFIG", conf)
+	t.Setenv("ORCHESTRATOR_STATE_DIR", filepath.Join(root, "state"))
+	t.Setenv("ORCHESTRATOR_DIR", root)
+	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", "aostest-unused")
 
 	cfg, err := app.Load()
 	if err != nil || cfg.DataDir != synced {
@@ -381,7 +381,7 @@ func TestNotesLiveInTheDataDir(t *testing.T) {
 		t.Error("the note was not written to data_dir")
 	}
 
-	t.Setenv("AGENTOS_DEV_DATA_DIR", filepath.Join(root, "override"))
+	t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", filepath.Join(root, "override"))
 	if cfg, _ = app.Load(); cfg.DataDir != filepath.Join(root, "override") {
 		t.Errorf("the override gave %q", cfg.DataDir)
 	}

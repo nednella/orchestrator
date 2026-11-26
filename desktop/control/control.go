@@ -1,4 +1,4 @@
-// Package control answers the commands of the agentos tools: each command is a handler that a service registers.
+// Package control answers the commands of the orchestrator tools: each command is a handler that a service registers.
 package control
 
 import (
@@ -53,7 +53,7 @@ func (r *Router) HandleExternal(cmd string, h Handler) {
 func (r *Router) Listen(stateDir string) {
 	srv, err := ctl.Listen(ctl.SocketPath(stateDir), r.answerExternal)
 	if err != nil {
-		log.Printf("agentos: agents cannot reach the app: %v", err)
+		log.Printf("orchestrator: agents cannot reach the app: %v", err)
 		return
 	}
 	r.server = srv
@@ -98,11 +98,11 @@ func (r *Router) AskerSession(req ctl.Request) (string, error) {
 	return req.Session, nil
 }
 
-// Caller is the thread whose host the request's token was made for. It reads nothing else of the request: an agentos
+// Caller is the thread whose host the request's token was made for. It reads nothing else of the request: an orchestrator
 // tool acts as its own thread, whatever the call says.
 func (r *Router) Caller(req ctl.Request) (string, error) {
 	if req.Token == "" {
-		return "", errors.New("This call carries no agentos thread token")
+		return "", errors.New("This call carries no orchestrator thread token")
 	}
 	id, ok := r.sessions.ThreadOfToken(req.Token)
 	if !ok {

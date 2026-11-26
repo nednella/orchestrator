@@ -25,7 +25,7 @@ import (
 type Place string
 
 const (
-	InWorktree Place = "worktree" // a worktree agentos makes for the thread, on a branch of its own
+	InWorktree Place = "worktree" // a worktree orchestrator makes for the thread, on a branch of its own
 	InProject  Place = "project"  // the project folder, on the branch checked out there
 )
 
@@ -90,7 +90,7 @@ func (l *Lifecycle) freeBranch(ctx context.Context, dir, name string) string {
 	return branch
 }
 
-// worktreeDir is the folder agentos makes the worktree of branch in, `<project>/trees/<branch>`; a `/` in the branch
+// worktreeDir is the folder orchestrator makes the worktree of branch in, `<project>/trees/<branch>`; a `/` in the branch
 // is a folder.
 func (l *Lifecycle) worktreeDir(proj project.Project, branch string) string {
 	return filepath.Join(proj.Dir, "trees", filepath.FromSlash(branch))
@@ -99,11 +99,11 @@ func (l *Lifecycle) worktreeDir(proj project.Project, branch string) string {
 // workPlace is where a thread runs: its folder, and the branch it works on there, "" in the project folder.
 type workPlace struct {
 	dir, branch string
-	made        bool // agentos made the worktree for the thread and recorded it
+	made        bool // orchestrator made the worktree for the thread and recorded it
 }
 
 // makeWorktree gives the thread its worktree on branch. A project that is not a git repository runs the thread in its
-// folder. A branch checked out in a worktree already runs the thread there, unrecorded, so agentos never removes it;
+// folder. A branch checked out in a worktree already runs the thread there, unrecorded, so orchestrator never removes it;
 // one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is made by
 // the project's session_worktree_command from base, a commit, or with no base from the default branch on origin,
 // fetched first, and the worktree is the one git then lists on the branch, wherever the command put it.
@@ -134,7 +134,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, thre
 	}
 	dir := l.worktreeDir(proj, branch)
 	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
-		return workPlace{}, fmt.Errorf("%s is already there, so agentos cannot make the worktree of %s in it", dir, branch)
+		return workPlace{}, fmt.Errorf("%s is already there, so orchestrator cannot make the worktree of %s in it", dir, branch)
 	}
 	if err := l.excludeTrees(ctx, proj, strings.TrimSpace(string(top))); err != nil {
 		return workPlace{}, err
@@ -191,7 +191,7 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 	return true, nil
 }
 
-// restore puts back the worktree agentos made for the thread, at the same path on the same branch, when it is gone, so
+// restore puts back the worktree orchestrator made for the thread, at the same path on the same branch, when it is gone, so
 // a woken thread never moves folder. A thread with no record has nothing to restore. A folder at the path is left as it
 // is: it is the thread's own worktree only when its marker holds the thread's id, and anything else is an error. The
 // branch is checked out as it is, the local one else origin's, with plain git: session_worktree_command makes a new
@@ -233,7 +233,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	}
 	if err := l.mark(ctx, w.Path, thread); err != nil {
 		if _, rerr := l.git(ctx, proj.Dir, "worktree", "remove", w.Path); rerr != nil {
-			log.Printf("agentos: removing the worktree %s, which agentos could not mark: %v", w.Path, rerr)
+			log.Printf("orchestrator: removing the worktree %s, which orchestrator could not mark: %v", w.Path, rerr)
 		}
 		return err
 	}
@@ -261,7 +261,7 @@ func (l *Lifecycle) dropEntry(ctx context.Context, dir string, trees worktrees, 
 func (l *Lifecycle) base(ctx context.Context, dir string) (ref, oid string, err error) {
 	branch := l.mainBranch(ctx, dir)
 	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
-		log.Printf("agentos: fetching %s for a new worktree, which starts from the copy of it there is: %v", branch, err)
+		log.Printf("orchestrator: fetching %s for a new worktree, which starts from the copy of it there is: %v", branch, err)
 	}
 	for _, ref := range []string{"origin/" + branch, branch} {
 		if out, err := l.git(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
@@ -296,7 +296,7 @@ func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) bool {
 	return l.hasRef(ctx, dir, ref)
 }
 
-// excludeTrees keeps the folder of the worktrees agentos makes out of the owner's git status, so `git add -A` never
+// excludeTrees keeps the folder of the worktrees orchestrator makes out of the owner's git status, so `git add -A` never
 // stages one as an embedded repository: the repository's own exclude file, which is never committed, gets the line once.
 // A tracked .gitignore is the owner's and is left alone.
 func (l *Lifecycle) excludeTrees(ctx context.Context, proj project.Project, top string) error {
@@ -335,7 +335,7 @@ func (l *Lifecycle) hasRef(ctx context.Context, dir, ref string) bool {
 	return err == nil
 }
 
-// undoWorktree removes the worktree makeWorktree made for a thread that did not start, when it is still the one agentos
+// undoWorktree removes the worktree makeWorktree made for a thread that did not start, when it is still the one orchestrator
 // made. git refuses to remove one with changes, and it stays.
 func (l *Lifecycle) undoWorktree(ctx context.Context, proj project.Project, thread session.Name, w workPlace) {
 	if !w.made || !l.ours(ctx, proj.Key(), w.dir, thread.String()) {
@@ -344,16 +344,16 @@ func (l *Lifecycle) undoWorktree(ctx context.Context, proj project.Project, thre
 	l.removeUnstarted(ctx, proj, w.dir)
 }
 
-// removeUnstarted removes a worktree agentos just made for a thread that did not start, and records it gone.
+// removeUnstarted removes a worktree orchestrator just made for a thread that did not start, and records it gone.
 func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, dir string) {
 	if _, err := l.git(ctx, proj.Dir, "worktree", "remove", dir); err != nil {
-		log.Printf("agentos: removing the worktree %s of a thread that did not start: %v", dir, err)
+		log.Printf("orchestrator: removing the worktree %s of a thread that did not start: %v", dir, err)
 		return
 	}
 	if _, ok := l.sessions.made.At(proj.Key(), dir); !ok {
 		return
 	}
 	if err := l.sessions.made.Removed(proj.Key(), dir, time.Now()); err != nil {
-		log.Printf("agentos: recording the worktree %s removed: %v", dir, err)
+		log.Printf("orchestrator: recording the worktree %s removed: %v", dir, err)
 	}
 }

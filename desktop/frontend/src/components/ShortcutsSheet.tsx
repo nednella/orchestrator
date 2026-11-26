@@ -76,7 +76,7 @@ function ShortcutsSheetDialog() {
     list.map((g) => (
       <section key={g.title} className="min-w-0">
         <h3 className="label pb-0.5">{g.title}</h3>
-        {g.title === 'Shell' && <p className="pb-1 text-small text-dim">A zsh in the project folder. Run agentos &lt;command&gt; here, or in any terminal, to drive the app.</p>}
+        {g.title === 'Shell' && <p className="pb-1 text-small text-dim">A zsh in the project folder. Run orchestrator &lt;command&gt; here, or in any terminal, to drive the app.</p>}
         <ul>
           {g.rows.map((row) => (
             <RowView key={row.id} row={row} />

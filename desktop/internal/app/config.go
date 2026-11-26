@@ -21,7 +21,7 @@ import (
 	"github.com/nednella/agentos/internal/term"
 )
 
-const defaultTmuxSocket = "agentos"
+const defaultTmuxSocket = "orchestrator"
 
 // Config is what the app reads from the config file and the environment.
 type Config struct {
@@ -31,13 +31,13 @@ type Config struct {
 	Machine      string // names this machine's event files in a data folder other machines share
 	DataDir      string // notes, evidence and stats: may be a synced folder
 	LocalDir     string // PR tracking and the clean-up log: never synced
-	DataDirFixed bool   // AGENTOS_DEV_DATA_DIR sets the data folder, so the settings cannot change it
+	DataDirFixed bool   // ORCHESTRATOR_DEV_DATA_DIR sets the data folder, so the settings cannot change it
 	Tmux         *term.Tmux
 	Agents       agent.Registry
 	Binary       string // this app's own binary: hosted agents run under its host command
 }
 
-// Load reads the config file and the environment. The project is the one holding AGENTOS_DIR
+// Load reads the config file and the environment. The project is the one holding ORCHESTRATOR_DIR
 // or the current folder. An app started from Finder (folder "/") gets the first
 // configured project, else the home folder.
 func Load() (Config, error) {
@@ -58,13 +58,13 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	dataDir := cmp.Or(cfg.DataDir, filepath.Join(home, ".local", "share", "agentos"))
-	localDir := filepath.Join(home, ".local", "share", "agentos")
-	override := os.Getenv("AGENTOS_DEV_DATA_DIR")
+	dataDir := cmp.Or(cfg.DataDir, filepath.Join(home, ".local", "share", "orchestrator"))
+	localDir := filepath.Join(home, ".local", "share", "orchestrator")
+	override := os.Getenv("ORCHESTRATOR_DEV_DATA_DIR")
 	if override != "" {
 		dataDir, localDir = override, override
 	}
-	dir := os.Getenv("AGENTOS_DIR")
+	dir := os.Getenv("ORCHESTRATOR_DIR")
 	if dir == "" {
 		if dir, err = os.Getwd(); err != nil {
 			return Config{}, fmt.Errorf("finding the current folder: %w", err)
@@ -85,7 +85,7 @@ func Load() (Config, error) {
 	} else {
 		current = cfg.Resolve(dir)
 	}
-	socket := os.Getenv("AGENTOS_TMUX_SOCKET")
+	socket := os.Getenv("ORCHESTRATOR_TMUX_SOCKET")
 	if socket == "" {
 		socket = defaultTmuxSocket
 	}
@@ -103,9 +103,9 @@ func Load() (Config, error) {
 	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agent.Registry{Dirs: slices.Compact([]string{dataDir, localDir})}, Binary: binary}, nil
 }
 
-// ConfigPath is the config file: AGENTOS_CONFIG, else the one in home's config folder.
+// ConfigPath is the config file: ORCHESTRATOR_CONFIG, else the one in home's config folder.
 func ConfigPath(home string) string {
-	return cmp.Or(os.Getenv("AGENTOS_CONFIG"), filepath.Join(home, ".config", "agentos", "config.yaml"))
+	return cmp.Or(os.Getenv("ORCHESTRATOR_CONFIG"), filepath.Join(home, ".config", "orchestrator", "config.yaml"))
 }
 
 // machineID is this machine's id, made on first use and kept in the state folder, which is never synced.

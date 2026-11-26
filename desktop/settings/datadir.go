@@ -14,7 +14,7 @@ import (
 // the local folder's, which never moves.
 var dataNames = []string{"notes.json", "notes-media", "evidence", "events", "digest.json"}
 
-var errDataFixed = errors.New("AGENTOS_DEV_DATA_DIR sets the data folder, so it cannot change here")
+var errDataFixed = errors.New("ORCHESTRATOR_DEV_DATA_DIR sets the data folder, so it cannot change here")
 
 // DataDirChoice is a folder picked for the data, and whether it is empty, so the data can be copied in.
 type DataDirChoice struct {
@@ -60,7 +60,7 @@ func (s *Service) SetDataDir(dir string, withData bool) error {
 		return err
 	}
 	if err := s.relaunch(); err != nil {
-		return fmt.Errorf("saved the data folder; quit and open agentos to use it: %w", err)
+		return fmt.Errorf("saved the data folder; quit and open orchestrator to use it: %w", err)
 	}
 	return nil
 }

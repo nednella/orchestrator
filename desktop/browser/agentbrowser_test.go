@@ -143,15 +143,15 @@ func TestASessionWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 	}
 }
 
-// TestAgentBrowserDrivesOnlyTheSessionsTab runs the agent-browser that AGENTOS_AGENT_BROWSER names, as make
+// TestAgentBrowserDrivesOnlyTheSessionsTab runs the agent-browser that ORCHESTRATOR_AGENT_BROWSER names, as make
 // agent-browser fetches it: the binding file is agent-browser's own, so a new version must pass this before it ships.
 func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
-	real := os.Getenv("AGENTOS_AGENT_BROWSER")
+	real := os.Getenv("ORCHESTRATOR_AGENT_BROWSER")
 	if out, err := exec.Command(real, "--version").Output(); real == "" || err != nil || !strings.HasPrefix(string(out), "agent-browser ") {
-		t.Skip("AGENTOS_AGENT_BROWSER names no agent-browser: run make agent-browser and set it to bin/agent-browser")
+		t.Skip("ORCHESTRATOR_AGENT_BROWSER names no agent-browser: run make agent-browser and set it to bin/agent-browser")
 	}
 	// The socket path may not pass 103 bytes, and the test's own temp folder is too deep for it.
-	data, err := os.MkdirTemp("/tmp", "agentos-ab-")
+	data, err := os.MkdirTemp("/tmp", "orchestrator-ab-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,16 +13,16 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// DefaultDir is where state files and the sockets live. AGENTOS_STATE_DIR overrides it.
+// DefaultDir is where state files and the sockets live. ORCHESTRATOR_STATE_DIR overrides it.
 func DefaultDir() (string, error) {
-	if dir := os.Getenv("AGENTOS_STATE_DIR"); dir != "" {
+	if dir := os.Getenv("ORCHESTRATOR_STATE_DIR"); dir != "" {
 		return dir, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("finding home dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "agentos"), nil
+	return filepath.Join(home, ".local", "state", "orchestrator"), nil
 }
 
 // AppPath is the file in which the app records the bundle it runs from, for the command that opens it.

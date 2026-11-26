@@ -43,7 +43,7 @@ const agentosSeeds: Seed[] = [
 
 const seedsByRepo: Record<string, Seed[]> = {
   'acme/storefront': storefrontSeeds,
-  'nednella/agentos': agentosSeeds,
+  'nednella/orchestrator': agentosSeeds,
 }
 
 const labelFor = (lane: Lane) => ({ ready: 'ready', plan: 'needs-plan', you: 'needs-human', idea: 'idea', inbox: '' })[lane]

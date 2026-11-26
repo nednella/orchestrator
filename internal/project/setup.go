@@ -9,7 +9,7 @@ import (
 // NeedsSetup says whether the project lacks the queue sections that setting it up writes.
 func (p Project) NeedsSetup() bool { return len(p.QueueSections) == 0 }
 
-// SetUp fills the keys of a basic agentos block that the project leaves empty: an issue's branch, the commands for PR reviews, failing checks and conflicts, and one Inbox section of every issue whose action is /work.
+// SetUp fills the keys of a basic orchestrator block that the project leaves empty: an issue's branch, the commands for PR reviews, failing checks and conflicts, and one Inbox section of every issue whose action is /work.
 func (p *Project) SetUp() {
 	p.Branch = cmp.Or(p.Branch, "issue-{n}")
 	p.OnReview = cmp.Or(p.OnReview, prompts.SetupReview())

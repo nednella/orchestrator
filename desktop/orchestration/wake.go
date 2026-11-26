@@ -134,7 +134,7 @@ func (c *Commands) give(r report) {
 		}
 	}
 	if err := c.threads.SetReported(r.child, end); err != nil {
-		log.Printf("agentos: %v", err)
+		log.Printf("orchestrator: %v", err)
 	}
 	if t.open > 0 || asleep {
 		return
@@ -144,7 +144,7 @@ func (c *Commands) give(r report) {
 	}
 	// A message that came for the child while its result went keeps it awake for the turn it starts.
 	if _, err := c.threads.SettleIdle(r.child); err != nil {
-		log.Printf("agentos: child %s did not go to sleep once its result went: %v", r.child, err)
+		log.Printf("orchestrator: child %s did not go to sleep once its result went: %v", r.child, err)
 	}
 }
 
@@ -189,14 +189,14 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 			return true
 		}
 		if _, gone := c.threads.ChatOf(w.waiter); gone != nil {
-			log.Printf("agentos: thread %s did not get the result of its child %s: %v", w.waiter, w.thread, err)
+			log.Printf("orchestrator: thread %s did not get the result of its child %s: %v", w.waiter, w.thread, err)
 			return false
 		}
 		if errors.Is(err, sessions.ErrToldDeleted) { // the parent is there, so the child was deleted
-			log.Printf("agentos: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
+			log.Printf("orchestrator: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
 			return false
 		}
-		log.Printf("agentos: thread %s did not get the result of its child %s, trying again in %v: %v", w.waiter, w.thread, pause, err)
+		log.Printf("orchestrator: thread %s did not get the result of its child %s, trying again in %v: %v", w.waiter, w.thread, pause, err)
 		select {
 		case <-ctx.Done():
 			return false
@@ -204,7 +204,7 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 		}
 		pause = min(2*pause, retryMost)
 		if ch, gone := c.threads.ChatOf(w.thread); gone != nil || ch.Deleting {
-			log.Printf("agentos: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
+			log.Printf("orchestrator: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
 			return false
 		}
 	}

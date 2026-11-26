@@ -52,7 +52,7 @@ func (c *commandLists) path(project string) string {
 func (c *commandLists) keep(project string, e chatlog.Event) {
 	var commands []Command
 	if err := json.Unmarshal(e.Input, &commands); err != nil {
-		log.Printf("agentos: reading the commands of a thread of %s: %v", project, err)
+		log.Printf("orchestrator: reading the commands of a thread of %s: %v", project, err)
 		return
 	}
 	c.mu.Lock()
@@ -61,7 +61,7 @@ func (c *commandLists) keep(project string, e chatlog.Event) {
 	if !ok {
 		saved, err := c.readLocked(project)
 		if err != nil {
-			log.Printf("agentos: %v", err)
+			log.Printf("orchestrator: %v", err)
 		}
 		latest = saved
 	}
@@ -76,7 +76,7 @@ func (c *commandLists) keep(project string, e chatlog.Event) {
 			err = atomicfile.Write(c.path(project), data, 0o600)
 		}
 		if err != nil {
-			log.Printf("agentos: saving the commands of %s: %v", project, err)
+			log.Printf("orchestrator: saving the commands of %s: %v", project, err)
 			return
 		}
 	}

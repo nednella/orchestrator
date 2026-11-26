@@ -17,11 +17,11 @@ import (
 	"github.com/nednella/agentos/internal/folder"
 )
 
-// markerFile, in a worktree's own git folder, holds the id of the thread agentos made the worktree
+// markerFile, in a worktree's own git folder, holds the id of the thread orchestrator made the worktree
 // for. git removes it with the folder, so a worktree a human makes again at the same path has none.
-const markerFile = "agentos-thread"
+const markerFile = "orchestrator-thread"
 
-// Made is a worktree agentos made for a thread. Times are in milliseconds.
+// Made is a worktree orchestrator made for a thread. Times are in milliseconds.
 type Made struct {
 	Path    string `json:"path"`
 	Branch  string `json:"branch"`
@@ -32,8 +32,8 @@ type Made struct {
 	Removed int64  `json:"removed,omitempty"`
 }
 
-// madeTrees is the record of the worktrees agentos made, one list per project, oldest first.
-// A thread's records go only when the thread is deleted; until then a path agentos once used stays known.
+// madeTrees is the record of the worktrees orchestrator made, one list per project, oldest first.
+// A thread's records go only when the thread is deleted; until then a path orchestrator once used stays known.
 type madeTrees struct {
 	dir string
 
@@ -80,7 +80,7 @@ func (m *madeTrees) save(key string, list []Made) error {
 	return nil
 }
 
-// Add records a worktree agentos made.
+// Add records a worktree orchestrator made.
 func (m *madeTrees) Add(key string, w Made) error {
 	if w.Thread == "" {
 		return errors.New("recording a worktree: no thread")
@@ -136,7 +136,7 @@ func (m *madeTrees) Restored(key, path string) error {
 	return m.change(key, path, func(w *Made) { w.Removed = 0 })
 }
 
-// Forget drops every record of the thread's worktrees: agentos no longer counts them as its own, so no clean-up
+// Forget drops every record of the thread's worktrees: orchestrator no longer counts them as its own, so no clean-up
 // removes them.
 func (m *madeTrees) Forget(key, thread string) error {
 	m.mu.Lock()
@@ -168,10 +168,10 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 			return m.save(key, list)
 		}
 	}
-	return fmt.Errorf("no worktree agentos made at %s", path)
+	return fmt.Errorf("no worktree orchestrator made at %s", path)
 }
 
-// handOver gives the worktree at path, which agentos made for the thread from, to the thread to: its record and its
+// handOver gives the worktree at path, which orchestrator made for the thread from, to the thread to: its record and its
 // marker name to from then on. A worktree that is not from's, as one a human made again at its path, stays as it is.
 func (l *Lifecycle) handOver(ctx context.Context, key, path, from, to string) error {
 	if !l.ours(ctx, key, path, from) {
@@ -184,7 +184,7 @@ func (l *Lifecycle) handOver(ctx context.Context, key, path, from, to string) er
 }
 
 // linkedGitDir is the worktree's own git folder, `<repo>/.git/worktrees/<name>`. The project
-// folder's own checkout is never a worktree agentos made, so it is an error.
+// folder's own checkout is never a worktree orchestrator made, so it is an error.
 func (l *Lifecycle) linkedGitDir(ctx context.Context, worktree string) (string, error) {
 	gitDir, common, err := l.gitDirs(ctx, worktree)
 	if err != nil {
@@ -211,9 +211,9 @@ func (l *Lifecycle) mark(ctx context.Context, worktree, thread string) error {
 	return nil
 }
 
-// ours says whether agentos made the worktree for the thread and it is still that worktree: the
+// ours says whether orchestrator made the worktree for the thread and it is still that worktree: the
 // newest record at the path is the thread's and not removed, and the worktree's marker holds the
-// thread's id. A worktree a human made again at a path agentos used has no marker.
+// thread's id. A worktree a human made again at a path orchestrator used has no marker.
 func (l *Lifecycle) ours(ctx context.Context, key, worktree, thread string) bool {
 	if thread == "" {
 		return false

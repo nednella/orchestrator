@@ -24,7 +24,7 @@ const devShim = `
 const listeners = {}
 const proxy = (get) => new Proxy({}, { get: (_, name) => get(name) })
 window.go = proxy((pkg) => proxy((type) => proxy((method) => async (...args) => {
-  const res = await fetch('/__call/' + pkg + '.' + type + '/' + method, { method: 'POST', headers: { 'X-Agentos': '1' }, body: JSON.stringify(args) })
+  const res = await fetch('/__call/' + pkg + '.' + type + '/' + method, { method: 'POST', headers: { 'X-Orchestrator': '1' }, body: JSON.stringify(args) })
   const text = await res.text()
   if (!res.ok) throw text.trimEnd()
   return text ? JSON.parse(text) : undefined
@@ -195,12 +195,12 @@ func Serve(o Options) error {
 		}
 		files.ServeHTTP(w, r)
 	})
-	fmt.Println("agentos: serving on http://" + o.Addr)
+	fmt.Println("orchestrator: serving on http://" + o.Addr)
 	return http.ListenAndServe(o.Addr, sameOrigin(o.Addr, mux))
 }
 
 // callHeader marks a /__call/ request as sent by the shim: a page on another site cannot add it without a preflight this server refuses.
-const callHeader = "X-Agentos"
+const callHeader = "X-Orchestrator"
 
 // fromShim refuses a request without callHeader.
 func fromShim(next http.Handler) http.Handler {

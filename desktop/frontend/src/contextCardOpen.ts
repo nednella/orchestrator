@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import { cardPlacement } from './contextCard'
 import { readStored, writeStored } from './storage'
 
-const SHOWN_KEY = 'agentos.contextCard'
+const SHOWN_KEY = 'orchestrator.contextCard'
 
 // shown is the owner's saved choice for the card over the chat; popover is the card opened under its top-bar button,
 // while the chat is too small to float it, and it is never saved.

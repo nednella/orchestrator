@@ -41,7 +41,7 @@ print("ready", flush=True)
 time.sleep(120)`
 
 // listener starts a listener on port in a session of its own, with env on top of this environment without any
-// agentos marker. The cleanup ends it by its pid, which is this test's child until it is waited for.
+// orchestrator marker. The cleanup ends it by its pid, which is this test's child until it is waited for.
 func listener(t *testing.T, port int, env ...string) *exec.Cmd {
 	t.Helper()
 	cmd := exec.Command("python3", "-c", listen, fmt.Sprint(port))
@@ -106,12 +106,12 @@ func TestProcessWithNoTerminalIsNotBusy(t *testing.T) {
 }
 
 func TestServersAndStopOnThisMac(t *testing.T) {
-	socket := t.TempDir() + "/agentos.sock"
+	socket := t.TempDir() + "/orchestrator.sock"
 	id := fmt.Sprintf("test/%d", os.Getpid())
 	mine := freePort(t)
 	server := listener(t, mine, sessionVar+"="+id, socketVar+"="+socket)
 	owners := listener(t, freePort(t))
-	otherApps := listener(t, freePort(t), sessionVar+"="+id, socketVar+"=/another/app/agentos.sock")
+	otherApps := listener(t, freePort(t), sessionVar+"="+id, socketVar+"=/another/app/orchestrator.sock")
 	table := New(socket, execRunner)
 
 	servers, err := table.Servers(context.Background(), map[string]int{id: 0})

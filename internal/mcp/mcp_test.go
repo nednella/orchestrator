@@ -27,7 +27,7 @@ func start(t *testing.T, tools []Tool, call Call) *harness {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, in: inW, out: bufio.NewReader(outR), done: make(chan error, 1), stop: cancel, lines: make(chan string, 16)}
 	go func() {
-		err := Serve(ctx, Info{Name: "agentos", Version: "1"}, tools, call, inR, outW)
+		err := Serve(ctx, Info{Name: "orchestrator", Version: "1"}, tools, call, inR, outW)
 		outW.Close()
 		h.done <- err
 	}()
@@ -113,7 +113,7 @@ func TestInitializeEchoesTheProtocolVersion(t *testing.T) {
 			if _, ok := res["capabilities"].(map[string]any)["tools"]; !ok {
 				t.Errorf("capabilities = %v", res["capabilities"])
 			}
-			if res["serverInfo"].(map[string]any)["name"] != "agentos" {
+			if res["serverInfo"].(map[string]any)["name"] != "orchestrator" {
 				t.Errorf("serverInfo = %v", res["serverInfo"])
 			}
 			if m["id"] != float64(1) {

@@ -62,7 +62,7 @@ func loggedRewinds(t *testing.T, h *apptest.Harness, id string) []string {
 	return out
 }
 
-// worktreeThread is the thread of issue 7, in the worktree agentos makes for it in a new git repository, and a file
+// worktreeThread is the thread of issue 7, in the worktree orchestrator makes for it in a new git repository, and a file
 // in that worktree that its stand-in claude's rewind of the files puts back.
 func worktreeThread(t *testing.T) (h *apptest.Harness, id, file string) {
 	t.Helper()

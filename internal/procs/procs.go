@@ -1,6 +1,6 @@
 // Package procs finds the servers a thread started. A thread's processes are found by the marker the app starts its
-// agent with, which every process the agent starts inherits: the thread's id in AGENTOS_SESSION and this app's control
-// socket in AGENTOS_CONTROL. Nothing else names them: a process is never matched by its name, folder, command or port,
+// agent with, which every process the agent starts inherits: the thread's id in ORCHESTRATOR_SESSION and this app's control
+// socket in ORCHESTRATOR_CONTROL. Nothing else names them: a process is never matched by its name, folder, command or port,
 // so a server the owner started by hand, or another app's thread, is never one.
 package procs
 
@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	sessionVar = "AGENTOS_SESSION"
-	socketVar  = "AGENTOS_CONTROL"
+	sessionVar = "ORCHESTRATOR_SESSION"
+	socketVar  = "ORCHESTRATOR_CONTROL"
 
 	// stopGrace is how long a server has to exit after SIGTERM before it gets SIGKILL.
 	stopGrace = 5 * time.Second
@@ -240,7 +240,7 @@ func (t *Table) Stop(ctx context.Context, servers []Server) <-chan struct{} {
 	}
 	snap, err := t.scan(func(id string) bool { return threads[id] })
 	if err != nil {
-		t.logf("agentos: stopping the servers of a thread: %v", err)
+		t.logf("orchestrator: stopping the servers of a thread: %v", err)
 		close(done)
 		return done
 	}
@@ -256,7 +256,7 @@ func (t *Table) Stop(ctx context.Context, servers []Server) <-chan struct{} {
 		targets, watched := snap.targets(p, s)
 		for _, pid := range targets {
 			if err := t.sys.signal(pid, syscall.SIGTERM); err != nil {
-				t.logf("agentos: stopping process %d of thread %s: %v", pid, s.Thread, err)
+				t.logf("orchestrator: stopping process %d of thread %s: %v", pid, s.Thread, err)
 			}
 		}
 		for _, q := range watched {
@@ -269,7 +269,7 @@ func (t *Table) Stop(ctx context.Context, servers []Server) <-chan struct{} {
 		case len(targets) > 1:
 			how = fmt.Sprintf(", with %d more processes of its group", len(targets)-1)
 		}
-		t.logf("agentos: stopping %s (pid %d, ports %s) of thread %s%s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, how)
+		t.logf("orchestrator: stopping %s (pid %d, ports %s) of thread %s%s", clip(s.Command, logWidth), s.PID, portList(s.Ports), s.Thread, how)
 	}
 	go func() {
 		defer close(done)
@@ -321,7 +321,7 @@ func (t *Table) killLeft(ctx context.Context, sent map[int]process, threads map[
 		}
 		list, err := t.sys.processes()
 		if err != nil {
-			t.logf("agentos: waiting for a thread's servers to stop: %v", err)
+			t.logf("orchestrator: waiting for a thread's servers to stop: %v", err)
 			return
 		}
 		live := make(map[int]process, len(list))
@@ -339,7 +339,7 @@ func (t *Table) killLeft(ctx context.Context, sent map[int]process, threads map[
 		for pid := range sent {
 			if _, env, err := t.sys.args(pid); err == nil {
 				if id, ok := t.marker(env); ok && id == threads[pid] {
-					t.logf("agentos: process %d of thread %s did not stop in %s; killing it", pid, id, t.grace)
+					t.logf("orchestrator: process %d of thread %s did not stop in %s; killing it", pid, id, t.grace)
 					_ = t.sys.signal(pid, syscall.SIGKILL)
 				}
 			}

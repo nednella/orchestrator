@@ -30,8 +30,8 @@ const RANGES = [
   { value: '365', label: '1y' },
   { value: '0', label: 'All' },
 ]
-const RANGE_KEY = 'agentos.statsWorkDays'
-const PROJECT_KEY = 'agentos.statsProject'
+const RANGE_KEY = 'orchestrator.statsWorkDays'
+const PROJECT_KEY = 'orchestrator.statsProject'
 
 export function Stats() {
   const { focusRequest, projects, project: currentProject } = useAgentos('focusRequest', 'projects', 'project')

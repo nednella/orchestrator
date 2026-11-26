@@ -14,7 +14,7 @@ import (
 // PRs polls the pull requests of the sessions.
 type PRs interface{ RefreshPRs() }
 
-// Commands answers the agentos commands that work on issues.
+// Commands answers the orchestrator commands that work on issues.
 type Commands struct {
 	issues *Issues
 	prs    PRs

@@ -756,7 +756,7 @@ test('only a message Claude holds as sent can be rewound to', () => {
   assert.deepEqual(kinds(buildTimeline([...denied, { kind: 'rewind', id: 'u3', seq: 99, at: 99_000 }], {}).items), kinds(buildTimeline(denied, {}).items), 'a rewind never cuts at a denial')
 })
 
-const delegate = (id: string, input: unknown = { task: 'Find the flaky test', title: 'Flaky test' }): Draft => toolUse(id, 'mcp__agentos__delegate', input)
+const delegate = (id: string, input: unknown = { task: 'Find the flaky test', title: 'Flaky test' }): Draft => toolUse(id, 'mcp__orchestrator__delegate', input)
 const started = (parent: string, child: string): Draft => toolResult(parent, JSON.stringify({ id: child, n: 7, title: 'Flaky test', project: 'shop', access: 'read', where: 'folder', dir: '/code/shop', branch: '' }))
 
 test('delegate call becomes a child card', () => {
@@ -782,7 +782,7 @@ test('failed delegate stays a tool row', () => {
   const open = buildTimeline(events, {})
   assert.deepEqual(kinds(open.items), ['user', 'working', 'work', 'reply', 'thinking'])
   const [work] = only(open.items, 'work')
-  assert.deepEqual(work.calls.map((c) => [c.tool, c.result, c.error]), [['mcp__agentos__delegate', 'This thread has 8 children running', true]])
+  assert.deepEqual(work.calls.map((c) => [c.tool, c.result, c.error]), [['mcp__orchestrator__delegate', 'This thread has 8 children running', true]])
   const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
   assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
   assert.deepEqual(only(t.items, 'work')[0].calls.map((c) => c.error), [true])

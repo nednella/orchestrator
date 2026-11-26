@@ -105,7 +105,7 @@ func (l *Lifecycle) forward(ctx context.Context, proj project.Project, repo stri
 	case proj.PRWatch == "webhook":
 		l.report("pull requests", fmt.Sprintf("gh webhook forward for %s stopped: %s", repo, util.FirstLine(endedWith(err))))
 	case !ran:
-		fmt.Fprintf(os.Stderr, "agentos: gh webhook forward does not work for %s, polling its pull requests instead: %v\n", repo, err)
+		fmt.Fprintf(os.Stderr, "orchestrator: gh webhook forward does not work for %s, polling its pull requests instead: %v\n", repo, err)
 		return false
 	}
 	return sleep(ctx, webhookRetry)

@@ -224,7 +224,7 @@ func (p Project) ConflictCommand(pr int) string {
 	return strings.ReplaceAll(p.OnConflict, "{n}", strconv.Itoa(pr))
 }
 
-// BranchFor is the branch agentos makes for an issue thread: session_branch_fallback, else issue-<n>.
+// BranchFor is the branch orchestrator makes for an issue thread: session_branch_fallback, else issue-<n>.
 func (p Project) BranchFor(number int) string {
 	return strings.ReplaceAll(cmp.Or(p.Branch, "issue-{n}"), "{n}", strconv.Itoa(number))
 }

@@ -40,7 +40,7 @@ func (n Name) String() string {
 // IsShell says whether the name is one of a project's shells rather than an agent.
 func (n Name) IsShell() bool { return n.Shell > 0 }
 
-// ParseName decodes a tmux session name. It fails for sessions agentos did not create.
+// ParseName decodes a tmux session name. It fails for sessions orchestrator did not create.
 func ParseName(s string) (Name, error) {
 	i := strings.IndexByte(s, '/')
 	if i <= 0 || i != strings.LastIndexByte(s, '/') || strings.Contains(s[:i], "..") {

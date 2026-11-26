@@ -509,7 +509,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
 
   // delegations fills a chat's log with a turn that delegates a task to each child, and one call that fails, then, for
   // each child with a result, the result as the child's message and Claude's reply to it, and a message from another
-  // thread, as the agentos tools log them.
+  // thread, as the orchestrator tools log them.
   function delegations(id: string, children: MockChild[], sender: { id: string; title: string }) {
     const ago = (minutes: number) => Date.now() - minutes * minute
     const app = 'APPLICATION_PROMPT: '
@@ -525,10 +525,10 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       { kind: 'init', id: 'mock-session', at: ago(20) },
       { kind: 'message', id: 'msg_1', uuid: 'r-1', text: 'I will give each question to a child thread of its own.', at: ago(19) },
       ...children.flatMap((c, i): Draft[] => [
-        { kind: 'tool_use', id: `toolu_d${i}`, tool: 'mcp__agentos__delegate', input: { task: c.task, title: c.title, access: c.access, where: 'folder', ...(c.project ? { project: c.project } : {}) }, at: ago(19) },
+        { kind: 'tool_use', id: `toolu_d${i}`, tool: 'mcp__orchestrator__delegate', input: { task: c.task, title: c.title, access: c.access, where: 'folder', ...(c.project ? { project: c.project } : {}) }, at: ago(19) },
         { kind: 'tool_result', parent: `toolu_d${i}`, text: JSON.stringify({ id: c.id, n: i + 20, title: c.title, project: c.project ?? id.slice(0, id.indexOf('/')), access: c.access, where: 'folder', dir: '', branch: '' }), at: ago(19) },
       ]),
-      { kind: 'tool_use', id: 'toolu_dx', tool: 'mcp__agentos__delegate', input: { task: 'Fix the flaky test once it is found', title: 'Fix the flaky test', access: 'full' }, at: ago(19) },
+      { kind: 'tool_use', id: 'toolu_dx', tool: 'mcp__orchestrator__delegate', input: { task: 'Fix the flaky test once it is found', title: 'Fix the flaky test', access: 'full' }, at: ago(19) },
       { kind: 'tool_result', parent: 'toolu_dx', text: 'A thread with supervised access cannot start a child with full access', error: true, at: ago(19) },
       { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Both children are at work. I will report what they find.', at: ago(18) },
       { kind: 'turn_end', cost: 0.05, at: ago(18) },
@@ -794,7 +794,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     })
     const [key, token] = id.split('/')
     return images.map((image) => {
-      const path = `/Users/mock/.local/share/agentos/${key}/chat-media/${token}/${Math.random().toString(16).slice(2, 18).padEnd(16, '0')}${imageExts[image.mime]}`
+      const path = `/Users/mock/.local/share/orchestrator/${key}/chat-media/${token}/${Math.random().toString(16).slice(2, 18).padEnd(16, '0')}${imageExts[image.mime]}`
       media.set(path, `data:${image.mime};base64,${image.base64}`)
       return path
     })

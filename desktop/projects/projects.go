@@ -242,7 +242,7 @@ func (r *Registry) SetPromptSend(key, mode string) error {
 	})
 }
 
-// SetUp fills the project's empty keys with a basic agentos block.
+// SetUp fills the project's empty keys with a basic orchestrator block.
 func (r *Registry) SetUp(key string) error {
 	return r.editProject(key, func(p *project.Project) error {
 		p.SetUp()

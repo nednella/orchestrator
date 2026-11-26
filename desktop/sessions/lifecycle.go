@@ -82,14 +82,14 @@ type Cleanup struct {
 	Reason       string   `json:"reason"`
 }
 
-// target is a thread that works on a branch, with the project it belongs to. Its branch is the one agentos made its
+// target is a thread that works on a branch, with the project it belongs to. Its branch is the one orchestrator made its
 // worktree on or the one it reported with the track tool, and no other thread has it.
 type target struct {
 	id, title string
 	issue     int
 	branch    string
 	dir       string // the folder the thread runs in
-	made      bool   // agentos made dir for the thread, and has not removed it
+	made      bool   // orchestrator made dir for the thread, and has not removed it
 	proj      project.Project
 	model     project.Model
 	woke      time.Time // the thread's latest start: its first one, or its latest wake
@@ -489,7 +489,7 @@ func (l *Lifecycle) refresh(ctx context.Context, proj project.Project, targets [
 func (l *Lifecycle) end(id string, o outcome) {
 	if o.settle && l.sessions.Has(id) {
 		if err := l.sessions.Settle(id); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: settling thread %s after its PR: %v\n", id, err)
+			fmt.Fprintf(os.Stderr, "orchestrator: settling thread %s after its PR: %v\n", id, err)
 		}
 	}
 	if o.auto {
@@ -706,7 +706,7 @@ func (l *Lifecycle) savePRs(key string) {
 		err = atomicfile.Write(l.prsPath(key), data, 0o600)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: saving PR state: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: saving PR state: %v\n", err)
 	}
 }
 
@@ -1024,7 +1024,7 @@ func verdict(reviews []review) string {
 	return ""
 }
 
-// Cleanup removes the worktree agentos made for a thread and its temp folder, and settles the thread, which stays with
+// Cleanup removes the worktree orchestrator made for a thread and its temp folder, and settles the thread, which stays with
 // its branch. Without force it first checks that nothing would be lost.
 func (l *Lifecycle) Cleanup(ctx context.Context, id string, force bool) error {
 	_, _, err := l.cleanupNow(ctx, id, force, byOwner)
@@ -1151,7 +1151,7 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 	}
 	key := t.proj.Key()
 	if err := l.appendCleanup(key, entry); err != nil {
-		fmt.Fprintf(os.Stderr, "agentos: logging a clean-up: %v\n", err)
+		fmt.Fprintf(os.Stderr, "orchestrator: logging a clean-up: %v\n", err)
 	}
 	l.activity.Record(key, activity.Event{At: entry.At, Kind: activity.Cleanup, Session: t.id, Issue: t.issue, PR: entry.PR, Label: entry.Status})
 	l.sessions.changed()
@@ -1159,14 +1159,14 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 	return reason
 }
 
-// childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
+// childAsleep removes the worktree orchestrator made for the child thread id, which went to sleep, when that loses nothing:
 // planFor's checks pass, with a thread asleep in it and any shell of the child, idle or busy, counting too. The owner
 // may have opened that shell after the child's work ended, so this clean-up never closes one, and as it runs only at
 // the sleep, a worktree a shell kept stays until the child sleeps again, the clean-up after its PR or Clean up now
 // removes it, or the child is deleted; those close the child's shells. A worktree with no commit since the one it
 // started at has only its changes to lose, so origin is not asked. Its branch stays, and so does the thread, whose wake
 // puts the worktree back. Anything else keeps the worktree for the clean-up after its pull request, and the log says
-// why, unless it said so for the child's last sleep. A child in its parent's folder, or in one agentos did not make for
+// why, unless it said so for the child's last sleep. A child in its parent's folder, or in one orchestrator did not make for
 // it, has nothing to remove. A Delete of the child takes its worktree only when asked.
 func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	t, err := l.sessions.target(id)
@@ -1258,7 +1258,7 @@ func (l *Lifecycle) startChildCleanup(id string) (tr *track, before string, ok b
 	return tr, before, true
 }
 
-// unchanged says whether the worktree agentos made for t holds no commit since the one it started at.
+// unchanged says whether the worktree orchestrator made for t holds no commit since the one it started at.
 func (l *Lifecycle) unchanged(ctx context.Context, t target) bool {
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
 	if !ok || w.BaseOid == "" {
@@ -1318,14 +1318,14 @@ type cleanupPlan struct {
 	family []string // the threads of the Delete that runs the clean-up, whose shells in the worktree go with it
 }
 
-// branchPlan is the thread's branch and the worktree agentos made for it.
+// branchPlan is the thread's branch and the worktree orchestrator made for it.
 type branchPlan struct {
 	branch   string
 	worktree string // the recorded folder of the worktree, or ""
-	made     bool   // agentos made the worktree for the thread and has not removed it, so the clean-up removes it
+	made     bool   // orchestrator made the worktree for the thread and has not removed it, so the clean-up removes it
 }
 
-// planFor finds the worktree agentos made for the thread, and unless forced, says why removing it could lose work or
+// planFor finds the worktree orchestrator made for the thread, and unless forced, says why removing it could lose work or
 // pull it from under something that uses it: a rebase, changes or commits only it holds, a running turn or held
 // prompts, another thread or a shell in it. Each check reads git, tmux and the threads afresh, so a second call sees
 // what changed since the first. A thread with no such worktree, or one removed already, has nothing on disk to lose:
@@ -1362,8 +1362,8 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 		}
 	default:
 		if err := l.fetchOrigin(ctx, dir); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: fetching origin before a clean-up: %v\n", err)
-			return p, "Could not fetch origin, so agentos cannot tell whether every commit is pushed"
+			fmt.Fprintf(os.Stderr, "orchestrator: fetching origin before a clean-up: %v\n", err)
+			return p, "Could not fetch origin, so orchestrator cannot tell whether every commit is pushed"
 		}
 		if reason := l.unsafe(ctx, dir, w.Path, t.branch, pr, l.mainBranch(ctx, dir)); reason != "" {
 			return p, reason
@@ -1410,10 +1410,10 @@ func shellsUnlisted(err error) string {
 	return fmt.Sprintf("tmux could not list the open shells: %v", err)
 }
 
-// removeWorktree removes the worktree agentos made for the thread with the project's session_cleanup_command, and
+// removeWorktree removes the worktree orchestrator made for the thread with the project's session_cleanup_command, and
 // records it removed. Forced or not, it never runs the command on the project folder, git's main worktree, a folder
-// that holds either, or a worktree that is not the one agentos made for the thread, as one a human made again at a path
-// agentos used, and it keeps everything when the thread woke since the clean-up settled it. Once nothing keeps the
+// that holds either, or a worktree that is not the one orchestrator made for the thread, as one a human made again at a path
+// orchestrator used, and it keeps everything when the thread woke since the clean-up settled it. Once nothing keeps the
 // worktree, it closes the thread's shells and those of the plan's family in the worktree, so none is left in a folder
 // that is gone. A worktree whose folder is gone already counts as removed.
 func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
@@ -1422,20 +1422,20 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	}
 	dir, path := t.proj.Dir, p.worktree
 	if path == "" {
-		return nil, "agentos has no folder recorded for the worktree of this thread"
+		return nil, "orchestrator has no folder recorded for the worktree of this thread"
 	}
 	trees, err := l.worktrees(ctx, dir)
 	if err != nil {
 		return nil, fmt.Sprintf("git could not list the worktrees: %v", err)
 	}
 	if folder.Inside(dir, path) || trees.main != "" && folder.Inside(trees.main, path) {
-		return nil, fmt.Sprintf("%s holds the project's own checkout, which agentos never removes", path)
+		return nil, fmt.Sprintf("%s holds the project's own checkout, which orchestrator never removes", path)
 	}
 	if reason := l.woke(t.id); reason != "" {
 		return nil, reason
 	}
 	if !gone(path) && !l.ours(ctx, t.proj.Key(), path, t.id) {
-		return nil, fmt.Sprintf("%s is not the worktree agentos made for this thread", path)
+		return nil, fmt.Sprintf("%s is not the worktree orchestrator made for this thread", path)
 	}
 	l.sessions.closeShellsOf(t.id, path, p.family...)
 	if !gone(path) {
@@ -1451,7 +1451,7 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 		case left:
 			return nil, fmt.Sprintf("the clean-up command left %s", path)
 		case err != nil:
-			fmt.Fprintf(os.Stderr, "agentos: the clean-up command failed, but %s is gone: %v\n", path, err)
+			fmt.Fprintf(os.Stderr, "orchestrator: the clean-up command failed, but %s is gone: %v\n", path, err)
 		}
 	}
 	if err := l.sessions.made.Removed(t.proj.Key(), path, time.Now()); err != nil {
@@ -1663,7 +1663,7 @@ func (l *Lifecycle) statuses(ctx context.Context, dir string, trees worktrees, f
 	// merged reads origin's branches as last fetched here, so restatus, run at each tool call, never fetches.
 	if slices.ContainsFunc(fetched, func(f fetch) bool { return f.pr != nil && f.pr.State == "merged" }) {
 		if err := l.fetchOrigin(ctx, dir); err != nil {
-			fmt.Fprintf(os.Stderr, "agentos: fetching origin for the git status: %v\n", err)
+			fmt.Fprintf(os.Stderr, "orchestrator: fetching origin for the git status: %v\n", err)
 		}
 	}
 	for _, f := range fetched {

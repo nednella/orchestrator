@@ -38,7 +38,7 @@ const wailsReply = `[
 
 func TestDigestRun(t *testing.T) {
 	h := newHarness(t)
-	t.Setenv("AGENTOS_SESSION", "main/9") // a run must not inherit a session
+	t.Setenv("ORCHESTRATOR_SESSION", "main/9") // a run must not inherit a session
 	t.Setenv("DEPLOY_TOKEN", "secret")
 	t.Setenv("ANTHROPIC_API_KEY", "claude-needs-this")
 	if err := os.WriteFile(filepath.Join(h.Dir, "package.json"), []byte(`{"dependencies":{"wails-ish":"1"}}`), 0o600); err != nil {
@@ -46,7 +46,7 @@ func TestDigestRun(t *testing.T) {
 	}
 	h.Claude.SetReply(wailsReply)
 	h.Claude.SetDo(func(call apptest.DigestCall) {
-		for _, leaked := range []string{"AGENTOS_SESSION", "DEPLOY_TOKEN", "AGENTOS_SOCKET", "AGENTOS_DIGEST_PROJECT"} {
+		for _, leaked := range []string{"ORCHESTRATOR_SESSION", "DEPLOY_TOKEN", "ORCHESTRATOR_SOCKET", "ORCHESTRATOR_DIGEST_PROJECT"} {
 			if envValue(call.Env, leaked) != "" {
 				t.Errorf("%s leaked into the digest run", leaked)
 			}
@@ -64,7 +64,7 @@ func TestDigestRun(t *testing.T) {
 	eventually(t, "the digest to finish", func() bool { d := lastDigest(h); return !d.Running && d.LastRunAt > 0 })
 
 	call := h.Claude.Calls()[0]
-	if call.Dir == h.Dir || !strings.Contains(call.Dir, "agentos-digest") || exists(call.Dir) {
+	if call.Dir == h.Dir || !strings.Contains(call.Dir, "orchestrator-digest") || exists(call.Dir) {
 		t.Errorf("the run's folder = %s (the project is %s): want a fresh folder that is removed afterwards", call.Dir, h.Dir)
 	}
 	if envValue(call.Env, "ANTHROPIC_API_KEY") != "claude-needs-this" || envValue(call.Env, "PATH") == "" || envValue(call.Env, "HOME") == "" {
@@ -74,7 +74,7 @@ func TestDigestRun(t *testing.T) {
 		t.Errorf("the prompt does not list the project's dependencies:\n%s", call.Args[2])
 	}
 	if len(call.Args) != 5 || call.Args[0] != "claude" || call.Args[1] != "-p" || call.Args[3] != "--allowedTools" ||
-		call.Args[4] != "WebSearch WebFetch" || strings.Contains(call.Args[2], "agentos") {
+		call.Args[4] != "WebSearch WebFetch" || strings.Contains(call.Args[2], "orchestrator") {
 		t.Errorf("command = %q in %s", call.Args, call.Dir)
 	}
 	if got := lastDigest(h).Project; got != "main" {

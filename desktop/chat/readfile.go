@@ -81,7 +81,7 @@ func (v *Service) ChatLatestPlan(id string) (Plan, error) {
 	}
 	plan, err := v.plans.of(ch.Log)
 	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
 		return Plan{}, fmt.Errorf("Could not read the chat of thread %d", ch.N)
 	}
 	return plan, nil
@@ -170,7 +170,7 @@ func (v *Service) markdownIn(dir, of string) ([]string, error) {
 	}
 	paths, err := v.files.list(v.ctx(), dir)
 	if err != nil {
-		log.Printf("agentos: listing the files of %s in %s: %v", of, dir, err)
+		log.Printf("orchestrator: listing the files of %s in %s: %v", of, dir, err)
 		return nil, fmt.Errorf("Could not list the files of %s", of)
 	}
 	out := []string{}
@@ -217,7 +217,7 @@ func readMarkdown(dir, path, of string) (string, error) {
 		data, err = io.ReadAll(io.LimitReader(f, maxShown+1))
 	}
 	if err != nil {
-		log.Printf("agentos: reading %s in the folder of %s: %v", path, of, err)
+		log.Printf("orchestrator: reading %s in the folder of %s: %v", path, of, err)
 		return "", errors.New("Could not read this file")
 	}
 	if len(data) > maxShown {

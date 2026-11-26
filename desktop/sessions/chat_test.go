@@ -48,7 +48,7 @@ func claudeEnv(t *testing.T, h *apptest.Harness, id string) map[string]string {
 // accessTag is the access the thread's tmux session is tagged with.
 func accessTag(t *testing.T, h *apptest.Harness, id string) string {
 	t.Helper()
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@agentos-access}").Output()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{@orchestrator-access}").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

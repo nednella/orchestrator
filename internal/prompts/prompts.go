@@ -1,4 +1,4 @@
-// Package prompts holds the texts agentos gives to agents and prints for them, as Markdown files.
+// Package prompts holds the texts orchestrator gives to agents and prints for them, as Markdown files.
 // Each file starts with an HTML comment that names its {token} placeholders; the callers fill them in.
 package prompts
 
@@ -102,7 +102,7 @@ func Issue(number int) string {
 	return strings.Replace(body(issue), "{number}", strconv.Itoa(number), 1)
 }
 
-// Worktree follows Thread in the system prompt of a thread that agentos started in the worktree it made, on branch.
+// Worktree follows Thread in the system prompt of a thread that orchestrator started in the worktree it made, on branch.
 func Worktree(branch, dir string) string {
 	return strings.NewReplacer("{branch}", branch, "{worktree}", dir).Replace(body(worktree))
 }
@@ -160,7 +160,7 @@ func Denied(text string) string { return strings.Replace(body(denied), "{text}",
 // DeniedWithoutReason is the reason a tool call is denied with when the user gives none.
 func DeniedWithoutReason() string { return body(deniedNoReason) }
 
-// Tool is the description of an agentos tool, by its name; empty for a name that is not one.
+// Tool is the description of an orchestrator tool, by its name; empty for a name that is not one.
 func Tool(name string) string {
 	switch name {
 	case "delegate":
@@ -209,7 +209,7 @@ func SetupChecks() string { return body(setupChecks) }
 func SetupConflict() string { return body(setupConflict) }
 
 // StartIssue is what a session for an issue is started with when the project defines no action for it.
-// {n} is the issue number, {title} its title and {branch} the branch agentos makes for it.
+// {n} is the issue number, {title} its title and {branch} the branch orchestrator makes for it.
 func StartIssue() string { return body(startIssueBranch) }
 
 // body drops the leading comment and the final newline of a file.

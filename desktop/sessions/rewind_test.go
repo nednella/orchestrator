@@ -35,7 +35,7 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != fmt.Sprintf("Thread %s also works in this worktree", fork.Title) {
 		t.Errorf("with a live fork in the worktree: reason = %q", reason)
 	}
-	if dir, inProject, reason := h.Sessions().FilesRewind(fork.ID); dir != "" || inProject || reason != "Files are rewound only in a worktree agentos made for this thread" {
+	if dir, inProject, reason := h.Sessions().FilesRewind(fork.ID); dir != "" || inProject || reason != "Files are rewound only in a worktree orchestrator made for this thread" {
 		t.Errorf("the fork: FilesRewind = %q, %v, %q", dir, inProject, reason)
 	}
 	if err := h.SettleThread(fork.ID); err != nil {

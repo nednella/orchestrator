@@ -10,14 +10,14 @@ const [url, w, h, stepsJson] = process.argv.slice(2)
 const port = 9333
 // Never the owner's browser app: macOS sends a clicked link to any running copy of the default browser, windowless or not.
 const app = 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
-const binary = process.env.AGENTOS_BROWSER || [join(homedir(), 'Applications', app), join('/Applications', app)].find(existsSync)
+const binary = process.env.ORCHESTRATOR_BROWSER || [join(homedir(), 'Applications', app), join('/Applications', app)].find(existsSync)
 if (!binary) {
-  console.error('no Chrome for Testing found: run install.sh again, or set AGENTOS_BROWSER')
+  console.error('no Chrome for Testing found: run install.sh again, or set ORCHESTRATOR_BROWSER')
   process.exit(1)
 }
-// A new profile asks the macOS keychain for its key, and a browser under agentos's tmux shows "Keychain Not Found".
+// A new profile asks the macOS keychain for its key, and a browser under orchestrator's tmux shows "Keychain Not Found".
 const brave = spawn(binary,
-  ['--headless=new', '--use-mock-keychain', `--remote-debugging-port=${port}`, `--window-size=${w},${h}`, '--hide-scrollbars', '--disable-brave-update', '--disable-features=MacAppCodeSignClone', `--user-data-dir=${join(tmpdir(), 'agentos-cdp-profile')}`, 'about:blank'], { stdio: 'ignore' })
+  ['--headless=new', '--use-mock-keychain', `--remote-debugging-port=${port}`, `--window-size=${w},${h}`, '--hide-scrollbars', '--disable-brave-update', '--disable-features=MacAppCodeSignClone', `--user-data-dir=${join(tmpdir(), 'orchestrator-cdp-profile')}`, 'about:blank'], { stdio: 'ignore' })
 process.on('exit', () => brave.kill())
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => process.exit(1))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

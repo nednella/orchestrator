@@ -583,7 +583,7 @@ type Options struct {
 	UpdateTick      time.Duration // how often to check the releases; an hour by default, and an hour before the first check
 	Releases        string        // the latest release's tag; "" fails the check
 	Version         string        // the version the app believes it runs; "dev" by default
-	DataDirConfig   bool          // put the data folder in the config's data_dir, not AGENTOS_DEV_DATA_DIR, and home in the state dir
+	DataDirConfig   bool          // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
 	NoProject       bool          // leave the project out of the config, so the app starts in a folder it does not know
 	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
@@ -664,15 +664,15 @@ func NewWith(t *testing.T, o Options) *Harness {
 		t.Fatal(err)
 	}
 	socket := fmt.Sprintf("aostest-%d", os.Getpid())
-	t.Setenv("AGENTOS_TMUX_SOCKET", socket)
-	t.Setenv("AGENTOS_STATE_DIR", state)
-	t.Setenv("AGENTOS_CONFIG", confPath)
-	t.Setenv("AGENTOS_DIR", dir)
+	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", socket)
+	t.Setenv("ORCHESTRATOR_STATE_DIR", state)
+	t.Setenv("ORCHESTRATOR_CONFIG", confPath)
+	t.Setenv("ORCHESTRATOR_DIR", dir)
 	if o.DataDirConfig {
-		t.Setenv("AGENTOS_DEV_DATA_DIR", "")
+		t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", "")
 		t.Setenv("HOME", filepath.Join(state, "home")) // the local folder sits under home
 	} else {
-		t.Setenv("AGENTOS_DEV_DATA_DIR", filepath.Join(state, "data"))
+		t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", filepath.Join(state, "data"))
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(state, "claude")) // never the user's own settings
 
@@ -849,7 +849,7 @@ var (
 	cliErr  error
 )
 
-// CLIPath builds the agentos command from this checkout, so the host and the tools' server run the code under test.
+// CLIPath builds the orchestrator command from this checkout, so the host and the tools' server run the code under test.
 // It is the app's binary with a stub page in place of the front end.
 func CLIPath(t *testing.T) string {
 	t.Helper()
@@ -857,14 +857,14 @@ func CLIPath(t *testing.T) string {
 		if cliDir, cliErr = os.MkdirTemp("", "aoscli"); cliErr != nil {
 			return
 		}
-		cliBin = filepath.Join(cliDir, "agentos")
+		cliBin = filepath.Join(cliDir, "orchestrator")
 		_, file, _, _ := runtime.Caller(0)
 		root := filepath.Join(filepath.Dir(file), "..", "..", "..")
 		cmd := exec.Command("go", "build", "-tags", "stub", "-o", cliBin, "./desktop")
 		cmd.Dir = root
 		cmd.Env = startEnv
 		if out, err := cmd.CombinedOutput(); err != nil {
-			cliErr = fmt.Errorf("building the agentos command: %w: %s", err, out)
+			cliErr = fmt.Errorf("building the orchestrator command: %w: %s", err, out)
 		}
 	})
 	if cliErr != nil {
@@ -873,7 +873,7 @@ func CLIPath(t *testing.T) string {
 	return cliBin
 }
 
-// ClaudeDir is the folder of the stand-in claude, which NewWith puts first on PATH beside the built agentos command,
+// ClaudeDir is the folder of the stand-in claude, which NewWith puts first on PATH beside the built orchestrator command,
 // so the app runs its Claude provider and each session's host starts the stand-in. The stand-in writes the
 // environment it was started with to <dir>/<session id, "/" as "_">.env and its arguments
 // to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
@@ -1167,7 +1167,7 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	t.Helper()
 	dir := t.TempDir()
 	// The rename makes the args file appear whole, so a test never reads it half written.
-	script := "#!/bin/sh\nf=\"" + dir + "/$(echo \"$AGENTOS_SESSION\" | tr / _)\"\n" + first +
+	script := "#!/bin/sh\nf=\"" + dir + "/$(echo \"$ORCHESTRATOR_SESSION\" | tr / _)\"\n" + first +
 		"printf '%s\\n' \"$@\" > \"$f.args.tmp\" && mv \"$f.args.tmp\" \"$f.args\"\n" + then
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
@@ -1184,7 +1184,7 @@ func PathWithout(command string) string {
 
 // Main runs a package's tests and removes the command they built.
 func Main(m *testing.M) int {
-	os.Setenv("AGENTOS_BROWSER_HEADLESS", "1") // tests never open windows on the owner's screen
+	os.Setenv("ORCHESTRATOR_BROWSER_HEADLESS", "1") // tests never open windows on the owner's screen
 	code := m.Run()
 	if cliDir != "" {
 		os.RemoveAll(cliDir)
@@ -1519,7 +1519,7 @@ func WithMergeable(prJSON, mergeable string) string {
 	return strings.Replace(prJSON, `"isDraft"`, fmt.Sprintf(`"mergeable":%q,"isDraft"`, mergeable), 1)
 }
 
-// Ask sends a command to the app's control socket, as the agentos mcp command does. The socket answers only what a
+// Ask sends a command to the app's control socket, as the orchestrator mcp command does. The socket answers only what a
 // client may run with a token.
 func (h *Harness) Ask(t *testing.T, req ctl.Request) ctl.Response {
 	t.Helper()

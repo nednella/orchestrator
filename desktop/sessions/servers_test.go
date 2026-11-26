@@ -80,7 +80,7 @@ func threadServing(t *testing.T, h *apptest.Harness) (sessions.Session, int, int
 	return thread, port, pid
 }
 
-// listener starts a listener on a free port with env on top of this environment without an agentos marker, in a
+// listener starts a listener on a free port with env on top of this environment without an orchestrator marker, in a
 // session of its own, and returns its port and pid. The cleanup ends it.
 func listener(t *testing.T, env ...string) (int, int) {
 	t.Helper()
@@ -93,7 +93,7 @@ s.listen(5)
 print("ready", flush=True)
 time.sleep(120)`, strconv.Itoa(port))
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		return strings.HasPrefix(kv, "AGENTOS_SESSION=") || strings.HasPrefix(kv, mcp.ControlEnv+"=")
+		return strings.HasPrefix(kv, "ORCHESTRATOR_SESSION=") || strings.HasPrefix(kv, mcp.ControlEnv+"=")
 	}), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	out, err := cmd.StdoutPipe()
@@ -117,7 +117,7 @@ time.sleep(120)`, strconv.Itoa(port))
 
 // marker is the environment of a process a thread of the harness's app started.
 func marker(h *apptest.Harness, id string) []string {
-	return []string{"AGENTOS_SESSION=" + id, mcp.ControlEnv + "=" + ctl.SocketPath(h.State)}
+	return []string{"ORCHESTRATOR_SESSION=" + id, mcp.ControlEnv + "=" + ctl.SocketPath(h.State)}
 }
 
 func TestServersListAThreadsListener(t *testing.T) {
@@ -284,7 +284,7 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 	started := startOf(pid)
 	_, unknown := listener(t, marker(h, "main/zzzzzzzz")...)
 	unknownStart := startOf(unknown)
-	_, otherApps := listener(t, "AGENTOS_SESSION="+thread.ID, mcp.ControlEnv+"=/another/app/control.sock")
+	_, otherApps := listener(t, "ORCHESTRATOR_SESSION="+thread.ID, mcp.ControlEnv+"=/another/app/control.sock")
 	otherAppsStart := startOf(otherApps)
 	h.App.Stop() // so only the next app's start sees the thread gone
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+thread.ID).Run(); err != nil {
@@ -321,7 +321,7 @@ func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	backdate(t, h, live.ID)
 	backdate(t, h, killed.ID)
 
-	t.Setenv("AGENTOS_TMUX_SOCKET", h.Socket+"-other")
+	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", h.Socket+"-other")
 	second := h.Restart(t)
 	eventually(t, "the second app sees the live thread settled", func() bool {
 		for _, s := range second.Sessions().List() {
@@ -361,7 +361,7 @@ func backdate(t *testing.T, h *apptest.Harness, id string) {
 }
 
 func TestShellCarriesNoThreadMarker(t *testing.T) {
-	t.Setenv("AGENTOS_SESSION", "main/aaaaaaaa") // as an app started from a thread's terminal has
+	t.Setenv("ORCHESTRATOR_SESSION", "main/aaaaaaaa") // as an app started from a thread's terminal has
 	h := newHarness(t)
 	thread, err := h.NewSession("work", "")
 	if err != nil {
@@ -379,9 +379,9 @@ func TestShellCarriesNoThreadMarker(t *testing.T) {
 	eventually(t, "the shell's environment", func() bool {
 		data, err := os.ReadFile(out)
 		env = string(data)
-		return err == nil && strings.Contains(env, "AGENTOS_PROJECT=")
+		return err == nil && strings.Contains(env, "ORCHESTRATOR_PROJECT=")
 	})
-	for _, name := range []string{"AGENTOS_SESSION=", mcp.ControlEnv + "="} {
+	for _, name := range []string{"ORCHESTRATOR_SESSION=", mcp.ControlEnv + "="} {
 		if strings.Contains(env, name) {
 			t.Errorf("the shell has %s:\n%s", name, env)
 		}

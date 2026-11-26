@@ -11,7 +11,7 @@ func TestUntaggedTmuxSessionIsIgnored(t *testing.T) {
 	h := newHarness(t)
 	id := "main/aaaaaaaa"
 	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "600")
-	tmuxRun(t, h, "set-option", "-t", id, "@agentos-issue", "12", ";", "set-option", "-t", id, "@agentos-name", "#12 work")
+	tmuxRun(t, h, "set-option", "-t", id, "@orchestrator-issue", "12", ";", "set-option", "-t", id, "@orchestrator-name", "#12 work")
 	h.Sessions().Refresh()
 	if row, ok := h.Session(id); ok {
 		t.Errorf("a tmux session with no access tag has the row %+v", row)

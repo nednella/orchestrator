@@ -1,5 +1,5 @@
 // Where the Files view keeps whether it shows a file rendered or as its source.
-export const FILES_MODE_KEY = 'agentos.filesMode'
+export const FILES_MODE_KEY = 'orchestrator.filesMode'
 export type FilesMode = 'rendered' | 'source'
 
 // The picker's entry for the plan Claude last asked to have approved; no file path can be this, as each ends in .md.

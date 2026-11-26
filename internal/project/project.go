@@ -26,10 +26,10 @@ const DefaultCleanupCommand = "git worktree remove {force} {worktree}"
 // MakeWorktree is the command that makes the worktree of an issue thread.
 func (p Project) MakeWorktree() string { return cmp.Or(p.WorktreeCommand, DefaultWorktreeCommand) }
 
-// RemoveWorktree is the command that removes the worktree agentos made.
+// RemoveWorktree is the command that removes the worktree orchestrator made.
 func (p Project) RemoveWorktree() string { return cmp.Or(p.CleanupCommand, DefaultCleanupCommand) }
 
-// Project is the unit agentos is scoped to: a name and the folder agents start in.
+// Project is the unit orchestrator is scoped to: a name and the folder agents start in.
 type Project struct {
 	Name               string    `yaml:"name"`
 	Dir                string    `yaml:"directory"`
@@ -37,7 +37,7 @@ type Project struct {
 	NoteSessionCommand string    `yaml:"note_session_command,omitempty"`     // typed into a session started from a note; {text} is the note, the note itself when unset
 	SessionPromptSend  string    `yaml:"session_prompt_send,omitempty"`      // auto (the default) sends what a session starts with at once; manual waits for Enter
 	Branch             string    `yaml:"session_branch_fallback,omitempty"`  // branch of an issue's work when the session reports none; {n} is the number
-	CleanupCommand     string    `yaml:"session_cleanup_command,omitempty"`  // shell command that removes the worktree agentos made; {worktree}, {branch}, {dir} and {force}
+	CleanupCommand     string    `yaml:"session_cleanup_command,omitempty"`  // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
 	WorktreeCommand    string    `yaml:"session_worktree_command,omitempty"` // shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir} and {base}
 	CleanupMode        Cleanup   `yaml:"session_cleanup_mode,omitempty"`     // whether the app cleans up by itself, per event
 	URL                string    `yaml:"browser_start_url,omitempty"`        // the page a session's browser opens first
@@ -59,7 +59,7 @@ func (p Project) Present() bool {
 	return err == nil && info.IsDir()
 }
 
-// Config is the optional ~/.config/agentos/config.yaml.
+// Config is the optional ~/.config/orchestrator/config.yaml.
 type Config struct {
 	DataDir      string         `yaml:"data_dir,omitempty"`          // where notes, stats and digests live; may sit in a synced folder
 	KeepAwake    *bool          `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a session works; on unless false

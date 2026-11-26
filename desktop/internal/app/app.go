@@ -272,7 +272,7 @@ func (a *App) Answer(ctx context.Context, req ctl.Request) ctl.Response {
 	return a.router.Answer(ctx, req)
 }
 
-// Tools returns the commands that answer the agentos tools threads call, for tests and wiring.
+// Tools returns the commands that answer the orchestrator tools threads call, for tests and wiring.
 func (a *App) Tools() *orchestration.Commands { return a.tools }
 
 // Sessions is the session list, for tests and wiring.
