@@ -11,7 +11,8 @@ const MIN_CHAT_WIDTH = 640
 const MIN_HEIGHT = 160
 
 // CardFacts is what the thread's context card knows beside the thread itself. folder is the full path the thread
-// works in; the parent is the thread it was delegated from or forked from, and forks are the threads forked from it.
+// works in, and editor the app that opens it, '' while the card does not know which; the parent is the thread it was
+// delegated from or forked from, and forks are the threads forked from it.
 export type CardFacts = {
   machine: string
   folder: string
@@ -43,7 +44,7 @@ const present = <T>(row: T | false): row is T => row !== false
 export function cardSections(s: Session, f: CardFacts): CardSection[] {
   const workspace: (CardRow | false)[] = [
     (f.machine !== '' || f.folder !== '') && { kind: 'workspace', key: 'workspace', machine: f.machine, folder: f.folder, worktree: s.worktree },
-    f.editor !== '' && { kind: 'editor', key: 'editor', editor: f.editor },
+    f.folder !== '' && { kind: 'editor', key: 'editor', editor: f.editor },
   ]
   const git: (CardRow | false)[] = [
     s.branch !== '' && { kind: 'branch', key: 'branch', branch: s.branch },
@@ -64,6 +65,25 @@ export function cardSections(s: Session, f: CardFacts): CardSection[] {
     { key: 'lineage', heading: lineageLabel(f), rows: lineage },
   ]
   return sections.filter((section) => section.rows.length > 0)
+}
+
+// cardLineage is the threads around s among sessions: the thread that delegated it, else the one it was forked from,
+// then its delegated children and the threads forked from it.
+export function cardLineage(s: Session, sessions: Session[]): Pick<CardFacts, 'parent' | 'children' | 'forks'> {
+  const from = s.parent || s.forkOf
+  return {
+    parent: (from && sessions.find((x) => x.id === from)) || null,
+    children: sessions.filter((x) => x.parent === s.id),
+    forks: sessions.filter((x) => x.forkOf === s.id),
+  }
+}
+
+// VS_CODE_APP is the config's name for VS Code, the editor_app it opens folders with by default.
+export const VS_CODE_APP = 'Visual Studio Code'
+
+// editorLabel names the editor row: the editor by its short name, or just "editor" while the card does not know which.
+export function editorLabel(editor: string): string {
+  return `Open in ${editor === VS_CODE_APP ? 'VS Code' : editor || 'editor'}`
 }
 
 // lineageLabel heads the lineage: how many of the thread's delegated children and subagents work now, if any.

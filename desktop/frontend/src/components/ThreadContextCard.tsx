@@ -5,10 +5,10 @@ import { api } from '../api'
 import { splitBranch } from '../branchLabel'
 import { openAgent } from '../chatAgents'
 import type { AgentState } from '../chatTimeline'
-import { folderName, serverProcess } from '../contextCard'
+import { editorLabel, folderName, serverProcess } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { STATE_LABEL } from '../stateMeta'
-import type { PR, Session } from '../types'
+import type { PR } from '../types'
 import { useCardFacts } from '../useCardFacts'
 import { useCopied } from '../useCopied'
 import { ChecksMark } from './ChecksMark'
@@ -22,15 +22,15 @@ const CHECKS: Record<PR['checks'], string> = { none: '', pending: 'Checks runnin
 const AGENT_STATE: Record<AgentState, string> = { running: 'Running', done: 'Done', failed: 'Failed', stopped: 'Stopped' }
 const RELATION_ICON = { parent: CornerLeftUp, child: Bot, fork: GitFork }
 
-type ThreadContextCardProps = { session: Session; className: string }
+type ThreadContextCardProps = { id: string; className: string }
 
 // ThreadContextCard is what the thread works with, at a glance: where it runs, its branch, PR and issue, its servers
 // and the threads and subagents around it.
-export function ThreadContextCard({ session, className }: ThreadContextCardProps) {
+export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const a = useAgentos('select', 'report', 'openInEditor')
-  const { sections, issueURL, refreshServers } = useCardFacts(session)
-  const [copied, copyBranch] = useCopied(session.branch)
-  if (sections.length === 0) return null
+  const { session, sections, issueURL, refreshServers } = useCardFacts(id)
+  const [copied, copyBranch] = useCopied(session?.branch ?? '')
+  if (!session || sections.length === 0) return null
   const open = (url: string) => () => a.report(() => api.openURL(url))
   const copy = (e: MouseEvent) => {
     e.preventDefault()
@@ -50,7 +50,7 @@ export function ThreadContextCard({ session, className }: ThreadContextCardProps
         return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} end={end} title={[r.machine, r.folder].filter(Boolean).join('\n')} />
       }
       case 'editor':
-        return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={`Open in ${r.editor}`} onClick={() => a.report(() => a.openInEditor(session.id))} />
+        return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={editorLabel(r.editor)} onClick={() => a.report(() => a.openInEditor(session.id))} />
       case 'branch': {
         const { head, tail } = splitBranch(r.branch)
         const label = (

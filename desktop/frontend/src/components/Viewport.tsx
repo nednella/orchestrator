@@ -33,7 +33,7 @@ export function Viewport() {
       <div className="h-full" style={cardInline ? clearOfCard : undefined}>
         <ChatView key={selected.id} session={selected} />
       </div>
-      {cardInline && <ThreadContextCard session={selected} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
+      {cardInline && <ThreadContextCard id={selected.id} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
     </section>
   )
 }

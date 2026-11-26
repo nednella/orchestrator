@@ -5,6 +5,7 @@ import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosCont
 import { actionsFor, formatShortcut } from '../actions'
 import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
+import { selectedCardHasRows } from '../useCardFacts'
 import { Icon } from './Icon'
 import { ThreadContextCard } from './ThreadContextCard'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
@@ -18,7 +19,7 @@ export function TopBar() {
   const layout = useLayout()
   const { docked, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
-  const selected = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const cardHasRows = useAgentosSelector(selectedCardHasRows)
   const card = useContextCard()
   const cardToggle = useRef<HTMLDivElement>(null)
   const popover = card.placement === 'popover' && card.popover
@@ -60,7 +61,7 @@ export function TopBar() {
             )}
           </button>
         )}
-        {showsThread && selected && (
+        {showsThread && cardHasRows && (
           <div ref={cardToggle} className="relative flex">
             <button
               className={titleBarButton}
@@ -72,7 +73,7 @@ export function TopBar() {
             >
               <SquareMenu size={14} strokeWidth={2.25} aria-hidden="true" />
             </button>
-            {popover && <ThreadContextCard session={selected} className="absolute top-full right-0 z-(--z-popup) mt-1 max-h-[calc(100vh-var(--topbar-h)-1rem)]" />}
+            {popover && <ThreadContextCard id={selectedId} className="absolute top-full right-0 z-(--z-popup) mt-1 max-h-[calc(100vh-var(--topbar-h)-1rem)]" />}
           </div>
         )}
         <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />

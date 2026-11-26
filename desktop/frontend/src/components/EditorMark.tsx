@@ -1,4 +1,5 @@
 import { SquareArrowOutUpRight } from 'lucide-react'
+import { VS_CODE_APP } from '../contextCard'
 
 // The Visual Studio Code mark, drawn from the Simple Icons glyph (CC0).
 const VS_CODE =
@@ -6,9 +7,9 @@ const VS_CODE =
 
 type EditorMarkProps = { editor: string; size?: number }
 
-// EditorMark is the editor's own mark where agentos has it, else a plain open-outside icon.
+// EditorMark is the editor's own mark where agentos has it, else a plain open-outside icon, as for an editor not known.
 export function EditorMark({ editor, size = 16 }: EditorMarkProps) {
-  if (editor !== 'VS Code') return <SquareArrowOutUpRight size={size} aria-hidden="true" />
+  if (editor !== VS_CODE_APP) return <SquareArrowOutUpRight size={size} aria-hidden="true" />
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} className="flex-none" style={{ fill: 'var(--vscode-mark)' }} aria-hidden="true">
       <path d={VS_CODE} />

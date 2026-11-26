@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentItem } from './chatTimeline.ts'
-import { cardPlacement, cardSections, lineageLabel } from './contextCard.ts'
+import { cardLineage, cardPlacement, cardSections, editorLabel, lineageLabel } from './contextCard.ts'
 import type { CardFacts } from './contextCard.ts'
 import type { PR, Session } from './types.ts'
 
@@ -64,8 +64,8 @@ const kinds = (s: Session, f: CardFacts) => cardSections(s, f).map((section) => 
 
 test('no row without data', () => {
   assert.deepEqual(cardSections(session(), facts()), [])
-  assert.deepEqual(kinds(session({ branch: 'issue-612', issue: 612 }), facts({ machine: 'MacBook Air', folder: '/code/shop' })), [['workspace'], ['branch', 'issue']])
-  assert.deepEqual(kinds(session(), facts({ editor: 'VS Code' })), [['editor']], 'an editor alone is a row')
+  assert.deepEqual(kinds(session({ branch: 'issue-612', issue: 612 }), facts({ machine: 'MacBook Air', folder: '/code/shop' })), [['workspace', 'editor'], ['branch', 'issue']])
+  assert.deepEqual(kinds(session(), facts({ editor: 'Zed' })), [], 'no folder to open: no editor row')
 })
 
 test('a thread with no PR has no PR row', () => {
@@ -111,4 +111,31 @@ test('popover when the chat would keep under 640 px', () => {
 test('popover when shorter than 160 px', () => {
   assert.equal(cardPlacement(1400, 160), 'inline')
   assert.equal(cardPlacement(1400, 159), 'popover')
+})
+
+test('the editor row names the editor only when it is known', () => {
+  assert.equal(editorLabel(''), 'Open in editor')
+  assert.equal(editorLabel('Visual Studio Code'), 'Open in VS Code')
+  assert.equal(editorLabel('Zed'), 'Open in Zed')
+  const row = cardSections(session(), facts({ folder: '/code/shop' }))[0].rows.find((r) => r.kind === 'editor')
+  assert.deepEqual(row, { kind: 'editor', key: 'editor', editor: '' })
+})
+
+test("a fork's parent is the thread it was forked from", () => {
+  const source = session({ id: 'shop/srce2345', title: 'Source' })
+  const fork = session({ id: 'shop/fork2345', forkOf: source.id })
+  const other = session({ id: 'shop/othr2345', forkOf: source.id })
+  const all = [source, fork, other]
+  assert.equal(cardLineage(fork, all).parent, source)
+  assert.deepEqual(cardLineage(source, all), { parent: null, children: [], forks: [fork, other] })
+})
+
+test('a delegated thread names the thread that delegated it as its parent', () => {
+  const lead = session({ id: 'shop/lead2345' })
+  const source = session({ id: 'shop/srce2345' })
+  const child = session({ id: 'shop/kid22345', parent: lead.id, forkOf: source.id })
+  const all = [lead, source, child]
+  assert.equal(cardLineage(child, all).parent, lead, 'the delegation wins over the fork')
+  assert.deepEqual(cardLineage(lead, all).children, [child])
+  assert.equal(cardLineage(session({ parent: 'shop/gone2345' }), all).parent, null, 'a parent gone from the list is no row')
 })
