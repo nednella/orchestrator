@@ -487,7 +487,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const waiting = asked.find(unanswered)
   const streaming = Object.keys(live).length > 0 || Object.keys(thinking).length > 0
   const subagents = held === null ? 0 : tasks.filter((t) => t.works).length
-  if (running && !streaming && !waiting) items.push({ kind: 'thinking', key: `thinking-${running.key}`, label: subagents > 0 ? waitingOn(subagents) : 'Thinking' })
+  if (running && !streaming && !waiting && !interrupted) items.push({ kind: 'thinking', key: `thinking-${running.key}`, label: subagents > 0 ? waitingOn(subagents) : 'Thinking' })
   return {
     items,
     queued: [...queued.values()],

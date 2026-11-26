@@ -190,10 +190,11 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
-// another, after three tool calls of a second and a half each to a message that says "tools", or about 30 KB of markdown, as Claude streams it, to a message that says "long", or two subagents in the
-// background to a message that says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
-// would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
-// says whether a project key is configured.
+// another, after three tool calls of a second and a half each to a message that says "tools", or about 30 KB of
+// markdown, as Claude streams it, to a message that says "long", or two subagents in the background to a message that
+// says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that
+// is just "exit". The images sent are kept in memory, at the paths the service would save them to, and mediaURL gives
+// each one's address. thread throws for an id that has no chat, and isProject says whether a project key is configured.
 export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
   const logs = new Map<string, ChatEvent[]>()
   const unreadable = new Set<string>()

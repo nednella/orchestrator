@@ -403,7 +403,7 @@ test('queued is not sent once the host drops it or Claude exits', () => {
 
   const dropping = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }), {})
   assert.deepEqual(dropping.queued.map((q) => q.id), ['q2'])
-  assert.deepEqual(dropping.items.slice(-2).map((i) => i.key), ['unsent-q1', 'thinking-u1'], 'the notice shows while the turn still runs')
+  assert.equal(dropping.items.at(-1)?.key, 'unsent-q1', 'the notice shows while the turn still runs')
 
   const dropped = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }, turnEnd(true), user('q2', 'Then lint')), {})
   assert.deepEqual(dropped.queued, [])
@@ -870,4 +870,13 @@ test('waiting on two subagents', () => {
   const ended = log(...rests, taskEnd('a1', 'a.go'), taskEnd('a2', '5'))
   assert.deepEqual(live(buildTimeline(ended, {}).items).at(-1), ['thinking', 'Thinking'], 'Claude is still to tell of their end')
   assert.deepEqual(live(buildTimeline(log(...ended, message('msg_2', 'Both are done.'), turnEnd()), {}).items), [], 'the work ends once it has')
+})
+
+test('no Thinking row after an interrupt', () => {
+  const running = log(user('u1', 'Fix it'), toolUse('t1', 'Read'))
+  assert.equal(buildTimeline(running, {}).items.at(-1)?.kind, 'thinking')
+  const stopping = buildTimeline(log(...running, { kind: 'interrupt' }), {})
+  assert.deepEqual([kinds(stopping.items), stopping.turnOpen], [['user', 'working', 'work'], true], 'it goes at once, before the turn ends')
+  const next = buildTimeline(log(...running, { kind: 'interrupt' }, turnEnd(true), user('u2', 'Go on')), {})
+  assert.equal(next.items.at(-1)?.kind, 'thinking', 'the next turn has it again')
 })
