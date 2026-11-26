@@ -4,22 +4,15 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
-	"os"
 	"path/filepath"
-	"slices"
 	"strings"
-	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/nednella/orchestrator/desktop/sessions"
-	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 const (
@@ -64,101 +57,6 @@ func (v *Service) ProjectReadFile(project, path string) (FileContent, error) {
 		return FileContent{}, fmt.Errorf("No project %s", project)
 	}
 	return readFile(dir, path, "project "+project)
-}
-
-// Plan is the plan the thread's own Claude last asked to have approved, and whether it still waits on the owner.
-type Plan struct {
-	Text    string `json:"text"`
-	Waiting bool   `json:"waiting"`
-}
-
-// ChatLatestPlan is the thread's latest plan: of its own Claude, never a subagent's, and not one the owner denied. A
-// plan whose input does not parse is left out, and the one before it counts. None is the zero Plan. The log is read
-// again only once it has changed.
-func (v *Service) ChatLatestPlan(id string) (Plan, error) {
-	ch, err := v.c.threads.ChatOf(id)
-	if err != nil {
-		return Plan{}, err
-	}
-	plan, err := v.plans.of(ch.Log)
-	if err != nil {
-		log.Printf("orchestrator: reading the chat log of %s: %v", id, err)
-		return Plan{}, fmt.Errorf("Could not read the chat of thread %d", ch.N)
-	}
-	return plan, nil
-}
-
-// planCache keeps each chat log's latest plan with the size and time of change the log had when it was read.
-type planCache struct {
-	mu    sync.Mutex
-	byLog map[string]cachedPlan
-}
-
-type cachedPlan struct {
-	size int64
-	mod  time.Time
-	plan Plan
-}
-
-func (c *planCache) of(path string) (Plan, error) {
-	info, err := os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Plan{}, nil
-	}
-	if err != nil {
-		return Plan{}, err
-	}
-	c.mu.Lock()
-	hit, ok := c.byLog[path]
-	c.mu.Unlock()
-	if ok && hit.size == info.Size() && hit.mod.Equal(info.ModTime()) {
-		return hit.plan, nil
-	}
-	events, err := chatlog.ReadLog(path, 0)
-	if err != nil {
-		return Plan{}, err
-	}
-	plan := latestPlan(events)
-	c.mu.Lock()
-	if c.byLog == nil {
-		c.byLog = map[string]cachedPlan{}
-	}
-	c.byLog[path] = cachedPlan{size: info.Size(), mod: info.ModTime(), plan: plan}
-	c.mu.Unlock()
-	return plan, nil
-}
-
-// latestPlan is the latest plan in the events, as ChatLatestPlan has it. An approval waits as chatlog.Waiting says.
-func latestPlan(events []chatlog.Event) Plan {
-	var plans []chatlog.Event
-	denied := map[int]bool{}
-	unanswered := map[string]int{} // the plan each request id last asked for, by its place in plans
-	var waiting []chatlog.Event
-	var tasks chatlog.Tasks
-	for _, e := range events {
-		waiting = chatlog.Waiting(waiting, e, &tasks)
-		tasks.See(e)
-		switch {
-		case e.Kind == chatlog.KindApproval && e.Tool == "ExitPlanMode" && e.Agent == "":
-			unanswered[e.ID] = len(plans)
-			plans = append(plans, e)
-		case e.Kind == chatlog.KindAnswer:
-			if i, ok := unanswered[e.ID]; ok {
-				denied[i] = e.Text != "allow"
-				delete(unanswered, e.ID)
-			}
-		}
-	}
-	for i, p := range slices.Backward(plans) {
-		var in struct {
-			Plan string `json:"plan"`
-		}
-		if denied[i] || json.Unmarshal(p.Input, &in) != nil || in.Plan == "" {
-			continue
-		}
-		return Plan{Text: in.Plan, Waiting: slices.ContainsFunc(waiting, func(a chatlog.Event) bool { return a.Seq == p.Seq && a.ID == p.ID })}
-	}
-	return Plan{}
 }
 
 // threadDir is the folder the thread works in: its worktree, else the project folder.

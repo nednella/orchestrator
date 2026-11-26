@@ -27,7 +27,6 @@ type Service struct {
 	files      *files
 	projectDir func(project string) string
 	ctx        func() context.Context
-	plans      planCache
 	// noRewind is why Edit from here is off for this run of the app, once Claude Code did not know a rewind request.
 	noRewind atomic.Pointer[string]
 }
