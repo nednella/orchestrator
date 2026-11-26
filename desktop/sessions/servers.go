@@ -24,6 +24,7 @@ type Server struct {
 	Port    int    `json:"port"`
 	PID     int    `json:"pid"`
 	Command string `json:"command"`
+	Started int64  `json:"started"` // when its process started, in milliseconds since the epoch
 }
 
 // Servers are the ports the servers thread id started listen on, one row per port, by port: the processes that carry
@@ -36,7 +37,7 @@ func (s *Sessions) Servers(id string) ([]Server, error) {
 	rows := []Server{}
 	for _, srv := range list {
 		for _, port := range srv.Ports {
-			rows = append(rows, Server{Port: port, PID: srv.PID, Command: srv.Command})
+			rows = append(rows, Server{Port: port, PID: srv.PID, Command: srv.Command, Started: srv.Started().UnixMilli()})
 		}
 	}
 	slices.SortFunc(rows, func(a, b Server) int { return a.Port - b.Port })

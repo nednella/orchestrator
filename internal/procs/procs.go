@@ -78,6 +78,9 @@ type Server struct {
 	agent int
 }
 
+// Started is when the server's process started.
+func (s Server) Started() time.Time { return time.UnixMicro(s.start) }
+
 // snapshot is every process at one moment, and which of them belong to the threads asked about.
 type snapshot struct {
 	procs   map[int]process

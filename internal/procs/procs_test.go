@@ -238,6 +238,18 @@ func TestServersShowsTheCommand(t *testing.T) {
 	}
 }
 
+func TestServersTellWhenTheyStarted(t *testing.T) {
+	started := time.Date(2026, 11, 26, 9, 30, 0, 250_000_000, time.UTC)
+	sys := newFake(fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: started.UnixMicro()}, argv: []string{"node", "vite"}, env: marked("p/ab")})
+	got, err := newTable(t, sys, lsofSays("p200\nn*:18080\n")).Servers(context.Background(), map[string]int{"p/ab": 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !got[0].Started().Equal(started) {
+		t.Errorf("Servers = %+v, want one that started at %v", got, started)
+	}
+}
+
 func TestServersWhenNothingListens(t *testing.T) {
 	got, err := newTable(t, newFake(thread...), lsofSays("")).Servers(context.Background(), map[string]int{"p/ab": 0})
 	if err != nil || len(got) != 0 {

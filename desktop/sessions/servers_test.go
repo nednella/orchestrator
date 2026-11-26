@@ -120,6 +120,7 @@ func marker(h *apptest.Harness, id string) []string {
 
 func TestServersListAThreadsListener(t *testing.T) {
 	h := newHarness(t)
+	before := time.Now().Add(-time.Second) // the kernel's start time is rounded down
 	thread, port, pid := threadServing(t, h)
 	listener(t) // the owner's, with no marker
 
@@ -131,6 +132,9 @@ func TestServersListAThreadsListener(t *testing.T) {
 	})
 	if len(list) != 1 || list[0].Port != port || list[0].PID != pid || !strings.Contains(list[0].Command, "-c import os, socket") {
 		t.Errorf("Servers = %+v, want the listener %d on %d alone", list, pid, port)
+	}
+	if started := time.UnixMilli(list[0].Started); started.Before(before) || started.After(time.Now()) {
+		t.Errorf("the server started at %v, want after %v and before now", started, before)
 	}
 	if err := h.OpenServer(port); err != nil {
 		t.Fatal(err)
