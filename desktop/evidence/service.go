@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/nednella/agentos/desktop/internal/media"
@@ -62,10 +64,11 @@ func (c Changes) Changed(store *Store, id string, byAgent bool) {
 
 // Commands answers agentos show.
 type Commands struct {
-	store   *Store
-	asker   Asker
-	roots   Roots
-	changes Changes
+	beforeOpen func(path string) // tests only: runs between the check of a file and its opening
+	store      *Store
+	asker      Asker
+	roots      Roots
+	changes    Changes
 }
 
 func NewCommands(s *Store, a Asker, r Roots, c Changes) *Commands {
@@ -93,16 +96,9 @@ func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%s is not a file", path)
-	}
-	if info.Size() > media.MaxImageSize {
-		return "", fmt.Errorf("%s is over 10 MB", path)
-	}
-	data, err := os.ReadFile(path)
+	data, err := c.readRegular(path)
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, err)
+		return "", err
 	}
 	if _, err = c.store.AddImage(id, data, caption, "agent"); err != nil {
 		if len(data) > maxTextCard || !utf8.Valid(data) {
@@ -117,6 +113,38 @@ func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
 	}
 	c.changes.Changed(c.store, id, true)
 	return "filed as evidence", nil
+}
+
+// readRegular reads the regular file at path, which allowedFile resolved. It opens the file once, refusing a symlink
+// at its last part, and reads the file it opened only if that is the file checked, so a swap after the check is refused.
+func (c *Commands) readRegular(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a file", path)
+	}
+	if info.Size() > media.MaxImageSize {
+		return nil, fmt.Errorf("%s is over 10 MB", path)
+	}
+	if c.beforeOpen != nil {
+		c.beforeOpen(path)
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not a file", path)
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return nil, fmt.Errorf("%s changed while it was read", path)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, media.MaxImageSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	if len(data) > media.MaxImageSize {
+		return nil, fmt.Errorf("%s is over 10 MB", path)
+	}
+	return data, nil
 }
 
 // allowedFile is the real path of file, symlinks resolved, when it lies inside one of the roots, resolved the same way.
