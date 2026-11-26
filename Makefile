@@ -45,13 +45,12 @@ bin/%.app: desktop $(AGENT_BROWSER)
 	cp $(AGENT_BROWSER) $@/Contents/Helpers/agent-browser
 	cp desktop/build/Info.plist $@/Contents/Info.plist
 	plutil -replace CFBundleShortVersionString -string '$(VERSION:v%=%)' $@/Contents/Info.plist
-	go run desktop/build/icon.go bin/icon.png
 	for s in 16 32 128 256 512; do \
-		sips -z $$s $$s bin/icon.png --out bin/icon.iconset/icon_$${s}x$${s}.png >/dev/null; \
-		sips -z $$((s*2)) $$((s*2)) bin/icon.png --out bin/icon.iconset/icon_$${s}x$${s}@2x.png >/dev/null; \
+		sips -z $$s $$s desktop/build/icon.png --out bin/icon.iconset/icon_$${s}x$${s}.png >/dev/null; \
+		sips -z $$((s*2)) $$((s*2)) desktop/build/icon.png --out bin/icon.iconset/icon_$${s}x$${s}@2x.png >/dev/null; \
 	done
 	iconutil -c icns bin/icon.iconset -o $@/Contents/Resources/agentos.icns
-	rm -rf bin/icon.iconset bin/icon.png
+	rm -rf bin/icon.iconset
 	codesign --force --sign "$(SIGN_IDENTITY)" $@/Contents/Helpers/agent-browser
 	codesign --force --sign "$(SIGN_IDENTITY)" $@
 
