@@ -13,8 +13,11 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// maxPrompt is the most a prompt for a new thread may hold.
-const maxPrompt = 6 << 10
+const (
+	maxPrompt  = 6 << 10  // the most a prompt for a new thread may hold
+	maxNote    = 64 << 10 // the most a note may hold
+	maxCaption = 1 << 10  // the most a caption of evidence may hold
+)
 
 // agentTools are the agent tools, each with the control command it sends: the one its agentos command sent.
 func agentTools() map[string]string {
@@ -90,6 +93,9 @@ func agentArgs(tool, input string) ([]string, map[string]string, error) {
 		if strings.TrimSpace(in.Text) == "" {
 			return nil, nil, errors.New("The note is empty")
 		}
+		if len(in.Text) > maxNote {
+			return nil, nil, fmt.Errorf("The note is %d bytes, more than the %d a note takes", len(in.Text), maxNote)
+		}
 		return []string{in.Text}, map[string]string{}, nil
 	case "issue":
 		var in struct {
@@ -128,6 +134,8 @@ func agentArgs(tool, input string) ([]string, map[string]string, error) {
 		}
 		opts := map[string]string{"text": in.Text, "caption": in.Caption}
 		switch {
+		case len(in.Caption) > maxCaption:
+			return nil, nil, fmt.Errorf("The caption is %d bytes, more than the %d a caption takes", len(in.Caption), maxCaption)
 		case (in.File == "") == (in.Text == ""):
 			return nil, nil, errors.New("Give file or text, not both")
 		case in.Text != "":
