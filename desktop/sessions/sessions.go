@@ -146,6 +146,7 @@ type Sessions struct {
 	awake      Awake
 	keepAwake  func(projectKey string) bool
 	editorApp  func() string
+	newPlace   func() string
 	info       []term.Info              // the live sessions under a host
 	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []session.Name           // every project's shell sessions
@@ -243,6 +244,7 @@ type Options struct {
 	Awake         Awake
 	KeepAwake     func(projectKey string) bool
 	EditorApp     func() string // the macOS app that opens a thread's folder
+	ThreadPlace   func() string // where a thread with no issue and no place picked runs: worktree or project, "" for a worktree
 }
 
 // New tracks the sessions of o.Tmux, and follows their pull requests.
@@ -270,7 +272,7 @@ func (s *Sessions) Touch() { s.changed() }
 func newSessions(o Options) *Sessions {
 	return &Sessions{
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
-		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp,
+		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{}, waking: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
@@ -1793,7 +1795,15 @@ func (s *Sessions) IssueSessions() map[int]string {
 // Create starts the agent in the current project with the access given. A non-empty text is given to the agent through
 // its host: sent when send is set, else left as a draft in its chat.
 func (s *Sessions) Create(title, text string, send bool, issue int, access session.Access) (Session, error) {
-	return s.createIn(s.Current(), title, text, send, issue, "", "", "", forkStart{}, StartOptions{Access: access, Place: placeFor(access, issue, "")})
+	return s.createIn(s.Current(), title, text, send, issue, "", "", "", forkStart{}, StartOptions{Access: access, Place: placeFor(s.placeSetting(), issue, "")})
+}
+
+// placeSetting is the config's new_thread_place, "" when it is unset.
+func (s *Sessions) placeSetting() Place {
+	if s.newPlace == nil {
+		return ""
+	}
+	return Place(s.newPlace())
 }
 
 // StartOptions is what the owner chose for a new thread: the first message, sent as it is, the model and effort,
@@ -1844,7 +1854,7 @@ func (s *Sessions) CreateThread(title string, o StartOptions) (Session, error) {
 		return Session{}, err
 	}
 	title = cmp.Or(strings.TrimSpace(title), titleFromPrompt(o.Prompt))
-	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, "", "", "", forkStart{}, StartOptions{Model: o.Model, Access: access, Place: placeFor(access, 0, place)})
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, "", "", "", forkStart{}, StartOptions{Model: o.Model, Access: access, Place: placeFor(s.placeSetting(), 0, place)})
 }
 
 // CreateBriefed is Create for a Supervised session with a job of its own, in the project folder: brief is added to the
@@ -2363,7 +2373,7 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 	if err := s.mayGive(asker, access); err != nil {
 		return Session{}, Kept, err
 	}
-	view, err := s.createIn(proj, title, text, send, issue, "", handover, action, forkStart{}, StartOptions{Model: model, Access: access, Place: placeFor(access, issue, place)})
+	view, err := s.createIn(proj, title, text, send, issue, "", handover, action, forkStart{}, StartOptions{Model: model, Access: access, Place: placeFor(s.placeSetting(), issue, place)})
 	return view, Created, err
 }
 

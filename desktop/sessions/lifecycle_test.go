@@ -1014,7 +1014,7 @@ func TestCleanupCommandThatLeavesTheWorktreeKeeps(t *testing.T) {
 func TestReadThreadHasNothingToCleanUp(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s, err := h.NewThread("ask", "", "", "", "read")
+	s, err := h.NewThreadIn("ask", "", "read", "project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1513,6 +1513,9 @@ func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
+	if _, err := h.SetThreadPlace("project"); err != nil {
+		t.Fatal(err)
+	}
 	other, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)

@@ -226,7 +226,7 @@ func TestTrackRefusesAnotherThreadsBranch(t *testing.T) {
 func TestTrackRefusesAReadThread(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	read, err := h.NewThread("ask", "", "", "", "read")
+	read, err := h.NewThreadIn("ask", "", "read", "project")
 	if err != nil {
 		t.Fatal(err)
 	}

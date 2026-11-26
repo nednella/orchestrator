@@ -38,17 +38,17 @@ func parsePlace(s string) (Place, error) {
 	return "", fmt.Errorf("place must be %s or %s, not %q", InWorktree, InProject, s)
 }
 
-// placeFor is where a new thread runs: the place picked, else a worktree for an issue thread at every access, since a
-// running Claude cannot change folder and a Read issue thread is often switched to Write next, else a worktree for a
-// thread that writes and the project folder for a Read one.
-func placeFor(access session.Access, issue int, picked Place) Place {
+// placeFor is where a new thread runs: the place picked, else a worktree for an issue thread, since a running Claude
+// cannot change folder and the issue's work goes on its branch, else the place the setting names, a worktree when it is
+// unset.
+func placeFor(setting Place, issue int, picked Place) Place {
 	switch {
 	case picked != "":
 		return picked
-	case issue > 0 || access != session.Read:
+	case issue > 0 || setting == "":
 		return InWorktree
 	}
-	return InProject
+	return setting
 }
 
 const branchLength = 40

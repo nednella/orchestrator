@@ -84,7 +84,8 @@ type AgentosActions = {
   showHome(projectKey: string): void
   detach(): void
   stepSession(delta: number): void
-  newThread(start: ThreadStart, access: Access, place: Place): Promise<Session>
+  // place '' leaves it to new_thread_place.
+  newThread(start: ThreadStart, access: Access, place: Place | ''): Promise<Session>
   settleThread(id: string): Promise<void>
   // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree agentos made
   // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays.

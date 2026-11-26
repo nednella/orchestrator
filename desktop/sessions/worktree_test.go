@@ -119,20 +119,31 @@ func TestWriteThreadStartsInAWorktreeAgentosMade(t *testing.T) {
 	}
 }
 
-func TestReadThreadStartsInTheProjectFolder(t *testing.T) {
+func TestNewThreadStartsWhereTheSettingSays(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
-	s, err := h.NewThreadIn("Look around", "", "read", "")
+	unset, err := h.NewThreadIn("Look around", "", "read", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir := realDir(t, filepath.Join(h.Dir, "trees", "look-around")); unset.Branch != "look-around" || unset.Worktree != dir {
+		t.Errorf("unset: a Read thread has branch %q, worktree %q; want its own worktree", unset.Branch, unset.Worktree)
+	}
+
+	if _, err := h.SetThreadPlace("project"); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.NewThreadIn("Fix the footer", "", "supervised", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := realDir(t, panePath(t, h, s.ID)); got != realDir(t, h.Dir) {
 		t.Errorf("the thread runs in %s, want the project folder", got)
 	}
-	if trees := worktreesOf(t, h.Dir); len(trees) != 1 || exists(filepath.Join(h.Dir, "trees")) {
-		t.Errorf("worktrees = %v", trees)
+	if trees := worktreesOf(t, h.Dir); len(trees) != 2 {
+		t.Errorf("worktrees = %v, want the project's and the first thread's", trees)
 	}
-	if records := madeRecords(t, h); len(records) != 0 {
+	if records := madeRecords(t, h); len(records) != 1 {
 		t.Errorf("records = %+v", records)
 	}
 	if s.Branch != "" || s.Worktree != "" {
@@ -140,6 +151,14 @@ func TestReadThreadStartsInTheProjectFolder(t *testing.T) {
 	}
 	if got := systemPrompt(t, h, s.ID); strings.Contains(got, worktreeText) {
 		t.Errorf("the system prompt names a worktree:\n%s", got)
+	}
+
+	issue, err := h.StartIssueWith(7, "Work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Branch != "issue-7" || issue.Worktree == "" {
+		t.Errorf("an issue thread under project has branch %q, worktree %q; want its own worktree", issue.Branch, issue.Worktree)
 	}
 }
 

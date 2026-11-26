@@ -69,20 +69,20 @@ func TestBranchFromTitle(t *testing.T) {
 
 func TestPlaceFor(t *testing.T) {
 	for _, tt := range []struct {
-		access session.Access
-		issue  int
-		picked Place
-		want   Place
+		setting Place
+		issue   int
+		picked  Place
+		want    Place
 	}{
-		{session.Read, 0, "", InProject},
-		{session.Supervised, 0, "", InWorktree},
-		{session.Full, 0, "", InWorktree},
-		{session.Read, 7, "", InWorktree},
-		{session.Supervised, 0, InProject, InProject},
-		{session.Read, 0, InWorktree, InWorktree},
+		{"", 0, "", InWorktree},
+		{InWorktree, 0, "", InWorktree},
+		{InProject, 0, "", InProject},
+		{InProject, 7, "", InWorktree},
+		{"", 0, InProject, InProject},
+		{InProject, 0, InWorktree, InWorktree},
 	} {
-		if got := placeFor(tt.access, tt.issue, tt.picked); got != tt.want {
-			t.Errorf("placeFor(%s, %d, %q) = %q, want %q", tt.access, tt.issue, tt.picked, got, tt.want)
+		if got := placeFor(tt.setting, tt.issue, tt.picked); got != tt.want {
+			t.Errorf("placeFor(%q, %d, %q) = %q, want %q", tt.setting, tt.issue, tt.picked, got, tt.want)
 		}
 	}
 }

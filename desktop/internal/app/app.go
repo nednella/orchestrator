@@ -86,7 +86,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	sess := sessions.New(sessions.Options{
 		Tmux: c.Tmux, Agents: c.Agents, Binary: c.Binary, StateDir: c.StateDir, LocalDir: c.LocalDir, Projects: c.Registry,
 		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Tally: waits, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
-		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp,
+		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
 	})
 	chats := chat.New(sess, c.LocalDir, h.Emit)
 	iss := issues.New(runner, sess, h.Emit)

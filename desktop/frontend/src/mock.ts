@@ -1003,8 +1003,7 @@ export function createMock(params: URLSearchParams) {
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
       const name = title.trim() || titleFromPrompt(prompt) || 'agent'
       const acc = access || 'supervised'
-      // As the Go side: no place picked runs a Read thread in the project folder and any other in a worktree.
-      if ((place || (acc === 'read' ? 'project' : 'worktree')) === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
+      if ((place || settings.threadPlace || 'worktree') === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
       const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
       return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` })
     },

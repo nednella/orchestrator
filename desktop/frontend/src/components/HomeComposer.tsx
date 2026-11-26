@@ -9,7 +9,6 @@ import { EMPTY_DRAFT } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
-import { placeFor } from '../place'
 import type { Issue } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
@@ -37,7 +36,7 @@ const MODES: { value: ComposerMode; label: string; icon: ReactNode }[] = [
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const a = useAgentos('project', 'issues', 'settings', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
+  const a = useAgentos('project', 'issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
   const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })
@@ -133,7 +132,7 @@ export function HomeComposer() {
         } else {
           const start = { prompt: text.trim(), model, effort }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
-          else await a.newThread(start, a.composerAccess, placeFor(a.settings.threadPlace, false))
+          else await a.newThread(start, a.composerAccess, '')
           setPicked(null)
         }
         a.setComposerDraft(EMPTY_DRAFT)

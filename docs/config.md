@@ -12,7 +12,7 @@ app_theme_dark: black          # the theme the dark appearance shows: black (the
 app_theme_light: light         # the theme the light appearance shows: light (the default)
 app_text_scale: 1.2            # text size as a multiple of the default, 0.48 to 2.08; unset is 1. The settings panel writes it
 editor_app: Visual Studio Code # the macOS app that "Open in VS Code" opens a thread's folder with, through open -a; unset is Visual Studio Code
-new_thread_place: worktree     # where a thread you start from the composer with no issue runs: worktree (a new worktree, the default) or project (the project folder, on the branch checked out there); see Where a thread runs. The settings panel writes it
+new_thread_place: worktree     # where a thread with no issue starts, at every access: worktree (a new worktree, the default) or project (the project folder, on the branch checked out there); see Where a thread runs. The settings panel writes it
 new_thread_access: supervised  # the access the composer starts a new thread with: read, supervised (the default) or full; a thread can change it in the model menu. The settings panel writes it
 projects:
   - name: storefront
@@ -126,9 +126,7 @@ Every thread runs `claude` under `agentos host`, with hooks that call the `agent
 A thread runs in one folder from its start, and a wake starts it there again.
 
 - An issue thread, at every access, runs in its own worktree on the issue's branch, `issue-<n>` unless `session_branch_fallback` names it otherwise.
-- A Write thread with no issue (Supervised or Full access) runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. This holds for `agentos new` and a thread started from a note too.
-- A Read thread with no issue runs in the project folder.
-- A thread you start from the composer with no issue runs where `new_thread_place` says, at any access: in a new worktree as above, unless it is `project`, then in the project folder on the branch checked out there.
+- A thread with no issue runs where `new_thread_place` says, at every access. Unset or `worktree`, it runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. `project`, it runs in the project folder, on the branch checked out there. This holds for the composer, `agentos new` and a thread started from a note alike. A child runs where `delegate`'s `where` puts it.
 - The set-up session runs in the project folder.
 
 The worktree is `<project>/trees/<branch>`. Before it makes the first one, agentos adds `/trees/` to the repository's `.git/info/exclude`, which is never committed, so the worktrees stay out of `git status` and `git add -A`; it never edits a `.gitignore`. A branch that exists, locally or on origin (fetched first when this clone has no copy), is checked out there as it is and never reset; a new one comes from `session_worktree_command`. A branch that a worktree already has checked out, such as one you made by hand, runs the thread in that worktree, and agentos never removes it. A branch that another thread works on, running or asleep, is refused with `Thread <n> works on <branch>`. A folder already at `<project>/trees/<branch>` that is no worktree of the branch stops the start, and agentos leaves it as it is. A project that is not a git repository runs every thread in its folder.
