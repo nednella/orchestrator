@@ -26,11 +26,14 @@ func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if _, err := session.ParseName(req.Session); err != nil {
+		return "", errors.New("no calling thread")
+	}
 	if err := c.s.mayGive(req.Session, access); err != nil {
 		return "", err
 	}
 	prompt := req.Opts["prompt"]
-	if _, err := session.ParseName(req.Session); err == nil && prompt != "" {
+	if prompt != "" {
 		prompt = FromApp(prompts.Handover(prompt))
 	}
 	s, err := c.s.Create(strings.Join(req.Args, " "), prompt, c.s.Current().SendsPrompt(), 0, access)

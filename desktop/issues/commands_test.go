@@ -232,12 +232,16 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 		t.Errorf("issue 11, a Supervised action, from a Read thread = %+v", resp)
 	}
 
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK {
-		t.Fatalf("issue 7 from the shell = %+v", resp)
+	owner, err := h.NewThread("full", "", "", "", "full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: owner.ID, Args: []string{"7"}}); !resp.OK {
+		t.Fatalf("issue 7 from a Full thread = %+v", resp)
 	}
 	full, ok := issueThread()
 	if !ok || full.Access != session.Full {
-		t.Fatalf("issue 7 from the shell started %+v", full)
+		t.Fatalf("issue 7 from a Full thread started %+v", full)
 	}
 	if err := h.SettleThread(full.ID); err != nil {
 		t.Fatal(err)
@@ -248,7 +252,7 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 	if s, _ := h.Session(full.ID); s.State != session.Settled {
 		t.Errorf("a thread that is not Full woke the Full thread: %+v", s)
 	}
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
-		t.Errorf("issue 7 from the shell on the settled Full thread = %+v", resp)
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: owner.ID, Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
+		t.Errorf("issue 7 from a Full thread on the settled Full thread = %+v", resp)
 	}
 }
