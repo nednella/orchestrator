@@ -154,12 +154,20 @@ func Rewind(ctx context.Context, socket, id, within string) (string, error) {
 // ErrNoUsage is what Usage returns when the thread's Claude Code does not know the get_usage control request.
 var ErrNoUsage = &Refused{Reason: "This version of Claude Code does not report plan usage", Unsupported: true}
 
+// ErrHostTooOld is what Usage returns when the thread's host is from a build before the usage op: another thread's host
+// may answer.
+var ErrHostTooOld = errors.New("this thread's host is too old to ask for usage")
+
 // Usage asks the thread's Claude for the plan's usage and limits, as its /usage shows them, and returns Claude's answer
 // to the get_usage control request. It never waits on the thread's turn.
 func Usage(ctx context.Context, socket string) (json.RawMessage, error) {
 	rep, err := callWithin(ctx, socket, request{Op: opUsage}, usageTimeout)
-	if refused := (*Refused)(nil); errors.As(err, &refused) && refused.Unsupported {
+	refused := (*Refused)(nil)
+	switch {
+	case errors.As(err, &refused) && refused.Unsupported:
 		return nil, fmt.Errorf("host at %s: %w", socket, ErrNoUsage)
+	case errors.As(err, &refused) && refused.Reason == unknownOp(opUsage).Error():
+		return nil, fmt.Errorf("host at %s: %w", socket, ErrHostTooOld)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("ask for usage: %w", err)

@@ -3063,3 +3063,26 @@ func TestUnknownRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestUsageOfAnOlderHostSaysSo(t *testing.T) {
+	socket := filepath.Join(socketDir(t), "old.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			bufio.NewReader(conn).ReadBytes('\n')
+			conn.Write([]byte(`{"ok":false,"error":"unknown op \"usage\""}` + "\n"))
+			conn.Close()
+		}
+	}()
+	if _, err := Usage(ctxT(t), socket); !errors.Is(err, ErrHostTooOld) {
+		t.Errorf("err = %v, want ErrHostTooOld", err)
+	}
+}

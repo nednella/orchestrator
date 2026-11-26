@@ -723,8 +723,11 @@ func (h *host) do(req request) (string, error) {
 		h.release()
 		return "", nil
 	}
-	return "", fmt.Errorf("unknown op %q", req.Op)
+	return "", unknownOp(req.Op)
 }
+
+// unknownOp is the host's refusal of an op it does not know, which a host from an older build also gives.
+func unknownOp(op string) error { return fmt.Errorf("unknown op %q", op) }
 
 // send gives the message to Claude and returns its id.
 // While an approval waits, the owner's message denies each waiting tool with the text as the reason and is not written
