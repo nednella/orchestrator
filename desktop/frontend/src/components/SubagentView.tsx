@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { closeAgent, useShowAgents } from '../chatAgents'
+import { closeAgent, closeGoneAgent, useShowAgents } from '../chatAgents'
 import { COLUMN_KEY, storedColumn } from '../chatColumn'
-import type { AgentItem } from '../chatTimeline'
+import { sameSteps } from '../chatTimeline'
+import type { AgentItem, AgentState, WorkStep } from '../chatTimeline'
 import { readStored } from '../storage'
 import type { Session } from '../types'
 import { useChat } from '../useChat'
+import { useFollowEnd } from '../useFollowEnd'
 import { ChatLineageDivider } from './ChatLineageDivider'
 import { ChatMarkdown } from './ChatMarkdown'
 import { ChatSteps } from './ChatSteps'
 import { ChatUserText } from './ChatUserText'
 import { Loading } from './Loading'
-import { Notice } from './Notice'
 import { SubagentBar } from './SubagentBar'
 
 type SubagentViewProps = { parent: Session; agent: string }
@@ -21,26 +22,30 @@ type SubagentViewProps = { parent: Session; agent: string }
 // what it reported. It follows the parent's chat, which holds every event of the subagent.
 export function SubagentView({ parent, agent }: SubagentViewProps) {
   const { project } = useAgentos('project')
-  const { timeline, loading, error } = useChat(parent.id, parent.state)
+  const { timeline, loading } = useChat(parent.id, parent.state)
   useShowAgents(parent.id, timeline.items)
   const [column] = useState(() => storedColumn(readStored(COLUMN_KEY, null)))
   const found = timeline.items.find((item): item is AgentItem => item.kind === 'agent' && item.id === agent)
+  const holds = found !== undefined
+  useEffect(() => closeGoneAgent(parent.id, !loading, holds), [parent.id, loading, holds])
+  const scroller = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const onScroll = useFollowEnd(scroller, content)
   const back = () => closeAgent(parent.id)
 
   return (
     <div data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties}>
-      <div data-chat-scroll tabIndex={-1} className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-6 outline-none">
-        <div className="chat-column flex flex-col gap-4 pb-6">
+      <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-6 outline-none">
+        <div ref={content} className="chat-column flex flex-col gap-4 pb-6">
           <ChatLineageDivider parent={parent.title} onOpenParent={back} />
-          {found && <SubagentRun agent={found} thread={parent.id} folder={parent.worktree || project?.dir || ''} />}
+          {found && <SubagentRun thread={parent.id} folder={parent.worktree || project?.dir || ''} id={found.key} prompt={found.prompt} state={found.state} steps={found.steps} result={found.result} />}
           {!found && loading && <Loading />}
-          {!found && !loading && <Notice title="This subagent is not in the chat" hint={error || 'Its thread no longer holds it.'} centered />}
         </div>
       </div>
       {found && (
         <div className="chat-over flex-none pt-1.5 pb-4 sm:pt-2 sm:pb-5">
           <div className="chat-column">
-            <SubagentBar agent={found} onOpenParent={back} />
+            <SubagentBar agent={found} parentModel={parent.model} onOpenParent={back} />
           </div>
         </div>
       )}
@@ -48,25 +53,29 @@ export function SubagentView({ parent, agent }: SubagentViewProps) {
   )
 }
 
-type SubagentRunProps = { agent: AgentItem; thread: string; folder: string }
+type SubagentRunProps = { thread: string; folder: string; id: string; prompt: string; state: AgentState; steps: WorkStep[]; result: string | null }
+
+// The parent's timeline is built anew on every event, so the subagent's steps are new objects holding the same values,
+// and an event of the parent or of another subagent leaves the run as it was.
+const unchanged = (a: SubagentRunProps, b: SubagentRunProps) => a.thread === b.thread && a.folder === b.folder && a.id === b.id && a.prompt === b.prompt && a.state === b.state && a.result === b.result && sameSteps(a.steps, b.steps)
 
 // SubagentRun is the subagent's prompt, as the message it was sent, then its steps and its report.
-function SubagentRun({ agent, thread, folder }: SubagentRunProps) {
+const SubagentRun = memo(function SubagentRun({ thread, folder, id, prompt, state, steps, result }: SubagentRunProps) {
   return (
     <>
-      {agent.prompt && (
+      {prompt && (
         <div className="max-w-[80%] self-end rounded-2xl bg-[var(--bg-user-message)] p-3">
-          <ChatUserText id={agent.key} text={agent.prompt} />
+          <ChatUserText id={id} text={prompt} />
         </div>
       )}
       <div>
-        <ChatSteps thread={thread} steps={agent.steps} running={agent.state === 'running'} folder={folder} />
+        <ChatSteps thread={thread} steps={steps} running={state === 'running'} folder={folder} />
       </div>
-      {agent.result && (
-        <div className={`text-body ${agent.state === 'failed' ? 'text-danger' : 'text-ink'}`}>
-          <ChatMarkdown text={agent.result} />
+      {result && (
+        <div className={`text-body ${state === 'failed' ? 'text-danger' : 'text-ink'}`}>
+          <ChatMarkdown text={result} />
         </div>
       )}
     </>
   )
-}
+}, unchanged)

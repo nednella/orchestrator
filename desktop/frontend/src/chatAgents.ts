@@ -1,6 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { agentList } from './chatTimeline'
 import type { AgentItem, TimelineItem } from './chatTimeline'
+import { closedIn, heldBy, keptFor, viewedIn } from './subagentView'
+import type { AgentView } from './subagentView'
 
 // The subagents of each thread whose chat is shown, for its Agents list, and the subagent whose view is open. The chat
 // keeps them here, and the list renders again only when what it shows of one of them changes: a subagent's tool calls
@@ -8,7 +10,7 @@ import type { AgentItem, TimelineItem } from './chatTimeline'
 const shown = new Map<string, AgentItem[]>()
 const listeners = new Set<() => void>()
 const none: AgentItem[] = []
-let viewed: { thread: string; agent: string } | null = null
+let viewed: AgentView | null = null
 
 const sameAgent = (a: AgentItem, b: AgentItem) => a.id === b.id && a.description === b.description && a.state === b.state && a.startedAt === b.startedAt
 
@@ -40,22 +42,41 @@ export function useAgentsRunning(thread: string): number | null {
   })
 }
 
+// view sets the subagent view and tells the listeners when it changed.
+function view(next: AgentView | null) {
+  if (next === viewed) return
+  viewed = next
+  listeners.forEach((listener) => listener())
+}
+
 // openAgent opens the subagent's own view in place of the thread's chat.
 export function openAgent(thread: string, agent: string) {
-  viewed = { thread, agent }
-  listeners.forEach((listener) => listener())
+  view({ thread, agent })
 }
 
 // closeAgent takes the thread from its subagent's view back to its chat.
 export function closeAgent(thread: string) {
-  if (viewed?.thread !== thread) return
-  viewed = null
-  listeners.forEach((listener) => listener())
+  view(closedIn(viewed, thread))
+}
+
+// keepAgentViewOf closes a subagent view of any thread but the one on screen.
+export function keepAgentViewOf(selected: string) {
+  view(keptFor(viewed, selected))
+}
+
+// closeGoneAgent closes the thread's subagent view once its loaded chat no longer holds the subagent.
+export function closeGoneAgent(thread: string, loaded: boolean, holds: boolean) {
+  view(heldBy(viewed, thread, loaded, holds))
+}
+
+// useAgentView is the subagent view that is open, of any thread.
+export function useAgentView(): AgentView | null {
+  return useSyncExternalStore(subscribe, () => viewed)
 }
 
 // useViewedAgent is the subagent of the thread whose view is open, null while the thread shows its chat.
 export function useViewedAgent(thread: string): string | null {
-  return useSyncExternalStore(subscribe, () => (viewed?.thread === thread ? viewed.agent : null))
+  return useSyncExternalStore(subscribe, () => viewedIn(viewed, thread))
 }
 
 // useShowAgents keeps the subagents of the thread's chat for its list while the chat, or one of its subagents' views,
