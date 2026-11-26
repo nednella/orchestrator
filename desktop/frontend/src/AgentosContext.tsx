@@ -4,6 +4,7 @@ import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
 import { shellsOf } from './shells'
+import { forgetPanel } from './panelStore'
 import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
@@ -225,9 +226,11 @@ const composerModeKey = (project: string) => `agentos.composerMode.${project}`
 const threadDraftKey = (id: string) => `agentos.thread.draft.${id}`
 const draftSeenKey = (id: string) => `agentos.thread.draftSeen.${id}`
 
-function forgetThreadDraft(id: string) {
+// forgetThread drops what the app keeps of a thread that is gone: its draft and its right panel.
+function forgetThread(id: string) {
   removeStored(threadDraftKey(id))
   removeStored(draftSeenKey(id))
+  forgetPanel(id)
 }
 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -372,7 +375,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
 
   const applySessions = useCallback(
     (projectKey: string, items: Session[]) => {
-      goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThreadDraft)
+      goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThread)
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
       if (projectKey === projectRef.current?.key) selectAmong(items, [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items])
     },
@@ -754,7 +757,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
         const gone = new Set([id, ...descendantsOf(id, sessionsRef.current).map((s) => s.id)])
         await api.deleteThread(id, worktree)
-        gone.forEach(forgetThreadDraft)
+        gone.forEach(forgetThread)
         setSessions((prev) => prev.filter((s) => !gone.has(s.id)))
         const left = sessionsRef.current.filter((s) => !gone.has(s.id))
         if (owner === projectRef.current?.key) selectAmong(left.filter((s) => s.project === owner), left)

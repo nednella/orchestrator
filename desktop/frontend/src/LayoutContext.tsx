@@ -5,7 +5,8 @@ import type { FocusTarget } from './AgentosContext'
 import { devFlags } from './api'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
-import { closeTab, openTab, panelFit, panelStateOf, panelWidth, stepTab } from './panelTabs'
+import { updatePanel, usePanel } from './panelStore'
+import { closeTab, openTab, panelFit, panelWidth, stepTab } from './panelTabs'
 import type { PanelState, PanelViewId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
@@ -23,8 +24,6 @@ const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shel
 
 const LAYOUT_KEY = 'agentos.layout.v3'
 const SIDEBAR_WIDTH_KEY = 'agentos.sidebarWidth'
-// Each thread's right panel, and Home's under ''.
-const PANEL_KEY = 'agentos.panel.v2'
 const SHELL_ROW_REM = 1.0325
 const SHELL_PAD_REM = 0.5
 export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PAD_REM
@@ -132,7 +131,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
-  const [panels, setPanels] = useState(() => readStored<Record<string, unknown>>(PANEL_KEY, {}))
   const zoomToast = useRef<number | null>(null)
   const focusBefore = useRef<Partial<Record<TogglePanel, Element>>>({})
 
@@ -159,7 +157,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const rightOpen = docked.right ? prefs.rightOpen : overlay === 'right'
   const shellOpen = prefs.shellOpen
   const panelKey = selectedId ?? ''
-  const panel = panelStateOf(panels[panelKey])
+  const panel = usePanel(panelKey)
   const panelExpanded = panel.expanded && docked.right && rightOpen
 
   const updatePrefs = useCallback(
@@ -248,19 +246,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (project) selectHome(project.key)
   }, [moveOverlay, project, selectHome])
 
-  // A panel back at its empty state is dropped, so the saved panels hold only the threads that show something.
-  const updatePanel = useCallback(
-    (key: string, change: (st: PanelState) => PanelState) =>
-      setPanels((all) => {
-        const st = change(panelStateOf(all[key]))
-        const { [key]: _, ...rest } = all
-        const next = st.tabs.length === 0 && !st.expanded ? rest : { ...rest, [key]: st }
-        writeStored(PANEL_KEY, next)
-        return next
-      }),
-    [],
-  )
-
   const showPanelView = useCallback(
     (view: PanelViewId, opts: { expanded?: boolean; thread?: string } = {}) => {
       setRightOpen(true)
@@ -269,7 +254,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         return opts.expanded === undefined || !docked.right ? next : { ...next, expanded: opts.expanded }
       })
     },
-    [setRightOpen, updatePanel, panelKey, docked.right],
+    [setRightOpen, panelKey, docked.right],
   )
 
   const focusPanel = useCallback(
@@ -397,7 +382,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, showPanelView, updatePanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>
