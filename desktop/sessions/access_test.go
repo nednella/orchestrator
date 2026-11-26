@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"reflect"
@@ -109,10 +108,6 @@ func TestAHaikuThreadChangedToReadKeepsTheFullModelId(t *testing.T) {
 }
 
 func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
-	logged := &apptest.LockedBuffer{}
-	before := log.Writer()
-	log.SetOutput(logged)
-	t.Cleanup(func() { log.SetOutput(before) })
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -134,9 +129,6 @@ func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
 		}
 		return false
 	})
-	if strings.Contains(logged.String(), "gives more than its access") {
-		t.Errorf("the mode Claude reported met the old access:\n%s", logged.String())
-	}
 	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Supervised))
 }
 
@@ -448,6 +440,30 @@ func TestModeWithoutAnApprovedPlanGivesNoMoreAccess(t *testing.T) {
 	time.Sleep(300 * time.Millisecond) // the follower takes the turn's end after the mode
 	if row, _ := h.Session(s.ID); row.Access != session.Read || accessTag(t, h, s.ID) != "read" {
 		t.Errorf("row = %+v, tagged %q, want read", row, accessTag(t, h, s.ID))
+	}
+}
+
+func TestAModeClaudeReportsDoesNotChangeTheAccessOfAFullOrSupervisedThread(t *testing.T) {
+	for _, access := range []session.Access{session.Full, session.Supervised} {
+		t.Run(string(access), func(t *testing.T) {
+			h := apptest.New(t)
+			s, err := h.NewThread("left plan", "", "", "", string(access))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := h.ChatWatch(s.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.ChatSend(s.ID, "leave plan"); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "the mode in the log", modeLogged(h, s.ID, "default"))
+			eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
+			time.Sleep(300 * time.Millisecond) // the follower takes the turn's end after the mode
+			if row, _ := h.Session(s.ID); row.Access != access || accessTag(t, h, s.ID) != string(access) {
+				t.Errorf("row = %+v, tagged %q, want %s", row, accessTag(t, h, s.ID), access)
+			}
+		})
 	}
 }
 

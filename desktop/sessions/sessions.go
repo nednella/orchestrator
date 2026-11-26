@@ -3849,10 +3849,10 @@ func (s *Sessions) withoutRefused(argv []string) []string {
 	return argv
 }
 
-// AccessChanged follows a permission mode the live thread's Claude reports. A mode that gives less access is recorded.
-// One that gives more is recorded only when it takes a Read thread to Supervised right after the owner approved its
-// plan (planApproved), as Claude leaves plan mode to carry the plan out; the owner's own changes are recorded by
-// SetAccess, and nothing Claude reports raises a thread to Full.
+// AccessChanged follows a permission mode the live thread's Claude reports. The access a thread has changes only when
+// the owner sets it, which SetAccess records. The one mode Claude's report adds is a Read thread's Supervised right
+// after the owner approved its plan (planApproved), as Claude leaves plan mode to carry the plan out; any other mode,
+// plan mode in a Full thread among them, leaves the access as it is.
 func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 	access, ok := agent.AccessOfMode(mode)
 	name, err := session.ParseName(id)
@@ -3873,9 +3873,7 @@ func (s *Sessions) AccessChanged(id, mode string, planApproved bool) {
 	if i < 0 {
 		return
 	}
-	planDone := planApproved && have == session.Read && access == session.Supervised
-	if access.Rank() > have.Rank() && !planDone {
-		log.Printf("orchestrator: thread %s reports the mode %s, which gives more than its access %s; the access stays", id, mode, have)
+	if !planApproved || have != session.Read || access != session.Supervised {
 		return
 	}
 	if err := s.liveAccess(name, access); err != nil {
