@@ -3,11 +3,10 @@ package chat
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -80,12 +79,12 @@ func TestReadFileInsideTheFolder(t *testing.T) {
 		"./docs/plan.md":                    "# Plan",
 		filepath.Join(real, "docs/plan.md"): "# Plan",
 	} {
-		if got, err := svc.ChatReadFile("main/abcdefgh", path); err != nil || got != want {
-			t.Errorf("ChatReadFile(%q) = %q, %v; want %q", path, got, err, want)
+		if got, err := svc.ChatReadFile("main/abcdefgh", path); err != nil || got.Kind != "text" || got.Text != want || got.Size != int64(len(want)) || got.Truncated {
+			t.Errorf("ChatReadFile(%q) = %+v, %v; want the text %q", path, got, err, want)
 		}
 	}
-	if got, err := svc.ProjectReadFile("demo", "AGENTS.md"); err != nil || got != "# Agents" {
-		t.Errorf("ProjectReadFile = %q, %v; want the project's AGENTS.md", got, err)
+	if got, err := svc.ProjectReadFile("demo", "AGENTS.md"); err != nil || got.Text != "# Agents" {
+		t.Errorf("ProjectReadFile = %+v, %v; want the project's AGENTS.md", got, err)
 	}
 }
 
@@ -104,7 +103,7 @@ func TestReadFileRefusesOutside(t *testing.T) {
 	for _, path := range []string{"../x.md", "../gone.md", "../issue-7/../x.md", filepath.Join(parent, "x.md"), filepath.Join(parent, "gone.md"), filepath.Join(elsewhere, "y.md"), "out.md", "dangling.md", "up.md", "docs/y.md", "docs/gone.md"} {
 		got, err := svc.ChatReadFile("main/abcdefgh", path)
 		if want := "This file is outside thread 7's folder"; err == nil || err.Error() != want {
-			t.Errorf("ChatReadFile(%q) = %q, %v; want %q", path, got, err, want)
+			t.Errorf("ChatReadFile(%q) = %+v, %v; want %q", path, got, err, want)
 		}
 	}
 	if _, err := svc.ProjectReadFile("demo", "../x.md"); err == nil || err.Error() != "This file is outside project demo's folder" {
@@ -115,59 +114,83 @@ func TestReadFileRefusesOutside(t *testing.T) {
 	}
 }
 
-func TestReadFileRefusesBigAndOtherFiles(t *testing.T) {
+func TestReadFileRefusesWhatIsNotAFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeFiles(t, dir, map[string]string{
-		"big.md":         strings.Repeat("a", maxShown+1),
-		"full.md":        strings.Repeat("a", maxShown),
-		"notes.txt":      "notes",
-		".env":           "TOKEN=x",
-		"folder.md/a.md": "# A",
-	})
-	symlink(t, ".env", filepath.Join(dir, "env.md"))
-	symlink(t, "full.md", filepath.Join(dir, "full"))
-	if err := syscall.Mkfifo(filepath.Join(dir, "pipe.md"), 0o600); err != nil {
+	writeFiles(t, dir, map[string]string{"folder.d/a.md": "# A", "full.md": "x"})
+	symlink(t, "folder.d", filepath.Join(dir, "folder"))
+	if err := syscall.Mkfifo(filepath.Join(dir, "pipe"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	svc := readService(t, dir, dir, "")
 	for path, want := range map[string]string{
-		"big.md":    "This file is too big to show",
-		"notes.txt": "This is not a markdown file",
-		"env.md":    "This is not a markdown file",
-		"full":      "This is not a markdown file",
-		"folder.md": "This is not a markdown file",
-		"pipe.md":   "This is not a markdown file",
+		"folder.d":  "This is not a file",
+		"folder":    "This is not a file",
+		"pipe":      "This is not a file",
 		"gone.md":   "This file does not exist",
 		"full.md/x": "This file does not exist",
 	} {
 		if got, err := svc.ChatReadFile("main/abcdefgh", path); err == nil || err.Error() != want {
-			t.Errorf("ChatReadFile(%q) = %.20q, %v; want %q", path, got, err, want)
+			t.Errorf("ChatReadFile(%q) = %+v, %v; want %q", path, got, err, want)
 		}
-	}
-	if got, err := svc.ChatReadFile("main/abcdefgh", "full.md"); err != nil || len(got) != maxShown {
-		t.Errorf("ChatReadFile(full.md) = %d bytes, %v; want the whole file", len(got), err)
 	}
 }
 
-// Not parallel: it sets a package-level hook.
-func TestReadFileRefusesAFileThatGrowsPastTheCapAfterItsSize(t *testing.T) {
+func TestReadFileShowsAnyTextFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	writeFiles(t, dir, map[string]string{"full.md": strings.Repeat("a", maxShown)})
-	beforeRead = func() {
-		f, err := os.OpenFile(filepath.Join(dir, "full.md"), os.O_APPEND|os.O_WRONLY, 0)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		defer f.Close()
-		if _, err := f.WriteString("more"); err != nil {
-			t.Error(err)
+	writeFiles(t, dir, map[string]string{"main.go": "package main\n", ".env": "TOKEN=x", "empty.txt": "", "ünï/cødé.ts": "const é = 1"})
+	svc := readService(t, dir, dir, "")
+	for path, want := range map[string]string{"main.go": "package main\n", ".env": "TOKEN=x", "empty.txt": "", "ünï/cødé.ts": "const é = 1"} {
+		if got, err := svc.ChatReadFile("main/abcdefgh", path); err != nil || got.Kind != "text" || got.Text != want {
+			t.Errorf("ChatReadFile(%q) = %+v, %v; want the text %q", path, got, err, want)
 		}
 	}
-	t.Cleanup(func() { beforeRead = nil })
-	if got, err := readService(t, dir, dir, "").ChatReadFile("main/abcdefgh", "full.md"); err == nil || err.Error() != "This file is too big to show" {
-		t.Errorf("ChatReadFile = %d bytes, %v; want it too big", len(got), err)
+}
+
+func TestReadFileCutsABigTextFileWhereACharacterEnds(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// "é" is two bytes, so the cap falls inside the last one.
+	big := strings.Repeat("a", maxShown-1) + "é" + "tail"
+	writeFiles(t, dir, map[string]string{"big.txt": big, "full.txt": strings.Repeat("a", maxShown)})
+	svc := readService(t, dir, dir, "")
+	got, err := svc.ChatReadFile("main/abcdefgh", "big.txt")
+	if err != nil || got.Kind != "text" || !got.Truncated || got.Size != int64(len(big)) || got.Text != strings.Repeat("a", maxShown-1) {
+		t.Errorf("ChatReadFile(big.txt) = %d bytes of %q, truncated %v, size %d, %v; want the first %d bytes, cut before the character", len(got.Text), got.Kind, got.Truncated, got.Size, err, maxShown-1)
+	}
+	got, err = svc.ChatReadFile("main/abcdefgh", "full.txt")
+	if err != nil || got.Truncated || len(got.Text) != maxShown {
+		t.Errorf("ChatReadFile(full.txt) = %d bytes, truncated %v, %v; want the whole file", len(got.Text), got.Truncated, err)
+	}
+}
+
+func TestReadFileSaysABinaryFileIsBinary(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"nul.bin": "ab\x00cd", "latin1.txt": "caf\xe9", "later.bin": strings.Repeat("a", 5000) + "\x00"})
+	svc := readService(t, dir, dir, "")
+	for _, path := range []string{"nul.bin", "latin1.txt", "later.bin"} {
+		if got, err := svc.ChatReadFile("main/abcdefgh", path); err != nil || got.Kind != "binary" || got.Text != "" || got.Size == 0 {
+			t.Errorf("ChatReadFile(%q) = %+v, %v; want a binary file with no text", path, got, err)
+		}
+	}
+}
+
+func TestReadFileGivesAnImageAsBase64(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"logo.PNG": "\x89PNG-bytes", "icon.svg": "<svg/>", "huge.png": strings.Repeat("a", maxImage+1)})
+	svc := readService(t, dir, dir, "")
+	got, err := svc.ChatReadFile("main/abcdefgh", "logo.PNG")
+	if want := (FileContent{Kind: "image", Size: 10, Mime: "image/png", Data: base64.StdEncoding.EncodeToString([]byte("\x89PNG-bytes"))}); err != nil || got != want {
+		t.Errorf("ChatReadFile(logo.PNG) = %+v, %v; want %+v", got, err, want)
+	}
+	if got, err := svc.ChatReadFile("main/abcdefgh", "icon.svg"); err != nil || got.Mime != "image/svg+xml" {
+		t.Errorf("ChatReadFile(icon.svg) = %+v, %v; want an svg image", got, err)
+	}
+	if got, err := svc.ChatReadFile("main/abcdefgh", "huge.png"); err == nil || err.Error() != "This file is too big to show" {
+		t.Errorf("ChatReadFile(huge.png) = %d bytes, %v; want it too big", len(got.Data), err)
 	}
 }
 
@@ -289,38 +312,5 @@ func TestLatestPlanIsReadAgainOnlyOnceTheLogChanges(t *testing.T) {
 	}
 	if got, _ := svc.ChatLatestPlan("main/abcdefgh"); got.Text != "# Three" {
 		t.Errorf("ChatLatestPlan of a grown log = %+v, want # Three", got)
-	}
-}
-
-// Not parallel: it sets the process environment.
-func TestMarkdownFilesListsOnlyMarkdown(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
-	git(t, dir, "init", "-q")
-	writeFiles(t, dir, map[string]string{"README.md": "", "docs/config.markdown": "", "NOTES.MD": "", "main.go": "", "notes.txt": "", "build/out.md": ""})
-	writeFiles(t, dir, map[string]string{".git/info/exclude": "build/\n"})
-	git(t, dir, "add", "README.md")
-	svc := readService(t, dir, dir, "")
-	want := []string{"README.md", "docs/config.markdown", "NOTES.MD"}
-	if got, err := svc.ChatMarkdownFiles("main/abcdefgh"); err != nil || !slices.Equal(got, want) {
-		t.Errorf("ChatMarkdownFiles = %q, %v; want %q", got, err, want)
-	}
-	if got, err := svc.ProjectMarkdownFiles("demo"); err != nil || !slices.Equal(got, want) {
-		t.Errorf("ProjectMarkdownFiles = %q, %v; want %q", got, err, want)
-	}
-
-	var listed strings.Builder
-	for i := range maxMarkdownFiles + 10 {
-		fmt.Fprintf(&listed, "a/doc-%03d.md\x00", i)
-	}
-	listed.WriteString("docs/z.md\x00z/AGENTS.md\x00AGENTS.md\x00README.md\x00")
-	many := func(context.Context, string, string, ...string) ([]byte, error) { return []byte(listed.String()), nil }
-	svc = NewService(New(folderThread(dir), t.TempDir(), func(string, any) {}), many, noProject, context.Background)
-	got, err := svc.ChatMarkdownFiles("main/abcdefgh")
-	if err != nil || len(got) != maxMarkdownFiles {
-		t.Fatalf("ChatMarkdownFiles of a folder with %d = %d files, %v; want %d", maxMarkdownFiles+14, len(got), err, maxMarkdownFiles)
-	}
-	if first := got[:4]; !slices.Equal(first, []string{"AGENTS.md", "README.md", "docs/z.md", "a/doc-000.md"}) {
-		t.Errorf("ChatMarkdownFiles starts %q, want AGENTS.md, README.md and docs/ kept ahead of the cap", first)
 	}
 }

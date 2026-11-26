@@ -1,7 +1,9 @@
 package chat
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,60 +11,59 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nednella/orchestrator/desktop/sessions"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 const (
-	maxShown         = 1 << 20 // the largest file the Files view shows
-	maxMarkdownFiles = 500
+	maxShown = 1 << 20 // the most of a text file the Files view reads
+	maxImage = 8 << 20 // the largest image the Files view shows
 )
 
 var errTooBig = errors.New("This file is too big to show")
 
-// beforeRead, when set, runs between readMarkdown's size check and its read, for a test to grow the file there.
-var beforeRead func()
+// FileContent is a file as the Files view shows it. Kind is "text", "image" or "binary". Text is the file's text, at
+// most its first maxShown bytes, and Truncated says it was cut; Size is the file's own size in bytes. An image has its
+// Mime type and its bytes as base64 in Data. A binary file has neither.
+type FileContent struct {
+	Kind      string `json:"kind"`
+	Text      string `json:"text"`
+	Size      int64  `json:"size"`
+	Truncated bool   `json:"truncated"`
+	Mime      string `json:"mime"`
+	Data      string `json:"data"`
+}
 
-// ChatReadFile is the text of the markdown file at path, relative to the thread's folder or absolute: its worktree,
-// else the project folder. Only a file inside that folder, symlinks resolved, of at most 1 MB is read.
-func (v *Service) ChatReadFile(id, path string) (string, error) {
+// imageMimes are the image types the Files view shows, by file extension.
+var imageMimes = map[string]string{
+	".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+	".bmp": "image/bmp", ".ico": "image/x-icon", ".avif": "image/avif", ".svg": "image/svg+xml",
+}
+
+// ChatReadFile is the file at path, relative to the thread's folder or absolute: its worktree, else the project
+// folder. Only a regular file inside that folder, symlinks resolved, is read.
+func (v *Service) ChatReadFile(id, path string) (FileContent, error) {
 	ch, err := v.c.threads.ChatOf(id)
 	if err != nil {
-		return "", err
+		return FileContent{}, err
 	}
-	return readMarkdown(v.threadDir(ch), path, fmt.Sprintf("thread %d", ch.N))
+	return readFile(v.threadDir(ch), path, fmt.Sprintf("thread %d", ch.N))
 }
 
 // ProjectReadFile is ChatReadFile for the project's folder.
-func (v *Service) ProjectReadFile(project, path string) (string, error) {
+func (v *Service) ProjectReadFile(project, path string) (FileContent, error) {
 	dir := v.projectDir(project)
 	if dir == "" {
-		return "", fmt.Errorf("No project %s", project)
+		return FileContent{}, fmt.Errorf("No project %s", project)
 	}
-	return readMarkdown(dir, path, "project "+project)
-}
-
-// ChatMarkdownFiles is the markdown files of the thread's folder that git tracks or does not ignore, at most 500.
-func (v *Service) ChatMarkdownFiles(id string) ([]string, error) {
-	ch, err := v.c.threads.ChatOf(id)
-	if err != nil {
-		return nil, err
-	}
-	return v.markdownIn(v.threadDir(ch), fmt.Sprintf("thread %d", ch.N))
-}
-
-// ProjectMarkdownFiles is ChatMarkdownFiles for the project's folder.
-func (v *Service) ProjectMarkdownFiles(project string) ([]string, error) {
-	dir := v.projectDir(project)
-	if dir == "" {
-		return nil, fmt.Errorf("No project %s", project)
-	}
-	return v.markdownIn(dir, "project "+project)
+	return readFile(dir, path, "project "+project)
 }
 
 // Plan is the plan the thread's own Claude last asked to have approved, and whether it still waits on the owner.
@@ -163,65 +164,50 @@ func latestPlan(events []chatlog.Event) Plan {
 // threadDir is the folder the thread works in: its worktree, else the project folder.
 func (v *Service) threadDir(ch sessions.Chat) string { return cmp.Or(ch.Dir, v.projectDir(ch.Project)) }
 
-// markdownIn is the markdown files of dir, as filesIn lists them; of names whose files they are, for the error.
-func (v *Service) markdownIn(dir, of string) ([]string, error) {
-	if dir == "" {
-		return []string{}, nil
-	}
-	paths, err := v.files.list(v.ctx(), dir)
+// readFile is the file at path in dir, as sessions.OpenFile opens it; of names whose folder dir is, for the error.
+func readFile(dir, path, of string) (FileContent, error) {
+	f, real, err := sessions.OpenFile(dir, path, of)
 	if err != nil {
-		log.Printf("orchestrator: listing the files of %s in %s: %v", of, dir, err)
-		return nil, fmt.Errorf("Could not list the files of %s", of)
-	}
-	out := []string{}
-	for _, p := range paths {
-		if sessions.IsMarkdown(p) {
-			out = append(out, p)
-		}
-	}
-	slices.SortStableFunc(out, func(a, b string) int { return pickerRank(a) - pickerRank(b) })
-	return out[:min(len(out), maxMarkdownFiles)], nil
-}
-
-// pickerRank is where a file goes in the Files view's picker, so the cap keeps the files it lists first: AGENTS.md,
-// README.md, the files under docs/, then the rest.
-func pickerRank(path string) int {
-	switch {
-	case path == "AGENTS.md":
-		return 0
-	case path == "README.md":
-		return 1
-	case strings.HasPrefix(path, "docs/"):
-		return 2
-	}
-	return 3
-}
-
-// readMarkdown is the text of the markdown file at path in dir, as sessions.OpenMarkdown opens it, when it is at most
-// maxShown bytes.
-func readMarkdown(dir, path, of string) (string, error) {
-	f, _, err := sessions.OpenMarkdown(dir, path, of)
-	if err != nil {
-		return "", err
+		return FileContent{}, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err == nil && info.Size() > maxShown {
-		return "", errTooBig
-	}
-	if beforeRead != nil {
-		beforeRead()
-	}
-	var data []byte
-	if err == nil {
-		data, err = io.ReadAll(io.LimitReader(f, maxShown+1))
-	}
 	if err != nil {
 		log.Printf("orchestrator: reading %s in the folder of %s: %v", path, of, err)
-		return "", errors.New("Could not read this file")
+		return FileContent{}, errors.New("Could not read this file")
 	}
+	if mime, ok := imageMimes[strings.ToLower(filepath.Ext(real))]; ok {
+		data, err := readAtMost(f, maxImage)
+		if err != nil {
+			log.Printf("orchestrator: reading %s in the folder of %s: %v", path, of, err)
+			return FileContent{}, errors.New("Could not read this file")
+		}
+		if len(data) > maxImage {
+			return FileContent{}, errTooBig
+		}
+		return FileContent{Kind: "image", Size: int64(len(data)), Mime: mime, Data: base64.StdEncoding.EncodeToString(data)}, nil
+	}
+	data, err := readAtMost(f, maxShown)
+	if err != nil {
+		log.Printf("orchestrator: reading %s in the folder of %s: %v", path, of, err)
+		return FileContent{}, errors.New("Could not read this file")
+	}
+	content := FileContent{Kind: "text", Size: max(info.Size(), int64(len(data)))}
 	if len(data) > maxShown {
-		return "", errTooBig
+		data, content.Truncated = data[:maxShown], true
+		// The cut may fall inside a character.
+		for cut := 0; cut < utf8.UTFMax && !utf8.Valid(data) && len(data) > 0; cut++ {
+			data = data[:len(data)-1]
+		}
 	}
-	return string(data), nil
+	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
+		return FileContent{Kind: "binary", Size: content.Size}, nil
+	}
+	content.Text = string(data)
+	return content, nil
+}
+
+// readAtMost is the first limit+1 bytes of f at most, so that a longer file shows as longer than limit.
+func readAtMost(f io.Reader, limit int) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(f, int64(limit)+1))
 }
