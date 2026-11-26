@@ -21,7 +21,7 @@ func startHost(t *testing.T, argv ...string) (dir string, done <-chan error) {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s")
 
-	root := newRootCmd()
+	root := newRootCmd(nil)
 	root.SetArgs(append([]string{"host", "--log", filepath.Join(dir, "chat.jsonl"), "--socket", socket, "--"}, argv...))
 	result := make(chan error, 1)
 	go func() { result <- root.Execute() }()

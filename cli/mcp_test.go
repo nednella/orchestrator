@@ -18,12 +18,28 @@ import (
 	"github.com/nednella/agentos/internal/control"
 )
 
+// fakeApp answers commands on a socket in a short temp dir, and points the command at it.
+func fakeApp(t *testing.T, handle control.Handler) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "aosapp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	srv, err := control.Listen(control.SocketPath(dir), handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	t.Setenv("AGENTOS_SOCKET", bus.SocketPath(dir))
+}
+
 // callTool runs agentos mcp, sends one tools/call and returns the result's text and error flag.
 func callTool(t *testing.T, tool, input string) (string, bool) {
 	t.Helper()
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
-	root := newRootCmd()
+	root := newRootCmd(nil)
 	root.SetIn(inR)
 	root.SetOut(outW)
 	root.SetArgs([]string{"mcp"})

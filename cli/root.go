@@ -1,56 +1,43 @@
-// Package cli is the agentos command line.
+// Package cli holds the binary's entry points: the app, and the hidden commands the app and its agents start.
 package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/spf13/cobra"
 )
 
-const (
-	groupWork    = "work"
-	groupViews   = "views"
-	groupProject = "project"
-	groupSession = "session"
-)
+const noCommandLine = "agentos has no command line"
 
-// launcher is how the bare command reaches the app.
-type launcher struct {
-	open     opener          // shows the bundle at a path, as Finder would
-	places   func() []string // where the bundle may be, in the order to look
-	window   func() error    // runs the app in this process; nil when this build has no window
-	attached func() bool     // whether a person typed the command at a terminal
-}
-
-// Execute runs the agentos command line. window runs the app in this process: the
-// app's binary is the command, and starts as the app when nothing typed it.
+// Execute runs the binary. With no arguments it runs the app through window; the only commands are the hidden
+// ones the app and Claude start.
 func Execute(ctx context.Context, window func() error) error {
-	return newRootCmdWith(launcher{open: openWithMac, places: appPlaces, window: window, attached: stdinIsTerminal}).ExecuteContext(ctx)
+	return newRootCmd(window).ExecuteContext(ctx)
 }
 
-func newRootCmd() *cobra.Command {
-	return newRootCmdWith(launcher{open: openWithMac, places: appPlaces, attached: stdinIsTerminal})
-}
-
-func newRootCmdWith(l launcher) *cobra.Command {
+func newRootCmd(window func() error) *cobra.Command {
 	root := &cobra.Command{
-		Use:               "agentos",
-		Short:             "One screen for all your coding agents",
-		Long:              "One screen for all your coding agents.\n\nWith no command, agentos opens the app.",
-		Args:              cobra.NoArgs,
-		RunE:              openApp(l),
-		PersistentPostRun: func(cmd *cobra.Command, _ []string) { notice(cmd, l) },
-		SilenceUsage:      true,
-		SilenceErrors:     true,
+		Use: "agentos",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return errors.New(noCommandLine)
+			}
+			return nil
+		},
+		RunE:          func(*cobra.Command, []string) error { return window() },
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.AddGroup(
-		&cobra.Group{ID: groupWork, Title: "Work:"},
-		&cobra.Group{ID: groupViews, Title: "Views:"},
-		&cobra.Group{ID: groupProject, Title: "Projects:"},
-		&cobra.Group{ID: groupSession, Title: "From inside a session:"},
-	)
-	root.AddCommand(newBrowserCmd(), newDigestCmd(), newHookCmd(), newHostCmd(), newMCPCmd(), newNoteCmd(), newSettleCmd(), newShowCmd(), newStatsCmd(), newTrackCmd(), newUpdateCmd(l), newVersionCmd())
-	root.AddCommand(newAppCmds()...)
+	root.SetHelpCommand(&cobra.Command{
+		Use:    "help",
+		Hidden: true,
+		Args:   cobra.ArbitraryArgs,
+		RunE:   func(*cobra.Command, []string) error { return errors.New(noCommandLine) },
+	})
+	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.ErrOrStderr(), noCommandLine) })
+	root.AddCommand(newHookCmd(), newHostCmd(), newMCPCmd())
 	return root
 }

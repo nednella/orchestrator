@@ -141,7 +141,7 @@ func TestOnlySessionStartCreatesTheStateFile(t *testing.T) {
 func TestHookCommandIsQuiet(t *testing.T) {
 	hookSetup(t)
 	var out bytes.Buffer
-	root := newRootCmd()
+	root := newRootCmd(nil)
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetIn(strings.NewReader(`{}`))

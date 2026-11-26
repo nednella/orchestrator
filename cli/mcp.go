@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/version"
@@ -22,11 +23,24 @@ const (
 	waitSliceCall    = 65 * time.Second
 	defaultWaitLimit = 300
 	maxWaitLimit     = 3600
+	// browserTimeoutMs is how long the app may spend on a browser call: a page load can take 30 seconds.
+	browserTimeoutMs = 75_000
 	// An answer that comes well before its slice ends, as while the app starts, is asked again after a pause that
 	// doubles each time, up to waitPauseMost.
 	waitPauseFirst = 500 * time.Millisecond
 	waitPauseMost  = 8 * time.Second
 )
+
+func controlSocket() (string, error) {
+	if socket := os.Getenv("AGENTOS_SOCKET"); socket != "" {
+		return control.SocketPath(bus.DirOf(socket)), nil
+	}
+	dir, err := bus.DefaultDir()
+	if err != nil {
+		return "", err
+	}
+	return control.SocketPath(dir), nil
+}
 
 // newMCPCmd serves the agentos tools to the agent that started it, over stdin and stdout.
 func newMCPCmd() *cobra.Command {
