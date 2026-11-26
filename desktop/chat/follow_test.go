@@ -615,3 +615,61 @@ func TestAwaitTurnEndsWhenTheHostExits(t *testing.T) {
 		}
 	})
 }
+
+func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
+	user := chatlog.Event{Kind: chatlog.KindUser, Text: "work"}
+	settle := chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle}
+	for _, tt := range []struct {
+		name   string
+		logged []chatlog.Event
+		want   int // how many exits OnTurnEnd hears
+	}{
+		{"the run's own settle", []chatlog.Event{{Kind: chatlog.KindStart}, user, settle}, 1},
+		{"an earlier run's settle", []chatlog.Event{{Kind: chatlog.KindStart}, user, settle, {Kind: chatlog.KindStart}}, 0},
+		{"an exit that is no settle", []chatlog.Event{{Kind: chatlog.KindStart}, user, {Kind: chatlog.KindExit, Error: true}}, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, err := os.MkdirTemp("", "aos")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.RemoveAll(dir) })
+			socket, logPath := filepath.Join(dir, "host.sock"), filepath.Join(dir, "chat.jsonl")
+			chatLog, err := chatlog.OpenLog(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range tt.logged {
+				if _, err := chatLog.Append(e); err != nil {
+					t.Fatal(err)
+				}
+			}
+			chatLog.Close()
+			ln, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { ln.Close() })
+			events := make(chan chatlog.Event)
+			t.Cleanup(func() { close(events) })
+			go pushed(t, ln, events)
+
+			thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+			chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
+			heard := make(chan chatlog.Event, 4)
+			chats.OnTurnEnd(func(_ string, e chatlog.Event) {
+				if e.Kind == chatlog.KindExit {
+					heard <- e
+				}
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			chats.Start(ctx)
+			apptest.Eventually(t, "the log read", func() bool { _, known := chats.TurnOver(thread.chat.ID, 0); return known })
+			time.Sleep(100 * time.Millisecond) // the follower tells what it read just after it is read
+			if got := len(heard); got != tt.want {
+				t.Errorf("OnTurnEnd heard %d exits, want %d", got, tt.want)
+			}
+		})
+	}
+}

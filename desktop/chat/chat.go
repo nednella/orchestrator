@@ -375,6 +375,8 @@ func (f *follower) run(ctx context.Context) {
 		case chatlog.KindCommands:
 			commands = &e
 		case chatlog.KindStart:
+			// An exit before the run's start was an earlier run's.
+			exit = nil
 			mode.started, mode.text = true, ""
 			if e.Text != "" && e.At >= f.chats.since {
 				f.chats.threads.FlagRefused(e.Text)
