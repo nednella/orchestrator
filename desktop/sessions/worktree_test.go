@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
@@ -810,6 +811,47 @@ func TestWakeIsRefusedDuringACleanup(t *testing.T) {
 	}
 	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
 		t.Errorf("the clean-up did not finish: worktree there %v", exists(s.Worktree))
+	}
+}
+
+func TestToldMessageWaitsForACleanup(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	pushWork(t, s.Worktree)
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+	release, done := heldCleanup(t, h, s.ID)
+
+	told := make(chan error, 1)
+	go func() {
+		_, err := h.Sessions().Tell(s.ID, sessions.Told{From: "main/aaaaaaaa", Text: "Check the tests too"})
+		told <- err
+	}()
+	select {
+	case err := <-told:
+		t.Fatalf("Tell returned %v during the clean-up, want it to wait for its end", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	release()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-told:
+		if err != nil {
+			t.Fatalf("Tell after the clean-up = %v, want the thread woken for it", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("Tell did not return once the clean-up ended")
+	}
+	if got, _ := h.Session(s.ID); got.State == "settled" {
+		t.Error("the thread did not wake for the message")
+	}
+	if !exists(filepath.Join(s.Worktree, "work.txt")) {
+		t.Error("the wake did not put the worktree back")
 	}
 }
 

@@ -3200,8 +3200,8 @@ func (s *Sessions) deliverRanked(name session.Name, m Told) (string, error) {
 	return s.deliver(name, m)
 }
 
-// awaken makes sure the thread id runs, waking it when it has settled. A thread that is deleted or being deleted, ran in
-// a terminal or is unknown is an error.
+// awaken makes sure the thread id runs, waking it when it has settled, once a clean-up of it that runs now has ended. A
+// thread that is deleted or being deleted, ran in a terminal or is unknown is an error.
 func (s *Sessions) awaken(id string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -3224,12 +3224,29 @@ func (s *Sessions) awaken(id string) error {
 	case old:
 		return fmt.Errorf("Thread %s ran in a terminal, so it takes no messages", id)
 	case settled:
+		s.awaitCleanup(id)
 		_, err := s.wakeOrJoin(id, "")
 		return err
 	case !live:
 		return fmt.Errorf("No thread %s", id)
 	}
 	return nil
+}
+
+// awaitCleanup waits, at most gitTimeout, for a clean-up of the thread that runs now to end: a wake is refused while
+// one runs, and a message for the thread wakes it once the clean-up is over instead of failing.
+func (s *Sessions) awaitCleanup(id string) {
+	ctx, cancel := context.WithTimeout(s.context(), gitTimeout)
+	defer cancel()
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for s.life.CleaningUp(id) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }
 
 // HoldsTold says whether a message a thread told the thread id is held for it, or held prompts are being given to it
