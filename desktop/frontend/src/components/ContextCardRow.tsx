@@ -1,10 +1,12 @@
 import { Square } from 'lucide-react'
 import type { MouseEvent, ReactNode } from 'react'
 import type { State } from '../types'
+import { useDelayedTip } from '../useDelayedTip'
+import { FloatingTip } from './FloatingTip'
 import { StateDot } from './StateDot'
 
 // label wraps to two lines when wrap is set; meta is a muted line under it. dot is a thread's state on the icon, and
-// stop names what the row's stop button stops.
+// stop names what the row's stop button stops. tip shows in a floating tip while the pointer rests on the row.
 type ContextCardRowProps = {
   icon: ReactNode
   label: ReactNode
@@ -12,13 +14,15 @@ type ContextCardRowProps = {
   meta?: ReactNode
   wrap?: boolean
   title?: string
+  tip?: string
   dot?: State
   onClick?(): void
   onContextMenu?(e: MouseEvent): void
   stop?: { label: string; run(): void }
 }
 
-export function ContextCardRow({ icon, label, end, meta, wrap = false, title, dot, onClick, onContextMenu, stop }: ContextCardRowProps) {
+export function ContextCardRow({ icon, label, end, meta, wrap = false, title, tip, dot, onClick, onContextMenu, stop }: ContextCardRowProps) {
+  const { anchor, tipHandlers } = useDelayedTip()
   const body = (
     <>
       <span className={`flex min-w-0 gap-2.5 text-[0.8125rem] leading-5 font-medium text-(--text-chip) ${wrap ? 'items-start' : 'items-center'}`}>
@@ -38,7 +42,7 @@ export function ContextCardRow({ icon, label, end, meta, wrap = false, title, do
   )
   const inner = 'flex min-h-8 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-lg px-2.5 py-1.5 text-left'
   return (
-    <div className={`flex min-h-8 items-center rounded-lg ${onClick ? 'hover:bg-(--bg-row-hover)' : ''}`} title={title} onContextMenu={onContextMenu}>
+    <div className={`flex min-h-8 items-center rounded-lg ${onClick ? 'hover:bg-(--bg-row-hover)' : ''}`} title={title} onContextMenu={onContextMenu} {...(tip ? tipHandlers : undefined)}>
       {onClick ? (
         <button className={`${inner} focus-visible:outline-2 focus-visible:-outline-offset-2 active:scale-[0.97] motion-reduce:active:scale-100`} onClick={onClick}>
           {body}
@@ -46,6 +50,7 @@ export function ContextCardRow({ icon, label, end, meta, wrap = false, title, do
       ) : (
         <div className={inner}>{body}</div>
       )}
+      {tip && anchor && <FloatingTip anchor={anchor} text={tip} below />}
       {stop && (
         <button className="btn btn-ghost mr-1 h-7 w-7 flex-none justify-center px-0 text-danger" title={stop.label} aria-label={stop.label} onClick={stop.run}>
           <Square size={12} fill="currentColor" aria-hidden="true" />

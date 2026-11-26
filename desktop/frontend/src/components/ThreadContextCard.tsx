@@ -1,9 +1,9 @@
-import { Bot, CircleDot, CornerLeftUp, Folder, FolderGit2, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop } from 'lucide-react'
+import { Bot, CircleDot, CornerLeftUp, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { splitBranch } from '../branchLabel'
-import { editorLabel, folderName } from '../contextCard'
+import { editorLabel } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
 import { askToReadIssue } from '../issueReadRequest'
@@ -45,16 +45,8 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
 
   const row = (r: CardRow) => {
     switch (r.kind) {
-      case 'workspace': {
-        const WorkspaceIcon = r.worktree ? FolderGit2 : Folder
-        const end = (
-          <>
-            <WorkspaceIcon size={14} aria-hidden="true" />
-            {r.worktree ? folderName(r.worktree) : 'Project folder'}
-          </>
-        )
-        return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} end={end} title={[r.machine, r.folder].filter(Boolean).join('\n')} />
-      }
+      case 'workspace':
+        return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} tip={r.folder} />
       case 'editor':
         return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={editorLabel(r.editor)} onClick={() => a.report(() => a.openInEditor(session.id))} />
       case 'branch': {
