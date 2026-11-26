@@ -1,14 +1,11 @@
 package bus
 
 import (
-	"context"
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -74,105 +71,5 @@ func TestDefaultDirHonoursTheOverride(t *testing.T) {
 	t.Setenv("AGENTOS_STATE_DIR", "")
 	if dir, err := DefaultDir(); err != nil || !strings.HasSuffix(dir, filepath.Join(".local", "state", "agentos")) {
 		t.Errorf("DefaultDir = %q, %v", dir, err)
-	}
-	if got := DirOf(SocketPath("/a/b")); got != "/a/b" {
-		t.Errorf("DirOf = %q", got)
-	}
-}
-
-func TestSendReachesTheListener(t *testing.T) {
-	socket := SocketPath(tempDir(t))
-	var mu sync.Mutex
-	got := map[string]session.Record{}
-	ln, err := Listen(socket, func(rec session.Record) {
-		mu.Lock()
-		defer mu.Unlock()
-		got[rec.Session] = rec
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-
-	ctx := context.Background()
-	want := session.Record{Session: "p/1", State: session.Idle, Event: "Stop"}
-	if err := Send(ctx, socket, want); err != nil {
-		t.Fatal(err)
-	}
-	if err := Send(ctx, socket, session.Record{Session: "p/2", State: session.Working}); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		mu.Lock()
-		n := len(got)
-		mu.Unlock()
-		if n == 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("listener got %d records, want 2", n)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if !reflect.DeepEqual(got["p/1"], want) {
-		t.Errorf("record = %+v, want %+v", got["p/1"], want)
-	}
-}
-
-func TestListenRefusesATakenSocket(t *testing.T) {
-	socket := SocketPath(tempDir(t))
-	ln, err := Listen(socket, func(session.Record) {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	if _, err := Listen(socket, func(session.Record) {}); !errors.Is(err, ErrInUse) {
-		t.Errorf("a second Listen = %v, want ErrInUse", err)
-	}
-}
-
-func TestListenRefusesALongPath(t *testing.T) {
-	long := filepath.Join(tempDir(t), strings.Repeat("x", 120), "agentos.sock")
-	if _, err := Listen(long, func(session.Record) {}); err == nil {
-		t.Error("a path over the limit was accepted")
-	}
-}
-
-func TestSendWithoutAListenerFails(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := Send(ctx, SocketPath(tempDir(t)), session.Record{Session: "p/1"}); err == nil {
-		t.Error("Send to nobody succeeded")
-	}
-}
-
-func TestListenerIgnoresBadSessionNames(t *testing.T) {
-	socket := SocketPath(tempDir(t))
-	var mu sync.Mutex
-	var got []string
-	ln, err := Listen(socket, func(rec session.Record) {
-		mu.Lock()
-		defer mu.Unlock()
-		got = append(got, rec.Session)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-
-	ctx := context.Background()
-	for _, name := range []string{"../../x/1", "a/b/1", "nonsense", "p/1"} {
-		if err := Send(ctx, socket, session.Record{Session: name}); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(got) != 1 || got[0] != "p/1" {
-		t.Errorf("delivered %v, want only p/1", got)
 	}
 }

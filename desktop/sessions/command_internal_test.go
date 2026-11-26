@@ -25,7 +25,7 @@ func (f fakeBrowsers) PIDs() []int                               { return nil }
 
 // commandFor is the argv claude starts with.
 func (s *Sessions) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, access session.Access) []string {
-	return agent.Claude{Exe: "/x"}.Command(launchFor(model, conversation, brief, handover, access, s.hasBrowser(proj, brief), forkStart{}, workTree{}, ""))
+	return agent.Claude{}.Command(launchFor(model, conversation, brief, handover, access, s.hasBrowser(proj, brief), forkStart{}, workTree{}, ""))
 }
 
 // allowedTools is the --allowedTools value in argv, "" when there is none.
@@ -110,11 +110,11 @@ func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
 
 func TestHostedRefusesASocketPathTooLong(t *testing.T) {
 	name := session.Name{Project: "p", Token: session.NewToken()}
-	fits := &Sessions{stateDir: "/" + strings.Repeat("s", 73), agents: agent.Registry{Exe: "/x"}}
+	fits := &Sessions{stateDir: "/" + strings.Repeat("s", 73), agents: agent.Registry{}}
 	if got := len(fits.hostSocket(name)); got != 103 {
 		t.Fatalf("socket path is %d bytes, want 103", got)
 	}
-	long := &Sessions{stateDir: filepath.Join(t.TempDir(), strings.Repeat("s", 100)), agents: agent.Registry{Exe: "/x"}}
+	long := &Sessions{stateDir: filepath.Join(t.TempDir(), strings.Repeat("s", 100)), agents: agent.Registry{}}
 	_, err := long.hosted(name, []string{"claude"})
 	if err == nil || !strings.HasPrefix(err.Error(), "the session socket path is too long: ") {
 		t.Errorf("err = %v", err)

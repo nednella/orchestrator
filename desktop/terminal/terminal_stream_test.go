@@ -147,7 +147,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	}
 	out := openRead(t, h, shell.ID, 100, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
-	if err := h.TermWrite(shell.ID, "echo \"$AGENTOS_PROJECT|${AGENTOS_SESSION-unset}|${AGENTOS_SOCKET:+set}|$(pwd -P)\"\n"); err != nil {
+	if err := h.TermWrite(shell.ID, "echo \"$AGENTOS_PROJECT|${AGENTOS_SESSION-unset}|${AGENTOS_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(h.Dir)
@@ -155,7 +155,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the shell's environment", func() bool {
-		return strings.Contains(out.String(), "\r\nmain|unset|set|"+want+"\r\n")
+		return strings.Contains(out.String(), "\r\nmain|unset|unset|"+want+"\r\n")
 	})
 	h.TermClose(shell.ID)
 }

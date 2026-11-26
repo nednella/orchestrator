@@ -380,9 +380,9 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	if got, want := strings.TrimSpace(string(out)), apptest.CLIPath(t)+" host "; !strings.HasPrefix(got, want) {
 		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
 	}
-	args := strings.Join(claudeArgs(t, h, s.ID), " ")
-	if !strings.Contains(args, apptest.CLIPath(t)+"' hook Stop") || strings.Contains(args, older) {
-		t.Errorf("the hooks do not run the app's own binary: %q", args)
+	args := claudeArgs(t, h, s.ID)
+	if command, _ := mcpServerOf(t, args); command != apptest.CLIPath(t) || strings.Contains(strings.Join(args, " "), older) {
+		t.Errorf("the tools' server runs %q, want the app's own binary %q and not %q", command, apptest.CLIPath(t), older)
 	}
 }
 

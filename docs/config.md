@@ -168,7 +168,7 @@ A Read thread runs every tool but `show` and `track` without asking; for those t
 
 ## No command line
 
-The `agentos` binary is the app. Started with no command it runs the app; the only commands it takes are the hidden `host`, `mcp` and `hook`, which the app and Claude start, and any other command exits with "agentos has no command line". Nothing links it into a folder on PATH, and a thread needs no `agentos` on PATH: its hooks, its host and its tools' server run the app's own binary by its path. Everything else is done in the app, and an agent uses the [tools](#agent-tools). The app answers only the `orchestrate` call on its control socket, as the thread its token names.
+The `agentos` binary is the app. Started with no command it runs the app; the only commands it takes are the hidden `host` and `mcp`, which the app and Claude start, and any other command exits with "agentos has no command line". Nothing links it into a folder on PATH, and a thread needs no `agentos` on PATH: its host and its tools' server run the app's own binary by its path. Everything else is done in the app, and an agent uses the [tools](#agent-tools). The app answers only the `orchestrate` call on its control socket, as the thread its token names.
 
 ## Environment
 

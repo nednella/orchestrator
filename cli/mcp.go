@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/version"
@@ -31,17 +30,6 @@ const (
 	waitPauseMost  = 8 * time.Second
 )
 
-func controlSocket() (string, error) {
-	if socket := os.Getenv("AGENTOS_SOCKET"); socket != "" {
-		return control.SocketPath(bus.DirOf(socket)), nil
-	}
-	dir, err := bus.DefaultDir()
-	if err != nil {
-		return "", err
-	}
-	return control.SocketPath(dir), nil
-}
-
 // newMCPCmd serves the agentos tools to the agent that started it, over stdin and stdout.
 func newMCPCmd() *cobra.Command {
 	return &cobra.Command{
@@ -50,14 +38,12 @@ func newMCPCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			socket, err := controlSocket()
-			if err != nil {
-				return err
-			}
+			// The app that started this server names its control socket; the server has no other way to find one.
+			socket := os.Getenv(mcp.ControlEnv)
 			// The token comes from the environment of this process only; Claude's own environment never holds it.
 			token := os.Getenv(mcp.TokenEnv)
 			call := func(ctx context.Context, tool string, input json.RawMessage) (string, error) {
-				if token == "" {
+				if token == "" || socket == "" {
 					return "", errors.New(notInAThread)
 				}
 				switch tool {

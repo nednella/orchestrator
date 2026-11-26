@@ -83,7 +83,7 @@ func TestLoadConfigRunsHooksWithTheAppsOwnBinary(t *testing.T) {
 	if real, err := filepath.EvalSymlinks(own); err == nil {
 		own = real
 	}
-	if cfg.Binary != own || cfg.Agents.Exe != own {
-		t.Errorf("binary = %q, registry runs %q, want the app's own %q and not %q", cfg.Binary, cfg.Agents.Exe, own, filepath.Join(bin, "agentos"))
+	if cfg.Binary != own {
+		t.Errorf("binary = %q, want the app's own %q and not %q", cfg.Binary, own, filepath.Join(bin, "agentos"))
 	}
 }

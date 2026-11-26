@@ -17,24 +17,25 @@ import (
 var headlessFlags = []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--thinking-display", "summarized", "--permission-prompt-tool", "stdio", "--replay-user-messages"}
 
 func TestClaudeCommand(t *testing.T) {
-	argv := Claude{Exe: "/opt/it's here/agentos"}.Command(Launch{})
+	argv := Claude{}.Command(Launch{})
 	if len(argv) != 3+len(headlessFlags)+4 || argv[0] != "claude" || argv[1] != "--settings" {
 		t.Fatalf("argv = %q", argv)
 	}
-	var settings struct {
-		Hooks map[string][]struct {
-			Hooks []struct{ Type, Command string }
-		}
-	}
+}
+
+func TestNoHookInTheSettings(t *testing.T) {
+	argv := Claude{Dirs: []string{"/d"}}.Command(Launch{Access: session.Full, Browser: true, MCPConfig: "/m.json", Prompt: "p"})
+	var settings map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(argv[2]), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if len(settings.Hooks) != len(claudeEvents) {
-		t.Errorf("hooks for %d events, want %d", len(settings.Hooks), len(claudeEvents))
+	if _, ok := settings["hooks"]; ok || len(settings) != 1 {
+		t.Errorf("the settings are %s, want only permissions", argv[2])
 	}
-	got := settings.Hooks["Stop"][0].Hooks[0]
-	if got.Type != "command" || !strings.HasSuffix(got.Command, " hook Stop") || !strings.HasPrefix(got.Command, `'/opt/it'\''s here/agentos'`) {
-		t.Errorf("Stop hook = %+v", got)
+	for _, arg := range argv {
+		if strings.Contains(arg, " hook ") {
+			t.Errorf("argument %q runs a hook", arg)
+		}
 	}
 }
 
@@ -50,7 +51,7 @@ func TestWithoutFlagDropsItsValue(t *testing.T) {
 }
 
 func TestClaudeGrantsDirs(t *testing.T) {
-	argv := Claude{Exe: "/x", Dirs: []string{"/data", "/local"}}.Command(Launch{})
+	argv := Claude{Dirs: []string{"/data", "/local"}}.Command(Launch{})
 	var settings struct {
 		Permissions struct{ AdditionalDirectories []string }
 	}
@@ -88,7 +89,7 @@ func TestClaudeLaunch(t *testing.T) {
 			[]string{"--permission-mode", "plan", "--allowedTools", tools + ",Bash(agent-browser:*)", "--append-system-prompt", "p"}},
 	}
 	for _, tt := range tests {
-		argv := Claude{Exe: "/x"}.Command(tt.l)
+		argv := Claude{}.Command(tt.l)
 		if !slices.Equal(argv[3:3+len(headlessFlags)], headlessFlags) {
 			t.Errorf("%s: argv = %q, want the headless flags after --settings", tt.name, argv)
 		}
@@ -112,7 +113,7 @@ func TestAccessFlags(t *testing.T) {
 	for access, mode := range modes {
 		l := base
 		l.Access = access
-		argv := Claude{Exe: "/x"}.Command(l)
+		argv := Claude{}.Command(l)
 		if i := slices.Index(argv, "--permission-mode"); argv[i+1] != mode {
 			t.Errorf("%s: --permission-mode %q, want %q", access, argv[i+1], mode)
 		}
@@ -128,7 +129,7 @@ func TestAccessFlags(t *testing.T) {
 			t.Errorf("%s: env = %q", access, env)
 		}
 	}
-	if argv := (Claude{Exe: "/x"}).Command(Launch{Access: "write"}); !slices.Contains(argv, "default") || slices.Contains(argv, "bypassPermissions") {
+	if argv := (Claude{}).Command(Launch{Access: "write"}); !slices.Contains(argv, "default") || slices.Contains(argv, "bypassPermissions") {
 		t.Errorf("a level claude does not know: argv = %q, want Supervised", argv)
 	}
 }
@@ -148,12 +149,12 @@ func TestAccessOfModeUndoesPermissionMode(t *testing.T) {
 }
 
 func TestClaudeForkFlags(t *testing.T) {
-	argv := Claude{Exe: "/x"}.Command(Launch{Resume: "abc", ForkAt: "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", Prompt: "p"})
+	argv := Claude{}.Command(Launch{Resume: "abc", ForkAt: "1203a261-38c2-4e41-b43b-07f6c4fdb1bd", Prompt: "p"})
 	want := append(append([]string{"--resume", "abc", "--fork-session", "--resume-session-at", "1203a261-38c2-4e41-b43b-07f6c4fdb1bd"}, supervised...), "--append-system-prompt", "p")
 	if got := argv[3+len(headlessFlags):]; !slices.Equal(got, want) {
 		t.Errorf("flags = %q, want %q", got, want)
 	}
-	if argv := (Claude{Exe: "/x"}).Command(Launch{ForkAt: "1203a261"}); slices.Contains(argv, "--fork-session") {
+	if argv := (Claude{}).Command(Launch{ForkAt: "1203a261"}); slices.Contains(argv, "--fork-session") {
 		t.Errorf("a fork with no conversation to resume: argv = %q", argv)
 	}
 }
@@ -179,7 +180,7 @@ func TestMCPConfigFlag(t *testing.T) {
 	const readTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__refresh,mcp__agentos__browser"
 	const writeTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__show,mcp__agentos__track,mcp__agentos__refresh,mcp__agentos__browser"
 	for access, agentos := range map[session.Access]string{session.Read: readTools, session.Supervised: writeTools, session.Full: writeTools} {
-		argv := Claude{Exe: "/x"}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
+		argv := Claude{}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
 		if n := slices.Index(argv, "--mcp-config"); n < 0 || argv[n+1] != "/state/hosts/ab/tok.mcp.json" || slices.Index(argv[n+1:], "--mcp-config") >= 0 {
 			t.Errorf("%s: argv = %q, want --mcp-config and its path once", access, argv)
 		}
@@ -187,7 +188,7 @@ func TestMCPConfigFlag(t *testing.T) {
 			t.Errorf("%s: --allowedTools = %q, want the thread tools and %s", access, got, agentos)
 		}
 	}
-	argv := Claude{Exe: "/x"}.Command(Launch{})
+	argv := Claude{}.Command(Launch{})
 	if slices.Contains(argv, "--mcp-config") || strings.Contains(strings.Join(argv, " "), "mcp__agentos__") {
 		t.Errorf("without a config: argv = %q", argv)
 	}
@@ -205,7 +206,7 @@ func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.access), func(t *testing.T) {
-			allowed := allowedTools(t, Claude{Exe: "/x"}.Command(Launch{Access: tt.access, Browser: true, MCPConfig: "/m.json"}))
+			allowed := allowedTools(t, Claude{}.Command(Launch{Access: tt.access, Browser: true, MCPConfig: "/m.json"}))
 			for _, tool := range []string{"mcp__agentos__show", "mcp__agentos__track"} {
 				if slices.Contains(allowed, tool) != tt.showTrack {
 					t.Errorf("%s allowed = %v, want %v: %q", tool, !tt.showTrack, tt.showTrack, allowed)
@@ -227,7 +228,7 @@ func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
 func TestNoAllowRuleNamesTheCommand(t *testing.T) {
 	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
 		for _, l := range []Launch{{Access: access}, {Access: access, Browser: true, MCPConfig: "/m.json"}} {
-			for _, rule := range allowedTools(t, Claude{Exe: "/x"}.Command(l)) {
+			for _, rule := range allowedTools(t, Claude{}.Command(l)) {
 				if strings.Contains(rule, "agentos ") || strings.Contains(rule, "agentos:") {
 					t.Errorf("%s: the allow rule %q runs the agentos command", access, rule)
 				}
@@ -239,78 +240,47 @@ func TestNoAllowRuleNamesTheCommand(t *testing.T) {
 func TestCheckInstalled(t *testing.T) {
 	bin := t.TempDir()
 	t.Setenv("PATH", bin)
-	if err := CheckInstalled(Claude{Exe: "/x"}); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
+	if err := CheckInstalled(Claude{}); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
 		t.Errorf("without claude: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := CheckInstalled(Claude{Exe: "/x"}); err != nil {
+	if err := CheckInstalled(Claude{}); err != nil {
 		t.Errorf("with claude: %v", err)
 	}
 }
 
-func TestClaudeParseEvent(t *testing.T) {
-	tests := []struct {
-		name  string
-		event string
-		body  string
-		want  session.Event
-	}{
-		{"permission notification", "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`,
-			session.Event{Name: "Notification", NotificationType: "permission_prompt", Message: "Claude needs your permission to use Bash", Detail: "Claude needs your permission to use Bash"}},
-		{"tool with command", "PreToolUse", `{"tool_name":"Bash","tool_input":{"command":"echo hi","description":"Print hi"}}`,
-			session.Event{Name: "PreToolUse", Detail: "Bash echo hi", Tool: "Bash", Command: "echo hi"}},
-		{"tool without known input", "PostToolUse", `{"tool_name":"Task","tool_input":{"x":1}}`,
-			session.Event{Name: "PostToolUse", Detail: "Task", Tool: "Task"}},
-		{"prompt on many lines", "UserPromptSubmit", `{"prompt":"fix\n  the   bug"}`,
-			session.Event{Name: "UserPromptSubmit", Detail: "fix the bug"}},
-		{"working directory", "Stop", `{"cwd":"/tmp/p"}`, session.Event{Name: "Stop", Cwd: "/tmp/p"}},
-		{"conversation", "Stop", `{"session_id":"abc"}`, session.Event{Name: "Stop", Conversation: "abc"}},
-		{"transcript", "Stop", `{"transcript_path":"/t/abc.jsonl"}`, session.Event{Name: "Stop", Transcript: "/t/abc.jsonl"}},
-		{"not json", "Stop", `garbage`, session.Event{Name: "Stop"}},
-		{"reply ends in a question", "Stop", `{"last_assistant_message":"Done.\n\n**Do you want me to push?**\n"}`,
-			session.Event{Name: "Stop", Detail: "Done. **Do you want me to push?**", Asks: true}},
-		{"question inside the reply", "Stop", `{"last_assistant_message":"Why? The test was flaky. I fixed it."}`,
-			session.Event{Name: "Stop", Detail: "Why? The test was flaky. I fixed it."}},
-		{"empty", "SessionStart", ``, session.Event{Name: "SessionStart"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, reply, ok := (Claude{}).ParseEvent(tt.event, strings.NewReader(tt.body))
-			if reply != "" {
-				t.Errorf("reply = %q, want none for claude", reply)
-			}
-			if !ok || got != tt.want {
-				t.Errorf("got %+v, %v, want %+v", got, ok, tt.want)
-			}
-		})
-	}
-}
-
 func TestRegistryProvider(t *testing.T) {
-	got, err := Registry{Exe: "/x", Dirs: []string{"/d"}}.Provider()
-	if want := (Claude{Exe: "/x", ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); err != nil || !reflect.DeepEqual(got, want) {
+	got, err := Registry{Dirs: []string{"/d"}}.Provider()
+	if want := (Claude{ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("Provider() = %#v, %v, want %#v", got, err, want)
 	}
 }
 
-func TestRegistryWithoutABinaryRefuses(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	p, err := Registry{Dirs: []string{"/d"}}.Provider()
-	if p != nil || err == nil || err.Error() != "The app's own binary is unknown, so a thread's hooks cannot report its state" {
-		t.Errorf("Provider() = %#v, %v", p, err)
+func TestClaudeTranscript(t *testing.T) {
+	// The hash is the one claude's own function gives for this path.
+	long := "/" + strings.Repeat("a/", 120)
+	tests := []struct {
+		name            string
+		configDir       string
+		origin, session string
+		want            string
+	}{
+		{"a folder", "/c", "/tmp/rec", "8a2bd559", "/c/projects/-tmp-rec/8a2bd559.jsonl"},
+		{"characters outside letters and digits", "/c", "/Users/a b/my_dir.v2/x", "s1", "/c/projects/-Users-a-b-my-dir-v2-x/s1.jsonl"},
+		{"a character beyond the basic plane counts twice", "/c", "/a\U0001F600b", "s1", "/c/projects/-a--b/s1.jsonl"},
+		{"a long path is cut and hashed", "/c", long, "s1", "/c/projects/" + strings.Repeat("-a", 100) + "-nkcon3/s1.jsonl"},
+		{"no config folder", "", "/tmp/rec", "s1", ""},
+		{"no folder", "/c", "", "s1", ""},
+		{"no conversation", "/c", "/tmp/rec", "", ""},
 	}
-}
-
-func TestRegistryDoesNotLookTheCommandUpOnPath(t *testing.T) {
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "agentos"), []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	if p, err := (Registry{}).Provider(); err == nil {
-		t.Errorf("Provider() = %#v, want a refusal: an agentos on PATH is not the app's binary", p)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (Claude{ConfigDir: tt.configDir}).Transcript(tt.origin, tt.session); got != tt.want {
+				t.Errorf("Transcript(%q, %q) = %q, want %q", tt.origin, tt.session, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -394,31 +364,5 @@ func TestClaudeValidModel(t *testing.T) {
 		if err := (Claude{}).ValidModel(tt.model, tt.effort); (err == nil) != tt.ok {
 			t.Errorf("%s: ValidModel(%q, %q) = %v", tt.name, tt.model, tt.effort, err)
 		}
-	}
-}
-
-func TestClaudeTranscript(t *testing.T) {
-	// The hash is the one claude's own function gives for this path.
-	long := "/" + strings.Repeat("a/", 120)
-	tests := []struct {
-		name            string
-		configDir       string
-		origin, session string
-		want            string
-	}{
-		{"a folder", "/c", "/tmp/rec", "8a2bd559", "/c/projects/-tmp-rec/8a2bd559.jsonl"},
-		{"characters outside letters and digits", "/c", "/Users/a b/my_dir.v2/x", "s1", "/c/projects/-Users-a-b-my-dir-v2-x/s1.jsonl"},
-		{"a character beyond the basic plane counts twice", "/c", "/a\U0001F600b", "s1", "/c/projects/-a--b/s1.jsonl"},
-		{"a long path is cut and hashed", "/c", long, "s1", "/c/projects/" + strings.Repeat("-a", 100) + "-nkcon3/s1.jsonl"},
-		{"no config folder", "", "/tmp/rec", "s1", ""},
-		{"no folder", "/c", "", "s1", ""},
-		{"no conversation", "/c", "/tmp/rec", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := (Claude{ConfigDir: tt.configDir}).Transcript(tt.origin, tt.session); got != tt.want {
-				t.Errorf("Transcript(%q, %q) = %q, want %q", tt.origin, tt.session, got, tt.want)
-			}
-		})
 	}
 }

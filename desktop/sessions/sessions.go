@@ -33,6 +33,7 @@ import (
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/folder"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/mcp"
@@ -301,7 +302,7 @@ func newSessions(o Options) *Sessions {
 		stateRead:  map[string]fileStamp{},
 		sentShells: map[string][]Shell{},
 		made:       newMadeTrees(o.LocalDir),
-		procs:      procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
+		procs:      procs.New(control.SocketPath(o.StateDir), anyDir(o.Run)),
 		ctx:        context.Background(),
 	}
 }
@@ -2644,7 +2645,7 @@ func (s *Sessions) reserve(proj project.Project) (session.Name, context.Context)
 func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access session.Access, action string, fork forkStart, parent string) (err error) {
 	env := []string{
 		"AGENTOS_SESSION=" + name.String(),
-		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
+		mcp.ControlEnv + "=" + control.SocketPath(s.stateDir),
 	}
 	if issue > 0 {
 		env = append(env, "AGENTOS_ISSUE="+strconv.Itoa(issue))
@@ -2739,7 +2740,7 @@ func (s *Sessions) mintToken(name session.Name) error {
 	rand.Read(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	data, err := json.Marshal(mcpConfig{Servers: map[string]mcpServer{
-		mcp.Server: {Command: s.binary, Args: []string{"mcp"}, Env: map[string]string{mcp.TokenEnv: token}},
+		mcp.Server: {Command: s.binary, Args: []string{"mcp"}, Env: map[string]string{mcp.TokenEnv: token, mcp.ControlEnv: control.SocketPath(s.stateDir)}},
 	}})
 	if err != nil {
 		return err
@@ -4607,10 +4608,7 @@ func (s *Sessions) startShell(proj project.Project, thread, dir string) (string,
 	name := session.Name{Project: proj.Key(), Shell: session.NextN(used)}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	env := []string{
-		"AGENTOS_PROJECT=" + proj.Key(),
-		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
-	}
+	env := []string{"AGENTOS_PROJECT=" + proj.Key()}
 	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{loginShell(), "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}

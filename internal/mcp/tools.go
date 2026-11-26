@@ -18,6 +18,9 @@ const (
 	ToolPrefix = "mcp__" + Server + "__"
 	// TokenEnv holds the thread's token, in the server's environment only.
 	TokenEnv = "AGENTOS_MCP_TOKEN"
+	// ControlEnv holds the path of the app's control socket, in the server's environment and in the thread's, which
+	// it names to the app that started it.
+	ControlEnv = "AGENTOS_CONTROL"
 )
 
 // spec is one tool as the server lists it. writes marks a tool that only a thread that writes runs without asking.

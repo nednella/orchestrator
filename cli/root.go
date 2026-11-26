@@ -38,6 +38,6 @@ func newRootCmd(window func() error) *cobra.Command {
 		RunE:   func(*cobra.Command, []string) error { return errors.New(noCommandLine) },
 	})
 	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.ErrOrStderr(), noCommandLine) })
-	root.AddCommand(newHookCmd(), newHostCmd(), newMCPCmd())
+	root.AddCommand(newHostCmd(), newMCPCmd())
 	return root
 }

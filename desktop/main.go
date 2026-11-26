@@ -1,4 +1,4 @@
-// Command desktop is agentos: the app, and the hidden commands its host, hooks and tools' server run.
+// Command desktop is agentos: the app, and the hidden commands its host and tools' server run.
 package main
 
 import (

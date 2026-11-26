@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +30,7 @@ type Launch struct {
 }
 
 // Provider is one agent CLI as agentos runs it: the command and environment a session starts with, and the way its
-// hooks and transcripts are read.
+// transcripts are read.
 type Provider interface {
 	Name() string
 	Command(l Launch) []string
@@ -46,13 +44,10 @@ type Provider interface {
 	ValidModel(model, effort string) error
 	// Prepare makes what the agent needs before it starts and its command line cannot carry; nothing for most.
 	Prepare(l Launch) error
-	// ParseEvent reads the agent's hook payload for its event name into the canonical event, and gives the reply the
-	// hook prints on stdout, "" for an agent that reads none. It reports false for a hook agentos does not record.
-	ParseEvent(name string, r io.Reader) (ev session.Event, reply string, ok bool)
-	// Usage reads what the agent's transcripts say it used after the mark's time, from the mark's offsets.
 	// Transcript is the file the agent writes the conversation to, for an agent started in the folder origin; "" when
 	// it cannot say.
 	Transcript(origin, conversation string) string
+	// Usage reads what the agent's transcripts say it used after the mark's time, from the mark's offsets.
 	Usage(from usage.Mark) usage.Reader
 }
 
@@ -106,19 +101,14 @@ func checkModel(agent string, models []Model, model, effort string) error {
 	return nil
 }
 
-// Registry makes the provider each session starts with. Exe is the app's own binary, which the agent's hooks run. Dirs
-// are the app's folders the agent may use.
+// Registry makes the provider each session starts with. Dirs are the app's folders the agent may use.
 type Registry struct {
-	Exe  string
 	Dirs []string
 }
 
-// Provider is claude with hooks that run Exe. Without it nothing could report a thread's state, so there is none.
+// Provider is claude.
 func (r Registry) Provider() (Provider, error) {
-	if r.Exe == "" {
-		return nil, errors.New("The app's own binary is unknown, so a thread's hooks cannot report its state")
-	}
-	return Claude{Exe: r.Exe, ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
+	return Claude{ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
 }
 
 // claudeConfigDir is where claude keeps the user's settings, "" when there is no home.

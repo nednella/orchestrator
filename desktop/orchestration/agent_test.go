@@ -17,7 +17,6 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/bus"
 	ctl "github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
@@ -451,7 +450,7 @@ func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
 	cmd := exec.CommandContext(ctx, server.Command, server.Args...)
 	// The server runs with Claude's environment, which names the app's socket, and the config's, which holds the token.
 	// A session and a project set there name another thread; the call still acts as the token's.
-	cmd.Env = append(os.Environ(), "AGENTOS_SOCKET="+bus.SocketPath(h.State), "AGENTOS_SESSION=main/bbbbbbbb", "AGENTOS_PROJECT=elsewhere")
+	cmd.Env = append(os.Environ(), "AGENTOS_SESSION=main/bbbbbbbb", "AGENTOS_PROJECT=elsewhere")
 	for k, v := range server.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

@@ -1,6 +1,6 @@
 // Package procs finds the servers a thread started. A thread's processes are found by the marker the app starts its
-// agent with, which every process the agent starts inherits: the thread's id in AGENTOS_SESSION and this app's hook
-// socket in AGENTOS_SOCKET. Nothing else names them: a process is never matched by its name, folder, command or port,
+// agent with, which every process the agent starts inherits: the thread's id in AGENTOS_SESSION and this app's control
+// socket in AGENTOS_CONTROL. Nothing else names them: a process is never matched by its name, folder, command or port,
 // so a server the owner started by hand, or another app's thread, is never one.
 package procs
 
@@ -24,7 +24,7 @@ import (
 
 const (
 	sessionVar = "AGENTOS_SESSION"
-	socketVar  = "AGENTOS_SOCKET"
+	socketVar  = "AGENTOS_CONTROL"
 
 	// stopGrace is how long a server has to exit after SIGTERM before it gets SIGKILL.
 	stopGrace = 5 * time.Second
@@ -61,7 +61,7 @@ type Table struct {
 	logf   func(format string, args ...any)
 }
 
-// New is a table for the threads of the app whose hook socket is socket. lsof runs through run.
+// New is a table for the threads of the app whose control socket is socket. lsof runs through run.
 func New(socket string, run Runner) *Table {
 	return &Table{socket: socket, sys: kernel{}, run: run, grace: stopGrace, logf: log.Printf}
 }

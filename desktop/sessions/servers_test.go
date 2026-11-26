@@ -18,6 +18,8 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/bus"
+	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/session"
 )
 
@@ -91,7 +93,7 @@ s.listen(5)
 print("ready", flush=True)
 time.sleep(120)`, strconv.Itoa(port))
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		return strings.HasPrefix(kv, "AGENTOS_SESSION=") || strings.HasPrefix(kv, "AGENTOS_SOCKET=")
+		return strings.HasPrefix(kv, "AGENTOS_SESSION=") || strings.HasPrefix(kv, mcp.ControlEnv+"=")
 	}), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	out, err := cmd.StdoutPipe()
@@ -115,7 +117,7 @@ time.sleep(120)`, strconv.Itoa(port))
 
 // marker is the environment of a process a thread of the harness's app started.
 func marker(h *apptest.Harness, id string) []string {
-	return []string{"AGENTOS_SESSION=" + id, "AGENTOS_SOCKET=" + bus.SocketPath(h.State)}
+	return []string{"AGENTOS_SESSION=" + id, mcp.ControlEnv + "=" + ctl.SocketPath(h.State)}
 }
 
 func TestServersListAThreadsListener(t *testing.T) {
@@ -282,7 +284,7 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 	started := startOf(pid)
 	_, unknown := listener(t, marker(h, "main/zzzzzzzz")...)
 	unknownStart := startOf(unknown)
-	_, otherApps := listener(t, "AGENTOS_SESSION="+thread.ID, "AGENTOS_SOCKET=/another/app/agentos.sock")
+	_, otherApps := listener(t, "AGENTOS_SESSION="+thread.ID, mcp.ControlEnv+"=/another/app/control.sock")
 	otherAppsStart := startOf(otherApps)
 	h.App.Stop() // so only the next app's start sees the thread gone
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+thread.ID).Run(); err != nil {
@@ -379,7 +381,9 @@ func TestShellCarriesNoThreadMarker(t *testing.T) {
 		env = string(data)
 		return err == nil && strings.Contains(env, "AGENTOS_PROJECT=")
 	})
-	if strings.Contains(env, "AGENTOS_SESSION=") {
-		t.Errorf("the shell has a thread marker:\n%s", env)
+	for _, name := range []string{"AGENTOS_SESSION=", mcp.ControlEnv + "="} {
+		if strings.Contains(env, name) {
+			t.Errorf("the shell has %s:\n%s", name, env)
+		}
 	}
 }

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,7 +12,6 @@ import (
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/session"
 	"github.com/nednella/agentos/internal/usage"
-	"github.com/nednella/agentos/internal/util"
 )
 
 // threadTools are the commands every thread may run without asking, at every access: the ones that file an issue for
@@ -27,28 +25,11 @@ const browserTool = "Bash(agent-browser:*)"
 // may take.
 const toolTimeout = "3700000"
 
-var claudeEvents = []string{
-	"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
-	"Notification", "Stop", "SessionEnd",
-}
-
-// Claude runs Claude Code with hooks that call back into the agentos binary at Exe.
-// The hooks come from --settings, so they apply to our sessions only.
-// ConfigDir holds the user's own settings.json. Dirs are the app's own folders, which the
-// agent may use without asking, so a fresh claude install does not prompt for them.
+// Claude runs Claude Code. ConfigDir holds the user's own settings.json and the transcripts. Dirs are the app's own
+// folders, which the agent may use without asking, so a fresh claude install does not prompt for them.
 type Claude struct {
-	Exe, ConfigDir string
-	Dirs           []string
-}
-
-type hookCommand struct {
-	Type    string `json:"type"`
-	Command string `json:"command"`
-}
-
-type hookGroup struct {
-	Matcher string        `json:"matcher,omitempty"`
-	Hooks   []hookCommand `json:"hooks"`
+	ConfigDir string
+	Dirs      []string
 }
 
 func (c Claude) Name() string { return "claude" }
@@ -72,17 +53,12 @@ func WithoutFlag(argv []string, flag string) []string {
 
 // Command is claude's command line, run headless for agentos host.
 func (c Claude) Command(l Launch) []string {
-	hooks := make(map[string][]hookGroup, len(claudeEvents))
-	for _, ev := range claudeEvents {
-		hooks[ev] = []hookGroup{{Hooks: []hookCommand{{Type: "command", Command: util.ShellQuote(c.Exe) + " hook " + ev}}}}
-	}
 	type permissions struct {
 		AdditionalDirectories []string `json:"additionalDirectories,omitempty"`
 	}
 	settings, _ := json.Marshal(struct {
-		Hooks       map[string][]hookGroup `json:"hooks"`
-		Permissions permissions            `json:"permissions"`
-	}{hooks, permissions{c.Dirs}})
+		Permissions permissions `json:"permissions"`
+	}{permissions{c.Dirs}})
 	argv := append([]string{"claude", "--settings", string(settings)}, headless...)
 	if l.Model != "" {
 		argv = append(argv, "--model", modelArg(l.Model))
@@ -225,65 +201,6 @@ func folderName(path string) string {
 		abs = -abs
 	}
 	return name[:maxFolderName] + "-" + strconv.FormatInt(abs, 36)
-}
-
-type payload struct {
-	NotificationType     string         `json:"notification_type"`
-	Message              string         `json:"message"`
-	ToolName             string         `json:"tool_name"`
-	ToolInput            map[string]any `json:"tool_input"`
-	Prompt               string         `json:"prompt"`
-	LastAssistantMessage string         `json:"last_assistant_message"`
-	Cwd                  string         `json:"cwd"`
-	SessionID            string         `json:"session_id"`
-	TranscriptPath       string         `json:"transcript_path"`
-}
-
-// ParseEvent reads the hook JSON from r. A body that is not JSON still gives a
-// usable event, because the event name alone moves the state. Claude reads nothing from a hook that only reports.
-func (c Claude) ParseEvent(name string, r io.Reader) (session.Event, string, bool) {
-	var p payload
-	_ = json.NewDecoder(io.LimitReader(r, 1<<20)).Decode(&p)
-	ev := session.Event{Name: name, NotificationType: p.NotificationType, Message: p.Message, Cwd: p.Cwd, Conversation: p.SessionID, Transcript: p.TranscriptPath}
-	switch name {
-	case "Notification":
-		ev.Detail = p.Message
-	case "PreToolUse", "PostToolUse":
-		ev.Detail = toolDetail(p)
-	case "UserPromptSubmit":
-		ev.Detail = p.Prompt
-	case "Stop":
-		ev.Detail = p.LastAssistantMessage
-		ev.Asks = asks(p.LastAssistantMessage)
-	}
-	ev.Detail = oneLine(ev.Detail, 120)
-	if name == "PreToolUse" || name == "PostToolUse" {
-		ev.Tool = p.ToolName
-		if cmd, ok := p.ToolInput["command"].(string); ok {
-			ev.Command = oneLine(cmd, 200)
-		}
-	}
-	return ev, "", true
-}
-
-// asks says whether a reply ends in a question to the owner.
-func asks(reply string) bool { return strings.HasSuffix(strings.TrimRight(reply, " \t\n*_"), "?") }
-
-func toolDetail(p payload) string {
-	for _, key := range []string{"command", "file_path", "pattern", "url", "description"} {
-		if v, ok := p.ToolInput[key].(string); ok && v != "" {
-			return p.ToolName + " " + v
-		}
-	}
-	return p.ToolName
-}
-
-func oneLine(s string, max int) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if r := []rune(s); len(r) > max {
-		return string(r[:max-1]) + "…"
-	}
-	return s
 }
 
 type claudeSettings struct {

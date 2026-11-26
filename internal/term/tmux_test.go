@@ -386,6 +386,7 @@ func TestCleanEnvDropsInheritedSession(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-1/default,1,0")
 	t.Setenv("AGENTOS_SESSION", "other/abc")
 	t.Setenv("AGENTOS_ISSUE", "7")
+	t.Setenv("AGENTOS_CONTROL", "/other/control.sock")
 	t.Setenv("AGENTOS_PROJECT", "other")
 	t.Setenv("AGENTOS_KEEP", "yes")
 	env := strings.Join(cleanEnv(), "\n")

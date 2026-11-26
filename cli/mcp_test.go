@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/mcp"
 )
 
 // fakeApp answers commands on a socket in a short temp dir, and points the command at it.
@@ -31,7 +31,7 @@ func fakeApp(t *testing.T, handle control.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	t.Setenv("AGENTOS_SOCKET", bus.SocketPath(dir))
+	t.Setenv(mcp.ControlEnv, control.SocketPath(dir))
 }
 
 // callTool runs agentos mcp, sends one tools/call and returns the result's text and error flag.
@@ -220,6 +220,27 @@ func TestMCPIgnoresAgentosSession(t *testing.T) {
 	}
 }
 
+func TestMCPServerFindsTheControlSocket(t *testing.T) {
+	var got control.Request
+	fakeApp(t, func(_ context.Context, req control.Request) control.Response {
+		got = req
+		return control.Response{OK: true, Out: "ok"}
+	})
+	t.Setenv("AGENTOS_STATE_DIR", t.TempDir()) // the state folder says nothing: the app names its socket
+	t.Setenv(mcp.TokenEnv, "tok-1")
+	if text, isErr := callTool(t, "threads", `{}`); isErr || text != "ok" || got.Token != "tok-1" {
+		t.Errorf("result = %q, error %v, request %+v", text, isErr, got)
+	}
+}
+
+func TestMCPWithoutTheControlSocketIsNotInAThread(t *testing.T) {
+	t.Setenv(mcp.ControlEnv, "")
+	t.Setenv(mcp.TokenEnv, "tok-1")
+	if text, isErr := callTool(t, "threads", `{}`); !isErr || text != notInAThread {
+		t.Errorf("result = %q, error %v", text, isErr)
+	}
+}
+
 func TestMCPWaitRefusesMoreThanAnHour(t *testing.T) {
 	fakeApp(t, func(context.Context, control.Request) control.Response { return control.Response{OK: true} })
 	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
@@ -235,7 +256,7 @@ func TestMCPWithTheAppDownReportsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	t.Setenv("AGENTOS_SOCKET", bus.SocketPath(dir))
+	t.Setenv(mcp.ControlEnv, control.SocketPath(dir))
 	t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
 	text, isErr := callTool(t, "threads", `{}`)
 	if !isErr || text != control.ErrNotRunning.Error() {
@@ -252,10 +273,7 @@ func TestMCPCancelledWaitStopsAtOnce(t *testing.T) {
 		return control.Response{OK: true, Out: `{"done":true,"text":"late"}`}
 	})
 	t.Cleanup(func() { close(release) })
-	socket, err := controlSocket()
-	if err != nil {
-		t.Fatal(err)
-	}
+	socket := os.Getenv(mcp.ControlEnv)
 	ctx, cancel := context.WithCancel(context.Background())
 	errc := make(chan error, 1)
 	go func() {

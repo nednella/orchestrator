@@ -16,7 +16,7 @@ func TestRootHasOnlyHiddenEntryPoints(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	if want := []string{"hook", "host", "mcp"}; !slices.Equal(names, want) {
+	if want := []string{"host", "mcp"}; !slices.Equal(names, want) {
 		t.Errorf("commands = %v, want %v", names, want)
 	}
 }
@@ -31,7 +31,7 @@ func TestNoArgumentsRunsTheApp(t *testing.T) {
 }
 
 func TestAnythingElseHasNoCommandLine(t *testing.T) {
-	for _, args := range [][]string{{"note"}, {"settle", "3"}, {"version"}, {"update"}, {"help"}, {"--help"}, {"completion"}, {"open", "x"}} {
+	for _, args := range [][]string{{"note"}, {"hook", "Stop"}, {"settle", "3"}, {"version"}, {"update"}, {"help"}, {"--help"}, {"completion"}, {"open", "x"}} {
 		t.Run(args[0], func(t *testing.T) {
 			ran := false
 			var out, errOut bytes.Buffer

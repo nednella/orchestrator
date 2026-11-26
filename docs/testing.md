@@ -10,7 +10,7 @@ export AGENTOS_TMUX_SOCKET=aos-test-$$      # never "agentos", the owner's socke
 export AGENTOS_STATE_DIR=$S                 # never ~/.local/state/agentos
 export AGENTOS_DEV_DATA_DIR=$S/data             # never ~/.local/share/agentos (also moves notes and the event log)
 export AGENTOS_CONFIG=$S/config.yaml        # never ~/.config/agentos/config.yaml
-unset AGENTOS_SOCKET AGENTOS_SESSION AGENTOS_ISSUE  # an agentos session has them; AGENTOS_SOCKET sends every command to the live app
+unset AGENTOS_SESSION AGENTOS_CONTROL AGENTOS_PROJECT AGENTOS_SOCKET AGENTOS_ISSUE  # a thread has the first two and a shell the third; the installed agentos's threads have the last two too
 ```
 
 A throwaway config, with `{"model": "haiku"}` in the demo project's `.claude/settings.local.json` so its threads run `claude` on the cheapest model:
@@ -35,17 +35,7 @@ Each `desktop/<pkg>` service has its tests beside it. They build the whole app t
 
 ## Recorded agents
 
-`internal/agent/testdata/<provider>/` holds what the real agents sent: for each scenario in `scenario_test.go` (a prompt, a tool call, a question, a permission prompt, an exit, a resume) the hook payloads and the transcript lines with usage, and in `version` the agent's version. `TestScenarios` replays them through the provider as the app reads them and checks the state, reply and usage each row must end with.
-
-After an update of `claude`, record again with the isolation env above set:
-
-```sh
-go test ./internal/agent -run TestRecord -record claude -v
-git diff internal/agent/testdata
-go test ./internal/agent -run TestScenarios
-```
-
-The diff shows what the agent changed, the test what that breaks. Recording runs each agent for real, on a cheap model, in a throwaway folder on a tmux server of its own with no agentos session around it, and spends a few requests. The agents use the owner's login; the recording keeps no line of the transcripts besides the model calls, and puts `$WORK`, `$HOME` and `$RECORDING` in place of the machine's paths.
+`internal/chat/testdata/` holds what the real Claude wrote on its stdout, and `README.md` there says how each file was made. `hooks.jsonl` is one run with every kind of turn, beside `hooks-payloads.jsonl`, what Claude's hooks got in the same run: the app no longer runs hooks, and `desktop/chat`'s `TestStateFollowsTheStream` follows the stream of that run to the state each point of it shows. After an update of `claude`, record the files again as the README says, with the isolation env above set and `claude` on a cheap model in a throwaway folder; the diff shows what the agent changed, and the tests what that breaks.
 
 ## The real front end, in a browser
 

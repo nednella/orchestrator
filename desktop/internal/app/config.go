@@ -34,7 +34,7 @@ type Config struct {
 	DataDirFixed bool   // AGENTOS_DEV_DATA_DIR sets the data folder, so the settings cannot change it
 	Tmux         *term.Tmux
 	Agents       agent.Registry
-	Binary       string // this app's own binary: hosted agents run under its host command and their hooks run it
+	Binary       string // this app's own binary: hosted agents run under its host command
 }
 
 // Load reads the config file and the environment. The project is the one holding AGENTOS_DIR
@@ -100,7 +100,7 @@ func Load() (Config, error) {
 	if real, err := filepath.EvalSymlinks(binary); err == nil {
 		binary = real
 	}
-	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agents(binary, slices.Compact([]string{dataDir, localDir})), Binary: binary}, nil
+	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agent.Registry{Dirs: slices.Compact([]string{dataDir, localDir})}, Binary: binary}, nil
 }
 
 // ConfigPath is the config file: AGENTOS_CONFIG, else the one in home's config folder.
@@ -123,10 +123,4 @@ func machineID(stateDir string) (string, error) {
 		return "", fmt.Errorf("saving machine id: %w", err)
 	}
 	return id, nil
-}
-
-// agents is the registry the sessions get their provider from. The agent's hooks run the app's own binary, never a
-// command found on PATH.
-func agents(binary string, dirs []string) agent.Registry {
-	return agent.Registry{Exe: binary, Dirs: dirs}
 }
