@@ -59,7 +59,7 @@ const pr: PR = {
   newComments: 0,
 }
 
-const agent = (id: string, state: AgentItem['state']): AgentItem => ({ kind: 'agent', key: `agent-${id}`, id, turn: 't1', description: id, type: 'general-purpose', startedAt: 0, endedAt: null, state, tools: 0, steps: [], result: null })
+const agent = (id: string, state: AgentItem['state']): AgentItem => ({ kind: 'agent', key: `agent-${id}`, id, turn: 't1', description: id, type: 'general-purpose', prompt: '', model: '', startedAt: 0, endedAt: null, state, tools: 0, steps: [], result: null })
 
 const kinds = (s: Session, f: CardFacts) => cardSections(s, f).map((section) => section.rows.map((row) => row.kind))
 

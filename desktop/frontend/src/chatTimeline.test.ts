@@ -495,6 +495,23 @@ test('parallel subagents are rows of their own beside the fold, holding their ow
   assert.equal(second.turn, first.turn)
 })
 
+test('an agent item carries its prompt and model', () => {
+  const [first, second] = only(buildTimeline(parallel, {}).items, 'agent')
+  assert.deepEqual([first.prompt, first.model], ['Do: List files', ''], 'a call that names no model has none')
+  const named = buildTimeline(log(user('u1', 'Go'), { kind: 'tool_use', id: 'a3', tool: 'Agent', input: { description: 'Look', prompt: 'Look around.', model: 'haiku' } }), {})
+  assert.deepEqual(
+    only(named.items, 'agent').map((a) => [a.prompt, a.model]),
+    [['Look around.', 'haiku']],
+  )
+  const bare = buildTimeline(log(user('u1', 'Go'), { kind: 'tool_use', id: 'a4', tool: 'Agent', input: { description: 'Look', prompt: 7 } }), {})
+  assert.deepEqual(
+    only(bare.items, 'agent').map((a) => [a.prompt, a.model]),
+    [['', '']],
+    'an input that is not text is none',
+  )
+  assert.equal(second.prompt, 'Do: Count lines')
+})
+
 test('subagents in the background run on after their turn', () => {
   const t = buildTimeline(parallel, {})
   assert.deepEqual([t.turnOpen, t.agentsRunning], [false, true], 'one still works after the turn ended')

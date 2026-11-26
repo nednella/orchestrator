@@ -137,18 +137,22 @@ const longReply = Array.from({ length: 19 }, (_, i) => {
   ].join('\n\n')
 }).join('\n\n')
 
-// backgroundAgents are the two subagents a message that says "agents" starts: what each looks into, the tools it runs,
-// and the report it ends with.
+// backgroundAgents are the two subagents a message that says "agents" starts: what each looks into, what it is asked and
+// on which model, '' for the thread's own, the tools it runs, and the report it ends with.
 const backgroundAgents = [
   {
     description: 'List the checkout pages',
     type: 'Explore',
+    prompt: 'List every page of the checkout under app-frontend/src/js/pages. Give each file name, nothing else.',
+    model: 'haiku',
     steps: [{ tool: 'Glob', input: { pattern: 'app-frontend/src/js/pages/*.tsx' }, result: 'app-frontend/src/js/pages/Cart.tsx\napp-frontend/src/js/pages/Checkout.tsx\napp-frontend/src/js/pages/checkout_steps.tsx' }],
     report: 'Three pages: `Cart.tsx`, `Checkout.tsx` and `checkout_steps.tsx`.',
   },
   {
     description: 'Count the checkout tests',
     type: 'general-purpose',
+    prompt: 'Count the tests in app-frontend/test that cover the checkout. Say which file holds them.',
+    model: '',
     steps: [
       { tool: 'Grep', input: { pattern: 'test\\(', path: 'app-frontend/test' }, result: 'app-frontend/test/checkout.test.ts' },
       { tool: 'Bash', input: { command: "grep -c 'test(' app-frontend/test/checkout.test.ts", description: 'Count the tests' }, result: '12' },
@@ -326,7 +330,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     const runs = backgroundAgents.map((a) => ({ ...a, call: `toolu_${Math.random().toString(36).slice(2, 10)}`, done: 0 }))
     t.setState('working')
     for (const r of runs) {
-      append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.description } })
+      append(id, { kind: 'tool_use', id: r.call, tool: 'Agent', input: { description: r.description, subagent_type: r.type, prompt: r.prompt, ...(r.model ? { model: r.model } : {}) } })
       // Claude lists its tasks again just before each start, and after each end.
       append(id, { kind: 'tasks', input: runs.slice(0, runs.indexOf(r) + 1).map((x) => ({ id: `task-${x.call}`, kind: 'local_agent' })) })
       append(id, { kind: 'task_start', id: `task-${r.call}`, parent: r.call, tool: 'local_agent', text: r.description })

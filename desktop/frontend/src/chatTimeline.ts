@@ -14,8 +14,8 @@ export type AgentState = 'running' | 'done' | 'failed' | 'stopped'
 
 // AgentItem is an Agent call of the thread's own Claude and what its subagent did: its tool calls, thinking and text,
 // and its report once it ends. turn is the key of the turn that made the call; type is the subagent's type, '' for the
-// default one.
-export type AgentItem = { kind: 'agent'; key: string; id: string; turn: string; description: string; type: string; startedAt: number; endedAt: number | null; state: AgentState; tools: number; steps: WorkStep[]; result: string | null }
+// default one. prompt and model are what the call gave the subagent, '' when it gave none.
+export type AgentItem = { kind: 'agent'; key: string; id: string; turn: string; description: string; type: string; prompt: string; model: string; startedAt: number; endedAt: number | null; state: AgentState; tools: number; steps: WorkStep[]; result: string | null }
 
 // Ask is a question Claude puts to the user, or a plan it asks the user to approve. request is the approval that
 // answers it, '' until Claude asks for one. answers is what a question was answered with, by question, once known.
@@ -123,8 +123,13 @@ const childOf = (result = '') => {
 }
 
 const agentOf = (input: unknown) => {
-  const { description, subagent_type: type } = (input ?? {}) as { description?: unknown; subagent_type?: unknown }
-  return { description: typeof description === 'string' && description !== '' ? description : 'Subagent', type: typeof type === 'string' && type !== defaultAgentType ? type : '' }
+  const { description, subagent_type: type, prompt, model } = (input ?? {}) as { description?: unknown; subagent_type?: unknown; prompt?: unknown; model?: unknown }
+  return {
+    description: typeof description === 'string' && description !== '' ? description : 'Subagent',
+    type: typeof type === 'string' && type !== defaultAgentType ? type : '',
+    prompt: typeof prompt === 'string' ? prompt : '',
+    model: typeof model === 'string' ? model : '',
+  }
 }
 
 // approvalKind is what an approval for the tool asks of the user: to let a tool run, to answer a question or to
