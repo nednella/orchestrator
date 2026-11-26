@@ -1162,11 +1162,12 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 // childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
 // planFor's checks pass, with a thread asleep in it and any shell of the child, idle or busy, counting too. The owner
 // may have opened that shell after the child's work ended, so this clean-up never closes one, and as it runs only at
-// the sleep, a worktree a shell kept stays until the child sleeps again or is deleted. A worktree with no commit since
-// the one it started at has only its changes to lose, so origin is not asked. Its branch stays, and so
-// does the thread, whose wake puts the worktree back. Anything else keeps the worktree for the clean-up after its pull
-// request, and the log says why, unless it said so for the child's last sleep. A child in its parent's folder, or in
-// one agentos did not make for it, has nothing to remove. A Delete of the child takes its worktree only when asked.
+// the sleep, a worktree a shell kept stays until the child sleeps again, the clean-up after its PR or Clean up now
+// removes it, or the child is deleted; those close the child's shells. A worktree with no commit since the one it
+// started at has only its changes to lose, so origin is not asked. Its branch stays, and so does the thread, whose wake
+// puts the worktree back. Anything else keeps the worktree for the clean-up after its pull request, and the log says
+// why, unless it said so for the child's last sleep. A child in its parent's folder, or in one agentos did not make for
+// it, has nothing to remove. A Delete of the child takes its worktree only when asked.
 func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	t, err := l.sessions.target(id)
 	if err != nil || !t.ended || !t.made {
