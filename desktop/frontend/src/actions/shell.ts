@@ -14,8 +14,17 @@ export const shellActions = ({ a, layout }: ActionContext): Action[] => [
   {
     id: 'open-terminal',
     label: 'Open terminal',
-    shortcut: { key: 'j' },
     run: () => showTerminal(a, layout, false),
+  },
+  {
+    id: 'toggle-terminal',
+    label: 'Toggle terminal',
+    shortcut: { key: 'j' },
+    run() {
+      // The panel closes only when the Terminal surface is what it shows.
+      if (layout.rightOpen && layout.panel.active === 'terminal') return layout.togglePanel('right')
+      return showTerminal(a, layout, false)
+    },
   },
   {
     id: 'new-terminal',

@@ -17,7 +17,7 @@ const GROUPS: Group[] = [
   { title: 'Views', ids: ['digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
   {
     title: 'Terminal',
-    ids: ['open-terminal', 'new-terminal', 'split-terminal'],
+    ids: ['toggle-terminal', 'new-terminal', 'split-terminal'],
     extra: [
       { id: 'terminal-new', label: 'New terminal, with a terminal in focus', keys: formatShortcut(NEW_TERMINAL_IN_TERMINAL_KEY) },
       { id: 'terminal-stacked', label: 'Split terminal stacked, with a terminal in focus', keys: formatShortcut(SPLIT_STACKED_KEY) },

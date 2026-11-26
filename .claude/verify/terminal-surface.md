@@ -6,7 +6,7 @@ The right panel has a Terminal surface. Each group of terminals is one tab of th
 
 ## How a user reaches it
 
-The Terminal row of the panel's list (T), the Terminal button of the sidebar's bottom bar, ⌘J (open or focus), ⌘T (new tab), ⌘D (split side by side). While a terminal has the focus, ⌘N makes a new tab, ⌘⇧D splits stacked and ⌘W closes the terminal; these three take the place of the app's own keys for new read-only thread, toggle right panel and detach. A double Esc leaves the terminal for the chat.
+The Terminal row of the panel's list (T), the Terminal button of the sidebar's bottom bar, ⌘J (open or focus; it closes the panel when the Terminal surface is the one shown), ⌘T (new tab), ⌘D (split side by side). While a terminal has the focus, ⌘N makes a new tab, ⌘⇧D splits stacked and ⌘W closes the terminal; these three take the place of the app's own keys for new read-only thread, toggle right panel and detach. A double Esc leaves the terminal for the chat.
 
 ## How to drive it
 
