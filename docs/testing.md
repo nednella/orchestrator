@@ -2,7 +2,7 @@
 
 ## Isolation first
 
-Twice a test that used the default tmux socket killed the owner's live sessions. Never run anything that starts the app, a session or the CLI against the default socket or the real state folders. Every run outside `go test` MUST set all of these:
+Twice a test that used the default tmux socket killed the owner's live sessions. Never run anything that starts the app, a thread or a host against the default socket or the real state folders. Every run outside `go test` MUST set all of these:
 
 ```sh
 S=$(mktemp -d "${TMPDIR:-/tmp}/aos.XXXX")
@@ -10,7 +10,7 @@ export ORCHESTRATOR_TMUX_SOCKET=aos-test-$$      # never "orchestrator", the own
 export ORCHESTRATOR_STATE_DIR=$S                 # never ~/.local/state/orchestrator
 export ORCHESTRATOR_DEV_DATA_DIR=$S/data             # never ~/.local/share/orchestrator (also moves notes and the event log)
 export ORCHESTRATOR_CONFIG=$S/config.yaml        # never ~/.config/orchestrator/config.yaml
-unset ORCHESTRATOR_SESSION ORCHESTRATOR_CONTROL ORCHESTRATOR_PROJECT ORCHESTRATOR_SOCKET ORCHESTRATOR_ISSUE  # a thread has the first two and a shell the third; the installed orchestrator's threads have the last two too
+unset ORCHESTRATOR_SESSION ORCHESTRATOR_CONTROL ORCHESTRATOR_PROJECT ORCHESTRATOR_MCP_TOKEN  # a thread has the first two and its tools' server the third, and a shell has ORCHESTRATOR_PROJECT: the live app sets them, so a check run from one of its threads must unset them
 ```
 
 A throwaway config, with `{"model": "haiku"}` in the demo project's `.claude/settings.local.json` so its threads run `claude` on the cheapest model:
@@ -27,8 +27,8 @@ An orchestrator session runs with `TMPDIR` set to its own temp folder, which it 
 ## Unit and integration tests
 
 ```sh
-go vet ./...
-go test -race ./...
+go vet -tags stub ./...
+go test -race -tags stub ./...
 ```
 
 Each `desktop/<pkg>` service has its tests beside it. They build the whole app through `desktop/internal/apptest`, which starts real tmux servers on private sockets (`aostest-<pid>`), real git repos in temp folders, and real headless Chrome for Testing on temp profiles. GitHub and `claude` are always replaced by fake runners (`apptest.FakeGH`, `FakeClaude`); commands run through `desktop/internal/run`. Every session runs a stand-in `claude`, a shell script the harness puts first on PATH, under the built command's host, as a real Claude session does: it answers each message with a reply and each control request with a success, and `Harness.Stdin` and `Harness.Args` give the lines it read and the arguments it was started with. A test checks what reached Claude there, or in the chat log for a draft, not in the pane. The browser tests skip when Chrome for Testing is not installed; CI points `ORCHESTRATOR_BROWSER` at its Google Chrome. The agent-browser test runs the real `agent-browser` only when `ORCHESTRATOR_AGENT_BROWSER` names it: run `make agent-browser` and set it to `bin/agent-browser`. Run it before a bump of `AGENT_BROWSER_VERSION`, since orchestrator writes a file of agent-browser's own. `desktop` embeds `frontend/dist`; build it first, or run with `-tags stub`, which embeds a small page instead. The host and the tools' server in the tests run the `orchestrator` command built from `./desktop` with that tag: the app's binary is the command. A thread's state follows its host's stream, so a test of the state sends the stand-in a message that makes the stream it needs (`ask`, `tool`, `question`, `work`, `background`, `fails`, `exit`; the comment on `ClaudeDir` lists them); `Harness.Observe` gives a thread a change of state in the names of Claude's hooks, for a test that is not about the stream. The `cli` tests answer from a fake app on a temp control socket. The release check never reaches GitHub: the harness answers curl with `Options.Releases` and refuses every other download.
@@ -43,11 +43,13 @@ Each `desktop/<pkg>` service has its tests beside it. They build the whole app t
 
 ```sh
 make -o desktop-frontend desktop-app          # or: make desktop-app (rebuilds the front end)
-(cd / && ORCHESTRATOR_HTTP=127.0.0.1:18772 bin/orchestrator-dev.app/Contents/MacOS/orchestrator) &
+cp bin/orchestrator-dev.app/Contents/MacOS/orchestrator $S/orchestrator   # a bare copy: it is never the .app, so nothing opens a second app
+(cd / && ORCHESTRATOR_HTTP=127.0.0.1:18772 $S/orchestrator) &
+APP=$!
 curl -s -XPOST -H 'X-Orchestrator: 1' 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
 ```
 
-A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with SIGTERM so it stops its browsers.
+A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with `kill $APP` (SIGTERM) so it stops its browsers, and never by name. Use a port of your own, from 18000 to 18999.
 
 ## The agent tools
 
@@ -57,10 +59,11 @@ Claude signs in through its own config folder, so a check with a real Claude wri
 
 ## Driving the page
 
-`scripts/cdp.mjs` opens a page in its own headless Chrome for Testing (its own temp profile, never the owner's) and runs steps: wait, click at a point, type, key, eval JavaScript, screenshot.
+`scripts/cdp.mjs` opens a page in its own headless Chrome for Testing (its own temp profile, never the owner's) and runs steps: wait, click at a point, type, key, eval JavaScript, screenshot. It starts that Chrome on the fixed DevTools port 9333 with one profile folder, so two runs at once, yours and another session's, would share them. Run a private copy with a port and a profile name of your own:
 
 ```sh
-node scripts/cdp.mjs http://127.0.0.1:18772/ 1400 900 \
+sed -e 's/const port = 9333/const port = 9411/' -e "s/orchestrator-cdp-profile/orchestrator-cdp-profile-9411/" scripts/cdp.mjs > $S/cdp.mjs
+node $S/cdp.mjs http://127.0.0.1:18772/ 1400 900 \
   '[{"wait":1500},{"eval":"document.title"},{"click":[700,400]},{"wait":300},{"shot":"aos-shot.png"}]'
 ```
 

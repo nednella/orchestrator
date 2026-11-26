@@ -48,10 +48,6 @@ projects:
 
 A clean-up the checks kept after the PR of a sleeping thread's branch merged or closed is tried again, with every check, every hour, and at each start of the app when `session_cleanup_mode` cleans that PR up by itself (`auto`; under `manual` the ask comes back after a restart and stays an ask), so a worktree kept for a running turn, a shell or work not yet pushed goes once that has ended; a clean-up that asks you first is never tried by itself, nor is the clean-up of a thread you woke. *Clean up now* in a thread's right-click menu runs the clean-up at once, with every check: on every kept clean-up, whatever kept it, and on a thread whose worktree is still there while no clean-up runs or asks. *Clean up anyway* forces a kept one.
 
-A `session_cleanup_command` that still holds `git branch -D {branch}` deletes the branch, so remove that part from your configs: the branch now stays.
-
-With `session_branch_fallback` unset, issue threads now work on `issue-<n>`.
-
 The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
 
 ### Queue sections and actions
@@ -90,7 +86,7 @@ queue_sections:
 - So a `"*"` section placed last takes every issue the sections above it did not. A section after it would never be reached, so a config with one does not load.
 - An issue no section matches goes under one folded row below the last section, `<n> more issues match no section`, with the `Start` action. A last `"*"` section is only needed to give those issues a name or other actions.
 - In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `session_branch_fallback`, `issue-{n}` when unset. The `Start` action always names the branch. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
-- `access` is what the action's thread may do without asking: `read` (Claude plans and asks before it changes anything), `supervised` (the default: your Claude allow rules apply and other tools ask in the chat) or `full` (every tool runs without asking). Every thread follows its branch and pull request, whatever its access. An issue has one thread: starting any action of an issue whose thread runs opens that thread, and one whose thread is asleep wakes it with its own access. The queue row links to it. The old `kind` is gone: a config whose action sets `kind` does not load, and says to use `access: read`, so an old `kind: chat` action never starts with write access.
+- `access` is what the action's thread may do without asking: `read` (Claude plans and asks before it changes anything), `supervised` (the default: your Claude allow rules apply and other tools ask in the chat) or `full` (every tool runs without asking). Every thread follows its branch and pull request, whatever its access. An issue has one thread: starting any action of an issue whose thread runs opens that thread, and one whose thread is asleep wakes it with its own access. The queue row links to it. A config whose action sets `kind` does not load; use `access: read`.
 - A session started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
 - The first action of a section is its default. A section needs a name, an action needs a name, and each is unique in its list; a config that breaks this does not load.
 - Dragging an issue to another section relabels it on GitHub: it loses the labels of the section it left and gains the first label of the section it enters. No session starts. A section with no labels takes an issue only when no label is left.
@@ -98,10 +94,6 @@ queue_sections:
 - `draggable: false` keeps the issues of a section from being dragged out. `draggable_from` lists the sections whose issues may be dropped in; each must be a section other than this one. Issues no section takes count as one section that can be dragged out, and `draggable_from` never lists it.
 - A `"*"` section takes no drops, so it can not have `draggable_from`; a config that sets it does not load.
 - With no `queue_sections` the queue is one list, and each issue has one action, `Start`, which types `Work on issue #<n>: <title>`. A section with no actions has that same action.
-
-The old `lanes`, `commands`, `models`, `session_model` and `session_effort` keys are gone. They are not read, and the app removes `session_model` and `session_effort` from the file the next time it saves a setting.
-
-The old `agent_command`, an action's `agent` and an issue's `agent:` labels are ignored: a config or an issue that has them still loads, and every thread runs `claude`.
 
 ### How a session picks its model
 
@@ -166,16 +158,15 @@ A thread reaches the app through the tools of its orchestrator MCP server, not t
 
 A Read thread runs every tool but `show` and `track` without asking; for those two the owner gets an approval card. The orchestration tools, `delegate`, `threads`, `read`, `send`, `wait` and `stop`, start and follow child threads; each tool's text is in `internal/prompts/tool-<name>.md`.
 
-## No command line
-
-The `orchestrator` binary is the app. Started with no command it runs the app; the only commands it takes are the hidden `host` and `mcp`, which the app and Claude start, and any other command exits with "orchestrator has no command line". Nothing links it into a folder on PATH, and a thread needs no `orchestrator` on PATH: its host and its tools' server run the app's own binary by its path. Everything else is done in the app, and an agent uses the [tools](#agent-tools). The app answers only the `orchestrate` call on its control socket, as the thread its token names.
-
 ## Environment
 
 | Variable | Does |
 |---|---|
 | `ORCHESTRATOR_CONFIG` | the config file to use |
-| `ORCHESTRATOR_BROWSER` | the browser to drive, as a path; by default Chrome for Testing in `~/Applications` or `/Applications`, which `install.sh` installs. orchestrator never falls back to another browser: macOS sends clicked links to any running copy of your default browser's app, and one that orchestrator runs has no window to show them |
+| `ORCHESTRATOR_BROWSER` | the browser to drive, as a path; by default `Google Chrome for Testing.app` in `~/Applications` or `/Applications`, which `install.sh` installs. agentos uses the same app: the binary is shared, but each project's profile and `browser-port` file live in orchestrator's own folders. orchestrator never falls back to another browser: macOS sends clicked links to any running copy of your default browser's app, and one that orchestrator runs has no window to show them |
 | `ORCHESTRATOR_AGENT_BROWSER` | the `agent-browser` that sessions drive their browser tab with, as a path; by default the one in the app bundle's `Contents/Helpers`. Without one, sessions start with no browser |
 | `ORCHESTRATOR_DIR` | the project folder to start in, instead of the current folder |
 | `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` | the tmux socket, the state folder, and one folder in place of both data folders; for tests |
+| `ORCHESTRATOR_BROWSER_HEADLESS` | `1` starts the browser with no windows; for tests |
+| `ORCHESTRATOR_HTTP` | `127.0.0.1:PORT` serves the real front end over HTTP instead of opening the window; for checks, see `docs/testing.md` |
+| `ORCHESTRATOR_SESSION`, `ORCHESTRATOR_CONTROL`, `ORCHESTRATOR_MCP_TOKEN`, `ORCHESTRATOR_PROJECT` | set by the app, never by you: a thread's processes get the first two (its id and the control socket's path), its tools' server also gets the token that names the thread, and a shell gets `ORCHESTRATOR_PROJECT`. Tests unset them, since a thread of a running app has them |
