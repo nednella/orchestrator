@@ -29,15 +29,6 @@ export function useThreadAgents(thread: string): AgentItem[] {
   return useSyncExternalStore(subscribe, () => shown.get(thread) ?? none)
 }
 
-// useAgentsRunning is how many subagents of the thread's chat work now, null while it has none, for the panel's list of
-// views, which renders again only when that changes.
-export function useAgentsRunning(thread: string): number | null {
-  return useSyncExternalStore(subscribe, () => {
-    const agents = shown.get(thread)
-    return agents ? agents.filter((a) => a.state === 'running').length : null
-  })
-}
-
 // useShowAgents keeps the subagents of the thread's chat for its list while the chat, or one of its subagents' views,
 // is shown.
 export function useShowAgents(thread: string, items: TimelineItem[]) {
