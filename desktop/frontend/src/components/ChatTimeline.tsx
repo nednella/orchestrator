@@ -16,7 +16,9 @@ import { ChatPlanCard } from './ChatPlanCard'
 import { ChatQuestionCard } from './ChatQuestionCard'
 import { ChatQuoteButton } from './ChatQuoteButton'
 import { ChatReplyRow } from './ChatReplyRow'
+import { ChatThinkingRow } from './ChatThinkingRow'
 import { ChatUserRow } from './ChatUserRow'
+import { ChatWorkingRow } from './ChatWorkingRow'
 import { ChatWorkRow } from './ChatWorkRow'
 import { ImageViewer } from './ImageViewer'
 
@@ -75,7 +77,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
     }
     case 'reply': {
       const next = items[index + 1]
-      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && !next.header} onReply={onReply} onFork={onFork} />
+      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && next.endedAt === null} onReply={onReply} onFork={onFork} />
     }
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
@@ -85,10 +87,10 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatNotice text={label ? `Restarted with ${label}` : 'Restarted'} error={false} />
     }
     case 'work': {
-      const work = <ChatWorkRow thread={thread} turn={item.key} header={item.header} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
-      // The reply these tool rows follow shows its actions under them. A turn's heading follows no reply of its own turn.
+      const work = <ChatWorkRow thread={thread} turn={item.key} steps={item.steps} startedAt={item.startedAt} endedAt={item.endedAt} folder={folder} />
+      // The reply these tool rows follow shows its actions under them. A turn's fold follows no reply of its own turn.
       const reply = items[index - 1]
-      if (reply?.kind !== 'reply' || item.header) return work
+      if (reply?.kind !== 'reply' || item.endedAt !== null) return work
       return (
         <>
           {work}
@@ -96,6 +98,10 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
         </>
       )
     }
+    case 'working':
+      return <ChatWorkingRow startedAt={item.startedAt} />
+    case 'thinking':
+      return <ChatThinkingRow label={item.label} />
     case 'approval':
       return <ChatApprovalCard thread={thread} request={item.request} tool={item.tool} input={item.input} expired={item.expired} folder={folder} />
     case 'question':
@@ -114,6 +120,10 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
     }
   }
 }
+
+// headsSteps is whether the row is the working row with the turn's first steps right under it, which sit at the rule's
+// own space below it.
+const headsSteps = (items: TimelineItem[], index: number) => items[index].kind === 'working' && items[index + 1]?.kind === 'work'
 
 export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, onReply, onQuote, onFork, edit }: ChatTimelineProps) {
   const scroller = useRef<HTMLDivElement>(null)
@@ -203,7 +213,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
       <div ref={scroller} onScroll={onScroll} data-chat-scroll tabIndex={-1} className="chat-scroll h-full overflow-y-auto outline-none">
         <div ref={lane} className="chat-column relative" style={{ height: total }}>
           {virtualizer.getVirtualItems().map((row) => (
-            <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full pb-5" style={{ transform: `translateY(${row.start}px)` }}>
+            <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className={`absolute top-0 left-0 w-full ${headsSteps(items, row.index) ? '' : 'pb-5'}`} style={{ transform: `translateY(${row.start}px)` }}>
               {rowOf(items, row.index, id, folder, onReply, onFork, setViewing, edit)}
             </div>
           ))}

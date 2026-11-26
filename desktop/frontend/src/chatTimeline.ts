@@ -38,10 +38,13 @@ export type TimelineItem =
   // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
   // failed on: the turn's last part.
   | { kind: 'reply'; key: string; at: number; id: string; uuid: string; text: string; streaming: boolean; ended?: TurnEnd }
-  // header is whether the work item heads its turn and shows how long the turn has worked: the first item of the turn
-  // that runs, and the fold of a finished one. In the turn that runs, the calls and thoughts after a reply or a card
-  // are a work item that does not head it.
-  | { kind: 'work'; key: string; header: boolean; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
+  // work is a finished turn's fold, or in the turn that runs each run of its calls and thoughts, endedAt null.
+  | { kind: 'work'; key: string; startedAt: number; endedAt: number | null; calls: ToolCall[]; steps: WorkStep[] }
+  // working heads the turn that runs with how long it has worked, where its fold shows once it ends.
+  | { kind: 'working'; key: string; startedAt: number }
+  // thinking ends the turn that runs while nothing in it streams or waits on the owner: Claude thinks, a call runs, or
+  // the subagents it left running after its reply work.
+  | { kind: 'thinking'; key: string; label: string }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
   | ({ kind: 'plan' } & Ask)
@@ -482,6 +485,9 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   items.push(...unplaced)
   const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
   const waiting = asked.find(unanswered)
+  const streaming = Object.keys(live).length > 0 || Object.keys(thinking).length > 0
+  const subagents = held === null ? 0 : tasks.filter((t) => t.works).length
+  if (running && !streaming && !waiting) items.push({ kind: 'thinking', key: `thinking-${running.key}`, label: subagents > 0 ? waitingOn(subagents) : 'Thinking' })
   return {
     items,
     queued: [...queued.values()],
@@ -491,6 +497,8 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     commands,
   }
 }
+
+const waitingOn = (subagents: number) => (subagents === 1 ? 'Waiting on a subagent' : `Waiting on ${subagents} subagents`)
 
 function noticeOf(e: ChatEvent, text: string, error: boolean): Notice {
   return { kind: 'notice', key: `notice-${e.seq}`, at: e.at, text, error }
@@ -512,7 +520,7 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   const calls = turn.parts.flatMap((p) => (p.kind === 'call' ? [p.call] : []))
   const endedOn = turn.parts.at(-1)
   const reply = (r: Reply) => replyItem(r, '', r === endedOn ? ended : undefined)
-  const work = (steps: WorkStep[]): TimelineItem => ({ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt, calls, steps })
+  const work = (steps: WorkStep[]): TimelineItem => ({ kind: 'work', key: `work-${turn.key}`, startedAt: turn.startedAt, endedAt, calls, steps })
   // A turn with nothing to fold keeps its heading in place, so the timeline does not move when it ends.
   if (!turn.parts.some((p) => p.kind === 'call' || p.kind === 'thought')) return [work([]), ...turn.parts.map((p) => (p.kind === 'reply' ? reply(p) : (p as AskItem | ApprovalItem | AgentItem | ChildItem)))]
   const replies = turn.parts.filter((p): p is Reply => p.kind === 'reply')
@@ -527,17 +535,17 @@ function folded(turn: Turn, endedAt: number, ended?: TurnEnd): TimelineItem[] {
   return [work(steps), ...rest, ...(last ? [reply(last)] : [])]
 }
 
-// unfolded is the turn that runs: the work item that heads it, then its parts in order, each run of calls and thoughts
-// as one work item, the first in the heading one, then the thinking and the messages that have only streamed so far. A
-// call that waits on its approval shows only as the approval's card.
+// unfolded is the turn that runs: the working row, under the key of the fold that takes its place when the turn ends,
+// then its parts in order, each run of calls and thoughts as one work item, then the thinking and the messages that
+// have only streamed so far. A call that waits on its approval shows only as the approval's card.
 function unfolded(turn: Turn, live: Record<string, string>, thinking: Record<string, string>, now: number): TimelineItem[] {
-  const out: TimelineItem[] = [{ kind: 'work', key: `work-${turn.key}`, header: true, startedAt: turn.startedAt, endedAt: null, calls: [], steps: [] }]
+  const out: TimelineItem[] = [{ kind: 'working', key: `work-${turn.key}`, startedAt: turn.startedAt }]
   const asked = new Set(turn.approvals.filter((a) => !a.answered && a.item).map((a) => a.call))
   // line adds a step to the work item the items end with, or to a new one after a reply or a card.
   const line = (step: WorkStep, key: string) => {
     let work = out.at(-1)
     if (work?.kind !== 'work') {
-      work = { kind: 'work', key: `work-${key}`, header: false, startedAt: turn.startedAt, endedAt: null, calls: [], steps: [] }
+      work = { kind: 'work', key: `work-${key}`, startedAt: turn.startedAt, endedAt: null, calls: [], steps: [] }
       out.push(work)
     }
     work.steps.push(step)

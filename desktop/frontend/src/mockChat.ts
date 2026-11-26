@@ -82,6 +82,14 @@ const thoughts = [
   "**Reading the test run**\n\nAll 48 pass and none were skipped, so the change holds.",
 ]
 
+// toolCalls are the calls Claude makes before it replies to a message that says "tools", each running a while.
+const toolRuns = 1500
+const toolCalls = [
+  { tool: 'Read', input: { file_path: 'app-frontend/src/js/routes.tsx' }, result: "export const routes = [\n  { path: '/cart', page: Cart },\n]" },
+  { tool: 'Grep', input: { pattern: 'useCart' }, result: 'app-frontend/src/js/pages/Cart.tsx\napp-frontend/src/js/pages/Checkout.tsx' },
+  { tool: 'Bash', input: { command: 'npm test', description: 'Run the tests' }, result: 'Tests: 48 passed, 0 failed' },
+]
+
 const olderReplies = [
   'The cart total rounds each line before it adds them up, so two lines of 0.005 come to 0.02 where the order says 0.01.',
   'Two places read the locale:\n\n- `formatPrice` in `money.ts`, which takes it from the store\n- `Checkout.tsx`, which reads `navigator.language` itself\n\nThe second one is the odd one out.',
@@ -182,7 +190,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
-// another, or about 30 KB of markdown, as Claude streams it, to a message that says "long", or two subagents in the
+// another, after three tool calls of a second and a half each to a message that says "tools", or about 30 KB of markdown, as Claude streams it, to a message that says "long", or two subagents in the
 // background to a message that says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that is just "exit". The images sent are kept in memory, at the paths the service
 // would save them to, and mediaURL gives each one's address. thread throws for an id that has no chat, and isProject
 // says whether a project key is configured.
@@ -255,9 +263,28 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     return t
   }
 
-  // reply streams Claude's thinking, then its reply to the message asked, at the pace of a reply over a second, or over
-  // eight to a message that says "slow", then ends the turn, or runs the next queued message as its own turn.
+  // reply answers the message asked, with three tool calls first when it says "tools", as stream does.
   function reply(id: string, asked = '') {
+    const calls = /\btools\b/i.test(asked) ? toolCalls : []
+    const call = (k: number) => {
+      if (k === calls.length) {
+        stream(id, asked)
+        return
+      }
+      const use = `toolu_${Math.random().toString(36).slice(2, 10)}`
+      append(id, { kind: 'tool_use', id: use, tool: calls[k].tool, input: calls[k].input })
+      const timer = setTimeout(() => {
+        append(id, { kind: 'tool_result', parent: use, text: calls[k].result })
+        call(k + 1)
+      }, toolRuns)
+      replying.set(id, () => clearTimeout(timer))
+    }
+    call(0)
+  }
+
+  // stream streams Claude's thinking, then its reply to the message asked, at the pace of a reply over a second, or over
+  // eight to a message that says "slow", then ends the turn, or runs the next queued message as its own turn.
+  function stream(id: string, asked: string) {
     const t = thread(id)
     const n = nextReply++
     const long = /\blong\b/i.test(asked)

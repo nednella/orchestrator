@@ -25,13 +25,12 @@ const only = <K extends TimelineItem['kind']>(items: TimelineItem[], kind: K) =>
 
 test('a turn with no calls and no thinking keeps its heading, with nothing to open, where it was', () => {
   const events = log(user('u1', 'Hi', 10_000), { kind: 'init', id: 's' }, message('msg_1', 'Hello.'), message('msg_2', 'And more.'), turnEnd(false, 13_500))
-  const heading = (items: TimelineItem[]) => only(items, 'work').map((w) => [w.key, w.header, w.steps.length])
   const open = buildTimeline(events.slice(0, -1), {})
   const t = buildTimeline(events, {})
-  assert.deepEqual(kinds(t.items), kinds(open.items), 'the items stay as they were, in the same order')
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply', 'reply'])
-  assert.deepEqual(heading(t.items), heading(open.items), 'the heading keeps its key, so its row stays')
-  assert.deepEqual(heading(t.items), [['work-u1', true, 0]])
+  assert.deepEqual(kinds(open.items), ['user', 'working', 'reply', 'reply', 'thinking'])
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply', 'reply'], 'the fold takes the working row\'s place, and the rest stay in order')
+  assert.equal(only(t.items, 'work')[0].key, only(open.items, 'working')[0].key, 'the heading keeps its key, so its row stays')
+  assert.deepEqual(only(t.items, 'work').map((w) => [w.key, w.steps.length]), [['work-u1', 0]])
   const [work] = only(t.items, 'work')
   assert.equal(work.endedAt! - work.startedAt, 3_500)
   assert.deepEqual(only(t.items, 'reply').map((r) => r.text), ['Hello.', 'And more.'])
@@ -53,11 +52,10 @@ test('finished turn folds tools into one work row', () => {
   )
   const open = buildTimeline(events.slice(0, -1), {})
   assert.equal(open.turnOpen, true)
-  assert.deepEqual(kinds(open.items), ['user', 'work', 'reply', 'work', 'reply', 'work', 'reply'], 'an open turn stays in order, under the work item that heads it')
-  assert.deepEqual(only(open.items, 'work').map((w) => [w.header, w.endedAt, w.calls.length]), [
-    [true, null, 0],
-    [false, null, 1],
-    [false, null, 1],
+  assert.deepEqual(kinds(open.items), ['user', 'working', 'reply', 'work', 'reply', 'work', 'reply', 'thinking'], 'an open turn stays in order, under the working row')
+  assert.deepEqual(only(open.items, 'work').map((w) => [w.endedAt, w.calls.length]), [
+    [null, 1],
+    [null, 1],
   ])
 
   const t = buildTimeline(events, {})
@@ -81,23 +79,23 @@ test('finished turn folds tools into one work row', () => {
   assert.equal(new Set(t.items.map((i) => i.key)).size, t.items.length, 'keys are unique')
 })
 
-test('the turn that runs is headed by its work item, which its thinking streams into', () => {
+test('the turn that runs is headed by its working row, and its thinking streams into its work', () => {
   const thought = (id: string, text: string): Draft => ({ kind: 'thought', id, text })
   const [u, first, use, result] = log(user('u1', 'Fix it', 10_000), thought('msg_1', '**Reading the router**\n\nIt holds the routes.'), toolUse('t1', 'Read'), toolResult('t1', 'a'))
-  const lines = (items: TimelineItem[]) => only(items, 'work').map((w) => [w.key, w.header, w.steps.map((st) => (st.kind === 'thought' ? [st.key, st.text, st.live] : st.kind))])
+  const lines = (items: TimelineItem[]) => only(items, 'work').map((w) => [w.key, w.steps.map((st) => (st.kind === 'thought' ? [st.key, st.text, st.live] : st.kind))])
 
   const started = buildTimeline([u], {}, '', { msg_1: '' }).items
-  assert.deepEqual(kinds(started), ['user', 'work'])
-  assert.deepEqual(lines(started), [['work-u1', true, [['thought-msg_1-0', '', true]]]], 'a block shows from its start')
-  assert.equal(only(started, 'work')[0].startedAt, 10_000)
+  assert.deepEqual(kinds(started), ['user', 'working', 'work'])
+  assert.deepEqual(lines(started), [['work-thought-msg_1-0', [['thought-msg_1-0', '', true]]]], 'a block shows from its start')
+  assert.equal(only(started, 'working')[0].startedAt, 10_000)
 
   const thinking = buildTimeline([u, first, use, result], {}, '', { msg_2: 'Now I can ' }).items
-  assert.deepEqual(lines(thinking), [['work-u1', true, [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can ', true]]]])
+  assert.deepEqual(lines(thinking), [['work-thought-msg_1-0', [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can ', true]]]])
 
   const [second, reply] = log(thought('msg_2', 'Now I can answer.'), message('msg_2', 'Done.')).map((e, i) => ({ ...e, seq: 5 + i, at: 20_000 + i }))
   const writing = buildTimeline([u, first, use, result, second], { msg_2: 'Do' }).items
-  assert.deepEqual(kinds(writing), ['user', 'work', 'reply'])
-  assert.deepEqual(lines(writing)[0][2], [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can answer.', false]], 'the logged thought keeps the key it streamed under')
+  assert.deepEqual(kinds(writing), ['user', 'working', 'work', 'reply'])
+  assert.deepEqual(lines(writing)[0][1], [['thought-msg_1-0', '**Reading the router**\n\nIt holds the routes.', false], 'call', ['thought-msg_2-0', 'Now I can answer.', false]], 'the logged thought keeps the key it streamed under')
   assert.equal(only(writing, 'reply')[0].streaming, true)
 
   const ended = { ...turnEnd(false, 73_000), seq: 7 } as ChatEvent
@@ -105,8 +103,8 @@ test('the turn that runs is headed by its work item, which its thinking streams 
   const done = buildTimeline(events, {}).items
   assert.deepEqual(kinds(done), ['user', 'work', 'reply'])
   const [work] = only(done, 'work')
-  assert.deepEqual([work.key, work.header, work.endedAt! - work.startedAt], ['work-u1', true, 63_000], 'the heading item folds where it was')
-  assert.deepEqual(lines(done), lines(writing), 'the fold holds the same lines')
+  assert.deepEqual([work.key, work.endedAt! - work.startedAt], ['work-u1', 63_000], 'the fold takes the working row\'s place')
+  assert.deepEqual(lines(done)[0][1], lines(writing)[0][1], 'the fold holds the same lines')
 
   const reloaded = mergeEvents(EMPTY_CHAT, events).state
   assert.deepEqual(buildTimeline(reloaded.events, reloaded.live, '', reloaded.thinking).items, done, 'the log alone gives the fold again')
@@ -193,7 +191,7 @@ test('a killed run leaves nothing waiting once the next run starts', () => {
 
 test('claude started again without a flag it did not know goes on with the same turn', () => {
   const t = buildTimeline(log(user('u1', 'Hi'), { kind: 'start', text: '--thinking-display' }, message('msg_1', 'Hello.')), {})
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'reply'])
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'reply', 'thinking'])
   assert.equal(t.turnOpen, true)
 })
 
@@ -201,7 +199,7 @@ test('an unanswered approval expires when Claude withdraws it or rejects its cal
   const events = log(user('u1', 'Install it'), toolUse('t1', 'Bash', { command: 'npm install\nnpm test' }), approval('r1', 'Bash', { command: 'npm install\nnpm test' }, 't1'))
   const waiting = buildTimeline(events, {}, 'shop/abcd2345')
   assert.deepEqual(waiting.pending, { id: 'shop/abcd2345', request: 'r1', tool: 'Bash', summary: 'npm install', kind: 'tool', input: { command: 'npm install\nnpm test' }, inputTooLarge: false })
-  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'working', 'approval'])
   assert.equal(only(waiting.items, 'approval')[0].expired, false)
 
   const after = (...drafts: Draft[]) => buildTimeline(log(...events, ...drafts), {}, 'shop/abcd2345')
@@ -220,10 +218,10 @@ test('an unanswered approval expires when Claude withdraws it or rejects its cal
 test('a call that waits on its approval shows only as the card', () => {
   const asking = log(user('u1', 'Install it'), toolUse('t1', 'Read', { file_path: 'package.json' }), toolResult('t1', '{}'), toolUse('t2', 'Bash', { command: 'npm install' }), approval('r1', 'Bash', { command: 'npm install' }, 't2'))
   const waiting = buildTimeline(asking, {})
-  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'approval'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'working', 'work', 'approval'])
   assert.deepEqual(only(waiting.items, 'work')[0].calls.map((c) => c.id), ['t1'])
   const allowed = buildTimeline(log(...asking, answer('r1', 'allow')), {})
-  assert.deepEqual(kinds(allowed.items), ['user', 'work'])
+  assert.deepEqual(kinds(allowed.items), ['user', 'working', 'work', 'thinking'])
   assert.deepEqual(only(allowed.items, 'work')[0].calls.map((c) => c.id), ['t1', 't2'])
 })
 
@@ -232,7 +230,7 @@ test('question and plan items', () => {
   const plan = { plan: '# Move checkout\n\n1. Add the route' }
   const asking = log(user('u1', 'Ask me'), toolUse('t1', 'AskUserQuestion', questions), approval('r1', 'AskUserQuestion', questions))
   const t = buildTimeline(asking, {})
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'question'])
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'question'])
   const [q] = only(t.items, 'question')
   assert.deepEqual([q.id, q.request, q.input, q.answer, q.result, q.expired], ['t1', 'r1', questions, undefined, null, false])
   assert.equal(t.pending?.kind, 'question')
@@ -386,7 +384,7 @@ test('queued until delivered', () => {
   const sent = log(user('u1', 'Slow job'), message('msg_1', 'Working.'), { kind: 'queued', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] })
   const waiting = buildTimeline(sent, {})
   assert.deepEqual(waiting.queued, [{ id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] }])
-  assert.deepEqual(kinds(waiting.items), ['user', 'work', 'reply'])
+  assert.deepEqual(kinds(waiting.items), ['user', 'working', 'reply', 'thinking'])
 
   const delivered = buildTimeline(log(...sent, { kind: 'user', id: 'q1', text: 'Also run the tests', files: ['/m/a.png'] }), {})
   assert.deepEqual(delivered.queued, [])
@@ -405,7 +403,7 @@ test('queued is not sent once the host drops it or Claude exits', () => {
 
   const dropping = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }), {})
   assert.deepEqual(dropping.queued.map((q) => q.id), ['q2'])
-  assert.equal(dropping.items.at(-1)?.key, 'unsent-q1', 'the notice shows while the turn still runs')
+  assert.deepEqual(dropping.items.slice(-2).map((i) => i.key), ['unsent-q1', 'thinking-u1'], 'the notice shows while the turn still runs')
 
   const dropped = buildTimeline(log(...sent, { kind: 'unsent', id: 'q1' }, turnEnd(true), user('q2', 'Then lint')), {})
   assert.deepEqual(dropped.queued, [])
@@ -507,7 +505,7 @@ test('subagents in the background run on after their turn', () => {
 
 test('subagents of the turn that runs split its work like a card', () => {
   const t = buildTimeline(log(user('u1', 'Go'), toolUse('t1', 'Read'), agentCall('a1', 'Look'), from('a1', toolUse('s1', 'Grep')), toolUse('t2', 'Read')), {})
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'work'])
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'work', 'agent', 'work', 'thinking'])
   assert.deepEqual(only(t.items, 'work').map((w) => w.steps.length), [1, 1], "the subagent's call is not one of the turn's")
   assert.equal(only(t.items, 'agent')[0].tools, 1)
 })
@@ -551,9 +549,8 @@ test('the turns are one piece of work until Claude has told of the end of its su
   const at = (n: number) => buildTimeline(background.slice(0, n), {})
   const rests = at(6)
   assert.equal(rests.turnOpen, false, 'a message sent now starts a turn')
-  assert.deepEqual(kinds(rests.items), ['user', 'work', 'agent', 'reply'])
-  assert.equal(only(rests.items, 'work')[0].endedAt, null, 'the work goes on while the subagent runs')
-  assert.equal(only(at(9).items, 'work')[0].endedAt, null, 'and until Claude tells of its end')
+  assert.deepEqual(kinds(rests.items), ['user', 'working', 'agent', 'reply', 'thinking'], 'the work goes on while the subagent runs')
+  assert.deepEqual(kinds(at(9).items), ['user', 'working', 'agent', 'reply', 'thinking'], 'and until Claude tells of its end')
   assert.equal(at(10).turnOpen, true, "Claude's own turn runs")
   const t = at(11)
   assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'reply', 'reply'], "Claude's own turn shows no message of the owner's")
@@ -566,8 +563,8 @@ test('a piece of work that waits on its subagents ends where the owner, an error
   const rest = background.slice(0, 6)
   const after = (...drafts: Draft[]) => buildTimeline([...rest, ...log(...drafts).map((e) => ({ ...e, seq: e.seq + rest.length, at: e.at + 30_000 }))], {})
   const sent = after(user('u2', 'Also count them'))
-  assert.deepEqual(kinds(sent.items), ['user', 'work', 'agent', 'reply', 'user', 'work'])
-  assert.deepEqual(only(sent.items, 'work').map((w) => w.endedAt), [15_000, null], 'the owner\'s message ends the piece where its turn ended')
+  assert.deepEqual(kinds(sent.items), ['user', 'work', 'agent', 'reply', 'user', 'working', 'thinking'])
+  assert.deepEqual(only(sent.items, 'work').map((w) => w.endedAt), [15_000], 'the owner\'s message ends the piece where its turn ended')
   const stopped = after(taskEnd('a1', '', 'stopped'))
   assert.deepEqual([only(stopped.items, 'work')[0].endedAt, stopped.turnOpen], [15_000, false], 'Claude tells of no stopped task')
   const exited = after({ kind: 'exit' })
@@ -586,7 +583,7 @@ test("Claude's list of its tasks ends the piece when a subagent's end was missed
   const monitorOnly = buildTimeline([...rest, { ...listed({ id: 'm9', kind: 'monitor_mcp' }), seq: 7, at: 40_000 }], {})
   assert.equal(only(monitorOnly.items, 'work')[0].endedAt, 15_000, 'a monitor is no work')
   const unknown = buildTimeline(log(user('u1', 'Go', 1_000), listed({ id: 'a7', kind: 'local_agent' }), message('msg_1', 'On it.'), turnEnd(false, 3_000)), {})
-  assert.equal(only(unknown.items, 'work')[0].endedAt, null, 'a subagent only the list names holds the work')
+  assert.deepEqual(kinds(unknown.items), ['user', 'working', 'reply', 'thinking'], 'a subagent only the list names holds the work')
   const started = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), listed({ id: 'task-a1', kind: 'local_agent' }), taskStart('a1'), turnEnd(), taskEnd('a1', 'done', 'stopped')), {})
   assert.equal(only(started.items, 'work')[0].endedAt, 5_000, 'the start after the list is the same task, which its end ends')
 })
@@ -600,7 +597,7 @@ test('a shell or a monitor in the background does not hold the work open', () =>
 
 test("a subagent's own task holds the work open, and a subagent woken again runs", () => {
   const t = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), taskStart('a1'), turnEnd(), from('a1', taskStart('b2')), taskEnd('a1', 'done'), taskStart('a1')), {})
-  assert.equal(only(t.items, 'work')[0].endedAt, null)
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'agent', 'thinking'])
   assert.equal(only(t.items, 'agent')[0].state, 'running')
 })
 
@@ -617,14 +614,14 @@ const asking = log(
 
 test("a subagent's approval shows after its row and waits past the turns until it is answered", () => {
   const t = buildTimeline(asking, {}, 'main/t1')
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'agent', 'approval'])
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'agent', 'approval'])
   assert.deepEqual([t.pending?.request, t.pending?.tool, t.pending?.summary], ['r1', 'Write', 'sub.txt'])
   const later = buildTimeline([...asking, ...log(user('u2', 'Meanwhile, hi'), message('msg_2', 'Hi.'), turnEnd()).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
-  assert.deepEqual(kinds(later.items), ['user', 'work', 'agent', 'approval', 'user', 'work', 'reply'], "another turn's end leaves it")
+  assert.deepEqual(kinds(later.items), ['user', 'work', 'agent', 'approval', 'user', 'working', 'reply'], "another turn's end leaves it")
   assert.equal(only(later.items, 'approval')[0].expired, false)
   assert.equal(later.pending?.request, 'r1')
   const answered = buildTimeline([...asking, ...log(answer('r1', 'allow'), from('a1', toolResult('s1', 'Wrote sub.txt'))).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
-  assert.deepEqual(kinds(answered.items), ['user', 'work', 'agent'])
+  assert.deepEqual(kinds(answered.items), ['user', 'working', 'agent', 'thinking'])
   assert.equal(answered.pending, null)
   const [step] = only(answered.items, 'agent')[0].steps
   assert.deepEqual(step.kind === 'call' && [step.call.answer, step.call.result], ['allow', 'Wrote sub.txt'])
@@ -652,21 +649,21 @@ test("a message that denies a subagent's approval is its answer, not a turn of t
   assert.equal(only(t.items, 'user')[1].text, 'Use b.txt')
   assert.deepEqual([t.turnOpen, t.pending], [false, null])
   const during = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Look'), from('a1', toolUse('s1', 'Write')), from('a1', approval('r1', 'Write', {}, 's1')), answer('r1', 'deny'), from('a1', { ...user('u2', 'Not that file'), parent: 'r1' })), {})
-  assert.deepEqual([kinds(during.items), during.turnOpen], [['user', 'work', 'agent', 'user', 'work'], true], 'the turn that waits on its subagent goes on after it')
+  assert.deepEqual([kinds(during.items), during.turnOpen], [['user', 'work', 'agent', 'user', 'working', 'thinking'], true], 'the turn that waits on its subagent goes on after it')
 })
 
 test("a subagent's approval with no row of its own still shows, and waits", () => {
   const unknown = buildTimeline([...asking.slice(0, -1), { ...from('gone', approval('r1', 'Write', { file_path: 'sub.txt' }, 's9')), seq: asking.length, at: 9_000 }], {}, 'main/t1')
-  assert.deepEqual(kinds(unknown.items), ['user', 'work', 'agent', 'approval'])
+  assert.deepEqual(kinds(unknown.items), ['user', 'working', 'agent', 'approval'])
   assert.equal(unknown.pending?.request, 'r1')
   const nested = buildTimeline([...asking.slice(0, -1), ...log(from('a1', agentCall('n1', 'Look deeper')), from('n1', approval('r2', 'Bash', { command: 'ls' }, 's2')), message('msg_9', 'Still here.')).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
-  assert.deepEqual(kinds(nested.items), ['user', 'work', 'agent', 'approval', 'reply'], "a subagent's subagent asks under the row it shows in")
+  assert.deepEqual(kinds(nested.items), ['user', 'working', 'agent', 'approval', 'reply'], "a subagent's subagent asks under the row it shows in")
   assert.equal(nested.pending?.request, 'r2')
 })
 
 test('an approval in a log from before the host named the subagent finds it by its call', () => {
   const unnamed = asking.map((e) => (e.kind === 'approval' ? { ...e, agent: undefined } : e))
-  assert.deepEqual(kinds(buildTimeline(unnamed, {}).items), ['user', 'work', 'agent', 'approval'])
+  assert.deepEqual(kinds(buildTimeline(unnamed, {}).items), ['user', 'working', 'agent', 'approval'])
 })
 
 test('the agent list puts the newest turn first', () => {
@@ -748,7 +745,7 @@ const started = (parent: string, child: string): Draft => toolResult(parent, JSO
 test('delegate call becomes a child card', () => {
   const events = log(user('u1', 'Split it up'), toolUse('t1', 'Read', { file_path: 'a.ts' }), toolResult('t1', 'x'), delegate('d1'), message('msg_1', 'Started a child.'))
   const open = buildTimeline(events, {})
-  assert.deepEqual(kinds(open.items), ['user', 'work', 'child', 'reply'], 'the card is not in the work row')
+  assert.deepEqual(kinds(open.items), ['user', 'working', 'work', 'child', 'reply', 'thinking'], 'the card is not in the work row')
   assert.deepEqual(only(open.items, 'child'), [{ kind: 'child', key: 'child-d1', at: 4000, call: 'd1', child: '', title: 'Flaky test', error: false, expired: false }])
   const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
   assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'reply'], 'a finished turn keeps the card outside the fold')
@@ -766,7 +763,7 @@ test('child card takes the id from the result', () => {
 test('failed delegate stays a tool row', () => {
   const events = log(user('u1', 'Go'), delegate('d1'), toolResult('d1', 'This thread has 8 children running', true), message('msg_1', 'It failed.'))
   const open = buildTimeline(events, {})
-  assert.deepEqual(kinds(open.items), ['user', 'work', 'reply'])
+  assert.deepEqual(kinds(open.items), ['user', 'working', 'work', 'reply', 'thinking'])
   const [work] = only(open.items, 'work')
   assert.deepEqual(work.calls.map((c) => [c.tool, c.result, c.error]), [['mcp__agentos__delegate', 'This thread has 8 children running', true]])
   const t = buildTimeline(log(...events.map(({ seq: _s, at: _a, ...d }) => d), turnEnd()), {})
@@ -779,7 +776,7 @@ test('child result becomes a result card', () => {
     log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), { kind: 'user', id: 'u2', text: 'APPLICATION_PROMPT: Task Flaky test is done:\n\nThe retry test.', from: 'shop/abcd2345' }, message('msg_2', 'The child found it.')),
     {},
   )
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'childResult', 'work', 'reply'])
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'childResult', 'working', 'reply', 'thinking'])
   assert.deepEqual(only(t.items, 'childResult'), [{ kind: 'childResult', key: 'result-u2', at: 5000, child: 'shop/abcd2345', text: 'Task Flaky test is done:\n\nThe retry test.' }])
   assert.equal(t.turnOpen, true, 'the result starts a turn, as a message does')
 })
@@ -807,4 +804,70 @@ test('a delegate call that gets no answer ends with its turn', () => {
 test('a delegate result that comes after its turn ended still names the child', () => {
   const [item] = only(buildTimeline(log(user('u1', 'Go'), delegate('d1'), turnEnd(true), started('d1', 'shop/abcd2345')), {}).items, 'child')
   assert.deepEqual([item.child, item.expired], ['shop/abcd2345', false])
+})
+
+const live = (items: TimelineItem[]) => items.filter((i) => i.kind === 'working' || i.kind === 'thinking').map((i) => (i.kind === 'thinking' ? [i.kind, i.label] : [i.kind, i.key]))
+
+test('the working row follows the user message', () => {
+  const events = log(user('u1', 'Fix it', 10_000), toolUse('t1', 'Read'), toolResult('t1', 'a'), message('msg_1', 'Done.'), turnEnd(false, 20_000))
+  const open = buildTimeline(events.slice(0, -1), {}).items
+  assert.deepEqual(kinds(open), ['user', 'working', 'work', 'reply', 'thinking'])
+  const [working] = only(open, 'working')
+  assert.deepEqual([working.key, working.startedAt], ['work-u1', 10_000])
+  const done = buildTimeline(events, {}).items
+  assert.equal(only(done, 'work')[0].key, working.key, 'the fold takes the working row\'s place')
+})
+
+test('the thinking row is last while nothing streams', () => {
+  const calling = log(user('u1', 'Fix it'), toolUse('t1', 'Read'))
+  assert.deepEqual(buildTimeline(calling, {}).items.at(-1), { kind: 'thinking', key: 'thinking-u1', label: 'Thinking' }, 'a call that runs is no stream')
+  const replied = buildTimeline(log(user('u1', 'Fix it'), message('msg_1', 'On it.')), {}).items
+  assert.deepEqual(kinds(replied), ['user', 'working', 'reply', 'thinking'], 'a logged reply streams no more')
+  const unsent = buildTimeline(log(user('u1', 'Fix it'), { kind: 'queued', id: 'q1', text: 'And this' }, { kind: 'unsent', id: 'q1' }), {}).items
+  assert.equal(unsent.at(-1)?.kind, 'thinking', 'after the not-sent notices too')
+})
+
+test('no thinking row while a reply streams', () => {
+  const t = buildTimeline(log(user('u1', 'Hi')), { msg_1: 'Hel' })
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'reply'])
+  assert.deepEqual(live(t.items), [['working', 'work-u1']])
+})
+
+test('no thinking row while a thought streams', () => {
+  const t = buildTimeline(log(user('u1', 'Hi')), {}, '', { msg_1: '' })
+  assert.deepEqual(kinds(t.items), ['user', 'working', 'work'])
+})
+
+test('no thinking row while an approval waits', () => {
+  const asking = log(user('u1', 'Install it'), toolUse('t1', 'Bash'), approval('r1', 'Bash', {}, 't1'))
+  assert.deepEqual(kinds(buildTimeline(asking, {}).items), ['user', 'working', 'approval'])
+  assert.equal(buildTimeline(log(...asking, answer('r1', 'allow')), {}).items.at(-1)?.kind, 'thinking', 'it comes back once answered')
+  const question = { questions: [{ question: 'Which colour?', options: [{ label: 'Red' }] }] }
+  assert.deepEqual(kinds(buildTimeline(log(user('u1', 'Ask me'), toolUse('t1', 'AskUserQuestion', question), approval('r1', 'AskUserQuestion', question)), {}).items), ['user', 'working', 'question'])
+  assert.deepEqual(kinds(buildTimeline(log(user('u1', 'Plan it'), toolUse('t1', 'ExitPlanMode', { plan: 'x' }), approval('r1', 'ExitPlanMode', { plan: 'x' })), {}).items), ['user', 'working', 'plan'])
+  const subagent = buildTimeline(log(user('u1', 'Go'), agentCall('a1', 'Write file'), from('a1', toolUse('s1', 'Write')), from('a1', approval('r1', 'Write', {}, 's1'))), {})
+  assert.deepEqual(kinds(subagent.items), ['user', 'working', 'agent', 'approval'], "a subagent's approval waits on the owner too")
+})
+
+test('no live rows once the turn ends', () => {
+  const ran = log(user('u1', 'Fix it'), toolUse('t1', 'Read'), toolResult('t1', 'a'), message('msg_1', 'Done.'))
+  for (const [name, end] of [
+    ['finished', [turnEnd()]],
+    ['stopped', [{ kind: 'interrupt' }, turnEnd(true)]],
+    ['failed', [turnEnd(true)]],
+    ['exited', [{ kind: 'exit' }]],
+  ] as [string, Draft[]][]) {
+    assert.deepEqual(live(buildTimeline(log(...ran, ...end), {}).items), [], name)
+  }
+})
+
+test('waiting on two subagents', () => {
+  const launched = log(user('u1', 'Look around'), agentCall('a1', 'List files'), taskStart('a1'), agentCall('a2', 'Count lines'), taskStart('a2'))
+  assert.deepEqual(live(buildTimeline(launched, {}).items).at(-1), ['thinking', 'Thinking'], 'Claude still works on its turn')
+  const rests = log(...launched, message('msg_1', 'Both are running.'), turnEnd())
+  assert.deepEqual(buildTimeline(rests, {}).items.at(-1), { kind: 'thinking', key: 'thinking-u1', label: 'Waiting on 2 subagents' })
+  assert.deepEqual(live(buildTimeline(log(...rests, taskEnd('a1', 'a.go')), {}).items).at(-1), ['thinking', 'Waiting on a subagent'])
+  const ended = log(...rests, taskEnd('a1', 'a.go'), taskEnd('a2', '5'))
+  assert.deepEqual(live(buildTimeline(ended, {}).items).at(-1), ['thinking', 'Thinking'], 'Claude is still to tell of their end')
+  assert.deepEqual(live(buildTimeline(log(...ended, message('msg_2', 'Both are done.'), turnEnd()), {}).items), [], 'the work ends once it has')
 })
