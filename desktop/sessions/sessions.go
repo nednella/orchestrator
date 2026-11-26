@@ -2394,6 +2394,12 @@ func (s *Sessions) createForIssue(proj project.Project, title, text string, send
 		if err := s.mayGive(asker, was); err != nil {
 			return Session{}, Kept, err
 		}
+		if asker != "" {
+			from, _ := s.liveAccessOf(asker)
+			if from = cmp.Or(from, session.Read); was.Rank() > from.Rank() {
+				return Session{}, Kept, fmt.Errorf("A thread with %s access cannot wake a thread with %s access", from, was)
+			}
+		}
 		ch, err := s.wakeOrJoin(settled, handover)
 		if err != nil {
 			return Session{}, Kept, err

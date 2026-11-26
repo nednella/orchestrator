@@ -311,3 +311,34 @@ func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
 		t.Errorf("the owner's project is now %q, want main", got)
 	}
 }
+
+func TestIssueCommandRefusesWakingAThreadWithMoreAccess(t *testing.T) {
+	h := newHarness(t)
+	read, err := h.NewThread("read", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	supervised, err := h.NewSession("supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	asleep, err := h.StartIssue(11)
+	if err != nil || asleep.Access != session.Supervised {
+		t.Fatalf("issue 11 started %+v, %v", asleep, err)
+	}
+	if err := h.SettleThread(asleep.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: read.ID, Args: []string{"11"}, Opts: map[string]string{"prompt": "do it my way"}})
+	if resp.OK || !strings.Contains(resp.Error, "A thread with read access cannot wake a thread with supervised access") {
+		t.Fatalf("issue 11 from a Read thread = %+v", resp)
+	}
+	if got, _ := h.Session(asleep.ID); got.State != "settled" {
+		t.Errorf("the thread of #11 is %q after the refusal, want settled", got.State)
+	}
+
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: supervised.ID, Args: []string{"11"}}); !resp.OK || !strings.Contains(resp.Out, "woke the sleeping") {
+		t.Errorf("issue 11 from a Supervised thread = %+v", resp)
+	}
+}
