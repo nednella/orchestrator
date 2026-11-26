@@ -32,27 +32,31 @@ const generations = new Map<string, number>()
 // Every live terminal by shell id. A session outlives its pane, so showing it again needs no attach.
 export const sessions = new Map<string, TermSession>()
 
-type Look = { theme: ITheme; fontSize: number; key: string }
+type Look = { theme: ITheme; fontSize: number; blink: boolean; key: string }
 
 function readLook(): Look {
   const root = document.documentElement
   const scale = parseFloat(getComputedStyle(root).getPropertyValue('--ui-scale')) || 1
   const theme = terminalThemeFrom(root)
   const fontSize = Math.round(FONT_PX * scale * 2) / 2
-  return { theme, fontSize, key: JSON.stringify(theme) }
+  return { theme, fontSize, blink: !reducedMotion.matches, key: JSON.stringify(theme) }
 }
 
 let look: Look | null = null
 let lookWatch: MutationObserver | null = null
 
-// The terminals follow the app's theme and text size live: both are set on the root element.
+const relook = () => {
+  look = readLook()
+  sessions.forEach((s) => s.restyle())
+}
+
+// The terminals follow the app's theme and text size live, both set on the root element, and the system's reduced
+// motion.
 function currentLook(): Look {
   if (!lookWatch) {
-    lookWatch = new MutationObserver(() => {
-      look = readLook()
-      sessions.forEach((s) => s.restyle())
-    })
+    lookWatch = new MutationObserver(relook)
     lookWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] })
+    reducedMotion.addEventListener('change', relook)
   }
   look ??= readLook()
   return look
@@ -61,6 +65,7 @@ function currentLook(): Look {
 function stopWatchingLook() {
   lookWatch?.disconnect()
   lookWatch = null
+  reducedMotion.removeEventListener('change', relook)
   look = null
 }
 
@@ -90,14 +95,14 @@ export class TermSession {
   constructor(readonly id: string) {
     this.generation = (generations.get(id) ?? 0) + 1
     generations.set(id, this.generation)
-    const { theme, fontSize, key } = currentLook()
+    const { theme, fontSize, blink, key } = currentLook()
     this.styled = key
     this.term = new Terminal({
       fontFamily: TERMINAL_FONT,
       fontSize,
       lineHeight: LINE_HEIGHT,
       // xterm blinks the cursor only while the terminal has the focus.
-      cursorBlink: !reducedMotion.matches,
+      cursorBlink: blink,
       // tmux holds the history. A mount onto a running stream never sees tmux's switch to the alternate screen, so
       // any scrollback here fills with lines tmux pushes off the bottom and xterm offers a slider over them.
       scrollback: 0,
@@ -161,9 +166,10 @@ export class TermSession {
     this.syncStream()
   }
 
+  // An open still on its way closes when it lands, in open; closing now could reach Go before it.
   dispose() {
     this.unmount()
-    const attached = this.state !== 'new'
+    const attached = this.state === 'open'
     this.state = 'gone'
     this.stopStream?.()
     this.stopStream = null
@@ -181,7 +187,8 @@ export class TermSession {
   }
 
   restyle() {
-    const { theme, fontSize, key } = currentLook()
+    const { theme, fontSize, blink, key } = currentLook()
+    if (this.term.options.cursorBlink !== blink) this.term.options.cursorBlink = blink
     if (key !== this.styled) {
       this.styled = key
       this.term.options.theme = theme
