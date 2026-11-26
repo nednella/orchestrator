@@ -1,4 +1,3 @@
-import { isFiltering } from '../issueFilter'
 import type { Action, ActionContext } from './types'
 
 export const queueActions = ({ a, layout }: ActionContext): Action[] => [
@@ -32,10 +31,10 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'filter-queue',
     label: 'Filter the queue…',
     group: 'Queue',
-    run(args) {
+    run() {
       layout.showPanelView('issues')
-      a.setIssueFilter(args.join(' '))
-      return isFiltering(args.join(' ')) ? 'Filter set' : 'Filter cleared'
+      a.setIssueFilter('')
+      return 'Filter cleared'
     },
   },
   {

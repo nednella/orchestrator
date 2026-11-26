@@ -69,13 +69,10 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     id: 'show-browser',
     label: 'Show browser',
     group: 'Sessions',
-    async run(args) {
+    run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
       layout.showPanelView('browser')
-      if (args.length === 0) return
-      await a.openBrowser(current.id, args.join(' '))
-      return `Opened ${args.join(' ')}`
     },
   },
   {
