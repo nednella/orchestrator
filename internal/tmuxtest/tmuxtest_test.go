@@ -39,6 +39,23 @@ func TestStopKillsTheServerAndRemovesItsSocketFile(t *testing.T) {
 	Stop(socket) // none is running: nothing to stop, nothing to fail
 }
 
+func TestStopWaitsForWhatThePanesRan(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	socket := fmt.Sprintf("aostest-tmuxtest-wait-%d", os.Getpid())
+	done := filepath.Join(t.TempDir(), "done")
+	// The pane ignores the hangup kill-server sends and writes a file a moment later, as a host that is still closing does.
+	script := "trap '' HUP; sleep 0.5; touch '" + done + "'"
+	if out, err := exec.Command("tmux", "-L", socket, "new-session", "-d", "-s", "x", "sh", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("starting a server: %v: %s", err, out)
+	}
+	Stop(socket)
+	if _, err := os.Stat(done); err != nil {
+		t.Errorf("Stop returned while the pane's process still ran: %v", err)
+	}
+}
+
 func TestStopRemovesTheFileOfAServerThatIsGone(t *testing.T) {
 	socket := fmt.Sprintf("aostest-tmuxtest-gone-%d", os.Getpid())
 	path := Path(socket)
