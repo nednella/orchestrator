@@ -6,27 +6,27 @@ import type { PanelState } from './panelTabs.ts'
 const state = (over: Partial<PanelState> = {}): PanelState => ({ ...EMPTY_PANEL, ...over })
 
 test('opening a view adds its tab and makes it active', () => {
-  assert.deepEqual(openTab(EMPTY_PANEL, 'agents'), { tabs: ['agents'], active: 'agents' })
-  assert.deepEqual(openTab(state({ tabs: ['agents'], active: 'agents' }), 'issues'), { tabs: ['agents', 'issues'], active: 'issues' })
+  assert.deepEqual(openTab(EMPTY_PANEL, 'agents'), { tabs: ['agents'], active: 'agents', expanded: false })
+  assert.deepEqual(openTab(state({ tabs: ['agents'], active: 'agents', expanded: true }), 'issues'), { tabs: ['agents', 'issues'], active: 'issues', expanded: true })
 })
 
 test('opening an open view only selects it', () => {
   const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'issues' })
   assert.deepEqual(openTab(st, 'agents'), { ...st, active: 'agents' })
-  assert.deepEqual(openTab(state({ tabs: ['agents'], active: null }), 'agents'), { tabs: ['agents'], active: 'agents' }, 'from the list')
+  assert.deepEqual(openTab(state({ tabs: ['agents'], active: null }), 'agents'), { tabs: ['agents'], active: 'agents', expanded: false }, 'from the list')
 })
 
 test('closing the active tab picks its left neighbour', () => {
-  const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'servers' })
-  assert.deepEqual(closeTab(st, 'servers'), { tabs: ['agents', 'issues'], active: 'agents' })
-  assert.deepEqual(closeTab(st, 'agents'), { tabs: ['servers', 'issues'], active: 'servers' }, 'a tab that is not active leaves the active one')
-  assert.deepEqual(closeTab(state({ tabs: ['agents', 'servers'], active: 'agents' }), 'agents'), { tabs: ['servers'], active: 'servers' }, 'the first tab has no left neighbour: the next one')
+  const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'servers', expanded: true })
+  assert.deepEqual(closeTab(st, 'servers'), { tabs: ['agents', 'issues'], active: 'agents', expanded: true })
+  assert.deepEqual(closeTab(st, 'agents'), { tabs: ['servers', 'issues'], active: 'servers', expanded: true }, 'a tab that is not active leaves the active one')
+  assert.deepEqual(closeTab(state({ tabs: ['agents', 'servers'], active: 'agents' }), 'agents'), { tabs: ['servers'], active: 'servers', expanded: false }, 'the first tab has no left neighbour: the next one')
   assert.equal(closeTab(st, 'notes'), st, 'a view with no tab changes nothing')
 })
 
-test('closing the last tab shows the list', () => {
-  assert.deepEqual(closeTab(state({ tabs: ['issues'], active: 'issues' }), 'issues'), EMPTY_PANEL)
-  assert.deepEqual(closeTab(state({ tabs: ['issues'], active: null }), 'issues'), EMPTY_PANEL, 'from the list too')
+test('closing the last tab shows the list and restores the size', () => {
+  assert.deepEqual(closeTab(state({ tabs: ['issues'], active: 'issues', expanded: true }), 'issues'), EMPTY_PANEL)
+  assert.deepEqual(closeTab(state({ tabs: ['issues'], active: null, expanded: true }), 'issues'), EMPTY_PANEL, 'from the list too')
 })
 
 test('letters open their views', () => {
@@ -69,7 +69,7 @@ test('the tab keys step through the open tabs, round the ends', () => {
 
 test('a saved panel keeps only the views it knows', () => {
   assert.deepEqual(panelStateOf(undefined), EMPTY_PANEL)
-  assert.deepEqual(panelStateOf({ tabs: ['agents', 'details', 'agents', 'files'], active: 'details' }), { tabs: ['agents'], active: null })
-  assert.deepEqual(panelStateOf({ tabs: ['issues'], active: 'issues' }), { tabs: ['issues'], active: 'issues' })
-  assert.deepEqual(panelStateOf({ tabs: 'issues', active: 7 }), EMPTY_PANEL)
+  assert.deepEqual(panelStateOf({ tabs: ['agents', 'details', 'agents', 'files'], active: 'details', expanded: true }), { tabs: ['agents'], active: null, expanded: true })
+  assert.deepEqual(panelStateOf({ tabs: ['issues'], active: 'issues', expanded: false }), { tabs: ['issues'], active: 'issues', expanded: false })
+  assert.deepEqual(panelStateOf({ tabs: 'issues', active: 7, expanded: 'yes' }), EMPTY_PANEL)
 })

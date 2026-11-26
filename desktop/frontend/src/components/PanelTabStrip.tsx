@@ -1,4 +1,4 @@
-import { List, X } from 'lucide-react'
+import { List, Maximize2, Minimize2, X } from 'lucide-react'
 import { useAgentosSelector } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
 import { agentsWait, panelView } from '../panelViews'
@@ -10,10 +10,11 @@ type PanelTabStripProps = { session: Session | undefined }
 const stripButton = 'btn btn-ghost h-8 w-8 flex-none justify-center px-0 aria-pressed:bg-(--bg-segment-on) aria-pressed:text-ink'
 
 // PanelTabStrip heads the right panel: the list of views, a tab for each view open, marked while it waits on the owner,
-// then Close.
+// then Expand, offered only beside the chat, and Close.
 export function PanelTabStrip({ session }: PanelTabStripProps) {
-  const { panel, showPanelList, showPanelView, closePanelTab, togglePanel } = useLayout()
+  const { panel, panelExpanded, docked, showPanelList, showPanelView, closePanelTab, togglePanelExpanded, togglePanel } = useLayout()
   const agentsWaiting = useAgentosSelector((a) => agentsWait(session, a.sessions))
+  const expand = panelExpanded ? 'Restore panel size' : 'Expand panel'
 
   const tab = (id: PanelViewId) => {
     const view = panelView(id)
@@ -53,6 +54,11 @@ export function PanelTabStrip({ session }: PanelTabStripProps) {
       <div role="tablist" aria-label="Open views" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {panel.tabs.map(tab)}
       </div>
+      {docked.right && (
+        <button className={stripButton} title={expand} aria-label={expand} aria-pressed={panelExpanded} onClick={togglePanelExpanded}>
+          {panelExpanded ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+        </button>
+      )}
       <button className={stripButton} title="Close the panel" aria-label="Close the panel" onClick={() => togglePanel('right')}>
         <X size={16} aria-hidden="true" />
       </button>

@@ -42,7 +42,7 @@ export function App() {
   useFocusedPanel()
   const fullscreen = useFullscreen()
   const { selectedId } = useAgentos('selectedId')
-  const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen } = useLayout()
+  const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen, panelExpanded } = useLayout()
   const [splash, setSplash] = useState<SplashStage>(() =>
     matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
   )
@@ -61,7 +61,8 @@ export function App() {
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar />
             <main className="relative flex min-h-0 min-w-0 flex-1">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
+              <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
                 <div className="relative min-h-0 flex-1">
                   <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>{selectedId ? <Viewport /> : <Home />}</div>
                   {statsOpen && <Stats />}
@@ -70,7 +71,7 @@ export function App() {
                 </div>
                 <ShellStrip />
               </div>
-              {docked.right && rightOpen && <Divider panel="right" />}
+              {docked.right && rightOpen && !panelExpanded && <Divider panel="right" />}
               {docked.right && rightOpen && <RightPanel />}
             </main>
           </div>

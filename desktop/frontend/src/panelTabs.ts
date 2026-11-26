@@ -6,18 +6,18 @@ export const PANEL_KEYS: Record<PanelViewId, string> = { agents: 'A', servers: '
 // The views the panel lists, in its order. Files joins them with its view.
 export const PANEL_ORDER: PanelViewId[] = ['agents', 'servers', 'pulls', 'issues', 'notes', 'evidence', 'browser']
 
-// What the right panel shows for one thread, or for Home: the views open as tabs, and the one shown (null for the list
-// of views).
-export type PanelState = { tabs: PanelViewId[]; active: PanelViewId | null }
+// What the right panel shows for one thread, or for Home: the views open as tabs, the one shown (null for the list of
+// views), and whether it takes the chat's room too.
+export type PanelState = { tabs: PanelViewId[]; active: PanelViewId | null; expanded: boolean }
 
-export const EMPTY_PANEL: PanelState = { tabs: [], active: null }
+export const EMPTY_PANEL: PanelState = { tabs: [], active: null, expanded: false }
 
 export function openTab(st: PanelState, view: PanelViewId): PanelState {
   return { ...st, tabs: st.tabs.includes(view) ? st.tabs : [...st.tabs, view], active: view }
 }
 
 // closeTab closes the view's tab. A closed active tab hands over to its left neighbour, else to the tab after it; with
-// no tab left the list shows.
+// no tab left the list shows, at the panel's own size.
 export function closeTab(st: PanelState, view: PanelViewId): PanelState {
   const at = st.tabs.indexOf(view)
   if (at < 0) return st
@@ -40,10 +40,10 @@ export function viewForKey(key: string): PanelViewId | null {
 // panelStateOf is a saved panel as the panel can show it: a view it no longer lists drops out.
 export function panelStateOf(saved: unknown): PanelState {
   if (typeof saved !== 'object' || saved === null) return EMPTY_PANEL
-  const { tabs, active } = saved as Record<string, unknown>
+  const { tabs, active, expanded } = saved as Record<string, unknown>
   const known = (view: unknown): view is PanelViewId => PANEL_ORDER.includes(view as PanelViewId)
   const kept = Array.isArray(tabs) ? [...new Set(tabs.filter(known))] : []
-  return { tabs: kept, active: known(active) && kept.includes(active) ? active : null }
+  return { tabs: kept, active: known(active) && kept.includes(active) ? active : null, expanded: expanded === true }
 }
 
 // At this window width or less the panel opens over the chat as a sheet.

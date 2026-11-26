@@ -9,6 +9,7 @@ import { IssueReader } from './IssueReader'
 import { Notice } from './Notice'
 import { QueueSearch } from './QueueSearch'
 
+// IssuesView is the queue's list, and an issue read in its place, or beside it where the panel is 720 px wide or more.
 export function IssuesView() {
   const { issues, issuesDisabled, issueFilter, report } = useAgentos('issues', 'issuesDisabled', 'issueFilter', 'report')
   const projectName = useAgentosSelector((a) => a.project?.name)
@@ -44,10 +45,16 @@ export function IssuesView() {
   }
 
   return (
-    <div ref={root} className="flex h-full min-h-0 flex-col">
-      {reading !== null && <IssueReader key={reading} number={reading} onBack={back} />}
-      {reading === null && <QueueSearch shown={filtering ? shown.length : null} />}
-      <IssueList shown={shown} filtering={filtering} hidden={reading !== null} onRead={setReading} />
+    <div ref={root} className="flex h-full min-h-0">
+      <div className={`min-h-0 min-w-0 flex-1 flex-col ${reading === null ? 'flex' : 'hidden @min-[720px]:flex'}`}>
+        <QueueSearch shown={filtering ? shown.length : null} />
+        <IssueList shown={shown} filtering={filtering} onRead={setReading} />
+      </div>
+      {reading !== null && (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col border-line @min-[720px]:border-l">
+          <IssueReader key={reading} number={reading} onBack={back} />
+        </div>
+      )}
     </div>
   )
 }

@@ -26,9 +26,9 @@ function moveFocus(list: HTMLElement, step: number) {
   stops[at < 0 ? 0 : Math.min(Math.max(at + step, 0), stops.length - 1)]?.focus()
 }
 
-type IssueListProps = { shown: Issue[]; filtering: boolean; hidden: boolean; onRead(number: number): void }
+type IssueListProps = { shown: Issue[]; filtering: boolean; onRead(number: number): void }
 
-export function IssueList({ shown: coreShown, filtering, hidden, onRead }: IssueListProps) {
+export function IssueList({ shown: coreShown, filtering, onRead }: IssueListProps) {
   const { issues: coreIssues, issuesLoading } = useAgentos('issues', 'issuesLoading')
   const drag = useIssueDrag(coreIssues)
   const issues = drag.place(coreIssues)
@@ -93,7 +93,7 @@ export function IssueList({ shown: coreShown, filtering, hidden, onRead }: Issue
   }
 
   return (
-    <div ref={list} hidden={hidden} className="min-h-0 flex-1 overflow-y-auto pb-2" onKeyDown={onKeyDown}>
+    <div ref={list} className="min-h-0 flex-1 overflow-y-auto pb-2" onKeyDown={onKeyDown}>
       {body()}
     </div>
   )
