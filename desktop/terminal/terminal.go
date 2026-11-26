@@ -3,6 +3,7 @@ package terminal
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -22,7 +23,7 @@ const (
 	flushEvery = 8 * time.Millisecond
 	flushSize  = 32 << 10
 	oscLimit   = 1 << 20 // the most base64 text of one OSC 52 sequence that reaches the clipboard
-	redrawGap  = 30 * time.Millisecond
+	tmuxWait   = 5 * time.Second
 )
 
 var (
@@ -55,7 +56,7 @@ func (t *Terms) Open(id string, cols, rows int) error {
 	t.mu.Lock()
 	if st := t.streams[id]; st != nil {
 		t.mu.Unlock()
-		return st.redraw(cols, rows)
+		return t.redraw(st, cols, rows)
 	}
 	argv := t.tmux.AttachArgv(name)
 	cmd := exec.Command(argv[0], argv[1:]...)
@@ -66,7 +67,8 @@ func (t *Terms) Open(id string, cols, rows int) error {
 		t.mu.Unlock()
 		return fmt.Errorf("attaching to %s: %w", id, err)
 	}
-	st := &stream{id: id, pty: f, cmd: cmd, emit: t.emit, clip: t.clip, size: size}
+	// StartWithSize gives the attach its tty as stdin, and tmux names the client by that tty.
+	st := &stream{id: id, client: cmd.Stdin.(*os.File).Name(), pty: f, cmd: cmd, emit: t.emit, clip: t.clip}
 	t.streams[id] = st
 	t.mu.Unlock()
 	go func() {
@@ -80,6 +82,22 @@ func (t *Terms) Open(id string, cols, rows int) error {
 			t.emit("term:exit", map[string]string{"id": id})
 		}
 	}()
+	return nil
+}
+
+// redraw makes tmux paint the whole screen again, at the size asked for, for a front end that mounted the stream anew.
+func (t *Terms) redraw(st *stream, cols, rows int) error {
+	if err := st.resize(cols, rows); err != nil {
+		return fmt.Errorf("resizing %s: %w", st.id, err)
+	}
+	if !st.hasDrawn() {
+		return nil // tmux may not know the client yet, and its first draw is the whole screen
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
+	defer cancel()
+	if err := t.tmux.Redraw(ctx, st.client); err != nil {
+		return fmt.Errorf("redrawing %s: %w", st.id, err)
+	}
 	return nil
 }
 
@@ -133,33 +151,26 @@ func (t *Terms) CloseAll() {
 
 // stream is one attach client in a PTY.
 type stream struct {
-	id   string
-	pty  *os.File
-	cmd  *exec.Cmd
-	emit func(string, any)
-	clip func(string)
+	id     string
+	client string // the tty tmux names the attach client by
+	pty    *os.File
+	cmd    *exec.Cmd
+	emit   func(string, any)
+	clip   func(string)
 
 	ptyMu   sync.Mutex // the pty is resized and closed one at a time: Setsize reads the file's descriptor
 	mu      sync.Mutex
 	pending []byte
 	timer   *time.Timer
 	done    bool
+	drawn   bool   // tmux has sent output, so it knows the client
 	osc     []byte // the unfinished tail of an OSC 52 sequence
-	size    pty.Winsize
 }
 
 func (s *stream) resize(cols, rows int) error {
-	s.mu.Lock()
-	s.size = pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}
-	size := s.size
-	s.mu.Unlock()
-	return s.setSize(size)
-}
-
-func (s *stream) setSize(size pty.Winsize) error {
 	s.ptyMu.Lock()
 	defer s.ptyMu.Unlock()
-	return pty.Setsize(s.pty, &size)
+	return pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
 
 func (s *stream) closePTY() {
@@ -168,30 +179,16 @@ func (s *stream) closePTY() {
 	_ = s.pty.Close()
 }
 
-// redraw makes tmux paint the whole screen again, by making the window one column wider for a moment.
-// The size it restores is the latest asked for, so a resize that comes in between is not undone.
-func (s *stream) redraw(cols, rows int) error {
-	s.mu.Lock()
-	s.size = pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}
-	s.mu.Unlock()
-	if err := s.setSize(pty.Winsize{Cols: uint16(cols + 1), Rows: uint16(rows)}); err != nil {
-		return fmt.Errorf("redrawing %s: %w", s.id, err)
-	}
-	time.AfterFunc(redrawGap, func() {
-		s.mu.Lock()
-		size, done := s.size, s.done
-		s.mu.Unlock()
-		if !done {
-			_ = s.setSize(size)
-		}
-	})
-	return nil
-}
-
 func (s *stream) closed() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.done
+}
+
+func (s *stream) hasDrawn() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.drawn
 }
 
 func (s *stream) close() {
@@ -227,6 +224,7 @@ func (s *stream) add(b []byte) {
 	s.copyOSC52(b)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.drawn = true
 	s.pending = append(s.pending, b...)
 	switch {
 	case len(s.pending) >= flushSize:

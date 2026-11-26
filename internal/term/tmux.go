@@ -339,6 +339,14 @@ func (t *Tmux) AttachArgv(name session.Name) []string {
 	return t.argv("attach-session", "-t", target(name))
 }
 
+// Redraw makes tmux paint the whole screen of the client on tty again.
+func (t *Tmux) Redraw(ctx context.Context, tty string) error {
+	if _, err := t.run(ctx, "refresh-client", "-t", tty); err != nil {
+		return fmt.Errorf("redrawing the client on %s: %w", tty, err)
+	}
+	return nil
+}
+
 // Env is the environment for a process that attaches to the server.
 func (t *Tmux) Env() []string { return cleanEnv() }
 

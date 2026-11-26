@@ -94,10 +94,25 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 	if err := h.TermOpen(id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "a full redraw that still shows the screen", func() bool {
-		out := h.Rec.Output(id)
-		return len(out) > n && strings.Count(out[n:], "before-reopen") >= 2
-	})
+	// Soon, so a later redraw for some other reason does not pass for this one.
+	deadline := time.Now().Add(time.Second)
+	for strings.Count(h.Rec.Output(id)[n:], "before-reopen") < 2 {
+		if time.Now().After(deadline) {
+			t.Fatalf("no full redraw that still shows the screen; got %q", h.Rec.Output(id)[n:])
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func TestReopeningBeforeTheFirstDrawWorks(t *testing.T) {
+	h, id := newShell(t)
+	if err := h.TermOpen(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.TermOpen(id, 80, 24); err != nil {
+		t.Errorf("a reopen before tmux drew failed: %v", err)
+	}
+	eventually(t, "the first draw", func() bool { return len(h.Rec.Output(id)) > 0 })
 }
 
 func TestHeavyOutputIsMerged(t *testing.T) {
