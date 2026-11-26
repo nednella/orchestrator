@@ -33,7 +33,7 @@ type listed struct {
 }
 
 // list answers the threads tool: the threads of the project the input names, of every project for all, else of the
-// caller's, in the order the sidebar shows them. A deleted thread is left out.
+// caller's, in the order the sidebar shows them. A deleted thread and a side chat are left out.
 func (c *Commands) list(_ context.Context, caller string, req ctl.Request) (string, error) {
 	var in threadsInput
 	if err := decode(req.Opts["input"], &in); err != nil {
@@ -45,7 +45,7 @@ func (c *Commands) list(_ context.Context, caller string, req ctl.Request) (stri
 	}
 	out := []listed{}
 	for _, v := range c.threads.List() {
-		if key != allProjects && v.Project != key {
+		if v.Side || key != allProjects && v.Project != key {
 			continue
 		}
 		l := listed{ID: v.ID, N: v.N, Title: v.Title, Project: v.Project, State: v.State, Access: v.Access, Parent: v.Parent, Issue: v.Issue, Branch: v.Branch, You: v.ID == caller}

@@ -27,6 +27,7 @@ type Threads interface {
 	Tell(id string, m sessions.Told) (string, error)
 	Descendants(id string) []string
 	ParentOf(id string) string
+	SideChat(id string) bool
 	DropTold(id string) int
 	HoldsTold(id string) bool
 	Reported(id string) int64
@@ -66,6 +67,14 @@ func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx
 		c.tools[name] = c.agentTool(name)
 	}
 	return c
+}
+
+// reachable errs for a side chat, which is the owner's alone, as in the thread list: to the tools it is no thread.
+func (c *Commands) reachable(id string) error {
+	if c.threads.SideChat(id) {
+		return fmt.Errorf("No thread %s", id)
+	}
+	return nil
 }
 
 // SetRetryFirst sets the first pause before a result the parent could not take goes again, a second by default; the

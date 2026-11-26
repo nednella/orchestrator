@@ -176,16 +176,16 @@ func TestTokenSurvivesAppRestart(t *testing.T) {
 	}
 }
 
-func TestForkGetsItsOwnToken(t *testing.T) {
-	t.Parallel()
-	h := apptest.New(t)
-	src := newThread(t, h, "work")
+// withReply gives the thread a conversation and a chat of one finished turn, whose reply's uuid is r1, as a fork and
+// a side chat need.
+func withReply(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
 	transcript := filepath.Join(t.TempDir(), "transcript.jsonl")
 	if err := os.WriteFile(transcript, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.Observe(t, src.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
-	c, err := h.Sessions().ChatOf(src.ID)
+	h.Observe(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
+	c, err := h.Sessions().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,15 +194,22 @@ func TestForkGetsItsOwnToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer l.Close()
 	for _, e := range []chat.Event{{Kind: chat.KindUser, ID: "u1", Text: "first"}, {Kind: chat.KindMessage, ID: "msg_1", UUID: "r1", Text: "one"}, {Kind: chat.KindTurnEnd}} {
 		if _, err := l.Append(e); err != nil {
 			t.Fatal(err)
 		}
 	}
-	l.Close()
+}
+
+func TestForkGetsItsOwnToken(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	src := newThread(t, h, "work")
+	withReply(t, h, src.ID)
 	var fork sessions.Session
 	// The Stop hook reaches the app a moment after it runs; until then the thread has no conversation to fork.
-	apptest.Eventually(t, "the fork", func() bool { fork, err = h.ForkSession(src.ID, "r1"); return err == nil })
+	apptest.Eventually(t, "the fork", func() bool { f, err := h.ForkSession(src.ID, "r1"); fork = f; return err == nil })
 
 	srcToken, forkToken := tokenOf(t, h, src.ID), tokenOf(t, h, fork.ID)
 	if srcToken == forkToken {

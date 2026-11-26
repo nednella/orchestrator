@@ -31,8 +31,8 @@ type sent struct {
 }
 
 // send answers the send tool: it gives the text to the thread the input names, framed as the caller's, so the thread
-// never takes it for the owner's. A thread may message any thread but itself whose access is not above its own: a
-// thread with less access never has one with more act for it.
+// never takes it for the owner's. A thread may message any other thread but a side chat whose access is not above its
+// own: a thread with less access never has one with more act for it.
 func (c *Commands) send(_ context.Context, caller string, req ctl.Request) (string, error) {
 	var in sendInput
 	if err := decode(req.Opts["input"], &in); err != nil {
@@ -45,6 +45,9 @@ func (c *Commands) send(_ context.Context, caller string, req ctl.Request) (stri
 		return "", errors.New("send needs a text")
 	case in.Thread == caller:
 		return "", errors.New("A thread cannot send to itself")
+	}
+	if err := c.reachable(in.Thread); err != nil {
+		return "", err
 	}
 	ch, err := c.threads.ChatOf(in.Thread)
 	settled := err == nil && !ch.Live

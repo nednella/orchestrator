@@ -213,6 +213,9 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 	case c.isAncestor(in.Thread, caller):
 		return "", fmt.Errorf("Thread %s started this thread; waiting on it would wait forever", in.Thread)
 	}
+	if err := c.reachable(in.Thread); err != nil {
+		return "", err
+	}
 	ch, err := c.threads.ChatOf(in.Thread)
 	if err != nil {
 		return "", err

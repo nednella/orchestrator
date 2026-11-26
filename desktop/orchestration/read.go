@@ -57,7 +57,7 @@ type page struct {
 }
 
 // read answers the read tool: the newest entries of a thread's chat before the seq the input gives. Any thread that is
-// not deleted may be read, whatever its access or project.
+// not deleted and is no side chat may be read, whatever its access or project.
 func (c *Commands) read(_ context.Context, _ string, req ctl.Request) (string, error) {
 	var in readInput
 	if err := decode(req.Opts["input"], &in); err != nil {
@@ -70,6 +70,9 @@ func (c *Commands) read(_ context.Context, _ string, req ctl.Request) (string, e
 		return "", fmt.Errorf("view is %s or %s, not %q", viewMessages, viewActivity, in.View)
 	case in.Limit < 0 || in.Limit > readMost:
 		return "", fmt.Errorf("limit is 1 to %d, not %d", readMost, in.Limit)
+	}
+	if err := c.reachable(in.Thread); err != nil {
+		return "", err
 	}
 	ch, err := c.threads.ChatOf(in.Thread)
 	if err != nil {
