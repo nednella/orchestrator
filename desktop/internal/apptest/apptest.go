@@ -812,6 +812,9 @@ func (h *Harness) Notes() *notes.Notes { return h.App.Notes() }
 func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 	t.Helper()
 	live := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", "="+id).Run() == nil
+	if live {
+		h.followsHost(t, id)
+	}
 	if rec, _ := bus.ReadState(h.State, id); live && event != "SessionStart" && rec.Session == "" {
 		h.Sessions().Observe(id, session.Event{Name: "SessionStart"})
 	}
@@ -855,6 +858,21 @@ func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 		ev.Asks = strings.HasSuffix(strings.TrimRight(p.LastAssistantMessage, " \t\n*_"), "?")
 	}
 	h.Sessions().Observe(id, ev)
+}
+
+// followsHost waits until the app has taken in the start of the thread's host, which its follower does once the host
+// listens. A change of state the test makes before is overtaken by that start when the host is slow to come up, as on a
+// busy machine: the start is then newer than the change. A thread that runs no host is not waited for.
+func (h *Harness) followsHost(t *testing.T, id string) {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id, "#{pane_start_command}").Output()
+	if err != nil || !strings.Contains(string(out), " host ") {
+		return
+	}
+	Eventually(t, "the app to take in the start of the host of "+id, func() bool {
+		rec, _ := bus.ReadState(h.State, id)
+		return rec.Observed > 0
+	})
 }
 
 // Session is the session with that id in the current project's list.
