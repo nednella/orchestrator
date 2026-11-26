@@ -43,7 +43,7 @@ func (c *Commands) ChildTurnEnded(id string, e chatlog.Event) {
 		return
 	}
 	w := waitOn{parent, id}
-	r := report{child: id, parent: parent, end: e.Seq, waited: c.Waits(parent, id) || c.answeredWith(w) >= e.Seq}
+	r := report{child: id, parent: parent, end: e.Seq, waited: c.Waits(parent, id) || c.givenByWait(w, e.Seq)}
 	c.reportMu.Lock()
 	defer c.reportMu.Unlock()
 	if c.reporting[id] {
@@ -92,7 +92,7 @@ func (c *Commands) give(r report) {
 	if ctx.Err() != nil {
 		return
 	}
-	if !given && c.answeredWith(w) < r.end {
+	if !given && c.claim(w, r.end, false) {
 		later := c.threads.Reported(r.child) > 0
 		text := sessions.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
 		if !c.sendResult(ctx, w, r.end, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
@@ -102,9 +102,6 @@ func (c *Commands) give(r report) {
 	if err := c.threads.SetReported(r.child, r.end); err != nil {
 		log.Printf("agentos: %v", err)
 	}
-	c.waitMu.Lock()
-	delete(c.answered, w)
-	c.waitMu.Unlock()
 	if t.open > 0 {
 		return
 	}
@@ -117,17 +114,17 @@ func (c *Commands) give(r report) {
 	}
 }
 
-// waitGets says whether the wait w answers done with the turn that ended at the seq end, as it does at once: false once
-// the wait no longer lasts without it, or ctx ends.
+// waitGets says whether the wait w took the child's result that the seq end ends: it waits while the wait lasts, and
+// says no once it no longer does without it, or ctx ends.
 func (c *Commands) waitGets(ctx context.Context, w waitOn, end int64) bool {
 	tick := time.NewTicker(reportTick)
 	defer tick.Stop()
 	for {
-		if c.answeredWith(w) >= end {
+		if c.givenByWait(w, end) {
 			return true
 		}
 		if !c.Waits(w.waiter, w.thread) {
-			return c.answeredWith(w) >= end
+			return c.givenByWait(w, end)
 		}
 		select {
 		case <-ctx.Done():
@@ -164,10 +161,11 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, end int64, m sessio
 			return false
 		}
 		if errors.Is(err, sessions.ErrToldStopped) {
+			c.unclaim(w, end)
 			if !c.untilRuns(ctx, ch) {
 				return false
 			}
-			if c.answeredWith(w) >= end {
+			if !c.claim(w, end, false) {
 				return true
 			}
 			continue

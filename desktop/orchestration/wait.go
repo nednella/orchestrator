@@ -40,8 +40,8 @@ type waitInput struct {
 }
 
 // waited is what one slice of a wait answers. Text is what the agent is given: the thread's last reply once its turn
-// ended, else a sentence that says how it stands. end is the seq of the thread's last turn_end when it is done, which
-// the agent is not given.
+// ended, else a sentence that says how it stands. end is the seq that ends the turn whose result it gives, as
+// turn.result says, which the agent is not given.
 type waited struct {
 	Done bool   `json:"done"`
 	Text string `json:"text"`
@@ -116,23 +116,66 @@ func (c *Commands) hold(w waitOn, until time.Time, newest int64) {
 	c.waiting[w] = h
 }
 
-// release ends the wait once a slice answered it done with the thread's turn that ended at the seq end. A parent's wait
-// keeps that seq, so the child's result is not also sent to it.
-func (c *Commands) release(w waitOn, end int64) {
+// givenBy is a child's result that went to its parent, or is going: the seq that ends the turn it is of, and whether a
+// wait gave it, not a message.
+type givenBy struct {
+	end    int64
+	byWait bool
+}
+
+// claim takes the child's result that the seq end ends for the way byWait names, and says whether it did: false when
+// it, or a later one, was taken already. It takes waitMu.
+func (c *Commands) claim(w waitOn, end int64, byWait bool) bool {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	return c.claimLocked(w, end, byWait)
+}
+
+func (c *Commands) claimLocked(w waitOn, end int64, byWait bool) bool {
+	if c.given[w].end >= end {
+		return false
+	}
+	c.given[w] = givenBy{end: end, byWait: byWait}
+	return true
+}
+
+// unclaim gives back the claim of a message that was dropped before it went, so a wait may take the result.
+func (c *Commands) unclaim(w waitOn, end int64) {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	if c.given[w] == (givenBy{end: end}) {
+		delete(c.given, w)
+	}
+}
+
+// givenByWait says whether a wait of the parent's on the child took the result that the seq end ends, or a later one.
+func (c *Commands) givenByWait(w waitOn, end int64) bool {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	g := c.given[w]
+	return g.byWait && g.end >= end
+}
+
+// release ends the wait once a slice answered it done with got. A parent's wait on its child takes the child's result
+// for got's turn, unless a message to the parent took it first: then the answer says so, and gives the parent no
+// second copy of it.
+func (c *Commands) release(w waitOn, got waited) waited {
 	parent := c.threads.ParentOf(w.thread) == w.waiter
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
-	if parent && end > c.answered[w] {
-		c.answered[w] = end
-	}
 	delete(c.waiting, w)
-}
-
-// answeredWith is the seq of the child's latest turn_end that its parent's wait on it answered with, 0 for none.
-func (c *Commands) answeredWith(w waitOn) int64 {
-	c.waitMu.Lock()
-	defer c.waitMu.Unlock()
-	return c.answered[w]
+	if !parent || got.end == 0 {
+		return got
+	}
+	g := c.given[w]
+	switch {
+	case g.end >= got.end && g.byWait:
+	case g.end >= got.end, c.threads.Reported(w.thread) >= got.end:
+		return waited{Done: true, Text: fmt.Sprintf("Thread %s's result of this turn is sent to you as a message instead.", w.thread), end: got.end}
+	default:
+		c.claimLocked(w, got.end, true)
+	}
+	return got
 }
 
 // wait answers one slice of the wait tool: it returns once the thread's turn has ended, it settles or is deleted, or
@@ -186,7 +229,7 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 	go c.cancelAtTurnEnd(ctx, cancel, caller, newest)
 	got := c.waitFor(ctx, ch)
 	if got.Done {
-		c.release(w, got.end)
+		got = c.release(w, got)
 	}
 	data, err := json.Marshal(got)
 	if err != nil {
@@ -264,6 +307,7 @@ func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 type turn struct {
 	newest int64 // the seq of the log's last event
 	end    int64 // the seq of the log's last turn_end
+	user   int64 // the seq of the log's last user message
 	// ended says the last turn_end comes after the last user message, no queued message waits to be taken in, no
 	// subagent works in the background and no turn Claude runs to tell of a task's end is due: Claude runs one after
 	// a task of its own ends.
@@ -322,7 +366,7 @@ func turnIn(events []chatlog.Event) turn {
 			t.ran, t.settled, reporting = true, e.Stop == chatlog.StopSettle, false
 		}
 	}
-	t.asks, t.open, t.end = len(approvals) > 0, len(tasks.Open()), end.Seq
+	t.asks, t.open, t.end, t.user = len(approvals) > 0, len(tasks.Open()), end.Seq, user
 	t.ended = end.Seq > user && len(queued) == 0 && tasks.Working() == 0 && !reporting
 	switch {
 	case interrupt.Seq > user && interrupt.Seq < end.Seq:
@@ -340,9 +384,17 @@ func turnIn(events []chatlog.Event) turn {
 	return t
 }
 
+// result is the seq that ends the last turn as its result: its turn_end, 0 while the last turn has none.
+func (t turn) result() int64 {
+	if t.end > t.user {
+		return t.end
+	}
+	return 0
+}
+
 // answer is the slice's answer for the thread id with its turn t and the outcome, "" while it runs.
 func answer(id string, t turn, outcome string) waited {
-	w := waited{Done: outcome != "", end: t.end}
+	w := waited{Done: outcome != "", end: t.result()}
 	var head string
 	switch outcome {
 	case "":

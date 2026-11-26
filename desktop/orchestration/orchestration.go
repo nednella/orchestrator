@@ -45,8 +45,9 @@ type Commands struct {
 
 	waitMu  sync.Mutex
 	waiting map[waitOn]held // each wait, and how long it lasts
-	// answered is, for a parent's wait on its child, the seq of the child's latest turn_end a slice answered done with.
-	answered map[waitOn]int64
+	// given is, for a parent and its child, the latest result of the child's that went to the parent or is going, and
+	// how: by a wait or as a message. Whichever takes a result first gives it, so the parent never gets it twice.
+	given map[waitOn]givenBy
 
 	ctx        func() context.Context // the app's, for the reports to stop with it
 	reportMu   sync.Mutex
@@ -57,7 +58,7 @@ type Commands struct {
 // NewCommands answers the agentos tools as the threads s, and gives each child's result to its parent until the context
 // ctx gives ends.
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
-	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, answered: map[waitOn]int64{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
+	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	return c
 }

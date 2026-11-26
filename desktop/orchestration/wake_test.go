@@ -428,3 +428,45 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 	apptest.Eventually(t, "the result recorded as given", func() bool { return h.Sessions().Reported(c) > 0 })
 	noMoreResults(t, h, parent, c, 1)
 }
+
+func TestWaitAfterTheResultWentSaysSo(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release").ID
+	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
+	quiet(t, h, c)
+	if n := len(resultLines(t, h, parent, c)); n != 1 {
+		t.Fatalf("the parent read %d results, want 1", n)
+	}
+	a := waitOn(t, h, parent, c, 5*time.Second)
+	if want := "Thread " + c + "'s result of this turn is sent to you as a message instead."; !a.Done || a.Text != want {
+		t.Errorf("wait answered %+v, want done with %q", a, want)
+	}
+	other := newThread(t, h, "Watch the release").ID
+	if a := waitOn(t, h, other, c, 5*time.Second); !a.Done || !strings.Contains(a.Text, "done") {
+		t.Errorf("another thread's wait answered %+v, want the child's last reply", a)
+	}
+}
+
+func TestWaitWhileTheResultIsHeldSaysSo(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release").ID
+	if _, err := h.ChatSend(parent, "subagent asks"); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the subagent's approval after the turn's end", func() bool {
+		_, asks := logged(t, h, parent, chat.KindApproval, "sub-1")
+		return asks && turnEnded(t, h, parent)
+	})
+	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
+	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
+	// The message took the result before the wait came, so the wait does not give it too.
+	a := waitOn(t, h, parent, c, 5*time.Second)
+	if want := "Thread " + c + "'s result of this turn is sent to you as a message instead."; !a.Done || a.Text != want {
+		t.Errorf("wait answered %+v, want done with %q", a, want)
+	}
+	if err := h.ChatAnswer(parent, "sub-1", true, ""); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the result once the approval is answered", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
+	noMoreResults(t, h, parent, c, 1)
+}
