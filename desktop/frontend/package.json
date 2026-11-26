@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pierre/diffs": "1.7.2",
+    "@pierre/trees": "1.0.0",
     "@tanstack/react-virtual": "3.14.26",
     "@tiptap/markdown": "3.35.0",
     "@tiptap/pm": "3.35.0",
