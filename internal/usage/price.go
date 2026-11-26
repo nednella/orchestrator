@@ -6,7 +6,7 @@ import (
 )
 
 // PricesAsOf is the day the prices below were taken from Anthropic's API list prices.
-const PricesAsOf = "2026-10-20"
+const PricesAsOf = "2026-11-26"
 
 // price is a model's list price in US dollars per million tokens. A cache write costs 1.25 times the
 // input price when it is kept 5 minutes and twice it when kept an hour.
@@ -19,6 +19,8 @@ var prices = []struct {
 	prefix string
 	price
 }{
+	{"claude-fable-5-2", price{8, 40, 0.2}},
+	{"claude-mythos-5-2", price{8, 40, 0.2}},
 	{"claude-fable-5-1", price{10, 50, 0.25}},
 	{"claude-mythos-5-1", price{10, 50, 0.25}},
 	{"claude-fable-5", price{10, 50, 1}},
@@ -30,6 +32,7 @@ var prices = []struct {
 	{"claude-opus-4-6", price{5, 25, 0.5}},
 	{"claude-opus-4-5", price{5, 25, 0.5}},
 	{"claude-opus-4", price{15, 75, 1.5}},
+	{"claude-sonnet-5-5", price{2, 10, 0.1}},
 	{"claude-sonnet-5", price{2, 10, 0.2}},
 	{"claude-sonnet-4", price{3, 15, 0.3}},
 	{Haiku, price{0.1, 0.5, 0.01}},
