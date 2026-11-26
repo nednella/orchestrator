@@ -226,11 +226,18 @@ func TestSecondReaderReplacesTheFirst(t *testing.T) {
 	// A second reader gets the screen painted again, and what the shell prints before the paint reaches it is part of
 	// that paint, not a stream of its own that the check below reads: the command waits for the paint.
 	eventually(t, "the repaint", func() bool { return len(second.Bytes()) > 0 })
-	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("the first reader got %q\nthe second reader got %q", first.String(), second.String())
+		}
+	})
+	// The output is looked for anywhere in the stream: while tmux still paints the screen it may move the cursor to the
+	// line instead of starting it with a line break. The typed command does not hold "42xy", so only the output matches.
+	if err := h.TermWrite(id, "echo $((6*7))xy\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the echo on the second reader", func() bool { return strings.Contains(second.String(), "\r\n42\r\n") })
-	if strings.Contains(first.String(), "42") {
+	eventually(t, "the echo on the second reader", func() bool { return strings.Contains(second.String(), "42xy") })
+	if strings.Contains(first.String(), "42xy") {
 		t.Error("the replaced reader still got output")
 	}
 }
