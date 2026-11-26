@@ -10,7 +10,7 @@ The sessions panel on the right (⌘D) and the queue on the left. Click a group 
 
 ## How to drive it
 
-No back end is needed: `npx vite` in `desktop/frontend` serves the front end on `mock.ts`, which has three projects. Close a group, switch project from the top bar, and read `aria-expanded` on the `.section-head` buttons inside `[data-panel="sessions"]` and `[data-panel="sidebar"]`. Only storefront has queue sections at the start; *Set up* in agentos gives it an Inbox, the same name as storefront's.
+No back end is needed: `npx vite` in `desktop/frontend` serves the front end on `mock.ts`, which has three projects. Close a group, switch project from the top bar, and read `aria-expanded` on the `.section-head` buttons inside `[data-panel="sessions"]` and `[data-panel="sidebar"]`. Only storefront has queue sections at the start; *Set up* in orchestrator gives it an Inbox, the same name as storefront's.
 
 ## What goes wrong
 

@@ -3,7 +3,7 @@ description: Work issue <n> end to end: branch in a worktree, build, verify, dra
 argument-hint: <issue number>
 ---
 
-Work issue #$ARGUMENTS on `nednella/agentos`, start to finish, without waiting for the owner unless a decision is genuinely theirs. Read `AGENTS.md` first; its hard rules apply.
+Work issue #$ARGUMENTS on `nednella/orchestrator`, start to finish, without waiting for the owner unless a decision is genuinely theirs. Read `AGENTS.md` first; its hard rules apply.
 
 ## 1. Understand
 
@@ -14,7 +14,7 @@ Work issue #$ARGUMENTS on `nednella/agentos`, start to finish, without waiting f
 
 ## 2. Branch
 
-If you run in a worktree agentos made (your system prompt names its folder and branch), work there. Otherwise make it yourself:
+If you run in a worktree orchestrator made (your system prompt names its folder and branch), work there. Otherwise make it yourself:
 
 ```
 git fetch origin
@@ -33,7 +33,7 @@ Branch from `origin/main`, never from local `main`, so the PR holds only your ch
 ## 4. Verify
 
 - `go vet ./...` and `go test -race ./...` for Go; `cd desktop/frontend && npm run build` for the front end.
-- For anything visible, run the real app in browser mode and look at it, as `docs/testing.md` describes. Always set `AGENTOS_TMUX_SOCKET`, `AGENTOS_STATE_DIR`, `AGENTOS_DEV_DATA_DIR` and `AGENTOS_CONFIG` to throwaway values: the defaults hold the owner's live sessions.
+- For anything visible, run the real app in browser mode and look at it, as `docs/testing.md` describes. Always set `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` and `ORCHESTRATOR_CONFIG` to throwaway values: the defaults hold the owner's live sessions.
 - Never claim something works that you did not run.
 
 ## 5. Deliver
