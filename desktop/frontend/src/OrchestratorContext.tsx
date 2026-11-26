@@ -776,7 +776,11 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const selectSession = useCallback(
     (id: string) => {
       const target = sessionsRef.current.find((s) => s.id === id)
-      const owner = target && target.project !== projectRef.current?.key ? projectsRef.current.find((p) => p.key === target.project) : undefined
+      if (!target) {
+        pushToast({ tone: 'info', text: 'That thread is gone' })
+        return
+      }
+      const owner = target.project !== projectRef.current?.key ? projectsRef.current.find((p) => p.key === target.project) : undefined
       if (!owner) {
         selectId(id)
         focus('thread')
@@ -790,7 +794,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         focus('thread')
       })
     },
-    [selectId, focus, report, enterFrom, remember],
+    [selectId, focus, report, enterFrom, remember, pushToast],
   )
 
   // goThrough steps through history to the first view whose thread and project are still there, entering its project
