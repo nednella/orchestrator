@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { useAgentosSelector } from '../AgentosContext'
-import { closeAgent, keepAgentViewOf, useAgentView, useViewedAgent } from '../chatAgents'
 import { CARD_ROOM } from '../contextCard'
 import { useCardPlacement, useContextCard } from '../contextCardOpen'
+import { viewedAgent } from '../navHistory'
 import { useFocusRequest } from '../useFocusRequest'
 import { ChatView } from './ChatView'
 import { SubagentView } from './SubagentView'
@@ -16,11 +16,7 @@ export function Viewport() {
   const card = useContextCard()
   useCardPlacement(panel, selected !== undefined)
   const id = selected?.id ?? ''
-  const agent = useViewedAgent(id)
-  const agentView = useAgentView()
-  // A thread opens on its chat: a subagent view of a thread not on screen closes, and leaving a thread closes its own.
-  useEffect(() => keepAgentViewOf(id), [id, agentView])
-  useEffect(() => () => closeAgent(id), [id])
+  const agent = useAgentosSelector((a) => viewedAgent(a.viewHistory, id))
 
   useFocusRequest('thread', panel, !selected)
   // The thread's chat takes the focus in its scroll area, or in the panel while the chat loads.

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { closeAgent, closeGoneAgent, useShowAgents } from '../chatAgents'
+import { useShowAgents } from '../chatAgents'
 import { COLUMN_KEY, storedColumn } from '../chatColumn'
 import { sameSteps } from '../chatTimeline'
 import type { AgentItem, AgentState, WorkStep } from '../chatTimeline'
@@ -21,17 +21,17 @@ type SubagentViewProps = { parent: Session; agent: string }
 // SubagentView shows a subagent Claude started in the parent's chat, read only: what it was asked, what it did and
 // what it reported. It follows the parent's chat, which holds every event of the subagent.
 export function SubagentView({ parent, agent }: SubagentViewProps) {
-  const { project } = useAgentos('project')
+  const { project, select, closeGoneAgent } = useAgentos('project', 'select', 'closeGoneAgent')
   const { timeline, loading } = useChat(parent.id, parent.state)
   useShowAgents(parent.id, timeline.items)
   const [column] = useState(() => storedColumn(readStored(COLUMN_KEY, null)))
   const found = timeline.items.find((item): item is AgentItem => item.kind === 'agent' && item.id === agent)
   const holds = found !== undefined
-  useEffect(() => closeGoneAgent(parent.id, !loading, holds), [parent.id, loading, holds])
+  useEffect(() => closeGoneAgent(parent.id, !loading, holds), [closeGoneAgent, parent.id, loading, holds])
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const onScroll = useFollowEnd(scroller, content)
-  const back = () => closeAgent(parent.id)
+  const back = () => select(parent.id)
 
   return (
     <div data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties}>

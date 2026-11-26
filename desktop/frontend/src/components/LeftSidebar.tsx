@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useLayout } from '../LayoutContext'
+import { HistoryButtons } from './HistoryButtons'
 import { ProjectRail } from './ProjectRail'
 import { SidebarBottomBar } from './SidebarBottomBar'
 import { ThreadSidebar } from './ThreadSidebar'
@@ -16,7 +17,9 @@ export function LeftSidebar() {
         <div className="flex flex-none items-center border-b border-line text-ink" style={{ ...drag, height: 'var(--topbar-h)' }}>
           <span className="flex-1" style={{ minWidth: 'var(--title-inset)' }} />
           <span className="min-w-0 truncate text-title font-semibold tracking-wide">agentos</span>
-          <span className="flex-1" />
+          <span className="flex flex-1 justify-end pr-1.5">
+            <HistoryButtons />
+          </span>
         </div>
       )}
       <div className="flex min-h-0 flex-1">

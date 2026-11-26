@@ -55,6 +55,20 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     run: () => layout.showPanelView('issues', { expanded: true }),
   },
   {
+    id: 'history-back',
+    label: 'Back',
+    group: 'Navigate',
+    shortcut: { key: '[', code: 'BracketLeft', alt: true, label: '[' },
+    run: () => a.goBack(),
+  },
+  {
+    id: 'history-forward',
+    label: 'Forward',
+    group: 'Navigate',
+    shortcut: { key: ']', code: 'BracketRight', alt: true, label: ']' },
+    run: () => a.goForward(),
+  },
+  {
     id: 'previous-session',
     label: 'Previous session',
     group: 'Navigate',

@@ -4,6 +4,8 @@ import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
 import { shellsOf } from './shells'
+import { back, current, forward, goneAgent, NO_HISTORY, push, threadOf } from './navHistory'
+import type { History, View } from './navHistory'
 import { forgetPanel } from './panelStore'
 import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
@@ -39,6 +41,9 @@ type AgentosState = {
   // Each thread's top-level thread and what each top-level thread needs the owner for, built once per sessions change.
   threadTree: ThreadTree
   selectedId: string | null
+  // The views the owner went through, for Back and Forward; the one shown now may be a subagent's view of the selected
+  // thread.
+  viewHistory: History
   issues: Issue[]
   issuesLoading: boolean
   issuesDisabled: boolean
@@ -76,6 +81,13 @@ type AgentosActions = {
   selectShell(id: string): void
   select(id: string): void
   showHome(projectKey: string): void
+  // openAgent shows the view of a subagent Claude started in the thread's chat, in place of that chat.
+  openAgent(thread: string, agent: string): void
+  // closeGoneAgent takes the thread back to its chat once its loaded chat no longer holds the subagent shown.
+  closeGoneAgent(thread: string, loaded: boolean, holds: boolean): void
+  // goBack and goForward move through the views the owner went through, past the threads and projects now gone.
+  goBack(): void
+  goForward(): void
   detach(): void
   stepSession(delta: number): void
   // place '' leaves it to new_thread_place.
@@ -233,6 +245,9 @@ function forgetThread(id: string) {
   forgetPanel(id)
 }
 
+// viewOf is the view that shows the thread, or with none the project's home.
+const viewOf = (id: string | null, project: string): View => (id ? { kind: 'thread', id } : { kind: 'home', project })
+
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // Keeps each item of prev that next holds unchanged, and prev itself when nothing changed, so the rows
@@ -253,6 +268,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [viewHistory, setViewHistory] = useState(NO_HISTORY)
   const [rawIssues, setRawIssues] = useState<Issue[]>([])
   const [issuesLoading, setIssuesLoading] = useState(true)
   const [issuesDisabled, setIssuesDisabled] = useState(false)
@@ -287,6 +303,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const treeRef = useRef(threadTree)
   const projectsRef = useRef(projects)
   const selectedRef = useRef(selectedId)
+  const historyRef = useRef(viewHistory)
+  const quiet = useRef(false)
   const projectRef = useRef(project)
   const lastSelected = useRef(new Map<string, string>())
   const toastKey = useRef(0)
@@ -306,12 +324,39 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   notesRef.current = notes
   browserStatesRef.current = browserStates
 
-  const selectId = useCallback((id: string | null) => {
-    selectedRef.current = id
-    setSelectedId(id)
-    if (!id) return
-    detached.current = false
+  const moveHistory = useCallback((next: History) => {
+    if (next === historyRef.current) return
+    historyRef.current = next
+    setViewHistory(next)
   }, [])
+
+  const remember = useCallback(
+    (view: View) => {
+      if (!quiet.current) moveHistory(push(historyRef.current, view))
+    },
+    [moveHistory],
+  )
+
+  // quietly makes the selections in run without adding them to history.
+  const quietly = useCallback((run: () => void) => {
+    quiet.current = true
+    try {
+      run()
+    } finally {
+      quiet.current = false
+    }
+  }, [])
+
+  const selectId = useCallback(
+    (id: string | null) => {
+      selectedRef.current = id
+      setSelectedId(id)
+      remember(viewOf(id, projectRef.current?.key ?? ''))
+      if (!id) return
+      detached.current = false
+    },
+    [remember],
+  )
 
   const detach = useCallback(() => {
     const id = selectedRef.current
@@ -403,13 +448,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     }
   }, [])
 
+  // record adds the view the project opens on to history; a step through history shows its own view instead.
   const enterProject = useCallback(
-    (snap: Snapshot, epoch: number, homeUnlessRemembered = false) => {
+    (snap: Snapshot, epoch: number, homeUnlessRemembered = false, record = true) => {
       projectEpoch.current = epoch
       if (projectRef.current && selectedRef.current) lastSelected.current.set(projectRef.current.name, selectedRef.current)
       projectRef.current = snap.project
       detached.current = false
-      selectId(null)
+      quietly(() => selectId(null))
       setProject(snap.project)
       setProjects(snap.projects)
       setNotes(snap.notes)
@@ -433,22 +479,19 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       })
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
-      selectAmong(
-        snap.sessions.filter((s) => s.project === snap.project.key),
-        snap.sessions,
-        homeUnlessRemembered,
-      )
+      quietly(() => selectAmong(snap.sessions.filter((s) => s.project === snap.project.key), snap.sessions, homeUnlessRemembered))
+      if (record) remember(viewOf(selectedRef.current, snap.project.key))
       report(() => loadIssues(false))
     },
-    [selectAmong, loadIssues, report, selectId],
+    [selectAmong, loadIssues, report, selectId, remember, quietly],
   )
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
   const enterFrom = useCallback(
-    async (request: Promise<Snapshot>, homeUnlessRemembered = false) => {
+    async (request: Promise<Snapshot>, homeUnlessRemembered = false, record = true) => {
       const epoch = ++projectEpoch.current
       const snap = await request
-      if (epoch === projectEpoch.current) enterProject(snap, epoch, homeUnlessRemembered)
+      if (epoch === projectEpoch.current) enterProject(snap, epoch, homeUnlessRemembered, record)
       return snap
     },
     [enterProject],
@@ -690,13 +733,55 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         return
       }
       report(async () => {
-        await enterFrom(api.switchProject(owner.name))
-        if (projectRef.current?.key !== owner.key || !sessionsRef.current.some((s) => s.id === id)) return
+        await enterFrom(api.switchProject(owner.name), false, false)
+        if (projectRef.current?.key !== owner.key) return
+        if (!sessionsRef.current.some((s) => s.id === id)) return remember(viewOf(selectedRef.current, owner.key))
         selectId(id)
         focus('thread')
       })
     },
-    [selectId, focus, report, enterFrom],
+    [selectId, focus, report, enterFrom, remember],
+  )
+
+  // showView shows a view Back or Forward reached, entering its project first, without adding to history.
+  const showView = useCallback(
+    (view: View, owner: Project) => {
+      const reached = historyRef.current
+      const show = () =>
+        quietly(() => {
+          if (view.kind === 'home') {
+            detached.current = true
+            selectId(null)
+            return
+          }
+          selectId(threadOf(view))
+          focus('thread')
+        })
+      if (owner.key === projectRef.current?.key) return show()
+      report(async () => {
+        await enterFrom(api.switchProject(owner.name), false, false)
+        if (historyRef.current === reached && projectRef.current?.key === owner.key) show()
+      })
+    },
+    [quietly, selectId, focus, report, enterFrom],
+  )
+
+  // goThrough steps through history to the first view whose thread or project is still there.
+  const goThrough = useCallback(
+    (step: (h: History) => History) => {
+      let h = historyRef.current
+      for (let next = step(h); next !== h; next = step(next)) {
+        h = next
+        const view = current(h)!
+        const key = view.kind === 'home' ? view.project : sessionsRef.current.find((s) => s.id === threadOf(view))?.project
+        const owner = projectsRef.current.find((p) => p.key === key)
+        if (!owner) continue
+        moveHistory(h)
+        showView(view, owner)
+        return
+      }
+    },
+    [moveHistory, showView],
   )
 
   // An answer the host refused because its approval no longer waits says so, and drops the approval from pending in
@@ -734,10 +819,19 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         }
         if (owner.key === projectRef.current?.key) return show()
         report(async () => {
-          await enterFrom(api.switchProject(owner.name))
+          await enterFrom(api.switchProject(owner.name), false, false)
           if (projectRef.current?.key === owner.key) show()
         })
       },
+      openAgent(thread, agent) {
+        if (selectedRef.current !== thread) return
+        remember({ kind: 'agent', thread, agent })
+      },
+      closeGoneAgent(thread, loaded, holds) {
+        moveHistory(goneAgent(historyRef.current, thread, loaded, holds))
+      },
+      goBack: () => goThrough(back),
+      goForward: () => goThrough(forward),
       detach,
       stepSession(delta) {
         const list = inSidebarOrder()
@@ -987,7 +1081,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
   const value = useMemo<Agentos>(
@@ -998,6 +1092,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       projectSessions,
       threadTree,
       selectedId,
+      viewHistory,
       issues,
       issuesLoading,
       issuesDisabled,
@@ -1027,7 +1122,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

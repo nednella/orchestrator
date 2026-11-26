@@ -24,19 +24,3 @@ export function subagentStatus(a: AgentItem, now: number): string {
       return 'Stopped'
   }
 }
-
-// AgentView is the subagent whose view shows in place of its thread's chat.
-export type AgentView = { thread: string; agent: string }
-
-// viewedIn is the subagent of the thread whose view is open, null while the thread shows its chat.
-export const viewedIn = (view: AgentView | null, thread: string): string | null => (view?.thread === thread ? view.agent : null)
-
-// closedIn is the view once the thread goes back to its chat: another thread's view is left as it is.
-export const closedIn = (view: AgentView | null, thread: string): AgentView | null => (view?.thread === thread ? null : view)
-
-// keptFor is the view while the thread is on screen: a view of any other thread closes, so no thread opens on a
-// subagent the owner did not open while it showed.
-export const keptFor = (view: AgentView | null, selected: string): AgentView | null => (view?.thread === selected ? view : null)
-
-// heldBy is the view once the thread's chat has loaded: it closes when the chat does not hold the view's subagent.
-export const heldBy = (view: AgentView | null, thread: string, loaded: boolean, holds: boolean): AgentView | null => (loaded && !holds && view?.thread === thread ? null : view)

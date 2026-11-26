@@ -3,7 +3,6 @@ import type { MouseEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { splitBranch } from '../branchLabel'
-import { openAgent } from '../chatAgents'
 import { editorLabel, folderName } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
@@ -30,7 +29,7 @@ type ThreadContextCardProps = { id: string; className: string }
 // ThreadContextCard is what the thread works with, at a glance: where it runs, its branch, PR and issue, its servers
 // and the threads and subagents around it.
 export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
-  const a = useAgentos('select', 'report', 'openInEditor')
+  const a = useAgentos('select', 'report', 'openInEditor', 'openAgent')
   const { showPanelView, focusPanel } = useLayout()
   const { session, sections, refreshServers } = useCardFacts(id)
   const [copied, copyBranch] = useCopied(session?.branch ?? '')
@@ -106,7 +105,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
       case 'agent': {
         const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE_LABEL[r.agent.state]}</span>
         const open = () => {
-          openAgent(session.id, r.agent.id)
+          a.openAgent(session.id, r.agent.id)
           focusPanel('centre')
         }
         return <ContextCardRow icon={<ClaudeMark size={16} />} label={r.agent.description} end={end} onClick={open} />

@@ -1,6 +1,6 @@
 import { Bot, ChevronDown, ChevronRight } from 'lucide-react'
 import { memo, useState } from 'react'
-import { openAgent } from '../chatAgents'
+import { useAgentos } from '../AgentosContext'
 import { isOpened, setOpened } from '../chatOpen'
 import { sameSteps } from '../chatTimeline'
 import type { AgentState, WorkStep } from '../chatTimeline'
@@ -23,6 +23,7 @@ const unchanged = (a: ChatAgentRowProps, b: ChatAgentRowProps) =>
 // tools it ran. The line opens the subagent's own view; its chevron shows what the subagent did, under the line, and
 // its report.
 export const ChatAgentRow = memo(function ChatAgentRow({ thread, id, description, type, state, startedAt, endedAt, tools, steps, result, folder }: ChatAgentRowProps) {
+  const { openAgent } = useAgentos('openAgent')
   const [open, setOpen] = useState(() => isOpened(thread, id))
   const running = state === 'running'
   const Chevron = open ? ChevronDown : ChevronRight
