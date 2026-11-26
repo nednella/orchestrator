@@ -521,6 +521,10 @@ export function createMock(params: URLSearchParams) {
       cleanupReason: 'the worktree of experiment/websocket-retry-banner-with-backoff has uncommitted changes',
     })
     seed('#8 drop old flag', 8, 'settled', [['working', 300], ['settled', 240]], data[2])
+    // A thread asleep with the two children it delegated to, asleep too: one in a worktree of its own, one in its folder.
+    const ratio = byIssue(430)
+    Object.assign(seed('Measure the thumbnail sizes', 0, 'settled', [['working', 55], ['settled', 40]]), { parent: ratio.id, branch: 'measure-the-thumbnail-sizes', worktree: '~/code/acme/storefront/trees/measure-the-thumbnail-sizes' })
+    Object.assign(seed('Check the image CDN headers', 0, 'settled', [['working', 50], ['settled', 42]], data[0], 'read'), { parent: ratio.id, branch: '', worktree: '' })
     seed('#12 session memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], 'read')
@@ -833,7 +837,8 @@ export function createMock(params: URLSearchParams) {
 
   const deletePlan = (s: Session): DeletePlan => {
     const taken = takenWorktrees(s)
-    return { worktrees: taken.length, required: taken.some((x) => x !== s) }
+    const children = descendants(s.id).filter((x) => x.state === 'settled').map((x) => x.title)
+    return { worktrees: taken.length, required: taken.some((x) => x !== s), children }
   }
 
   const merging = sessions.find((s) => s.cleanup === 'pending')

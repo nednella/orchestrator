@@ -1047,15 +1047,22 @@ func (s *Sessions) isLive(id string) bool {
 
 // DeletePlan is what a Delete of a thread would take with it, for its confirm.
 type DeletePlan struct {
-	Worktrees int  `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that no other thread and no shell works in
-	Required  bool `json:"required"`  // a descendant has one, which cannot stay once its thread goes, so the Delete takes them or is refused
+	Worktrees int      `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that no other thread and no shell works in
+	Required  bool     `json:"required"`  // a descendant has one, which cannot stay once its thread goes, so the Delete takes them or is refused
+	Children  []string `json:"children"`  // the titles of the asleep descendants that go with the thread, nearest first
 }
 
 // DeletePlan is what a Delete of the thread id would take with it.
 func (s *Sessions) DeletePlan(id string) DeletePlan {
 	ctx := s.context()
-	var p DeletePlan
-	for _, d := range append(s.Descendants(id), id) {
+	p := DeletePlan{Children: []string{}}
+	descendants := s.Descendants(id)
+	for _, d := range descendants {
+		if !s.isLive(d) {
+			p.Children = append(p.Children, s.titleOf(d))
+		}
+	}
+	for _, d := range append(descendants, id) {
 		if path, shared := s.ownWorktree(ctx, d); path != "" && shared == "" {
 			p.Worktrees++
 			p.Required = p.Required || d != id

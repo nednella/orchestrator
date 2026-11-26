@@ -143,8 +143,8 @@ func TestDeleteTakesAsleepChildrenWithIt(t *testing.T) {
 		parent := issueThread(h, t, 7)
 		child := childOf(t, h, parent, "Helper", sessions.WhereFolder)
 		putToSleep(t, h, child.ID)
-		if got, want := h.DeletePlan(parent.ID), (sessions.DeletePlan{Worktrees: 1}); got != want {
-			t.Errorf("DeletePlan = %+v, want %+v", got, want)
+		if got := h.DeletePlan(parent.ID); got.Worktrees != 1 || got.Required {
+			t.Errorf("DeletePlan = %+v, want one worktree, not required", got)
 		}
 		if err := h.DeleteThread(parent.ID, false); err != nil {
 			t.Fatal(err)
@@ -579,11 +579,11 @@ func TestDeleteOfAFamilyTakesItsChildrensWorktrees(t *testing.T) {
 		cleanupOf(t, h, c)
 		children = append(children, c)
 	}
-	if got, want := h.DeletePlan(parent.ID), (sessions.DeletePlan{Worktrees: 2, Required: true}); got != want {
-		t.Errorf("DeletePlan of the parent = %+v, want %+v", got, want)
+	if got := h.DeletePlan(parent.ID); got.Worktrees != 2 || !got.Required {
+		t.Errorf("DeletePlan of the parent = %+v, want two worktrees, required", got)
 	}
-	if got, want := h.DeletePlan(children[0].ID), (sessions.DeletePlan{Worktrees: 1}); got != want {
-		t.Errorf("DeletePlan of a child = %+v, want %+v", got, want)
+	if got := h.DeletePlan(children[0].ID); got.Worktrees != 1 || got.Required {
+		t.Errorf("DeletePlan of a child = %+v, want one worktree, not required", got)
 	}
 
 	err = h.DeleteThread(parent.ID, false)
@@ -606,5 +606,22 @@ func TestDeleteOfAFamilyTakesItsChildrensWorktrees(t *testing.T) {
 	}
 	if !exists(filepath.Join(h.Dir, "README")) {
 		t.Error("the project folder lost its files")
+	}
+}
+
+func TestDeletePlanNamesTheAsleepDescendants(t *testing.T) {
+	h := apptest.New(t)
+	parent := talked(t, h)
+	if got := h.DeletePlan(parent.ID).Children; got == nil || len(got) != 0 {
+		t.Errorf("Children of a thread with none = %#v, want []", got)
+	}
+	helper := childOf(t, h, parent, "Helper", sessions.WhereFolder)
+	checker := childOf(t, h, helper, "Checker", sessions.WhereFolder)
+	childOf(t, h, parent, "Runner", sessions.WhereFolder)
+	putToSleep(t, h, checker.ID)
+	putToSleep(t, h, helper.ID)
+
+	if got, want := h.DeletePlan(parent.ID).Children, []string{"Helper", "Checker"}; !slices.Equal(got, want) {
+		t.Errorf("Children = %q, want the asleep ones, nearest first: %q", got, want)
 	}
 }
