@@ -6,3 +6,11 @@ export function pullRows(pulls: RepoPull[], thread: Session | null): { mine: Rep
   const mine = thread ? (pulls.find((p) => p.thread === thread.id) ?? null) : null
   return { mine, rest: mine ? pulls.filter((p) => p !== mine) : pulls }
 }
+
+export type PullsRead = { project: string; pulls: RepoPull[]; error: string }
+
+// pullsShown is what the view shows for project: its own latest read, else the list known from before, else nothing yet.
+export function pullsShown(read: PullsRead | null, project: string, known: Map<string, RepoPull[]>): { pulls: RepoPull[] | null; error: string } {
+  if (read?.project === project) return { pulls: read.pulls, error: read.error }
+  return { pulls: known.get(project) ?? null, error: '' }
+}

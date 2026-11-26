@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pullRows } from './pullRows.ts'
+import { pullRows, pullsShown } from './pullRows.ts'
 import type { RepoPull, Session } from './types.ts'
 
 const pull = (number: number, thread: string): RepoPull => ({ number, title: `PR ${number}`, draft: false, branch: `b${number}`, url: '', author: 'amy', updatedAt: number, thread })
@@ -18,4 +18,13 @@ test('no mine without a thread', () => {
   const { mine, rest } = pullRows(pulls, null)
   assert.equal(mine, null)
   assert.deepEqual(rest.map((p) => p.number), [2, 1])
+})
+
+test("a read of another project is not the project's own", () => {
+  const known = new Map([['b', [pull(7, '')]]])
+  const read = { project: 'a', pulls: [pull(1, '')], error: 'x' }
+  assert.equal(pullsShown(read, 'a', known).pulls?.[0].number, 1)
+  assert.equal(pullsShown(read, 'a', known).error, 'x')
+  assert.equal(pullsShown(read, 'b', known).pulls?.[0].number, 7)
+  assert.equal(pullsShown(read, 'c', known).pulls, null)
 })

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import type { PanelViewProps } from '../panelViews'
-import { pullRows } from '../pullRows'
+import { pullRows, pullsShown } from '../pullRows'
+import type { PullsRead } from '../pullRows'
 import type { RepoPull } from '../types'
 import { Ago } from './Ago'
 import { Icon } from './Icon'
@@ -73,33 +74,45 @@ export function PullRequestsView({ session }: PanelViewProps) {
   const { projectSessions } = useAgentos('projectSessions')
   const project = useAgentosSelector((a) => a.project?.name)
   const repo = useAgentosSelector((a) => a.project?.repo ?? '')
-  const [pulls, setPulls] = useState<RepoPull[] | null>(known.get(project ?? '') ?? null)
-  const [error, setError] = useState('')
+  const key = project ?? ''
+  const [found, setFound] = useState<PullsRead | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
-  const [detail, setDetail] = useState<number | null>(null)
+  const [opened, setOpened] = useState<{ project: string; number: number } | null>(null)
+  const current = useRef(key)
+  current.current = key
+  const detail = opened?.project === key ? opened.number : null
+  const setDetail = (number: number | null) => setOpened(number === null ? null : { project: key, number })
 
   const read = useCallback(() => {
     setReading(true)
     api.pullRequests().then(
       (got) => {
-        known.set(project ?? '', got.pulls)
-        setPulls(got.pulls)
-        setError(got.error)
+        if (current.current !== key) return
+        known.set(key, got.pulls)
+        setFound({ project: key, pulls: got.pulls, error: got.error })
+        setFailed(null)
       },
-      () => setError('Could not read the pull requests.'),
-    ).finally(() => setReading(false))
-  }, [project])
+      () => current.current === key && setFailed('Could not read the pull requests.'),
+    ).finally(() => {
+      if (current.current === key) setReading(false)
+    })
+  }, [key])
   useEffect(() => {
+    setFailed(null)
     if (project !== undefined && repo) read()
   }, [project, repo, read])
+  const shown = pullsShown(found, key, known)
+  const pulls = shown.pulls
+  const error = failed ?? shown.error
 
   if (project !== undefined && !repo) return <Notice title="No repo linked" hint={`${project} has no GitHub repo, so it has no pull requests.`} centered />
 
-  const opened = pulls?.find((p) => p.number === detail)
-  if (opened) {
-    const thread = projectSessions.find((s) => s.id === opened.thread)
+  const open = pulls?.find((p) => p.number === detail)
+  if (open) {
+    const thread = projectSessions.find((s) => s.id === open.thread)
     const back = () => setDetail(null)
-    if (!thread) return <PullDetail pull={opened} onBack={back} />
+    if (!thread) return <PullDetail pull={open} onBack={back} />
     return (
       <div className="flex h-full min-h-0 flex-col">
         <header className="flex-none border-b border-line px-3 py-2">
