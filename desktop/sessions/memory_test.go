@@ -30,9 +30,12 @@ func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {
 	if m != h.Sessions().Memory() {
 		t.Errorf("Memory() = %+v, want the last event %+v", h.Sessions().Memory(), m)
 	}
-	sent := h.Rec.Count("sessions")
+	// A sample that finds the figures where they were sends nothing; a loaded machine may move a rounded figure between
+	// two samples, and the test then has nothing to say.
+	sent, before, held := h.Rec.Count("sessions"), h.Sessions().Memory(), row.Memory
 	h.Sessions().SampleMemory()
-	if n := h.Rec.Count("sessions"); n != sent {
+	row, _ = h.Session(s.ID)
+	if n := h.Rec.Count("sessions"); n != sent && h.Sessions().Memory() == before && row.Memory == held {
 		t.Errorf("a sample with the same figures sent the sessions %d more times", n-sent)
 	}
 
