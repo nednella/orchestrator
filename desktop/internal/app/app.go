@@ -157,7 +157,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"pr":      sc.PR,
 		"cleanup": sc.Cleanup,
 	})
-	for _, view := range []string{"queue", "notes", "evidence", "term", "next", "filter"} {
+	for _, view := range []string{"queue", "notes", "evidence", "chat", "next", "filter"} {
 		a.router.Handle(view, a.router.View(view))
 	}
 	a.services = []any{

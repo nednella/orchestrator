@@ -57,7 +57,7 @@ func TestViewCommands(t *testing.T) {
 		{ctl.Request{Cmd: "queue"}, control.UICommand{Name: "queue", Args: []string{}}},
 		{ctl.Request{Cmd: "notes"}, control.UICommand{Name: "notes", Args: []string{}}},
 		{ctl.Request{Cmd: "evidence"}, control.UICommand{Name: "evidence", Args: []string{}}},
-		{ctl.Request{Cmd: "term"}, control.UICommand{Name: "term", Args: []string{}}},
+		{ctl.Request{Cmd: "chat"}, control.UICommand{Name: "chat", Args: []string{}}},
 		{ctl.Request{Cmd: "next"}, control.UICommand{Name: "next", Args: []string{}}},
 		{ctl.Request{Cmd: "filter", Args: []string{"@me", "type:bug"}}, control.UICommand{Name: "filter", Args: []string{"@me", "type:bug"}}},
 	}
@@ -76,5 +76,13 @@ func TestViewCommands(t *testing.T) {
 				t.Errorf("the screen stayed on %q, not the caller's project", name)
 			}
 		})
+	}
+}
+
+func TestTermIsNotAView(t *testing.T) {
+	h := newHarness(t)
+	resp := h.Ask(t, ctl.Request{Cmd: "term", Project: "main"})
+	if want := `unknown command "term"`; resp.OK || resp.Error != want {
+		t.Errorf("term = %+v, want the error %q", resp, want)
 	}
 }
