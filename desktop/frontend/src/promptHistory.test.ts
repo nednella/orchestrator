@@ -63,3 +63,7 @@ test('a recall in one thread is not active in another', () => {
   assert.equal(stepDown(['a', 'b'], recall, 'u'), null)
   assert.equal(stepUp(['a', 'b'], recall, 'u')?.text, 'b')
 })
+
+test('a reply recalls without its quote', () => {
+  assert.deepEqual(historyOf([user('> earlier line\n> second\n\nmy answer'), user('> only a quote')]), ['my answer', '> only a quote'])
+})

@@ -52,6 +52,7 @@ export function ComposerEditor({ inputRef, value, label, placeholder = PROMPT_PL
   const handlers = useRef({ onChange, onCaret, onKeyDown, onAttach, onSend })
   const written = useRef(value)
   const focused = useRef(false)
+  const caretAtEnd = useRef(false)
   const [empty, setEmpty] = useState(() => value.text.trim() === '')
 
   useLayoutEffect(() => {
@@ -99,6 +100,9 @@ export function ComposerEditor({ inputRef, value, label, placeholder = PROMPT_PL
     written.current = value
     // Undo must not bring back a message already sent.
     editor.chain().setMeta('addToHistory', false).setContent(value.doc, { emitUpdate: false }).run()
+    // A caret asked for at the end of text that was still on its way waits for the text.
+    if (caretAtEnd.current) editor.commands.focus('end')
+    caretAtEnd.current = false
   }, [editor, value])
 
   useEffect(() => {
@@ -109,7 +113,10 @@ export function ComposerEditor({ inputRef, value, label, placeholder = PROMPT_PL
   useImperativeHandle(
     inputRef,
     () => ({
-      focus: (at) => editor?.commands.focus(at),
+      focus: (at) => {
+        caretAtEnd.current = at === 'end'
+        editor?.commands.focus(at)
+      },
       caretOnFirstLine: () => onEdgeLine(editor, 'first'),
       caretOnLastLine: () => onEdgeLine(editor, 'last'),
       blur: () => editor?.commands.blur(),

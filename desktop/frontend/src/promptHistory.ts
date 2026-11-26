@@ -5,12 +5,17 @@ export type Recall = { thread: string; index: number; text: string } | null
 
 type Step = { recall: Recall; text: string }
 
+// A message sent as a reply starts with the quote of the message it answers, which the owner did not type.
+const withoutReplyQuote = (text: string) => text.replace(/^(?:>[^\n]*\n)+\n(?=\S)/, '')
+
 // historyOf is the owner's own messages in the thread, oldest first, with equal ones in a row counted once.
 export function historyOf(items: TimelineItem[]): string[] {
   const prompts: string[] = []
   for (const item of items) {
-    if (item.kind !== 'user' || item.from || item.text.trim() === '') continue
-    if (prompts[prompts.length - 1] !== item.text) prompts.push(item.text)
+    if (item.kind !== 'user' || item.from) continue
+    const text = withoutReplyQuote(item.text)
+    if (text.trim() === '') continue
+    if (prompts[prompts.length - 1] !== text) prompts.push(text)
   }
   return prompts
 }
