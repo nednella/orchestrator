@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn, CircleDot, Ellipsis, GitPullRequestArrow, Settings } from 'lucide-react'
+import { ChartNoAxesColumn, CircleDot, Ellipsis, GitPullRequestArrow, Settings, SquareTerminal } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
@@ -18,6 +18,7 @@ const ICONS: Record<BarButtonId, ReactNode> = {
   pulls: <GitPullRequestArrow size={16} aria-hidden="true" />,
   issues: <CircleDot size={16} aria-hidden="true" />,
   usage: <ChartNoAxesColumn size={16} aria-hidden="true" />,
+  terminal: <SquareTerminal size={16} aria-hidden="true" />,
   news: <Icon name="digest" fixed />,
 }
 
@@ -49,9 +50,10 @@ export function SidebarBottomBar() {
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),
     issues: () => report(() => layout.showPanelView('issues', { expanded: true })),
     usage: openUsage,
+    terminal: () => runAction('open-terminal'),
     news: () => report(() => layout.showPanelView('news')),
   }
-  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, news: layout.panel.active === 'news' && layout.rightOpen }
+  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, terminal: layout.panel.active === 'terminal' && layout.rightOpen, news: layout.panel.active === 'news' && layout.rightOpen }
   const unseen: Partial<Record<BarButtonId, number>> = { news: digestUnseenCount }
   const { shown, more } = barLayout(width)
 
