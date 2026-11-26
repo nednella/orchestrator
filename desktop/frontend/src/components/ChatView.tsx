@@ -143,7 +143,7 @@ export function ChatView({ session }: ChatViewProps) {
           let files = false
           if (asked.checked) {
             const preview = await api.rewindPreview(thread, uuid)
-            if (preview.reason) throw preview.reason
+            if (preview.reason) throw new Error(preview.reason)
             files = preview.files.length > 0
             if (files && !(await askConfirm(undoRequest(preview, preview.files.map((f) => relative(f, worktree))))).ok) return
           }
