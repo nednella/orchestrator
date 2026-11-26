@@ -725,6 +725,61 @@ func TestDeleteGivesAChildsWorktreeToItsNewestFork(t *testing.T) {
 	}
 }
 
+func TestDeleteGivesAChildsWorktreeToTheNewerOfTwoForksMadeInOneSecond(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	pushWork(t, parent.Worktree)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	withConversation(t, h, child.ID)
+	writeChat(t, h, child.ID, oneReply...)
+	fork := func() sessions.Session {
+		t.Helper()
+		f, err := h.ForkSession(child.ID, "r1b")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	var older, newer sessions.Session
+	for try := 0; ; try++ {
+		older, newer = fork(), fork()
+		if older.CreatedAt/1000 == newer.CreatedAt/1000 {
+			break
+		}
+		if try == 4 {
+			t.Fatal("no two forks were made in one second")
+		}
+		for _, f := range []sessions.Session{older, newer} {
+			if err := h.DeleteThread(f.ID, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// A refresh dates each live session by tmux, to the second.
+	h.Sessions().Refresh()
+	if o, n := createdAt(h, older.ID), createdAt(h, newer.ID); n <= o {
+		t.Errorf("after a refresh the older fork started at %d, the newer at %d; want the newer later", o, n)
+	}
+	putToSleep(t, h, older.ID)
+	putToSleep(t, h, newer.ID)
+	putToSleep(t, h, child.ID)
+	cleanupOf(t, h, child)
+
+	if err := h.DeleteThread(parent.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if o, n := recordsOf(t, h, older.ID), recordsOf(t, h, newer.ID); len(o) != 0 || !slices.Equal(n, []string{child.Worktree}) {
+		t.Errorf("the older fork's records %q, the newer's %q; want the child's worktree for the newer only", o, n)
+	}
+}
+
+// createdAt is when the thread's row says it first started, in unix ms.
+func createdAt(h *apptest.Harness, id string) int64 {
+	got, _ := h.Session(id)
+	return got.CreatedAt
+}
+
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)

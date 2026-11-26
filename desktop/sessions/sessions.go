@@ -2916,7 +2916,9 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 	defer s.mu.Unlock()
 	if forkAt != "" {
 		rec := session.Record{Session: name.String(), State: session.Idle, At: created}
-		rec.ForkAt = forkAt
+		// A later read of the state file has no newer At, so it never adds the start to this record, and tmux dates a
+		// session only to the second: a delete's heir is the fork that started last.
+		rec.ForkAt, rec.Created, rec.Woke = forkAt, created.UnixMilli(), created.UnixMilli()
 		if err := s.writeState(rec); err != nil {
 			log.Printf("agentos: saving where %s was forked: %v", name, err)
 		}
@@ -3612,8 +3614,9 @@ func (s *Sessions) settleBy(id, by string) error {
 
 // SettleIdle settles the live thread if its host is idle: no turn open or message queued, no approval waiting and no
 // subagent at work. It says whether the thread sleeps now: a thread another settle, as the owner's Sleep, put to sleep
-// first is no error. A message a thread tells it meanwhile is held, and wakes it once it sleeps; the host takes no
-// other message from its check until it stops, so none is cut off. It takes mu.
+// first gives true and no error, since it is asleep either way. A message a thread tells it meanwhile is held, and
+// wakes it once it sleeps; the host takes no other message from its check until it stops, so none is cut off. It takes
+// mu.
 func (s *Sessions) SettleIdle(id string) (bool, error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -4481,11 +4484,13 @@ func (s *Sessions) worksIn(id, dir string) bool {
 // heirOf is the fork outside family that works in the worktree dir, live or asleep, and has no worktree agentos made
 // for it, so a Delete of family may give it the worktree; "" when there is none. A thread with a worktree of its own
 // never gets a second one, and a thread that is not a fork works on a branch of its own. Of several, it is the one that
-// started last, and of those the first by id, so a refusal and the Delete after it pick the same.
+// started last, then the one made last, whose number is the higher, then the first by id, so a refusal and the Delete
+// after it pick the same.
 func (s *Sessions) heirOf(key, dir string, family []string) string {
 	type fork struct {
 		id      string
 		created time.Time
+		n       int
 	}
 	var forks []fork
 	for _, in := range s.usersIn(dir, true, family...) {
@@ -4493,15 +4498,16 @@ func (s *Sessions) heirOf(key, dir string, family []string) string {
 		if _, made := s.made.Of(key, id); in.Fork != "" && !made {
 			s.mu.Lock()
 			created, _ := s.startsOf(id, in)
+			n := s.nums[id]
 			s.mu.Unlock()
-			forks = append(forks, fork{id, created})
+			forks = append(forks, fork{id, created, n})
 		}
 	}
 	if len(forks) == 0 {
 		return ""
 	}
 	return slices.MinFunc(forks, func(a, b fork) int {
-		return cmp.Or(b.created.Compare(a.created), strings.Compare(a.id, b.id))
+		return cmp.Or(b.created.Compare(a.created), cmp.Compare(b.n, a.n), strings.Compare(a.id, b.id))
 	}).id
 }
 
