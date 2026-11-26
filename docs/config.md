@@ -156,10 +156,10 @@ A thread reaches the app through the tools of its agentos MCP server, not throug
 
 | Tool | Input | Does |
 |---|---|---|
-| `note` | `text` | adds a note to the thread's project |
-| `issue` | `number`, `prompt` | starts the issue's thread, as the queue does; one whose thread runs is reported as running and gets nothing, and one whose thread is asleep has it woken. `prompt`, at most 6 KB, is the new or woken thread's handover. From a thread that is not Full access, an issue whose action is `access: full` or whose sleeping thread is Full access is refused (`A thread that is not Full access cannot start one that is`) |
+| `note` | `text` | adds a note (at most 64 KB) to the thread's project |
+| `issue` | `number`, `prompt` | starts the issue's thread, as the queue does; one whose thread runs is reported as running and gets nothing, and one whose thread is asleep has it woken. `prompt`, at most 6 KB, is the new or woken thread's handover. A new thread started by a thread gets the lower of its action's access and the caller's, so an id that is not a running thread starts none, a Read caller starts a Read thread and a Full caller starts a Supervised action's thread as Supervised. A sleeping thread that is Full access is refused from a thread that is not Full (`A thread that is not Full access cannot start one that is`) |
 | `new_thread` | `title`, `prompt`, `access` | starts a thread with no issue, where `new_thread_place` says, and gives it `prompt`, at most 6 KB, framed as the caller's handover and sent unless `session_prompt_send` is `manual`. `access` is `read`, `supervised` or `full`, by default the caller's, and refused above it (`A thread with supervised access cannot start a thread with full access`) |
-| `show` | `file` or `text`, `caption` | files evidence for the thread: an image, or a text file under 64 KB, by its absolute path, or a text card |
+| `show` | `file` or `text`, `caption` | files evidence for the thread: an image, or a text file under 64 KB, by its absolute path, or a text card. A file must lie, after symlinks are resolved, in the thread's folder, the project folder or the thread's own temp folder; any other path is refused. `caption` is at most 1 KB |
 | `track` | `branch` | makes the branch the thread's; see [Where a thread runs](#where-a-thread-runs) |
 | `refresh` | none | reloads the issues and the pull requests |
 | `browser` | `action` (`open`, `screenshot` or `close`), `url`, `front`, `caption`, `full` | opens `url` in the thread's browser window, raised in front with `front`; files a screenshot of it as evidence, the whole page with `full`; or closes the window. A call may take 75 s |
