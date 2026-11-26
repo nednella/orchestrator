@@ -968,6 +968,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 	delete(s.readers, id)
 	delete(s.spent, id)
 	s.dropTold(id, errToldDeleted)
+	s.dropResultsOf(id)
 	delete(s.wakes, id)
 	delete(s.afterTurn, id)
 	delete(s.cwds, id)
@@ -3482,6 +3483,28 @@ func (s *Sessions) dropTold(id string, why error) int {
 	}
 	log.Printf("agentos: dropped %d messages held for thread %s: %v", dropped, id, why)
 	return dropped
+}
+
+// dropResultsOf drops each result of the child, deleted, that is kept for its parent's next turn, and tells its
+// sender so. It needs mu.
+func (s *Sessions) dropResultsOf(child string) {
+	for id, all := range s.wakes {
+		var kept []heldPrompt
+		for _, h := range all {
+			if h.nextTurn && h.From == child {
+				h.gone(errToldDeleted)
+				continue
+			}
+			kept = append(kept, h)
+		}
+		switch {
+		case len(kept) == len(all):
+		case len(kept) == 0:
+			delete(s.wakes, id)
+		default:
+			s.wakes[id] = kept
+		}
+	}
 }
 
 // hold puts what a host refused while an approval waited back before what is held for the thread. It takes mu.

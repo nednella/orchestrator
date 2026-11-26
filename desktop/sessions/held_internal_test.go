@@ -114,3 +114,44 @@ func TestResultKeptForTheNextTurnGoesWithIt(t *testing.T) {
 		t.Errorf("held %+v, want the result released for the next turn", got)
 	}
 }
+
+func TestResultsOfADeletedChildAreDropped(t *testing.T) {
+	const child, parent, other = "main/childaaa", "main/parentaa", "main/otheraaa"
+	for _, tt := range []struct {
+		name string
+		held []heldPrompt
+		want []heldPrompt
+		gone int // how many senders hear of the drop
+	}{
+		{"a kept result", []heldPrompt{{Told: Told{From: child, Text: "Task done", Result: true}, nextTurn: true}}, nil, 1},
+		{"another child's", []heldPrompt{{Told: Told{From: other, Text: "Task done", Result: true}, nextTurn: true}}, []heldPrompt{{Told: Told{From: other, Text: "Task done", Result: true}, nextTurn: true}}, 0},
+		{"one about to go", []heldPrompt{{Told: Told{From: child, Text: "Check this"}}}, []heldPrompt{{Told: Told{From: child, Text: "Check this"}}}, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newSessions(Options{})
+			done := make(chan error, len(tt.held))
+			for i := range tt.held {
+				tt.held[i].Done = done
+			}
+			s.wakes[parent] = tt.held
+			s.mu.Lock()
+			s.dropResultsOf(child)
+			s.mu.Unlock()
+			got := s.wakes[parent]
+			for i := range got {
+				got[i].Done = nil
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("held %+v, want %+v", got, tt.want)
+			}
+			if len(done) != tt.gone {
+				t.Errorf("%d senders heard of a drop, want %d", len(done), tt.gone)
+			}
+			for range tt.gone {
+				if err := <-done; !errors.Is(err, errToldDeleted) {
+					t.Errorf("Done got %v, want %v", err, errToldDeleted)
+				}
+			}
+		})
+	}
+}
