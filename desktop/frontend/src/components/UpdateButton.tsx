@@ -24,10 +24,9 @@ export function UpdateButton() {
     if (look.spin) setTurning(true)
   }, [look.spin])
 
-  const inPlay = update.status === 'available' || update.status === 'downloading' || update.status === 'downloaded' || update.status === 'installed'
   // A turn that runs on keeps the check's icon, so only it spins.
   const Icon = turning ? RefreshCw : ICONS[look.icon]
-  const tone = look.success ? 'text-[var(--finished)]' : inPlay ? 'text-ink' : 'text-[var(--sidebar-icon)] hover:text-ink'
+  const tone = look.success ? 'text-[var(--finished)]' : look.filled ? 'text-ink' : 'text-[var(--sidebar-icon)] hover:text-ink'
 
   const onClick = () =>
     report(async () => {
@@ -39,7 +38,7 @@ export function UpdateButton() {
 
   return (
     <button
-      className={`relative ml-auto inline-flex h-[32px] w-[32px] flex-none items-center justify-center rounded-full transition-colors duration-[120ms] hover:bg-[var(--bg-row-hover)] aria-disabled:cursor-default ${tone} ${inPlay ? 'bg-[var(--bg-update)]' : ''}`}
+      className={`relative ml-auto inline-flex h-[32px] w-[32px] flex-none items-center justify-center rounded-full transition-colors duration-[120ms] hover:bg-[var(--bg-row-hover)] aria-disabled:cursor-default ${tone} ${look.filled ? 'bg-[var(--bg-update)]' : ''}`}
       aria-label={look.tooltip}
       aria-disabled={action === null}
       onClick={() => action !== null && onClick()}

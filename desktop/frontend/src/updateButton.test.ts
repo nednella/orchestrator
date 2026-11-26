@@ -4,7 +4,8 @@ import type { UpdateState } from './types.ts'
 import { installConfirm, updateAction, updateLook } from './updateButton.ts'
 
 const state = (s: Partial<UpdateState>): UpdateState => ({ status: 'idle', version: '', percent: 0, failedStep: '', error: '', ...s })
-const plain = { spin: false, dot: false, badge: false, ring: null, success: false }
+const plain = { spin: false, filled: false, dot: false, badge: false, ring: null, success: false }
+const filled = { ...plain, filled: true }
 
 test('idle checks for updates', () => {
   assert.deepEqual(updateLook(state({})), { ...plain, icon: 'refresh-cw', tooltip: 'Check for updates' })
@@ -18,13 +19,13 @@ test('checking spins and waits', () => {
 
 test('available is green with a dot and downloads', () => {
   const s = state({ status: 'available', version: '1.4.0' })
-  assert.deepEqual(updateLook(s), { ...plain, icon: 'download', dot: true, success: true, tooltip: 'Update 1.4.0 ready to download' })
+  assert.deepEqual(updateLook(s), { ...filled, icon: 'download', dot: true, success: true, tooltip: 'Update 1.4.0 ready to download' })
   assert.equal(updateAction(s), 'download')
 })
 
 test('downloading shows the progress in a ring and waits', () => {
   const s = state({ status: 'downloading', version: '1.4.0', percent: 40 })
-  assert.deepEqual(updateLook(s), { ...plain, icon: 'download', ring: 40, tooltip: 'Downloading update (40%)' })
+  assert.deepEqual(updateLook(s), { ...filled, icon: 'download', ring: 40, tooltip: 'Downloading update (40%)' })
   assert.equal(updateAction(s), null)
 })
 
@@ -35,12 +36,12 @@ test('the percent is rounded down', () => {
 })
 
 test('a download of unknown size has no ring', () => {
-  assert.deepEqual(updateLook(state({ status: 'downloading', version: '1.4.0', percent: -1 })), { ...plain, icon: 'download', tooltip: 'Downloading update…' })
+  assert.deepEqual(updateLook(state({ status: 'downloading', version: '1.4.0', percent: -1 })), { ...filled, icon: 'download', tooltip: 'Downloading update…' })
 })
 
 test('downloaded has the check badge and installs', () => {
   const s = state({ status: 'downloaded', version: '1.4.0', percent: 100 })
-  assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', badge: true, tooltip: 'Update 1.4.0 downloaded. Click to restart and install.' })
+  assert.deepEqual(updateLook(s), { ...filled, icon: 'rotate-cw', badge: true, tooltip: 'Update 1.4.0 downloaded. Click to restart and install.' })
   assert.equal(updateAction(s), 'install')
 })
 
@@ -58,7 +59,7 @@ test('a failed install retries the install', () => {
 
 test('a failed restart asks for a restart, which only relaunches', () => {
   const s = state({ status: 'installed', version: '1.4.0', error: 'open failed' })
-  assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', badge: true, tooltip: 'Restart to finish the update' })
+  assert.deepEqual(updateLook(s), { ...filled, icon: 'rotate-cw', badge: true, tooltip: 'Restart to finish the update' })
   assert.equal(updateAction(s), 'restart')
 })
 

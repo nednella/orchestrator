@@ -162,7 +162,6 @@ export type Snapshot = {
   sessions: Session[]
   notes: Note[]
   version: string
-  update: string
   shells: Shell[]
   machine: string
 }

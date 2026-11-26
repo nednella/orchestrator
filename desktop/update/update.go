@@ -113,13 +113,6 @@ func (u *Updater) State() State {
 	return u.state
 }
 
-// Available is the version of the newer release the last check found, or "".
-func (u *Updater) Available() string {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.latest.Version
-}
-
 // Check asks GitHub for the latest release, showing that it checks. A check that fails keeps what the one before it
 // found, and its download.
 func (u *Updater) Check(ctx context.Context) error {

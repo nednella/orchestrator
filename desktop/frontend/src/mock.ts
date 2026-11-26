@@ -368,7 +368,6 @@ export function createMock(params: URLSearchParams) {
       sessions: data.flatMap((p) => sessionsOf(p.name)),
       notes: currentNotes(),
       version: 'mock',
-      update: update.version,
       shells: shellsOf(current.name).map(shellView),
       machine: 'Studio MacBook Pro',
     }
