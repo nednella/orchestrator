@@ -20,7 +20,7 @@ func TestShowFilesEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
+	dir := h.Sessions().ShowRoots(s.ID)[0]
 	img, note, bin := filepath.Join(dir, "shot.png"), filepath.Join(dir, "notes.txt"), filepath.Join(dir, "blob.bin")
 	for path, data := range map[string][]byte{img: onePixelPNG, note: []byte("all green\nno regressions\n"), bin: {0xff, 0xfe, 0x00}} {
 		if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -58,6 +58,7 @@ func TestShowFilesEvidence(t *testing.T) {
 	for _, bad := range []ctl.Request{
 		{Cmd: "show", Session: s.ID, Args: []string{bin}},
 		{Cmd: "show", Session: s.ID, Args: []string{filepath.Join(dir, "missing.png")}},
+		{Cmd: "show", Session: s.ID, Args: []string{filepath.Join(t.TempDir(), "outside.png")}},
 		{Cmd: "show", Session: s.ID},
 		{Cmd: "show", Args: []string{img}},
 	} {

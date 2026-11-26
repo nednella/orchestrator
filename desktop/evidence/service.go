@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/nednella/agentos/desktop/internal/media"
@@ -17,6 +18,11 @@ const maxTextCard = 64 << 10
 // Asker checks which session a command comes from.
 type Asker interface {
 	AskerSession(req ctl.Request) (string, error)
+}
+
+// Roots names the folders a session may file evidence from.
+type Roots interface {
+	ShowRoots(id string) []string
 }
 
 // Changes is told when a session's evidence changed.
@@ -58,11 +64,12 @@ func (c Changes) Changed(store *Store, id string, byAgent bool) {
 type Commands struct {
 	store   *Store
 	asker   Asker
+	roots   Roots
 	changes Changes
 }
 
-func NewCommands(s *Store, a Asker, c Changes) *Commands {
-	return &Commands{store: s, asker: a, changes: c}
+func NewCommands(s *Store, a Asker, r Roots, c Changes) *Commands {
+	return &Commands{store: s, asker: a, roots: r, changes: c}
 }
 
 // Show files a picture, a text file or some words as the session's evidence.
@@ -82,7 +89,10 @@ func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) != 1 {
 		return "", errors.New("usage: agentos show <file> [--caption <text>] or agentos show --text <words>")
 	}
-	path := req.Args[0]
+	path, err := allowedFile(req.Args[0], c.roots.ShowRoots(id))
+	if err != nil {
+		return "", err
+	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", fmt.Errorf("%s is not a file", path)
@@ -107,4 +117,26 @@ func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
 	}
 	c.changes.Changed(c.store, id, true)
 	return "filed as evidence", nil
+}
+
+// allowedFile is the real path of file, symlinks resolved, when it lies inside one of the roots, resolved the same way.
+// A file that does not exist is judged by its cleaned path, so a refusal never tells whether a file outside is there.
+func allowedFile(file string, roots []string) (string, error) {
+	real, err := filepath.EvalSymlinks(file)
+	if err != nil {
+		real = filepath.Clean(file)
+		if dir, err := filepath.EvalSymlinks(filepath.Dir(real)); err == nil {
+			real = filepath.Join(dir, filepath.Base(real))
+		}
+	}
+	for _, root := range roots {
+		root, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			continue
+		}
+		if rel, err := filepath.Rel(root, real); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return real, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not in the thread's folder, the project folder or the thread's temp folder, so it cannot be shown", file)
 }

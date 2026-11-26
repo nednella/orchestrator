@@ -267,10 +267,63 @@ func TestTrackToolTakesTheBranchForTheCaller(t *testing.T) {
 	}
 }
 
+func TestShowToolTakesFilesOnlyFromTheThreadsFolders(t *testing.T) {
+	h := apptest.New(t)
+	a := newThread(t, h, "a")
+	roots := h.Sessions().ShowRoots(a.ID)
+	if len(roots) != 3 {
+		t.Fatalf("roots = %q, want the thread's folder, the project's and the temp folder", roots)
+	}
+	write := func(dir, name string) string {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(dir, name)
+		if err := os.WriteFile(file, []byte("inside "+name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	outside := t.TempDir()
+	secret := write(outside, "id_rsa")
+	link := filepath.Join(roots[0], "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	fileLink := filepath.Join(roots[0], "key.txt")
+	if err := os.Symlink(secret, fileLink); err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range []string{"thread.txt", "project.txt", "temp.txt"} {
+		mustUse(t, h, a.ID, "show", `{"file":"`+write(roots[i], name)+`"}`, nil)
+	}
+	if n := len(h.Evidence(a.ID)); n != 3 {
+		t.Fatalf("%d pieces of evidence after the three allowed files, want 3", n)
+	}
+	refusal := "is not in the thread's folder, the project folder or the thread's temp folder, so it cannot be shown"
+	for name, file := range map[string]string{
+		"a file outside":               secret,
+		"a path with ..":               filepath.Join(roots[0], "..", filepath.Base(outside), "id_rsa"),
+		"a path that climbs out":       roots[0] + "/../../../../../../etc/hosts",
+		"a folder link that leads out": filepath.Join(link, "id_rsa"),
+		"a file link that leads out":   fileLink,
+		"a sibling of the folder":      roots[0] + "-other/x.txt",
+		"a file that is not there":     filepath.Join(outside, "gone.txt"),
+	} {
+		if err := useTool(t, h, a.ID, "show", `{"file":"`+file+`"}`, nil); !strings.Contains(err, refusal) {
+			t.Errorf("show %s: %q, want a refusal", name, err)
+		}
+	}
+	if n := len(h.Evidence(a.ID)); n != 3 {
+		t.Errorf("%d pieces of evidence after the refused calls, want 3", n)
+	}
+}
+
 func TestShowToolFilesEvidenceForTheCaller(t *testing.T) {
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
-	file := filepath.Join(t.TempDir(), "result.txt")
+	file := filepath.Join(h.Sessions().ShowRoots(a.ID)[0], "result.txt")
 	if err := os.WriteFile(file, []byte("all 12 tests pass\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +349,7 @@ func TestShowToolFilesEvidenceForTheCaller(t *testing.T) {
 		{`{"file":"result.txt"}`, "result.txt is not an absolute path"},
 		{`{"file":"` + file + `","text":"both"}`, "Give file or text, not both"},
 		{`{"caption":"none"}`, "Give file or text, not both"},
-		{`{"file":"` + filepath.Join(t.TempDir(), "gone.png") + `"}`, "is not a file"},
+		{`{"file":"` + filepath.Join(filepath.Dir(file), "gone.png") + `"}`, "is not a file"},
 	} {
 		if err := useTool(t, h, a.ID, "show", tt.input, nil); !strings.Contains(err, tt.err) {
 			t.Errorf("show %s: %q, want %q", tt.input, err, tt.err)
