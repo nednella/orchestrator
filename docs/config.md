@@ -37,7 +37,7 @@ projects:
     pr_review_drafts: false    # send pr_review_command while the PR is a draft too; when false, comments on a draft count as seen
     pr_checks_command: ""      # typed into a session whose PR has failing checks, {n} the PR number; "" sends nothing
     pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
-    setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
+    setup_dismissed: false     # the app no longer writes it
 ```
 
 `editor_app` is the app the thread menu's, the palette's and the thread details card's *Open in VS Code* opens a thread's folder with: `open -a <editor_app> <folder>`, run without a shell. The card names the app: *Open in Zed* for `editor_app: Zed`. The folder is the thread's own worktree when it has one, else the project folder; a thread whose worktree is gone opens nothing and says so.
