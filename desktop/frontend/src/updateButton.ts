@@ -1,22 +1,22 @@
 import type { ConfirmRequest } from './confirmQueue'
 import type { UpdateState } from './types'
 
-// dot puts a mark at the icon's corner: the ready dot on download, the check badge on rotate-cw.
+// dot is the ready dot on download; badge is the check badge on rotate-cw.
 export type UpdateLook = {
   icon: 'refresh-cw' | 'download' | 'rotate-cw'
   spin: boolean
   dot: boolean
+  badge: boolean
   ring: number | null
   success: boolean
   tooltip: string
 }
 
-export type UpdateAction = 'check' | 'download' | 'install'
-
-const installFailed = (s: UpdateState) => s.status === 'failed' && s.percent >= 100
+// restart only relaunches into the update that is in place already; the install binding does it.
+export type UpdateAction = 'check' | 'download' | 'install' | 'restart'
 
 export function updateLook(s: UpdateState): UpdateLook {
-  const plain = { spin: false, dot: false, ring: null, success: false }
+  const plain = { spin: false, dot: false, badge: false, ring: null, success: false }
   switch (s.status) {
     case 'checking':
       return { ...plain, icon: 'refresh-cw', spin: true, tooltip: 'Checking for updates…' }
@@ -26,9 +26,11 @@ export function updateLook(s: UpdateState): UpdateLook {
       if (s.percent < 0) return { ...plain, icon: 'download', tooltip: 'Downloading update…' }
       return { ...plain, icon: 'download', ring: Math.floor(s.percent), tooltip: `Downloading update (${Math.floor(s.percent)}%)` }
     case 'downloaded':
-      return { ...plain, icon: 'rotate-cw', dot: true, tooltip: `Update ${s.version} downloaded. Click to restart and install.` }
+      return { ...plain, icon: 'rotate-cw', badge: true, tooltip: `Update ${s.version} downloaded. Click to restart and install.` }
+    case 'installed':
+      return { ...plain, icon: 'rotate-cw', badge: true, tooltip: 'Restart to finish the update' }
     case 'failed':
-      if (installFailed(s)) return { ...plain, icon: 'rotate-cw', tooltip: `Install failed for ${s.version}. Click to retry.` }
+      if (s.failedStep === 'install') return { ...plain, icon: 'rotate-cw', tooltip: `Install failed for ${s.version}. Click to retry.` }
       return { ...plain, icon: 'download', tooltip: `Download failed for ${s.version}. Click to retry.` }
     default:
       return { ...plain, icon: 'refresh-cw', tooltip: 'Check for updates' }
@@ -45,8 +47,10 @@ export function updateAction(s: UpdateState): UpdateAction | null {
       return 'download'
     case 'downloaded':
       return 'install'
+    case 'installed':
+      return 'restart'
     case 'failed':
-      return installFailed(s) ? 'install' : 'download'
+      return s.failedStep === 'install' ? 'install' : 'download'
     default:
       return 'check'
   }

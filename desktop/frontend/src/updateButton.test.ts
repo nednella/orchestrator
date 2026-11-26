@@ -3,8 +3,8 @@ import { test } from 'node:test'
 import type { UpdateState } from './types.ts'
 import { installConfirm, updateAction, updateLook } from './updateButton.ts'
 
-const state = (s: Partial<UpdateState>): UpdateState => ({ status: 'idle', version: '', percent: 0, error: '', ...s })
-const plain = { spin: false, dot: false, ring: null, success: false }
+const state = (s: Partial<UpdateState>): UpdateState => ({ status: 'idle', version: '', percent: 0, failedStep: '', error: '', ...s })
+const plain = { spin: false, dot: false, badge: false, ring: null, success: false }
 
 test('idle checks for updates', () => {
   assert.deepEqual(updateLook(state({})), { ...plain, icon: 'refresh-cw', tooltip: 'Check for updates' })
@@ -40,20 +40,26 @@ test('a download of unknown size has no ring', () => {
 
 test('downloaded has the check badge and installs', () => {
   const s = state({ status: 'downloaded', version: '1.4.0', percent: 100 })
-  assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', dot: true, tooltip: 'Update 1.4.0 downloaded. Click to restart and install.' })
+  assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', badge: true, tooltip: 'Update 1.4.0 downloaded. Click to restart and install.' })
   assert.equal(updateAction(s), 'install')
 })
 
 test('a failed download retries the download', () => {
-  const s = state({ status: 'failed', version: '1.4.0', percent: 40, error: 'curl: (18)' })
+  const s = state({ status: 'failed', version: '1.4.0', failedStep: 'download', error: 'curl: (18)' })
   assert.deepEqual(updateLook(s), { ...plain, icon: 'download', tooltip: 'Download failed for 1.4.0. Click to retry.' })
   assert.equal(updateAction(s), 'download')
 })
 
 test('a failed install retries the install', () => {
-  const s = state({ status: 'failed', version: '1.4.0', percent: 100, error: 'sha256' })
+  const s = state({ status: 'failed', version: '1.4.0', failedStep: 'install', error: 'sha256' })
   assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', tooltip: 'Install failed for 1.4.0. Click to retry.' })
   assert.equal(updateAction(s), 'install')
+})
+
+test('a failed restart asks for a restart, which only relaunches', () => {
+  const s = state({ status: 'installed', version: '1.4.0', error: 'open failed' })
+  assert.deepEqual(updateLook(s), { ...plain, icon: 'rotate-cw', badge: true, tooltip: 'Restart to finish the update' })
+  assert.equal(updateAction(s), 'restart')
 })
 
 test('the install asks to restart', () => {
