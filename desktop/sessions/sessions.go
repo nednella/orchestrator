@@ -2943,19 +2943,18 @@ func (s *Sessions) wake(ctx context.Context, t target, prompt string) {
 	s.send(ctx, name, prompt, true)
 }
 
-// wakeFor wakes the settled thread of t for a pull request's command and says whether it runs: a thread with no issue
-// stays settled, and so does one whose issue has another live thread, which keeps the issue's branch.
+// wakeFor wakes the settled thread of t for a pull request's command and says whether it runs. A thread with an issue
+// stays settled when the issue has another live thread, which keeps the issue's branch.
 func (s *Sessions) wakeFor(t target) bool {
-	if t.issue == 0 {
-		return false
-	}
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
-	if live := s.liveIssueSession(t.proj.Key(), t.issue); live != "" {
-		return live == t.id
+	if t.issue != 0 {
+		if live := s.liveIssueSession(t.proj.Key(), t.issue); live != "" {
+			return live == t.id
+		}
 	}
 	if _, err := s.wakeOrJoin(t.id, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "orchestrator: waking thread %s for #%d: %v\n", t.id, t.issue, err)
+		fmt.Fprintf(os.Stderr, "orchestrator: waking thread %s for the PR on its branch: %v\n", t.id, err)
 		return false
 	}
 	return true

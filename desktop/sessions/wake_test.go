@@ -473,3 +473,28 @@ func TestTwoMessagesAtOnceWakeTheThreadOnce(t *testing.T) {
 		t.Errorf("rows = %+v, want the one thread awake", list)
 	}
 }
+
+func TestPRReviewWakesASettledThreadWithNoIssue(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
+	repoFixture(t, h)
+	s, err := h.NewThreadIn("my work", "", "supervised", "worktree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Issue != 0 || s.Branch != "my-work" {
+		t.Fatalf("thread = %+v, want one with no issue on my-work", s)
+	}
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	eventually(t, "the PR on the thread", hasPR(h, s.ID))
+	if err := h.SettleThread(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))
+	h.RefreshPRs()
+	eventually(t, "the thread woken", func() bool { return stateOf(h, s.ID) == "idle" })
+	eventually(t, "the prompt on stdin", func() bool {
+		users := userLines(t, h, s.ID)
+		return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
+	})
+}
