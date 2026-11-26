@@ -1117,7 +1117,7 @@ func (l *Lifecycle) checkCleanup(ctx context.Context, id string) (string, error)
 		pr = &c
 	}
 	l.mu.Unlock()
-	_, reason := l.planFor(ctx, t, pr, false, false)
+	_, reason := l.planFor(ctx, t, pr, false, l.unchanged(ctx, t))
 	if reason == "" {
 		return "", nil
 	}
@@ -1240,12 +1240,13 @@ func (l *Lifecycle) unchanged(ctx context.Context, t target) bool {
 }
 
 // removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
-// may have changed the worktree until it stopped, the worktree's removal, and the rest of the settle. A non-empty reason
+// may have changed the worktree until it stopped, each measuring the worktree from the commit it started at as a
+// child's sleep does, the worktree's removal, and the rest of the settle. A non-empty reason
 // means it stopped before the end. A step that finds the context cancelled stops with closedReason, and one that finds
 // the thread woken stops and keeps what is left, as does the end.
 func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool) (removed []string, reason string) {
 	removed = []string{}
-	if _, reason := l.planFor(ctx, t, pr, force, false); reason != "" {
+	if _, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t)); reason != "" {
 		return removed, reason
 	}
 	if ctx.Err() != nil {
@@ -1257,7 +1258,7 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 		}
 		t.ended = true
 	}
-	plan, reason := l.planFor(ctx, t, pr, force, false)
+	plan, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t))
 	if reason != "" {
 		return removed, reason
 	}

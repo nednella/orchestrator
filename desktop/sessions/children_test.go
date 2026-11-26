@@ -290,6 +290,35 @@ func TestChildOnItsParentsUnpushedWorkGoesWithoutAFetch(t *testing.T) {
 	}
 }
 
+func TestDeleteTakesAChildWorktreeOnItsParentsUnpushedWork(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	commitIn(t, h.Dir, "parent.txt")
+	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	if !exists(filepath.Join(child.Worktree, "parent.txt")) {
+		t.Fatal("the child does not start at its parent's commit")
+	}
+	// A grandchild asleep in the child's worktree keeps it at the child's sleep.
+	checker := childOf(t, h, child, "Checker", sessions.WhereFolder)
+	putToSleep(t, h, checker.ID)
+	putToSleep(t, h, child.ID)
+	cleanupOf(t, h, child)
+
+	if err := h.DeleteThread(parent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(child.Worktree) || !hasBranch(t, h.Dir, child.Branch) {
+		t.Errorf("the child's worktree there %v, its branch there %v; want only the branch", exists(child.Worktree), hasBranch(t, h.Dir, child.Branch))
+	}
+	if !exists(filepath.Join(h.Dir, "parent.txt")) {
+		t.Error("the project folder lost the parent's commit")
+	}
+}
+
 func TestChildWorktreeWithChangesStays(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
