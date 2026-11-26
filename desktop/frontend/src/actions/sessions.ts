@@ -9,7 +9,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
   {
     id: 'new-session',
     label: 'New thread',
-    group: 'Sessions',
     shortcut: { key: 'm' },
     run() {
       layout.showHome()
@@ -21,7 +20,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
   {
     id: 'new-chat',
     label: 'New read-only thread',
-    group: 'Sessions',
     shortcut: { key: 'n' },
     run() {
       layout.showHome()
@@ -33,7 +31,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
   {
     id: 'detach-session',
     label: current ? `Detach session ${describe(current)}` : 'Detach session',
-    group: 'Sessions',
     shortcut: { key: 'w' },
     run() {
       if (!current) return
@@ -44,7 +41,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
   {
     id: 'open-in-editor',
     label: OPEN_IN_EDITOR_LABEL,
-    group: 'Sessions',
     async run() {
       if (!current) throw 'Select a thread first'
       await a.openInEditor(current.id)
@@ -53,7 +49,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
   {
     id: 'next-attention',
     label: 'Next that needs you',
-    group: 'Sessions',
     shortcut: { key: 'e' },
     run() {
       a.nextAttention()

@@ -55,7 +55,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onDelete 
         cleanupNowShown(session) && { label: 'Clean up now', run: () => a.report(() => a.cleanupSession(session.id, false)) },
         CLEANUP_LABEL[session.cleanup] !== '' && { label: CLEANUP_LABEL[session.cleanup], run: () => a.report(cleanUp) },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
-        openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run([])) },
+        openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run()) },
         settled && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(session.id)) },
         !settled && { label: 'Sleep', danger: true, separated: true, detail: subagentsWorking(session.subagents), run: () => a.report(() => a.settleThread(session.id)) },
         { label: 'Delete', danger: true, run: onDelete },

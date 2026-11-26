@@ -9,17 +9,14 @@ export type Shortcut = {
   code?: string
   aliases?: string[]
   anyShift?: boolean
-  unlessTyping?: boolean
   label?: string
 }
-export type ActionGroup = 'Sessions' | 'Navigate' | 'Projects' | 'Notes' | 'Queue' | 'App'
 
 export type Action = {
   id: string
   label: string
-  group: ActionGroup
   shortcut?: Shortcut
-  run(args: string[]): string | void | Promise<string | void>
+  run(): void | Promise<void>
 }
 
 export type ActionContext = { a: Orchestrator; layout: Layout; current: Session | undefined }

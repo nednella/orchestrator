@@ -16,7 +16,7 @@ export function RailButton({ id, label, icon }: RailButtonProps) {
       title={action.shortcut ? `${label} (${formatShortcut(action.shortcut)})` : label}
       aria-label={label}
       data-rail-item
-      onClick={() => action.run([])}
+      onClick={() => action.run()}
     >
       <Icon name={icon} />
     </button>

@@ -17,7 +17,6 @@ export const shellActions = ({ a, layout }: ActionContext): Action[] => {
     {
       id: 'toggle-shell',
       label: 'Toggle terminal',
-      group: 'Navigate',
       shortcut: { key: 'j' },
       run() {
         if (!a.project) throw 'The terminal is unavailable'
@@ -33,14 +32,12 @@ export const shellActions = ({ a, layout }: ActionContext): Action[] => {
     {
       id: 'new-terminal',
       label: 'New terminal',
-      group: 'Navigate',
       shortcut: NEW_TERMINAL_KEY,
       run: () => open(false),
     },
     {
       id: 'split-terminal',
       label: 'Split terminal side by side',
-      group: 'Navigate',
       shortcut: SPLIT_TERMINAL_KEY,
       run: () => open(true),
     },

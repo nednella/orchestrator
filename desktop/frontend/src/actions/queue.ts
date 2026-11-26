@@ -1,50 +1,12 @@
 import type { Action, ActionContext } from './types'
 
-export const queueActions = ({ a, layout }: ActionContext): Action[] => [
-  {
-    id: 'start-issue',
-    label: 'Start issue',
-    group: 'Queue',
-    async run(args) {
-      const numbers = args.map((x) => Number(x.replace(/^#/, '')))
-      if (numbers.length === 0 || numbers.some((n) => !Number.isInteger(n))) throw 'Give issue numbers: issue 394 393'
-      for (const [i, number] of numbers.entries()) {
-        try {
-          await a.startIssue(number, '', i < numbers.length - 1)
-        } catch (err) {
-          throw `Issue #${number}: ${typeof err === 'string' ? err : 'could not start'}`
-        }
-      }
-      return `Started ${numbers.map((n) => `#${n}`).join(', ')}`
-    },
-  },
-  {
-    id: 'show-queue',
-    label: 'Search the queue',
-    group: 'Queue',
-    run() {
-      layout.showPanelView('issues')
-      a.focus('queue-filter')
-    },
-  },
-  {
-    id: 'filter-queue',
-    label: 'Filter the queue…',
-    group: 'Queue',
-    run() {
-      layout.showPanelView('issues')
-      a.setIssueFilter('')
-      return 'Filter cleared'
-    },
-  },
+export const queueActions = ({ a }: ActionContext): Action[] => [
   {
     id: 'refresh-issues',
     label: 'Refresh issues and PRs',
-    group: 'Queue',
     shortcut: { key: 'r' },
     async run() {
       await Promise.all([a.refreshIssues(), a.refreshPRs()])
-      return 'Issues and pull requests refreshed'
     },
   },
 ]

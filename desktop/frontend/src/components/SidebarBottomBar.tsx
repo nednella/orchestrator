@@ -44,7 +44,7 @@ export function SidebarBottomBar() {
     return () => observer.disconnect()
   }, [])
 
-  const runAction = (id: string) => report(() => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!.run([]))
+  const runAction = (id: string) => report(() => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!.run())
   const open: Record<BarButtonId, () => void> = {
     settings: () => runAction('settings'),
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),

@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useLatestOrchestrator } from './OrchestratorContext'
 import { actionsFor, matchShortcut } from './actions'
 import { useLayout } from './LayoutContext'
-import { isEditingText } from './useListNav'
 
 export function useShortcuts(enabled: boolean) {
   const latestOrchestrator = useLatestOrchestrator()
@@ -14,10 +13,10 @@ export function useShortcuts(enabled: boolean) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!latest.current.enabled) return
       const orchestrator = latestOrchestrator()
-      const action = actionsFor(orchestrator, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut) && !(x.shortcut.unlessTyping && isEditingText(e.target)))
+      const action = actionsFor(orchestrator, latest.current.layout).find((x) => x.shortcut && matchShortcut(e, x.shortcut))
       if (action) {
         e.preventDefault()
-        orchestrator.report(() => action.run([]))
+        orchestrator.report(() => action.run())
       }
     }
     const onEscape = (e: KeyboardEvent) => {

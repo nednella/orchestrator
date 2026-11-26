@@ -19,11 +19,6 @@ export function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable)
 }
 
-// Inside xterm the app's own shortcuts must still work; every other text field keeps its keys.
-export function isEditingText(target: EventTarget | null): boolean {
-  return isTyping(target) && !(target as HTMLElement).closest('.xterm')
-}
-
 // The cursor follows the row it is on by key, so re-sorting the list does not move it. It is -1 until
 // a click or a key puts it on a row.
 export function useListNav(keys: string[], handlers: ListNavHandlers): ListNav {

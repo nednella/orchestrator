@@ -46,26 +46,26 @@ export function TopBar() {
               title={named('Toggle thread details', 'toggle-context-card')}
               aria-label={named('Toggle thread details', 'toggle-context-card')}
               aria-pressed={cardPressed}
-              onClick={() => report(() => find('toggle-context-card').run([]))}
+              onClick={() => report(() => find('toggle-context-card').run())}
             >
               <SquareMenu size={14} strokeWidth={2.25} aria-hidden="true" />
             </button>
             {popover && <ThreadContextCard id={selectedId} className="absolute top-full right-0 z-(--z-popup) mt-1 max-h-[calc(100vh-var(--topbar-h)-1rem)]" />}
           </div>
         )}
-        <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
+        <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run()} />
         <TitleBarButton
           label={project ? named('Toggle terminal', 'toggle-shell') : 'The terminal is unavailable'}
           icon="panel-bottom"
           pressed={terminalOpen}
           disabled={!project}
-          onClick={() => report(() => find('toggle-shell').run([]))}
+          onClick={() => report(() => find('toggle-shell').run())}
         />
         <TitleBarButton
           label={named(rightOpen ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
           icon="panel-right"
           pressed={rightOpen}
-          onClick={() => report(() => find('toggle-right').run([]))}
+          onClick={() => report(() => find('toggle-right').run())}
         />
       </div>
     </header>

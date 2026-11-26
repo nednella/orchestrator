@@ -16,13 +16,13 @@ test('the registry has Open in VS Code, which opens the selected thread by its i
   const opened: string[] = []
   const action = openAction(thread, opened)
   assert.equal(action?.label, OPEN_IN_EDITOR_LABEL)
-  await action?.run([])
+  await action?.run()
   assert.deepEqual(opened, [thread.id])
 })
 
 test('Open in VS Code with no thread selected rejects with a sentence and opens nothing', async () => {
   const opened: string[] = []
-  const failure = await Promise.resolve(openAction(undefined, opened)?.run([])).then(
+  const failure = await Promise.resolve(openAction(undefined, opened)?.run()).then(
     () => '',
     (e: unknown) => String(e),
   )
