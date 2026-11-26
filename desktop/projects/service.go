@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/notes"
 	"github.com/nednella/orchestrator/desktop/sessions"
 	"github.com/nednella/orchestrator/internal/project"
@@ -30,6 +32,7 @@ type Notes interface {
 // Repos names the GitHub repo of a folder.
 type Repos interface {
 	Repo(ctx context.Context, dir string) string
+	FreshRepo(ctx context.Context, dir string) string
 }
 
 // Snapshot is everything the screen needs on load.
@@ -49,14 +52,15 @@ type Service struct {
 	sessions Sessions
 	notes    Notes
 	repos    Repos
+	run      run.Runner
 	stateDir string
 	pickDir  func() (string, error) // "" when the user cancels
 	machine  func() string
 	ctx      func() context.Context
 }
 
-func NewService(r *Registry, s Sessions, n Notes, repos Repos, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
-	return &Service{registry: r, sessions: s, notes: n, repos: repos, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
+func NewService(r *Registry, s Sessions, n Notes, repos Repos, runner run.Runner, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
+	return &Service{registry: r, sessions: s, notes: n, repos: repos, run: runner, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
 }
 
 // Snapshot is everything the screen needs; call it on load.
@@ -96,20 +100,25 @@ func (s *Service) remember(p project.Project) {
 	}
 }
 
-// AddProject asks for a folder and makes it the current project.
-func (s *Service) AddProject() (Snapshot, error) {
+// PickFolder asks for a folder and returns its path; "" when the user cancels.
+func (s *Service) PickFolder() (string, error) {
 	dir, err := s.pickDir()
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("choosing a folder: %w", err)
+		return "", fmt.Errorf("choosing a folder: %w", err)
 	}
-	if dir == "" {
-		return s.Snapshot(), nil
-	}
-	return s.AddProjectDir(dir)
+	return dir, nil
 }
 
-// AddProjectDir adds a folder as a project and makes it the current one.
-func (s *Service) AddProjectDir(dir string) (Snapshot, error) {
+// AddProjectDir adds a folder as a project and makes it the current one. With create, a folder that is not there is
+// made first.
+func (s *Service) AddProjectDir(dir string, create bool) (Snapshot, error) {
+	dir = s.resolveFolder(dir)
+	if create {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Printf("orchestrator: creating %s: %v", dir, err)
+			return Snapshot{}, fmt.Errorf("Failed to create the folder %s.", dir)
+		}
+	}
 	p, err := s.registry.Add(dir)
 	if err != nil {
 		return Snapshot{}, err

@@ -1,0 +1,66 @@
+[
+ {
+  "name": "Demo",
+  "folder": "demo"
+ },
+ {
+  "name": "  My App  ",
+  "folder": "my-app"
+ },
+ {
+  "name": "Tìm kiếm",
+  "folder": "tim-kiem"
+ },
+ {
+  "name": "Crème brûlée",
+  "folder": "creme-brulee"
+ },
+ {
+  "name": "Straße Ørsted",
+  "folder": "strasse-orsted"
+ },
+ {
+  "name": "Æther & Œuvre",
+  "folder": "aether-oeuvre"
+ },
+ {
+  "name": "---x---",
+  "folder": "x"
+ },
+ {
+  "name": "a__b..c",
+  "folder": "a-b-c"
+ },
+ {
+  "name": "日本語",
+  "folder": "project"
+ },
+ {
+  "name": "",
+  "folder": "project"
+ },
+ {
+  "name": "!!!",
+  "folder": "project"
+ },
+ {
+  "name": "ＡＢＣ１２３",
+  "folder": "abc123"
+ },
+ {
+  "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "folder": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ },
+ {
+  "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b",
+  "folder": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+ },
+ {
+  "name": "ﬁne",
+  "folder": "fine"
+ },
+ {
+  "name": "Łódź",
+  "folder": "lodz"
+ }
+]

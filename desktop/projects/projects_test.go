@@ -48,17 +48,26 @@ func TestProjects(t *testing.T) {
 	}
 
 	t.Run("picker", func(t *testing.T) {
-		before := h.Snapshot()
-		if snap, err := h.AddProject(); err != nil || snap.Project.Name != before.Project.Name {
-			t.Errorf("a cancelled picker changed the project: %+v, %v", snap.Project, err)
+		if dir, err := h.PickFolder(); err != nil || dir != "" {
+			t.Errorf("a cancelled picker gave %q, %v", dir, err)
 		}
 		picked := filepath.Join(root, "c", "picked")
 		if err := os.MkdirAll(picked, 0o700); err != nil {
 			t.Fatal(err)
 		}
 		h.Rec.SetPick(picked)
-		if snap, err := h.AddProject(); err != nil || snap.Project.Name != "picked" {
-			t.Errorf("picked project = %+v, %v", snap.Project, err)
+		if dir, err := h.PickFolder(); err != nil || dir != picked {
+			t.Errorf("picked folder = %q, %v", dir, err)
+		}
+	})
+
+	t.Run("a folder that is not there is made on request", func(t *testing.T) {
+		made := filepath.Join(root, "d", "made")
+		if _, err := h.AddProjectDir(made); err == nil {
+			t.Error("a missing folder was added without being made")
+		}
+		if snap, err := h.AddProjectDirCreating(made); err != nil || snap.Project.Dir != made || !exists(made) {
+			t.Errorf("AddProjectDirCreating = %+v, %v", snap.Project, err)
 		}
 	})
 
