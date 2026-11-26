@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/nednella/agentos/internal/session"
@@ -34,6 +35,39 @@ func TestHeldPromptsWaitForTheirTurn(t *testing.T) {
 			}
 			if got := s.holds(id, command); got != tt.cmd {
 				t.Errorf("a command held %v, want %v", got, tt.cmd)
+			}
+		})
+	}
+}
+
+func TestDroppedMessageTellsItsSender(t *testing.T) {
+	const id = "main/abcdefgh"
+	for _, tt := range []struct {
+		name string
+		drop func(s *Sessions) int
+		want error
+	}{
+		{"a stop", func(s *Sessions) int { return s.DropTold(id) }, ErrToldStopped},
+		{"a delete", func(s *Sessions) int { return s.dropTold(id, errToldDeleted) }, errToldDeleted},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newSessions(Options{})
+			done := make(chan error, 1)
+			command := heldPrompt{Told: Told{Text: "/review"}, command: true}
+			s.wakes[id] = []heldPrompt{{Told: Told{From: "main/bbbbbbbb", Text: "Check the tests", Done: done}}, command, {Told: Told{From: "main/cccccccc", Text: "No one asks"}}}
+			if n := tt.drop(s); n != 2 {
+				t.Errorf("dropped %d, want the 2 told messages", n)
+			}
+			select {
+			case err := <-done:
+				if !errors.Is(err, tt.want) {
+					t.Errorf("Done got %v, want %v", err, tt.want)
+				}
+			default:
+				t.Error("Done got nothing")
+			}
+			if got := s.wakes[id]; len(got) != 1 || got[0] != command {
+				t.Errorf("held %+v, want only the command", got)
 			}
 		})
 	}

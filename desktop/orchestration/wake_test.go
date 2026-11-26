@@ -361,3 +361,70 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 	}
 	noMoreResults(t, h, parent, c, 1)
 }
+
+func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
+	h := apptest.New(t)
+	repoFixture(t, h)
+	parent := threadWith(t, h, "Plan the release", session.Supervised)
+	if parent.Worktree == "" {
+		t.Fatalf("the parent has no worktree: %+v", parent)
+	}
+	c := mustDelegate(t, h, parent.ID, `{"task":"slow","title":"Count files","access":"read","where":"worktree"}`).ID
+	if err := h.SettleThread(parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	// A folder that is not the parent's worktree at its path refuses the parent's wake.
+	if err := os.RemoveAll(parent.Worktree); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(parent.Worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
+	time.Sleep(1500 * time.Millisecond)
+	if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
+		t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
+	}
+	if h.Sessions().Reported(c) != 0 {
+		t.Fatal("the result is recorded as given while the parent could not wake for it")
+	}
+	if err := os.Remove(parent.Worktree); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the result once the parent can wake", func() bool { return len(resultLines(t, h, parent.ID, c)) > 0 })
+	noMoreResults(t, h, parent.ID, c, 1)
+}
+
+func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
+	h := apptest.New(t)
+	top := newThread(t, h, "Plan the release").ID
+	parent := mustDelegate(t, h, top, `{"task":"keep working","title":"Check the build"}`).ID
+	apptest.Eventually(t, "the parent's task taken in", func() bool { return stdinHas(t, h, parent, "keep working") })
+	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
+	// The parent waits on the owner in the middle of its turn, so the result is held for it.
+	h.Hook(t, parent, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	apptest.Eventually(t, "the parent waiting", func() bool { return row(t, h, parent).State == session.Waiting })
+	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
+
+	if stopped, err := stopAs(t, h, top, parent); err != "" || !slices.Contains(stopped, parent) {
+		t.Fatalf("stop = %q, %q", stopped, err)
+	}
+	apptest.Eventually(t, "the parent's stopped turn to end", func() bool { return turnEnded(t, h, parent) })
+	time.Sleep(time.Second)
+	if lines := resultLines(t, h, parent, c); len(lines) != 0 {
+		t.Fatalf("the parent read %q after the stop dropped the result", lines)
+	}
+	if got := h.Sessions().Reported(c); got != 0 {
+		t.Fatalf("Reported = %d after the result was dropped, want 0", got)
+	}
+	if asleep(t, h, c) {
+		t.Error("the child went to sleep before its result went")
+	}
+
+	if a := sendAs(t, h, top, `{"thread":"`+parent+`","text":"Carry on"}`); a.ID == "" {
+		t.Fatalf("send answered %+v, want the message sent", a)
+	}
+	apptest.Eventually(t, "the result at the parent's next turn", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
+	apptest.Eventually(t, "the result recorded as given", func() bool { return h.Sessions().Reported(c) > 0 })
+	noMoreResults(t, h, parent, c, 1)
+}

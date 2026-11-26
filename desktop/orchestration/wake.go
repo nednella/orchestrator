@@ -2,7 +2,9 @@ package orchestration
 
 import (
 	"context"
+	"errors"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,8 +13,14 @@ import (
 	"github.com/nednella/agentos/internal/prompts"
 )
 
-// reportTick is how often a result in hand looks again at the wait or the held message it goes by.
-const reportTick = 100 * time.Millisecond
+const (
+	// reportTick is how often a result in hand looks again at the wait it may go by.
+	reportTick = 100 * time.Millisecond
+	// retryFirst and retryMost are the first and the longest pause before a result the parent could not take goes
+	// again, and how often a dropped one looks for the parent's next turn.
+	retryFirst = time.Second
+	retryMost  = time.Minute
+)
 
 // report is a child's turn that ended at the seq end, whose result goes to its parent. waited says that the parent's
 // wait on the child was in flight when the turn ended, and so gives the parent the result.
@@ -87,12 +95,7 @@ func (c *Commands) give(r report) {
 	if !given && c.answeredWith(w) < r.end {
 		later := c.threads.Reported(r.child) > 0
 		text := sessions.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
-		id, err := c.threads.Tell(r.parent, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true})
-		if err != nil {
-			log.Printf("agentos: thread %s did not get the result of its child %s: %v", r.parent, r.child, err)
-			return
-		}
-		if id == "" && !c.untilSent(ctx, r.parent) {
+		if !c.sendResult(ctx, w, r.end, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
 			return
 		}
 	}
@@ -134,20 +137,75 @@ func (c *Commands) waitGets(ctx context.Context, w waitOn, end int64) bool {
 	}
 }
 
-// untilSent waits while a message is held for the thread id, as a result is while the thread waits on the owner's
-// answer to an approval, and says whether it went: a held message lives only in the app, so one the app quits with
-// is sent again when it starts.
-func (c *Commands) untilSent(ctx context.Context, id string) bool {
-	tick := time.NewTicker(reportTick)
+// sendResult tells the parent its child's result m, which ends at the seq end, until the parent takes it, and says
+// whether it did: false once the parent is gone or ctx ends. A message held for the parent counts once it goes. One
+// dropped because the parent was stopped goes again once the parent's next turn or run starts, unless a wait of the
+// parent's took the result meanwhile; one the parent could not take, as when its wake was refused, goes again after a
+// pause that doubles up to a minute.
+func (c *Commands) sendResult(ctx context.Context, w waitOn, end int64, m sessions.Told) bool {
+	pause := retryFirst
+	for {
+		done := make(chan error, 1)
+		m.Done = done
+		id, err := c.threads.Tell(w.waiter, m)
+		if err == nil && id == "" {
+			select {
+			case err = <-done:
+			case <-ctx.Done():
+				return false
+			}
+		}
+		if err == nil {
+			return true
+		}
+		ch, gone := c.threads.ChatOf(w.waiter)
+		if gone != nil {
+			log.Printf("agentos: thread %s did not get the result of its child %s: %v", w.waiter, w.thread, err)
+			return false
+		}
+		if errors.Is(err, sessions.ErrToldStopped) {
+			if !c.untilRuns(ctx, ch) {
+				return false
+			}
+			if c.answeredWith(w) >= end {
+				return true
+			}
+			continue
+		}
+		log.Printf("agentos: thread %s did not get the result of its child %s, trying again in %v: %v", w.waiter, w.thread, pause, err)
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(pause):
+		}
+		pause = min(2*pause, retryMost)
+	}
+}
+
+// untilRuns waits until the thread's log has a user message or a run's start after what it holds now: the thread
+// stopped at another thread's ask takes nothing until then. It says false once the thread is gone or ctx ends.
+func (c *Commands) untilRuns(ctx context.Context, ch sessions.Chat) bool {
+	from := c.turnOf(ch).newest
+	tick := time.NewTicker(retryFirst)
 	defer tick.Stop()
-	for c.threads.HoldsTold(id) {
+	for {
 		select {
 		case <-ctx.Done():
 			return false
 		case <-tick.C:
 		}
+		if _, err := c.threads.ChatOf(ch.ID); err != nil {
+			return false
+		}
+		events, err := chatlog.ReadLog(ch.Log, from)
+		if err != nil {
+			log.Printf("agentos: reading the chat log of %s: %v", ch.ID, err)
+			continue
+		}
+		if slices.ContainsFunc(events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindUser || e.Kind == chatlog.KindStart }) {
+			return true
+		}
 	}
-	return true
 }
 
 // outcomeText is how a child's turn ended, as its result tells the parent.

@@ -955,7 +955,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 	delete(s.nums, id)
 	delete(s.readers, id)
 	delete(s.spent, id)
-	s.dropTold(id, "it was deleted")
+	s.dropTold(id, errToldDeleted)
 	delete(s.wakes, id)
 	delete(s.afterTurn, id)
 	delete(s.cwds, id)
@@ -3105,6 +3105,9 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 		}
 		if err := s.awaken(id); err != nil {
 			log.Printf("agentos: thread %s did not get %d messages held for it: %v", id, len(told), err)
+			for _, h := range told {
+				h.gone(err)
+			}
 			return
 		}
 		now = told
@@ -3126,6 +3129,7 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 		case err != nil:
 			log.Printf("agentos: thread %s did not get a message from %s: %v", id, cmp.Or(h.From, "agentos"), err)
 		}
+		h.gone(err)
 	}
 }
 
@@ -3157,10 +3161,23 @@ func (s *Sessions) doneDelivering(id string, refused bool) {
 // which Text frames for Claude, and Result marks a child's result; the log keeps both for the chat to show. Steer stops
 // the turn that runs so the thread takes it in now. Ranked holds a message a thread sends of its own accord to the rank
 // rule: it may reach no thread whose access is above its own, when it is told and again when it goes, also after being
-// held.
+// held. Done, when set, gets how a message Tell held ended: nil once its thread took it, else why it was dropped. It
+// gets one value and must have room for it.
 type Told struct {
 	From, Text, Body      string
 	Result, Steer, Ranked bool
+	Done                  chan<- error
+}
+
+// gone tells m's sender how the held message ended, when it asked to know.
+func (m Told) gone(err error) {
+	if m.Done == nil {
+		return
+	}
+	select {
+	case m.Done <- err:
+	default:
+	}
 }
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
@@ -3337,24 +3354,36 @@ func (s *Sessions) SetReported(id string, seq int64) error {
 func (s *Sessions) DropTold(id string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.dropTold(id, "it was stopped")
+	return s.dropTold(id, ErrToldStopped)
 }
 
-// dropTold drops the messages threads told the thread that are held for it, logs it with why, and says how many. It
-// needs mu.
-func (s *Sessions) dropTold(id, why string) int {
+var (
+	// ErrToldStopped is what a held message's Done gets when its thread was stopped at another thread's ask before it
+	// went: the thread takes nothing more until something else starts its next turn.
+	ErrToldStopped = errors.New("it was stopped")
+	errToldDeleted = errors.New("it was deleted")
+)
+
+// dropTold drops the messages threads told the thread that are held for it, logs it with why, which each one's Done
+// gets, and says how many. It needs mu.
+func (s *Sessions) dropTold(id string, why error) int {
 	all := s.wakes[id]
 	kept := slices.DeleteFunc(slices.Clone(all), func(h heldPrompt) bool { return !h.command })
 	dropped := len(all) - len(kept)
 	if dropped == 0 {
 		return 0
 	}
+	for _, h := range all {
+		if !h.command {
+			h.gone(why)
+		}
+	}
 	if len(kept) > 0 {
 		s.wakes[id] = kept
 	} else {
 		delete(s.wakes, id)
 	}
-	log.Printf("agentos: dropped %d messages held for thread %s: %s", dropped, id, why)
+	log.Printf("agentos: dropped %d messages held for thread %s: %v", dropped, id, why)
 	return dropped
 }
 
