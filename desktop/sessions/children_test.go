@@ -14,14 +14,17 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/session"
 )
 
-// childOf starts a child of the live thread parent, with parent's access, working where says.
+// childOf starts a child of the live thread parent, with parent's access, working where says. Its turn stays open, so
+// it never goes to sleep by itself once its result reaches its parent: only a test's putToSleep or sleepsByItself puts
+// it to sleep.
 func childOf(t *testing.T, h *apptest.Harness, parent sessions.Session, title, where string) sessions.Session {
 	t.Helper()
-	c, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "Do the work", Title: title, Access: parent.Access, Where: where})
+	c, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "keep working", Title: title, Access: parent.Access, Where: where})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,13 +34,25 @@ func childOf(t *testing.T, h *apptest.Harness, parent sessions.Session, title, w
 	return c
 }
 
-// putToSleep puts the thread to sleep and waits until its row says so.
+// putToSleep puts the thread to sleep as the owner does and waits until its row says so. No sleep of its own races it:
+// a child of childOf keeps its turn open, and a thread with no parent has no result to give.
 func putToSleep(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the thread asleep", func() bool { return stateOf(h, id) == "settled" })
+}
+
+// sleepsByItself ends the child's open turn, so its result goes to its parent and the child goes to sleep by itself, and
+// waits until its row and its log say so. It is the child's first sleep.
+func sleepsByItself(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	if err := h.Interrupt(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the child asleep by itself", func() bool { return stateOf(h, id) == "settled" })
+	assertExits(t, h, id, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle})
 }
 
 // cleanupOf waits until the thread's clean-up has ended with an entry in the log, and returns the entry.
@@ -408,7 +423,7 @@ func TestChildSleepKeepsItsWorktreeWhileItsShellIsOpen(t *testing.T) {
 			}
 			shellRuns(t, h, shell, tc.command, tc.command != "")
 
-			putToSleep(t, h, child.ID)
+			sleepsByItself(t, h, child.ID)
 			if entry := cleanupOf(t, h, child); entry.Status != "blocked" || entry.Reason != "a shell of this thread is open" || len(entry.Removed) != 0 {
 				t.Errorf("the clean-up = %+v, want it kept for the child's shell", entry)
 			}
@@ -436,7 +451,7 @@ func TestChildWithNoShellLosesItsEmptyWorktree(t *testing.T) {
 	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
 	others := []string{newShell(t, h, parent.ID), newShell(t, h, "")}
 
-	putToSleep(t, h, child.ID)
+	sleepsByItself(t, h, child.ID)
 	if entry := cleanupOf(t, h, child); entry.Status != "done" || !slices.Equal(entry.Removed, []string{"worktree " + child.Worktree}) {
 		t.Errorf("the clean-up = %+v, want the worktree removed", entry)
 	}
