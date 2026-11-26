@@ -5,6 +5,7 @@ import { Terminal as Xterm } from '@xterm/xterm'
 import { useEffect, useRef } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
+import { makeInputBatch } from '../inputBatch'
 import { useLayout } from '../LayoutContext'
 import { terminalFontFrom, terminalThemeFrom } from '../terminalTheme'
 
@@ -113,6 +114,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       },
     }
 
+    const write = makeInputBatch((data) => void api.termWrite(id, data), requestAnimationFrame)
     term.attachCustomKeyEventHandler((event) => {
       if (kind === 'shell' && event.key === 'Escape' && event.type === 'keydown') {
         const now = performance.now()
@@ -131,7 +133,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
         if (event.type === 'keydown') {
           event.preventDefault()
-          void api.termWrite(id, event.key === 'ArrowLeft' ? LINE_START : LINE_END)
+          write(event.key === 'ArrowLeft' ? LINE_START : LINE_END)
         }
         return false
       }
@@ -139,7 +141,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       if (event.key === 'Enter' && event.shiftKey) {
         if (event.type === 'keydown') {
           event.preventDefault()
-          void api.termWrite(id, SHIFT_ENTER)
+          write(SHIFT_ENTER)
         }
         return false
       }
@@ -172,9 +174,9 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       // version, colours). tmux has stopped waiting by the time the answer
       // crosses the bridge, so it would land in the agent's prompt as typed text.
       if (DEVICE_REPORT.test(data)) return
-      void api.termWrite(id, data)
+      write(data)
     })
-    term.onBinary((data) => void api.termWrite(id, data))
+    term.onBinary(write)
 
     let stopStream = () => {}
     let disposed = false
