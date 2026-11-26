@@ -6,6 +6,7 @@ import { actionsFor } from '../actions'
 import { barLayout } from '../bottomBar'
 import type { BarButtonId } from '../bottomBar'
 import { useLayout } from '../LayoutContext'
+import { openUsage, useUsageOpen } from '../usageOpen'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
 import { Icon } from './Icon'
@@ -27,6 +28,7 @@ export function SidebarBottomBar() {
   const { report, digestUnseenCount } = useAgentos('report', 'digestUnseenCount')
   const layout = useLayout()
   const latestAgentos = useLatestAgentos()
+  const usageOpen = useUsageOpen()
   const bar = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(Infinity)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
@@ -47,12 +49,11 @@ export function SidebarBottomBar() {
     settings: () => runAction('settings'),
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),
     issues: () => report(() => layout.showPanelView('issues', { expanded: true })),
-    // The Stats page until the Usage modal comes.
-    usage: () => runAction('stats'),
+    usage: openUsage,
     stats: () => runAction('stats'),
     news: () => runAction('digest'),
   }
-  const pressed: Partial<Record<BarButtonId, boolean>> = { stats: layout.statsOpen, news: layout.digestOpen }
+  const pressed: Partial<Record<BarButtonId, boolean>> = { stats: layout.statsOpen, usage: usageOpen, news: layout.digestOpen }
   const unseen: Partial<Record<BarButtonId, number>> = { news: digestUnseenCount }
   const { shown, more } = barLayout(width)
 

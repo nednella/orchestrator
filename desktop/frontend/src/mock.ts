@@ -191,7 +191,7 @@ export function createMock(params: URLSearchParams) {
     lineage: params.has('lineage'),
     // childask=question or childask=plan has the child ask that; any other value a tool approval.
     childAsk: params.get('childask'),
-    // limits=unsupported is a Claude Code without get_usage, limits=failed a probe that did not answer.
+    // limits=unsupported is a Claude Code without get_usage, limits=failed a probe that did not answer, limits=none nothing read yet.
     limits: params.get('limits'),
   }
   const handlers = new Map<string, Set<Handler>>()
@@ -1116,6 +1116,7 @@ export function createMock(params: URLSearchParams) {
     const hours = (h: number) => at + h * 3_600_000
     const weekly = { name: 'seven_day', label: 'Weekly', left: 18, resetsAt: hours(3 * 24 + 4) }
     if (flags.limits === 'unsupported') return { windows: [weekly], at, unsupported: true, error: '' }
+    if (flags.limits === 'none') return { windows: [], at: 0, unsupported: false, error: '' }
     if (flags.limits === 'failed') return { windows: [], at: 0, unsupported: false, error: 'the usage probe did not answer: context deadline exceeded' }
     return {
       windows: [{ name: 'five_hour', label: 'Session', left: 62, resetsAt: hours(2) + 5 * 60_000 }, weekly, { name: 'model:Fable', label: 'Weekly · Fable', left: 9, resetsAt: hours(3 * 24 + 4) }],

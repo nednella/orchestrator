@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ConfirmHost } from './components/ConfirmHost'
+import { UsageModal } from './components/UsageModal'
 import { DigestView } from './components/DigestView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
@@ -81,6 +82,7 @@ export function App() {
         <PatchNotes />
         <Toasts />
       </div>
+      <UsageModal />
       <ConfirmHost />
       {!network.online && <OfflineSplash retrying={network.retrying} onRetry={() => void network.retry()} />}
       {splash !== 'done' && <Splash stage={splash} onStage={setSplash} />}

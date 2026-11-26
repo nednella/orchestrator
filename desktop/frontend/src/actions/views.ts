@@ -1,4 +1,5 @@
 import { toggleContextCard } from '../contextCardOpen'
+import { toggleUsage } from '../usageOpen'
 import type { Action, ActionContext } from './types'
 
 export const viewActions = ({ a, layout, current }: ActionContext): Action[] => [
@@ -37,6 +38,16 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     shortcut: { key: 's', code: 'KeyS', alt: true },
     uiCommand: 'stats',
     run: layout.toggleStats,
+  },
+  {
+    id: 'usage',
+    label: 'Usage',
+    group: 'App',
+    shortcut: { key: 'u' },
+    run() {
+      if (document.activeElement?.closest('.xterm')) return
+      toggleUsage()
+    },
   },
   {
     id: 'toggle-context-card',
