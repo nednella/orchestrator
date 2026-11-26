@@ -38,11 +38,15 @@ type started struct {
 
 // delegate starts a child of the caller for the task the input gives, in the project the input names, else the
 // caller's. The child gets the caller's access unless the input asks for less, and works in a folder when it is Read,
-// the caller's in the caller's own project, else in a worktree of its own.
+// the caller's in the caller's own project, else in a worktree of its own. A side chat starts none: the child would
+// outlive it, since a side chat goes with its thread.
 func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request) (string, error) {
 	var in delegateInput
 	if err := decode(req.Opts["input"], &in); err != nil {
 		return "", err
+	}
+	if c.threads.SideChat(caller) {
+		return "", errors.New("A side chat cannot delegate")
 	}
 	access := c.threads.AccessOf(caller)
 	if in.Access != "" {
