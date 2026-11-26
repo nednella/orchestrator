@@ -69,6 +69,11 @@ func (m message) event(kind chat.Kind, id string) chat.Event {
 	return chat.Event{Kind: kind, ID: id, Text: m.text, Files: m.files, From: m.from, Body: m.body, Result: m.result}
 }
 
+// unsent is the event that says the message id never reached Claude, with the words the chat shows of it.
+func (m message) unsent(id string) chat.Event {
+	return chat.Event{Kind: chat.KindUnsent, ID: id, Text: m.text, From: m.from, Body: m.body, Result: m.result}
+}
+
 // interruptRequest is an interrupt written to Claude and the messages that were queued then.
 type interruptRequest struct {
 	id     string
@@ -225,7 +230,8 @@ func (h *host) notReached() {
 		h.mu.Lock()
 		delete(h.queued, e.ID)
 		h.mu.Unlock()
-		if _, err := h.publish(chat.Event{Kind: chat.KindUnsent, ID: e.ID, Text: e.Text, Error: true}); err != nil {
+		e.Error = true
+		if _, err := h.publish(e); err != nil {
 			fmt.Fprintf(h.echo, "host: %v\n", err)
 		}
 	}
@@ -758,7 +764,7 @@ func (h *host) send(m message) (string, error) {
 		return "", err
 	}
 	if !h.spoke.Load() {
-		h.unreached = append(h.unreached, chat.Event{ID: id, Text: m.text})
+		h.unreached = append(h.unreached, m.unsent(id))
 	}
 	return id, nil
 }
@@ -876,7 +882,7 @@ func (h *host) stillQueued(request string, held json.RawMessage) {
 			continue
 		}
 		delete(h.queued, id)
-		e, err := h.appendLocked(chat.Event{Kind: chat.KindUnsent, ID: id, Text: m.text})
+		e, err := h.appendLocked(m.unsent(id))
 		if err != nil {
 			fmt.Fprintf(h.echo, "host: %v\n", err)
 			continue

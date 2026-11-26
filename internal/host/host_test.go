@@ -1926,6 +1926,51 @@ func TestSendKeepsTheBodyAndTheResultMark(t *testing.T) {
 	}
 }
 
+func TestUnsentKeepsTheBody(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	lost, err := SendMessage(ctxT(t), h.socket, Message{Text: "lost", From: "main/bbbbbbbb", Body: "the bare words"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Interrupt(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	if e := waitKind(t, events, chat.KindUnsent); e.ID != lost || e.Body != "the bare words" || e.From != "main/bbbbbbbb" {
+		t.Errorf("unsent = %+v, want the message's bare words and sender", e)
+	}
+}
+
+func TestAMessageAFailedStartNeverReadKeepsItsBody(t *testing.T) {
+	t.Parallel()
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model", "AOS_FAKE_REJECT_AFTER=500ms")
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "APPLICATION_PROMPT: hi", From: "main/aaaaaaaa", Body: "hi"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-h.done:
+		h.done <- err
+	case <-time.After(10 * time.Second):
+		t.Fatal("the host did not end with claude")
+	}
+	logged, err := chat.ReadLog(h.log, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(logged, func(e chat.Event) bool { return e.Kind == chat.KindUnsent })
+	if i < 0 {
+		t.Fatalf("no unsent event in %+v", logged)
+	}
+	if e := logged[i]; e.Body != "hi" || e.From != "main/aaaaaaaa" || !e.Error {
+		t.Errorf("unsent = %+v, want the bare words, the sender and an error", e)
+	}
+}
+
 func TestAThreadsMessageNeverAnswersAnApproval(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)

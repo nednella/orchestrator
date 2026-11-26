@@ -295,7 +295,7 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
       // An unsent error is a message a Claude that failed at its start never read, sent or queued.
       case 'unsent': {
         if (!e.id || (!queued.has(e.id) && !e.error)) return
-        const notice = unsent(e.id, queued.get(e.id)?.text ?? e.text ?? '', e.at, e.error)
+        const notice = unsent(e.id, queued.get(e.id)?.text ?? shownText(e), e.at, e.error)
         if (turn) turn.unsent.push(notice)
         else items.push(notice)
         return

@@ -808,6 +808,8 @@ test("the app's mark is off every message the chat shows", () => {
     ['Look at the cart too.'],
     'a queued message from a thread',
   )
+  const lost = buildTimeline(log({ kind: 'unsent', id: 'q2', text: 'APPLICATION_PROMPT: Look at the cart too.', from: 'shop/other234', body: 'Look at the cart too.', error: true }), {})
+  assert.deepEqual(only(lost.items, 'notice').map((n) => n.text), ['Not sent: Look at the cart too.'], 'a message from a thread that never reached Claude')
 })
 
 test('a delegate call that gets no answer ends with its turn', () => {
