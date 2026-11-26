@@ -39,3 +39,13 @@ func (kernel) args(pid int) (argv, env []string, err error) {
 }
 
 func (kernel) signal(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) }
+
+// Busy says whether another process group runs in front on the terminal of the process pid, as on a shell's terminal
+// while a command runs in it. A process with no terminal is not busy.
+func Busy(pid int) (bool, error) {
+	k, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+	if err != nil {
+		return false, err
+	}
+	return k.Eproc.Tpgid > 0 && int(k.Eproc.Tpgid) != pid, nil
+}

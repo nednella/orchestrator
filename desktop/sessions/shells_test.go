@@ -283,39 +283,41 @@ func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {
 
 // commandHarness is a shellHarness whose login shell is bash, which names its own process as it is called; macOS's sh
 // runs as bash.
+// commandHarness is an app whose shells run sh, which macOS names bash once it runs: a shell is busy by its terminal,
+// never by its name.
 func commandHarness(t *testing.T) *apptest.Harness {
 	t.Helper()
-	t.Setenv("SHELL", "/bin/bash")
+	t.Setenv("SHELL", "/bin/sh")
 	t.Setenv("HOME", t.TempDir())
 	return newHarness(t)
 }
 
-// shellRuns waits until a refresh finds the shell running command, busy or not.
+// shellRuns waits until a refresh finds the shell running command, busy or not. An empty command is the shell itself.
 func shellRuns(t *testing.T, h *apptest.Harness, id, command string, busy bool) {
 	t.Helper()
-	eventually(t, fmt.Sprintf("the shell running %s", command), func() bool {
+	eventually(t, fmt.Sprintf("the shell running %q", command), func() bool {
 		h.Sessions().Refresh()
 		got, ok := shellOf(h, id)
-		return ok && got.Command == command && got.Busy == busy
+		return ok && got.Busy == busy && (got.Command == command || command == "" && got.Command != "sleep")
 	})
 }
 
 func TestShellReportsItsRunningCommand(t *testing.T) {
 	h := commandHarness(t)
 	id := newShell(t, h, "")
-	shellRuns(t, h, id, "bash", false)
+	shellRuns(t, h, id, "", false)
 	typeIn(t, h, id, "sleep 30")
 	shellRuns(t, h, id, "sleep", true)
 	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+id+":", "C-c").Run(); err != nil {
 		t.Fatal(err)
 	}
-	shellRuns(t, h, id, "bash", false)
+	shellRuns(t, h, id, "", false)
 }
 
 func TestChangedCommandIsSentAgain(t *testing.T) {
 	h := commandHarness(t)
 	id := newShell(t, h, "")
-	shellRuns(t, h, id, "bash", false)
+	shellRuns(t, h, id, "", false)
 	sent := func() []sessions.Shell {
 		list, _ := h.Rec.Last("shells").(scoped.List[sessions.Shell])
 		if list.Project != "main" {

@@ -88,6 +88,7 @@ type Shell struct {
 	Name    session.Name
 	Thread  string // the thread the shell belongs to, "" for a shell of the project
 	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
+	PID     int    // the shell's own process, which its pane runs
 	Path    string // the folder the shell is in now; only ShellPaths reads it
 }
 
@@ -152,7 +153,8 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 			continue
 		}
 		if name.IsShell() {
-			shells = append(shells, Shell{Name: name, Thread: f[15], Command: f[16]})
+			pid, _ := strconv.Atoi(f[12])
+			shells = append(shells, Shell{Name: name, Thread: f[15], Command: f[16], PID: pid})
 			continue
 		}
 		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10], Branch: f[13], Parent: f[14]}

@@ -4195,12 +4195,18 @@ func (s *Sessions) shellsIn(key string) []Shell {
 		}
 	}
 	slices.SortFunc(mine, func(a, b term.Shell) int { return a.Name.Shell - b.Name.Shell })
-	login := filepath.Base(loginShell())
 	list := make([]Shell, len(mine))
 	for i, sh := range mine {
-		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread, Command: sh.Command, Busy: sh.Command != "" && sh.Command != login}
+		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread, Command: sh.Command, Busy: shellBusy(sh)}
 	}
 	return list
+}
+
+// shellBusy says whether a command runs in front in the shell, as its terminal shows: a shell that waits for input is
+// in front itself.
+func shellBusy(sh term.Shell) bool {
+	busy, err := procs.Busy(sh.PID)
+	return err == nil && busy
 }
 
 // announceShells sends each project's shells when they changed since they were last sent. It needs mu.

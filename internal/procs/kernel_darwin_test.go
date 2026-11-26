@@ -93,6 +93,18 @@ func TestKernelReadsAProcess(t *testing.T) {
 	}
 }
 
+func TestProcessWithNoTerminalIsNotBusy(t *testing.T) {
+	cmd := exec.Command("sleep", "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	if busy, err := Busy(cmd.Process.Pid); err != nil || busy {
+		t.Errorf("Busy = %v, %v; want false", busy, err)
+	}
+}
+
 func TestServersAndStopOnThisMac(t *testing.T) {
 	socket := t.TempDir() + "/agentos.sock"
 	id := fmt.Sprintf("test/%d", os.Getpid())

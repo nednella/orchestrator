@@ -261,6 +261,12 @@ func TestShellIsTaggedWithItsThread(t *testing.T) {
 	byShell := func(a, b Shell) int { return a.Name.Shell - b.Name.Shell }
 	_, shells, err := tmux.ListAll(ctx)
 	slices.SortFunc(shells, byShell)
+	for i := range shells {
+		if shells[i].PID == 0 {
+			t.Errorf("%s has no process", shells[i].Name)
+		}
+		shells[i].PID = 0
+	}
 	want := []Shell{{Name: thread, Thread: "demo/a1", Command: "sleep"}, {Name: project, Command: "sleep"}}
 	if err != nil || !slices.Equal(shells, want) {
 		t.Errorf("ListAll shells = %+v, %v; want %+v", shells, err, want)
