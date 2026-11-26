@@ -3253,9 +3253,14 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	}
 	if m.Result && s.asleepForCleanup(id) {
 		s.mu.Lock()
-		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m, nextTurn: true})
+		// Asked again under the lock: a thread deleted meanwhile has had its messages dropped, and one woken has had its
+		// next turn start, so a result held for either would wait forever.
+		if _, settled := s.ended[id]; settled {
+			s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m, nextTurn: true})
+			s.mu.Unlock()
+			return "", nil
+		}
 		s.mu.Unlock()
-		return "", nil
 	}
 	if err := s.awaken(id); err != nil {
 		return "", err
