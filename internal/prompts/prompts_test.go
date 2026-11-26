@@ -3,6 +3,9 @@ package prompts
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -14,15 +17,15 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		text string
 		hash string
 	}{
-		{"browser", Browser(), "926e745d1d793d4cc18ced3cc6228d0f77e729f20bc7d3d3ac9c535546cf68ae"},
-		{"session", Session(), "12b2e2270dd05b51e702721d9233bb01ba6ed3979be36942b2b489492425fad0"},
-		{"thread", Thread(), "f6704bff01616896a5f0c833891bf924a166a2a782c864610ba4ec93661862a0"},
-		{"worktree", Worktree("{branch}", "{worktree}"), "7baaded65c2f3d475e2d43dc2c998d28e8c9feb839f55f0384b4fc249e0c9e76"},
-		{"fork", Fork("{title}"), "36966801271daf33064acc775e695a81b0dfcf4d18e6cd36ea6729b4fcb40264"},
-		{"child", Child("{parent}"), "c03b84f66728347627298a325f5f0f196a5ff02db99cd845ed02ad2c695553e4"},
+		{"browser", Browser(), "eaa2c696c1572510d631edd9644c5635af7848e1f885bc230cfa1d8baeae1a21"},
+		{"session", Session(), "69dc352f3cb4f88d83faf22a1c411b17ca6c16b8724aee370ba1a78276a1464a"},
+		{"thread", Thread(), "6fe85b8d2f1b3210c0996a3e232a4447046d4e4eca5b1da2d3bf5cc68e1a1f0c"},
+		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
+		{"fork", Fork("{title}"), "5134e8f39ae74781ddf512e2e91cfef6d7e198cc2f7a2787518e1468582cf62e"},
+		{"child", Child("{parent}"), "86bf6448ba50c747ee084c5ae934f71c5cad61a0447fba09e7fbdf49cc251874"},
 		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
 		{"from thread", FromThread("{title}", "{id}", "{text}"), "92c5efbfeb4efed58314ba6e8fbee1efdf2d9647e82d07e9c4aa456c4918011b"},
-		{"browser help", BrowserHelp(), "0d1fdc28917e77454388c34e9a0c92e2b9ae9f9cbfd597c512e2039857925076"},
+		{"browser help", BrowserHelp(), "749d45535cd0ce50a9dd79bdb31ea967bf3a430843028b14506a64be12db1dd4"},
 		{"setup brief", SetupBrief(), "3fd3fdfb3c5df412ad078a78f02d163e5ad0b5be8ee1c0e97c06cd3ae2dd81be"},
 		{"setup start", SetupStart(), "cf5d8bdf29eda3fed3e8a7dd0fc7c5eb2129b3f810f26cf0df0da908a13e4606"},
 		{"setup review", SetupReview(), "6dc96647c3e24553864850e3a069dc7af5ad73d3cfaa0510c25952fd9f762ad7"},
@@ -47,14 +50,14 @@ func TestPromptsKeepTheirText(t *testing.T) {
 
 func TestForkNamesItsSource(t *testing.T) {
 	got := Fork("Fix the login")
-	if !strings.Contains(got, `fork of the thread "Fix the login"`) || strings.Contains(got, "{title}") || !strings.Contains(got, "never run `agentos track`") {
+	if !strings.Contains(got, `fork of the thread "Fix the login"`) || strings.Contains(got, "{title}") || !strings.Contains(got, "never call `track`") {
 		t.Errorf("Fork = %q", got)
 	}
 }
 
 func TestChildNamesItsParent(t *testing.T) {
 	got := Child("Plan \"the\"\nrelease")
-	if !strings.Contains(got, `Thread "Plan 'the' release" started this thread for one task`) || !strings.Contains(got, "Never run `agentos track` there") || strings.Contains(got, "{parent}") {
+	if !strings.Contains(got, `Thread "Plan 'the' release" started this thread for one task`) || !strings.Contains(got, "Never call `track` there") || strings.Contains(got, "{parent}") {
 		t.Errorf("Child = %q", got)
 	}
 }
@@ -111,7 +114,7 @@ func TestForkKeepsTheTitleOnOneLine(t *testing.T) {
 
 func TestWorktreeNamesItsBranchAndFolder(t *testing.T) {
 	got := Worktree("issue-7", "/p/trees/issue-7")
-	for _, want := range []string{"`/p/trees/issue-7`", "`issue-7`", "Never make a worktree", "agentos track --branch <name>"} {
+	for _, want := range []string{"`/p/trees/issue-7`", "`issue-7`", "Never make a worktree", "Call `track` only for another branch"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Worktree lacks %q:\n%s", want, got)
 		}
@@ -171,5 +174,41 @@ func TestEveryToolHasADescription(t *testing.T) {
 	}
 	if Tool("nope") != "" {
 		t.Error("an unknown tool has a description")
+	}
+}
+
+// agentCommand is a command line a thread ran before the agentos tools took the commands' place.
+var agentCommand = regexp.MustCompile("`agentos |agentos (note|issue|new|show|track|refresh|browser|settle|open|--help)\\b")
+
+func TestNoPromptNamesTheCommand(t *testing.T) {
+	files, err := filepath.Glob("*.md")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no texts: %v", err)
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := agentCommand.Find(data); m != nil {
+			t.Errorf("%s names the command: %q", f, m)
+		}
+	}
+}
+
+func TestToolTextsNameTheTools(t *testing.T) {
+	for _, tt := range []struct {
+		name, text string
+		want       []string
+	}{
+		{"session", Session(), []string{"`note`", "`issue`", "`new_thread`", "`refresh`"}},
+		{"thread", Thread(), []string{"`issue`", "`note`", "`show`", "`track`", "`delegate`", "`wait`", "A child never gets more access than you have"}},
+		{"tool browser", Tool("browser"), []string{"`open`", "`screenshot`", "`close`", "--pin-tab", "dialog accept", "5 seconds"}},
+	} {
+		for _, want := range tt.want {
+			if !strings.Contains(tt.text, want) {
+				t.Errorf("%s lacks %q:\n%s", tt.name, want, tt.text)
+			}
+		}
 	}
 }

@@ -1,11 +1,11 @@
 <!-- placeholders: none -->
 
-This session has its own browser window with one tab. `agentos browser help` has the rules; the ones that matter most:
+This thread has its own browser window with one tab. The `browser` tool's text has the rules; the ones that matter most:
 
-- Start with `agentos browser open <url>`. It makes your window and loads the page. Until then every `agent-browser` command fails.
-- The window opens behind the owner's other windows. When the owner should look at the page, such as a design you made, add `--front` to raise it. Leave it off for your own checks and screenshots.
-- Drive the tab with `agent-browser` in Bash. It is set up for your tab: never pass `--session`, `--cdp` or `--pin-tab`, and never run `agent-browser connect`, `tab`, `window`, `inspect` or `close`. They take another session's tab or bring the browser in front of the owner's windows.
-- File what you built with `agentos browser screenshot --caption "<text>"`, and run `agentos browser close` when you are done.
+- Start with the `browser` tool's `open` and the page's `url`. It makes your window and loads the page. Until then every `agent-browser` command fails.
+- The window opens behind the owner's other windows. When the owner should look at the page, such as a design you made, set `front` to raise it. Leave it off for your own checks and screenshots.
+- Drive the tab with `agent-browser` in Bash. It is set up for your tab: never pass `--session`, `--cdp` or `--pin-tab`, and never run `agent-browser connect`, `tab`, `window`, `inspect` or `close`. They take another thread's tab or bring the browser in front of the owner's windows.
+- File what you built with the `browser` tool's `screenshot` and a `caption`, and call its `close` when you are done.
 
 agent-browser commands:
 

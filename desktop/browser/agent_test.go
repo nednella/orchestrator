@@ -152,7 +152,7 @@ func TestBrowserWithoutArgumentsShowsTheView(t *testing.T) {
 	if got := h.Rec.LastUI(); !resp.OK || resp.Out != "ok" || got.Name != "browser" || len(got.Args) != 0 {
 		t.Errorf("browser = %+v, ui %+v", resp, got)
 	}
-	if help := h.Ask(t, ctl.Request{Cmd: "browser", Args: []string{"help"}}); !help.OK || !strings.Contains(help.Out, "your session's browser window") {
+	if help := h.Ask(t, ctl.Request{Cmd: "browser", Args: []string{"help"}}); !help.OK || !strings.Contains(help.Out, "your thread's browser window") {
 		t.Errorf("browser help = %+v", help)
 	}
 }

@@ -317,8 +317,8 @@ func TestRegistryFindsAgentosInstalledLater(t *testing.T) {
 	}
 }
 
-func TestBrowserPromptNamesTheCommands(t *testing.T) {
-	for _, want := range []string{"agentos browser help", "agentos browser open", "agentos browser screenshot", "agentos browser close"} {
+func TestBrowserPromptNamesTheTool(t *testing.T) {
+	for _, want := range []string{"The `browser` tool's text has the rules", "`open`", "`front`", "`screenshot`", "`close`"} {
 		if !strings.Contains(prompts.Browser(), want) {
 			t.Errorf("the prompt lacks %q", want)
 		}

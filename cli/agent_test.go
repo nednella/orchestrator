@@ -222,7 +222,7 @@ func TestBrowserHelpWorksWithoutTheApp(t *testing.T) {
 	t.Setenv("AGENTOS_SOCKET", "/nonexistent/agentos.sock")
 	for _, args := range [][]string{{"browser", "help"}, {"browser", "--help"}} {
 		out, err := run(t, args...)
-		if err != nil || !strings.Contains(out, "open <url>") || !strings.Contains(out, "screenshot") {
+		if err != nil || !strings.Contains(out, "The `browser` tool drives your thread's browser window") {
 			t.Errorf("agentos %v = %q, %v", args, out, err)
 		}
 	}
