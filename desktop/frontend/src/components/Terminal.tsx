@@ -13,6 +13,7 @@ type TerminalProps = { id: string; active: boolean; kind?: 'session' | 'shell'; 
 
 const DOUBLE_ESC_MS = 500
 const RESIZE_SETTLE_MS = 120
+const INPUT_BATCH_MS = 16
 
 const BASE_FONT_PX = 14
 const SHIFT_ENTER = '\x1b[13;2u'
@@ -114,7 +115,8 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       },
     }
 
-    const write = makeInputBatch((data) => void api.termWrite(id, data), requestAnimationFrame)
+    // A timer, not an animation frame: WebKit holds frames back while the window is hidden.
+    const write = makeInputBatch((data) => void api.termWrite(id, data), (run) => window.setTimeout(run, INPUT_BATCH_MS))
     term.attachCustomKeyEventHandler((event) => {
       if (kind === 'shell' && event.key === 'Escape' && event.type === 'keydown') {
         const now = performance.now()
