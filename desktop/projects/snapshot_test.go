@@ -29,6 +29,7 @@ func snapshot(cfg app.Config) projects.Snapshot {
 	return projects.Snapshot{}
 }
 
+// Not parallel: it sets the process environment.
 func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 	root := t.TempDir()
 	api := filepath.Join(root, "api")
@@ -66,6 +67,7 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 	})
 }
 
+// Not parallel: it sets the process environment.
 func TestSnapshotNamesTheMachineFromOneRead(t *testing.T) {
 	dir := t.TempDir()
 	useConfig(t, "projects:\n  - {name: api, directory: "+dir+"}\n")

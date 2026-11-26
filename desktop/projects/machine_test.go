@@ -11,6 +11,7 @@ import (
 )
 
 func TestComputerName(t *testing.T) {
+	t.Parallel()
 	host, err := os.Hostname()
 	if err != nil {
 		t.Fatal(err)

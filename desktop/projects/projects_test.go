@@ -15,6 +15,7 @@ import (
 )
 
 func TestProjects(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	root := t.TempDir()
 	other, clash := filepath.Join(root, "a", "other"), filepath.Join(root, "b", "other")
@@ -121,6 +122,7 @@ func TestProjects(t *testing.T) {
 }
 
 func TestRegistryKeepAwake(t *testing.T) {
+	t.Parallel()
 	off := false
 	r := projects.NewRegistry("", project.Config{
 		KeepAwake: &off,
@@ -134,6 +136,7 @@ func TestRegistryKeepAwake(t *testing.T) {
 }
 
 func TestRegistryDir(t *testing.T) {
+	t.Parallel()
 	r := projects.NewRegistry("", project.Config{Projects: []project.Project{{Name: "Quiet Work", Dir: "/q"}}})
 	for key, want := range map[string]string{"quiet-work": "/q", "unlisted": ""} {
 		if got := r.Dir(key); got != want {
@@ -143,6 +146,7 @@ func TestRegistryDir(t *testing.T) {
 }
 
 func TestRegistryListSkipsMissingFolders(t *testing.T) {
+	t.Parallel()
 	here := t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	r := projects.NewRegistry(path, project.Config{

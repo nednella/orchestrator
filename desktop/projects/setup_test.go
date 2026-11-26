@@ -10,6 +10,7 @@ import (
 )
 
 func TestSetUpProject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if h.Snapshot().Project.NeedsSetup {
 		t.Error("a project with queue sections is offered setting up")
@@ -44,6 +45,7 @@ func TestSetUpProject(t *testing.T) {
 }
 
 func TestSetUpAddsAProjectMissingFromTheConfig(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{NoProject: true})
 	if snap := h.Snapshot(); snap.Project.Dir != h.Dir || !snap.Project.NeedsSetup {
 		t.Fatalf("the folder the app started in = %+v", snap.Project)
@@ -58,6 +60,7 @@ func TestSetUpAddsAProjectMissingFromTheConfig(t *testing.T) {
 }
 
 func TestSetUpLeavesAnotherMachinesProjectAlone(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		act  func(h *apptest.Harness) error
@@ -88,6 +91,7 @@ func TestSetUpLeavesAnotherMachinesProjectAlone(t *testing.T) {
 }
 
 func TestSetUpProjectKeepsTheConfigOfAProjectWithSections(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"\"\n"})
 	before, err := os.ReadFile(h.Conf)
 	if err != nil {

@@ -32,6 +32,7 @@ func loadRegistry(t *testing.T, path string) *projects.Registry {
 }
 
 func TestRegistryKeepsHandEditOnSave(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	writeConfig(t, path, "projects:\n  - name: p\n    directory: "+dir+"\n")
@@ -56,6 +57,7 @@ func TestRegistryKeepsHandEditOnSave(t *testing.T) {
 }
 
 func TestRegistryReload(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	writeConfig(t, path, "projects:\n  - name: p\n    directory: "+dir+"\n")
@@ -77,6 +79,7 @@ func TestRegistryReload(t *testing.T) {
 }
 
 func TestRegistryRefusesToSaveOverBadFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	writeConfig(t, path, "projects:\n  - name: p\n    directory: "+dir+"\n")
@@ -99,6 +102,7 @@ func TestRegistryRefusesToSaveOverBadFile(t *testing.T) {
 }
 
 func TestAppFollowsConfigEdits(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ConfigTick: 50 * time.Millisecond})
 	data, err := os.ReadFile(h.Conf)
 	if err != nil {
@@ -122,6 +126,7 @@ func TestAppFollowsConfigEdits(t *testing.T) {
 }
 
 func TestAppWarnsWhileClaudeIsNotInstalled(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}, ConfigTick: 50 * time.Millisecond})
 	h.RemoveClaude(t)
 	eventually(t, "a warning naming claude", func() bool {
