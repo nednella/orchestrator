@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/desktop/internal/scoped"
 	"github.com/nednella/agentos/desktop/sessions"
 )
 
@@ -55,6 +56,14 @@ func shellFolder(t *testing.T, h *apptest.Harness, id string) string {
 func resolved(path string) string {
 	r, _ := filepath.EvalSymlinks(path)
 	return r
+}
+
+// typeIn types the line into the shell and presses Enter.
+func typeIn(t *testing.T, h *apptest.Harness, id, line string) {
+	t.Helper()
+	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+id+":", line, "Enter").Run(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // pushedThread is the thread of issue 7, with pushed work in its worktree and idle there.
@@ -140,5 +149,63 @@ func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {
 	}
 	if got := shellIDs(h); !slices.Equal(got, []string{project}) {
 		t.Errorf("shells = %q, want only the project's %s", got, project)
+	}
+}
+
+// commandHarness is a shellHarness whose login shell is bash, which names its own process as it is called; macOS's sh
+// runs as bash.
+func commandHarness(t *testing.T) *apptest.Harness {
+	t.Helper()
+	t.Setenv("SHELL", "/bin/bash")
+	t.Setenv("HOME", t.TempDir())
+	return newHarness(t)
+}
+
+// shellRuns waits until a refresh finds the shell running command, busy or not.
+func shellRuns(t *testing.T, h *apptest.Harness, id, command string, busy bool) {
+	t.Helper()
+	eventually(t, fmt.Sprintf("the shell running %s", command), func() bool {
+		h.Sessions().Refresh()
+		got, ok := shellOf(h, id)
+		return ok && got.Command == command && got.Busy == busy
+	})
+}
+
+func TestShellReportsItsRunningCommand(t *testing.T) {
+	h := commandHarness(t)
+	id := newShell(t, h, "")
+	shellRuns(t, h, id, "bash", false)
+	typeIn(t, h, id, "sleep 30")
+	shellRuns(t, h, id, "sleep", true)
+	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+id+":", "C-c").Run(); err != nil {
+		t.Fatal(err)
+	}
+	shellRuns(t, h, id, "bash", false)
+}
+
+func TestChangedCommandIsSentAgain(t *testing.T) {
+	h := commandHarness(t)
+	id := newShell(t, h, "")
+	shellRuns(t, h, id, "bash", false)
+	sent := func() []sessions.Shell {
+		list, _ := h.Rec.Last("shells").(scoped.List[sessions.Shell])
+		if list.Project != "main" {
+			return nil
+		}
+		return list.Items
+	}
+	if got := sent(); len(got) != 1 || got[0].ID != id || got[0].Busy {
+		t.Fatalf("the shells sent = %+v, want %s idle", got, id)
+	}
+	before := h.Rec.Count("shells")
+	h.Sessions().Refresh()
+	if got := h.Rec.Count("shells"); got != before {
+		t.Errorf("a refresh with nothing changed sent the shells again (%d events, was %d)", got, before)
+	}
+
+	typeIn(t, h, id, "sleep 30")
+	shellRuns(t, h, id, "sleep", true)
+	if got := sent(); len(got) != 1 || got[0].Command != "sleep" || !got[0].Busy {
+		t.Errorf("the shells sent once the command changed = %+v, want sleep, busy", got)
 	}
 }

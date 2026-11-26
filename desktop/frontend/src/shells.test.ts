@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { shellsOf } from './shells.ts'
 import type { Shell } from './types.ts'
 
-const shell = (id: string, thread: string): Shell => ({ id, thread })
+const shell = (id: string, thread: string): Shell => ({ id, thread, command: 'zsh', busy: false })
 
 const shells = [shell('main/shell', ''), shell('main/shell-2', 'main/aaaaaaaa'), shell('main/shell-3', 'main/bbbbbbbb'), shell('main/shell-4', 'main/aaaaaaaa')]
 

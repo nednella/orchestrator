@@ -259,7 +259,7 @@ func TestShellIsTaggedWithItsThread(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, shells, err := tmux.ListAll(ctx)
-	want := []Shell{{Name: thread, Thread: "demo/a1"}, {Name: project}}
+	want := []Shell{{Name: thread, Thread: "demo/a1", Command: "sleep"}, {Name: project, Command: "sleep"}}
 	slices.SortFunc(shells, func(a, b Shell) int { return a.Name.Shell - b.Name.Shell })
 	if err != nil || !slices.Equal(shells, want) {
 		t.Errorf("ListAll shells = %+v, %v; want %+v", shells, err, want)

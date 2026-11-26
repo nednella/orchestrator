@@ -150,8 +150,9 @@ export type IssueDetail = {
   comments: IssueComment[]
 }
 
-// Shell is one shell of the current project: a thread's, or with thread '' the project's.
-export type Shell = { id: string; thread: string }
+// Shell is one shell of the current project: a thread's, or with thread '' the project's. command is the process in
+// front in it, such as zsh, vim or node; busy says it is not the login shell.
+export type Shell = { id: string; thread: string; command: string; busy: boolean }
 
 export type Snapshot = {
   project: Project
@@ -454,6 +455,7 @@ export type EventMap = {
   [k: `chat:${string}/${string}`]: ChatUpdate
   'chat:pending': { id: string; pending: Pending | null }
   sessions: ProjectList<Session>
+  shells: ProjectList<Shell>
   projects: Project[]
   notes: ProjectList<Note>
   issues: ProjectList<Issue>

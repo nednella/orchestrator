@@ -85,8 +85,9 @@ type Info struct {
 
 // Shell is one shell session as tmux reports it.
 type Shell struct {
-	Name   session.Name
-	Thread string // the thread the shell belongs to, "" for a shell of the project
+	Name    session.Name
+	Thread  string // the thread the shell belongs to, "" for a shell of the project
+	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
 }
 
 // argv runs tmux with -u: without a UTF-8 locale (an app started from Finder has none)
@@ -128,7 +129,9 @@ func cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}")
+	const fields = 17
+	// The process name comes last, so a tab in it stays in its own field.
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -139,8 +142,8 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 	var infos []Info
 	var shells []Shell
 	for line := range strings.SplitSeq(out, "\n") {
-		f := strings.Split(line, "\t")
-		if len(f) != 16 {
+		f := strings.SplitN(line, "\t", fields)
+		if len(f) != fields {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -148,7 +151,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 			continue
 		}
 		if name.IsShell() {
-			shells = append(shells, Shell{Name: name, Thread: f[15]})
+			shells = append(shells, Shell{Name: name, Thread: f[15], Command: f[16]})
 			continue
 		}
 		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10], Branch: f[13], Parent: f[14]}

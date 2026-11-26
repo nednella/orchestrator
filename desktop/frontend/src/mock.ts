@@ -306,8 +306,11 @@ export function createMock(params: URLSearchParams) {
     }))
   }
 
-  type Shell = { id: string; project: string; thread: string; dir: string; buffer: string; line: string; opened: boolean }
+  type Shell = { id: string; project: string; thread: string; command: string; dir: string; buffer: string; line: string; opened: boolean }
   const shells: Shell[] = []
+  const LOGIN = 'zsh'
+  // What a line typed in a mock shell keeps running until Ctrl-C, so the shell reports it.
+  const LONG_RUNNING = ['vim', 'nvim', 'top', 'less', 'node', 'sleep']
   const shellName = (project: string, n: number) => (n === 1 ? `shell-${project}` : `shell-${project}-${n}`)
 
   const prompt = (project: string) => `\x1b[38;2;167;139;250m${project}\x1b[0m \x1b[2m❯\x1b[0m `
@@ -326,6 +329,12 @@ export function createMock(params: URLSearchParams) {
       shellWrite(shell, `\r\n\x1b[2mok: agentos ${args.join(' ')}\x1b[0m`)
       return
     }
+    if (LONG_RUNNING.includes(name)) {
+      shell.command = name
+      shellWrite(shell, '\r\n')
+      publishShells()
+      return
+    }
     if (name === 'ls') shellWrite(shell, '\r\napp-frontend  api  e2e  locales  CLAUDE.md  package.json')
     else if (name === 'pwd') shellWrite(shell, `\r\n${shell.dir}`)
     else if (name === 'clear') shellWrite(shell, '\x1bc')
@@ -334,7 +343,8 @@ export function createMock(params: URLSearchParams) {
 
   const shellsOf = (project: string) => shells.filter((x) => x.project === project)
   const findShell = (id: string) => shells.find((x) => x.id === id)
-  const shellView = (x: Shell) => ({ id: x.id, thread: x.thread })
+  const shellView = (x: Shell) => ({ id: x.id, thread: x.thread, command: x.command, busy: x.command !== LOGIN })
+  const publishShells = () => emit('shells', { project: current.name, items: shellsOf(current.name).map(shellView) })
 
   // startShell starts a shell of the thread in its worktree, or with thread '' a shell of the project in its folder.
   function startShell(thread: string): Shell {
@@ -343,8 +353,9 @@ export function createMock(params: URLSearchParams) {
     const taken = shellsOf(current.name).map((x) => x.id)
     let n = 1
     while (taken.includes(shellName(current.name, n))) n++
-    const shell: Shell = { id: shellName(current.name, n), project: current.name, thread, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
+    const shell: Shell = { id: shellName(current.name, n), project: current.name, thread, command: LOGIN, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
     shells.push(shell)
+    publishShells()
     return shell
   }
 
@@ -1301,6 +1312,7 @@ export function createMock(params: URLSearchParams) {
     ShellClose: async (id: string) => {
       const at = shells.findIndex((x) => x.id === id)
       if (at >= 0) shells.splice(at, 1)
+      publishShells()
     },
     TermOpen: async (id: string) => {
       const shell = findShell(id)
@@ -1312,11 +1324,16 @@ export function createMock(params: URLSearchParams) {
       const shell = findShell(id)
       if (!shell) return
       for (const ch of data) {
-        if (ch === '\r') {
+        if (shell.command !== LOGIN) {
+          if (ch !== '\x03') continue
+          shell.command = LOGIN
+          shellWrite(shell, `^C\r\n${prompt(shell.project)}`)
+          publishShells()
+        } else if (ch === '\r') {
           const line = shell.line
           shell.line = ''
           shellRun(shell, line)
-          shellWrite(shell, `\r\n${prompt(shell.project)}`)
+          if (shell.command === LOGIN) shellWrite(shell, `\r\n${prompt(shell.project)}`)
         } else if (ch === '\x7f') {
           if (shell.line) {
             shell.line = shell.line.slice(0, -1)

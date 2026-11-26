@@ -11,6 +11,7 @@ export function ShellTabs() {
   const scroller = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ start: 0, end: 1 })
   const shellIds = shellsOf(shells, selectedId ?? '')
+  const commandOf = (id: string) => shells.find((x) => x.id === id)?.command
 
   const measure = useCallback(() => {
     const { scrollLeft, clientWidth, scrollWidth } = scroller.current!
@@ -67,7 +68,7 @@ export function ShellTabs() {
             {shellIds.map((id, i) => (
               <ShellTab
                 key={id}
-                label={`Shell ${i + 1}`}
+                label={commandOf(id) || `Shell ${i + 1}`}
                 selected={id === shellId}
                 onSelect={() => pick(id)}
                 onClose={() => report(() => closeShell(id))}

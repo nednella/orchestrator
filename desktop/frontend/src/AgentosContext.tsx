@@ -519,6 +519,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     }
 
   useEffect(() => on('sessions', ({ project: key, items }) => applySessions(key, items)), [applySessions])
+  useEffect(() => on('shells', ifCurrent(setShells)), [])
   useEffect(() => on('term:exit', ({ id }) => setShells((list) => list.filter((x) => x.id !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
   useEffect(() => on('awake', setAwake), [])
@@ -719,7 +720,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       async newShell() {
         const thread = selectedRef.current ?? ''
         const { id } = await api.shellNew(thread)
-        setShells((list) => (list.some((x) => x.id === id) ? list : [...list, { id, thread }]))
+        setShells((list) => (list.some((x) => x.id === id) ? list : [...list, { id, thread, command: '', busy: false }]))
         setPickedShell(id)
       },
       async closeShell(id) {

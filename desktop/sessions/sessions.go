@@ -151,6 +151,7 @@ type Sessions struct {
 	info       []term.Info              // the live sessions under a host
 	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
 	shells     []term.Shell             // every project's shell sessions
+	sentShells map[string][]Shell       // by project key, the shells last sent
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until deleted
 	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
@@ -291,6 +292,7 @@ func newSessions(o Options) *Sessions {
 		refused:    map[string]bool{},
 		background: map[string]Background{},
 		stateRead:  map[string]fileStamp{},
+		sentShells: map[string][]Shell{},
 		made:       newMadeTrees(o.LocalDir),
 		procs:      procs.New(bus.SocketPath(o.StateDir), anyDir(o.Run)),
 		ctx:        context.Background(),
@@ -371,6 +373,7 @@ func (s *Sessions) Refresh() {
 		}
 	}
 	s.shells = shells
+	s.announceShells()
 	for _, in := range s.info {
 		if name := in.Name.String(); s.ended[name] != nil {
 			records[name] = s.revive(name, in)
@@ -4165,8 +4168,10 @@ func (s *Sessions) closeBrowser(id string) {
 
 // Shell is one shell of the current project.
 type Shell struct {
-	ID     string `json:"id"`
-	Thread string `json:"thread"` // the thread the shell belongs to, "" for a shell of the project
+	ID      string `json:"id"`
+	Thread  string `json:"thread"`  // the thread the shell belongs to, "" for a shell of the project
+	Command string `json:"command"` // the name of the process in front in the shell, such as zsh, vim or node, or ""
+	Busy    bool   `json:"busy"`    // Command is not the login shell, so closing the shell stops what runs in it
 }
 
 // Shells are the current project's shells, by shell number.
@@ -4185,11 +4190,35 @@ func (s *Sessions) shellsIn(key string) []Shell {
 		}
 	}
 	slices.SortFunc(mine, func(a, b term.Shell) int { return a.Name.Shell - b.Name.Shell })
+	login := filepath.Base(loginShell())
 	list := make([]Shell, len(mine))
 	for i, sh := range mine {
-		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread}
+		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread, Command: sh.Command, Busy: sh.Command != "" && sh.Command != login}
 	}
 	return list
+}
+
+// announceShells sends each project's shells when they changed since they were last sent. It needs mu.
+func (s *Sessions) announceShells() {
+	keys := map[string]bool{}
+	for _, sh := range s.shells {
+		keys[sh.Name.Project] = true
+	}
+	for k := range s.sentShells {
+		keys[k] = true
+	}
+	for _, k := range slices.Sorted(maps.Keys(keys)) {
+		list := s.shellsIn(k)
+		if slices.Equal(list, s.sentShells[k]) {
+			continue
+		}
+		s.emit("shells", scoped.Of(k, list))
+		if len(list) == 0 {
+			delete(s.sentShells, k)
+		} else {
+			s.sentShells[k] = list
+		}
+	}
 }
 
 // loginShell is the shell a new shell session runs, as a login shell.
@@ -4256,6 +4285,7 @@ func (s *Sessions) startShell(proj project.Project, thread, dir string) (string,
 	// A refresh may have listed the shell before its tag was on.
 	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
 	s.shells = append(s.shells, term.Shell{Name: name, Thread: thread})
+	s.announceShells()
 	return name.String(), nil
 }
 
@@ -4282,6 +4312,7 @@ func (s *Sessions) stopShell(name session.Name) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
+	s.announceShells()
 	return nil
 }
 
