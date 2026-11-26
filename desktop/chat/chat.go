@@ -85,6 +85,8 @@ type Chats struct {
 	// turnEnded hears of each turn_end a follower takes, after the threads do, and of each exit of a thread that
 	// settled; OnTurnEnd sets it before Start.
 	turnEnded func(id string, e chatlog.Event)
+	// rateLimited hears of each rate_limit event a follower takes; OnRateLimit sets it before Start.
+	rateLimited func(id string, e chatlog.Event)
 	// since is when this run of the app began, in unix milliseconds: a flag Claude refused before it was an earlier
 	// run's, which may have run another claude.
 	since int64
@@ -99,7 +101,7 @@ type Chats struct {
 
 // New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
 func New(t Threads, dir string, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}}
+	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}, rateLimited: func(string, chatlog.Event) {}}
 }
 
 // OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.TurnEnded and before an AwaitTurn does: the
@@ -107,6 +109,10 @@ func New(t Threads, dir string, emit func(string, any)) *Chats {
 // the host streams when the thread settles, which may end a turn with no turn_end. fn runs on the follower, so it must
 // not block. It comes before Start.
 func (c *Chats) OnTurnEnd(fn func(id string, e chatlog.Event)) { c.turnEnded = fn }
+
+// OnRateLimit has fn hear of each rate_limit event a thread's host streams: Claude telling of a plan limit during a
+// turn. The chat never shows one. fn runs on the follower, so it must not block. It comes before Start.
+func (c *Chats) OnRateLimit(fn func(id string, e chatlog.Event)) { c.rateLimited = fn }
 
 // Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
 func (c *Chats) Start(ctx context.Context) {
@@ -450,6 +456,10 @@ func (f *follower) run(ctx context.Context) {
 
 // take handles one event from the host's stream.
 func (f *follower) take(e chatlog.Event) {
+	if e.Kind == chatlog.KindRateLimit {
+		f.chats.rateLimited(f.chat.ID, e)
+		return
+	}
 	before, background := f.waiting(), f.backgroundNow()
 	mode, approved := f.see(e)
 	f.announce(before)

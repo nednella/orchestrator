@@ -673,3 +673,54 @@ func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
 		})
 	}
 }
+
+func TestRateLimitEventsAreHandedOn(t *testing.T) {
+	dir, err := os.MkdirTemp("", "aos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket, logPath := filepath.Join(dir, "host.sock"), filepath.Join(dir, "chat.jsonl")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	events := make(chan chatlog.Event)
+	t.Cleanup(func() { close(events) })
+	go pushed(t, ln, events)
+
+	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
+	type heard struct {
+		id string
+		e  chatlog.Event
+	}
+	limits := make(chan heard, 4)
+	chats.OnRateLimit(func(id string, e chatlog.Event) { limits <- heard{id, e} })
+	turns := make(chan chatlog.Event, 4)
+	chats.OnTurnEnd(func(_ string, e chatlog.Event) { turns <- e })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	chats.Start(ctx)
+
+	info := json.RawMessage(`{"rateLimitType":"five_hour","utilization":0.4,"resetsAt":1796079600}`)
+	events <- chatlog.Event{Kind: chatlog.KindRateLimit, Input: info}
+	events <- chatlog.Event{Seq: 1, Kind: chatlog.KindTurnEnd}
+	select {
+	case got := <-limits:
+		if got.id != thread.chat.ID || string(got.e.Input) != string(info) {
+			t.Errorf("OnRateLimit heard %+v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnRateLimit heard nothing")
+	}
+	select {
+	case <-turns:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the follower took nothing after the rate_limit event")
+	}
+	if len(limits) != 0 {
+		t.Errorf("OnRateLimit heard %d more", len(limits))
+	}
+}
