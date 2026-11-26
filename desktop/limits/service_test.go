@@ -94,7 +94,7 @@ func TestRefreshWithNoThreadProbes(t *testing.T) {
 		t.Errorf("limits = %+v, want the stand-in's windows", got)
 	}
 	// The probe's claude runs with no thread, so its files have no session id in their names.
-	want := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", ""}
+	want := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", "", "--setting-sources", "project,local"}
 	if args := h.Args(t, ""); !slices.Equal(args, want) {
 		t.Errorf("the probe ran claude %q, want %q", args, want)
 	}

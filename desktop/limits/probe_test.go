@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -24,6 +26,7 @@ type fakeClaude struct {
 	delay time.Duration
 
 	mu        sync.Mutex
+	empty     []bool // whether dir was empty at each start
 	starts    int
 	running   int
 	most      int
@@ -35,12 +38,14 @@ type fakeClaude struct {
 }
 
 func (f *fakeClaude) start(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
-	if _, err := os.Stat(dir); err != nil {
+	in, err := os.ReadDir(dir)
+	if err != nil {
 		return nil, nil, nil, err
 	}
 	deadline, _ := ctx.Deadline()
 	f.mu.Lock()
 	f.starts++
+	f.empty = append(f.empty, len(in) == 0)
 	f.running++
 	f.most = max(f.most, f.running)
 	f.argv, f.dirs, f.deadlines = argv, append(f.dirs, dir), append(f.deadlines, deadline)
@@ -91,6 +96,13 @@ const usageReply = `{"type":"control_response","response":{"subtype":"success","
 func TestNoLiveThreadStartsAProbe(t *testing.T) {
 	f := &fakeClaude{reply: usageReply}
 	tr, _, _ := tracker(t, threads{{ID: "main/settled", Socket: "/tmp/s.sock"}}, nil, f.start)
+	// What a probe left, as one the app was quit during, is gone before the next starts.
+	if err := os.MkdirAll(tr.dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tr.dir, "left.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	got, err := tr.Refresh(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -110,14 +122,23 @@ func TestNoLiveThreadStartsAProbe(t *testing.T) {
 			t.Errorf("the probe sent a user message: %s", l)
 		}
 	}
-	want := []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", ""}
+	want := []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", "", "--setting-sources", "project,local"}
 	if !slices.Equal(f.argv, want) {
 		t.Errorf("argv = %q, want %q", f.argv, want)
 	}
-	if dir := f.dirs[0]; filepath.Dir(dir) != tr.tmp {
-		t.Errorf("the probe ran in %s, want a folder of its own in %s", dir, tr.tmp)
-	} else if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+	if f.dirs[0] != tr.dir || !f.empty[0] {
+		t.Errorf("the probe ran in %s, empty: %v; want %s, emptied", f.dirs[0], f.empty[0], tr.dir)
+	}
+	if _, err := os.Stat(tr.dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the probe's folder is still there: %v", err)
+	}
+	// The next probe runs in the same folder.
+	tr.fetched = time.Time{}
+	if _, err := tr.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.dirs) != 2 || f.dirs[1] != tr.dir {
+		t.Errorf("the probes ran in %q, want %s each time", f.dirs, tr.dir)
 	}
 }
 
@@ -179,7 +200,7 @@ func TestFailedProbeIsNotCached(t *testing.T) {
 
 func TestProbeTimesOut(t *testing.T) {
 	f := &fakeClaude{}
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "usage-probe")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	began := time.Now()
@@ -193,16 +214,20 @@ func TestProbeTimesOut(t *testing.T) {
 	if _, _, waited, _ := f.seen(); waited != 1 {
 		t.Errorf("%d waits, want the probe waited for", waited)
 	}
-	if left, _ := os.ReadDir(dir); len(left) != 0 {
-		t.Errorf("%s holds %v, want the probe's folder gone", dir, left)
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the probe's folder is still there: %v", err)
 	}
-	// Without a nearer deadline of the caller's, a probe has 20 s.
+	// Without a nearer deadline of the caller's, a probe runs for at most 15 s, so with its 5 s for the pipes it ends
+	// within 20 s.
 	f = &fakeClaude{reply: usageReply}
 	if _, err := probe(context.Background(), f.start, dir); err != nil {
 		t.Fatal(err)
 	}
-	if deadline := f.deadlines[0]; deadline.IsZero() || deadline.After(time.Now().Add(probeTimeout)) {
-		t.Errorf("the probe's deadline is %v, want one at most %v on", deadline, probeTimeout)
+	if deadline := f.deadlines[0]; deadline.IsZero() || deadline.After(time.Now().Add(15*time.Second)) {
+		t.Errorf("the probe's deadline is %v, want one at most 15 s on", deadline)
+	}
+	if probeTimeout+waitDelay > 20*time.Second {
+		t.Errorf("a probe may take %v, over 20 s", probeTimeout+waitDelay)
 	}
 }
 
@@ -290,5 +315,37 @@ func TestProbeSaysAClaudeWithoutGetUsage(t *testing.T) {
 	f := &fakeClaude{reply: `{"type":"control_response","response":{"subtype":"error","request_id":"aos-usage","error":"Unsupported control request subtype: get_usage"}}`}
 	if _, err := probe(context.Background(), f.start, t.TempDir()); !errors.Is(err, host.ErrNoUsage) {
 		t.Errorf("err = %v, want host.ErrNoUsage", err)
+	}
+}
+
+func TestAProbesGrandchildIsGone(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	// The grandchild leaves the pipes, so nothing waits on it, and runs on after the probe's claude answered and exited.
+	script := `sleep 300 </dev/null >/dev/null 2>&1 & echo $! > ` + pidFile + `
+read line
+echo '` + usageReply + `'
+cat >/dev/null`
+	start := func(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
+		return Exec(ctx, dir, []string{"sh", "-c", script})
+	}
+	raw, err := probe(context.Background(), start, filepath.Join(t.TempDir(), "usage-probe"))
+	if err != nil || len(raw) == 0 {
+		t.Fatalf("probe = %s, %v; want the answer", raw, err)
+	}
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { syscall.Kill(pid, syscall.SIGKILL) })
+	deadline := time.Now().Add(2 * time.Second)
+	for syscall.Kill(pid, 0) == nil && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if syscall.Kill(pid, 0) == nil {
+		t.Errorf("the probe's grandchild %d still runs", pid)
 	}
 }

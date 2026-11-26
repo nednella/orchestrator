@@ -21,23 +21,25 @@ import (
 )
 
 const (
-	// probeTimeout bounds a whole probe: Claude answers get_usage in about 5 s.
-	probeTimeout = 20 * time.Second
+	// probeTimeout bounds a probe's run: Claude answers get_usage in about 5 s. With waitDelay the whole probe ends
+	// within 20 s.
+	probeTimeout = 15 * time.Second
 	probeRequest = "aos-usage"
 	// waitDelay is how long a stopped probe's pipes may stay open.
 	waitDelay = 5 * time.Second
 )
 
-// probeArgv is Claude in stream-json with no MCP server and no tool. The probe sends it no user message, so nothing
-// reaches the model and it costs no tokens.
-var probeArgv = []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", ""}
+// probeArgv is Claude in stream-json with no MCP server, no tool and no user setting, so no hook of the user's or a
+// plugin's runs. The probe sends it no user message, so nothing reaches the model and it costs no tokens.
+var probeArgv = []string{"claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", "", "--setting-sources", "project,local"}
 
 // Starter starts argv in dir and gives its stdin, its stdout and a wait for its exit. It stops the command when ctx
 // ends.
 type Starter func(ctx context.Context, dir string, argv []string) (stdin io.WriteCloser, stdout io.Reader, wait func() error, err error)
 
 // Exec is the Starter that runs the command, with only the environment Claude needs to start and find its login, in a
-// process group of its own that is killed when ctx ends. wait's error names the first line of the command's stderr.
+// process group of its own that is killed when ctx ends. wait kills what is left of the group once the command has
+// exited, so nothing it started outlives it; its error names the first line of the command's stderr.
 func Exec(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
 	if len(argv) == 0 {
 		return nil, nil, nil, errors.New("start a probe: no command given")
@@ -62,7 +64,10 @@ func Exec(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Re
 		return nil, nil, nil, fmt.Errorf("start %s: %w", argv[0], err)
 	}
 	wait := func() error {
-		if err := cmd.Wait(); err != nil {
+		err := cmd.Wait()
+		// The group outlives its leader while a process the command started runs, also one that left its pipes.
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if err != nil {
 			first, _, _ := strings.Cut(strings.TrimSpace(stderr.String()), "\n")
 			return fmt.Errorf("%s: %w: %s", argv[0], err, first)
 		}
@@ -71,21 +76,21 @@ func Exec(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Re
 	return stdin, stdout, wait, nil
 }
 
-// probe starts Claude in a new folder under dir, sends it only the get_usage control request and returns its answer.
-// It reads Claude's lines until the answer, for at most 20 s, then closes Claude's stdin, waits for its exit and removes
-// the folder. A Claude that does not know get_usage gives host.ErrNoUsage.
+// probe starts Claude in dir, emptied first, sends it only the get_usage control request and returns its answer. It
+// reads Claude's lines until the answer, for at most 15 s, then closes Claude's stdin, waits for its exit and empties
+// dir again. Every probe runs in the same folder, so a Claude Code that keeps a record of each folder it ran in keeps
+// one. A Claude that does not know get_usage gives host.ErrNoUsage.
 func probe(ctx context.Context, start Starter, dir string) (json.RawMessage, error) {
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, fmt.Errorf("empty the probe's folder: %w", err)
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("make the probe's folder: %w", err)
 	}
-	folder, err := os.MkdirTemp(dir, "usage-")
-	if err != nil {
-		return nil, fmt.Errorf("make the probe's folder: %w", err)
-	}
-	defer os.RemoveAll(folder)
+	defer os.RemoveAll(dir)
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	stdin, stdout, wait, err := start(ctx, folder, probeArgv)
+	stdin, stdout, wait, err := start(ctx, dir, probeArgv)
 	if err != nil {
 		return nil, fmt.Errorf("start the usage probe: %w", err)
 	}

@@ -59,12 +59,15 @@ type Tracker struct {
 	threads Threads
 	ask     Asker
 	start   Starter
-	tmp     string // the probes' folders go in it
+	dir     string // the folder every probe runs in
 	emit    func(string, any)
 	now     func() time.Time
 
 	// reading holds one token per read in flight: one read, and so one probe, at a time.
 	reading chan struct{}
+	// emitting is taken before mu and held through the emit, so the limits events go out in the order their values
+	// were taken.
+	emitting sync.Mutex
 
 	mu      sync.Mutex
 	limits  Limits
@@ -73,10 +76,10 @@ type Tracker struct {
 	asked   time.Time // when a live thread's host was last asked
 }
 
-// New tracks the limits: it asks a live thread's host with ask, and with no live thread runs a probe with start in a
-// new folder under tmp.
-func New(threads Threads, ask Asker, start Starter, tmp string, emit func(string, any)) *Tracker {
-	return &Tracker{threads: threads, ask: ask, start: start, tmp: tmp, emit: emit, now: time.Now, reading: make(chan struct{}, 1), windows: map[string]Window{}}
+// New tracks the limits: it asks a live thread's host with ask, and with no live thread runs a probe with start in
+// dir, which it empties before each probe.
+func New(threads Threads, ask Asker, start Starter, dir string, emit func(string, any)) *Tracker {
+	return &Tracker{threads: threads, ask: ask, start: start, dir: dir, emit: emit, now: time.Now, reading: make(chan struct{}, 1), windows: map[string]Window{}}
 }
 
 // Run asks a live thread's host for the usage at once and then whenever its last ask is 5 minutes old, until ctx ends.
@@ -104,8 +107,9 @@ func (t *Tracker) Refresh(ctx context.Context) (Limits, error) {
 }
 
 // read asks for the usage, one read at a time. Without the owner's ask a live thread's host is asked at most every 5
-// minutes, whatever it answered, and no probe runs; the owner's ask with no live thread probes only once the latest
-// good answer is 5 minutes old.
+// minutes, whatever it answered, and no probe runs. A host from before the usage op is passed over for the next live
+// thread's. The owner's ask with no live thread, or none whose host knows the op, probes only once the latest good
+// answer is 5 minutes old.
 func (t *Tracker) read(ctx context.Context, owner bool) error {
 	select {
 	case t.reading <- struct{}{}:
@@ -113,33 +117,39 @@ func (t *Tracker) read(ctx context.Context, owner bool) error {
 		return ctx.Err()
 	}
 	defer func() { <-t.reading }()
-	socket := t.liveSocket()
-	switch {
-	case socket == "" && (!owner || t.within(&t.fetched)):
-		return nil
-	case socket == "":
-		raw, err := probe(ctx, t.start, t.tmp)
-		t.take(raw, err)
-	case !owner && t.within(&t.asked):
-		return nil
-	default:
+	if sockets := t.liveSockets(); len(sockets) > 0 {
+		if !owner && t.within(&t.asked) {
+			return nil
+		}
 		t.mu.Lock()
 		t.asked = t.now()
 		t.mu.Unlock()
-		raw, err := t.ask(ctx, socket)
-		t.take(raw, err)
+		for _, socket := range sockets {
+			raw, err := t.ask(ctx, socket)
+			if errors.Is(err, host.ErrHostTooOld) {
+				continue
+			}
+			t.take(raw, err)
+			return nil
+		}
 	}
+	if !owner || t.within(&t.fetched) {
+		return nil
+	}
+	raw, err := probe(ctx, t.start, t.dir)
+	t.take(raw, err)
 	return nil
 }
 
-// liveSocket is the host socket of a live thread, "" when none runs.
-func (t *Tracker) liveSocket() string {
+// liveSockets are the host sockets of the live threads.
+func (t *Tracker) liveSockets() []string {
+	var out []string
 	for _, c := range t.threads.Chats() {
 		if c.Live && !c.Deleting && c.Socket != "" {
-			return c.Socket
+			out = append(out, c.Socket)
 		}
 	}
-	return ""
+	return out
 }
 
 // within says whether the time at is set and under 5 minutes ago.
@@ -149,34 +159,47 @@ func (t *Tracker) within(at *time.Time) bool {
 	return !at.IsZero() && t.now().Sub(*at) < every
 }
 
-// take keeps what a read gave. An answer with windows counts as fresh; a failure, an answer with none and a Claude
-// that does not know get_usage do not, so the next read tries again. Each keeps the windows turns told of.
+// take keeps what a read gave. An answer with windows replaces the windows held and counts as fresh. An answer with
+// none, as when Claude gives every window as null, keeps the windows turns told of and is not fresh; nor are a failure
+// and a Claude that does not know get_usage, which keep them too. What is not fresh is read again at the next ask.
 func (t *Tracker) take(raw json.RawMessage, err error) {
 	var windows []Window
 	if err == nil {
 		windows, err = parseUsage(raw)
 	}
+	t.change(func(now time.Time) bool {
+		switch {
+		case errors.Is(err, host.ErrNoUsage):
+			t.limits.Unsupported, t.limits.Error = true, ""
+		case err != nil:
+			t.limits.Error = err.Error()
+		default:
+			t.limits.Unsupported, t.limits.Error = false, ""
+			if len(windows) == 0 {
+				break
+			}
+			clear(t.windows)
+			for _, w := range windows {
+				t.windows[w.Name] = w
+			}
+			t.limits.At, t.fetched = now.UnixMilli(), now
+		}
+		return true
+	})
+}
+
+// change runs fn under mu with the time, then sends the limits event when fn says they changed. The events go out in
+// the order the changes were made.
+func (t *Tracker) change(fn func(now time.Time) bool) {
+	t.emitting.Lock()
+	defer t.emitting.Unlock()
 	t.mu.Lock()
-	now := t.now()
-	switch {
-	case errors.Is(err, host.ErrNoUsage):
-		t.limits.Unsupported, t.limits.Error = true, ""
-	case err != nil:
-		t.limits.Error = err.Error()
-	default:
-		t.limits.Unsupported, t.limits.Error = false, ""
-		clear(t.windows)
-		for _, w := range windows {
-			t.windows[w.Name] = w
-		}
-		t.limits.At = now.UnixMilli()
-		if len(windows) > 0 {
-			t.fetched = now
-		}
-	}
+	changed := fn(t.now())
 	l := t.limitsLocked()
 	t.mu.Unlock()
-	t.emit("limits", l)
+	if changed {
+		t.emit("limits", l)
+	}
 }
 
 // Seen takes a rate_limit event a thread's turn streamed and updates the windows it names.
@@ -185,14 +208,13 @@ func (t *Tracker) Seen(_ string, e chat.Event) {
 	if len(windows) == 0 {
 		return
 	}
-	t.mu.Lock()
-	for _, w := range windows {
-		t.windows[w.Name] = w
-	}
-	t.limits.At = t.now().UnixMilli()
-	l := t.limitsLocked()
-	t.mu.Unlock()
-	t.emit("limits", l)
+	t.change(func(now time.Time) bool {
+		for _, w := range windows {
+			t.windows[w.Name] = w
+		}
+		t.limits.At = now.UnixMilli()
+		return true
+	})
 }
 
 // Limits are the plan limits as last read.

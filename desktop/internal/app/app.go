@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,7 +94,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
 	})
 	chats := chat.New(sess, c.LocalDir, h.Emit)
-	a.limits = limits.New(sess, host.Usage, limits.Exec, os.TempDir(), h.Emit)
+	a.limits = limits.New(sess, host.Usage, limits.Exec, filepath.Join(c.StateDir, "usage-probe"), h.Emit)
 	chats.OnRateLimit(a.limits.Seen)
 	iss := issues.New(runner, sess, h.Emit)
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)

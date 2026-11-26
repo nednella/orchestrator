@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -74,7 +75,7 @@ func tracker(t *testing.T, th Threads, ask Asker, start Starter) (*Tracker, *clo
 	t.Helper()
 	var mu sync.Mutex
 	var emitted []Limits
-	tr := New(th, ask, start, t.TempDir(), func(name string, payload any) {
+	tr := New(th, ask, start, filepath.Join(t.TempDir(), "usage-probe"), func(name string, payload any) {
 		if name != "limits" {
 			t.Errorf("emitted %q", name)
 		}
@@ -305,5 +306,71 @@ func TestLimitsAreNeverNil(t *testing.T) {
 	tr, _, _ := tracker(t, threads{}, nil, nil)
 	if got := tr.Limits(); got.Windows == nil || len(got.Windows) != 0 {
 		t.Errorf("windows = %#v, want []", got.Windows)
+	}
+}
+
+func TestANullAnswerKeepsTheStreamsWindows(t *testing.T) {
+	a := &asker{answer: `{"rate_limits":{"five_hour":null,"seven_day":null,"model_scoped":[],"extra_usage":{"is_enabled":false}}}`}
+	tr, _, _ := tracker(t, oneLive, a.ask, nil)
+	tr.Seen("main/abcdefgh", chat.Event{Kind: chat.KindRateLimit, Input: json.RawMessage(`{"rateLimitType":"seven_day","utilization":0.5,"resetsAt":1796079600}`)})
+	got, err := tr.Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Window{{Name: "seven_day", Label: "Weekly", Left: 50, ResetsAt: 1796079600000}}
+	if !reflect.DeepEqual(got.Windows, want) || got.Error != "" || got.Unsupported {
+		t.Errorf("limits = %+v, want the stream's window kept", got)
+	}
+	if tr.within(&tr.fetched) {
+		t.Error("an answer with no window counts as fresh")
+	}
+}
+
+func TestAnOlderHostIsPassedOver(t *testing.T) {
+	two := threads{{ID: "main/oldhost1", Socket: "/tmp/old.sock", Live: true}, {ID: "main/newhost1", Socket: "/tmp/new.sock", Live: true}}
+	var asked []string
+	ask := func(_ context.Context, socket string) (json.RawMessage, error) {
+		asked = append(asked, socket)
+		if socket == "/tmp/old.sock" {
+			return nil, fmt.Errorf("host at %s: %w", socket, host.ErrHostTooOld)
+		}
+		return json.RawMessage(weekly96), nil
+	}
+	f := &fakeClaude{reply: usageReply}
+	tr, _, _ := tracker(t, two, ask, f.start)
+	got, err := tr.Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Windows) != 1 || got.Error != "" || !reflect.DeepEqual(asked, []string{"/tmp/old.sock", "/tmp/new.sock"}) {
+		t.Errorf("limits = %+v after asking %q, want the second host's answer", got, asked)
+	}
+	if starts, _, _, _ := f.seen(); starts != 0 {
+		t.Errorf("%d probes, want none while a host answers", starts)
+	}
+
+	// With every live host too old, the owner's ask probes.
+	tr, _, _ = tracker(t, threads{two[0]}, ask, f.start)
+	if got, err := tr.Refresh(context.Background()); err != nil || len(got.Windows) != 1 || got.Error != "" {
+		t.Errorf("limits = %+v, %v; want the probe's answer", got, err)
+	}
+	if starts, _, _, _ := f.seen(); starts != 1 {
+		t.Errorf("%d probes, want one", starts)
+	}
+}
+
+func TestLimitsEventsComeInOrder(t *testing.T) {
+	tr, _, emitted := tracker(t, threads{}, nil, nil)
+	var wg sync.WaitGroup
+	for i := range 50 {
+		wg.Go(func() {
+			info := fmt.Sprintf(`{"rateLimitType":"five_hour","utilization":%v,"resetsAt":1796079600}`, float64(i)/100)
+			tr.Seen("main/abcdefgh", chat.Event{Kind: chat.KindRateLimit, Input: json.RawMessage(info)})
+		})
+	}
+	wg.Wait()
+	sent := emitted()
+	if len(sent) != 50 || !reflect.DeepEqual(sent[len(sent)-1], tr.Limits()) {
+		t.Errorf("the last of %d limits events is %+v, want the limits as they are, %+v", len(sent), sent[len(sent)-1], tr.Limits())
 	}
 }
