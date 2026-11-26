@@ -116,7 +116,14 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
     }
 
     // A timer, not an animation frame: WebKit holds frames back while the window is hidden.
-    const write = makeInputBatch((data) => void api.termWrite(id, data), (run) => window.setTimeout(run, INPUT_BATCH_MS))
+    const input = makeInputBatch(
+      (data) => void api.termWrite(id, data),
+      (run) => {
+        const timer = window.setTimeout(run, INPUT_BATCH_MS)
+        return () => window.clearTimeout(timer)
+      },
+    )
+    const write = input.write
     term.attachCustomKeyEventHandler((event) => {
       if (kind === 'shell' && event.key === 'Escape' && event.type === 'keydown') {
         const now = performance.now()
@@ -199,6 +206,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       hostEl.removeEventListener('wheel', wheel, { capture: true })
       disposed = true
       stopStream()
+      input.dispose()
       if (opened.current) {
         // Deferred a tick: an immediate remount of this id bumps the generation and keeps the session open.
         setTimeout(() => {
