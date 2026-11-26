@@ -195,6 +195,8 @@ export function createMock(params: URLSearchParams) {
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
     staleAnswer: params.has('stale'),
+    // lineage gives #454 a delegated child and a fork, for its context card.
+    lineage: params.has('lineage'),
     // childask=question or childask=plan has the child ask that; any other value a tool approval.
     childAsk: params.get('childask'),
   }
@@ -490,6 +492,13 @@ export function createMock(params: URLSearchParams) {
       { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173' },
       { port: 8787, pid: 48230, command: 'node server/api.js --watch' },
     ])
+    if (flags.lineage) {
+      const split = byIssue(454)
+      const bundle = seed('Measure the product page bundle', 0, 'working', [['working', 6]], data[0], 'read')
+      bundle.parent = split.id
+      const fork = seed('#454 product page split (fork)', 454, 'idle', [['working', 20], ['idle', 14]])
+      Object.assign(fork, { forkOf: split.id, branch: '', worktree: split.worktree })
+    }
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
       pr: pr(452, 'open', 'failing', { title: 'Move checkout to its own route', review: 'changes', comments: 4, newComments: 2, failedChecks: ['unit-tests', 'lint / eslint'], passedChecks: 3 }),

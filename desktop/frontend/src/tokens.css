@@ -60,12 +60,17 @@
   --agent-claude: #e0875f;
   --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
   --claude-mark: #d97757;
+  --vscode-mark: #1f9cf0;
 
   --bg-card: var(--bg-raised);
   --bg-tile: var(--bg-segment);
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);
+  /* Dropdown glass: the composer surface at 80%, tinted with 18% more of it, over the blurred chat. */
+  --bg-dropdown: color-mix(in srgb, var(--bg-composer) 80%, transparent);
+  --bg-dropdown-tint: linear-gradient(color-mix(in srgb, var(--bg-composer) 18%, transparent), color-mix(in srgb, var(--bg-composer) 18%, transparent));
+  --border-card-section: color-mix(in srgb, var(--border) 65%, transparent);
   --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.25);
   --chart-bar: color-mix(in srgb, var(--text) 24%, transparent);
   --chart-bar-on: color-mix(in srgb, var(--text) 75%, transparent);
@@ -211,6 +216,7 @@
   --border-thread-waiting: rgba(217, 58, 43, 0.25);
   --bg-thread-question: rgba(0, 0, 0, 0.04);
   --agent-claude: #c15f3c;
+  --vscode-mark: #007acc;
   --bg-user-message: color-mix(in srgb, #e4e4e7 55%, #f4f4f5);
 
   --bg-card: var(--bg-surface);

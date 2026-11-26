@@ -1,8 +1,12 @@
+import { SquareMenu } from 'lucide-react'
+import { useRef } from 'react'
 import type { CSSProperties } from 'react'
-import { useAgentos, useLatestAgentos } from '../AgentosContext'
+import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
 import { actionsFor, formatShortcut } from '../actions'
+import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import { Icon } from './Icon'
+import { ThreadContextCard } from './ThreadContextCard'
 import { TitleBarButton, titleBarButton } from './TitleBarButton'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
 
@@ -14,6 +18,12 @@ export function TopBar() {
   const layout = useLayout()
   const { docked, sidebarOpen, shellOpen, rightOpen, statsOpen, digestOpen } = layout
   const latestAgentos = useLatestAgentos()
+  const selected = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const card = useContextCard()
+  const cardToggle = useRef<HTMLDivElement>(null)
+  const popover = card.placement === 'popover' && card.popover
+  const cardPressed = card.placement === 'inline' ? card.shown : popover
+  useCardPopoverDismiss(cardToggle, popover)
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
   const named = (label: string, id: string) => {
     const shortcut = find(id).shortcut
@@ -49,6 +59,21 @@ export function TopBar() {
               </>
             )}
           </button>
+        )}
+        {showsThread && selected && (
+          <div ref={cardToggle} className="relative flex">
+            <button
+              className={titleBarButton}
+              style={{ color: cardPressed ? 'var(--text)' : undefined }}
+              title={named('Toggle thread details', 'toggle-context-card')}
+              aria-label={named('Toggle thread details', 'toggle-context-card')}
+              aria-pressed={cardPressed}
+              onClick={() => report(() => find('toggle-context-card').run([]))}
+            >
+              <SquareMenu size={14} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+            {popover && <ThreadContextCard session={selected} className="absolute top-full right-0 z-(--z-popup) mt-1 max-h-[calc(100vh-var(--topbar-h)-1rem)]" />}
+          </div>
         )}
         <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run([])} />
         <TitleBarButton label={named(shellOpen ? 'Hide shell' : 'Show shell', 'toggle-shell')} icon="panel-bottom" pressed={shellOpen} onClick={() => find('toggle-shell').run([])} />
