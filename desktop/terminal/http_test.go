@@ -91,6 +91,7 @@ func read(t *testing.T, h *apptest.Harness, id string) *reading {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &reading{header: http.Header{}, done: make(chan struct{})}
 	req := httptest.NewRequestWithContext(ctx, "GET", terminal.Prefix+url.PathEscape(id), nil)
+	req.Header.Set("X-Agentos", "1")
 	go func() {
 		defer close(r.done)
 		h.App.Assets().ServeHTTP(r, req)
@@ -160,6 +161,33 @@ func TestStreamRefusesAThreadID(t *testing.T) {
 			t.Errorf("GET %s = %d, want 404", id, out.Status())
 		}
 	}
+}
+
+func TestStreamNeedsTheAppHeader(t *testing.T) {
+	h, id := newShell(t)
+	out := openRead(t, h, id, 80, 24)
+	eventually(t, "the first draw", func() bool { return len(out.Bytes()) > 0 })
+	// A same-origin <img> or <script> sends no header of the app's own.
+	for _, header := range []string{"", "0"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second) // a GET it takes would stream on
+		req := httptest.NewRequestWithContext(ctx, "GET", terminal.Prefix+url.PathEscape(id), nil)
+		if header != "" {
+			req.Header.Set("X-Agentos", header)
+		}
+		rec := httptest.NewRecorder()
+		h.App.Assets().ServeHTTP(rec, req)
+		cancel()
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("X-Agentos %q: status %d, want 403", header, rec.Code)
+		}
+	}
+	if out.ended() {
+		t.Fatal("a refused GET ended the reader")
+	}
+	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the echo on the reader", func() bool { return strings.Contains(out.String(), "\r\n42\r\n") })
 }
 
 func TestSecondReaderReplacesTheFirst(t *testing.T) {

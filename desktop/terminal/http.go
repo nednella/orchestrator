@@ -8,12 +8,20 @@ import (
 // Prefix is where a shell's output is served: GET /term/<shell id>.
 const Prefix = "/term/"
 
+// appHeader marks a read the front end sends. A page loads a same-origin <img> or <script> without it, so such a tag
+// cannot take the stream over, in the window or in the browser mode.
+const appHeader = "X-Agentos"
+
 // Handler serves the output of each open shell as one long response of raw bytes, written as it comes. A shell has
 // one reader: a second GET ends the first. The body ends when the shell exits or its terminal closes.
 func (t *Terms) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "only GET", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Header.Get(appHeader) != "1" {
+			http.Error(w, "missing "+appHeader+" header", http.StatusForbidden)
 			return
 		}
 		st := t.get(strings.TrimPrefix(r.URL.Path, Prefix))

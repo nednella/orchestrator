@@ -170,7 +170,7 @@ func Serve(o Options) error {
 	})
 	mux.HandleFunc("/__events", o.Hub.serve)
 	mux.Handle(media.Prefix, o.Handler)
-	mux.Handle(terminal.Prefix, fromShim(o.Handler))
+	mux.Handle(terminal.Prefix, o.Handler) // the terminal handler checks the shim's header itself
 	mux.Handle("/__call/", fromShim(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -199,7 +199,7 @@ func Serve(o Options) error {
 	return http.ListenAndServe(o.Addr, sameOrigin(o.Addr, mux))
 }
 
-// callHeader marks a /__call/ or /term/ request as sent by the shim: a page on another site cannot add it without a preflight this server refuses.
+// callHeader marks a /__call/ request as sent by the shim: a page on another site cannot add it without a preflight this server refuses.
 const callHeader = "X-Agentos"
 
 // fromShim refuses a request without callHeader.
