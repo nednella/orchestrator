@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { middleTruncate, threadCardLines } from './threadCard.ts'
+import type { PR, Session } from './types.ts'
+
+const session = (over: Partial<Session> = {}): Session => ({
+  id: 'shop/abcd2345', project: 'shop', n: 7, title: 'Flaky test', state: 'working', detail: '', lastEventAt: 0, createdAt: 0, wokeAt: 0,
+  issue: 0, model: '', effort: '', history: [], branch: '', worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '',
+  browser: false, evidence: 0, access: 'supervised', hosted: true, action: '', forkOf: '', parent: '', tokens: 0, cost: 0, memory: 0, subagents: 0, ...over,
+})
+
+const pr: PR = {
+  number: 618, url: '', state: 'draft', checks: 'passing', comments: 0, updatedAt: 0, conflicting: false, title: 'Keep the return path', review: '',
+  failedChecks: [], runningChecks: 0, passedChecks: 0, newComments: 0,
+}
+
+const keys = (s: Session, machine = '', title = '') => threadCardLines(s, machine, title).map((l) => l.key)
+
+test('no PR line without a PR', () => {
+  assert.deepEqual(keys(session({ branch: 'issue-1' })), ['branch'])
+  assert.deepEqual(keys(session({ pr })), ['pr'])
+})
+
+test('the branch is truncated in the middle', () => {
+  assert.equal(middleTruncate('issue-1', 32), 'issue-1')
+  const cut = middleTruncate('experiment/websocket-retry-banner-with-backoff', 20)
+  assert.equal(Array.from(cut).length, 20)
+  assert.equal(cut.startsWith('experiment'), true)
+  assert.equal(cut.endsWith('backoff'), true)
+  assert.equal(cut.includes('…'), true)
+  const line = threadCardLines(session({ branch: 'experiment/websocket-retry-banner-with-backoff' }), '', '')[0]
+  assert.equal(line.text.includes('…') && line.text.length <= 32, true)
+})
+
+test('the issue title comes from the list', () => {
+  assert.equal(threadCardLines(session({ issue: 454 }), '', 'Split the page')[0].text, '#454 Split the page')
+  assert.equal(threadCardLines(session({ issue: 454 }), '', '')[0].text, '#454')
+})
+
+test('lines keep their order', () => {
+  const all = session({ branch: 'issue-454', pr, issue: 454, model: 'sonnet', effort: 'high' })
+  assert.deepEqual(keys(all, 'Mac', 'Split'), ['machine', 'branch', 'pr', 'issue', 'model'])
+  const line = threadCardLines(all, 'Mac', 'Split')[2]
+  assert.equal(line.text, '#618 Keep the return path')
+  assert.equal(line.detail, 'Draft')
+  assert.deepEqual(keys(session(), 'Mac'), ['machine'])
+})

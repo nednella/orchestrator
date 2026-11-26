@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAgentos } from '../AgentosContext'
 import { EFFORTS, modelName } from '../model'
+import { threadCardLines } from '../threadCard'
 import type { Session } from '../types'
 import { ThreadCardLine } from './ThreadCardLine'
 
@@ -14,11 +15,10 @@ const MARGIN = 8
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
 export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
-  const { machine } = useAgentos('machine')
+  const { machine, issues } = useAgentos('machine', 'issues')
   const card = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
-  const model = modelName(session.model)
-  const effort = EFFORTS[session.effort] ?? session.effort
+  const lines = threadCardLines(session, machine, issues.find((i) => i.number === session.issue)?.title ?? '')
 
   useLayoutEffect(() => {
     const el = card.current
@@ -44,17 +44,37 @@ export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
     >
       <p className="text-body font-semibold break-words text-ink">{session.title}</p>
       <div className="flex flex-col gap-1.5 text-small text-soft">
-        {machine && <ThreadCardLine icon="machine">{machine}</ThreadCardLine>}
-        {(model || effort) && (
-          <ThreadCardLine icon="claude" iconColor="var(--agent-claude)">
-            <span className="flex gap-1.5">
-              {model && <span className="text-ink">{model}</span>}
-              {effort && <span>{effort}</span>}
-            </span>
+        {lines.map((line) => (
+          <ThreadCardLine key={line.key} icon={line.icon} iconColor={line.color}>
+            {line.key === 'model' ? <ModelText model={line.text} effort={line.detail ?? ''} /> : <LineText text={line.text} detail={line.detail} />}
           </ThreadCardLine>
-        )}
+        ))}
       </div>
     </div>,
     document.body,
+  )
+}
+
+type ModelTextProps = { model: string; effort: string }
+
+function ModelText({ model, effort }: ModelTextProps) {
+  const name = modelName(model)
+  const level = EFFORTS[effort] ?? effort
+  return (
+    <span className="flex gap-1.5">
+      {name && <span className="text-ink">{name}</span>}
+      {level && <span>{level}</span>}
+    </span>
+  )
+}
+
+type LineTextProps = { text: string; detail?: string }
+
+function LineText({ text, detail }: LineTextProps) {
+  return (
+    <>
+      {text}
+      {detail && <span className="text-dim"> {'· ' + detail}</span>}
+    </>
   )
 }

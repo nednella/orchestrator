@@ -38,7 +38,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
   const open = useAgentosSelector((s) => s.selectedId === session.id)
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
-  const card = useHoverCard(400)
+  const card = useHoverCard(600)
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
   const settled = session.state === 'settled'
