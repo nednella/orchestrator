@@ -79,6 +79,14 @@
   --bg-danger: color-mix(in srgb, var(--danger) 6%, transparent);
   --border-danger: color-mix(in srgb, var(--danger) 35%, transparent);
 
+  /* The confirm modal: dialog glass over the page, blurred at 64% behind it, and a muted footer at 72%. */
+  --bg-dialog-backdrop: color-mix(in srgb, var(--bg-app) 64%, transparent);
+  --bg-dialog: color-mix(in srgb, var(--bg-composer) 80%, transparent);
+  --border-dialog: rgba(255, 255, 255, 0.08);
+  --shadow-dialog: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 24px 72px -20px rgba(0, 0, 0, 0.9);
+  --dialog-foot: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+  --shadow-destructive: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+
   --pr-open: #238636;
   --pr-draft: #5a6270;
   --pr-merged: #8957e5;
@@ -137,6 +145,7 @@
   --z-popup: 30;
   --z-overlay: 40;
   --z-toast: 50;
+  --z-dialog: 50;
   --z-splash: 60;
 }
 
@@ -222,6 +231,9 @@
   --bg-card: var(--bg-surface);
   --bg-tile: var(--bg-raised);
   --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.08), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --bg-dialog-backdrop: color-mix(in srgb, var(--bg-app) 60%, transparent);
+  --border-dialog: color-mix(in srgb, var(--text) 10%, transparent);
+  --shadow-dialog: 0 24px 64px -24px rgba(0, 0, 0, 0.65);
 
 
   --pr-open: #238636;

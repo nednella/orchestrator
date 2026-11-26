@@ -1832,4 +1832,191 @@
       transform: rotate(360deg);
     }
   }
+
+  /* The confirm modal: centred from 640px, a bottom sheet below. */
+  .confirm-back {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dialog);
+    display: grid;
+    place-items: end stretch;
+    background: var(--bg-dialog-backdrop);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    animation: fade-in 0.2s ease-in-out;
+  }
+
+  .confirm-dialog {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-dialog);
+    border-bottom: 0;
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-dialog);
+    animation: confirm-sheet-in 0.2s ease-in-out;
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .confirm-dialog {
+      background: var(--bg-dialog);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+  }
+
+  .confirm-back[data-leaving] {
+    pointer-events: none;
+    animation: fade-out 0.2s ease-in-out forwards;
+  }
+
+  .confirm-back[data-leaving] .confirm-dialog {
+    animation: confirm-sheet-out 0.2s ease-in-out forwards;
+  }
+
+  .confirm-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .confirm-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.375;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  .confirm-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: min(24rem, 60dvh);
+    overflow-y: auto;
+    font-size: var(--fs-body);
+    color: var(--text-soft);
+    text-align: left;
+  }
+
+  .confirm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    color: var(--text);
+  }
+
+  .confirm-check {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .confirm-check input {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.1875rem;
+    accent-color: var(--accent);
+  }
+
+  .confirm-check small {
+    display: block;
+    font-size: var(--fs-small);
+    color: var(--text-soft);
+  }
+
+  .confirm-check[data-disabled] {
+    cursor: default;
+  }
+
+  .confirm-check[data-disabled] > span > span {
+    color: var(--text-dim);
+  }
+
+  .confirm-foot {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--dialog-foot);
+  }
+
+  .confirm-foot .btn {
+    justify-content: center;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    font-size: var(--fs-body);
+  }
+
+  .btn-destructive {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: var(--text-on-danger);
+    box-shadow: var(--shadow-destructive);
+  }
+
+  .btn-destructive:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 90%, transparent);
+  }
+
+  @media (min-width: 640px) {
+    .confirm-back {
+      place-items: center;
+      padding: 1rem;
+    }
+
+    .confirm-dialog {
+      width: 100%;
+      max-width: 32rem;
+      border-bottom: 1px solid var(--border-dialog);
+      border-radius: 1rem;
+      animation-name: confirm-in;
+    }
+
+    .confirm-back[data-leaving] .confirm-dialog {
+      animation-name: confirm-out;
+    }
+
+    .confirm-head {
+      text-align: left;
+    }
+
+    .confirm-foot {
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+
+    .confirm-foot .btn {
+      height: 2rem;
+    }
+  }
+
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
+
+  @keyframes confirm-in {
+    from { opacity: 0; transform: scale(0.98); }
+  }
+
+  @keyframes confirm-out {
+    to { opacity: 0; transform: scale(0.98); }
+  }
+
+  @keyframes confirm-sheet-in {
+    from { opacity: 0; transform: translateY(1rem); }
+  }
+
+  @keyframes confirm-sheet-out {
+    to { opacity: 0; transform: translateY(1rem); }
+  }
 }

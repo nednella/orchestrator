@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
+import { ConfirmHost } from './components/ConfirmHost'
 import { DigestView } from './components/DigestView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
@@ -17,6 +18,7 @@ import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
 import { useAgentos } from './AgentosContext'
+import { useConfirming } from './confirm'
 import { useLayout } from './LayoutContext'
 import { useFocusedPanel } from './useFocusedPanel'
 import { useFullscreen } from './useFullscreen'
@@ -33,7 +35,8 @@ const appEnterClass: Record<SplashStage, string> = {
 
 export function App() {
   const network = useNetwork()
-  useShortcuts(network.online)
+  const confirming = useConfirming()
+  useShortcuts(network.online && !confirming)
   useUiCommands()
   useDigestToasts()
   useFocusedPanel()
@@ -77,6 +80,7 @@ export function App() {
         <PatchNotes />
         <Toasts />
       </div>
+      <ConfirmHost />
       {!network.online && <OfflineSplash retrying={network.retrying} onRetry={() => void network.retry()} />}
       {splash !== 'done' && <Splash stage={splash} onStage={setSplash} />}
     </>
