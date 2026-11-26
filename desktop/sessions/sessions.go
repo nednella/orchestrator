@@ -4116,9 +4116,9 @@ func (s *Sessions) heirOf(key, dir string, family []string) string {
 }
 
 // FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
-// made for the thread, while no other live thread and no shell works there. inProject is set for a thread that runs in
-// the project folder, whose files a rewind never touches. reason says why the files cannot be rewound, "" when dir is
-// where they may be.
+// made for the thread, while no other live thread and no shell but the thread's own works there, and none of the
+// thread's own shells runs a command. inProject is set for a thread that runs in the project folder, whose files a
+// rewind never touches. reason says why the files cannot be rewound, "" when dir is where they may be.
 func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason string) {
 	s.mu.Lock()
 	in, found := s.infoOf(id)
@@ -4138,10 +4138,28 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	if user := s.usersOf(w.Path, true, id); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	if shell := s.life.shellIn(ctx, proj.Key(), w.Path); shell != "" {
+	if shell := s.life.shellIn(ctx, proj.Key(), w.Path, id); shell != "" {
+		return "", false, shell
+	}
+	if shell := s.busyShellOf(ctx, id); shell != "" {
 		return "", false, shell
 	}
 	return w.Path, false, ""
+}
+
+// busyShellOf says why a shell of the thread keeps a rewind from its files: one runs a command, which may write them.
+// It is "" when none does.
+func (s *Sessions) busyShellOf(ctx context.Context, id string) string {
+	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
+	defer cancel()
+	_, shells, err := s.tmux.ListAll(ctx)
+	if err != nil {
+		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+	}
+	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id && shellBusy(sh) }) {
+		return "a shell of this thread runs a command"
+	}
+	return ""
 }
 
 // pending says why the thread is busy, or "" when it is not. Prompts are held while a turn runs, so they are named

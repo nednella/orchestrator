@@ -2,9 +2,7 @@ package sessions_test
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/nednella/agentos/desktop/sessions"
@@ -55,18 +53,21 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 	}
 
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
-	shell, err := h.ShellNew(s.ID)
+	own, err := h.ShellNew(s.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	realWt, _ := filepath.EvalSymlinks(wt)
-	eventually(t, "the shell in the worktree", func() bool {
-		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+shell.ID+":", "#{pane_current_path}").Output()
-		path, _ := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
-		return err == nil && path == realWt
-	})
+	eventually(t, "the thread's shell in the worktree", func() bool { return shellFolder(t, h, own.ID) == resolved(wt) })
+	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != "" {
+		t.Errorf("with the thread's idle shell in the worktree: reason = %q", reason)
+	}
+	other, err := h.ShellNew("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cdShell(t, h, other.ID, wt)
 	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != "a shell is open in this worktree" {
-		t.Errorf("with a shell in the worktree: reason = %q", reason)
+		t.Errorf("with a shell of the project in the worktree: reason = %q", reason)
 	}
 }
 

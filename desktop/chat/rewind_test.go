@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -279,15 +280,24 @@ func TestRewindIsRefusedWhileATurnRuns(t *testing.T) {
 	}
 }
 
+// typeIn types the line into the shell id and presses Enter.
+func typeIn(t *testing.T, h *apptest.Harness, id, line string) {
+	t.Helper()
+	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+id+":", line, "Enter").Run(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	s, _ := h.Session(id)
 	h.Hook(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
-	shell, err := h.ShellNew(id)
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}
+	typeIn(t, h, shell.ID, fmt.Sprintf("cd %q", s.Worktree))
 	eventually(t, "the shell in the worktree", func() bool {
 		_, _, reason := h.Sessions().FilesRewind(id)
 		return reason != ""
@@ -308,6 +318,31 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	}
 	if got := read(t, file); got != "after" {
 		t.Errorf("file = %q, want it left", got)
+	}
+	if err := h.ShellClose(shell.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
+	h, id, _ := worktreeThread(t)
+	s, _ := h.Session(id)
+	h.Hook(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
+	shell, err := h.ShellNew(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "" {
+		t.Errorf("RewindFilesOffer beside an idle shell of the thread = %+v", offer)
+	}
+
+	typeIn(t, h, shell.ID, "sleep 30")
+	eventually(t, "the shell's command keeps the files", func() bool {
+		_, _, reason := h.Sessions().FilesRewind(id)
+		return reason != ""
+	})
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell of this thread runs a command" {
+		t.Errorf("RewindFilesOffer while a shell of the thread runs a command = %+v", offer)
 	}
 	if err := h.ShellClose(shell.ID); err != nil {
 		t.Fatal(err)
