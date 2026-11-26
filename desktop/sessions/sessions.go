@@ -4334,8 +4334,8 @@ func (s *Sessions) CloseShell(id string) error {
 	return s.stopShell(name)
 }
 
-// closeShellsOf stops every shell of the thread, and those of the threads in others that are in the worktree, as tmux
-// lists them now. A shell it cannot stop is logged and left running.
+// closeShellsOf stops every shell of the thread, and those of the threads in others that are in the worktree or in a
+// folder tmux cannot read, as tmux lists them now. A shell it cannot stop is logged and left running.
 func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
 	if thread == "" {
 		return
@@ -4350,7 +4350,7 @@ func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
 		return
 	}
 	for _, sh := range shells {
-		inWorktree := worktree != "" && sh.Path != "" && folder.Inside(sh.Path, worktree)
+		inWorktree := worktree != "" && (sh.Path == "" || folder.Inside(sh.Path, worktree))
 		if sh.Thread != thread && (!inWorktree || !slices.Contains(others, sh.Thread)) {
 			continue
 		}

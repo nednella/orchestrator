@@ -281,8 +281,6 @@ func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {
 	}
 }
 
-// commandHarness is a shellHarness whose login shell is bash, which names its own process as it is called; macOS's sh
-// runs as bash.
 // commandHarness is an app whose shells run sh, which macOS names bash once it runs: a shell is busy by its terminal,
 // never by its name.
 func commandHarness(t *testing.T) *apptest.Harness {
