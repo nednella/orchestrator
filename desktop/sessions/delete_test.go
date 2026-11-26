@@ -414,12 +414,10 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 		pushWork(t, wt)
 		h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
 		eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
-		shell, err := h.ShellNew(s.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		shell := newShell(t, h, "")
+		cdShell(t, h, shell, wt)
 		eventually(t, "the shell in the worktree", func() bool { return h.OwnWorktree(s.ID) == "" })
-		if err := h.ShellClose(shell.ID); err != nil {
+		if err := h.ShellClose(shell); err != nil {
 			t.Fatal(err)
 		}
 		if got := h.OwnWorktree(s.ID); got != wt {

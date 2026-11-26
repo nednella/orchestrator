@@ -359,6 +359,13 @@ export function createMock(params: URLSearchParams) {
     return shell
   }
 
+  // closeShellsOf stops the thread's shells, as a clean-up or a delete of it does.
+  function closeShellsOf(thread: string) {
+    if (!shells.some((x) => x.thread === thread)) return
+    shells.splice(0, shells.length, ...shells.filter((x) => x.thread !== thread))
+    publishShells()
+  }
+
   function snapshot(): Snapshot {
     return {
       project: projectView(current),
@@ -819,6 +826,7 @@ export function createMock(params: URLSearchParams) {
   function finishCleanup(s: Session) {
     const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
+    if (s.worktree) closeShellsOf(s.id)
     if (s.state !== 'settled') chats.end(s.id, 'settle')
     Object.assign(s, { worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '', browser: false })
     setState(s, 'settled')
@@ -1062,6 +1070,7 @@ export function createMock(params: URLSearchParams) {
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
         if (x.state !== 'settled') chats.end(x.id, 'settle')
+        closeShellsOf(x.id)
         deleted.add(x.id)
         servers.delete(x.id)
         sessions.splice(sessions.indexOf(x), 1)

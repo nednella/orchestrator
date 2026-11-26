@@ -1543,39 +1543,6 @@ func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 	}
 }
 
-func TestOpenShellInTheWorktreeKeepsIt(t *testing.T) {
-	h := shellHarness(t)
-	repoFixture(t, h)
-	s := issueThread(h, t, 7)
-	wt := s.Worktree
-	pushWork(t, wt)
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
-	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
-	shell, err := h.ShellNew(s.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	realWt, _ := filepath.EvalSymlinks(wt)
-	eventually(t, "the shell in the worktree", func() bool {
-		out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+shell.ID+":", "#{pane_current_path}").Output()
-		path, _ := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
-		return err == nil && path == realWt
-	})
-
-	openThenMerge(h)
-	keptFor(t, h, s.ID, wt, "a shell is open in this worktree")
-
-	if err := h.ShellClose(shell.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.Cleanup(s.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	if !cleanedUp(h, s.ID)() || exists(wt) {
-		t.Errorf("the clean-up once the shell closed: cleaned up %v, worktree there %v", cleanedUp(h, s.ID)(), exists(wt))
-	}
-}
-
 func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)

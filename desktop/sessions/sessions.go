@@ -766,16 +766,17 @@ func (s *Sessions) handoverOf(id string) string {
 }
 
 // Delete stops the thread when it runs, as a settle does, and removes it for good: its row, state file, chat log, chat
-// images, evidence, handover, usage mark, temp folder, browser window and host socket. Its clean-up log entries and
-// its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-up
-// with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
-// no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
-// thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
-// first, so none is left without the parent that reaches it. With worktree their worktrees go with the thread's, all
-// or none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over to that
-// thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
-// until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
-// nor a descendant can be woken or forked, and none starts a child.
+// images, evidence, handover, usage mark, temp folder, browser window, host socket and shells. Its clean-up log entries
+// and its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a
+// clean-up with every check, and only when no other thread or shell works in it; a worktree that stays refuses the
+// Delete, and no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes
+// with the thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the
+// deepest first, so none is left without the parent that reaches it. With worktree their worktrees go with the
+// thread's, all or none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over
+// to that thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused, and so
+// is an old terminal session whose pane still runs: the owner ends it there, and until then it keeps its row, so no
+// second thread claims its issue's branch. While the delete runs, neither the thread nor a descendant can be woken or
+// forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -823,12 +824,13 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	return nil
 }
 
-// remove stops the thread id of a Delete when it runs and removes it with its files, and says whether it stopped it.
+// remove stops the thread id of a Delete and its shells, and removes it with its files, and says whether it stopped the thread.
 func (s *Sessions) remove(id string) (settled bool, err error) {
 	name, err := session.ParseName(id)
 	if err != nil {
 		return false, err
 	}
+	s.closeShellsOf(id)
 	s.mu.Lock()
 	rec := s.records[id]
 	if e, ok := s.ended[id]; ok {
@@ -1030,7 +1032,7 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 		if id != top {
 			heir = s.heirOf(key, path, family)
 		}
-		reason := s.life.shellIn(ctx, key, path)
+		reason := s.life.shellIn(ctx, key, path, family...)
 		if user := s.usersOf(path, true, family...); reason == "" && user != "" && heir == "" {
 			reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 		}
@@ -1052,11 +1054,12 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 }
 
 // removeWorktrees removes the worktrees of a Delete's family, trees, once every one has passed every check of a
-// clean-up, so a worktree kept refuses the Delete before any goes. A worktree kept because a shell or a thread outside
-// the family works in it refuses the Delete with no check run; one a fork takes over stays for the fork. When the
-// thread runs and works in a worktree that is to go, its own or a descendant's, the Delete puts it to sleep after the
-// checks and runs them again, since its agent may have changed the worktree until it stopped; a refusal then says it is
-// asleep. The family does not count as others in a worktree. asleep is the thread it put to sleep, "" when none.
+// clean-up, so a worktree kept refuses the Delete before any goes, and the family's shells close before the first goes.
+// A worktree kept because a shell or a thread outside the family works in it refuses the Delete with no check run; one
+// a fork takes over stays for the fork. When the thread runs and works in a worktree that is to go, its own or a
+// descendant's, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed the
+// worktree until it stopped; a refusal then says it is asleep. The family and its shells do not count as others in a
+// worktree. asleep is the thread it put to sleep, "" when none.
 func (s *Sessions) removeWorktrees(family []string, trees familyTrees) (asleep string, err error) {
 	ctx := s.context()
 	top := family[len(family)-1]
@@ -1079,6 +1082,9 @@ func (s *Sessions) removeWorktrees(family []string, trees familyTrees) (asleep s
 		if err := s.checkWorktrees(ctx, family, own, asleep, trees.count()); err != nil {
 			return asleep, err
 		}
+	}
+	for _, id := range family {
+		s.closeShellsOf(id)
 	}
 	for _, id := range own {
 		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
@@ -1202,16 +1208,18 @@ func (s *Sessions) OwnWorktree(id string) string {
 
 // ownWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
 // clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
-// it, as a fork does, or a shell is open in it. Its descendants do not count, as a Delete takes them with it.
+// it, as a fork does, or a shell is open in it. Its descendants and the shells of the thread and its descendants do not
+// count, as a Delete takes them with it.
 func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
 	path = s.madeWorktree(id)
 	if path == "" {
 		return "", ""
 	}
-	if user := s.usersOf(path, true, append(s.Descendants(id), id)...); user != "" {
+	family := append(s.Descendants(id), id)
+	if user := s.usersOf(path, true, family...); user != "" {
 		return path, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	return path, s.life.shellIn(ctx, session.ProjectKey(id), path)
+	return path, s.life.shellIn(ctx, session.ProjectKey(id), path, family...)
 }
 
 // madeWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
@@ -4227,18 +4235,22 @@ func loginShell() string { return cmp.Or(os.Getenv("SHELL"), "/bin/zsh") }
 // NewShell starts a shell in the current project, numbered after the shells it has, and returns its id. A shell is a
 // login shell; it reports nothing: it is not an agent, so it gets no hooks and no session number. With thread "" it
 // is a shell of the project, in the project folder. Else it belongs to the thread and starts in the thread's
-// worktree, or in the project folder once that is gone; it is refused while a clean-up of the thread runs, which may
-// be removing its worktree.
+// worktree, or in the project folder once that is gone; it is refused while a clean-up or a delete of the thread
+// runs, which closes the thread's shells.
 func (s *Sessions) NewShell(thread string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
 	s.mu.Lock()
 	proj := s.project
+	deleting := s.deleting[thread]
 	s.mu.Unlock()
 	dir := proj.Dir
 	if thread != "" {
-		if s.life.CleaningUp(thread) {
+		switch {
+		case s.life.CleaningUp(thread):
 			return "", fmt.Errorf("Thread %d is being cleaned up; open a shell when that ends", s.Number(thread))
+		case deleting:
+			return "", fmt.Errorf("Thread %d is being deleted; open a shell when that ends", s.Number(thread))
 		}
 		folder, err := s.threadFolder(thread)
 		switch {
@@ -4299,6 +4311,31 @@ func (s *Sessions) CloseShell(id string) error {
 		return fmt.Errorf("%s is not a shell", id)
 	}
 	return s.stopShell(name)
+}
+
+// closeShellsOf stops every shell that belongs to the thread, as tmux lists them now. A shell it cannot stop is logged
+// and left running.
+func (s *Sessions) closeShellsOf(thread string) {
+	if thread == "" {
+		return
+	}
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
+	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
+	defer cancel()
+	_, shells, err := s.tmux.ListAll(ctx)
+	if err != nil {
+		log.Printf("agentos: listing the shells of thread %s: %v", thread, err)
+		return
+	}
+	for _, sh := range shells {
+		if sh.Thread != thread {
+			continue
+		}
+		if err := s.stopShell(sh.Name); err != nil {
+			log.Printf("agentos: closing shell %s of thread %s: %v", sh.Name, thread, err)
+		}
+	}
 }
 
 // stopShell stops the shell name and its terminal.

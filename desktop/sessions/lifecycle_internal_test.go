@@ -339,6 +339,14 @@ func TestSweptCleanupStopsForADeleteOrAWake(t *testing.T) {
 	}
 }
 
+func TestNewShellIsRefusedWhileItsThreadIsDeleted(t *testing.T) {
+	s, name := asleepAndKept(t)
+	s.deleting[name.String()] = true
+	if _, err := s.NewShell(name.String()); err == nil || err.Error() != "Thread 3 is being deleted; open a shell when that ends" {
+		t.Errorf("shell = %v, want it refused while the delete runs, which closes the thread's shells", err)
+	}
+}
+
 func TestWakeIsRefusedWhileACleanupRuns(t *testing.T) {
 	s, name := asleepAndKept(t)
 	id := name.String()

@@ -527,16 +527,14 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 		pushWork(t, parent.Worktree)
 		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
 		h.Hook(t, child.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
-		shell, err := h.ShellNew(child.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = h.ShellClose(shell.ID) })
+		shell := newShell(t, h, "")
+		t.Cleanup(func() { _ = h.ShellClose(shell) })
+		cdShell(t, h, shell, child.Worktree)
 		eventually(t, "the shell in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
 		putToSleep(t, h, child.ID)
 		cleanupOf(t, h, child)
 
-		err = h.DeleteThread(parent.ID, true)
+		err := h.DeleteThread(parent.ID, true)
 		if want := fmt.Sprintf("Thread %d keeps its worktree: a shell is open in this worktree. Untick the box to keep the worktrees, or clean Thread %d up first", child.N, child.N); err == nil || err.Error() != want {
 			t.Errorf("Delete = %v, want %q", err, want)
 		}

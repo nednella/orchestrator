@@ -66,6 +66,13 @@ func typeIn(t *testing.T, h *apptest.Harness, id, line string) {
 	}
 }
 
+// cdShell moves the shell into dir and waits until tmux sees it there.
+func cdShell(t *testing.T, h *apptest.Harness, id, dir string) {
+	t.Helper()
+	typeIn(t, h, id, fmt.Sprintf("cd %q", dir))
+	eventually(t, "the shell in "+dir, func() bool { return shellFolder(t, h, id) == resolved(dir) })
+}
+
 // pushedThread is the thread of issue 7, with pushed work in its worktree and idle there.
 func pushedThread(t *testing.T, h *apptest.Harness) sessions.Session {
 	t.Helper()
@@ -127,6 +134,112 @@ func TestShellsAreReadAgainAfterARestart(t *testing.T) {
 		if got[i].ID != want[i].ID || got[i].Thread != want[i].Thread {
 			t.Errorf("shell %d after a restart = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestDeleteClosesOnlyTheThreadsShells(t *testing.T) {
+	t.Run("without the worktree", func(t *testing.T) {
+		h := shellHarness(t)
+		gone, err := h.NewSession("gone", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept, err := h.NewSession("kept", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		project := newShell(t, h, "")
+		goneShells := []string{newShell(t, h, gone.ID), newShell(t, h, gone.ID)}
+		keptShells := []string{newShell(t, h, kept.ID), newShell(t, h, kept.ID)}
+
+		if err := h.DeleteThread(gone.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range goneShells {
+			if tmuxHas(h, id) {
+				t.Errorf("the deleted thread's shell %s still runs", id)
+			}
+		}
+		left := append([]string{project}, keptShells...)
+		for _, id := range left {
+			if !tmuxHas(h, id) {
+				t.Errorf("the shell %s went with another thread", id)
+			}
+		}
+		if got := shellIDs(h); !slices.Equal(got, left) {
+			t.Errorf("shells after the delete = %q, want %q", got, left)
+		}
+	})
+
+	t.Run("with the worktree", func(t *testing.T) {
+		h := shellHarness(t)
+		s := pushedThread(t, h)
+		own := newShell(t, h, s.ID)
+		eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, own) == resolved(s.Worktree) })
+		project := newShell(t, h, "")
+		if got := h.DeletePlan(s.ID).Worktrees; got != 1 {
+			t.Errorf("the box offers %d worktrees with the thread's own shell in it, want 1", got)
+		}
+		if got := h.OwnWorktree(s.ID); got != s.Worktree {
+			t.Errorf("OwnWorktree with the thread's own shell in it = %q, want %s", got, s.Worktree)
+		}
+
+		if err := h.DeleteThread(s.ID, true); err != nil {
+			t.Fatal(err)
+		}
+		if exists(s.Worktree) || tmuxHas(h, own) {
+			t.Errorf("worktree there %v, the thread's shell runs %v; want neither", exists(s.Worktree), tmuxHas(h, own))
+		}
+		if !tmuxHas(h, project) {
+			t.Error("the project shell went with the thread")
+		}
+	})
+}
+
+func TestSleepWithCleanUpClosesTheThreadsShells(t *testing.T) {
+	h := shellHarness(t)
+	s := pushedThread(t, h)
+	own := newShell(t, h, s.ID)
+	eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, own) == resolved(s.Worktree) })
+	project := newShell(t, h, "")
+
+	openThenMerge(h)
+	eventually(t, "the clean-up", cleanedUp(h, s.ID))
+	if exists(s.Worktree) {
+		t.Error("the worktree is still there")
+	}
+	if tmuxHas(h, own) {
+		t.Error("the thread's shell still runs")
+	}
+	if !tmuxHas(h, project) {
+		t.Error("the project shell went with the thread's clean-up")
+	}
+	if got := shellIDs(h); !slices.Equal(got, []string{project}) {
+		t.Errorf("shells after the clean-up = %q, want only %s", got, project)
+	}
+}
+
+func TestCleanupWaitsForAProjectShellInTheWorktree(t *testing.T) {
+	h := shellHarness(t)
+	s := pushedThread(t, h)
+	own := newShell(t, h, s.ID)
+	project := newShell(t, h, "")
+	cdShell(t, h, project, s.Worktree)
+
+	openThenMerge(h)
+	keptFor(t, h, s.ID, s.Worktree, "a shell is open in this worktree")
+	if !tmuxHas(h, own) {
+		t.Error("a kept clean-up closed the thread's shell")
+	}
+
+	if err := h.ShellClose(project); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Cleanup(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, s.ID)() || exists(s.Worktree) || tmuxHas(h, own) {
+		t.Errorf("the clean-up once the project shell closed: cleaned up %v, worktree there %v, the thread's shell runs %v", cleanedUp(h, s.ID)(), exists(s.Worktree), tmuxHas(h, own))
 	}
 }
 
