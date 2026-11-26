@@ -207,6 +207,65 @@ func TestOpenInEditorOpensAFileInTheFolder(t *testing.T) {
 	}
 }
 
+func TestOpenInEditorOpensAnyFileOfTheFolder(t *testing.T) {
+	t.Parallel()
+	wt := t.TempDir()
+	if err := os.WriteFile(filepath.Join(wt, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(wt, "docs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := &opened{}
+	s, name := editorSessions(t, o, nil, t.TempDir())
+	s.info = []term.Info{{Name: name, Path: wt}}
+	s.nums[name.String()] = 3
+	if err := s.OpenInEditor(name.String(), "main.go"); err != nil {
+		t.Fatal(err)
+	}
+	if want := [][]string{{"open", "-a", "Visual Studio Code", filepath.Join(real, "main.go")}}; !reflect.DeepEqual(o.calls, want) {
+		t.Errorf("ran %q, want %q", o.calls, want)
+	}
+	if err := s.OpenInEditor(name.String(), "docs"); err == nil || err.Error() != "This is not a file" {
+		t.Errorf("OpenInEditor(docs) = %v, want it is not a file", err)
+	}
+}
+
+func TestOpenProjectInEditorOpensTheFolderOrAFileInIt(t *testing.T) {
+	t.Parallel()
+	projectDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectDir, "main.go"), []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := &opened{}
+	s, _ := editorSessions(t, o, nil, projectDir)
+	key := project.Project{Name: "shop", Dir: projectDir}.Key()
+	for path, want := range map[string]string{"": projectDir, "main.go": filepath.Join(real, "main.go")} {
+		if err := s.OpenProjectInEditor(key, path); err != nil {
+			t.Fatalf("OpenProjectInEditor(%q): %v", path, err)
+		}
+		if got := o.calls[len(o.calls)-1][3]; got != want {
+			t.Errorf("OpenProjectInEditor(%q) opened %q, want %q", path, got, want)
+		}
+	}
+	for path, want := range map[string]string{"../x.go": "This file is outside project " + key + "'s folder", "gone.go": "This file does not exist"} {
+		if err := s.OpenProjectInEditor(key, path); err == nil || err.Error() != want {
+			t.Errorf("OpenProjectInEditor(%q) = %v, want %q", path, err, want)
+		}
+	}
+	if err := s.OpenProjectInEditor("nope", ""); err == nil || err.Error() != "No project nope" {
+		t.Errorf("OpenProjectInEditor of an unknown project = %v", err)
+	}
+}
+
 func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 	t.Parallel()
 	parent := t.TempDir()
@@ -230,7 +289,6 @@ func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 		"../secret.md":                     "This file is outside thread 3's folder",
 		filepath.Join(parent, "secret.md"): "This file is outside thread 3's folder",
 		"out.md":                           "This file is outside thread 3's folder",
-		"notes.txt":                        "This is not a markdown file",
 	} {
 		if err := s.OpenInEditor(name.String(), path); err == nil || err.Error() != want {
 			t.Errorf("OpenInEditor(%q) = %v, want %q", path, err, want)
@@ -242,7 +300,7 @@ func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 }
 
 // Not parallel: it sets a package-level hook.
-func TestOpenMarkdownRefusesAFileSwappedAfterTheCheck(t *testing.T) {
+func TestOpenFileRefusesAFileSwappedAfterTheCheck(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "secret.md")
 	for name, swap := range map[string]struct{ target, want string }{
 		"a file in the folder": {"other.md", "This file changed while it was opened"},
@@ -268,12 +326,12 @@ func TestOpenMarkdownRefusesAFileSwappedAfterTheCheck(t *testing.T) {
 				}
 			}
 			t.Cleanup(func() { beforeOpen = nil })
-			f, _, err := OpenMarkdown(dir, "plan.md", "thread 3")
+			f, _, err := OpenFile(dir, "plan.md", "thread 3")
 			if err == nil {
 				f.Close()
 			}
 			if err == nil || err.Error() != swap.want {
-				t.Errorf("OpenMarkdown of a file swapped after the check = %v, want %q", err, swap.want)
+				t.Errorf("OpenFile of a file swapped after the check = %v, want %q", err, swap.want)
 			}
 		})
 	}

@@ -23,7 +23,7 @@ var errFolderGone = errors.New("This thread's folder is gone")
 
 // OpenInEditor opens the folder the thread works in with the editor app of the config: its worktree when it has one,
 // else the project folder. The folder comes from the thread's own record, never from the caller. A path opens that
-// markdown file instead, only when it is inside the folder, as OpenMarkdown has it.
+// file instead, only when it is inside the folder, as OpenFile has it.
 func (s *Sessions) OpenInEditor(id, path string) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -36,8 +36,32 @@ func (s *Sessions) OpenInEditor(id, path string) error {
 	if err != nil {
 		return err
 	}
+	return s.openInEditor(target, path, fmt.Sprintf("thread %d", s.Number(id)))
+}
+
+// OpenProjectInEditor is OpenInEditor for the project's folder, where no thread is open.
+func (s *Sessions) OpenProjectInEditor(key, path string) error {
+	s.mu.Lock()
+	projs := s.projects()
+	s.mu.Unlock()
+	for _, p := range projs {
+		if p.Key() != key {
+			continue
+		}
+		if info, err := os.Stat(p.Dir); err != nil || !filepath.IsAbs(p.Dir) || !info.IsDir() {
+			return fmt.Errorf("The folder of project %s is gone", key)
+		}
+		return s.openInEditor(p.Dir, path, "project "+key)
+	}
+	return fmt.Errorf("No project %s", key)
+}
+
+// openInEditor opens dir, or the file at path inside it, with the editor app of the config; of names whose folder dir
+// is, for an error.
+func (s *Sessions) openInEditor(dir, path, of string) error {
+	target := dir
 	if path != "" {
-		f, real, err := OpenMarkdown(target, path, fmt.Sprintf("thread %d", s.Number(id)))
+		f, real, err := OpenFile(dir, path, of)
 		if err != nil {
 			return err
 		}
@@ -92,12 +116,11 @@ func (s *Sessions) threadFolder(id string) (string, error) {
 	return dir, nil
 }
 
-// OpenMarkdown opens the markdown file at path, relative to dir or absolute, and gives its real path. It refuses a file
-// whose real path, symlinks resolved, is not inside dir, and one that is not a regular .md or .markdown file by the
-// name given or by the name its symlinks lead to; of names whose folder dir is, for the error. Whether the path leaves
+// OpenFile opens the file at path, relative to dir or absolute, and gives its real path. It refuses a file whose real
+// path, symlinks resolved, is not inside dir, and one that is not a regular file; of names whose folder dir is, for the error. Whether the path leaves
 // dir is judged before whether it exists, so a refusal never says whether a file outside dir is there. A hard link to a
 // file outside dir is read, since no path shows one.
-func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
+func OpenFile(dir, path, of string) (*os.File, string, error) {
 	gone := fmt.Errorf("The folder of %s is gone", of)
 	outside := fmt.Errorf("This file is outside %s's folder", of)
 	realDir, err := filepath.EvalSymlinks(dir)
@@ -136,8 +159,8 @@ func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
 	if _, inside := within(realDir, real); !inside {
 		return nil, "", outside
 	}
-	if !checked.Mode().IsRegular() || !IsMarkdown(path) || !IsMarkdown(real) {
-		return nil, "", errNotMarkdown
+	if !checked.Mode().IsRegular() {
+		return nil, "", errNotFile
 	}
 	if beforeOpen != nil {
 		beforeOpen()
@@ -156,18 +179,12 @@ func OpenMarkdown(dir, path, of string) (*os.File, string, error) {
 	return f, real, nil
 }
 
-// beforeOpen, when set, runs between OpenMarkdown's check of a file and its open, for a test to change the file there.
+// beforeOpen, when set, runs between OpenFile's check of a file and its open, for a test to change the file there.
 var beforeOpen func()
 
 var errCannotRead = errors.New("Could not read this file")
 
-var errNotMarkdown = errors.New("This is not a markdown file")
-
-// IsMarkdown says whether path names a .md or .markdown file.
-func IsMarkdown(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".md" || ext == ".markdown"
-}
+var errNotFile = errors.New("This is not a file")
 
 // within is path relative to dir, and whether it is inside it.
 func within(dir, path string) (string, bool) {
