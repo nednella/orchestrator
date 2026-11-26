@@ -52,7 +52,7 @@ func (b *Browsers) tabFor(ctx context.Context, id string) (*tab, error) {
 	return b.need(id)
 }
 
-// AgentOpen is agentos browser open: it loads the page in the session's window and prints it.
+// AgentOpen is the browser tool's open: it loads the page in the session's window and prints it.
 func (b *Browsers) AgentOpen(ctx context.Context, id, address string, front bool) (string, error) {
 	t, err := b.tabFor(ctx, id)
 	if err != nil {

@@ -14,7 +14,7 @@ type Asker interface {
 	AskerProject(req control.Request) string
 }
 
-// Commands answers agentos note.
+// Commands answers the note tool.
 type Commands struct {
 	notes   *Notes
 	asker   Asker

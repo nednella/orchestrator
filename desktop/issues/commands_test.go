@@ -27,7 +27,7 @@ func TestIssueCommand(t *testing.T) {
 		{"one running one new", []string{"7", "11"}, "started 1 session: #11 (3); already running: #7 (1)", false},
 		{"some fail", []string{"x", "999", "8"}, "already running: #8 (2); failed: x (not a number), #999 (issue #999 is not open in this project)", false},
 		{"all fail", []string{"x"}, "failed: x (not a number)", true},
-		{"none", nil, "usage:", true},
+		{"none", nil, "issue needs a number", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -78,7 +78,7 @@ A shot path that is not absolute lands in `$TMPDIR`. Read the screenshot to chec
 
 ## Releases
 
-`make release VERSION=v1.2.3` builds `bin/agentos-darwin-arm64.zip` and its `.sha256` the way the release workflow does, with the version stamped in the bundle's Info.plist. To try the installer or `agentos update` without a real release, serve `bin/` over HTTP and point them at it with a throwaway `HOME`; never run either against the owner's `~/Applications` or `~/.local/bin`.
+`make release VERSION=v1.2.3` builds `bin/agentos-darwin-arm64.zip` and its `.sha256` the way the release workflow does, with the version stamped in the bundle's Info.plist. To try the installer or the app's update without a real release, serve `bin/` over HTTP and point them at it with a throwaway `HOME`; never run either against the owner's `~/Applications` or `~/.local/bin`.
 
 ## What needs a human
 

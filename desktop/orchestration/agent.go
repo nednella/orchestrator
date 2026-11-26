@@ -164,7 +164,7 @@ func agentArgs(tool, input string) ([]string, map[string]string, error) {
 	return nil, nil, fmt.Errorf("agentos has no tool %q", tool)
 }
 
-// browserArgs reads the browser tool's input into the words and flags agentos browser sent.
+// browserArgs reads the browser tool's input into the words and flags the browser command reads.
 func browserArgs(input string) ([]string, map[string]string, error) {
 	var in struct {
 		Action  string `json:"action"`

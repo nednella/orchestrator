@@ -126,7 +126,7 @@ func TestBrowserAgentCLI(t *testing.T) {
 		if _, err := browserCmd(t, h, s.ID, "click", "e1"); err == nil || !strings.Contains(err.Error(), "unknown browser action") {
 			t.Errorf("a removed action's error = %v", err)
 		}
-		if out, err := browserCmd(t, h, "", "open", srv.URL); err == nil || !strings.Contains(err.Error(), "AGENTOS_SESSION") {
+		if out, err := browserCmd(t, h, "", "open", srv.URL); err == nil || !strings.Contains(err.Error(), "no calling thread") {
 			t.Errorf("without a session: %q, %v", out, err)
 		}
 	})

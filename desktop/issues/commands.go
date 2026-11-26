@@ -27,7 +27,7 @@ func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs
 // that is not Full access cannot start or wake one that is.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
-		return "", errors.New("usage: agentos issue <number...>")
+		return "", errors.New("issue needs a number")
 	}
 	var started, woken, running, failed []string
 	for _, arg := range req.Args {

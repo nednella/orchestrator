@@ -34,8 +34,7 @@ export function EvidenceTab({ session }: EvidenceTabProps) {
         <div className="flex max-w-sm flex-col items-center gap-2 text-center">
           <Icon name="image" size={28} />
           <h3 className="text-title font-semibold">Nothing to show yet</h3>
-          <p className="text-soft">Screenshots, before and after pairs and short notes from this session appear here. The agent adds them with</p>
-          <code className="mono rounded-sm border border-line-strong px-2 py-1 text-small">agentos show image.png --caption "…"</code>
+          <p className="text-soft">Screenshots, before and after pairs and short notes from this session appear here. The agent files them with its <code className="mono text-small">show</code> tool.</p>
           <p className="text-small text-dim">You can capture the browser yourself from its toolbar.</p>
         </div>
       </div>

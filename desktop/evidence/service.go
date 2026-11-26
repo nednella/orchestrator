@@ -62,7 +62,7 @@ func (c Changes) Changed(store *Store, id string, byAgent bool) {
 	c.Touch()
 }
 
-// Commands answers agentos show.
+// Commands answers the show tool.
 type Commands struct {
 	beforeOpen func(path string) // tests only: runs between the check of a file and its opening
 	store      *Store
@@ -90,7 +90,7 @@ func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
 		return "filed as evidence", nil
 	}
 	if len(req.Args) != 1 {
-		return "", errors.New("usage: agentos show <file> [--caption <text>] or agentos show --text <words>")
+		return "", errors.New("show needs a file or text")
 	}
 	path, err := allowedFile(req.Args[0], c.roots.ShowRoots(id))
 	if err != nil {

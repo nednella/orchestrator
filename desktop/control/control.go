@@ -90,7 +90,7 @@ func (r *Router) Answer(ctx context.Context, req ctl.Request) ctl.Response {
 // AskerSession checks that the command comes from a session that runs.
 func (r *Router) AskerSession(req ctl.Request) (string, error) {
 	if _, err := session.ParseName(req.Session); err != nil {
-		return "", errors.New("this command works inside an agentos session; AGENTOS_SESSION is not set")
+		return "", errors.New("no calling thread")
 	}
 	if !r.sessions.Has(req.Session) {
 		return "", fmt.Errorf("session %s is not running", req.Session)

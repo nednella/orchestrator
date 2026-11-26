@@ -47,7 +47,7 @@ func (c *Commands) Track(_ context.Context, req ctl.Request) (string, error) {
 		return "", errors.New("track needs a branch")
 	}
 	if _, err := session.ParseName(req.Session); err != nil {
-		return "", errors.New("this command works inside an agentos session; AGENTOS_SESSION is not set")
+		return "", errors.New("no calling thread")
 	}
 	if err := c.s.Track(req.Session, branch); err != nil {
 		return "", err

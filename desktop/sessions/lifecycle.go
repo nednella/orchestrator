@@ -83,7 +83,7 @@ type Cleanup struct {
 }
 
 // target is a thread that works on a branch, with the project it belongs to. Its branch is the one agentos made its
-// worktree on or the one it reported with agentos track, and no other thread has it.
+// worktree on or the one it reported with the track tool, and no other thread has it.
 type target struct {
 	id, title string
 	issue     int
