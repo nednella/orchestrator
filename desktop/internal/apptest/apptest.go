@@ -31,6 +31,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/scoped"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
+	"github.com/nednella/agentos/desktop/limits"
 	"github.com/nednella/agentos/desktop/notes"
 	"github.com/nednella/agentos/desktop/projects"
 	"github.com/nednella/agentos/desktop/sessions"
@@ -621,6 +622,7 @@ type Harness struct {
 	browser  *browser.Service
 	digest   *digest.Service
 	settings *settings.Service
+	limits   *limits.Service
 }
 
 // New starts an app for the test; the cleanup stops it and its tmux server.
@@ -755,6 +757,8 @@ func (h *Harness) build(t *testing.T) *app.App {
 			h.digest = s
 		case *settings.Service:
 			h.settings = s
+		case *limits.Service:
+			h.limits = s
 		}
 	}
 	return a
@@ -966,7 +970,8 @@ done
 // lives five minutes. "background" starts a subagent in the background, which ends at the next "finish", or is gone
 // with no end when "list none" lists no task; "subagent asks" starts one that asks for an approval, which waits past
 // the turn's end, and ends once it is answered; "subagent lost" starts one that asks and is gone with no end a moment
-// after the turn's end.
+// after the turn's end. "limit" streams a rate_limit event before its reply, and a get_usage request is answered with a
+// session and a weekly window.
 const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
 serve='import os, socket, sys, time
 if os.fork():
@@ -1044,6 +1049,9 @@ while IFS= read -r line; do
 		printf '%s\n' '{"type":"user","parent_tool_use_id":"toolu_asker","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_write","content":"written"}]}}' \
 			'{"type":"system","subtype":"task_notification","task_id":"a2","tool_use_id":"toolu_asker","status":"completed","summary":"written"}'
 		reply ;;
+	*'"type":"user"'*'"text":"limit"'*)
+		printf '%s\n' "$init" '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1795705200,"rateLimitType":"five_hour","utilization":0.5}}'
+		reply ;;
 	*'"type":"user"'*'"text":"list none"'*)
 		printf '%s\n' "$init" '{"type":"system","subtype":"background_tasks_changed","tasks":[]}'
 		reply ;;
@@ -1090,6 +1098,9 @@ while IFS= read -r line; do
 			text=$(grep -F "\"uuid\":\"$target\"" "$f.stdin" | head -n 1 | sed -n 's/.*"text":"\([^"]*\)".*/\1/p')
 			answer "{\"rewound\":true,\"targetMessageUuid\":\"$target\",\"prefillText\":\"$text\",\"precedingAssistantUuid\":\"fake-reply\"}" ;;
 		esac ;;
+	*'"subtype":"get_usage"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"rate_limits":{"five_hour":{"utilization":25,"resets_at":"2026-11-26T15:00:00+00:00"},"seven_day":{"utilization":96,"resets_at":"2026-11-30T23:00:00+00:00"}}}}}\n' "$id" ;;
 	*'"subtype":"set_permission_mode"'*)
 		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
 		mode=$(printf '%s' "$line" | sed -n 's/.*"mode":"\([^"]*\)".*/\1/p')
@@ -1255,6 +1266,10 @@ func (h *Harness) RewindTo(id, message string, files bool) (string, error) {
 	return h.chat.RewindTo(id, message, files)
 }
 func (h *Harness) RewindOff() string { return h.chat.RewindOff() }
+
+func (h *Harness) Limits() limits.Limits                 { return h.limits.Limits() }
+func (h *Harness) RefreshLimits() (limits.Limits, error) { return h.limits.RefreshLimits() }
+
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
 	return h.chat.ChatSend(id, text, images)
 }

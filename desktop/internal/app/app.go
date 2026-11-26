@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/internal/warn"
 	"github.com/nednella/agentos/desktop/issues"
+	"github.com/nednella/agentos/desktop/limits"
 	"github.com/nednella/agentos/desktop/notes"
 	"github.com/nednella/agentos/desktop/orchestration"
 	"github.com/nednella/agentos/desktop/projects"
@@ -28,6 +30,7 @@ import (
 	"github.com/nednella/agentos/desktop/terminal"
 	"github.com/nednella/agentos/desktop/update"
 	"github.com/nednella/agentos/internal/agent"
+	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/session"
 	upd "github.com/nednella/agentos/internal/update"
 )
@@ -56,6 +59,7 @@ type App struct {
 	awake    *awake.Awake
 	digests  *digest.Manager
 	updates  *update.Updater
+	limits   *limits.Tracker
 	router   *control.Router
 	tools    *orchestration.Commands
 	registry *projects.Registry
@@ -90,6 +94,8 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
 	})
 	chats := chat.New(sess, c.LocalDir, h.Emit)
+	a.limits = limits.New(sess, host.Usage, limits.Exec, os.TempDir(), h.Emit)
+	chats.OnRateLimit(a.limits.Seen)
 	iss := issues.New(runner, sess, h.Emit)
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)
 	a.registry, a.issues, a.warn = c.Registry, iss, warn.New(h.Emit)
@@ -181,6 +187,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		awake.NewService(stayAwake),
 		stats.NewService(waits, c.Registry, stats.NewBooks(events, c.Registry)),
 		update.NewService(a.updates, ctx),
+		limits.NewService(a.limits, ctx),
 		settings.NewService(c.Registry, sess, c.DataDir, c.DataDirFixed, h.PickDir, a.updates.Relaunch),
 	}
 	return a
@@ -216,6 +223,7 @@ func (a *App) Start(ctx context.Context) error {
 	a.router.Listen(a.stateDir)
 	go a.digests.Loop(ctx)
 	go a.updates.Loop(ctx)
+	go a.limits.Run(ctx)
 	go a.followConfig(ctx)
 	return nil
 }
