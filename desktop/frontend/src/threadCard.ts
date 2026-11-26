@@ -18,7 +18,8 @@ const PR_LOOK: Record<PR['state'], { icon: CardIcon; color: string; word: string
 export function middleTruncate(text: string, max: number): string {
   const chars = Array.from(text)
   if (chars.length <= max) return text
-  const keep = Math.max(max - 1, 2)
+  if (max <= 0) return ''
+  const keep = Math.max(max - 1, 0)
   const head = Math.ceil(keep / 2)
   return `${chars.slice(0, head).join('')}…${chars.slice(chars.length - (keep - head)).join('')}`
 }

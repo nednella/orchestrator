@@ -32,6 +32,13 @@ test('the branch is truncated in the middle', () => {
   assert.equal(line.text.includes('…') && line.text.length <= 32, true)
 })
 
+test('middleTruncate never returns more than max characters', () => {
+  assert.equal(middleTruncate('abcdef', 6), 'abcdef')
+  for (const max of [0, 1, 2, 3, 5]) assert.equal(Array.from(middleTruncate('abcdefgh', max)).length <= max, true)
+  assert.equal(middleTruncate('abcdefgh', 1), '…')
+  assert.equal(middleTruncate('abcdefgh', 2), 'a…')
+})
+
 test('the issue title comes from the list', () => {
   assert.equal(threadCardLines(session({ issue: 454 }), '', 'Split the page')[0].text, '#454 Split the page')
   assert.equal(threadCardLines(session({ issue: 454 }), '', '')[0].text, '#454')
