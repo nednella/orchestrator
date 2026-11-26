@@ -17,7 +17,7 @@ export function ProjectTile({ project, label, waiting }: ProjectTileProps) {
         className="btn btn-ghost relative h-9 w-9 flex-none justify-center px-0 font-semibold"
         title={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
         aria-label={needs > 0 ? `${project.name}, ${needs} waiting` : project.name}
-        aria-current={selected}
+        aria-current={selected ? 'location' : undefined}
         data-selected={selected}
         data-rail-item
         onClick={() => report(() => switchProject(project.name, true))}

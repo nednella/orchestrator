@@ -5,6 +5,7 @@ import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from 
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
+import { clickCloses } from '../threadClick'
 import { currentTask } from '../threads'
 import type { Session } from '../types'
 import type { Point } from '../useFloatingAt'
@@ -117,13 +118,16 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
           <>
             <button
               className="thread-open thread-dim min-w-0 truncate text-left text-body leading-[1.375rem] font-medium"
-              aria-current={open}
+              aria-current={open || undefined}
               aria-describedby={card.anchor ? cardId : undefined}
               onFocus={(e) => e.currentTarget.matches(':focus-visible') && row.current && showCard(row.current)}
               onBlur={closeCard}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                if (open) return a.showHome(session.project)
+              onClick={(e) => {
+                if (open) {
+                  if (clickCloses(open, e.detail)) a.showHome(session.project)
+                  return
+                }
                 a.select(session.id)
                 a.focus('thread')
               }}
