@@ -11,11 +11,11 @@ desktop-frontend:
 	cd desktop/frontend && (npm ci || npm install) && npm run build && npm test
 
 desktop: desktop-frontend
-	CGO_LDFLAGS='-framework UniformTypeIdentifiers' go build -tags desktop,production -ldflags '-w -s $(LDFLAGS)' -o bin/agentos-desktop ./desktop
+	CGO_LDFLAGS='-framework UniformTypeIdentifiers' go build -tags desktop,production -ldflags '-w -s $(LDFLAGS)' -o bin/orchestrator-desktop ./desktop
 
-APP := bin/agentos.app
+APP := bin/orchestrator.app
 
-# Sessions drive their browser tab with agent-browser. The version is pinned: agentos binds each session to its tab
+# Sessions drive their browser tab with agent-browser. The version is pinned: orchestrator binds each session to its tab
 # through a file of this version's daemon (desktop/browser/agentbrowser.go), so check that binding before a bump.
 AGENT_BROWSER_VERSION := 0.43.0
 AGENT_BROWSER_SHA256 := 05338a8eeddf0b3f9ebf0c87a6c21aedc10685608c68618e1a8483c43eae9c3f
@@ -35,13 +35,13 @@ agent-browser: $(AGENT_BROWSER)
 # A release signs with a stable certificate so macOS keeps its permission grants across updates; "-" signs ad-hoc.
 SIGN_IDENTITY ?= -
 
-# A local build gets its own name so it never passes for the installed agentos.app.
-desktop-app: bin/agentos-dev.app
+# A local build gets its own name so it never passes for the installed orchestrator.app.
+desktop-app: bin/orchestrator-dev.app
 
 bin/%.app: desktop $(AGENT_BROWSER)
 	rm -rf $@ bin/icon.iconset
 	mkdir -p $@/Contents/MacOS $@/Contents/Helpers $@/Contents/Resources bin/icon.iconset
-	cp bin/agentos-desktop $@/Contents/MacOS/agentos
+	cp bin/orchestrator-desktop $@/Contents/MacOS/orchestrator
 	cp $(AGENT_BROWSER) $@/Contents/Helpers/agent-browser
 	cp desktop/build/Info.plist $@/Contents/Info.plist
 	plutil -replace CFBundleShortVersionString -string '$(VERSION:v%=%)' $@/Contents/Info.plist
@@ -49,22 +49,22 @@ bin/%.app: desktop $(AGENT_BROWSER)
 		sips -z $$s $$s desktop/build/icon.png --out bin/icon.iconset/icon_$${s}x$${s}.png >/dev/null; \
 		sips -z $$((s*2)) $$((s*2)) desktop/build/icon.png --out bin/icon.iconset/icon_$${s}x$${s}@2x.png >/dev/null; \
 	done
-	iconutil -c icns bin/icon.iconset -o $@/Contents/Resources/agentos.icns
+	iconutil -c icns bin/icon.iconset -o $@/Contents/Resources/orchestrator.icns
 	rm -rf bin/icon.iconset
 	codesign --force --sign "$(SIGN_IDENTITY)" $@/Contents/Helpers/agent-browser
 	codesign --force --sign "$(SIGN_IDENTITY)" $@
 
 desktop-install: $(APP)
 	mkdir -p "$(HOME)/Applications"
-	rm -rf "$(HOME)/Applications/agentos.app" && cp -R $(APP) "$(HOME)/Applications/"
-	@echo "installed $(HOME)/Applications/agentos.app"
+	rm -rf "$(HOME)/Applications/orchestrator.app" && cp -R $(APP) "$(HOME)/Applications/"
+	@echo "installed $(HOME)/Applications/orchestrator.app"
 
-RELEASE := bin/agentos-darwin-arm64.zip
+RELEASE := bin/orchestrator-darwin-arm64.zip
 
 release: $(APP)
 	rm -f $(RELEASE) $(RELEASE).sha256
 	ditto -c -k --keepParent $(APP) $(RELEASE)
-	cd bin && shasum -a 256 agentos-darwin-arm64.zip > agentos-darwin-arm64.zip.sha256
+	cd bin && shasum -a 256 orchestrator-darwin-arm64.zip > orchestrator-darwin-arm64.zip.sha256
 
 clean:
 	rm -rf bin

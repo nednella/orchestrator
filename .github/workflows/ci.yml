@@ -62,7 +62,7 @@ jobs:
           go-version-file: go.mod
       # The tests' plain agent is bash; macOS's own 3.2 has no bracketed paste, so pasted line breaks would run.
       - run: brew install tmux bash
-      # agentos writes a file of agent-browser's own, so the pinned version must pass the agent-browser test.
+      # orchestrator writes a file of agent-browser's own, so the pinned version must pass the agent-browser test.
       - if: matrix.name == 'browser'
         run: make agent-browser && echo "AGENTOS_AGENT_BROWSER=$PWD/bin/agent-browser" >> "$GITHUB_ENV"
       - if: matrix.vet

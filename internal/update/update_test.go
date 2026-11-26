@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const latestTag = "https://github.com/nednella/agentos/releases/tag/v1.2.3"
+const latestTag = "https://github.com/nednella/orchestrator/releases/tag/v1.2.3"
 
 // fakeGitHub answers the latest release's redirect with tag, and has only the assets in sums.
 func fakeGitHub(tag string, sums ...string) Runner {
@@ -33,17 +33,17 @@ func fakeGitHub(tag string, sums ...string) Runner {
 }
 
 func TestLatestReadsTheReleaseFromTheRedirect(t *testing.T) {
-	sum := "https://github.com/nednella/agentos/releases/download/v1.2.3/agentos-darwin-arm64.zip.sha256"
+	sum := "https://github.com/nednella/orchestrator/releases/download/v1.2.3/orchestrator-darwin-arm64.zip.sha256"
 	rel, err := Latest(context.Background(), fakeGitHub(latestTag, sum))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Release{Version: "1.2.3", Zip: "https://github.com/nednella/agentos/releases/download/v1.2.3/agentos-darwin-arm64.zip", Sum: sum}
+	want := Release{Version: "1.2.3", Zip: "https://github.com/nednella/orchestrator/releases/download/v1.2.3/orchestrator-darwin-arm64.zip", Sum: sum}
 	if rel != want {
 		t.Errorf("got %+v, want %+v", rel, want)
 	}
 
-	if _, err := Latest(context.Background(), fakeGitHub(latestTag)); err == nil || !strings.Contains(err.Error(), "no agentos-darwin-arm64.zip") {
+	if _, err := Latest(context.Background(), fakeGitHub(latestTag)); err == nil || !strings.Contains(err.Error(), "no orchestrator-darwin-arm64.zip") {
 		t.Errorf("a release without the bundle: %v", err)
 	}
 	if _, err := Latest(context.Background(), fakeGitHub("", sum)); err == nil {
@@ -54,7 +54,7 @@ func TestLatestReadsTheReleaseFromTheRedirect(t *testing.T) {
 func TestCheckAsksAgainOnlyWhenTheAnswerIsOld(t *testing.T) {
 	state := t.TempDir()
 	calls := 0
-	github := fakeGitHub(latestTag, "https://github.com/nednella/agentos/releases/download/v1.2.3/agentos-darwin-arm64.zip.sha256")
+	github := fakeGitHub(latestTag, "https://github.com/nednella/orchestrator/releases/download/v1.2.3/orchestrator-darwin-arm64.zip.sha256")
 	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if args[len(args)-1] == latestURL {
 			calls++
@@ -134,7 +134,7 @@ func releaseZip(t *testing.T, dir, version string) (zip, sum string) {
 	if err := os.MkdirAll(filepath.Join(app, "Contents", "MacOS"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(app, "Contents", "MacOS", "agentos"), []byte("#!/bin/sh\necho "+version+"\n"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(app, "Contents", "MacOS", "orchestrator"), []byte("#!/bin/sh\necho "+version+"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	zip = filepath.Join(dir, Asset)
@@ -163,7 +163,7 @@ func TestInstallSwapsTheBundleAfterCheckingTheSum(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(path, "Contents", "MacOS"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "agentos"), []byte("old"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "orchestrator"), []byte("old"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	rel := Release{Version: "2.0.0", Zip: "https://x/zip", Sum: "https://x/sum"}
@@ -171,7 +171,7 @@ func TestInstallSwapsTheBundleAfterCheckingTheSum(t *testing.T) {
 	if err := Install(context.Background(), run, rel, path); err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(filepath.Join(path, "Contents", "MacOS", "agentos")).Output()
+	out, err := exec.Command(filepath.Join(path, "Contents", "MacOS", "orchestrator")).Output()
 	if err != nil || strings.TrimSpace(string(out)) != "2.0.0" {
 		t.Errorf("the installed binary printed %q, %v", out, err)
 	}
@@ -189,7 +189,7 @@ func TestInstallSwapsTheBundleAfterCheckingTheSum(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "sha256") {
 		t.Errorf("a wrong sum installed anyway: %v", err)
 	}
-	if out, _ := exec.Command(filepath.Join(path, "Contents", "MacOS", "agentos")).Output(); strings.TrimSpace(string(out)) != "2.0.0" {
+	if out, _ := exec.Command(filepath.Join(path, "Contents", "MacOS", "orchestrator")).Output(); strings.TrimSpace(string(out)) != "2.0.0" {
 		t.Errorf("the bundle changed after a failed install: %q", out)
 	}
 }
@@ -230,7 +230,7 @@ func (f *fakeRelease) run(_ context.Context, name string, args ...string) ([]byt
 		if err := os.MkdirAll(bin, 0o700); err != nil {
 			return nil, err
 		}
-		return nil, os.WriteFile(filepath.Join(bin, "agentos"), data, 0o700)
+		return nil, os.WriteFile(filepath.Join(bin, "orchestrator"), data, 0o700)
 	case "curl":
 	default:
 		return nil, fmt.Errorf("unexpected %s", name)
@@ -268,7 +268,7 @@ func (f *fakeRelease) run(_ context.Context, name string, args ...string) ([]byt
 }
 
 func newFakeRelease(version string) *fakeRelease {
-	body := []byte(strings.Repeat("agentos "+version+"\n", 100))
+	body := []byte(strings.Repeat("orchestrator "+version+"\n", 100))
 	h := sha256.Sum256(body)
 	return &fakeRelease{
 		rel:  Release{Version: version, Zip: "https://x/" + version + "/zip", Sum: "https://x/" + version + "/sum"},
@@ -349,14 +349,14 @@ func TestAFailedDownloadLeavesNoZip(t *testing.T) {
 	}
 }
 
-// installed makes an app bundle at <temp>/Applications/agentos.app whose binary holds "old".
+// installed makes an app bundle at <temp>/Applications/orchestrator.app whose binary holds "old".
 func installed(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "Applications", bundle)
 	if err := os.MkdirAll(filepath.Join(path, "Contents", "MacOS"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "agentos"), []byte("old"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "orchestrator"), []byte("old"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -364,7 +364,7 @@ func installed(t *testing.T) string {
 
 func binary(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(path, "Contents", "MacOS", "agentos"))
+	data, err := os.ReadFile(filepath.Join(path, "Contents", "MacOS", "orchestrator"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -87,7 +87,7 @@ func launch() error {
 	quitOnSignal(a)
 
 	return wails.Run(&options.App{
-		Title:            "agentos",
+		Title:            "orchestrator",
 		Width:            1500,
 		Height:           950,
 		MinWidth:         420,

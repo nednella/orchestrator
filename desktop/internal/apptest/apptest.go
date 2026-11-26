@@ -426,8 +426,8 @@ func (f *FakeGH) curl(args []string) ([]byte, error) {
 	switch {
 	case f.Releases == "":
 	case strings.HasSuffix(url, "/releases/latest"):
-		return []byte("https://github.com/nednella/agentos/releases/tag/" + f.Releases), nil
-	case strings.HasSuffix(url, "/releases/download/"+f.Releases+"/agentos-darwin-arm64.zip.sha256"):
+		return []byte("https://github.com/nednella/orchestrator/releases/tag/" + f.Releases), nil
+	case strings.HasSuffix(url, "/releases/download/"+f.Releases+"/orchestrator-darwin-arm64.zip.sha256"):
 		return nil, nil
 	}
 	return nil, fmt.Errorf("curl: no network in tests: %v", args)

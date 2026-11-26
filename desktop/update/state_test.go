@@ -41,7 +41,7 @@ func (f *fakeGitHub) counts() (fetched, unpacked int) {
 	return f.fetched, f.unpacked
 }
 
-func body(version string) []byte { return []byte(strings.Repeat("agentos "+version+"\n", 100)) }
+func body(version string) []byte { return []byte(strings.Repeat("orchestrator "+version+"\n", 100)) }
 
 func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.mu.Lock()
@@ -53,11 +53,11 @@ func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte
 		if err != nil {
 			return nil, err
 		}
-		bin := filepath.Join(args[3], "agentos.app", "Contents", "MacOS")
+		bin := filepath.Join(args[3], "orchestrator.app", "Contents", "MacOS")
 		if err := os.MkdirAll(bin, 0o700); err != nil {
 			return nil, err
 		}
-		return nil, os.WriteFile(filepath.Join(bin, "agentos"), data, 0o700)
+		return nil, os.WriteFile(filepath.Join(bin, "orchestrator"), data, 0o700)
 	}
 	if name != "curl" {
 		return nil, fmt.Errorf("unexpected %s", name)
@@ -73,7 +73,7 @@ func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte
 		if tag == "" {
 			return nil, errors.New("curl: (6) Could not resolve host: github.com")
 		}
-		return []byte("https://github.com/nednella/agentos/releases/tag/" + tag), nil
+		return []byte("https://github.com/nednella/orchestrator/releases/tag/" + tag), nil
 	}
 	_, rest, ok := strings.Cut(url, "/releases/download/v")
 	if !ok {
@@ -107,7 +107,7 @@ func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte
 		if badSum {
 			h = [32]byte{}
 		}
-		return []byte(hex.EncodeToString(h[:]) + "  agentos-darwin-arm64.zip\n"), nil
+		return []byte(hex.EncodeToString(h[:]) + "  orchestrator-darwin-arm64.zip\n"), nil
 	}
 	return nil, fmt.Errorf("curl: (22) 404 for %s", url)
 }
@@ -129,11 +129,11 @@ func newRig(t *testing.T, tag string) *rig { t.Helper(); return newRigIn(t, tag,
 // newRigIn is newRig with its state in stateDir, as the app after a restart.
 func newRigIn(t *testing.T, tag, stateDir string) *rig {
 	t.Helper()
-	r := &rig{gh: &fakeGitHub{tag: tag}, bundle: filepath.Join(t.TempDir(), "Applications", "agentos.app")}
+	r := &rig{gh: &fakeGitHub{tag: tag}, bundle: filepath.Join(t.TempDir(), "Applications", "orchestrator.app")}
 	if err := os.MkdirAll(filepath.Join(r.bundle, "Contents", "MacOS"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(r.bundle, "Contents", "MacOS", "agentos"), []byte("old"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(r.bundle, "Contents", "MacOS", "orchestrator"), []byte("old"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	emit := func(event string, payload any) {
@@ -165,7 +165,7 @@ func (r *rig) emitted() []State {
 
 func (r *rig) binary(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(r.bundle, "Contents", "MacOS", "agentos"))
+	data, err := os.ReadFile(filepath.Join(r.bundle, "Contents", "MacOS", "orchestrator"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestStatesOfADownload(t *testing.T) {
 	if got := r.emitted(); !slices.Equal(got, want) {
 		t.Errorf("states\n got %+v\nwant %+v", got, want)
 	}
-	if data, err := os.ReadFile(filepath.Join(r.u.downloads(), "agentos-darwin-arm64.zip")); err != nil || string(data) != string(body("2.0.0")) {
+	if data, err := os.ReadFile(filepath.Join(r.u.downloads(), "orchestrator-darwin-arm64.zip")); err != nil || string(data) != string(body("2.0.0")) {
 		t.Errorf("the zip waiting in the state folder: %d bytes, %v", len(data), err)
 	}
 }
@@ -575,7 +575,7 @@ func TestADownloadSurvivesARestart(t *testing.T) {
 
 func TestADownloadThatDoesNotMatchGoesAtTheStart(t *testing.T) {
 	state := t.TempDir()
-	zip := filepath.Join(state, "update", "agentos-darwin-arm64.zip")
+	zip := filepath.Join(state, "update", "orchestrator-darwin-arm64.zip")
 	if err := os.MkdirAll(filepath.Dir(zip), 0o700); err != nil {
 		t.Fatal(err)
 	}

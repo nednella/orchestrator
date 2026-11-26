@@ -1,4 +1,4 @@
-// Package update finds, downloads and installs a newer release of agentos.
+// Package update finds, downloads and installs a newer release of orchestrator.
 package update
 
 import (
@@ -23,16 +23,16 @@ import (
 
 const (
 	// Repo is where the releases are.
-	Repo = "nednella/agentos"
+	Repo = "nednella/orchestrator"
 	// Asset is the zip of the app bundle attached to each release; its sha256 sits beside it as Asset + ".sha256".
-	Asset = "agentos-darwin-arm64.zip"
+	Asset = "orchestrator-darwin-arm64.zip"
 
 	// latestURL redirects to the newest release's page. It is github.com, not the API, which allows
 	// only 60 requests an hour from an IP without a token.
 	latestURL   = "https://github.com/" + Repo + "/releases/latest"
 	downloadURL = "https://github.com/" + Repo + "/releases/download/"
 	cacheFile   = "update.json"
-	bundle      = "agentos.app"
+	bundle      = "orchestrator.app"
 )
 
 // sizeEvery is how often a download's partial file is measured; a var so tests can shorten it.
@@ -127,7 +127,7 @@ func parse(v string) ([3]int, bool) {
 
 // Install downloads rel and puts its bundle in place of the one at path.
 func Install(ctx context.Context, run Runner, rel Release, path string) error {
-	dir, err := os.MkdirTemp(filepath.Dir(path), ".agentos-download-")
+	dir, err := os.MkdirTemp(filepath.Dir(path), ".orchestrator-download-")
 	if err != nil {
 		return fmt.Errorf("making room for the download: %w", err)
 	}
@@ -226,7 +226,7 @@ func InstallZip(ctx context.Context, run Runner, rel Release, zip, path string) 
 	if err := Verify(ctx, run, rel, zip); err != nil {
 		return err
 	}
-	work, err := os.MkdirTemp(filepath.Dir(path), ".agentos-update-") // beside the bundle: the swap is then a rename
+	work, err := os.MkdirTemp(filepath.Dir(path), ".orchestrator-update-") // beside the bundle: the swap is then a rename
 	if err != nil {
 		return fmt.Errorf("making room for the new app: %w", err)
 	}
@@ -235,7 +235,7 @@ func InstallZip(ctx context.Context, run Runner, rel Release, zip, path string) 
 		return fmt.Errorf("unpacking %s: %w", Asset, err)
 	}
 	fresh := filepath.Join(work, bundle)
-	if _, err := os.Stat(filepath.Join(fresh, "Contents", "MacOS", "agentos")); err != nil {
+	if _, err := os.Stat(filepath.Join(fresh, "Contents", "MacOS", "orchestrator")); err != nil {
 		return fmt.Errorf("%s holds no %s", Asset, bundle)
 	}
 	return swap(fresh, path)

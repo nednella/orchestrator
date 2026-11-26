@@ -57,10 +57,10 @@ jobs:
           # Lets codesign use the key without a prompt nobody can answer.
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-      - run: make release VERSION=${{ needs.release-please.outputs.tag }} SIGN_IDENTITY="agentos signing"
+      - run: make release VERSION=${{ needs.release-please.outputs.tag }} SIGN_IDENTITY="orchestrator signing"
       - name: Delete signing keychain
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db"
-      - run: gh release upload ${{ needs.release-please.outputs.tag }} bin/agentos-darwin-arm64.zip bin/agentos-darwin-arm64.zip.sha256 --clobber
+      - run: gh release upload ${{ needs.release-please.outputs.tag }} bin/orchestrator-darwin-arm64.zip bin/orchestrator-darwin-arm64.zip.sha256 --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

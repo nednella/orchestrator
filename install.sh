@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Installs the latest agentos release: curl -fsSL https://raw.githubusercontent.com/nednella/agentos/main/install.sh | bash
+# Installs the latest orchestrator release: curl -fsSL https://raw.githubusercontent.com/nednella/orchestrator/main/install.sh | bash
 set -euo pipefail
 
-REPO="nednella/agentos"
-ASSET="agentos-darwin-arm64.zip"
+REPO="nednella/orchestrator"
+ASSET="orchestrator-darwin-arm64.zip"
 DOWNLOAD="https://github.com/$REPO/releases/latest/download/$ASSET"
 APP_DIR="$HOME/Applications"
-APP="$APP_DIR/agentos.app"
+APP="$APP_DIR/orchestrator.app"
 CHROME_APP="$APP_DIR/Google Chrome for Testing.app"
 CHROME_LATEST="https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE"
 CHROME_STORE="https://storage.googleapis.com/chrome-for-testing-public"
@@ -22,7 +22,7 @@ warn() { echo "  ${YELLOW}warn${RESET}  $1"; }
 die()  { echo "  ${RED}error${RESET} $1" >&2; echo; exit 1; }
 
 # The agent browser is Chrome for Testing, not the browser you use: macOS sends a clicked link to any running copy of
-# the default browser's app, and a copy agentos runs has no window to show it in.
+# the default browser's app, and a copy orchestrator runs has no window to show it in.
 install_chrome() {
     local version have
     version=$(curl -fsSL "$CHROME_LATEST") || return 1
@@ -37,14 +37,14 @@ install_chrome() {
 }
 
 echo
-echo "${CYAN}${BOLD}agentos${RESET} ${DIM}· one screen for all your coding agents${RESET}"
+echo "${CYAN}${BOLD}orchestrator${RESET} ${DIM}· one screen for all your coding agents${RESET}"
 echo
 
-[ "$(uname -s)" = "Darwin" ] || die "agentos runs on macOS only"
-[ "$(uname -m)" = "arm64" ] || die "agentos needs a Mac with Apple silicon"
+[ "$(uname -s)" = "Darwin" ] || die "orchestrator runs on macOS only"
+[ "$(uname -m)" = "arm64" ] || die "orchestrator needs a Mac with Apple silicon"
 ok "macOS on Apple silicon"
 
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/agentos-install.XXXXXX")
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/orchestrator-install.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 
 curl -fsSL "$DOWNLOAD" -o "$TMP/$ASSET" || die "could not download $DOWNLOAD"
@@ -53,12 +53,12 @@ curl -fsSL "$DOWNLOAD.sha256" -o "$TMP/$ASSET.sha256" || die "could not download
 ok "downloaded the latest release"
 
 ditto -x -k "$TMP/$ASSET" "$TMP" || die "could not unpack $ASSET"
-[ -x "$TMP/agentos.app/Contents/MacOS/agentos" ] || die "$ASSET holds no agentos.app"
+[ -x "$TMP/orchestrator.app/Contents/MacOS/orchestrator" ] || die "$ASSET holds no orchestrator.app"
 mkdir -p "$APP_DIR"
 rm -rf "$APP"
-mv "$TMP/agentos.app" "$APP"
+mv "$TMP/orchestrator.app" "$APP"
 VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist") || die "could not read the version of $APP"
-ok "installed agentos v$VERSION to $APP"
+ok "installed orchestrator v$VERSION to $APP"
 
 install_chrome || warn "could not install Chrome for Testing to $APP_DIR; agents get no browser until you run this script again"
 
@@ -68,12 +68,12 @@ if command -v gh >/dev/null; then
 else
     warn "gh is missing; the queue reads your issues with it: ${CYAN}brew install gh && gh auth login${RESET}"
 fi
-if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | awk '{print $1}')"; else warn "Claude Code is missing; agentos starts sessions with it: https://docs.claude.com/en/docs/claude-code"; fi
+if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | awk '{print $1}')"; else warn "Claude Code is missing; orchestrator starts sessions with it: https://docs.claude.com/en/docs/claude-code"; fi
 
-if pgrep -qf "$APP/Contents/MacOS/agentos"; then
-    warn "agentos is running the old version; quit it and open it again"
+if pgrep -qf "$APP/Contents/MacOS/orchestrator"; then
+    warn "orchestrator is running the old version; quit it and open it again"
 fi
 
 echo
-echo "  Open ${CYAN}agentos${RESET} from $APP_DIR."
+echo "  Open ${CYAN}orchestrator${RESET} from $APP_DIR."
 echo
