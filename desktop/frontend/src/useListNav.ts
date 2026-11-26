@@ -44,7 +44,8 @@ export function useListNav(keys: string[], handlers: ListNavHandlers): ListNav {
         handlers.onEnter(cursor)
       }
       else if (e.key === ' ') return handlers.onSpace?.(cursor) ?? false
-      else if (LEFT.has(e.key)) return handlers.onLeft?.(cursor) ?? false
+      // An a that folds nothing is still the list's, so it does not open the Agents view too.
+      else if (LEFT.has(e.key)) return (handlers.onLeft?.(cursor) ?? false) || e.key === 'a'
       else if (RIGHT.has(e.key)) return handlers.onRight?.(cursor) ?? false
       else return false
       return true
