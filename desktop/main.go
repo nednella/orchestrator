@@ -47,9 +47,6 @@ func launch() error {
 		}
 		return err
 	}
-	if err := app.RecordBundle(cfg.StateDir); err != nil {
-		log.Printf("orchestrator: %v", err)
-	}
 	assets, err := fs.Sub(assetsFS, assetsRoot)
 	if err != nil {
 		return err

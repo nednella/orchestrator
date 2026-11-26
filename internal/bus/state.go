@@ -25,9 +25,6 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, ".local", "state", "orchestrator"), nil
 }
 
-// AppPath is the file in which the app records the bundle it runs from, for the command that opens it.
-func AppPath(dir string) string { return filepath.Join(dir, "app-path") }
-
 func stateFile(dir, name string) string {
 	return filepath.Join(dir, "sessions", name+".json")
 }
