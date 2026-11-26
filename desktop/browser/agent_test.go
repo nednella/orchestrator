@@ -171,9 +171,10 @@ func TestBrowserTabs(t *testing.T) {
 	pages := func() int { return h.BrowserState(s.ID).Pages }
 
 	mustBrowser(t, h, s.ID, "open", srv.URL)
-	if st := h.BrowserState(s.ID); st.Pages != 1 || st.Title != "Demo" {
-		t.Fatalf("state after open = %+v", st)
-	}
+	eventually(t, "the opened page, titled Demo", func() bool {
+		st := h.BrowserState(s.ID)
+		return st.Pages == 1 && st.Title == "Demo"
+	})
 
 	t.Run("a tab the page opens is the session's", func(t *testing.T) {
 		if err := b.OpenTab(t.Context(), s.ID, srv.URL+"/second"); err != nil {
