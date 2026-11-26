@@ -496,6 +496,19 @@ func startHostOn(t *testing.T, log string, env ...string) *testHost {
 // temp folder when it is "".
 func startHostAt(t *testing.T, log string, flags []string, env ...string) *testHost {
 	t.Helper()
+	return startHostTuned(t, log, flags, nil, env...)
+}
+
+// shortTimeout is the host's wait for Claude's reply in the tests of a reply that comes too late, in place of the 10
+// seconds, and shortGrace the time Claude has to exit after SIGTERM, in place of 5.
+const (
+	shortTimeout = 250 * time.Millisecond
+	shortGrace   = 300 * time.Millisecond
+)
+
+// startHostTuned is startHostAt with tune changing the host's config before it runs, as a test sets the host's waits.
+func startHostTuned(t *testing.T, log string, flags []string, tune func(*Config), env ...string) *testHost {
+	t.Helper()
 	dir := t.TempDir()
 	h := &testHost{
 		socket: filepath.Join(socketDir(t), "h.sock"),
@@ -513,6 +526,9 @@ func startHostAt(t *testing.T, log string, flags []string, env ...string) *testH
 		Argv:   append([]string{os.Args[0], "-test.run=^TestHelperFakeClaude$", "--"}, flags...),
 		Env:    append(os.Environ(), append([]string{"AOS_FAKE_CLAUDE=1", "AOS_FAKE_STDIN=" + h.stdin}, env...)...),
 		Echo:   h.echo,
+	}
+	if tune != nil {
+		tune(&c)
 	}
 	go func() { h.done <- Run(ctx, c) }()
 	t.Cleanup(func() {
@@ -1620,7 +1636,7 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 func TestCancelStopsClaude(t *testing.T) {
 	t.Parallel()
 	pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
-	h := startHost(t, "AOS_FAKE_IGNORE_TERM=1", "AOS_FAKE_GRANDCHILD="+pidFile)
+	h := startHostTuned(t, "", nil, func(c *Config) { c.StopGrace = shortGrace }, "AOS_FAKE_IGNORE_TERM=1", "AOS_FAKE_GRANDCHILD="+pidFile)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	var grandchild int
@@ -1637,7 +1653,7 @@ func TestCancelStopsClaude(t *testing.T) {
 	case <-h.done:
 		h.done <- nil
 	case <-time.After(8 * time.Second):
-		t.Fatal("Run did not return within 8s of cancel")
+		t.Fatal("Run did not return within 8s of cancel, though the host's grace is under a second")
 	}
 	t.Logf("Run returned %s after cancel", time.Since(start).Round(time.Millisecond))
 	logged, err := chat.ReadLog(h.log, 0)
@@ -2949,14 +2965,14 @@ func TestRewindAfterTheHostStartsAgain(t *testing.T) {
 
 // lateCtx outlasts the host's wait for Claude's answer.
 func lateCtx(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	return ctx
 }
 
 func TestARewindClaudeConfirmsLateIsLogged(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_DELAY="+(requestTimeout+time.Second).String())
+	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "AOS_FAKE_REWIND_DELAY="+(shortTimeout+500*time.Millisecond).String())
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
@@ -2985,7 +3001,7 @@ func TestAFilesRewindClaudeDoesNotAnswerMayHaveChangedThem(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "a.txt")
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+file, "AOS_FAKE_FILES_DELAY="+(requestTimeout+time.Second).String())
+	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "AOS_FAKE_REWIND_FILES="+file, "AOS_FAKE_FILES_DELAY="+(shortTimeout+500*time.Millisecond).String())
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")

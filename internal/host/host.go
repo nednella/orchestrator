@@ -38,6 +38,10 @@ type Config struct {
 	Echo             io.Writer
 	// Interrupts interrupts Claude's turn at each signal, as the socket's interrupt op does.
 	Interrupts <-chan os.Signal
+	// RequestTimeout is how long the host waits for Claude's reply to a request, and for a client's request to be
+	// written, and StopGrace how long Claude has to exit after SIGTERM before it gets SIGKILL. Zero is the default of
+	// 10 and 5 seconds; a test shortens them.
+	RequestTimeout, StopGrace time.Duration
 }
 
 const (
@@ -88,6 +92,8 @@ type subscriber struct {
 }
 
 type host struct {
+	requestTimeout, stopGrace time.Duration
+
 	logPath string
 	log     *chat.Log
 	echo    io.Writer
@@ -178,14 +184,16 @@ func Run(ctx context.Context, c Config) error {
 		echo = io.Discard
 	}
 	h := &host{
-		logPath: c.Log,
-		log:     log,
-		echo:    &lockedWriter{w: echo},
-		subs:    map[*subscriber]struct{}{},
-		conns:   map[net.Conn]struct{}{},
-		queued:  map[string]message{},
-		replies: map[string]chan chat.Event{},
-		prompts: prompts,
+		requestTimeout: cmp.Or(c.RequestTimeout, requestTimeout),
+		stopGrace:      cmp.Or(c.StopGrace, stopGrace),
+		logPath:        c.Log,
+		log:            log,
+		echo:           &lockedWriter{w: echo},
+		subs:           map[*subscriber]struct{}{},
+		conns:          map[net.Conn]struct{}{},
+		queued:         map[string]message{},
+		replies:        map[string]chan chat.Event{},
+		prompts:        prompts,
 
 		subagentCalls: map[string]string{},
 	}
@@ -255,7 +263,7 @@ func (h *host) start(ctx context.Context, c Config, argv []string) (*claudeRun, 
 	run.cmd.Env = c.Env
 	run.cmd.Stderr = io.MultiWriter(h.echo, run.stderr)
 	run.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	run.cmd.WaitDelay = stopGrace
+	run.cmd.WaitDelay = h.stopGrace
 	var err error
 	if run.stdin, err = run.cmd.StdinPipe(); err != nil {
 		return nil, err
@@ -266,7 +274,7 @@ func (h *host) start(ctx context.Context, c Config, argv []string) (*claudeRun, 
 	if err := run.cmd.Start(); err != nil {
 		return nil, err
 	}
-	go stopOnCancel(ctx, run.cmd.Process.Pid, run.waited)
+	go stopOnCancel(ctx, run.cmd.Process.Pid, run.waited, h.stopGrace)
 	go h.interruptOn(c.Interrupts, run.waited)
 	return run, nil
 }
@@ -332,8 +340,8 @@ func (b *headBuffer) Write(p []byte) (int, error) {
 
 func (b *headBuffer) String() string { return b.buf.String() }
 
-// stopOnCancel stops Claude's whole process group when ctx ends: SIGTERM, then SIGKILL after stopGrace. The group takes in a process Claude started that still holds its stdout, which would keep Run reading.
-func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
+// stopOnCancel stops Claude's whole process group when ctx ends: SIGTERM, then SIGKILL after the grace. The group takes in a process Claude started that still holds its stdout, which would keep Run reading.
+func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}, grace time.Duration) {
 	select {
 	case <-ctx.Done():
 	case <-waited:
@@ -342,7 +350,7 @@ func stopOnCancel(ctx context.Context, pid int, waited <-chan struct{}) {
 	syscall.Kill(-pid, syscall.SIGTERM)
 	select {
 	case <-waited:
-	case <-time.After(stopGrace):
+	case <-time.After(grace):
 		syscall.Kill(-pid, syscall.SIGKILL)
 	}
 }
@@ -674,7 +682,7 @@ func (h *host) handle(conn net.Conn) {
 		h.mu.Unlock()
 		conn.Close()
 	}()
-	conn.SetReadDeadline(time.Now().Add(requestTimeout))
+	conn.SetReadDeadline(time.Now().Add(h.requestTimeout))
 	line, err := bufio.NewReader(io.LimitReader(conn, maxRequest+1)).ReadBytes('\n')
 	if err != nil {
 		if len(line) > maxRequest {
@@ -1029,12 +1037,12 @@ func (h *host) setMode(mode string) error {
 	return nil
 }
 
-// await waits up to requestTimeout for Claude's reply to the request id, and stops waiting for it after that.
+// await waits up to the request timeout for Claude's reply to the request id, and stops waiting for it after that.
 func (h *host) await(id string, got <-chan chat.Event) (chat.Event, bool) {
 	select {
 	case r := <-got:
 		return r, true
-	case <-time.After(requestTimeout):
+	case <-time.After(h.requestTimeout):
 		h.dropReply(id)
 		return chat.Event{}, false
 	}
@@ -1061,7 +1069,7 @@ func (h *host) ask(line func(id string) []byte, late func(chat.Event)) (chat.Eve
 		select {
 		case r := <-got:
 			return known(r)
-		case <-time.After(requestTimeout):
+		case <-time.After(h.requestTimeout):
 			go func() { late(<-got) }()
 			return chat.Event{}, errAnswerLate
 		}

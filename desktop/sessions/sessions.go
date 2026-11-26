@@ -49,15 +49,15 @@ import (
 )
 
 const (
-	pollEvery    = 2 * time.Second
-	stopSettle   = time.Second // Claude Code may write a turn's last reply just after the turn's end
-	tmuxTimeout  = 5 * time.Second
-	defaultTitle = "agent"
-	endedSettle  = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
-	startCols    = 120
-	startRows    = 32
-	hostWait     = 10 * time.Second // for a new session's host to listen
-	hostStarting = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
+	defaultPollEvery  = 2 * time.Second
+	defaultStopSettle = time.Second // Claude Code may write a turn's last reply just after the turn's end
+	tmuxTimeout       = 5 * time.Second
+	defaultTitle      = "agent"
+	endedSettle       = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
+	startCols         = 120
+	startRows         = 32
+	hostWait          = 10 * time.Second // for a new session's host to listen
+	hostStarting      = 3 * time.Second  // for a host that is still starting to listen, before a later message is dropped
 )
 
 var (
@@ -121,14 +121,16 @@ type Project struct {
 
 // Sessions tracks the agents in the private tmux server and tells the front end when they change.
 type Sessions struct {
-	tmux     *term.Tmux
-	agents   agent.Registry
-	binary   string
-	run      run.Runner
-	stateDir string
-	localDir string
-	emit     func(event string, payload any)
-	warn     *warn.Warnings
+	tmux       *term.Tmux
+	pollEvery  time.Duration // how often tmux is listed
+	stopSettle time.Duration // how long after a turn's end its usage is counted
+	agents     agent.Registry
+	binary     string
+	run        run.Runner
+	stateDir   string
+	localDir   string
+	emit       func(event string, payload any)
+	warn       *warn.Warnings
 
 	createMu  sync.Mutex           // one creation, or one refresh of the list from tmux, at a time: a list read before a creation must not be applied after it
 	stateRead map[string]fileStamp // each state file as the last refresh read it, under createMu
@@ -280,6 +282,7 @@ func (s *Sessions) Touch() { s.changed() }
 
 func newSessions(o Options) *Sessions {
 	return &Sessions{
+		pollEvery: defaultPollEvery, stopSettle: defaultStopSettle,
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
@@ -318,7 +321,7 @@ func (s *Sessions) Start(ctx context.Context) error {
 	s.Refresh()
 	go s.sweepServers()
 	go func() {
-		tick := time.NewTicker(pollEvery)
+		tick := time.NewTicker(s.pollEvery)
 		defer tick.Stop()
 		sample := time.NewTicker(sampleEvery)
 		defer sample.Stop()
@@ -1261,7 +1264,7 @@ func (s *Sessions) follow(rec session.Record, turnEnded, toolDone bool) {
 	// first refresh's usage at once: it catches up on turns while the app was closed.
 	if rec.Transcript != "" {
 		if turnEnded {
-			time.AfterFunc(stopSettle, func() { s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, true) })
+			time.AfterFunc(s.stopSettle, func() { s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, true) })
 		} else {
 			go s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, !s.loaded)
 		}
@@ -4218,6 +4221,13 @@ func (s *Sessions) AfterList(f func()) { s.afterList = f }
 // SetCleanupSweep sets how often a clean-up the checks kept is tried again, an hour by default; 0 or less turns the
 // sweep off. It comes before Run.
 func (s *Sessions) SetCleanupSweep(every time.Duration) { s.life.sweepEvery = every }
+
+// SetPollEvery sets how often tmux is listed, 2 seconds by default. It comes before Run.
+func (s *Sessions) SetPollEvery(every time.Duration) { s.pollEvery = every }
+
+// SetStopSettle sets how long after a turn's end its usage is counted, a second by default: Claude Code may write the
+// turn's last reply just after the turn's end. It comes before Run.
+func (s *Sessions) SetStopSettle(wait time.Duration) { s.stopSettle = wait }
 
 // Run follows tmux and the pull requests until ctx ends.
 func (s *Sessions) Run(ctx context.Context) error {

@@ -15,10 +15,10 @@ import (
 const (
 	// reportTick is how often a result in hand looks again at the wait it may go by.
 	reportTick = 100 * time.Millisecond
-	// retryFirst and retryMost are the first and the longest pause before a result the parent could not take goes
-	// again.
-	retryFirst = time.Second
-	retryMost  = time.Minute
+	// defaultRetryFirst and retryMost are the first and the longest pause before a result the parent could not take
+	// goes again.
+	defaultRetryFirst = time.Second
+	retryMost         = time.Minute
 )
 
 // report is a child's turn_end, or its exit when it was put to sleep, at the seq end, which may give its parent the
@@ -173,7 +173,7 @@ func (c *Commands) waitGets(ctx context.Context, w waitOn, end int64) bool {
 // the parent's next turn, as the sessions hold it. One the parent could not take, as when its wake was refused, goes
 // again after a pause that doubles up to a minute.
 func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bool {
-	pause := retryFirst
+	pause := c.retryFirst
 	for {
 		done := make(chan error, 1)
 		m.Done = done

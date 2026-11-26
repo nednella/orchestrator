@@ -1484,6 +1484,9 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 }
 
 func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
+	// The tries of a result that would wake the parent come at 0, 0.1, 0.3, 0.7 and 1.5 s: the pause starts at retry
+	// and doubles.
+	const retry = 100 * time.Millisecond
 	for _, tt := range []struct {
 		name    string
 		restart bool // the app restarts after the child went to sleep, before it looks at the PRs again
@@ -1492,7 +1495,7 @@ func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
 		{"across a restart", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := newHarness(t)
+			h := apptest.NewWith(t, apptest.Options{RetryFirst: retry})
 			repoFixture(t, h)
 			parent := issueThread(h, t, 7)
 			wt := parent.Worktree
@@ -1523,7 +1526,7 @@ func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
 				h.App.Stop()
 				h = h.Restart(t)
 			}
-			time.Sleep(3 * time.Second) // past the first tries of a result that would wake the parent
+			time.Sleep(10 * retry) // past the first tries of a result that would wake the parent
 			if got := stateOf(h, parent.ID); got != "settled" {
 				t.Fatalf("the parent is %s, want it left asleep for its clean-up", got)
 			}

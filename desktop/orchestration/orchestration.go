@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/nednella/orchestrator/desktop/chat"
 	"github.com/nednella/orchestrator/desktop/control"
@@ -50,6 +51,7 @@ type Commands struct {
 	given map[waitOn]givenBy
 
 	ctx        func() context.Context // the app's, for the reports to stop with it
+	retryFirst time.Duration          // the first pause before a result the parent could not take goes again
 	reportMu   sync.Mutex
 	reporting  map[string]bool   // the children whose results are being given to their parents now
 	reportNext map[string]report // the next result to give for each of them, once the one in hand is given
@@ -58,13 +60,17 @@ type Commands struct {
 // NewCommands answers the orchestrator tools as the threads s, and gives each child's result to its parent until the context
 // ctx gives ends.
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
-	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
+	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, retryFirst: defaultRetryFirst, reporting: map[string]bool{}, reportNext: map[string]report{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	for name := range agentTools() {
 		c.tools[name] = c.agentTool(name)
 	}
 	return c
 }
+
+// SetRetryFirst sets the first pause before a result the parent could not take goes again, a second by default; the
+// pause doubles each time. It comes before the first result.
+func (c *Commands) SetRetryFirst(pause time.Duration) { c.retryFirst = pause }
 
 // Orchestrate runs the tool req.Args[0] as the thread the request's token names.
 func (c *Commands) Orchestrate(ctx context.Context, req ctl.Request) (string, error) {

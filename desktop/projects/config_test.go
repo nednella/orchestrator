@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/internal/warn"
@@ -98,7 +99,7 @@ func TestRegistryRefusesToSaveOverBadFile(t *testing.T) {
 }
 
 func TestAppFollowsConfigEdits(t *testing.T) {
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{ConfigTick: 50 * time.Millisecond})
 	data, err := os.ReadFile(h.Conf)
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +122,7 @@ func TestAppFollowsConfigEdits(t *testing.T) {
 }
 
 func TestAppWarnsWhileClaudeIsNotInstalled(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
+	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}, ConfigTick: 50 * time.Millisecond})
 	h.RemoveClaude(t)
 	eventually(t, "a warning naming claude", func() bool {
 		return slices.Contains(h.Rec.Warnings(), warn.Warning{Source: "agent", Message: "claude is not installed: it is not on PATH"})

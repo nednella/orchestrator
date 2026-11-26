@@ -46,6 +46,8 @@ type Host struct {
 	Machine   func() string                   // this Mac's name, read once; nil leaves it empty
 }
 
+const defaultConfigTick = 2 * time.Second
+
 // App is the services, wired together.
 type App struct {
 	ctx      atomic.Pointer[context.Context]
@@ -63,19 +65,21 @@ type App struct {
 	limits   *limits.Tracker
 	router   *control.Router
 	tools    *orchestration.Commands
-	registry *projects.Registry
-	agents   agent.Registry
-	issues   *issues.Issues
-	warn     *warn.Warnings
-	media    http.Handler
-	assets   http.Handler
-	stateDir string
-	services []any
+	// configTick is how often the config file is read again; a field so a test can shorten it.
+	configTick time.Duration
+	registry   *projects.Registry
+	agents     agent.Registry
+	issues     *issues.Issues
+	warn       *warn.Warnings
+	media      http.Handler
+	assets     http.Handler
+	stateDir   string
+	services   []any
 }
 
 // New wires the services: who needs whom is decided here, and nowhere else.
 func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.EnvRunner) *App {
-	a := &App{}
+	a := &App{configTick: defaultConfigTick}
 	ctx := func() context.Context {
 		if c := a.ctx.Load(); c != nil {
 			return *c
@@ -214,7 +218,7 @@ func (a *App) Start(ctx context.Context) error {
 // followConfig picks up hand edits to the config file while the app runs, and warns while no thread can start: claude
 // is not installed.
 func (a *App) followConfig(ctx context.Context) {
-	tick := time.NewTicker(2 * time.Second)
+	tick := time.NewTicker(a.configTick)
 	defer tick.Stop()
 	for {
 		select {
@@ -275,6 +279,12 @@ func (a *App) Notes() *notes.Notes { return a.notes }
 
 // Browsers are the hidden browsers, for tests.
 func (a *App) Browsers() *browser.Browsers { return a.browsers }
+
+// Orchestration is the orchestrator tools, for tests.
+func (a *App) Orchestration() *orchestration.Commands { return a.tools }
+
+// SetConfigTick sets how often the config file is read again, 2 seconds by default. It comes before Start.
+func (a *App) SetConfigTick(every time.Duration) { a.configTick = every }
 
 // Digests is the digest manager, for tests.
 func (a *App) Digests() *digest.Manager { return a.digests }

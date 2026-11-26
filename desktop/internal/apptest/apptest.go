@@ -578,6 +578,10 @@ type Options struct {
 	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
 	CleanupSweep    time.Duration // how often kept clean-ups are tried again; 0 keeps the app's hour
+	PollEvery       time.Duration // how often tmux is listed; 0 keeps the app's 2 seconds
+	StopSettle      time.Duration // how long after a turn's end its usage is counted; 0 keeps the app's second
+	RetryFirst      time.Duration // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
+	ConfigTick      time.Duration // how often the config file is read again; 0 keeps the app's 2 seconds
 	Env             []string      // entries of the environment the app and its sessions run in; the harness's own isolation wins over them
 	PathWithout     []string      // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
 }
@@ -594,6 +598,7 @@ type Harness struct {
 	Conf   string
 	Env    []string // the environment the app and its sessions run in: the process's, with the harness's own entries
 
+	opts      Options // what the harness was made with
 	claudeDir string
 	cancel    context.CancelFunc // ends the context the app started with
 
@@ -701,6 +706,8 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if o.CleanupSweep != 0 {
 		h.App.Sessions().SetCleanupSweep(o.CleanupSweep)
 	}
+	h.opts = o
+	h.shortenWaits()
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
 	if err := h.App.Start(ctx); err != nil {
@@ -713,6 +720,22 @@ func NewWith(t *testing.T, o Options) *Harness {
 		os.RemoveAll(state)
 	})
 	return h
+}
+
+// shortenWaits applies the waits the options shorten to the app.
+func (h *Harness) shortenWaits() {
+	if h.opts.PollEvery != 0 {
+		h.App.Sessions().SetPollEvery(h.opts.PollEvery)
+	}
+	if h.opts.StopSettle != 0 {
+		h.App.Sessions().SetStopSettle(h.opts.StopSettle)
+	}
+	if h.opts.RetryFirst != 0 {
+		h.App.Orchestration().SetRetryFirst(h.opts.RetryFirst)
+	}
+	if h.opts.ConfigTick != 0 {
+		h.App.SetConfigTick(h.opts.ConfigTick)
+	}
 }
 
 // build wires an app from the environment the harness set up.
@@ -759,8 +782,9 @@ func (h *Harness) build(t *testing.T) *app.App {
 // environment that replace the first's.
 func (h *Harness) Restart(t *testing.T, env ...string) *Harness {
 	t.Helper()
-	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, Env: environ.With(h.Env, env...), claudeDir: h.claudeDir}
+	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, Env: environ.With(h.Env, env...), claudeDir: h.claudeDir, opts: h.opts}
 	second.App = second.build(t)
+	second.shortenWaits()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	t.Cleanup(second.App.Stop)

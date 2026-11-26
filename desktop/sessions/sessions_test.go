@@ -625,6 +625,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 }
 
 func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
+	const settle = 300 * time.Millisecond
 	for _, tt := range []struct {
 		name, message, state string
 	}{
@@ -632,7 +633,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 		{"a question", "question", "waiting"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := apptest.New(t)
+			h := apptest.NewWith(t, apptest.Options{StopSettle: settle})
 			s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
@@ -668,7 +669,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 				t.Errorf("state after the turn = %+v, %v; want the transcript %s", rec, err, transcript)
 			}
 			eventually(t, "the turn's usage in the event log", func() bool { return len(h.Events(t, "usage")) == 1 })
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(5 * settle) // past the settle's wait for a second count
 			if events := h.Events(t, "usage"); len(events) != 1 || events[0].Tokens.Input != 1000 {
 				t.Errorf("usage events = %+v, want the turn's once", events)
 			}
@@ -677,7 +678,8 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 }
 
 func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
-	h := apptest.New(t)
+	const settle = 300 * time.Millisecond
+	h := apptest.NewWith(t, apptest.Options{StopSettle: settle})
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
@@ -699,7 +701,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	}
 	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"last"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
-	time.Sleep(1500 * time.Millisecond) // past the wait for the last Stop's usage
+	time.Sleep(5 * settle) // past the wait for the last Stop's usage
 	usage := len(h.Events(t, "usage"))
 	running, err := bus.ReadState(h.State, s.ID)
 	if err != nil {

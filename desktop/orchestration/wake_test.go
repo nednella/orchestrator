@@ -382,6 +382,8 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 }
 
 func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
+	// The tries come at 0, 0.1, 0.3, 0.7 and 1.5 s: the pause starts at retry and doubles.
+	const retry = 100 * time.Millisecond
 	for _, tt := range []struct {
 		name   string
 		delete bool // the child is deleted while its result waits
@@ -391,7 +393,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 		{"until the child is deleted", true, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := apptest.New(t)
+			h := apptest.NewWith(t, apptest.Options{RetryFirst: retry})
 			repoFixture(t, h)
 			parent := threadWith(t, h, "Plan the release", session.Supervised)
 			if parent.Worktree == "" {
@@ -409,7 +411,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 				t.Fatal(err)
 			}
 			apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(6 * retry) // past the first tries
 			if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
 				t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
 			}
@@ -427,7 +429,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 			if tt.want > 0 {
 				apptest.Eventually(t, "the result once the parent can wake", func() bool { return len(resultLines(t, h, parent.ID, c)) > 0 })
 			} else {
-				time.Sleep(4 * time.Second) // past the next try, 2 s after the second
+				time.Sleep(20 * retry) // past the next try, which comes by 1.5 s
 				if !asleep(t, h, parent.ID) {
 					t.Error("the parent woke for the result of a deleted child")
 				}
