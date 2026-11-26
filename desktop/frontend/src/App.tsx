@@ -2,7 +2,6 @@ import type { CSSProperties } from 'react'
 import { CentreBoundary } from './components/CentreBoundary'
 import { ConfirmHost } from './components/ConfirmHost'
 import { UsageModal } from './components/UsageModal'
-import { DigestView } from './components/DigestView'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
 import { LeftSidebar } from './components/LeftSidebar'
@@ -33,7 +32,7 @@ export function App() {
   useFocusedPanel()
   const fullscreen = useFullscreen()
   const { selectedId } = useOrchestrator('selectedId')
-  const { mode, docked, sidebarOpen, rightOpen, overlay, digestOpen, panelExpanded } = useLayout()
+  const { mode, docked, sidebarOpen, rightOpen, overlay, panelExpanded } = useLayout()
 
   return (
     <>
@@ -52,10 +51,7 @@ export function App() {
               {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
               <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
                 <div className="relative min-h-0 flex-1">
-                  <div className={digestOpen ? 'hidden' : 'h-full'}>
-                    <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
-                  </div>
-                  {digestOpen && <DigestView />}
+                  <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
                   {overlay && <PanelOverlay panel={overlay} />}
                 </div>
                 <TerminalDrawer />

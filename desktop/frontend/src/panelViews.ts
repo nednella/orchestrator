@@ -2,6 +2,7 @@ import { CircleDot, Files, GitPullRequestArrow, Globe, Image, MessagesSquare, Ne
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { BrowserView } from './components/BrowserView'
+import { DigestView } from './components/DigestView'
 import { EvidenceView } from './components/EvidenceView'
 import { FilesView } from './components/FilesView'
 import { IssuesView } from './components/IssuesView'
@@ -24,6 +25,7 @@ const VIEWS: Record<PanelViewId, PanelView> = {
   pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: false, Component: PullRequestsView },
   browser: { id: 'browser', label: 'Browser', icon: Globe, thread: true, Component: BrowserView },
   media: { id: 'media', label: 'Media', icon: Image, thread: true, Component: EvidenceView },
+  news: { id: 'news', label: 'News', icon: Newspaper, thread: false, Component: DigestView },
 }
 
 export const panelView = (id: PanelViewId): PanelView | undefined => VIEWS[id]
@@ -38,5 +40,5 @@ const rowOf = (id: PanelViewId): PanelRow => ({ label: VIEWS[id].label, icon: VI
 export const PANEL_GROUPS: PanelGroup[] = [
   { heading: 'This project', rows: [rowOf('notes'), rowOf('files'), rowOf('issues'), rowOf('pulls'), { label: 'Terminal', icon: SquareTerminal, key: 'T', view: null }] },
   { heading: 'This thread', rows: [rowOf('browser'), rowOf('media'), { label: 'Side chat', icon: MessagesSquare, key: 'S', view: null }] },
-  { heading: 'Everywhere', rows: [{ label: 'News', icon: Newspaper, key: 'W', view: null }] },
+  { heading: 'Everywhere', rows: [rowOf('news')] },
 ]

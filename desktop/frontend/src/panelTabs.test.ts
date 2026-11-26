@@ -31,9 +31,9 @@ test('closing the last tab shows the list and restores the size', () => {
 })
 
 test('letters open their views', () => {
-  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media']]
+  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media'], ['w', 'news']]
   for (const [key, view] of keys) assert.equal(viewForKey(key), view, key)
-  for (const key of ['a', 'e', 's', 't', 'w', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
+  for (const key of ['a', 'e', 's', 't', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
 })
 
 test('the width keeps 360 px of chat', () => {
@@ -64,7 +64,7 @@ test('the open sidebar sends the panel over the chat where the chat would get un
 
 test('a focus in the chat column, or News opening there, gives it its room back', () => {
   const expanded = state({ tabs: ['issues'], active: 'issues', expanded: true })
-  for (const target of ['thread', 'composer', 'shell', 'centre'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
+  for (const target of ['thread', 'composer', 'shell'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
   for (const target of ['right', 'sidebar', 'thread-search', 'queue-filter'] as const) assert.equal(panelOnFocus(expanded, target), expanded, target)
   const restored = state({ tabs: ['issues'], active: 'issues' })
   assert.equal(panelOnFocus(restored, 'thread'), restored, 'a panel at its own size stays as it is')

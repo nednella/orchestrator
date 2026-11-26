@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { useOrchestrator } from './OrchestratorContext'
 import type { FocusTarget } from './OrchestratorContext'
-import { devFlags } from './api'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { updatePanel, usePanel } from './panelStore'
@@ -44,7 +43,6 @@ export type Layout = {
   // The open thread's right panel, or Home's; expanded only while the panel shows beside the chat and takes its room.
   panel: PanelState
   panelExpanded: boolean
-  digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
   closeOverlay(why: 'escape' | 'thread-focused'): void
   setWidth(panel: SidePanel, rem: number, commit: boolean): void
@@ -61,9 +59,6 @@ export type Layout = {
   stepPanelTab(delta: -1 | 1): void
   setSidebarOpen(open: boolean): void
   showHome(): void
-  toggleDigest(): void
-  openDigest(): void
-  closeCentre(): void
   focusChat(): void
   focusPanel(panel: Panel): void
 }
@@ -116,7 +111,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     return saved !== undefined ? saved : (readStored<Partial<Record<Band, { sidebar?: number | null }>>>(LAYOUT_KEY, {})[band]?.sidebar ?? null)
   })
   const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
-  const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const zoomToast = useRef<number | null>(null)
   const focusBefore = useRef<Partial<Record<TogglePanel, Element>>>({})
 
@@ -176,11 +170,8 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const previousSelected = useRef(selectedId)
   useEffect(() => {
     if (previousSelected.current === selectedId) return
-    const first = previousSelected.current === null
     previousSelected.current = selectedId
     moveOverlay('thread-opened')
-    if (first) return
-    setDigestOpen(false)
   }, [selectedId, moveOverlay])
 
   const setSidebarOpen = useCallback(
@@ -222,7 +213,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   )
 
   const showHome = useCallback(() => {
-    setDigestOpen(false)
     moveOverlay('thread-opened')
     if (project) selectHome(project.key)
   }, [moveOverlay, project, selectHome])
@@ -231,12 +221,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const panelKeyRef = useRef(panelKey)
   panelKeyRef.current = panelKey
   useEffect(() => onFocus((target) => updatePanel(panelKeyRef.current, (st) => panelOnFocus(st, target))), [onFocus])
-
-  // A centre page, News, opens in the chat column: the overlay goes, and the expanded panel gives the room back.
-  const showCentre = useCallback(() => {
-    moveOverlay('thread-opened')
-    updatePanel(panelKey, (st) => panelOnFocus(st, 'centre'))
-  }, [moveOverlay, panelKey])
 
   const showPanelView = useCallback(
     (view: PanelViewId, opts: { expanded?: boolean; thread?: string } = {}) => {
@@ -272,7 +256,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       widths: { sidebar: sidebar.width, right: right.width / 16 },
       panel,
       panelExpanded,
-      digestOpen,
       zoom(step) {
         const next = zoomedScale(scale, step)
         report(() => setTextScale(next))
@@ -339,23 +322,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       setSidebarOpen,
       showHome,
-      toggleDigest() {
-        if (!digestOpen) showCentre()
-        setDigestOpen(!digestOpen)
-      },
-      openDigest() {
-        showCentre()
-        setDigestOpen(true)
-      },
-      closeCentre() {
-        setDigestOpen(false)
-      },
       focusChat() {
         focus('thread')
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, prefs, prefs.rightOpen, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, digestOpen, band, setSidebarOpen, setRightOpen, showHome, showCentre, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, prefs, prefs.rightOpen, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, band, setSidebarOpen, setRightOpen, showHome, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

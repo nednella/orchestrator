@@ -49,9 +49,9 @@ export function SidebarBottomBar() {
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),
     issues: () => report(() => layout.showPanelView('issues', { expanded: true })),
     usage: openUsage,
-    news: () => runAction('digest'),
+    news: () => report(() => layout.showPanelView('news')),
   }
-  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, news: layout.digestOpen }
+  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, news: layout.panel.active === 'news' && layout.rightOpen }
   const unseen: Partial<Record<BarButtonId, number>> = { news: digestUnseenCount }
   const { shown, more } = barLayout(width)
 

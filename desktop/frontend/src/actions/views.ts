@@ -63,7 +63,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
   {
     id: 'digest',
     label: 'News',
-    run: layout.toggleDigest,
+    run: () => layout.showPanelView('news'),
   },
   {
     id: 'shortcuts',

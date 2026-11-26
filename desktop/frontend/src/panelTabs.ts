@@ -1,12 +1,12 @@
 import type { FocusTarget } from './OrchestratorContext'
 
-export type PanelViewId = 'notes' | 'files' | 'issues' | 'pulls' | 'browser' | 'media'
+export type PanelViewId = 'notes' | 'files' | 'issues' | 'pulls' | 'browser' | 'media' | 'news'
 
 // The letter that opens each view from the panel's list.
-export const PANEL_KEYS: Record<PanelViewId, string> = { notes: 'N', files: 'F', issues: 'I', pulls: 'P', browser: 'B', media: 'M' }
+export const PANEL_KEYS: Record<PanelViewId, string> = { notes: 'N', files: 'F', issues: 'I', pulls: 'P', browser: 'B', media: 'M', news: 'W' }
 
 // The views the panel lists, in its order.
-export const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media']
+export const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media', 'news']
 
 // What the right panel shows for one thread, or for Home: the views open as tabs, the one shown (null for the list of
 // views), and whether it takes the chat's room too.
@@ -35,14 +35,12 @@ export function stepTab(st: PanelState, delta: -1 | 1): PanelState {
   return { ...st, active: st.tabs[(at + delta + st.tabs.length) % st.tabs.length] }
 }
 
-// What the chat column holds, which the expanded panel hides: the focus targets in it, and the centre page, News,
-// that opens in the chat's place.
-type ChatColumnTarget = FocusTarget | 'centre'
-const CHAT_COLUMN: ChatColumnTarget[] = ['thread', 'composer', 'shell', 'centre']
+// What the chat column holds, which the expanded panel hides: the focus targets in it.
+const CHAT_COLUMN: FocusTarget[] = ['thread', 'composer', 'shell']
 
-// panelOnFocus gives the chat column its room back when the focus moves into it or a centre page opens in it: the
-// expanded panel goes back to its own size.
-export function panelOnFocus(st: PanelState, target: ChatColumnTarget): PanelState {
+// panelOnFocus gives the chat column its room back when the focus moves into it: the expanded panel goes back to its
+// own size.
+export function panelOnFocus(st: PanelState, target: FocusTarget): PanelState {
   return st.expanded && CHAT_COLUMN.includes(target) ? { ...st, expanded: false } : st
 }
 

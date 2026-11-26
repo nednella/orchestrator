@@ -32,11 +32,6 @@ export function useShortcuts(enabled: boolean) {
         if (!e.repeat) lay.closeOverlay('escape')
         return
       }
-      if (lay.digestOpen) {
-        lay.closeCentre()
-        orchestrator.focus('thread')
-        return
-      }
       const el = document.activeElement
       if (el instanceof HTMLElement && el.matches('input, textarea') && !el.closest('.xterm')) {
         el.blur()
