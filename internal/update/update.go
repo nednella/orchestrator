@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,8 +16,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
 const (
@@ -31,7 +28,6 @@ const (
 	// only 60 requests an hour from an IP without a token.
 	latestURL   = "https://github.com/" + Repo + "/releases/latest"
 	downloadURL = "https://github.com/" + Repo + "/releases/download/"
-	cacheFile   = "update.json"
 	bundle      = "orchestrator.app"
 )
 
@@ -67,33 +63,6 @@ func Latest(ctx context.Context, run Runner) (Release, error) {
 	return rel, nil
 }
 
-type cache struct {
-	CheckedAt time.Time `json:"checkedAt"`
-	Release   Release   `json:"release"`
-}
-
-// Check is Latest with a memory: the answer is kept in stateDir, and one younger than maxAge
-// is returned without asking again.
-func Check(ctx context.Context, run Runner, stateDir string, maxAge time.Duration, now time.Time) (Release, error) {
-	path := filepath.Join(stateDir, cacheFile)
-	var c cache
-	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &c) == nil && maxAge > 0 && now.Sub(c.CheckedAt) < maxAge {
-		return c.Release, nil
-	}
-	rel, err := Latest(ctx, run)
-	if err != nil {
-		return Release{}, err
-	}
-	data, err := json.Marshal(cache{CheckedAt: now, Release: rel})
-	if err != nil {
-		return Release{}, fmt.Errorf("encoding the latest release: %w", err)
-	}
-	if err := atomicfile.Write(path, data, 0o600); err != nil {
-		return Release{}, err
-	}
-	return rel, nil
-}
-
 // Newer says whether latest is a higher version than current. A dev build is never behind.
 func Newer(current, latest string) bool {
 	a, okA := parse(current)
@@ -123,20 +92,6 @@ func parse(v string) ([3]int, bool) {
 		n[i] = x
 	}
 	return n, true
-}
-
-// Install downloads rel and puts its bundle in place of the one at path.
-func Install(ctx context.Context, run Runner, rel Release, path string) error {
-	dir, err := os.MkdirTemp(filepath.Dir(path), ".orchestrator-download-")
-	if err != nil {
-		return fmt.Errorf("making room for the download: %w", err)
-	}
-	defer os.RemoveAll(dir)
-	zip, err := Download(ctx, run, rel, dir, func(int) {})
-	if err != nil {
-		return err
-	}
-	return InstallZip(ctx, run, rel, zip, path)
 }
 
 // Download fetches rel's bundle into dir and says how far it got: at each 10% step and at 100%, or -1 once when

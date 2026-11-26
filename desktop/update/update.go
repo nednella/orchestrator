@@ -231,7 +231,7 @@ func (u *Updater) check(ctx context.Context, shown bool) error {
 	if shown {
 		u.set(State{Status: checking, Version: before.Version, Percent: before.Percent})
 	}
-	rel, err := update.Check(ctx, u.run, u.stateDir, 0, time.Now())
+	rel, err := update.Latest(ctx, u.run)
 	if err != nil {
 		if shown {
 			before.Error = err.Error()

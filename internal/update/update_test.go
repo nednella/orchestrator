@@ -51,34 +51,6 @@ func TestLatestReadsTheReleaseFromTheRedirect(t *testing.T) {
 	}
 }
 
-func TestCheckAsksAgainOnlyWhenTheAnswerIsOld(t *testing.T) {
-	state := t.TempDir()
-	calls := 0
-	github := fakeGitHub(latestTag, "https://github.com/nednella/orchestrator/releases/download/v1.2.3/orchestrator-darwin-arm64.zip.sha256")
-	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if args[len(args)-1] == latestURL {
-			calls++
-		}
-		return github(ctx, name, args...)
-	}
-	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
-	for i := 0; i < 2; i++ {
-		rel, err := Check(context.Background(), run, state, 24*time.Hour, now.Add(time.Duration(i)*time.Hour))
-		if err != nil || rel.Version != "1.2.3" {
-			t.Fatalf("check %d: %+v, %v", i, rel, err)
-		}
-	}
-	if calls != 1 {
-		t.Errorf("GitHub was asked %d times within a day", calls)
-	}
-	if _, err := Check(context.Background(), run, state, 24*time.Hour, now.Add(25*time.Hour)); err != nil || calls != 2 {
-		t.Errorf("after a day: asked %d times, %v", calls, err)
-	}
-	if _, err := Check(context.Background(), run, state, 0, now); err != nil || calls != 3 {
-		t.Errorf("with no age allowed: asked %d times, %v", calls, err)
-	}
-}
-
 func TestNewer(t *testing.T) {
 	for _, tt := range []struct {
 		current, latest string
@@ -151,57 +123,6 @@ func releaseZip(t *testing.T, dir, version string) (zip, sum string) {
 		t.Fatal(err)
 	}
 	return zip, sum
-}
-
-func TestInstallSwapsTheBundleAfterCheckingTheSum(t *testing.T) {
-	if _, err := exec.LookPath("ditto"); err != nil {
-		t.Skip("ditto not installed")
-	}
-	zip, sum := releaseZip(t, t.TempDir(), "2.0.0")
-	home := t.TempDir()
-	path := filepath.Join(home, "Applications", bundle)
-	if err := os.MkdirAll(filepath.Join(path, "Contents", "MacOS"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "orchestrator"), []byte("old"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	rel := Release{Version: "2.0.0", Zip: "https://x/zip", Sum: "https://x/sum"}
-	run := fakeDownloads(t, map[string]string{rel.Zip: zip, rel.Sum: sum})
-	if err := Install(context.Background(), run, rel, path); err != nil {
-		t.Fatal(err)
-	}
-	out, err := exec.Command(filepath.Join(path, "Contents", "MacOS", "orchestrator")).Output()
-	if err != nil || strings.TrimSpace(string(out)) != "2.0.0" {
-		t.Errorf("the installed binary printed %q, %v", out, err)
-	}
-	entries, _ := os.ReadDir(filepath.Dir(path))
-	if len(entries) != 1 {
-		t.Errorf("leftovers beside the bundle: %v", entries)
-	}
-
-	bad := filepath.Join(t.TempDir(), "bad.sha256")
-	if err := os.WriteFile(bad, []byte(strings.Repeat("0", 64)+"  "+Asset+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	run = fakeDownloads(t, map[string]string{rel.Zip: zip, rel.Sum: bad})
-	err = Install(context.Background(), run, rel, path)
-	if err == nil || !strings.Contains(err.Error(), "sha256") {
-		t.Errorf("a wrong sum installed anyway: %v", err)
-	}
-	if out, _ := exec.Command(filepath.Join(path, "Contents", "MacOS", "orchestrator")).Output(); strings.TrimSpace(string(out)) != "2.0.0" {
-		t.Errorf("the bundle changed after a failed install: %q", out)
-	}
-}
-
-func TestInstallReportsAFailedDownload(t *testing.T) {
-	rel := Release{Version: "2.0.0", Zip: "https://x/zip", Sum: "https://x/sum"}
-	path := filepath.Join(t.TempDir(), bundle)
-	err := Install(context.Background(), fakeDownloads(t, nil), rel, path)
-	var pathErr *os.PathError
-	if err == nil || errors.As(err, &pathErr) || !strings.Contains(err.Error(), "downloading https://x/zip") {
-		t.Errorf("err = %v", err)
-	}
 }
 
 // fakeRelease answers curl for one release whose zip holds body, and unpacks the zip as ditto would into a bundle
