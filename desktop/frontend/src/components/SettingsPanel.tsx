@@ -64,7 +64,7 @@ export function SettingsPanel() {
   if (overlay !== 'settings') return null
 
   return (
-    <Overlay align="center" label="Settings" onClose={() => setOverlay(null)}>
+    <Overlay label="Settings" onClose={() => setOverlay(null)}>
       <div className="flex flex-none items-center gap-3 border-b border-line px-5 py-3.5">
         <h2 className="flex-1 text-title font-semibold">Settings</h2>
         <Keycap>Esc</Keycap>

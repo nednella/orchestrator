@@ -10,11 +10,10 @@ type Row = { id: string; label: string; keys?: string }
 type Group = { title: string; ids: string[]; extra?: Row[] }
 
 const GROUPS: Group[] = [
-  { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session', 'harness'] },
+  { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session'] },
   { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-shell', 'toggle-right', 'search-threads', 'shortcuts'] },
-  { title: 'Queue', ids: ['show-queue', 'filter-queue', 'refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
-  { title: 'Notes', ids: ['show-notes'] },
-  { title: 'Views', ids: ['stats', 'digest', 'show-thread', 'show-browser', 'show-evidence', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
+  { title: 'Queue', ids: ['refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
+  { title: 'Views', ids: ['stats', 'digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
   {
     title: 'Terminal',
     ids: ['new-terminal', 'split-terminal'],
@@ -24,7 +23,7 @@ const GROUPS: Group[] = [
 ]
 
 const LEFT = ['Sessions', 'Queue', 'In a list']
-const RIGHT = ['Navigate', 'Notes', 'Views', 'Terminal']
+const RIGHT = ['Navigate', 'Views', 'Terminal']
 const listed = new Set(GROUPS.flatMap((g) => g.ids))
 
 function toRow(action: Action): Row {
@@ -86,7 +85,7 @@ function ShortcutsSheetDialog() {
     ))
 
   return (
-    <Overlay align="center" size="wide" label="Keyboard shortcuts" onClose={() => setOverlay(null)}>
+    <Overlay size="wide" label="Keyboard shortcuts" onClose={() => setOverlay(null)}>
       <div className="flex flex-none items-center gap-3 border-b border-line px-4 py-2.5">
         <h2 className="flex-none text-title font-semibold">Shortcuts</h2>
         <div className="relative min-w-0 flex-1">

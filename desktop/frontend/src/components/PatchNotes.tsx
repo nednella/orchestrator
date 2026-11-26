@@ -49,7 +49,7 @@ function PatchNotesSheet({ releases, sinceLastRun, onClose }: PatchNotesSheetPro
   }, [releases.length])
 
   return (
-    <Overlay align="center" size="reading" label="Patch notes" onClose={onClose}>
+    <Overlay size="reading" label="Patch notes" onClose={onClose}>
       <div className="flex flex-none items-center gap-3 border-b border-line px-4 py-2.5">
         <h2 className="flex-none text-title font-semibold">{several ? 'Patch notes' : `What's new in ${release.version}`}</h2>
         {several && sinceLastRun && <span className="min-w-0 flex-1 truncate text-small text-dim">{releases.length} releases since you last opened orchestrator</span>}

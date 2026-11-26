@@ -12,13 +12,12 @@ const CENTRED: Record<Size, CSSProperties> = {
 
 type OverlayProps = {
   label: string
-  align: 'left' | 'center'
   size?: Size
   onClose(): void
   children: ReactNode
 }
 
-export function Overlay({ label, align, size = 'default', onClose, children }: OverlayProps) {
+export function Overlay({ label, size = 'default', onClose, children }: OverlayProps) {
   const { focus } = useOrchestrator('focus')
   const previous = useRef(document.activeElement)
   const dialog = useRef<HTMLDivElement>(null)
@@ -46,11 +45,7 @@ export function Overlay({ label, align, size = 'default', onClose, children }: O
         aria-modal="true"
         aria-label={label}
         className="absolute flex flex-col overflow-hidden rounded-md border border-line-strong bg-surface shadow-2xl"
-        style={
-          align === 'left'
-            ? { top: 'calc(var(--topbar-h) + 4px)', left: '50%', width: 'min(34rem, calc(100vw - 1.5rem))', maxHeight: '70vh', transform: 'translateX(-50%)' }
-            : { ...CENTRED[size], left: '50%' }
-        }
+        style={{ ...CENTRED[size], left: '50%' }}
       >
         {children}
       </div>
