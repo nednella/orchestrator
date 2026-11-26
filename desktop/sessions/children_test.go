@@ -381,6 +381,98 @@ func TestChildWorktreeUsedByAForkStays(t *testing.T) {
 	}
 }
 
+// childWithShell is a child of the thread of issue 7 in its own empty worktree, with a shell of its own open there.
+func childWithShell(t *testing.T, h *apptest.Harness) (child sessions.Session, shell string) {
+	t.Helper()
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child = childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	shell = newShell(t, h, child.ID)
+	eventually(t, "the shell in the worktree", func() bool { return shellFolder(t, h, shell) == resolved(child.Worktree) })
+	return child, shell
+}
+
+func TestChildSleepKeepsItsWorktreeWhileItsShellIsOpen(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command string
+	}{
+		{name: "idle"},
+		{name: "busy", command: "sleep"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := shellHarness(t)
+			child, shell := childWithShell(t, h)
+			if tc.command != "" {
+				typeIn(t, h, shell, tc.command+" 60")
+			}
+			shellRuns(t, h, shell, tc.command, tc.command != "")
+
+			putToSleep(t, h, child.ID)
+			if entry := cleanupOf(t, h, child); entry.Status != "blocked" || entry.Reason != "a shell of this thread is open" || len(entry.Removed) != 0 {
+				t.Errorf("the clean-up = %+v, want it kept for the child's shell", entry)
+			}
+			if !exists(child.Worktree) || !tmuxHas(h, shell) {
+				t.Fatalf("worktree there %v, the child's shell runs %v; want both", exists(child.Worktree), tmuxHas(h, shell))
+			}
+			shellRuns(t, h, shell, tc.command, tc.command != "")
+
+			if err := h.ShellClose(shell); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.WakeThread(child.ID); err != nil {
+				t.Fatal(err)
+			}
+			putToSleep(t, h, child.ID)
+			eventually(t, "the worktree gone at the next sleep", func() bool { return !exists(child.Worktree) })
+		})
+	}
+}
+
+func TestChildWithNoShellLosesItsEmptyWorktree(t *testing.T) {
+	h := shellHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	others := []string{newShell(t, h, parent.ID), newShell(t, h, "")}
+
+	putToSleep(t, h, child.ID)
+	if entry := cleanupOf(t, h, child); entry.Status != "done" || !slices.Equal(entry.Removed, []string{"worktree " + child.Worktree}) {
+		t.Errorf("the clean-up = %+v, want the worktree removed", entry)
+	}
+	if exists(child.Worktree) {
+		t.Error("the worktree is still there")
+	}
+	for _, id := range others {
+		if !tmuxHas(h, id) {
+			t.Errorf("the shell %s went with the child's worktree", id)
+		}
+	}
+}
+
+func TestDeleteClosesTheShellsOfAChildItsShellKept(t *testing.T) {
+	for _, withWorktree := range []bool{false, true} {
+		t.Run(fmt.Sprintf("worktree %v", withWorktree), func(t *testing.T) {
+			h := shellHarness(t)
+			child, shell := childWithShell(t, h)
+			putToSleep(t, h, child.ID)
+			if entry := cleanupOf(t, h, child); entry.Status != "blocked" {
+				t.Fatalf("the clean-up = %+v, want it kept for the child's shell", entry)
+			}
+
+			if err := h.DeleteThread(child.ID, withWorktree); err != nil {
+				t.Fatal(err)
+			}
+			if tmuxHas(h, shell) {
+				t.Error("the deleted child's shell still runs")
+			}
+			if exists(child.Worktree) != !withWorktree {
+				t.Errorf("worktree there %v after a delete with the worktree %v", exists(child.Worktree), withWorktree)
+			}
+		})
+	}
+}
+
 func TestDeleteGivesAChildsWorktreeToAForkOfIt(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)

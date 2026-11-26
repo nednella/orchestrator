@@ -1160,8 +1160,10 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 }
 
 // childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
-// planFor's checks pass, with a thread asleep in it counting too. The child's shells close first. A worktree with no
-// commit since the one it started at has only its changes to lose, so origin is not asked. Its branch stays, and so
+// planFor's checks pass, with a thread asleep in it and any shell of the child, idle or busy, counting too. The owner
+// may have opened that shell after the child's work ended, so this clean-up never closes one, and as it runs only at
+// the sleep, a worktree a shell kept stays until the child sleeps again or is deleted. A worktree with no commit since
+// the one it started at has only its changes to lose, so origin is not asked. Its branch stays, and so
 // does the thread, whose wake puts the worktree back. Anything else keeps the worktree for the clean-up after its pull
 // request, and the log says why, unless it said so for the child's last sleep. A child in its parent's folder, or in
 // one agentos did not make for it, has nothing to remove. A Delete of the child takes its worktree only when asked.
@@ -1190,6 +1192,9 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if user := l.sessions.usersOf(t.dir, true, id); reason == "" && user != "" {
 		reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
+	if reason == "" {
+		reason = l.shellOf(ctx, id)
+	}
 	var removed []string
 	if reason == "" {
 		removed, reason = l.removeWorktree(ctx, t, &plan)
@@ -1201,6 +1206,24 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if !again {
 		l.logCleanup(ctx, t, nil, removed, reason)
 	}
+}
+
+// shellOf says why a shell of the thread keeps its worktree: one is open, or tmux could not say. It holds shellMu, so a
+// shell that started before the clean-up's mark is listed, and NewShell refuses one after it.
+func (l *Lifecycle) shellOf(ctx context.Context, id string) string {
+	s := l.sessions
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
+	defer cancel()
+	shells, err := s.tmux.ShellPaths(ctx)
+	if err != nil {
+		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+	}
+	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id }) {
+		return "a shell of this thread is open"
+	}
+	return ""
 }
 
 // startChildCleanup marks the clean-up of the asleep child id as running and returns its track and the clean-up state
