@@ -13,7 +13,6 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/sessions"
-	"github.com/nednella/orchestrator/desktop/stats"
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/session"
@@ -189,7 +188,7 @@ func wakesAsRead(t *testing.T, edit func(file map[string]any)) {
 	}
 }
 
-func TestReadThreadCountsInStats(t *testing.T) {
+func TestReadThreadCountsInTheLedger(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("ask", "", "", "", "read")
@@ -205,15 +204,11 @@ func TestReadThreadCountsInStats(t *testing.T) {
 		h.Observe(t, id, "Notification", `{"message":"Claude needs your permission","notification_type":"permission_prompt"}`)
 		h.Observe(t, id, "Stop", `{}`)
 	}
-	for _, kind := range []string{activity.Prompt, activity.SessionStart, activity.Worked, activity.Wait} {
+	for _, kind := range []string{activity.Prompt, activity.SessionStart, activity.Worked} {
 		eventually(t, kind+" of the Read thread", func() bool {
 			return slices.ContainsFunc(h.Events(t, kind), func(e activity.Event) bool { return e.Session == read.ID })
 		})
 	}
-	eventually(t, "the Read thread's wait", func() bool {
-		st, _ := h.Stats(7, "")
-		return slices.ContainsFunc(st.Recent, func(w stats.Wait) bool { return w.SessionTitle == read.Title })
-	})
 	led, err := h.Ledger(30, "")
 	if err != nil {
 		t.Fatal(err)

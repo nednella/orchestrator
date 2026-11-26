@@ -831,29 +831,6 @@ func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
 	}
 }
 
-func TestAFinishedTurnIsNoInterruption(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	s, err := h.NewSession("r", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := func() string { got, _ := h.Session(s.ID); return string(got.State) }
-
-	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	eventually(t, "working", func() bool { return state() == "working" })
-	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
-	eventually(t, "waiting", func() bool { return state() == "waiting" })
-	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
-	eventually(t, "working again", func() bool { return state() == "working" })
-	replied := h.Rec.CountAttention("replied")
-	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"I fixed the test."}`)
-	eventually(t, "the reply", func() bool { return h.Rec.CountAttention("replied") > replied })
-	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Kind != "permission" {
-		t.Errorf("a finished turn counted as an interruption: %+v", st.ByCause)
-	}
-}
-
 func TestReplyEndingInAQuestionWaits(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
@@ -869,9 +846,6 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 	eventually(t, "waiting", func() bool { return state() == "waiting" })
 	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"main"}`)
 	eventually(t, "working again", func() bool { return state() == "working" })
-	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Label != "Question in reply" {
-		t.Errorf("the question did not count as a wait: %+v", st.ByCause)
-	}
 }
 
 func TestTheOwnersSleepAndTheAutomaticSleepAtOnceStopTheThreadOnce(t *testing.T) {

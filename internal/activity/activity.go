@@ -9,7 +9,6 @@ const (
 	SessionStart = "session_start" // label "resumed" when a wake starts the thread again
 	SessionEnd   = "session_end"   // ms is how long the session ran
 	Worked       = "worked"        // ms is how long a session worked
-	Wait         = "wait"          // ms is how long a session waited on the user; label is its kind (permission, question or idle)
 	PROpened     = "pr_opened"
 	PRMerged     = "pr_merged" // ms is the time from first seen open
 	PRClosed     = "pr_closed" // ms is the time from first seen open
@@ -39,8 +38,7 @@ type Event struct {
 	Effort  string `json:"effort,omitempty"`
 	Ms      int64  `json:"ms,omitempty"`
 	Label   string `json:"label,omitempty"`
-	Title   string `json:"title,omitempty"` // the session title, on a wait and on usage
-	Cause   string `json:"cause,omitempty"` // why a session waited, in the words the Stats view groups by
+	Title   string `json:"title,omitempty"` // the session title, on usage
 
 	usage.Tokens // on usage; At is the time of the latest message counted
 }

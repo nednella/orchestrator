@@ -89,14 +89,13 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	watch := network.New(h.Emit)
 	runner = watch.Runner(runner)
 	events := stats.NewLog(c.DataDir, c.Machine)
-	waits := stats.New(events)
 	proofs := evidence.New(c.DataDir, events)
 	browsers := browser.New(c.LocalDir, h.Emit, c.Env)
 	terms := terminal.New(c.Tmux, h.Emit, h.Clipboard)
 	stayAwake := awake.New(h.Awake, h.Emit)
 	sess := sessions.New(sessions.Options{
 		Tmux: c.Tmux, Agents: c.Agents, Binary: c.Binary, StateDir: c.StateDir, LocalDir: c.LocalDir, Projects: c.Registry,
-		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Tally: waits, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
+		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
 	})
 	chats := chat.New(sess, c.LocalDir, h.Emit)
@@ -179,7 +178,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		browser.NewService(browsers, proofs, changes, ctx),
 		digest.NewService(mgr),
 		awake.NewService(stayAwake),
-		stats.NewService(waits, c.Registry, stats.NewBooks(events, c.Registry)),
+		stats.NewService(stats.NewBooks(events, c.Registry)),
 		update.NewService(a.updates, ctx),
 		limits.NewService(a.limits, ctx),
 		settings.NewService(c.Registry, sess, c.DataDir, c.DataDirFixed, h.PickDir, a.updates.Relaunch),

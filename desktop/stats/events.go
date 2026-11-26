@@ -276,8 +276,7 @@ type Day struct {
 	IssuesFiled  int
 	ClosedIssues []int // the issues whose session's PR merged
 
-	spending spending  // the tokens the agents used
-	waits    waitTally // by the day each wait started; Days sums it, add does not
+	spending spending // the tokens the agents used
 }
 
 func (d *Day) add(o Day) {
@@ -295,13 +294,9 @@ func (d *Day) add(o Day) {
 	d.spending.merge(o.spending)
 }
 
-// apply adds the event to its day, a wait to the day it started. Kinds the rollup does not count are skipped.
+// apply adds the event to its day. Kinds the rollup does not count are skipped.
 func apply(days map[string]*Day, e activity.Event) {
-	at := e.At
-	if e.Kind == activity.Wait {
-		at -= e.Ms
-	}
-	day := localDay(time.UnixMilli(at))
+	day := localDay(time.UnixMilli(e.At))
 	d := days[day]
 	if d == nil {
 		d = &Day{}
@@ -334,8 +329,6 @@ func apply(days map[string]*Day, e activity.Event) {
 		d.IssuesFiled++
 	case activity.Usage:
 		d.spending.count(e)
-	case activity.Wait:
-		d.waits.count(waitOf(e))
 	}
 }
 
@@ -351,7 +344,6 @@ func (l *Log) Days(key string) map[string]Day {
 		for day, d := range f.days {
 			sum := out[day]
 			sum.add(*d)
-			sum.waits.merge(d.waits)
 			for _, n := range d.ClosedIssues {
 				if !slices.Contains(sum.ClosedIssues, n) {
 					sum.ClosedIssues = append(sum.ClosedIssues, n)

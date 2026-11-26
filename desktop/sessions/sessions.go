@@ -144,7 +144,6 @@ type Sessions struct {
 	ctx        context.Context
 	project    project.Project
 	configured ProjectList
-	tally      Tally
 	activity   Activity
 	closeTerm  func(id string)
 	evidence   Evidence
@@ -202,12 +201,6 @@ type ProjectList interface {
 	List() []project.Project
 }
 
-// Tally records when a session waits on the user.
-type Tally interface {
-	Opened(id, title string, issue int, model string, rec session.Record, at time.Time)
-	Closed(id string, at time.Time) bool
-}
-
 // Activity records what the user, the agents and the app do.
 type Activity interface {
 	Record(projectKey string, e activity.Event)
@@ -247,7 +240,6 @@ type Options struct {
 	Emit          func(event string, payload any)
 	Run           run.Runner
 	Stream        run.Streamer // long-running commands: gh webhook forward
-	Tally         Tally
 	Activity      Activity
 	CloseTerminal func(id string)
 	Evidence      Evidence
@@ -284,7 +276,7 @@ func newSessions(o Options) *Sessions {
 	return &Sessions{
 		pollEvery: defaultPollEvery, stopSettle: defaultStopSettle,
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
-		project: o.Current, configured: o.Projects, tally: o.Tally, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
+		project: o.Current, configured: o.Projects, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedSession{}, deleted: map[string]bool{}, deleting: map[string]bool{}, waking: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
@@ -1301,7 +1293,6 @@ func (s *Sessions) followBranch(rec session.Record, turnEnded, toolDone bool) {
 // end if the list changed. It needs mu.
 func (s *Sessions) sync() {
 	var attention [][2]string // session id and the attention state
-	waitsChanged := false
 	live := map[string]bool{}
 	for _, in := range s.info {
 		id := in.Name.String()
@@ -1348,23 +1339,9 @@ func (s *Sessions) sync() {
 				attention = append(attention, [2]string{id, "replied"})
 			}
 		}
-		if s.loaded {
-			ended := s.tally.Closed(id, at)
-			opens := state == session.Waiting
-			if opens {
-				issue, _ := strconv.Atoi(in.Issue)
-				s.tally.Opened(id, cmp.Or(in.Title, defaultTitle), issue, in.Model, rec, at)
-			}
-			if ended || opens {
-				waitsChanged = true
-			}
-		}
 	}
 	for id := range s.seen {
 		if !live[id] {
-			if s.tally.Closed(id, time.Now()) {
-				waitsChanged = true
-			}
 			if s.seen[id] == session.Working {
 				s.worked(id, time.Now())
 			}
@@ -1387,9 +1364,6 @@ func (s *Sessions) sync() {
 			delete(s.seen, id)
 			delete(s.records, id)
 		}
-	}
-	if waitsChanged {
-		s.emit("stats", nil)
 	}
 	s.endTurns()
 	s.deliverWakes()

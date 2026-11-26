@@ -124,19 +124,13 @@ func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 	}
 }
 
-func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
+func TestModelSurvivesARestart(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.StartIssue(8)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission"}`)
-	eventually(t, "a wait with the model", func() bool {
-		st, _ := h.Stats(7, "")
-		return len(st.Recent) == 1 && st.Recent[0].Model == "opus"
-	})
-
 	again := h.Restart(t)
 	got, ok := again.Session(s.ID)
 	if !ok || got.Model != "opus" || got.Effort != "" {

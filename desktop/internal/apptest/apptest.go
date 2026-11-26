@@ -1482,8 +1482,6 @@ func (h *Harness) SetDataDir(dir string, withData bool) error {
 	return h.settings.SetDataDir(dir, withData)
 }
 
-func (h *Harness) Stats(days int, key string) (stats.Stats, error) { return h.stats.Stats(days, key) }
-
 func (h *Harness) Ledger(days int, key string) (stats.Ledger, error) {
 	return h.stats.Ledger(days, key)
 }
