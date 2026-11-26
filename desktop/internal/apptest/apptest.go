@@ -983,7 +983,7 @@ while IFS= read -r line; do
 	case "$line" in
 	*'"type":"user"'*'"text":"ask"'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"ask-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"touch made.txt"}}}' ;;
-	*'"type":"user"'*'slow"'*)
+	*'"type":"user"'*'slow"}]}'*)
 		printf '%s\n' "$init"
 		sleep 1
 		reply ;;
