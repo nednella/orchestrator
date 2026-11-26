@@ -391,7 +391,7 @@
   /* What sits over the chat keeps the chat's sides: the scroller's padding and the gutter its 6px scrollbar keeps on each
      edge. Its message column then lines up with the chat's at every width. */
   .chat-over {
-    padding-inline: calc(var(--chat-side) + 6px);
+    padding-inline: calc(var(--chat-side) + 6px) calc(var(--chat-side) + 6px + var(--card-room, 0px));
   }
 
   [data-column-settling] .chat-column {
@@ -1130,7 +1130,7 @@
 
   .chat-scroll {
     --chat-fade: calc(1.5rem + 1px);
-    padding-inline: var(--chat-side);
+    padding-inline: var(--chat-side) calc(var(--chat-side) + var(--card-room, 0px));
     scrollbar-width: auto;
     scrollbar-color: auto;
     scrollbar-gutter: stable both-edges;
