@@ -10,6 +10,8 @@ type Handler = (payload: never) => void
 type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; waits: Wait[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
 
 const minute = 60_000
+// The reply of the seeded #444 chat that its mock fork is cut at.
+const FORK_AT = 'r-2'
 
 // A project that is not set up has no queue sections, so every issue sits in the nameless group.
 const unsorted = (issues: Issue[]) => issues.map((issue) => ({ ...issue, section: '', actions: ['Start'], access: actionAccess('Start'), moves: [] }))
@@ -499,7 +501,7 @@ export function createMock(params: URLSearchParams) {
       const bundle = seed('Measure the product page bundle', 0, 'working', [['working', 6]], data[0], 'read')
       bundle.parent = split.id
       const fork = seed('#454 product page split (fork)', 454, 'idle', [['working', 20], ['idle', 14]])
-      Object.assign(fork, { forkOf: split.id, forkAt: 'r-2', branch: '', worktree: split.worktree })
+      Object.assign(fork, { forkOf: split.id, forkAt: FORK_AT, branch: '', worktree: split.worktree })
     }
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
@@ -570,8 +572,8 @@ export function createMock(params: URLSearchParams) {
     if (flags.lineage) {
       const source = byIssue(444)
       const fork = seed('#444 checkout route (fork)', 444, 'idle', [['working', 20], ['idle', 14]])
-      Object.assign(fork, { forkOf: source.id, forkAt: 'r-2', branch: '', worktree: source.worktree })
-      chats.fork(source.id, fork.id, 'r-2')
+      Object.assign(fork, { forkOf: source.id, forkAt: FORK_AT, branch: '', worktree: source.worktree })
+      chats.fork(source.id, fork.id, FORK_AT)
     }
     // After the app's first read of what each thread waits on, so it still shows the approval.
     if (flags.staleAnswer) setTimeout(() => chats.forget(byIssue(444).id), 2000)

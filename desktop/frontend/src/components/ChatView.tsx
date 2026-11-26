@@ -5,7 +5,7 @@ import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
-import { forkDividers } from '../chatDividers'
+import { forkDividers, forksKey } from '../chatDividers'
 import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
@@ -40,8 +40,9 @@ export function ChatView({ session }: ChatViewProps) {
   const latest = useLatestAgentos()
   const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
-  const sessions = useAgentosSelector((s) => s.sessions)
-  const shown = useMemo(() => forkDividers(session, sessions, timeline.items), [session, sessions, timeline.items])
+  const forks = useAgentosSelector((s) => forksKey(session.id, s.sessions))
+  const { id: threadId, forkOf, forkAt } = session
+  const shown = useMemo(() => forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items), [threadId, forkOf, forkAt, forks, timeline.items])
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)

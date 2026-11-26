@@ -109,7 +109,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
     case 'forkedFrom':
       return <ChatForkDivider thread={item.source} label="Forked from conversation" hint="Open source conversation" />
     case 'forked':
-      return <ChatForkDivider thread={item.fork} label="Conversation forked" hint="Open fork" />
+      return <ChatForkDivider thread={item.fork} label={`Conversation forked · ${item.title}`} hint="Open fork" />
     case 'childResult': {
       const title = items.find((i): i is ChildItem => i.kind === 'child' && i.child === item.child)?.title ?? 'Child thread'
       return <ChatChildCard id={item.child} title={title} result={item.text} />
