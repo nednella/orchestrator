@@ -175,6 +175,7 @@ type Sessions struct {
 	onIssues   func()
 	wakes      map[string][]heldPrompt // what waits for each thread to take it, oldest first: its PR's commands, each once, and the messages threads told it
 	afterTurn  map[string][]func()     // what waits for a session's turn to end or the session to go, oldest first: the settle after its PR merged or closed
+	slept      func(id string)         // hears of each thread that stopped running or was found asleep; OnSlept sets it before Run
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
 	held       map[string]int64        // the memory each live session held at the last sample
@@ -287,6 +288,7 @@ func newSessions(o Options) *Sessions {
 		delivering: map[string]bool{},
 		idling:     map[string]bool{},
 		afterTurn:  map[string][]func(){},
+		slept:      func(string) {},
 		readers:    map[string]*reader{},
 		spent:      map[string]usage.Tokens{},
 		held:       map[string]int64{},
@@ -586,6 +588,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 	}
 	e := &endedSession{info: info, rec: rec, at: at}
 	s.ended[name] = e
+	go s.heardSleep(name)
 	if stale {
 		_ = bus.WriteState(s.stateDir, e.record())
 	}
@@ -978,6 +981,25 @@ func (s *Sessions) settleToDelete(name session.Name) error {
 		return nil
 	}
 	return s.Settle(name.String())
+}
+
+// OnSlept has fn hear of each thread that stops running while the app runs, other than for a restart, once its host has
+// logged Claude's exit or hostWait has passed, and of each one the app finds asleep, as it starts. fn runs on a
+// goroutine of its own. It comes before Run.
+func (s *Sessions) OnSlept(fn func(id string)) { s.slept = fn }
+
+// heardSleep tells the thread's stop to the function OnSlept set, once the thread's host is gone.
+func (s *Sessions) heardSleep(id string) {
+	name, err := session.ParseName(id)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.context(), hostWait)
+	defer cancel()
+	if err := host.Gone(ctx, s.hostSocket(name)); err != nil {
+		log.Printf("agentos: the host of thread %s still runs after it stopped: %v", id, err)
+	}
+	s.slept(id)
 }
 
 // awaitHostExit waits, for at most hostWait, until the thread's host is gone: it logs Claude's exit as it stops, and
@@ -1383,6 +1405,7 @@ func (s *Sessions) sync() {
 			go s.closeBrowser(id)
 			if !s.restarting[id] {
 				go s.stopServers(true, id)
+				go s.heardSleep(id)
 				if s.known[id].Parent != "" {
 					s.life.inBackground(s.ctx, func(ctx context.Context) { s.life.childAsleep(ctx, id) })
 				}
@@ -1624,7 +1647,7 @@ func (s *Sessions) ListOf(key string) []Session {
 	return slices.DeleteFunc(s.List(), func(v Session) bool { return v.Project != key })
 }
 
-// Title is the title of the live session with the given id, or "" when there is none.
+// Title is the title of the session with the given id, live or asleep, or "" when there is none.
 func (s *Sessions) Title(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1632,6 +1655,9 @@ func (s *Sessions) Title(id string) string {
 		if in.Name.String() == id {
 			return cmp.Or(in.Title, defaultTitle)
 		}
+	}
+	if e := s.ended[id]; e != nil {
+		return cmp.Or(e.info.Title, defaultTitle)
 	}
 	return ""
 }

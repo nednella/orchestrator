@@ -54,6 +54,22 @@ func (c *Commands) ChildTurnEnded(id string, e chatlog.Event) {
 	go c.reportAll(r)
 }
 
+// ChildSlept hears that the thread id stopped running, or was found asleep as the app started. A child put to sleep
+// before its follower took the exit, or while the app was closed, gives its result as ChildTurnEnded would; one whose
+// result went already gives nothing.
+func (c *Commands) ChildSlept(id string) {
+	if c.threads.ParentOf(id) == "" {
+		return
+	}
+	ch, err := c.threads.ChatOf(id)
+	if err != nil || ch.Live {
+		return
+	}
+	if end := c.turnOf(ch).result(); end > 0 {
+		c.ChildTurnEnded(id, chatlog.Event{Kind: chatlog.KindExit, Seq: end})
+	}
+}
+
 // reportAll gives the result r, then each next one that came for the same child meanwhile. Only the latest counts: a
 // turn that ended before another one is over is no result.
 func (c *Commands) reportAll(r report) {

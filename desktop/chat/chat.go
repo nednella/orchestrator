@@ -408,6 +408,10 @@ func (f *follower) run(ctx context.Context) {
 		f.reached(*turnEnd)
 	}
 	if exit != nil {
+		// A thread put to sleep as its follower started has that exit in the log already.
+		if exit.Stop == chatlog.StopSettle {
+			f.chats.turnEnded(f.chat.ID, *exit)
+		}
 		f.reached(*exit)
 	}
 	// A mode Claude reported while the app was closed is followed now, by the same rule as a live one.

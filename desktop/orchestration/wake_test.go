@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/prompts"
@@ -491,4 +493,63 @@ func TestChildPutToSleepMidTurnTellsItsParent(t *testing.T) {
 		t.Error("the result of the sleep is not recorded as given")
 	}
 	noMoreResults(t, h, parent, c, 1)
+}
+
+func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
+	t.Run("before its follower starts", func(t *testing.T) {
+		h := apptest.New(t)
+		parent := newThread(t, h, "Plan the release").ID
+		c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
+		apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
+		if err := h.SettleThread(c); err != nil {
+			t.Fatal(err)
+		}
+		apptest.Eventually(t, "the sleep on the parent's stdin", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
+		if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep") {
+			t.Errorf("the parent read %q, want one result that says the child was put to sleep", lines)
+		}
+		noMoreResults(t, h, parent, c, 1)
+	})
+	t.Run("while the app is closed", func(t *testing.T) {
+		h := apptest.New(t)
+		parent := newThread(t, h, "Plan the release").ID
+		c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
+		apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
+		ch, err := h.Sessions().ChatOf(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.App.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := host.PlanStop(ctx, ch.Socket, chat.StopSettle, ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+c).Run(); err != nil {
+			t.Fatal(err)
+		}
+		if err := host.Gone(ctx, ch.Socket); err != nil {
+			t.Fatal(err)
+		}
+		// The app takes a gone thread's state file in as asleep once it is not fresh.
+		rec, err := bus.ReadState(h.State, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec.At = rec.At.Add(-time.Minute)
+		if err := bus.WriteState(h.State, rec); err != nil {
+			t.Fatal(err)
+		}
+		if n := len(resultLines(t, h, parent, c)); n != 0 {
+			t.Fatalf("the parent read %d results before the restart", n)
+		}
+		fresh := h.Restart(t)
+		apptest.Eventually(t, "the sleep on the parent's stdin after the restart", func() bool { return len(resultLines(t, fresh, parent, c)) > 0 })
+		if lines := resultLines(t, fresh, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep") {
+			t.Errorf("the parent read %q, want one result that says the child was put to sleep", lines)
+		}
+		noMoreResults(t, fresh, parent, c, 1)
+		fresh.App.Stop()
+		noMoreResults(t, fresh.Restart(t), parent, c, 1)
+	})
 }

@@ -1475,9 +1475,9 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the child settled", func() bool { return stateOf(h, child.ID) == "settled" })
-	if err := h.Cleanup(parent.ID, false); err != nil {
-		t.Fatal(err)
-	}
+	// The child's result wakes the sleeping parent, which this fixture's worktree refuses, so a clean-up started during
+	// one of those wakes is refused until the next pause.
+	eventually(t, "the clean-up", func() bool { return h.Cleanup(parent.ID, false) == nil })
 	if !cleanedUp(h, parent.ID)() || exists(wt) {
 		t.Errorf("the clean-up after the child settled: cleaned up %v, worktree there %v", cleanedUp(h, parent.ID)(), exists(wt))
 	}
