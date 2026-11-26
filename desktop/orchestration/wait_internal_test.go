@@ -175,11 +175,19 @@ func TestThreadDeletedForgetsItsResults(t *testing.T) {
 		{"a thread with no results", "main/nobodyaa", []waitOn{{child, other}, {parent, child}, {parent, other}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &Commands{given: map[waitOn]givenBy{{parent, child}: {end: 4}, {parent, other}: {end: 7, byWait: true}, {child, other}: {end: 2}}}
+			all := []waitOn{{parent, child}, {parent, other}, {child, other}}
+			c := &Commands{given: map[waitOn]givenBy{}, waiting: map[waitOn]held{}}
+			for i, w := range all {
+				c.given[w] = givenBy{end: int64(i + 1)}
+				c.waiting[w] = held{from: int64(i + 1)}
+			}
 			c.ThreadDeleted(tc.deleted)
-			got := slices.SortedFunc(maps.Keys(c.given), func(a, b waitOn) int { return strings.Compare(a.waiter+a.thread, b.waiter+b.thread) })
-			if !slices.Equal(got, tc.want) {
+			byName := func(a, b waitOn) int { return strings.Compare(a.waiter+a.thread, b.waiter+b.thread) }
+			if got := slices.SortedFunc(maps.Keys(c.given), byName); !slices.Equal(got, tc.want) {
 				t.Errorf("given has %v, want %v", got, tc.want)
+			}
+			if got := slices.SortedFunc(maps.Keys(c.waiting), byName); !slices.Equal(got, tc.want) {
+				t.Errorf("waiting has %v, want %v", got, tc.want)
 			}
 		})
 	}

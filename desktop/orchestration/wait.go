@@ -140,11 +140,12 @@ func (c *Commands) claimLocked(w waitOn, end int64, byWait bool) bool {
 	return true
 }
 
-// ThreadDeleted forgets the results given to or by the thread id, which was deleted.
+// ThreadDeleted forgets the waits and the results given to or by the thread id, which was deleted.
 func (c *Commands) ThreadDeleted(id string) {
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
 	maps.DeleteFunc(c.given, func(w waitOn, _ givenBy) bool { return w.waiter == id || w.thread == id })
+	maps.DeleteFunc(c.waiting, func(w waitOn, _ held) bool { return w.waiter == id || w.thread == id })
 }
 
 // givenByWait says whether a wait of the parent's on the child took the result that the seq end ends, or a later one.
