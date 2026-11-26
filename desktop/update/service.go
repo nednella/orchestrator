@@ -1,10 +1,6 @@
 package update
 
-import (
-	"context"
-
-	"github.com/nednella/orchestrator"
-)
+import "context"
 
 // Service is bound to the front end.
 type Service struct {
@@ -30,4 +26,4 @@ func (s *Service) InstallUpdate() error { return s.u.Install(s.ctx()) }
 func (s *Service) PatchNotes() ([]Release, error) { return s.u.PatchNotes() }
 
 // Changelog is every release the app shipped with, newest first.
-func (s *Service) Changelog() []Release { return ParseChangelog(orchestrator.Changelog) }
+func (s *Service) Changelog() []Release { return ParseChangelog(s.u.changelog) }

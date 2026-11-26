@@ -4,9 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/nednella/orchestrator"
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/update"
 	internalupdate "github.com/nednella/orchestrator/internal/update"
@@ -27,6 +29,13 @@ const changelog = `# Changelog
 * widen settings panel so every row shows ([29a0500](https://github.com/nednella/orchestrator/commit/29a0500))
 * keep the Mac awake while sessions work ([#88](https://github.com/nednella/orchestrator/issues/88)) ([0313ac2](https://github.com/nednella/orchestrator/commit/0313ac2))
 
+## [0.13.0](https://github.com/nednella/orchestrator/compare/v0.1.0...v0.13.0) (2026-10-06)
+
+
+### Bug Fixes
+
+* a fix in between ([2222222](https://github.com/nednella/orchestrator/commit/2222222))
+
 ## 0.1.0 (2026-10-05)
 
 
@@ -43,6 +52,9 @@ func TestParseChangelogReadsEachReleaseAndItsChanges(t *testing.T) {
 				{Text: "widen settings panel so every row shows"},
 				{Text: "keep the Mac awake while sessions work", Issue: 88, URL: "https://github.com/nednella/orchestrator/issues/88"},
 			}},
+		}},
+		{Version: "0.13.0", Date: "2026-10-06", Sections: []update.Section{
+			{Title: "Bug Fixes", Changes: []update.Change{{Text: "a fix in between"}}},
 		}},
 		{Version: "0.1.0", Date: "2026-10-05", Sections: []update.Section{
 			{Title: "Features", Changes: []update.Change{{Scope: "ui", Text: "first window"}}},
@@ -71,6 +83,7 @@ func versions(t *testing.T, u *update.Updater) []string {
 
 func TestPatchNotesShowTheReleasesSinceTheLastRunOnce(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{UpdateTick: time.Hour, Version: "0.14.0"})
+	h.App.Updates().SetChangelog(changelog)
 	if err := os.WriteFile(filepath.Join(h.State, "seen-version"), []byte("0.12.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +97,7 @@ func TestPatchNotesShowTheReleasesSinceTheLastRunOnce(t *testing.T) {
 
 func TestPatchNotesOnTheFirstRunShowOnlyTheRunningRelease(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{UpdateTick: time.Hour, Version: "0.14.0"})
+	h.App.Updates().SetChangelog(changelog)
 	if got := versions(t, h.App.Updates()); !reflect.DeepEqual(got, []string{"0.14.0"}) {
 		t.Errorf("first run = %v", got)
 	}
@@ -97,13 +111,21 @@ func TestADevBuildHasNoPatchNotes(t *testing.T) {
 }
 
 func TestChangelogListsEveryShippedReleaseNewestFirst(t *testing.T) {
-	releases := update.NewService(nil, nil).Changelog()
-	if len(releases) < 2 {
+	u := update.New(nil, "", "", nil, nil, nil)
+	u.SetChangelog(changelog)
+	releases := update.NewService(u, nil).Changelog()
+	if len(releases) != 3 {
 		t.Fatalf("Changelog has %d releases, want the whole history", len(releases))
 	}
 	for i := 1; i < len(releases); i++ {
 		if !internalupdate.Newer(releases[i].Version, releases[i-1].Version) {
 			t.Errorf("%s comes before %s", releases[i-1].Version, releases[i].Version)
 		}
+	}
+}
+
+func TestTheShippedChangelogHasNoReleaseOfAnotherApp(t *testing.T) {
+	if strings.Contains(strings.ToLower(orchestrator.Changelog), "agentos") {
+		t.Error("CHANGELOG.md names another app's releases")
 	}
 }

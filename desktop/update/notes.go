@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nednella/orchestrator"
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/update"
 )
@@ -100,7 +99,7 @@ func (u *Updater) PatchNotes() ([]Release, error) {
 	if seen == u.current || u.current == "dev" {
 		return notes, nil
 	}
-	for _, r := range ParseChangelog(orchestrator.Changelog) {
+	for _, r := range ParseChangelog(u.changelog) {
 		since := update.Newer(seen, r.Version) && !update.Newer(u.current, r.Version)
 		if since || (seen == "" && r.Version == u.current) {
 			notes = append(notes, r)
