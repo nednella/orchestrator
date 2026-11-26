@@ -37,16 +37,19 @@ export function ThreadBreadcrumb({ project, onShowProject, parent, onOpenParent,
       <span className="min-w-0 truncate" aria-current="page" title={title}>
         {title}
       </span>
-      <span ref={full} aria-hidden="true" className="pointer-events-none invisible absolute top-0 left-0 flex w-max items-center gap-2">
-        <span className={crumb}>{project}</span>
-        {separator}
-        {parent !== null && (
-          <>
-            <span className={crumb}>{parent}</span>
-            {separator}
-          </>
-        )}
-        <span>{title}</span>
+      {/* The copy lies in a box the bar's size that clips it, so a copy wider than the bar overflows nothing. */}
+      <span aria-hidden="true" className="pointer-events-none invisible absolute inset-0 overflow-hidden">
+        <span ref={full} className="flex w-max items-center gap-2">
+          <span className={crumb}>{project}</span>
+          {separator}
+          {parent !== null && (
+            <>
+              <span className={crumb}>{parent}</span>
+              {separator}
+            </>
+          )}
+          <span>{title}</span>
+        </span>
       </span>
     </nav>
   )
