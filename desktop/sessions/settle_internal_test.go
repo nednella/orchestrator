@@ -12,6 +12,7 @@ import (
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/term"
+	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
 
 func TestSettleClosesNoTerminal(t *testing.T) {
@@ -19,7 +20,7 @@ func TestSettleClosesNoTerminal(t *testing.T) {
 		t.Skip("tmux not installed")
 	}
 	socket := fmt.Sprintf("aostest-settle-%d", os.Getpid())
-	t.Cleanup(func() { _ = exec.Command("tmux", "-L", socket, "kill-server").Run() })
+	t.Cleanup(func() { tmuxtest.Stop(socket) })
 	tmux, err := term.NewTmux(socket, t.TempDir())
 	if err != nil {
 		t.Fatal(err)

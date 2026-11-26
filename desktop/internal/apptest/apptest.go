@@ -42,6 +42,7 @@ import (
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
 
 type Recorder struct {
@@ -695,7 +696,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	t.Cleanup(func() {
 		cancel()
 		h.App.Stop()
-		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
+		tmuxtest.Stop(socket)
 		os.RemoveAll(state)
 	})
 	return h

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
 
 // newTestTmux starts nothing: it only points at a private socket, which the
@@ -33,7 +34,7 @@ func newTestTmux(t *testing.T) *Tmux {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
+		tmuxtest.Stop(socket)
 		os.RemoveAll(dir)
 	})
 	return tmux
