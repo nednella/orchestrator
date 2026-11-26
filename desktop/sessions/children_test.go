@@ -348,6 +348,39 @@ func TestChildWorktreeUsedByAForkStays(t *testing.T) {
 	}
 }
 
+func TestDeleteGivesAChildsWorktreeToAForkOfIt(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	pushWork(t, parent.Worktree)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	withConversation(t, h, child.ID)
+	writeChat(t, h, child.ID, oneReply...)
+	fork, err := h.ForkSession(child.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	putToSleep(t, h, fork.ID)
+	putToSleep(t, h, child.ID)
+	cleanupOf(t, h, child)
+
+	if err := h.DeleteThread(parent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := h.Session(child.ID); ok || !exists(child.Worktree) || exists(parent.Worktree) {
+		t.Fatalf("the child's row there %v, its worktree there %v, the parent's there %v; want only the child's worktree", ok, exists(child.Worktree), exists(parent.Worktree))
+	}
+	if got := h.OwnWorktree(fork.ID); got != child.Worktree {
+		t.Errorf("OwnWorktree of the fork = %q, want the child's %s", got, child.Worktree)
+	}
+	if err := h.DeleteThread(fork.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(child.Worktree) || !hasBranch(t, h.Dir, child.Branch) {
+		t.Errorf("the worktree there %v, its branch there %v; want only the branch", exists(child.Worktree), hasBranch(t, h.Dir, child.Branch))
+	}
+}
+
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)

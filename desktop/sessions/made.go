@@ -171,6 +171,18 @@ func (m *madeTrees) change(key, path string, edit func(*Made)) error {
 	return fmt.Errorf("no worktree agentos made at %s", path)
 }
 
+// handOver gives the worktree at path, which agentos made for the thread from, to the thread to: its record and its
+// marker name to from then on. A worktree that is not from's, as one a human made again at its path, stays as it is.
+func (l *Lifecycle) handOver(ctx context.Context, key, path, from, to string) error {
+	if !l.ours(ctx, key, path, from) {
+		return nil
+	}
+	if err := l.mark(ctx, path, to); err != nil {
+		return err
+	}
+	return l.sessions.made.change(key, path, func(w *Made) { w.Thread = to })
+}
+
 // linkedGitDir is the worktree's own git folder, `<repo>/.git/worktrees/<name>`. The project
 // folder's own checkout is never a worktree agentos made, so it is an error.
 func (l *Lifecycle) linkedGitDir(ctx context.Context, worktree string) (string, error) {

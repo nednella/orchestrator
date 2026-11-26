@@ -758,8 +758,8 @@ func (s *Sessions) handoverOf(id string) string {
 // no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
 // thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
 // first, so none is left without the parent that reaches it. With worktree their worktrees go with the thread's, all
-// or none; one that a thread outside the family works in stays on disk for it. A thread with a running descendant is
-// refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
+// or none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over to that
+// thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
 // until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
 // nor a descendant can be woken or forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
@@ -790,6 +790,9 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		if err := s.removeWorktrees(family); err != nil {
 			return err
 		}
+	}
+	for _, d := range family[:len(family)-1] {
+		s.handOverWorktree(d, family)
 	}
 	for _, d := range family {
 		if err := s.remove(d); err != nil {
@@ -1018,6 +1021,23 @@ func (s *Sessions) checkWorktrees(ctx context.Context, own []string, asleep stri
 		}
 	}
 	return nil
+}
+
+// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to a thread outside the family
+// that works in it, so the record does not go with id and the worktree is still agentos's to remove.
+func (s *Sessions) handOverWorktree(id string, family []string) {
+	key := session.ProjectKey(id)
+	w, ok := s.made.Of(key, id)
+	if !ok || w.Removed != 0 || gone(w.Path) {
+		return
+	}
+	user, _ := s.userIn(w.Path, true, family...)
+	if user == "" {
+		return
+	}
+	if err := s.life.handOver(s.context(), key, w.Path, id, user); err != nil {
+		log.Printf("agentos: giving the worktree %s of %s to %s: %v", w.Path, id, user, err)
+	}
 }
 
 // keptBy is the refusal of a Delete of worktrees worktrees whose clean-up of the thread id kept its worktree for reason.
@@ -3565,14 +3585,34 @@ func (s *Sessions) target(id string) (target, error) {
 	return target{}, fmt.Errorf("no session %s", id)
 }
 
-// targetOrErr needs mu.
+// targetOrErr needs mu. A fork that a Delete gave a worktree to has a target too, so a Delete of the fork can take it;
+// workTargets leaves it out, so it hears no pull request.
 func (s *Sessions) targetOrErr(in term.Info, ended bool) (target, error) {
 	t, ok := s.targetOf(in, s.projects())
+	if !ok {
+		t, ok = s.handedTarget(in)
+	}
 	if !ok {
 		return target{}, fmt.Errorf("session %s has no issue or branch to clean up after", in.Name)
 	}
 	t.ended = ended
 	return t, nil
+}
+
+// handedTarget is the target of a fork that holds a worktree agentos made, which a Delete gave it: the worktree and
+// the branch of its record. It needs mu.
+func (s *Sessions) handedTarget(in term.Info) (target, bool) {
+	proj, ok := projectIn(s.projects(), in)
+	if !ok || in.Fork == "" || !in.Hosted {
+		return target{}, false
+	}
+	id := in.Name.String()
+	w, ok := s.made.Of(proj.Key(), id)
+	if !ok || w.Removed != 0 || w.Branch == "" {
+		return target{}, false
+	}
+	_, woke := s.startsOf(id, in)
+	return target{id: id, title: cmp.Or(in.Title, defaultTitle), branch: w.Branch, dir: w.Path, proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke, made: true}, true
 }
 
 // targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork, an old terminal
@@ -3882,6 +3922,12 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 // runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a settled
 // thread that would wake there counts too. It takes mu.
 func (s *Sessions) usersOf(dir string, asleep bool, except ...string) string {
+	_, title := s.userIn(dir, asleep, except...)
+	return title
+}
+
+// userIn is the id and title of a thread that works in dir, as usersOf finds it; "" when none.
+func (s *Sessions) userIn(dir string, asleep bool, except ...string) (id, title string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, in := range s.info {
@@ -3890,18 +3936,18 @@ func (s *Sessions) usersOf(dir string, asleep bool, except ...string) string {
 			continue
 		}
 		if cwd := s.cwds[id]; in.Path != "" && folder.Inside(in.Path, dir) || cwd != "" && folder.Inside(cwd, dir) {
-			return cmp.Or(in.Title, defaultTitle)
+			return id, cmp.Or(in.Title, defaultTitle)
 		}
 	}
 	if !asleep {
-		return ""
+		return "", ""
 	}
 	for id, e := range s.ended {
 		if !slices.Contains(except, id) && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
-			return cmp.Or(e.info.Title, defaultTitle)
+			return id, cmp.Or(e.info.Title, defaultTitle)
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
