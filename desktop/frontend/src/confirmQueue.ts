@@ -1,7 +1,9 @@
 // ConfirmRequest is one question the confirm modal asks: its title, the paragraphs and list under it, an optional
-// box with the hint under it or why it is off, and the confirm button's label and tone.
+// box with the hint under it or why it is off, and the confirm button's label and tone. key names what it asks about,
+// so the same question is not queued twice.
 export type ConfirmRequest = {
   id: number
+  key?: string
   title: string
   body?: string[]
   list?: string[]
@@ -24,6 +26,11 @@ export function settle(q: ConfirmQueue, id: number): ConfirmQueue {
 
 export function current(q: ConfirmQueue): ConfirmRequest | undefined {
   return q[0]
+}
+
+// queuedWith is the confirm queued about key, shown or waiting.
+export function queuedWith(q: ConfirmQueue, key: string): ConfirmRequest | undefined {
+  return q.find((r) => r.key === key)
 }
 
 // check ticks or unticks the box of the confirm id.

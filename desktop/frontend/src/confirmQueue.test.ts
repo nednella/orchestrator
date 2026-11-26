@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { answerFor, check, current, enqueue, initialFocus, settle } from './confirmQueue.ts'
+import { answerFor, check, current, enqueue, initialFocus, queuedWith, settle } from './confirmQueue.ts'
 import type { ConfirmRequest } from './confirmQueue.ts'
 
 const ask = (id: number, title: string): ConfirmRequest => ({ id, title, confirm: 'Delete', tone: 'danger' })
@@ -37,4 +37,11 @@ test('ticking the box changes only that confirm', () => {
 test('a danger confirm focuses Cancel, so Enter never deletes', () => {
   assert.equal(initialFocus('danger'), 'cancel')
   assert.equal(initialFocus('primary'), 'confirm')
+})
+
+test('a confirm about the same thing is found while it is queued', () => {
+  const q = enqueue(enqueue([], { ...ask(1, 'Delete this note?'), key: 'delete:a' }), ask(2, 'Delete this evidence?'))
+  assert.equal(queuedWith(q, 'delete:a')?.id, 1)
+  assert.equal(queuedWith(q, 'delete:b'), undefined)
+  assert.equal(queuedWith(settle(q, 1), 'delete:a'), undefined)
 })

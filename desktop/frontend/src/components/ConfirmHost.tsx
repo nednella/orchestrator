@@ -18,7 +18,7 @@ function keepFocusIn(dialog: HTMLElement | null, e: KeyboardEvent) {
 // before the first gets it back after the last.
 export function ConfirmHost() {
   const { focus } = useAgentos('focus')
-  const { request, leaving } = useConfirm()
+  const { request, leaving, nudge } = useConfirm()
   const dialog = useRef<HTMLDivElement>(null)
   const no = useRef<HTMLButtonElement>(null)
   const yes = useRef<HTMLButtonElement>(null)
@@ -42,7 +42,7 @@ export function ConfirmHost() {
 
   useEffect(() => {
     if (tone !== undefined) (initialFocus(tone) === 'cancel' ? no : yes).current?.focus()
-  }, [id, tone])
+  }, [id, tone, nudge])
 
   useEffect(() => {
     if (id === undefined) return

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { api } from './api'
-import { check, current, enqueue, settle } from './confirmQueue'
+import { check, current, enqueue, queuedWith, settle } from './confirmQueue'
 import type { ConfirmQueue, ConfirmRequest } from './confirmQueue'
 import { deleteRequest } from './deleteThread'
 import type { DeletePlan, Session } from './types'
@@ -13,6 +13,8 @@ const LEAVE_MS = 200
 let queue: ConfirmQueue = []
 let leaving: number | null = null
 let nextId = 1
+// nudge changes when the confirm shown is asked for again, so it takes the focus back.
+let nudge = 0
 const answers = new Map<number, (a: ConfirmAnswer) => void>()
 const listeners = new Set<() => void>()
 
@@ -26,14 +28,26 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener)
 }
 
-// askConfirm shows r in the confirm modal once the confirms before it are answered, and says whether the owner
-// confirmed and whether the box was ticked.
+// askConfirm shows the confirm in the modal once the confirms before it are answered, and says whether the owner
+// confirmed and whether the box was ticked. A confirm with the key of one already queued is not queued again: it
+// answers no at once, and the one shown takes the focus back.
 export function askConfirm(r: Omit<ConfirmRequest, 'id'>): Promise<ConfirmAnswer> {
+  if (r.key !== undefined && asked(r.key)) return Promise.resolve({ ok: false, checked: false })
   const id = nextId++
   return new Promise((resolve) => {
     answers.set(id, resolve)
     publish(enqueue(queue, { ...r, id }))
   })
+}
+
+// asked says whether a confirm about key is queued, and gives it the focus back when it is the one shown.
+function asked(key: string): boolean {
+  const open = queuedWith(queue, key)
+  if (open && current(queue)?.id === open.id) {
+    nudge++
+    publish(queue)
+  }
+  return open !== undefined
 }
 
 // answerConfirm answers the confirm id; it leaves before the next one shows. A second answer is ignored.
@@ -54,11 +68,12 @@ export function checkConfirm(id: number, checked: boolean) {
   publish(check(queue, id, checked))
 }
 
-// useConfirm is the confirm shown, and whether it is leaving.
-export function useConfirm(): { request: ConfirmRequest | undefined; leaving: boolean } {
+// useConfirm is the confirm shown, whether it is leaving, and a count that changes when it is asked for again.
+export function useConfirm(): { request: ConfirmRequest | undefined; leaving: boolean; nudge: number } {
   const request = useSyncExternalStore(subscribe, () => current(queue))
   const leavingId = useSyncExternalStore(subscribe, () => leaving)
-  return { request, leaving: request !== undefined && leavingId === request.id }
+  const nudged = useSyncExternalStore(subscribe, () => nudge)
+  return { request, leaving: request !== undefined && leavingId === request.id, nudge: nudged }
 }
 
 // useConfirming says whether a confirm shows, and changes only when that does.
@@ -72,9 +87,11 @@ export async function confirmed(r: Omit<ConfirmRequest, 'id'>, run: (checked: bo
   if (ok) await run(checked)
 }
 
-// confirmDelete asks before the thread goes, with what goes with it, and deletes it on yes. When the app cannot say
-// what goes with it, the confirm offers no worktree.
+// confirmDelete asks before the thread goes, with what goes with it, and deletes it on yes; one confirm per thread.
+// When the app cannot say what goes with it, the confirm offers no worktree.
 export async function confirmDelete(session: Session, remove: (id: string, worktree: boolean) => Promise<void>): Promise<void> {
+  const key = `delete:${session.id}`
+  if (asked(key)) return
   const plan = await api.deletePlan(session.id).catch((): DeletePlan => ({ worktrees: 0, children: [] }))
-  await confirmed(deleteRequest(session, plan), (worktree) => remove(session.id, worktree))
+  await confirmed({ ...deleteRequest(session, plan), key }, (worktree) => remove(session.id, worktree))
 }
