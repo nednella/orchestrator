@@ -164,6 +164,8 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 	}{
 		{"supervised", "", "Fix the cart\nwith detail", "opus", "high", "supervised", "Fix the cart", ""},
 		{"read", "", "What is this?", "haiku", "", "read", "What is this?", "claude-haiku-5-5"},
+		{"supervised haiku", "", "go", "haiku", "", "supervised", "go", "claude-haiku-5-5"},
+		{"full haiku", "", "go", "haiku", "", "full", "go", "claude-haiku-5-5"},
 		{"long first line", "", long, "", "low", "", strings.Repeat("é", 60), ""},
 		{"given title", "mine", "do it", "", "", "full", "mine", ""},
 		{"empty", "", "", "", "", "read", "agent", ""},

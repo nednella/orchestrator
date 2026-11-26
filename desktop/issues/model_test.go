@@ -11,6 +11,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/usage"
 )
 
 // argsOf is the arguments a session's claude was started with, one per line.
@@ -26,6 +27,14 @@ func argsOf(t *testing.T, dir, id string) string {
 }
 
 // flagsOf is the --model and --effort values a session's claude was started with.
+// claudeModel is the --model argument claude gets for a model the thread was given.
+func claudeModel(model string) string {
+	if model == "haiku" {
+		return usage.Haiku
+	}
+	return model
+}
+
 func flagsOf(t *testing.T, dir, id string) (model, effort string) {
 	t.Helper()
 	args := strings.Split(argsOf(t, dir, id), "\n")
@@ -65,7 +74,7 @@ func TestIssueSessionsGetTheirActionsModel(t *testing.T) {
 		if s.Model != tt.model || s.Effort != tt.effort {
 			t.Errorf("%s: session runs %s %s, want %s %s", tt.name, s.Model, s.Effort, tt.model, tt.effort)
 		}
-		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != tt.effort {
+		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != claudeModel(tt.model) || effort != tt.effort {
 			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, model, effort, tt.model, tt.effort)
 		}
 	}
@@ -106,7 +115,7 @@ func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
-		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != tt.effort || s.Model != tt.model || s.Effort != tt.effort {
+		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != claudeModel(tt.model) || effort != tt.effort || s.Model != tt.model || s.Effort != tt.effort {
 			t.Errorf("%s: claude got %q %q, session %q %q, want %s %s", tt.name, model, effort, s.Model, s.Effort, tt.model, tt.effort)
 		}
 	}
@@ -147,7 +156,7 @@ func TestOwnersPromptFollowsTheActionsCommandAndTheirModelWins(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the command then the prompt on claude's stdin", func() bool { return sent(t, h, s.ID, "/ship 7 be careful") })
-	if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != "haiku" || effort != "low" {
+	if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != usage.Haiku || effort != "low" {
 		t.Errorf("claude got --model %q --effort %q, want haiku low", model, effort)
 	}
 

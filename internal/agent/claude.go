@@ -83,7 +83,7 @@ func (c Claude) Command(l Launch) []string {
 	}{hooks, permissions{c.Dirs}})
 	argv := append([]string{"claude", "--settings", string(settings)}, headless...)
 	if l.Model != "" {
-		argv = append(argv, "--model", planSafeModel(l.Model, l.Access))
+		argv = append(argv, "--model", modelArg(l.Model))
 	}
 	if l.Effort != "" {
 		argv = append(argv, "--effort", l.Effort)
@@ -113,15 +113,12 @@ func (c Claude) Command(l Launch) []string {
 	return argv
 }
 
-// claudeHaiku is the id the "haiku" alias stands for.
-const claudeHaiku = "claude-haiku-5-5"
-
-// planSafeModel is the model argument that keeps the model in plan mode. Claude Code answers in plan mode with Sonnet
-// for the alias "haiku", as it does for "opusplan", and shows haiku in its init line all the same; the full id has no
-// such switch.
-func planSafeModel(model string, a session.Access) string {
-	if a == session.Read && strings.EqualFold(strings.TrimSpace(model), "haiku") {
-		return claudeHaiku
+// modelArg is the model argument claude gets. Claude Code answers in plan mode with Sonnet for the alias "haiku", as
+// it does for "opusplan", and shows haiku in its init line all the same. A thread can change to plan mode while it
+// runs, so the alias is the full id for every access.
+func modelArg(model string) string {
+	if model == "haiku" {
+		return usage.Haiku
 	}
 	return model
 }

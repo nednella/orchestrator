@@ -32,9 +32,12 @@ var prices = []struct {
 	{"claude-opus-4", price{15, 75, 1.5}},
 	{"claude-sonnet-5", price{2, 10, 0.2}},
 	{"claude-sonnet-4", price{3, 15, 0.3}},
-	{"claude-haiku-5-5", price{0.1, 0.5, 0.01}},
+	{Haiku, price{0.1, 0.5, 0.01}},
 	{"claude-haiku-4-5", price{1, 5, 0.1}},
 }
+
+// Haiku is the id of Claude Haiku 5.5, the model the alias "haiku" stands for.
+const Haiku = "claude-haiku-5-5"
 
 // Claude Haiku 5.5 costs five times more for a prompt over this many tokens.
 const haikuLongPrompt = 100_000
@@ -45,7 +48,7 @@ func priceOf(model string, prompt int64) (price, bool) {
 		if !strings.HasPrefix(model, p.prefix) {
 			continue
 		}
-		if p.prefix == "claude-haiku-5-5" && prompt > haikuLongPrompt {
+		if p.prefix == Haiku && prompt > haikuLongPrompt {
 			return price{p.input * 5, p.output * 5, p.cacheRead * 5}, true
 		}
 		return p.price, true

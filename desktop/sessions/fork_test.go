@@ -205,11 +205,7 @@ func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 				t.Errorf("fork works in %q, its source in %q", forkChat.Dir, srcChat.Dir)
 			}
 			args := strings.Join(claudeArgs(t, h, fork.ID), " ")
-			model := "haiku"
-			if access == session.Read {
-				model = "claude-haiku-5-5"
-			}
-			if !strings.Contains(args, "--model "+model+" --effort low") || !strings.Contains(args, "--permission-mode "+mode) {
+			if !strings.Contains(args, "--model claude-haiku-5-5 --effort low") || !strings.Contains(args, "--permission-mode "+mode) {
 				t.Errorf("args = %s", args)
 			}
 		})

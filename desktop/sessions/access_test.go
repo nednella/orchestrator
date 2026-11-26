@@ -87,6 +87,27 @@ func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
 	eventually(t, "the access back to read", accessIs(h, s.ID, session.Read))
 }
 
+func TestAHaikuThreadChangedToReadKeepsTheFullModelId(t *testing.T) {
+	h := apptest.New(t)
+	s, err := h.NewThread("ask", "", "haiku", "", "supervised")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := claudeArgs(t, h, s.ID)
+	if i := slices.Index(args, "--model"); i < 0 || args[i+1] != "claude-haiku-5-5" {
+		t.Fatalf("claude started with %q, want --model claude-haiku-5-5", args)
+	}
+	if err := h.SetAccess(s.ID, "read"); err != nil {
+		t.Fatal(err)
+	}
+	if got := modeRequests(t, h, s.ID); len(got) != 1 || !strings.Contains(got[0], `"mode":"plan"`) {
+		t.Fatalf("stdin = %q, want one request for plan", got)
+	}
+	if got := h.Args(t, s.ID); strings.Join(got, " ") != strings.Join(args, " ") {
+		t.Errorf("claude started again with %q", got)
+	}
+}
+
 func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
 	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
