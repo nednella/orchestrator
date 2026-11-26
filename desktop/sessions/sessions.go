@@ -967,7 +967,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 	delete(s.nums, id)
 	delete(s.readers, id)
 	delete(s.spent, id)
-	s.dropTold(id, errToldDeleted)
+	s.dropTold(id, ErrToldDeleted)
 	s.dropResultsOf(id)
 	delete(s.wakes, id)
 	delete(s.afterTurn, id)
@@ -3255,7 +3255,12 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	if m.Result && s.asleepForCleanup(id) {
 		s.mu.Lock()
 		// Asked again under the lock: a thread deleted meanwhile has had its messages dropped, and one woken has had its
-		// next turn start, so a result held for either would wait forever.
+		// next turn start, so a result held for either would wait forever. A child deleted meanwhile has had its results
+		// dropped, so its result is too.
+		if s.deleted[m.From] || s.deleting[m.From] {
+			s.mu.Unlock()
+			return "", ErrToldDeleted
+		}
 		if _, settled := s.ended[id]; settled {
 			s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m, nextTurn: true})
 			s.mu.Unlock()
@@ -3450,7 +3455,9 @@ func (s *Sessions) DropTold(id string) int {
 
 var (
 	errToldStopped = errors.New("it was stopped")
-	errToldDeleted = errors.New("it was deleted")
+	// ErrToldDeleted is what Tell, or a held message's Done, gives when the thread or the child whose result it is was
+	// deleted.
+	ErrToldDeleted = errors.New("it was deleted")
 )
 
 // dropTold drops the messages threads told the thread that are held for it, logs it with why, which each one's Done
@@ -3492,7 +3499,7 @@ func (s *Sessions) dropResultsOf(child string) {
 		var kept []heldPrompt
 		for _, h := range all {
 			if h.nextTurn && h.From == child {
-				h.gone(errToldDeleted)
+				h.gone(ErrToldDeleted)
 				continue
 			}
 			kept = append(kept, h)

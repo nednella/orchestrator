@@ -50,7 +50,7 @@ func TestDroppedMessageTellsItsSender(t *testing.T) {
 		result bool // whether the child's result is kept for the next turn
 	}{
 		{"a stop", func(s *Sessions) int { return s.DropTold(id) }, errToldStopped, true},
-		{"a delete", func(s *Sessions) int { return s.dropTold(id, errToldDeleted) }, errToldDeleted, false},
+		{"a delete", func(s *Sessions) int { return s.dropTold(id, ErrToldDeleted) }, ErrToldDeleted, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newSessions(Options{})
@@ -148,8 +148,8 @@ func TestResultsOfADeletedChildAreDropped(t *testing.T) {
 				t.Errorf("%d senders heard of a drop, want %d", len(done), tt.gone)
 			}
 			for range tt.gone {
-				if err := <-done; !errors.Is(err, errToldDeleted) {
-					t.Errorf("Done got %v, want %v", err, errToldDeleted)
+				if err := <-done; !errors.Is(err, ErrToldDeleted) {
+					t.Errorf("Done got %v, want %v", err, ErrToldDeleted)
 				}
 			}
 		})

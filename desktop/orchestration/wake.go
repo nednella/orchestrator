@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -189,6 +190,10 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 		}
 		if _, gone := c.threads.ChatOf(w.waiter); gone != nil {
 			log.Printf("agentos: thread %s did not get the result of its child %s: %v", w.waiter, w.thread, err)
+			return false
+		}
+		if errors.Is(err, sessions.ErrToldDeleted) { // the parent is there, so the child was deleted
+			log.Printf("agentos: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
 			return false
 		}
 		log.Printf("agentos: thread %s did not get the result of its child %s, trying again in %v: %v", w.waiter, w.thread, pause, err)
