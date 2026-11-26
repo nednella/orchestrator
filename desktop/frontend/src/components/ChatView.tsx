@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
-import { useAgentos, useLatestAgentos } from '../AgentosContext'
+import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
 import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
 import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
+import { forkDividers } from '../chatDividers'
 import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
@@ -39,6 +40,8 @@ export function ChatView({ session }: ChatViewProps) {
   const latest = useLatestAgentos()
   const { timeline, events, loading, error } = useChat(session.id, session.state)
   const empty = timeline.items.length === 0
+  const sessions = useAgentosSelector((s) => s.sessions)
+  const shown = useMemo(() => forkDividers(session, sessions, timeline.items), [session, sessions, timeline.items])
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)
@@ -190,7 +193,7 @@ export function ChatView({ session }: ChatViewProps) {
       {!empty && (
         <ChatTimeline
           id={session.id}
-          items={timeline.items}
+          items={shown}
           folder={folder}
           inset={inset}
           endRef={end}

@@ -78,6 +78,7 @@ type Session struct {
 	Hosted      bool             `json:"hosted"` // the agent runs, or ran, under a host, whose chat log the chat service serves
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
 	ForkOf      string           `json:"forkOf"` // the thread the session was forked from, "" when none
+	ForkAt      string           `json:"forkAt"` // the uuid of the reply the fork's chat was cut at, "" when none
 	Parent      string           `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
@@ -489,9 +490,17 @@ func identityOf(in term.Info) session.Identity {
 // keptFrom is id with the number and the first and latest start rec holds: tmux knows no number, a wake leaves the
 // first start where it was and sets the latest itself, and tmux dates a session only to the second.
 func keptFrom(id session.Identity, rec session.Record) session.Identity {
-	id.N = cmp.Or(rec.N, id.N)
+	id.N, id.ForkAt = cmp.Or(rec.N, id.N), rec.ForkAt
 	id.Created, id.Woke = cmp.Or(rec.Created, id.Created), cmp.Or(rec.Woke, id.Woke)
 	return id
+}
+
+// forkAtOf is the reply the fork's chat was cut at, from the thread's record. It needs mu.
+func (s *Sessions) forkAtOf(id string) string {
+	if e, ok := s.ended[id]; ok {
+		return e.rec.ForkAt
+	}
+	return s.records[id].ForkAt
 }
 
 // startsOf are when the thread first started and when it last started, its first start or its latest wake, as its
@@ -1552,6 +1561,7 @@ func (s *Sessions) list() []Session {
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
 			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: in.Hosted, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			ForkAt:  s.forkAtOf(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
 		if !ss.At.IsZero() {
@@ -2462,7 +2472,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		s.life.undoWorktree(ctx, proj, name, work)
 		return Session{}, err
 	}
-	view := s.register(name, title, work, issue, model, created, o.Access, action, fork.of, o.Parent)
+	view := s.register(name, title, work, issue, model, created, o.Access, action, fork.of, fork.at, o.Parent)
 	if text != "" {
 		go s.giveHost(ctx, name, text, send)
 	}
@@ -2790,9 +2800,17 @@ func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 
 // register adds the new session, which runs in work, to the list and returns its row. forkOf is the thread it was
 // forked from and parent the thread that delegated to it, if any. It takes mu.
-func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf, parent string) Session {
+func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf, forkAt, parent string) Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if forkAt != "" {
+		rec := session.Record{Session: name.String(), State: session.Idle, At: created}
+		rec.ForkAt = forkAt
+		if err := s.writeState(rec); err != nil {
+			log.Printf("agentos: saving where %s was forked: %v", name, err)
+		}
+		s.records[rec.Session] = rec
+	}
 	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Hosted: true, Action: action, Fork: forkOf, Parent: parent, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)

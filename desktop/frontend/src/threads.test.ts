@@ -33,6 +33,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session
     hosted: true,
     action: '',
     forkOf: '',
+    forkAt: '',
     parent,
     tokens: 0,
     cost: 0,

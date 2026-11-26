@@ -9,6 +9,7 @@ import type { ChildItem, TimelineItem } from '../chatTimeline'
 import { ChatAgentRow } from './ChatAgentRow'
 import { ChatApprovalCard } from './ChatApprovalCard'
 import { ChatChildCard } from './ChatChildCard'
+import { ChatForkDivider } from './ChatForkDivider'
 import { ChatMessageActions } from './ChatMessageActions'
 import { ChatMinimap } from './ChatMinimap'
 import { ChatNotice } from './ChatNotice'
@@ -105,6 +106,10 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       if (item.error) return <ChatNotice text={`${item.title} did not start`} error />
       if (item.expired) return <ChatNotice text={`${item.title}: the call ended before it said which thread it started`} error={false} />
       return <ChatChildCard id={item.child} title={item.title} />
+    case 'forkedFrom':
+      return <ChatForkDivider thread={item.source} label="Forked from conversation" hint="Open source conversation" />
+    case 'forked':
+      return <ChatForkDivider thread={item.fork} label="Conversation forked" hint="Open fork" />
     case 'childResult': {
       const title = items.find((i): i is ChildItem => i.kind === 'child' && i.child === item.child)?.title ?? 'Child thread'
       return <ChatChildCard id={item.child} title={title} result={item.text} />

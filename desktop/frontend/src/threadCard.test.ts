@@ -6,7 +6,7 @@ import type { PR, Session } from './types.ts'
 const session = (over: Partial<Session> = {}): Session => ({
   id: 'shop/abcd2345', project: 'shop', n: 7, title: 'Flaky test', state: 'working', detail: '', lastEventAt: 0, createdAt: 0, wokeAt: 0,
   issue: 0, model: '', effort: '', history: [], branch: '', worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '',
-  browser: false, evidence: 0, access: 'supervised', hosted: true, action: '', forkOf: '', parent: '', tokens: 0, cost: 0, memory: 0, subagents: 0, ...over,
+  browser: false, evidence: 0, access: 'supervised', hosted: true, action: '', forkOf: '', forkAt: '', parent: '', tokens: 0, cost: 0, memory: 0, subagents: 0, ...over,
 })
 
 const pr: PR = {

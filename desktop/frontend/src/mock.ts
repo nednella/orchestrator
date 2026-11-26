@@ -251,6 +251,7 @@ export function createMock(params: URLSearchParams) {
       hosted: s.hosted,
       action: s.action,
       forkOf: s.forkOf,
+      forkAt: s.forkAt,
       parent: s.parent,
       tokens: s.tokens,
       cost: s.cost,
@@ -414,6 +415,7 @@ export function createMock(params: URLSearchParams) {
       hosted: true,
       action: issue ? 'Work' : '',
       forkOf: '',
+      forkAt: '',
       parent: '',
       ...usageFor(createdAt),
       memory: (4 + (nextN % 5) * 3) * tenthGB,
@@ -497,7 +499,7 @@ export function createMock(params: URLSearchParams) {
       const bundle = seed('Measure the product page bundle', 0, 'working', [['working', 6]], data[0], 'read')
       bundle.parent = split.id
       const fork = seed('#454 product page split (fork)', 454, 'idle', [['working', 20], ['idle', 14]])
-      Object.assign(fork, { forkOf: split.id, branch: '', worktree: split.worktree })
+      Object.assign(fork, { forkOf: split.id, forkAt: 'r-2', branch: '', worktree: split.worktree })
     }
     Object.assign(byIssue(389), { pr: pr(459, 'draft', 'passing', { title: 'Retry webhooks with backoff', review: 'approved' }), git: git() })
     Object.assign(byIssue(444), {
@@ -565,6 +567,12 @@ export function createMock(params: URLSearchParams) {
     const planChat = sessions.find((x) => x.title === 'Plan the checkout split')
     if (flags.chatCases) chats.breakLog(brokenChat.id)
     chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
+    if (flags.lineage) {
+      const source = byIssue(444)
+      const fork = seed('#444 checkout route (fork)', 444, 'idle', [['working', 20], ['idle', 14]])
+      Object.assign(fork, { forkOf: source.id, forkAt: 'r-2', branch: '', worktree: source.worktree })
+      chats.fork(source.id, fork.id, 'r-2')
+    }
     // After the app's first read of what each thread waits on, so it still shows the approval.
     if (flags.staleAnswer) setTimeout(() => chats.forget(byIssue(444).id), 2000)
     questionChat.detail = 'Should I keep the old cart hook or replace it?'
@@ -1065,7 +1073,7 @@ export function createMock(params: URLSearchParams) {
       if (!from.hosted) throw 'Only a thread with a chat can be forked'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.access)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
-      Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, worktree: '' })
+      Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, forkAt: at, worktree: '' })
       try {
         chats.fork(from.id, s.id, at)
       } catch (err) {

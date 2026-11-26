@@ -321,6 +321,44 @@ func TestForkStaysAFork(t *testing.T) {
 	}
 }
 
+func TestForkRemembersWhereItForked(t *testing.T) {
+	h := apptest.New(t)
+	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withConversation(t, h, src.ID)
+	writeChat(t, h, src.ID, oneReply...)
+	fork, err := h.ForkSession(src.ID, "r1b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fork.ForkAt != "r1b" {
+		t.Errorf("fork cut at %q, want r1b", fork.ForkAt)
+	}
+	withConversation(t, h, fork.ID)
+	if got, _ := h.Session(fork.ID); got.ForkAt != "r1b" {
+		t.Errorf("after its first turn the fork says %q", got.ForkAt)
+	}
+
+	fresh := h.Restart(t)
+	eventually(t, "the fork after a restart", func() bool { got, ok := fresh.Session(fork.ID); return ok && got.ForkAt == "r1b" })
+	if err := fresh.SettleThread(fork.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the settled fork", func() bool { got, _ := fresh.Session(fork.ID); return got.State == "settled" && got.ForkAt == "r1b" })
+	woken, err := fresh.WakeThread(fork.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if woken.ForkAt != "r1b" {
+		t.Errorf("woken fork cut at %q", woken.ForkAt)
+	}
+	if got, _ := fresh.Session(src.ID); got.ForkAt != "" {
+		t.Errorf("the source says it was cut at %q", got.ForkAt)
+	}
+}
+
 // forkHarness is a project whose issue 7 has a pushed worktree, worked on by a thread with a fork. Its clean-up
 // command notes each branch it is run for in the file ran names.
 func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork sessions.Session) {

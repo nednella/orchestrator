@@ -53,6 +53,10 @@ export type TimelineItem =
   | { kind: 'restart'; key: string; at: number; access: Access }
   | AgentItem
   | ChildItem
+  // forkedFrom marks where a fork's chat starts to differ from the thread it was forked from, source; forked marks
+  // where the thread was forked as the thread fork. They are placed by forkDividers, not by buildTimeline.
+  | { kind: 'forkedFrom'; key: string; source: string }
+  | { kind: 'forked'; key: string; fork: string }
 
 // TurnEnd is how a turn ended that did not finish: stopped by the owner or Claude's exit, or failed.
 export type TurnEnd = 'stopped' | 'failed'

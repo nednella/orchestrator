@@ -66,6 +66,7 @@
   --bg-tile: var(--bg-segment);
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
   --bg-glass: color-mix(in srgb, var(--bg-composer) 80%, transparent);
+  --border-fork-divider: color-mix(in srgb, var(--border) 70%, transparent);
   --border-rule: color-mix(in srgb, var(--border) 60%, transparent);
   /* Dropdown glass: the composer surface at 80%, tinted with 18% more of it, over the blurred chat. */
   --bg-dropdown: color-mix(in srgb, var(--bg-composer) 80%, transparent);
