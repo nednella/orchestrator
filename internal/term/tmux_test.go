@@ -461,3 +461,60 @@ func TestNewSessionGivesThePaneItsPath(t *testing.T) {
 		t.Errorf("the pane's PATH = %q, want %q", got, want)
 	}
 }
+
+func TestOptionValuesWithATabOrLineBreakAreRefused(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	name := session.Name{Project: "demo", Token: "a1"}
+	if err := tmux.NewSession(ctx, name, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		set  func(value string) error
+	}{
+		{"access", func(v string) error { return tmux.SetAccess(ctx, name, session.Access(v)) }},
+		{"fork", func(v string) error { return tmux.SetFork(ctx, name, v) }},
+		{"branch", func(v string) error { return tmux.SetBranch(ctx, name, v) }},
+		{"parent", func(v string) error { return tmux.SetParent(ctx, name, v) }},
+		{"thread", func(v string) error { return tmux.SetThread(ctx, name, v) }},
+		{"action", func(v string) error { return tmux.SetAction(ctx, name, v) }},
+		{"model", func(v string) error { return tmux.SetModel(ctx, name, v, "high") }},
+		{"effort", func(v string) error { return tmux.SetModel(ctx, name, "opus", v) }},
+	}
+	for _, tt := range tests {
+		for _, bad := range []string{"x\ty", "x\ny", "x\ry"} {
+			t.Run(fmt.Sprintf("%s %q", tt.name, bad), func(t *testing.T) {
+				if err := tt.set(bad); err == nil {
+					t.Error("the value was taken")
+				}
+			})
+		}
+	}
+	infos, err := list(tmux, ctx)
+	if err != nil || len(infos) != 1 || infos[0].Name != name || infos[0].Access != session.Supervised || infos[0].Branch != "" || infos[0].Parent != "" {
+		t.Fatalf("after the refusals the list is %+v, %v", infos, err)
+	}
+}
+
+func TestATitleWithLineBreaksStaysOneLine(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	name := session.Name{Project: "demo", Token: "a1"}
+	if err := tmux.NewSession(ctx, name, "fix\tthe\nbug\r\nnow", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmux.Rename(ctx, name, "ask\there\nplease"); err != nil {
+		t.Fatal(err)
+	}
+	infos, err := list(tmux, ctx)
+	if err != nil || len(infos) != 1 || infos[0].Title != "ask here please" {
+		t.Fatalf("list = %+v, %v", infos, err)
+	}
+}

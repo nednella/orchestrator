@@ -288,6 +288,9 @@ func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error
 
 // SetAccess records a session's access.
 func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.Access) error {
+	if err := plain(string(access)); err != nil {
+		return fmt.Errorf("recording the access of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), accessOption, string(access)); err != nil {
 		return fmt.Errorf("recording the access of session %s: %w", name, err)
 	}
@@ -296,6 +299,9 @@ func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.
 
 // SetFork records the session a fork was forked from.
 func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) error {
+	if err := plain(from); err != nil {
+		return fmt.Errorf("recording the fork source of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), forkOption, from); err != nil {
 		return fmt.Errorf("tagging fork %s: %w", name, err)
 	}
@@ -304,6 +310,9 @@ func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) erro
 
 // SetBranch records the branch a thread works on.
 func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) error {
+	if err := plain(branch); err != nil {
+		return fmt.Errorf("recording the branch of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), branchOption, branch); err != nil {
 		return fmt.Errorf("recording the branch of session %s: %w", name, err)
 	}
@@ -312,6 +321,9 @@ func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) 
 
 // SetParent records the thread that delegated to a session.
 func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) error {
+	if err := plain(parent); err != nil {
+		return fmt.Errorf("recording the parent of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), parentOption, parent); err != nil {
 		return fmt.Errorf("tagging the parent of session %s: %w", name, err)
 	}
@@ -320,6 +332,9 @@ func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) 
 
 // SetThread records the thread a shell belongs to.
 func (t *Tmux) SetThread(ctx context.Context, name session.Name, thread string) error {
+	if err := plain(thread); err != nil {
+		return fmt.Errorf("recording the thread of shell %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), threadOption, thread); err != nil {
 		return fmt.Errorf("tagging the thread of shell %s: %w", name, err)
 	}
@@ -328,6 +343,9 @@ func (t *Tmux) SetThread(ctx context.Context, name session.Name, thread string) 
 
 // SetAction records the queue action a session was started with.
 func (t *Tmux) SetAction(ctx context.Context, name session.Name, action string) error {
+	if err := plain(action); err != nil {
+		return fmt.Errorf("recording the action of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), actionOption, action); err != nil {
 		return fmt.Errorf("recording the action of session %s: %w", name, err)
 	}
@@ -336,6 +354,9 @@ func (t *Tmux) SetAction(ctx context.Context, name session.Name, action string) 
 
 // SetModel records the model and effort a session's agent runs.
 func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort string) error {
+	if err := plain(model, effort); err != nil {
+		return fmt.Errorf("recording the model of session %s: %w", name, err)
+	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), modelOption, model, ";", "set-option", "-t", target(name), effortOption, effort); err != nil {
 		return fmt.Errorf("recording the model of session %s: %w", name, err)
 	}
@@ -357,6 +378,17 @@ func (t *Tmux) Redraw(ctx context.Context, tty string) error {
 
 // Env is the environment for a process that attaches to the server.
 func (t *Tmux) Env() []string { return cleanEnv() }
+
+// plain refuses a value with a tab or a line break: ListAll splits the tags of a session on them, so one in a tag
+// would move the tags after it.
+func plain(values ...string) error {
+	for _, v := range values {
+		if strings.ContainsAny(v, "\t\r\n") {
+			return fmt.Errorf("%q has a tab or a line break", v)
+		}
+	}
+	return nil
+}
 
 // oneLine keeps a title from breaking the tab-separated list: tabs and line breaks become spaces.
 func oneLine(title string) string { return strings.Join(strings.Fields(title), " ") }
