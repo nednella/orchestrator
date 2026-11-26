@@ -284,7 +284,7 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	ids := talked(t, h, id, "one")
 	s, _ := h.Session(id)
 	h.Hook(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
-	shell, err := h.ShellOpen(id)
+	shell, err := h.ShellNew(id)
 	if err != nil {
 		t.Fatal(err)
 	}

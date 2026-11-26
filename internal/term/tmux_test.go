@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -234,7 +235,7 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 		}
 	}
 	infos, shells, err := tmux.ListAll(ctx)
-	if err != nil || len(infos) != 1 || infos[0].Name != agent || len(shells) != 1 || shells[0] != shell {
+	if err != nil || len(infos) != 1 || infos[0].Name != agent || len(shells) != 1 || shells[0].Name != shell {
 		t.Fatalf("ListAll = %v, %v, %v", infos, shells, err)
 	}
 	if infos, err = list(tmux, ctx); err != nil || len(infos) != 1 {
@@ -242,6 +243,26 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 	}
 	if !tmux.Has(ctx, shell) || !tmux.Has(ctx, agent) || tmux.Has(ctx, session.Name{Project: "demo", Token: "b2"}) || tmux.Has(ctx, session.Name{Project: "dem", Shell: 1}) {
 		t.Error("Has gave a wrong answer")
+	}
+}
+
+func TestShellIsTaggedWithItsThread(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	thread, project := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
+	for _, n := range []session.Name{thread, project} {
+		if err := tmux.NewSession(ctx, n, "shell", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tmux.SetThread(ctx, thread, "demo/a1"); err != nil {
+		t.Fatal(err)
+	}
+	_, shells, err := tmux.ListAll(ctx)
+	want := []Shell{{Name: thread, Thread: "demo/a1"}, {Name: project}}
+	slices.SortFunc(shells, func(a, b Shell) int { return a.Name.Shell - b.Name.Shell })
+	if err != nil || !slices.Equal(shells, want) {
+		t.Errorf("ListAll shells = %+v, %v; want %+v", shells, err, want)
 	}
 }
 

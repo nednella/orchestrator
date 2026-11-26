@@ -28,6 +28,7 @@ const (
 	forkOption   = "@agentos-fork"
 	branchOption = "@agentos-branch"
 	parentOption = "@agentos-parent"
+	threadOption = "@agentos-thread"
 )
 
 const conf = `
@@ -82,6 +83,12 @@ type Info struct {
 	PID     int // the process the session's pane runs: the agent, or the shell that started it
 }
 
+// Shell is one shell session as tmux reports it.
+type Shell struct {
+	Name   session.Name
+	Thread string // the thread the shell belongs to, "" for a shell of the project
+}
+
 // argv runs tmux with -u: without a UTF-8 locale (an app started from Finder has none)
 // tmux turns the tabs in list output into \011 and draws non-ASCII text as underscores.
 func (t *Tmux) argv(args ...string) []string {
@@ -120,8 +127,8 @@ func cleanEnv() []string {
 // ListAll returns the agent sessions and the shell sessions.
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
-func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}")
+func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+chatOption+"}\t#{"+actionOption+"}\t#{"+hostedOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -130,10 +137,10 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 		return nil, nil, err
 	}
 	var infos []Info
-	var shells []session.Name
+	var shells []Shell
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.Split(line, "\t")
-		if len(f) != 15 {
+		if len(f) != 16 {
 			continue
 		}
 		name, err := session.ParseName(f[0])
@@ -141,7 +148,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []session.Name, error) {
 			continue
 		}
 		if name.IsShell() {
-			shells = append(shells, name)
+			shells = append(shells, Shell{Name: name, Thread: f[15]})
 			continue
 		}
 		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: accessOf(f[6], f[7]), Action: f[8], Hosted: f[9] != "", Fork: f[10], Branch: f[13], Parent: f[14]}
@@ -314,6 +321,14 @@ func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) 
 func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), parentOption, parent); err != nil {
 		return fmt.Errorf("tagging the parent of session %s: %w", name, err)
+	}
+	return nil
+}
+
+// SetThread records the thread a shell belongs to.
+func (t *Tmux) SetThread(ctx context.Context, name session.Name, thread string) error {
+	if _, err := t.run(ctx, "set-option", "-t", target(name), threadOption, thread); err != nil {
+		return fmt.Errorf("tagging the thread of shell %s: %w", name, err)
 	}
 	return nil
 }

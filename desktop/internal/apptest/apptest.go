@@ -1208,22 +1208,21 @@ func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
 func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
 	return h.sessions.NewThread(title, prompt, model, effort, "supervised", "")
 }
-func (h *Harness) ShellOpen(id string) (sessions.ShellInfo, error) { return h.sessions.ShellOpen(id) }
-func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error)  { return h.sessions.ShellNew(id) }
-func (h *Harness) ShellClose(id string) error                      { return h.sessions.ShellClose(id) }
-func (h *Harness) SettleThread(id string) error                    { return h.sessions.SettleThread(id) }
-func (h *Harness) OwnWorktree(id string) string                    { return h.Sessions().OwnWorktree(id) }
-func (h *Harness) DeletePlan(id string) sessions.DeletePlan        { return h.sessions.DeletePlan(id) }
-func (h *Harness) Servers(id string) ([]sessions.Server, error)    { return h.sessions.Servers(id) }
-func (h *Harness) StopServer(id string, pid int) error             { return h.sessions.StopServer(id, pid) }
-func (h *Harness) OpenServer(port int) error                       { return h.sessions.OpenServer(port) }
-func (h *Harness) RenameSession(id, title string) error            { return h.sessions.RenameSession(id, title) }
-func (h *Harness) SetAccess(id, access string) error               { return h.sessions.SetAccess(id, access) }
-func (h *Harness) TypeInto(id, text string) error                  { return h.sessions.TypeInto(id, text) }
-func (h *Harness) RefreshPRs()                                     { h.sessions.RefreshPRs() }
-func (h *Harness) AckPR(id string) error                           { return h.sessions.AckPR(id) }
-func (h *Harness) Cleanup(id string, force bool) error             { return h.sessions.Cleanup(id, force) }
-func (h *Harness) Cleanups() []sessions.Cleanup                    { return h.sessions.Cleanups() }
+func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error) { return h.sessions.ShellNew(id) }
+func (h *Harness) ShellClose(id string) error                     { return h.sessions.ShellClose(id) }
+func (h *Harness) SettleThread(id string) error                   { return h.sessions.SettleThread(id) }
+func (h *Harness) OwnWorktree(id string) string                   { return h.Sessions().OwnWorktree(id) }
+func (h *Harness) DeletePlan(id string) sessions.DeletePlan       { return h.sessions.DeletePlan(id) }
+func (h *Harness) Servers(id string) ([]sessions.Server, error)   { return h.sessions.Servers(id) }
+func (h *Harness) StopServer(id string, pid int) error            { return h.sessions.StopServer(id, pid) }
+func (h *Harness) OpenServer(port int) error                      { return h.sessions.OpenServer(port) }
+func (h *Harness) RenameSession(id, title string) error           { return h.sessions.RenameSession(id, title) }
+func (h *Harness) SetAccess(id, access string) error              { return h.sessions.SetAccess(id, access) }
+func (h *Harness) TypeInto(id, text string) error                 { return h.sessions.TypeInto(id, text) }
+func (h *Harness) RefreshPRs()                                    { h.sessions.RefreshPRs() }
+func (h *Harness) AckPR(id string) error                          { return h.sessions.AckPR(id) }
+func (h *Harness) Cleanup(id string, force bool) error            { return h.sessions.Cleanup(id, force) }
+func (h *Harness) Cleanups() []sessions.Cleanup                   { return h.sessions.Cleanups() }
 
 func (h *Harness) DeleteThread(id string, worktree bool) error {
 	return h.sessions.DeleteThread(id, worktree)

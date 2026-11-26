@@ -142,7 +142,7 @@ func TestServersListAThreadsListener(t *testing.T) {
 
 func TestServersOfNoThread(t *testing.T) {
 	h := newHarness(t)
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestShellCarriesNoThreadMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shell, err := h.ShellOpen(thread.ID)
+	shell, err := h.ShellNew(thread.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

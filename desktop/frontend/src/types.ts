@@ -150,6 +150,9 @@ export type IssueDetail = {
   comments: IssueComment[]
 }
 
+// Shell is one shell of the current project: a thread's, or with thread '' the project's.
+export type Shell = { id: string; thread: string }
+
 export type Snapshot = {
   project: Project
   projects: Project[]
@@ -157,7 +160,7 @@ export type Snapshot = {
   notes: Note[]
   version: string
   update: string
-  shells: string[]
+  shells: Shell[]
   machine: string
 }
 

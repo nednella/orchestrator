@@ -527,7 +527,7 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 		pushWork(t, parent.Worktree)
 		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
 		h.Hook(t, child.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
-		shell, err := h.ShellOpen(child.ID)
+		shell, err := h.ShellNew(child.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

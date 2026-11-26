@@ -1551,7 +1551,7 @@ func TestOpenShellInTheWorktreeKeepsIt(t *testing.T) {
 	pushWork(t, wt)
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
 	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
-	shell, err := h.ShellOpen(s.ID)
+	shell, err := h.ShellNew(s.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

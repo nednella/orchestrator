@@ -9,7 +9,7 @@ let openedFor = -1
 type ShellTerminalProps = { visible: boolean }
 
 export function ShellTerminal({ visible }: ShellTerminalProps) {
-  const { shellId, openShell, report, focus, focusRequest } = useAgentos('shellId', 'openShell', 'report', 'focus', 'focusRequest')
+  const { shellId, newShell, report, focus, focusRequest } = useAgentos('shellId', 'newShell', 'report', 'focus', 'focusRequest')
   const projectName = useAgentosSelector((a) => a.project?.name)
   const { returnToTerminal } = useLayout()
 
@@ -18,7 +18,7 @@ export function ShellTerminal({ visible }: ShellTerminalProps) {
     () => {
       if (shellId || focusRequest.n <= openedFor) return
       openedFor = focusRequest.n
-      report(openShell)
+      report(newShell)
     },
     visible,
   )

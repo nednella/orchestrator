@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAgentos, useAgentosSelector } from '../AgentosContext'
+import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
+import { shellsOf } from '../shells'
 import { Icon } from './Icon'
 import { ShellTab, tabRowButton } from './ShellTab'
 
 export function ShellTabs() {
-  const { shellIds, shellId, selectShell, newShell, closeShell, report } = useAgentos('shellIds', 'shellId', 'selectShell', 'newShell', 'closeShell', 'report')
-  const projectName = useAgentosSelector((a) => a.project?.name ?? '')
+  const { shells, selectedId, shellId, selectShell, newShell, closeShell, report } = useAgentos('shells', 'selectedId', 'shellId', 'selectShell', 'newShell', 'closeShell', 'report')
   const { togglePanel, focusPanel } = useLayout()
   const scroller = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ start: 0, end: 1 })
-  const [projectShell = '', ...shells] = shellIds
+  const shellIds = shellsOf(shells, selectedId ?? '')
 
   const measure = useCallback(() => {
     const { scrollLeft, clientWidth, scrollWidth } = scroller.current!
@@ -39,7 +39,7 @@ export function ShellTabs() {
   useEffect(() => {
     scroller.current!.querySelector('[data-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     measure()
-  }, [shellIds, shellId, measure])
+  }, [shells, selectedId, shellId, measure])
 
   const pick = (id: string) => {
     selectShell(id)
@@ -56,7 +56,6 @@ export function ShellTabs() {
       }}
     >
       <div role="tablist" aria-label="Shells" className="flex min-w-0 items-stretch">
-        <ShellTab label={projectName} pinned selected={shellId === projectShell} onSelect={() => pick(projectShell)} />
         <div className="relative flex min-w-0">
           <div
             ref={scroller}
@@ -65,10 +64,10 @@ export function ShellTabs() {
             data-hidden-right={view.end < 1}
             onScroll={measure}
           >
-            {shells.map((id, i) => (
+            {shellIds.map((id, i) => (
               <ShellTab
                 key={id}
-                label={`Shell ${i + 2}`}
+                label={`Shell ${i + 1}`}
                 selected={id === shellId}
                 onSelect={() => pick(id)}
                 onClose={() => report(() => closeShell(id))}

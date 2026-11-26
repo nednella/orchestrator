@@ -55,7 +55,7 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 	}
 
 	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
-	shell, err := h.ShellOpen(s.ID)
+	shell, err := h.ShellNew(s.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

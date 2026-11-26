@@ -92,9 +92,9 @@ func newSettleCmd() *cobra.Command {
 				stopped++
 			}
 			if all { // a shell is only stopped when everything is
-				for _, name := range shells {
-					fmt.Fprintf(out, "stopping %s\n", name)
-					if err := e.tmux.Kill(cmd.Context(), name); err != nil {
+				for _, shell := range shells {
+					fmt.Fprintf(out, "stopping %s\n", shell.Name)
+					if err := e.tmux.Kill(cmd.Context(), shell.Name); err != nil {
 						return err
 					}
 					stopped++

@@ -1,12 +1,8 @@
 package sessions_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"os/exec"
-	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
@@ -28,17 +24,14 @@ func tmuxHas(h *apptest.Harness, name string) bool {
 func TestShellSession(t *testing.T) {
 	h := shellHarness(t)
 	if got := h.Snapshot().Shells; len(got) != 0 {
-		t.Fatalf("shells before one is opened = %q", got)
+		t.Fatalf("shells before one is opened = %+v", got)
 	}
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil || shell.ID != "main/shell" {
-		t.Fatalf("ShellOpen = %+v, %v", shell, err)
+		t.Fatalf("ShellNew = %+v, %v", shell, err)
 	}
-	if got := h.Snapshot().Shells; !slices.Equal(got, []string{shell.ID}) {
+	if got := shellIDs(h); !slices.Equal(got, []string{shell.ID}) {
 		t.Errorf("Snapshot.Shells = %q", got)
-	}
-	if again, err := h.ShellOpen(""); err != nil || again != shell {
-		t.Errorf("second ShellOpen = %+v, %v", again, err)
 	}
 	if !tmuxHas(h, shell.ID) {
 		t.Fatal("no tmux session for the shell")
@@ -84,7 +77,7 @@ func TestShellFollowsTheProject(t *testing.T) {
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,24 +85,24 @@ func TestShellFollowsTheProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := h.Snapshot().Shells; len(got) != 0 {
-		t.Errorf("the other project shows the shells %q", got)
+		t.Errorf("the other project shows the shells %+v", got)
 	}
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.Snapshot().Shells; !slices.Equal(got, []string{shell.ID}) {
+	if got := shellIDs(h); !slices.Equal(got, []string{shell.ID}) {
 		t.Errorf("shells after switching back = %q", got)
 	}
 }
 
 func TestShellSurvivesARestart(t *testing.T) {
 	h := shellHarness(t)
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	second := h.Restart(t)
-	if got := second.Snapshot().Shells; !slices.Equal(got, []string{shell.ID}) {
+	if got := shellIDs(second); !slices.Equal(got, []string{shell.ID}) {
 		t.Errorf("shells after a restart = %q", got)
 	}
 	if list := second.Sessions().List(); len(list) != 0 {
@@ -117,33 +110,11 @@ func TestShellSurvivesARestart(t *testing.T) {
 	}
 }
 
-func TestConcurrentShellOpensShareOneShell(t *testing.T) {
-	h := shellHarness(t)
-	const calls = 4
-	ids := make(chan string, calls)
-	errs := make(chan error, calls)
-	for range calls {
-		go func() {
-			shell, err := h.ShellOpen("")
-			ids <- shell.ID
-			errs <- err
-		}()
-	}
-	for range calls {
-		if err := <-errs; err != nil {
-			t.Errorf("ShellOpen: %v", err)
-		}
-		if id := <-ids; id != "main/shell" {
-			t.Errorf("ShellOpen = %q", id)
-		}
-	}
-}
-
 func TestShellTabs(t *testing.T) {
 	h := shellHarness(t)
-	first, err := h.ShellOpen("")
-	if err != nil {
-		t.Fatal(err)
+	first, err := h.ShellNew("")
+	if err != nil || first.ID != "main/shell" {
+		t.Fatalf("ShellNew = %+v, %v", first, err)
 	}
 	second, err := h.ShellNew("")
 	if err != nil || second.ID != "main/shell-2" {
@@ -154,11 +125,8 @@ func TestShellTabs(t *testing.T) {
 		t.Fatalf("ShellNew = %+v, %v", third, err)
 	}
 	want := []string{first.ID, second.ID, third.ID}
-	if got := h.Snapshot().Shells; !slices.Equal(got, want) {
+	if got := shellIDs(h); !slices.Equal(got, want) {
 		t.Errorf("Shells = %q, want %q", got, want)
-	}
-	if again, err := h.ShellOpen(""); err != nil || again != first {
-		t.Errorf("ShellOpen with shells = %+v, %v", again, err)
 	}
 
 	if err := h.ShellClose(second.ID); err != nil {
@@ -167,7 +135,7 @@ func TestShellTabs(t *testing.T) {
 	if tmuxHas(h, second.ID) {
 		t.Error("the closed shell still runs")
 	}
-	if got := h.Snapshot().Shells; !slices.Equal(got, []string{first.ID, third.ID}) {
+	if got := shellIDs(h); !slices.Equal(got, []string{first.ID, third.ID}) {
 		t.Errorf("Shells after close = %q", got)
 	}
 	if again, err := h.ShellNew(""); err != nil || again != second {
@@ -180,65 +148,5 @@ func TestShellTabs(t *testing.T) {
 	}
 	if err := h.ShellClose(agent.ID); err == nil {
 		t.Error("ShellClose stopped an agent")
-	}
-}
-
-func TestShellStartsInTheSessionsFolder(t *testing.T) {
-	apptest.CLIPath(t) // built before HOME moves, or the build fills the temp home with a read-only module cache
-	h := shellHarness(t)
-	s, err := h.NewSession("agent", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	folder := t.TempDir()
-	cwd, _ := json.Marshal(map[string]string{"cwd": folder})
-	h.Hook(t, s.ID, "PostToolUse", string(cwd))
-	eventually(t, "the shell's folder", func() bool {
-		shell, err := h.ShellNew(s.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer h.ShellClose(shell.ID)
-		got, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", shell.ID, "#{pane_current_path}").Output()
-		if err != nil {
-			t.Fatal(err)
-		}
-		want, _ := filepath.EvalSymlinks(folder)
-		have, _ := filepath.EvalSymlinks(strings.TrimSpace(string(got)))
-		return have == want
-	})
-
-	project, err := h.ShellNew("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, _ := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", project.ID, "#{pane_current_path}").Output()
-	if want, _ := filepath.EvalSymlinks(h.Dir); strings.TrimSpace(string(got)) != want {
-		t.Errorf("a shell with no session starts in %q, want the project folder %q", got, want)
-	}
-}
-
-func TestShellIsRefusedDuringACleanup(t *testing.T) {
-	h := shellHarness(t)
-	repoFixture(t, h)
-	s := issueThread(h, t, 7)
-	pushWork(t, s.Worktree)
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
-	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
-	release, done := heldCleanup(t, h, s.ID)
-
-	_, err := h.ShellOpen(s.ID)
-	if want := fmt.Sprintf("Thread %d is being cleaned up; open a shell when that ends", s.N); err == nil || err.Error() != want {
-		t.Errorf("shell = %v, want %q", err, want)
-	}
-	release()
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	if !cleanedUp(h, s.ID)() || exists(s.Worktree) {
-		t.Errorf("the clean-up did not finish: worktree there %v", exists(s.Worktree))
-	}
-	if got := h.Snapshot().Shells; len(got) != 0 {
-		t.Errorf("a shell started: %q", got)
 	}
 }

@@ -150,7 +150,7 @@ type Sessions struct {
 	newPlace   func() string
 	info       []term.Info              // the live sessions under a host
 	old        []term.Info              // the live sessions that ran in a terminal before the host: shown settled and never touched
-	shells     []session.Name           // every project's shell sessions
+	shells     []term.Shell             // every project's shell sessions
 	known      map[string]term.Info     // the last info of every session seen, for when it ends
 	ended      map[string]*endedSession // settled sessions, whose tmux session is gone, until deleted
 	nums       map[string]int           // the number each session shows: its state file's, or this run's for an old terminal session with no state file
@@ -4163,79 +4163,99 @@ func (s *Sessions) closeBrowser(id string) {
 	s.browsers.Close(ctx, id)
 }
 
-// ShellIDs are the current project's shell sessions in tab order, empty until one is opened.
-func (s *Sessions) ShellIDs() []string {
+// Shell is one shell of the current project.
+type Shell struct {
+	ID     string `json:"id"`
+	Thread string `json:"thread"` // the thread the shell belongs to, "" for a shell of the project
+}
+
+// Shells are the current project's shells, by shell number.
+func (s *Sessions) Shells() []Shell {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := s.project.Key()
-	var mine []session.Name
-	for _, n := range s.shells {
-		if n.Project == key {
-			mine = append(mine, n)
+	return s.shellsIn(s.project.Key())
+}
+
+// shellsIn are the shells of the project key, by shell number. It needs mu.
+func (s *Sessions) shellsIn(key string) []Shell {
+	var mine []term.Shell
+	for _, sh := range s.shells {
+		if sh.Name.Project == key {
+			mine = append(mine, sh)
 		}
 	}
-	slices.SortFunc(mine, func(a, b session.Name) int { return a.Shell - b.Shell })
-	ids := make([]string, len(mine))
-	for i, n := range mine {
-		ids[i] = n.String()
+	slices.SortFunc(mine, func(a, b term.Shell) int { return a.Name.Shell - b.Name.Shell })
+	list := make([]Shell, len(mine))
+	for i, sh := range mine {
+		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread}
 	}
-	return ids
+	return list
 }
 
-// OpenShell makes sure the current project has a shell session and returns the
-// first one's id. A shell is a login shell in the folder its session works in, or
-// the project folder when sessionID is empty or its folder is gone; it reports
-// nothing: it is not an agent, so it gets no hooks and no session number. A new
-// shell is refused while a clean-up of that session runs, which may be removing its folder.
-func (s *Sessions) OpenShell(sessionID string) (string, error) {
+// loginShell is the shell a new shell session runs, as a login shell.
+func loginShell() string { return cmp.Or(os.Getenv("SHELL"), "/bin/zsh") }
+
+// NewShell starts a shell in the current project, numbered after the shells it has, and returns its id. A shell is a
+// login shell; it reports nothing: it is not an agent, so it gets no hooks and no session number. With thread "" it
+// is a shell of the project, in the project folder. Else it belongs to the thread and starts in the thread's
+// worktree, or in the project folder once that is gone; it is refused while a clean-up of the thread runs, which may
+// be removing its worktree.
+func (s *Sessions) NewShell(thread string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	if ids := s.ShellIDs(); len(ids) > 0 {
-		return ids[0], nil
-	}
-	return s.startShell(sessionID)
-}
-
-// NewShell starts another shell in the current project, numbered after the shells it has.
-func (s *Sessions) NewShell(sessionID string) (string, error) {
-	s.shellMu.Lock()
-	defer s.shellMu.Unlock()
-	return s.startShell(sessionID)
-}
-
-func (s *Sessions) startShell(sessionID string) (string, error) {
-	if sessionID != "" && s.life.CleaningUp(sessionID) {
-		return "", fmt.Errorf("Thread %d is being cleaned up; open a shell when that ends", s.Number(sessionID))
-	}
 	s.mu.Lock()
-	ctx, proj := s.ctx, s.project
+	proj := s.project
+	s.mu.Unlock()
 	dir := proj.Dir
-	if cwd := s.cwds[sessionID]; cwd != "" {
-		if info, err := os.Stat(cwd); err == nil && info.IsDir() {
-			dir = cwd
+	if thread != "" {
+		if s.life.CleaningUp(thread) {
+			return "", fmt.Errorf("Thread %d is being cleaned up; open a shell when that ends", s.Number(thread))
+		}
+		folder, err := s.threadFolder(thread)
+		switch {
+		case err == nil:
+			dir = folder
+		case !errors.Is(err, errFolderGone):
+			return "", err
 		}
 	}
+	return s.startShell(proj, thread, dir)
+}
+
+// startShell starts a shell of the project proj that belongs to thread in dir. It needs shellMu.
+func (s *Sessions) startShell(proj project.Project, thread, dir string) (string, error) {
+	s.mu.Lock()
+	ctx := s.ctx
 	var used []int
-	for _, n := range s.shells {
-		if n.Project == proj.Key() {
-			used = append(used, n.Shell)
+	for _, sh := range s.shells {
+		if sh.Name.Project == proj.Key() {
+			used = append(used, sh.Name.Shell)
 		}
 	}
 	s.mu.Unlock()
 	name := session.Name{Project: proj.Key(), Shell: session.NextN(used)}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	login := cmp.Or(os.Getenv("SHELL"), "/bin/zsh")
 	env := []string{
 		"AGENTOS_PROJECT=" + proj.Key(),
 		"AGENTOS_SOCKET=" + bus.SocketPath(s.stateDir),
 	}
-	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{login, "-l"}, startCols, startRows); err != nil {
+	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{loginShell(), "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}
+	if thread != "" {
+		if err := s.tmux.SetThread(tctx, name, thread); err != nil {
+			if err := s.tmux.Kill(tctx, name); err != nil {
+				log.Printf("agentos: stopping the untagged shell %s: %v", name, err)
+			}
+			return "", err
+		}
+	}
 	s.mu.Lock()
-	s.shells = append(s.shells, name)
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	// A refresh may have listed the shell before its tag was on.
+	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
+	s.shells = append(s.shells, term.Shell{Name: name, Thread: thread})
 	return name.String(), nil
 }
 
@@ -4248,7 +4268,12 @@ func (s *Sessions) CloseShell(id string) error {
 	if !name.IsShell() {
 		return fmt.Errorf("%s is not a shell", id)
 	}
-	s.closeTerm(id)
+	return s.stopShell(name)
+}
+
+// stopShell stops the shell name and its terminal.
+func (s *Sessions) stopShell(name session.Name) error {
+	s.closeTerm(name.String())
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Kill(ctx, name); err != nil {
@@ -4256,7 +4281,7 @@ func (s *Sessions) CloseShell(id string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.shells = slices.DeleteFunc(s.shells, func(n session.Name) bool { return n == name })
+	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
 	return nil
 }
 

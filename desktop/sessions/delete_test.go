@@ -414,7 +414,7 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 		pushWork(t, wt)
 		h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
 		eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
-		shell, err := h.ShellOpen(s.ID)
+		shell, err := h.ShellNew(s.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -498,7 +498,7 @@ func TestDeleteRefusesAShell(t *testing.T) {
 		t.Errorf("Delete of a shell's row = %v, want %q", err, want)
 	}
 
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}

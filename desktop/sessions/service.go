@@ -44,17 +44,10 @@ type ShellInfo struct {
 	ID string `json:"id"`
 }
 
-// ShellOpen makes sure the current project has a shell session and returns the first one's id. A new shell starts
-// in the folder of the session sessionID, or in the project folder when that is empty or unknown.
-// Attach to it with TermOpen like any session; it is not a session row.
-func (v *Service) ShellOpen(sessionID string) (ShellInfo, error) {
-	id, err := v.s.OpenShell(sessionID)
-	return ShellInfo{ID: id}, err
-}
-
-// ShellNew starts another shell in the current project and returns its id; see ShellOpen for its folder.
-func (v *Service) ShellNew(sessionID string) (ShellInfo, error) {
-	id, err := v.s.NewShell(sessionID)
+// ShellNew starts a shell in the current project and returns its id: a shell of the thread in its worktree, or with
+// thread "" a shell of the project in the project folder. Attach to it with TermOpen; it is not a session row.
+func (v *Service) ShellNew(thread string) (ShellInfo, error) {
+	id, err := v.s.NewShell(thread)
 	return ShellInfo{ID: id}, err
 }
 

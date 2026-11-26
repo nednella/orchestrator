@@ -57,7 +57,7 @@ make -o desktop-frontend desktop-app          # or: make desktop-app (rebuilds t
 curl -s -XPOST -H 'X-Agentos: 1' 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
 ```
 
-Agents' commands reach the same app: `AGENTOS_SESSION=<id> AGENTOS_SOCKET=$S/agentos.sock agentos note "x"`. The shell session (`ShellOpen`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with SIGTERM so it stops its browsers.
+Agents' commands reach the same app: `AGENTOS_SESSION=<id> AGENTOS_SOCKET=$S/agentos.sock agentos note "x"`. A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with SIGTERM so it stops its browsers.
 
 ## Driving the page
 

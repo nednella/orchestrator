@@ -39,8 +39,7 @@ type Backend = {
   MoveIssue(number: number, section: string): Promise<void>
   UndoMove(number: number): Promise<void>
   IssueDetail(number: number): Promise<IssueDetail>
-  ShellOpen(sessionId: string): Promise<{ id: string }>
-  ShellNew(sessionId: string): Promise<{ id: string }>
+  ShellNew(thread: string): Promise<{ id: string }>
   ShellClose(id: string): Promise<void>
   TermOpen(id: string, cols: number, rows: number): Promise<void>
   TermWrite(id: string, data: string): Promise<void>
@@ -122,7 +121,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellOpen', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -194,8 +193,7 @@ export const api = {
   moveIssue: (number: number, section: string) => backend.MoveIssue(number, section),
   undoMove: (number: number) => backend.UndoMove(number),
   issueDetail: (number: number) => backend.IssueDetail(number),
-  shellOpen: (sessionId: string) => backend.ShellOpen(sessionId),
-  shellNew: (sessionId: string) => backend.ShellNew(sessionId),
+  shellNew: (thread: string) => backend.ShellNew(thread),
   shellClose: (id: string) => backend.ShellClose(id),
   termOpen: (id: string, cols: number, rows: number) => backend.TermOpen(id, cols, rows),
   // A terminal can close (project switch, session end) while keys or a resize

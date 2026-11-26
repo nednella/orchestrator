@@ -6,12 +6,13 @@ import { agentsTabShown } from './chatAgents'
 import { answeredLate } from './chatQuestions'
 import { nextView } from './detailsTabs'
 import { serversTabShown } from './useThreadServers'
+import { shellsOf } from './shells'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
-import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
@@ -63,7 +64,7 @@ type AgentosState = {
   composerMode: ComposerMode
   composerAccess: Access
   focusRequest: { target: FocusTarget; n: number }
-  shellIds: string[]
+  shells: Shell[]
   shellId: string
   version: string
   machine: string
@@ -75,7 +76,6 @@ type AgentosState = {
 
 // The actions keep their identity for the app's whole life, so picking one never renders a component again.
 type AgentosActions = {
-  openShell(): Promise<void>
   newShell(): Promise<void>
   closeShell(id: string): Promise<void>
   selectShell(id: string): void
@@ -272,9 +272,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
   const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true })
-  const [shellIds, setShellIds] = useState<string[]>([])
+  const [shells, setShells] = useState<Shell[]>([])
   const [pickedShell, setPickedShell] = useState('')
-  const shellId = shellIds.includes(pickedShell) ? pickedShell : (shellIds[0] ?? '')
+  const threadShells = useMemo(() => shellsOf(shells, selectedId ?? ''), [shells, selectedId])
+  const shellId = threadShells.includes(pickedShell) ? pickedShell : (threadShells[0] ?? '')
   const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState('')
@@ -301,7 +302,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const warningToasts = useRef(new Map<Warning['source'], { message: string; key: number }>())
   const failedBrowserIds = useRef(new Set<string>())
   const detached = useRef(false)
-  const shellIdsRef = useRef(shellIds)
   const notesRef = useRef(notes)
   const browserStatesRef = useRef(browserStates)
   const viewsRef = useRef(views)
@@ -310,7 +310,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   treeRef.current = threadTree
   projectsRef.current = projects
   projectRef.current = project
-  shellIdsRef.current = shellIds
   notesRef.current = notes
   browserStatesRef.current = browserStates
   viewsRef.current = views
@@ -418,7 +417,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setProject(snap.project)
       setProjects(snap.projects)
       setNotes(snap.notes)
-      setShellIds(snap.shells)
+      setShells(snap.shells)
       setVersion(snap.version)
       setMachine(snap.machine)
       setUpdate(snap.update)
@@ -520,7 +519,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     }
 
   useEffect(() => on('sessions', ({ project: key, items }) => applySessions(key, items)), [applySessions])
-  useEffect(() => on('term:exit', ({ id }) => setShellIds((ids) => ids.filter((x) => x !== id))), [])
+  useEffect(() => on('term:exit', ({ id }) => setShells((list) => list.filter((x) => x.id !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
   useEffect(() => on('awake', setAwake), [])
   useEffect(() => on('memory', setMemory), [])
@@ -717,19 +716,15 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
           throw err
         }
       },
-      async openShell() {
-        if (shellIdsRef.current.length) return
-        const shell = await api.shellOpen(selectedRef.current ?? '')
-        setShellIds([shell.id])
-      },
       async newShell() {
-        const shell = await api.shellNew(selectedRef.current ?? '')
-        setShellIds((ids) => [...ids, shell.id])
-        setPickedShell(shell.id)
+        const thread = selectedRef.current ?? ''
+        const { id } = await api.shellNew(thread)
+        setShells((list) => (list.some((x) => x.id === id) ? list : [...list, { id, thread }]))
+        setPickedShell(id)
       },
       async closeShell(id) {
         await api.shellClose(id)
-        setShellIds((ids) => ids.filter((x) => x !== id))
+        setShells((list) => list.filter((x) => x.id !== id))
       },
       selectShell: setPickedShell,
       select: selectSession,
@@ -1033,7 +1028,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       composerMode,
       composerAccess,
       focusRequest,
-      shellIds,
+      shells,
       shellId,
       version,
       machine,
@@ -1043,7 +1038,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shellIds, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
   )
 
   const [store] = useState(() => createStore(value))

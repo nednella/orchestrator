@@ -18,7 +18,7 @@ type Sessions interface {
 	Current() project.Project
 	Projects() []sessions.Project
 	List() []sessions.Session
-	ShellIDs() []string
+	Shells() []sessions.Shell
 	CreateBriefed(title, text, brief string) (sessions.Session, error)
 	SwitchProject(name string) (project.Project, error)
 	Forget(name string) (project.Project, error)
@@ -46,7 +46,7 @@ type Snapshot struct {
 	Notes    []notes.Note       `json:"notes"`
 	Version  string             `json:"version"`
 	Update   string             `json:"update"`  // a newer release's version, "" when the app is current
-	Shells   []string           `json:"shells"`  // the current project's shell sessions in tab order, empty until one is opened
+	Shells   []sessions.Shell   `json:"shells"`  // the current project's shell sessions, by shell number
 	Machine  string             `json:"machine"` // this Mac's name, as its owner set it
 }
 
@@ -73,7 +73,7 @@ func (s *Service) Snapshot() Snapshot {
 	cur := s.sessions.Current()
 	repo := s.repos.Repo(s.ctx(), cur.Dir)
 	projects := s.sessions.Projects()
-	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Version: version.Version, Update: s.releases.Available(), Shells: s.sessions.ShellIDs(), Machine: s.machine()}
+	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Version: version.Version, Update: s.releases.Available(), Shells: s.sessions.Shells(), Machine: s.machine()}
 	snap.Project = sessions.Project{Key: cur.Key(), Name: cur.Name, Dir: cur.Dir}
 	for i, p := range projects {
 		if p.Dir == cur.Dir {

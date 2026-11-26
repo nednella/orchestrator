@@ -306,7 +306,7 @@ export function createMock(params: URLSearchParams) {
     }))
   }
 
-  type Shell = { id: string; project: string; dir: string; buffer: string; line: string; opened: boolean }
+  type Shell = { id: string; project: string; thread: string; dir: string; buffer: string; line: string; opened: boolean }
   const shells: Shell[] = []
   const shellName = (project: string, n: number) => (n === 1 ? `shell-${project}` : `shell-${project}-${n}`)
 
@@ -334,13 +334,16 @@ export function createMock(params: URLSearchParams) {
 
   const shellsOf = (project: string) => shells.filter((x) => x.project === project)
   const findShell = (id: string) => shells.find((x) => x.id === id)
+  const shellView = (x: Shell) => ({ id: x.id, thread: x.thread })
 
-  function startShell(sessionId: string): Shell {
-    const dir = sessions.find((x) => x.id === sessionId)?.worktree || current.dir
+  // startShell starts a shell of the thread in its worktree, or with thread '' a shell of the project in its folder.
+  function startShell(thread: string): Shell {
+    if (thread && sessions.find((x) => x.id === thread)?.cleanup === 'pending') throw `Thread ${find(thread).n} is being cleaned up; open a shell when that ends`
+    const dir = sessions.find((x) => x.id === thread)?.worktree || current.dir
     const taken = shellsOf(current.name).map((x) => x.id)
     let n = 1
     while (taken.includes(shellName(current.name, n))) n++
-    const shell: Shell = { id: shellName(current.name, n), project: current.name, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
+    const shell: Shell = { id: shellName(current.name, n), project: current.name, thread, dir, buffer: `\x1b[2m${dir}\x1b[0m\r\n${prompt(current.name)}`, line: '', opened: false }
     shells.push(shell)
     return shell
   }
@@ -353,7 +356,7 @@ export function createMock(params: URLSearchParams) {
       notes: currentNotes(),
       version: 'mock',
       update: flags.update ? '1.4.0' : '',
-      shells: shellsOf(current.name).map((x) => x.id),
+      shells: shellsOf(current.name).map(shellView),
       machine: 'Studio MacBook Pro',
     }
   }
@@ -1294,10 +1297,7 @@ export function createMock(params: URLSearchParams) {
       if (!current.issues.some((i) => i.number === number)) throw `reading issue #${number}: gh api: HTTP 404: Not Found`
       return delay(buildIssueDetail(number), 350)
     },
-    ShellOpen: async (sessionId: string) => {
-      return { id: (shellsOf(current.name)[0] ?? startShell(sessionId)).id }
-    },
-    ShellNew: async (sessionId: string) => ({ id: startShell(sessionId).id }),
+    ShellNew: async (thread: string) => ({ id: startShell(thread).id }),
     ShellClose: async (id: string) => {
       const at = shells.findIndex((x) => x.id === id)
       if (at >= 0) shells.splice(at, 1)

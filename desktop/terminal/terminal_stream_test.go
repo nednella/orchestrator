@@ -151,7 +151,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	t.Setenv("HOME", t.TempDir())
 	h := newHarness(t)
-	shell, err := h.ShellOpen("")
+	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
 	}
