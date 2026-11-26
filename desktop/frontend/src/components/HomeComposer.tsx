@@ -1,4 +1,6 @@
+import { MessageSquare, StickyNote } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import { commandToken } from '../chatComposer'
@@ -7,14 +9,12 @@ import { EMPTY_DRAFT } from '../composerMarkdown'
 import { doubledSpace, pickCursor, pickListKey } from '../composerPick'
 import type { ComposerDraft } from '../composerMarkdown'
 import type { ComposerMode } from '../AgentosContext'
-import { defaultPlace, PLACE_ISSUE_HINT } from '../place'
-import type { Issue, Place } from '../types'
+import { placeFor } from '../place'
+import type { Issue } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { usePromptPicks } from '../usePromptPicks'
 import { Composer } from './Composer'
-import { ComposerAccessChip } from './ComposerAccessChip'
-import { ComposerPlaceChip } from './ComposerPlaceChip'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
 import { ComposerPickList } from './ComposerPickList'
@@ -29,15 +29,15 @@ const PICK_LIMIT = 8
 const CHIP_LIMIT = 3
 const TOKEN = /(^|\s)#(\w*)$/
 
-const MODES: { value: ComposerMode; label: string }[] = [
-  { value: 'thread', label: 'Thread' },
-  { value: 'note', label: 'Note' },
+const MODES: { value: ComposerMode; label: string; icon: ReactNode }[] = [
+  { value: 'thread', label: 'Thread', icon: <MessageSquare size={14} aria-hidden="true" /> },
+  { value: 'note', label: 'Note', icon: <StickyNote size={14} aria-hidden="true" /> },
 ]
 
 const matches = (issue: Issue, query: string) => (/^\d+$/.test(query) ? String(issue.number).startsWith(query) : issue.title.toLowerCase().includes(query))
 
 export function HomeComposer() {
-  const a = useAgentos('project', 'issues', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
+  const a = useAgentos('project', 'issues', 'settings', 'composerDraft', 'setComposerDraft', 'composerMode', 'setComposerMode', 'composerAccess', 'setComposerAccess', 'newThread', 'startIssue', 'addNote', 'report')
   const { text } = a.composerDraft
   const input = useRef<ComposerInput>(null)
   const [caret, setCaret] = useState({ before: '', after: '' })
@@ -46,7 +46,6 @@ export function HomeComposer() {
   const [dismissed, setDismissed] = useState(false)
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
-  const [chosenPlace, setChosenPlace] = useState<Place | null>(null)
   const [commands, setCommands] = useState<{ project: string; list: Command[] } | null>(null)
   const pending = usePendingImages()
   const sending = useRef(false)
@@ -77,8 +76,6 @@ export function HomeComposer() {
   const highlighted = pickCursor(cursor, rows)
   const typingCommand = !note && commandToken(caret.before) !== null
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
-  // A place the owner has not picked follows the access.
-  const place = chosenPlace && !pickedIssue ? chosenPlace : defaultPlace(a.composerAccess, Boolean(pickedIssue))
   const live = Boolean(pickedIssue?.sessionId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
   // The top of the queue: the issues of its first section, which the core lists first.
@@ -136,9 +133,8 @@ export function HomeComposer() {
         } else {
           const start = { prompt: text.trim(), model, effort }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
-          else await a.newThread(start, a.composerAccess, place)
+          else await a.newThread(start, a.composerAccess, placeFor(a.settings.threadPlace, false))
           setPicked(null)
-          setChosenPlace(null)
         }
         a.setComposerDraft(EMPTY_DRAFT)
       } finally {
@@ -198,29 +194,32 @@ export function HomeComposer() {
                 </span>
               )
         }
-        left={
+        left={(footer) => (
           <>
-            <SegmentedControl label="Composer mode" variant="track" options={MODES} value={a.composerMode} onChange={a.setComposerMode} />
+            <SegmentedControl label="Composer mode" variant="track" options={MODES} shows={footer === 'compact' ? 'icon' : 'label'} value={a.composerMode} onChange={a.setComposerMode} />
             {!note && (
               <>
                 <span className="mx-1.5 h-[18px] w-px flex-none bg-line" aria-hidden="true" />
-                <button className="composer-chip" title="Pick an issue" data-active={Boolean(pickedIssue)} aria-expanded={Boolean(token)} onMouseDown={(e) => e.preventDefault()} onClick={openPicker}>
+                <button className="composer-chip" title="Pick an issue" aria-label="Pick an issue" data-active={Boolean(pickedIssue)} aria-expanded={Boolean(token)} onMouseDown={(e) => e.preventDefault()} onClick={openPicker}>
                   <span className="font-mono">#</span>
-                  Issue
+                  {footer === 'wide' && 'Issue'}
                 </button>
               </>
             )}
           </>
-        }
+        )}
         right={
-          !note && (
-            <>
-              {!live && <ComposerPlaceChip place={place} disabled={pickedIssue ? PLACE_ISSUE_HINT : undefined} onPlace={setChosenPlace} />}
-              {!live && (
-                <ComposerAccessChip access={pickedIssue?.access ?? a.composerAccess} disabled={pickedIssue && `The issue’s action, ${pickedIssue.actions[0]}, sets the access`} onAccess={a.setComposerAccess} />
-              )}
-              {!live && <ComposerModelChip model={model} effort={effort} onModel={setModel} onEffort={setEffort} />}
-            </>
+          !note &&
+          !live && (
+            <ComposerModelChip
+              model={model}
+              effort={effort}
+              access={pickedIssue?.access ?? a.composerAccess}
+              accessOff={pickedIssue ? `The issue’s action, ${pickedIssue.actions[0]}, sets the access` : ''}
+              onModel={setModel}
+              onEffort={setEffort}
+              onAccess={a.setComposerAccess}
+            />
           )
         }
         onChange={edit}

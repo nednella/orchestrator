@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { DragEvent, ReactNode, RefObject } from 'react'
+import { footerMode } from '../composerLayout'
+import type { FooterMode } from '../composerLayout'
 import type { ComposerDraft } from '../composerMarkdown'
 import { ComposerEditor } from './ComposerEditor'
 import type { ComposerInput } from './ComposerEditor'
 import { Icon } from './Icon'
 
+// left may lay the footer's controls out for its mode, which the width of the form picks.
 type ComposerProps = {
   inputRef: RefObject<ComposerInput | null>
   value: ComposerDraft
@@ -17,7 +20,7 @@ type ComposerProps = {
   banner?: ReactNode
   drawer?: ReactNode
   attachments?: ReactNode
-  left?: ReactNode
+  left?: ReactNode | ((footer: FooterMode) => ReactNode)
   right?: ReactNode
   stop?: { stopping: boolean; onStop(): void }
   onChange(draft: ComposerDraft): void
@@ -29,6 +32,17 @@ type ComposerProps = {
 
 export function Composer({ inputRef, value, label, placeholder, canSend, sendLabel, sendText, sending = false, banner, drawer, attachments, left, right, stop, onChange, onCaret, onKeyDown, onAttach, onSend }: ComposerProps) {
   const [dragging, setDragging] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const [footer, setFooter] = useState<FooterMode>('wide')
+
+  useLayoutEffect(() => {
+    const form = box.current
+    if (!form) return
+    setFooter(footerMode(form.offsetWidth))
+    const observer = new ResizeObserver(() => setFooter(footerMode(form.offsetWidth)))
+    observer.observe(form)
+    return () => observer.disconnect()
+  }, [])
 
   const dragOver = (e: DragEvent) => {
     if (!onAttach || !e.dataTransfer.types.includes('Files')) return
@@ -50,6 +64,7 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
         </div>
       )}
       <div
+        ref={box}
         className="composer-box"
         data-dragging={dragging}
         onDragOver={dragOver}
@@ -71,7 +86,7 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
           />
         </div>
         <div className="flex items-center gap-2 px-2 pb-2">
-          <div className="flex min-w-0 flex-1 items-center gap-0.5">{left}</div>
+          <div className="flex flex-1 items-center gap-0.5">{typeof left === 'function' ? left(footer) : left}</div>
           <div className="flex min-w-0 items-center justify-end gap-0.5">{right}</div>
           {stop ? (
             <button

@@ -127,7 +127,8 @@ A thread runs in one folder from its start, and a wake starts it there again.
 
 - An issue thread, at every access, runs in its own worktree on the issue's branch, `issue-<n>` unless `session_branch_fallback` names it otherwise.
 - A Write thread with no issue (Supervised or Full access) runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. This holds for `agentos new` and a thread started from a note too.
-- A Read thread with no issue runs in the project folder. The app can start a thread with no issue in either place.
+- A Read thread with no issue runs in the project folder.
+- A thread you start from the composer with no issue runs where `new_thread_place` says, at any access: in a new worktree as above, unless it is `project`, then in the project folder on the branch checked out there.
 - The set-up session runs in the project folder.
 
 The worktree is `<project>/trees/<branch>`. Before it makes the first one, agentos adds `/trees/` to the repository's `.git/info/exclude`, which is never committed, so the worktrees stay out of `git status` and `git add -A`; it never edits a `.gitignore`. A branch that exists, locally or on origin (fetched first when this clone has no copy), is checked out there as it is and never reset; a new one comes from `session_worktree_command`. A branch that a worktree already has checked out, such as one you made by hand, runs the thread in that worktree, and agentos never removes it. A branch that another thread works on, running or asleep, is refused with `Thread <n> works on <branch>`. A folder already at `<project>/trees/<branch>` that is no worktree of the branch stops the start, and agentos leaves it as it is. A project that is not a git repository runs every thread in its folder.

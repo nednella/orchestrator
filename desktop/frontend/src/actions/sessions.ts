@@ -29,7 +29,7 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     run() {
       layout.showHome()
       a.setComposerMode('thread')
-      a.setComposerAccess('supervised')
+      a.setComposerAccess(a.settings.threadAccess || 'supervised')
       a.focus('composer')
     },
   },

@@ -37,9 +37,9 @@ export function ComposerMenuChip({ label, disabled, children, menu }: ComposerMe
   }, [open])
 
   return (
-    <div ref={root} className="relative flex-none">
+    <div ref={root} className="relative min-w-0">
       <button
-        className="composer-chip"
+        className="composer-chip max-w-full"
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}

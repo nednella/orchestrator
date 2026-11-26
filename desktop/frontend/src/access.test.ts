@@ -1,20 +1,30 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ACCESS_HINT, ACCESS_LABEL, accessDisabled, accessOf, choiceOf } from './access.ts'
-import type { Access } from './types.ts'
-
-test('accessOf and choiceOf round-trip', () => {
-  for (const access of ['read', 'supervised', 'full'] as Access[]) assert.equal(accessOf(choiceOf(access)), access)
-  assert.deepEqual(choiceOf('read'), { level: 'read', write: 'supervised' })
-  assert.deepEqual(choiceOf('full'), { level: 'write', write: 'full' })
-  assert.equal(accessOf({ level: 'read', write: 'full' }), 'read', 'Read wins over the Write choice under it')
-  assert.equal(accessOf({ ...choiceOf('read'), level: 'write' }), 'supervised', 'Write after Read is Supervised')
-})
+import { ACCESS_HINT, ACCESS_LABEL, ACCESS_NAME, accessDisabled, newThreadAccess, showsAccessIcon } from './access.ts'
 
 test('labels', () => {
   assert.deepEqual(ACCESS_LABEL, { read: 'Read', supervised: 'Write · Supervised', full: 'Write · Full access' })
+  assert.deepEqual(ACCESS_NAME, { read: 'Read', supervised: 'Supervised', full: 'Full access' })
   assert.equal(ACCESS_HINT.supervised, 'Your Claude allow rules apply; other tools ask in the chat')
   assert.equal(ACCESS_HINT.full, 'Every tool runs without asking')
+})
+
+test('an unset default access is Supervised', () => {
+  assert.equal(newThreadAccess(''), 'supervised')
+  assert.equal(newThreadAccess('full'), 'full')
+})
+
+test('no access icon at the default', () => {
+  assert.equal(showsAccessIcon('supervised', ''), false, 'the default is Supervised when unset')
+  assert.equal(showsAccessIcon('read', 'read'), false)
+  assert.equal(showsAccessIcon('full', 'full'), false)
+})
+
+test('an icon when the access differs from the default', () => {
+  assert.equal(showsAccessIcon('read', ''), true)
+  assert.equal(showsAccessIcon('full', ''), true)
+  assert.equal(showsAccessIcon('supervised', 'read'), true)
+  assert.equal(showsAccessIcon('supervised', 'full'), true)
 })
 
 test('accessDisabled during a turn and an approval', () => {

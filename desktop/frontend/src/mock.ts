@@ -3,7 +3,6 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
-import { defaultPlace } from './place'
 import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
@@ -1004,7 +1003,8 @@ export function createMock(params: URLSearchParams) {
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
       const name = title.trim() || titleFromPrompt(prompt) || 'agent'
       const acc = access || 'supervised'
-      if ((place || defaultPlace(acc, false)) === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
+      // As the Go side: no place picked runs a Read thread in the project folder and any other in a worktree.
+      if ((place || (acc === 'read' ? 'project' : 'worktree')) === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
       const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
       return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` })
     },

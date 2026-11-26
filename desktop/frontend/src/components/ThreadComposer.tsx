@@ -9,16 +9,15 @@ import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkdown'
 import { pickCursor, pickListKey } from '../composerPick'
-import { EFFORTS, modelName } from '../model'
+import { modelAlias } from '../model'
 import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { usePromptPicks } from '../usePromptPicks'
 import { ChatQueued } from './ChatQueued'
-import { ClaudeMark } from './ClaudeMark'
 import { Composer } from './Composer'
-import { ComposerAccessChip } from './ComposerAccessChip'
 import type { ComposerInput } from './ComposerEditor'
+import { ComposerModelChip } from './ComposerModelChip'
 import { ComposerPickList } from './ComposerPickList'
 import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
@@ -113,8 +112,6 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
 
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
-  const model = modelName(session.model)
-  const effort = EFFORTS[session.effort] ?? session.effort
 
   const send = () => {
     const typed = sendText(latest.current.draft.text)
@@ -208,16 +205,13 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
         </>
       }
       right={
-        <>
-          <ComposerAccessChip access={session.access} disabled={accessDisabled(timeline.turnOpen, timeline.pending !== null, timeline.agentsRunning)} onAccess={(next) => report(() => setAccess(id, next))} />
-          {(model || effort) && (
-            <span className="inline-flex h-7 flex-none items-center gap-1.5 px-2 text-small font-medium text-ink/80" title="The thread's model and reasoning effort">
-              <ClaudeMark />
-              {model && <span className="max-w-24 truncate">{model}</span>}
-              {effort && <span className="max-w-24 truncate text-soft">{effort}</span>}
-            </span>
-          )}
-        </>
+        <ComposerModelChip
+          model={session.model && modelAlias(session.model)}
+          effort={session.effort}
+          access={session.access}
+          accessOff={accessDisabled(timeline.turnOpen, timeline.pending !== null, timeline.agentsRunning)}
+          onAccess={(next) => report(() => setAccess(id, next))}
+        />
       }
       sending={sending}
       stop={action === 'stop' && !sending ? { stopping, onStop } : undefined}
