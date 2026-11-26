@@ -26,6 +26,7 @@ func (e *events) Record(key string, ev activity.Event) {
 }
 
 func TestEvidenceStore(t *testing.T) {
+	t.Parallel()
 	var recorded events
 	e := New(t.TempDir(), &recorded)
 	id := "main/3"

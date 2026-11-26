@@ -19,6 +19,7 @@ type fixedRoots []string
 func (r fixedRoots) ShowRoots(string) []string { return r }
 
 func TestShowRefusesAFileSwappedForALinkAfterTheCheck(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		swap    func(t *testing.T, path, outside string)

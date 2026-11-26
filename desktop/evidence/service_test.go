@@ -15,6 +15,7 @@ import (
 var onePixelPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
 
 func TestShowFilesEvidence(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("show", "")
 	if err != nil {
