@@ -47,7 +47,7 @@ import (
 
 const (
 	pollEvery    = 2 * time.Second
-	stopSettle   = time.Second // Claude Code writes a turn's last reply just after the Stop hook
+	stopSettle   = time.Second // Claude Code may write a turn's last reply just after the turn's end
 	tmuxTimeout  = 5 * time.Second
 	defaultTitle = "agent"
 	endedSettle  = 15 * time.Second // a state file this fresh may belong to a session tmux has not listed yet
@@ -159,7 +159,7 @@ type Sessions struct {
 	deleting   map[string]bool          // the threads a delete runs for: they are not woken, forked or given children
 	waking     map[string]bool          // the threads a wake runs for: no clean-up starts on them
 	records    map[string]session.Record
-	cwds       map[string]string // the working directory each session's last hook reported
+	cwds       map[string]string // the working directory each session's last event reported
 	seen       map[string]session.State
 	history    map[string][]session.Change
 	loaded     bool                 // the first refresh is in, so later changes may raise attention
@@ -306,22 +306,14 @@ func newSessions(o Options) *Sessions {
 	}
 }
 
-// Start listens for hooks and polls tmux until ctx ends. A hook socket held by
-// another agentos leaves only the poll.
+// Start polls tmux until ctx ends.
 func (s *Sessions) Start(ctx context.Context) error {
 	s.mu.Lock()
 	s.ctx = ctx
 	s.mu.Unlock()
-	ln, err := bus.Listen(bus.SocketPath(s.stateDir), s.observe)
-	if err != nil && !errors.Is(err, bus.ErrInUse) {
-		return fmt.Errorf("listening for hooks: %w", err)
-	}
 	s.Refresh()
 	go s.sweepServers()
 	go func() {
-		if ln != nil {
-			defer ln.Close()
-		}
 		tick := time.NewTicker(pollEvery)
 		defer tick.Stop()
 		sample := time.NewTicker(sampleEvery)
@@ -433,7 +425,7 @@ func (s *Sessions) markRead(records map[string]session.Record, stamps map[string
 func (s *Sessions) revive(name string, in term.Info) session.Record {
 	rec := s.woken(name, in)
 	delete(s.ended, name)
-	if err := s.writeState(rec); err != nil {
+	if err := bus.WriteState(s.stateDir, rec); err != nil {
 		fmt.Fprintf(os.Stderr, "agentos: saving a thread that runs again: %v\n", err)
 	}
 	return rec
@@ -454,16 +446,6 @@ func (s *Sessions) woken(id string, in term.Info) session.Record {
 	}
 	rec.Changes = session.AddChange(history, session.Change{State: session.Idle, At: at.UnixMilli()})
 	return rec
-}
-
-// writeState writes the thread's record under the lock its hooks take.
-func (s *Sessions) writeState(rec session.Record) error {
-	unlock, err := bus.LockState(s.stateDir, rec.Session)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	return bus.WriteState(s.stateDir, rec)
 }
 
 // endedSession is a session that is gone but whose row stays, settled, until deleted.
@@ -527,15 +509,10 @@ func (s *Sessions) startsOf(id string, in term.Info) (created, woke time.Time) {
 	return created, woke
 }
 
-// saveIdentity writes what a live session was started as into its state file, which hooks keep. Without it, a
+// saveIdentity writes what a live session was started as into its state file, which the events keep. Without it, a
 // session that ends while the app is closed comes back with no title, access or issue.
 func (s *Sessions) saveIdentity(in term.Info) {
 	id := in.Name.String()
-	unlock, err := bus.LockState(s.stateDir, id)
-	if err != nil {
-		return
-	}
-	defer unlock()
 	rec, err := bus.ReadState(s.stateDir, id)
 	if err != nil {
 		return
@@ -546,7 +523,7 @@ func (s *Sessions) saveIdentity(in term.Info) {
 		return
 	}
 	if rec.Session == "" {
-		// Dated when the session was created, so its first hook is not taken for one that came too late.
+		// Dated when the session was created, so its first event is not taken for one that came too late.
 		rec = session.Record{Session: id, State: session.Idle, At: in.Created}
 	}
 	rec.Identity = want
@@ -562,7 +539,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		return
 	}
 	if e, ok := s.ended[name]; ok {
-		if rec.Title == "" && e.info.Title != "" { // a late hook overwrote the file
+		if rec.Title == "" && e.info.Title != "" { // a late event overwrote the file
 			_ = bus.WriteState(s.stateDir, e.record())
 		}
 		return
@@ -613,7 +590,7 @@ func (s *Sessions) endSession(id string, at time.Time) {
 	if rec.Session == "" {
 		rec = session.Record{Session: id, At: at}
 	}
-	rec.N = cmp.Or(rec.N, s.nums[id]) // no hook may have come since the number was saved
+	rec.N = cmp.Or(rec.N, s.nums[id]) // no event may have come since the number was saved
 	// Nor since SetReported wrote the file.
 	if cur, err := bus.ReadState(s.stateDir, id); err == nil {
 		rec.Reported = max(rec.Reported, cur.Reported)
@@ -705,12 +682,6 @@ func (s *Sessions) saveNumber(id string, n int) {
 	if e, ok := s.ended[id]; ok {
 		e.rec.N = n
 	}
-	unlock, err := bus.LockState(s.stateDir, id)
-	if err != nil {
-		log.Printf("agentos: saving the number of thread %s: %v", id, err)
-		return
-	}
-	defer unlock()
 	rec, err := bus.ReadState(s.stateDir, id)
 	if err != nil || rec.Session == "" {
 		return
@@ -945,7 +916,7 @@ func (s *Sessions) dropThread(name session.Name) error {
 	if _, ok := s.ended[id]; !ok {
 		return fmt.Errorf("No thread %s", id)
 	}
-	if err := s.removeState(id); err != nil {
+	if err := bus.RemoveState(s.stateDir, id); err != nil {
 		return fmt.Errorf("deleting the thread: %w", err)
 	}
 	s.deleted[id] = true
@@ -1020,17 +991,6 @@ func (s *Sessions) awaitHostExit(name session.Name) {
 	if err := host.Gone(ctx, s.hostSocket(name)); err != nil {
 		log.Printf("agentos: deleting thread %s while its host runs: %v", name, err)
 	}
-}
-
-// removeState removes the thread's state file under the lock its hooks take, so a hook that comes later finds none
-// and writes nothing.
-func (s *Sessions) removeState(id string) error {
-	unlock, err := bus.LockState(s.stateDir, id)
-	if err != nil {
-		return err
-	}
-	defer unlock()
-	return bus.RemoveState(s.stateDir, id)
 }
 
 // familyTrees are the worktrees agentos made for the threads of a Delete's family that are on disk, as a Delete with the
@@ -1269,31 +1229,22 @@ func (s *Sessions) madeWorktree(id string) string {
 	return w.Path
 }
 
-// observe folds in a hook's record.
-func (s *Sessions) observe(rec session.Record) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if rec.Event == "UserPromptSubmit" {
-		s.record(rec.Session, activity.Event{At: rec.At.UnixMilli(), Kind: activity.Prompt})
+// take folds a record read from the state file in, unless the app holds a later one. It needs mu.
+func (s *Sessions) take(rec session.Record) {
+	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
+		return
 	}
-	s.take(rec)
-	s.sync()
+	s.set(rec)
 }
 
-// take folds a record in. It needs mu.
-func (s *Sessions) take(rec session.Record) {
+// set makes rec the record of its session, which is neither asleep nor deleted. It needs mu.
+func (s *Sessions) set(rec session.Record) {
 	if _, ended := s.ended[rec.Session]; ended || s.deleted[rec.Session] {
 		return
 	}
-	prev, ok := s.records[rec.Session]
-	if ok && !rec.At.After(prev.At) {
-		return
-	}
-	// A hook that read the state file before SetReported wrote it does not take the seq back.
-	rec.Reported = max(rec.Reported, prev.Reported)
 	s.records[rec.Session] = rec
 	s.followBranch(rec)
-	// Each hook moves the row's cost. The event log gets a turn's usage once the turn is over, and the
+	// Each event moves the row's cost. The event log gets a turn's usage once the turn is over, and the
 	// first refresh's usage at once: it catches up on turns while the app was closed.
 	if rec.Transcript != "" {
 		if endsTurn(rec.Event) {
@@ -1304,7 +1255,7 @@ func (s *Sessions) take(rec session.Record) {
 	}
 }
 
-// endsTurn says whether a record's event ends the agent's turn: its Stop hook, or the app's TurnError.
+// endsTurn says whether a record's event ends the agent's turn: its Stop, or its TurnError.
 func endsTurn(event string) bool { return event == "Stop" || event == session.TurnError }
 
 // followBranch has the lifecycle look up the PR of the thread's branch when its turn ends, since the agent may just
@@ -1467,7 +1418,7 @@ func (s *Sessions) recordStart(id string, in term.Info) {
 	s.record(id, e)
 }
 
-// adoptHistory takes the timeline the hooks kept for a session first seen, and records the working
+// adoptHistory takes the timeline the state file kept for a session first seen, and records the working
 // stretches in it that ended while the app was closed. It needs mu.
 func (s *Sessions) adoptHistory(id string, created time.Time) {
 	changes := s.records[id].Changes
@@ -2047,7 +1998,7 @@ func (s *Sessions) wakeOrJoin(id, handover string) (Chat, error) {
 }
 
 // startAgain starts the tmux session of the settled thread again and takes the thread back as live. Its state file says
-// it runs before Claude starts, so the first hook builds on it; a launch that fails writes back the settled one.
+// it runs before Claude starts, so the first event builds on it; a launch that fails writes back the settled one.
 func (s *Sessions) startAgain(name session.Name, handover string) error {
 	id := name.String()
 	s.createMu.Lock()
@@ -2107,7 +2058,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	s.mu.Lock()
 	rec, before := s.woken(id, in), e.record()
 	s.mu.Unlock()
-	if err := s.writeState(rec); err != nil {
+	if err := bus.WriteState(s.stateDir, rec); err != nil {
 		return fmt.Errorf("saving the thread's state: %w", err)
 	}
 	issue, _ := strconv.Atoi(in.Issue)
@@ -2115,7 +2066,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	defer cancel()
 	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
 	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, dir, in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork, in.Parent); err != nil {
-		_ = s.writeState(before)
+		_ = bus.WriteState(s.stateDir, before)
 		return err
 	}
 	s.life.unretire(id)
@@ -2864,7 +2815,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 		// A later read of the state file has no newer At, so it never adds the start to this record, and tmux dates a
 		// session only to the second: a delete's heir is the fork that started last.
 		rec.ForkAt, rec.Created, rec.Woke = forkAt, created.UnixMilli(), created.UnixMilli()
-		if err := s.writeState(rec); err != nil {
+		if err := bus.WriteState(s.stateDir, rec); err != nil {
 			log.Printf("agentos: saving where %s was forked: %v", name, err)
 		}
 		s.records[rec.Session] = rec
@@ -3057,7 +3008,7 @@ func awaitsOwner(rec session.Record) bool {
 }
 
 // asks says whether an approval of the thread waits on the owner's answer, which a message from a thread would deny:
-// in the middle of its turn, as its hooks say, or a subagent's after its turn ended, as its chat log says. It needs mu.
+// in the middle of its turn, as its state says, or a subagent's after its turn ended, as its chat log says. It needs mu.
 func (s *Sessions) asks(id string) bool {
 	return awaitsOwner(s.records[id]) || s.background[id].Asks
 }
@@ -3374,7 +3325,7 @@ func (s *Sessions) HoldsTold(id string) bool {
 }
 
 // Reported is the seq of the child's latest turn_end whose result went to its parent, 0 when none did, as its state
-// file says: a thread no hook has reported on yet has no record in the app.
+// file says: a thread no event has reported on yet has no record in the app.
 func (s *Sessions) Reported(id string) int64 {
 	rec, err := bus.ReadState(s.stateDir, id)
 	if err != nil {
@@ -3395,11 +3346,6 @@ func (s *Sessions) SetReported(id string, seq int64) error {
 	if e, ok := s.ended[id]; ok && e.rec.Reported < seq {
 		e.rec.Reported = seq
 	}
-	unlock, err := bus.LockState(s.stateDir, id)
-	if err != nil {
-		return fmt.Errorf("locking the state of thread %s: %w", id, err)
-	}
-	defer unlock()
 	rec, err := bus.ReadState(s.stateDir, id)
 	if err != nil {
 		return fmt.Errorf("reading the state of thread %s: %w", id, err)
@@ -3419,6 +3365,9 @@ func (s *Sessions) SetReported(id string, seq int64) error {
 func (s *Sessions) NextTurn(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, asleep := s.ended[id]; asleep {
+		return // a follower that started as the thread went to sleep
+	}
 	kept := false
 	for i, h := range s.wakes[id] {
 		if h.nextTurn {
@@ -3509,7 +3458,7 @@ func (s *Sessions) hold(id string, hs ...heldPrompt) {
 
 // deliver gives m to the live thread's host and returns the id it logged it under. With Steer, the turn that runs
 // takes it in now; a message that started a turn of its own was not queued, and needs no steer. It is
-// host.ErrApprovalWaits when an approval waits that the hook state did not show yet, and host.ErrRestarting while the
+// host.ErrApprovalWaits when an approval waits that the recorded state did not show yet, and host.ErrRestarting while the
 // host is held for a restart.
 func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 	socket, err := s.readyHost(name)
@@ -3745,7 +3694,7 @@ func (s *Sessions) SetAccess(id string, access session.Access) error {
 }
 
 // checkAccess records the access of a settled thread, and of a live one that must start again for it, which it then
-// settles. Its host says whether a turn is open: the hook state lags a message just written to Claude, and a reply that
+// settles. Its host says whether a turn is open: the recorded state lags a message just written to Claude, and a reply that
 // ends in a question waits on the owner with no turn open. A live change is checked by the host as it makes it. It holds
 // createMu, so neither a refresh nor a wake comes between the check and the settle. A record or a settle that fails
 // after the hold releases the host, and a failed settle puts the access back.
@@ -3760,7 +3709,7 @@ func (s *Sessions) checkAccess(name session.Name, access session.Access) (access
 	}
 	_, settled := s.ended[id]
 	deleted := s.deleted[id]
-	// The hooks of a subagent's tool calls say the thread works, so they cannot tell its own turn from its subagents'.
+	// The events of a subagent's tool calls say the thread works, so they cannot tell its own turn from its subagents'.
 	subagents := s.background[id].Subagents > 0
 	s.mu.Unlock()
 	switch {
@@ -3845,7 +3794,7 @@ func (s *Sessions) settledAccess(id string, access session.Access) error {
 	}
 	before := e.info.Access
 	e.info.Access = access
-	if err := s.writeState(e.record()); err != nil {
+	if err := bus.WriteState(s.stateDir, e.record()); err != nil {
 		e.info.Access = before
 		return fmt.Errorf("saving the thread's access: %w", err)
 	}
@@ -4139,48 +4088,94 @@ func (s *Sessions) refuseSettled(id string) error {
 	return nil
 }
 
-// TurnEnded folds the host's turn_end e into the session's state as a Stop hook, when no Stop hook ended that turn:
-// Claude Code runs none after an interrupt. A turn that ended in an error, an interrupt among them, is a TurnError,
-// which ends the turn as a Stop does but is no reply to alert the owner to. A turn_end older than the latest hook is an earlier turn's. The Stop hook
-// of a normal turn runs just before the host reports its end, so the state file is read under its lock, as the hook
-// writes it. At each start of the app the chat service passes in the latest turn_end of the log, so one older than
-// the record the app holds is passed over before the lock is taken.
-func (s *Sessions) TurnEnded(id string, e chat.Event) {
+// Observe takes in the changes of the thread's state that its host's stream shows, in the names of Claude's hooks, and
+// saves the record after each. The record holds the latest seq of the chat log it folds in, so an event taken in before
+// a restart is not taken in twice. The row and what follows from it change once, for the last of them: the events a
+// follower catches up on may end with the thread asleep, or answered. A thread that is asleep or deleted takes none. It
+// takes mu.
+func (s *Sessions) Observe(id string, evs ...session.Event) {
 	s.mu.Lock()
-	rec, known := s.records[id]
-	s.mu.Unlock()
-	if known && e.At < rec.At.UnixMilli() {
-		return
+	defer s.mu.Unlock()
+	changed := false
+	for _, ev := range evs {
+		if s.observe(id, ev) {
+			changed = true
+		}
 	}
-	unlock, err := bus.LockState(s.stateDir, id)
+	if changed {
+		s.sync()
+	}
+}
+
+// observe takes in one change of the thread's state. It says whether the thread's record changed. It needs mu.
+func (s *Sessions) observe(id string, ev session.Event) bool {
+	if _, ended := s.ended[id]; ended || s.deleted[id] {
+		return false
+	}
+	held := s.records[id]
+	if ev.Seq > 0 && ev.Seq <= held.Observed {
+		return false
+	}
+	prev, _ := bus.ReadState(s.stateDir, id)
+	if prev.Session == "" {
+		prev = held
+	}
+	if ev.Seq > 0 && ev.Seq <= prev.Observed {
+		return false
+	}
+	latest := prev.At
+	if held.At.After(latest) {
+		latest = held.At
+	}
+	at := ev.At
+	if at.IsZero() {
+		at = time.Now()
+	}
+	// An event older than the record is an earlier one's, which another change of the state has passed. The log's times
+	// have only milliseconds.
+	if at.UnixMilli() < latest.UnixMilli() {
+		return false
+	}
+	if ev.Name == "SessionEnd" {
+		// A thread is asleep once tmux has lost its session, which a wake and a delete go by, so its row stays as it
+		// was until then. Only the seq is kept.
+		prev.Observed = max(prev.Observed, ev.Seq)
+		if prev.Session != "" {
+			if err := bus.WriteState(s.stateDir, prev); err != nil {
+				log.Printf("agentos: saving the state of thread %s: %v", id, err)
+			}
+		}
+		if held.Session != "" {
+			held.Observed = prev.Observed
+			s.records[id] = held
+		}
+		return false
+	}
+	rec := session.Apply(id, prev, ev, at)
+	if err := bus.WriteState(s.stateDir, rec); err != nil {
+		log.Printf("agentos: saving the state of thread %s: %v", id, err)
+		return false
+	}
+	if ev.Name == "UserPromptSubmit" {
+		s.record(id, activity.Event{At: rec.At.UnixMilli(), Kind: activity.Prompt})
+	}
+	s.set(rec)
+	return true
+}
+
+// TranscriptPath is the file the agent writes the conversation to, for an agent started in the folder origin.
+func (s *Sessions) TranscriptPath(origin, conversation string) string {
+	p, err := s.Provider()
 	if err != nil {
-		return
+		return ""
 	}
-	cur, err := bus.ReadState(s.stateDir, id)
-	if err != nil || !holdsPrompts(cur.State) || cur.Event == "Stop" || e.At < cur.At.UnixMilli() {
-		unlock()
-		return
-	}
-	at := time.UnixMilli(e.At)
-	if !at.After(cur.At) { // e.At has only milliseconds, and take drops a record no later than the one before
-		at = cur.At.Add(time.Millisecond)
-	}
-	ev := session.Event{Name: "Stop"}
-	if e.Error {
-		ev.Name = session.TurnError
-	}
-	next := session.Apply(id, cur, ev, at)
-	err = bus.WriteState(s.stateDir, next)
-	unlock()
-	if err == nil {
-		s.observe(next)
-	}
+	return p.Transcript(origin, conversation)
 }
 
 // Background is what a thread's Claude does beside its turns: subagents in the background, which go on after the turn
 // that started them, and the turn Claude then starts itself to tell of one's end. Asks is an approval that waits on the
-// owner as the chat log shows it: a subagent's waits past the end of the turn that started it, when the hooks say the
-// thread is idle.
+// owner as the chat log shows it: a subagent's waits past the end of the turn that started it, when the recorded state
+// says the thread is idle.
 type Background struct {
 	Subagents int  // the tasks other than shells it runs in the background
 	Reporting bool // a task of its own ended, and Claude tells of it in a turn of its own that has not ended yet
@@ -4191,7 +4186,7 @@ type Background struct {
 func (b Background) working() bool { return b.Subagents > 0 || b.Reporting }
 
 // BackgroundChanged records what the thread's Claude does beside its turns, as the chat service reads it from the
-// host. The hooks say only that a turn stopped, so the thread shows idle at the turn that started a subagent. It takes
+// host. The stream says only that a turn ended, so the thread shows idle at the turn that started a subagent. It takes
 // mu.
 func (s *Sessions) BackgroundChanged(id string, b Background) {
 	s.mu.Lock()
@@ -4206,7 +4201,7 @@ func (s *Sessions) BackgroundChanged(id string, b Background) {
 	s.sync()
 }
 
-// stateOf is the live session's state: its hooks', but working while it is idle and its Claude works beside its turns.
+// stateOf is the live session's state: its events', but working while it is idle and its Claude works beside its turns.
 // It needs mu.
 func (s *Sessions) stateOf(id string) session.State {
 	state := session.Idle
@@ -4272,7 +4267,7 @@ func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 // sweep off. It comes before Run.
 func (s *Sessions) SetCleanupSweep(every time.Duration) { s.life.sweepEvery = every }
 
-// Run follows tmux, the hook bus and the pull requests until ctx ends.
+// Run follows tmux and the pull requests until ctx ends.
 func (s *Sessions) Run(ctx context.Context) error {
 	if err := s.Start(ctx); err != nil {
 		return err
@@ -4359,7 +4354,7 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 }
 
 // usersOf is the title of a live thread not in except that works in dir or a folder inside it, "" when none: one that
-// runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a settled
+// runs there, as a fork of a thread in its worktree does, or whose last reported folder is there. With asleep, a settled
 // thread that would wake there counts too. It takes mu.
 func (s *Sessions) usersOf(dir string, asleep bool, except ...string) string {
 	if users := s.usersIn(dir, asleep, except...); len(users) > 0 {
@@ -4568,7 +4563,7 @@ func (s *Sessions) announceShells() {
 func loginShell() string { return cmp.Or(os.Getenv("SHELL"), "/bin/zsh") }
 
 // NewShell starts a shell in the current project, numbered after the shells it has, and returns its id. A shell is a
-// login shell; it reports nothing: it is not an agent, so it gets no hooks and no session number. With thread "" it
+// login shell; it reports nothing: it is not an agent, so it gets no events and no session number. With thread "" it
 // is a shell of the project, in the project folder. Else it belongs to the thread and starts in the thread's
 // worktree, or in the project folder once that is gone; it is refused while a clean-up or a delete of the thread
 // runs, which closes the thread's shells.

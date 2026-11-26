@@ -15,11 +15,12 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/agentos/internal/session"
 )
 
 const (
-	reconcileEvery = time.Second
-	batchEvery     = 33 * time.Millisecond // about one frame at 30 per second
+	reconcileEvery = 250 * time.Millisecond // a thread shows what it does once its follower runs, so one starts soon
+	batchEvery     = 33 * time.Millisecond  // about one frame at 30 per second
 	retryFirst     = 100 * time.Millisecond
 	retryMost      = 2 * time.Second
 	startWait      = 3 * time.Second  // for a watch that comes before Start
@@ -30,15 +31,17 @@ const (
 // died, or the app stops.
 var ErrThreadGone = errors.New("the thread no longer runs")
 
-// Threads are the sessions whose agents run under a host. Wake starts a settled one again under its id, and
-// AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
+// Threads are the sessions whose agents run under a host. Observe takes in the changes of a thread's state that its
+// stream shows, each once, as the seq of the event says; TranscriptPath is where Claude writes a conversation, for a Claude started
+// in the folder origin. Wake starts a settled one again under its id, and AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
 // FlagRefused says that a thread's Claude did not know flag, so its host started it without. FilesRewind says where a
 // rewind may put a thread's files back, as Sessions.FilesRewind does. BackgroundChanged says what a thread's Claude
 // does beside its turns.
 type Threads interface {
 	ChatOf(id string) (sessions.Chat, error)
 	Chats() []sessions.Chat
-	TurnEnded(id string, e chatlog.Event)
+	Observe(id string, evs ...session.Event)
+	TranscriptPath(origin, conversation string) string
 	BackgroundChanged(id string, b sessions.Background)
 	AccessChanged(id, mode string, planApproved bool)
 	FlagRefused(flag string)
@@ -75,8 +78,8 @@ type PendingUpdate struct {
 	Pending *Pending `json:"pending"`
 }
 
-// Chats follows the host of each live thread, one subscription per host: it hands each turn's end to the sessions,
-// tells the front end which approval each thread waits on, sends the events of the threads it watches and keeps each
+// Chats follows the host of each live thread, one subscription per host: it hands each change of the thread's state to
+// the sessions, tells the front end which approval each thread waits on, sends the events of the threads it watches and keeps each
 // project's latest command list.
 type Chats struct {
 	threads  Threads
@@ -104,7 +107,7 @@ func New(t Threads, dir string, emit func(string, any)) *Chats {
 	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}, rateLimited: func(string, chatlog.Event) {}}
 }
 
-// OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.TurnEnded and before an AwaitTurn does: the
+// OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.Observe and before an AwaitTurn does: the
 // latest one of the log when the follower starts, and each one the host streams after it. fn also hears of the exit
 // the host streams when the thread settles, which may end a turn with no turn_end. fn runs on the follower, so it must
 // not block. It comes before Start.
@@ -163,7 +166,7 @@ func (c *Chats) reconcile() {
 // follow starts the thread's follower. It needs mu, and Start to have run.
 func (c *Chats) follow(ch sessions.Chat) *follower {
 	ctx, stop := context.WithCancel(c.ctx)
-	f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{})}
+	f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{}), state: newTurn(c.threads.TranscriptPath)}
 	c.followers[ch.ID] = f
 	go f.run(ctx)
 	return f
@@ -321,6 +324,7 @@ type follower struct {
 	chat  sessions.Chat
 	stop  context.CancelFunc
 	read  chan struct{} // closed once the follower has read the log
+	state *turn         // what the run's state events need of the events before; the follower's goroutine only
 
 	mu        sync.Mutex
 	approvals []chatlog.Event // waiting, oldest first
@@ -403,15 +407,17 @@ func (f *follower) run(ctx context.Context) {
 	}
 	f.mu.Unlock()
 	close(f.read)
+	// What the run's events changed while the app was closed, a turn interrupted among them, is taken in first: the
+	// sessions drop what they have taken in already, and a thread whose Claude exited is known so before its approvals
+	// are said to be gone.
+	f.replay(logged)
 	f.chats.threads.BackgroundChanged(f.chat.ID, f.backgroundNow())
 	// A follower starts for a thread that runs: at the app's start, or once it woke.
 	f.chats.threads.NextTurn(f.chat.ID)
 	if commands != nil {
 		f.chats.commands.keep(f.chat.Project, *commands)
 	}
-	// A turn interrupted while the app was closed ends now; the earlier turn_ends would change nothing after it.
 	if turnEnd != nil {
-		f.chats.threads.TurnEnded(f.chat.ID, *turnEnd)
 		f.chats.turnEnded(f.chat.ID, *turnEnd)
 		f.reached(*turnEnd)
 	}
@@ -467,11 +473,11 @@ func (f *follower) take(e chatlog.Event) {
 		now.At = time.UnixMilli(e.At)
 		f.chats.threads.BackgroundChanged(f.chat.ID, now)
 	}
+	f.observe(e)
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
 		// The sessions, and then OnTurnEnd's fn, hear of the turn's end before an await does, so they see a wait on it
 		// still in flight.
-		f.chats.threads.TurnEnded(f.chat.ID, e)
 		f.chats.turnEnded(f.chat.ID, e)
 		f.reached(e)
 	case chatlog.KindExit:
@@ -493,6 +499,33 @@ func (f *follower) take(e chatlog.Event) {
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)
+	}
+}
+
+// replay hands the sessions the state changes of the run the log ends in: the events since its latest start.
+func (f *follower) replay(logged []chatlog.Event) {
+	from := 0
+	for i := len(logged) - 1; i >= 0; i-- {
+		if logged[i].Kind == chatlog.KindStart {
+			from = i
+			break
+		}
+	}
+	var evs []session.Event
+	for _, e := range logged[from:] {
+		if ev, ok := stateEvent(e, f.state); ok {
+			evs = append(evs, ev)
+		}
+	}
+	if len(evs) > 0 {
+		f.chats.threads.Observe(f.chat.ID, evs...)
+	}
+}
+
+// observe hands the sessions the change of state that e makes, if it makes one.
+func (f *follower) observe(e chatlog.Event) {
+	if ev, ok := stateEvent(e, f.state); ok {
+		f.chats.threads.Observe(f.chat.ID, ev)
 	}
 }
 

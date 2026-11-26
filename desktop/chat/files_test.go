@@ -14,7 +14,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/run"
 	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // noProject knows no project.
@@ -169,7 +169,8 @@ func (f folderThread) ChatOf(id string) (sessions.Chat, error) {
 	return sessions.Chat{ID: id, Project: "main", Dir: string(f)}, nil
 }
 func (folderThread) Chats() []sessions.Chat                        { return nil }
-func (folderThread) TurnEnded(id string, e chatlog.Event)          {}
+func (folderThread) Observe(string, ...session.Event)              {}
+func (folderThread) TranscriptPath(string, string) string          { return "" }
 func (folderThread) BackgroundChanged(string, sessions.Background) {}
 func (folderThread) AccessChanged(string, string, bool)            {}
 func (folderThread) FlagRefused(string)                            {}

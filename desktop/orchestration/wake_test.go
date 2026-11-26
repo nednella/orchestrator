@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/host"
@@ -69,14 +70,30 @@ func quiet(t *testing.T, h *apptest.Harness, children ...string) {
 	})
 }
 
-// withConversation has the thread's hooks name its conversation and a transcript, so a wake resumes it.
+// withConversation gives the thread a conversation and a transcript, so a wake resumes it: one that a message of the
+// thread's names, and the one the stand-in claude's next init names, which Claude writes at its first prompt.
 func withConversation(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
 	transcript := filepath.Join(t.TempDir(), "transcript.jsonl")
 	if err := os.WriteFile(transcript, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, id, "SessionStart", fmt.Sprintf(`{"session_id":"conversation-1","transcript_path":%q}`, transcript))
+	h.Observe(t, id, "SessionStart", fmt.Sprintf(`{"session_id":"conversation-1","transcript_path":%q}`, transcript))
+	ch, err := h.Sessions().ChatOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := filepath.EvalSymlinks(ch.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	standIn := agent.Claude{ConfigDir: os.Getenv("CLAUDE_CONFIG_DIR")}.Transcript(folder, "fake-session")
+	if err := os.MkdirAll(filepath.Dir(standIn), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(standIn, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // noMoreResults fails the test when the parent gets another result of the child within a second.
@@ -282,9 +299,9 @@ func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"keep working","access":"read"}`).ID
 	for _, id := range []string{c, parent} {
-		h.Hook(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
+		h.Observe(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
 		apptest.Eventually(t, "the turn working", func() bool { return row(t, h, id).State == session.Working })
-		h.Hook(t, id, "Stop", `{}`)
+		h.Observe(t, id, "Stop", `{}`)
 		apptest.Eventually(t, "the turn's end", func() bool { return row(t, h, id).State == session.Idle })
 	}
 	if n := h.Rec.CountAttentionFor(c, "replied"); n != 0 {
@@ -293,7 +310,7 @@ func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
 	if n := h.Rec.CountAttentionFor(parent, "replied"); n != 1 {
 		t.Errorf("the parent's reply raised %d replied alerts, want 1", n)
 	}
-	h.Hook(t, c, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	h.Observe(t, c, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	apptest.Eventually(t, "the child's waiting alert", func() bool { return h.Rec.CountAttentionFor(c, "waiting") > 0 })
 }
 
@@ -427,7 +444,7 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 	apptest.Eventually(t, "the parent's task taken in", func() bool { return stdinHas(t, h, parent, "keep working") })
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
 	// The parent waits on the owner in the middle of its turn, so the result is held for it.
-	h.Hook(t, parent, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	h.Observe(t, parent, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	apptest.Eventually(t, "the parent waiting", func() bool { return row(t, h, parent).State == session.Waiting })
 	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
 

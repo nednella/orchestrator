@@ -17,20 +17,20 @@ func TestWaitsAreRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "PreToolUse", `{"tool_name":"Bash","tool_input":{"command":"make test api foo/bar.test.ts"}}`)
-	h.Hook(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "PreToolUse", `{"tool_name":"Bash","tool_input":{"command":"make test api foo/bar.test.ts"}}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	eventually(t, "open wait", func() bool {
 		st, _ := h.Stats(7, "")
 		return st.Total == 1 && st.Recent[0].WaitedMs == 0
 	})
 	time.Sleep(20 * time.Millisecond)
-	h.Hook(t, s.ID, "PreToolUse", `{"tool_name":"Edit","tool_input":{"file_path":"a.ts"}}`)
-	h.Hook(t, s.ID, "Notification", `{"message":"waiting for your input","notification_type":"idle_prompt"}`)
-	h.Hook(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Edit","notification_type":"permission_prompt"}`)
-	h.Hook(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
-	h.Hook(t, s.ID, "Notification", `{"message":"pick one","notification_type":"elicitation_dialog"}`)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"b"}`)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "PreToolUse", `{"tool_name":"Edit","tool_input":{"file_path":"a.ts"}}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"waiting for your input","notification_type":"idle_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Edit","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"pick one","notification_type":"elicitation_dialog"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"b"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "finished wait", func() bool {
 		st, _ := h.Stats(7, "")
 		return st.Total == 3

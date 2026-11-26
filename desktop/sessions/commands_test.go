@@ -116,7 +116,7 @@ func TestSessionsOfEveryProjectAreListed(t *testing.T) {
 		t.Fatalf("project of each session = %v, want here in main and there in %q", byTitle, other)
 	}
 
-	h.Hook(t, id, "Notification", `{"notification_type":"permission_prompt","message":"ok?"}`)
+	h.Observe(t, id, "Notification", `{"notification_type":"permission_prompt","message":"ok?"}`)
 	eventually(t, "a sessions event for the other project", func() bool {
 		for _, s := range h.Rec.LastSessionsOf(other) {
 			if s.ID == id && s.State == "waiting" {

@@ -42,6 +42,37 @@ func putToSleep(t *testing.T, h *apptest.Harness, id string) {
 		t.Fatal(err)
 	}
 	eventually(t, "the thread asleep", func() bool { return stateOf(h, id) == "settled" })
+	resultTaken(t, h, id)
+}
+
+// resultTaken waits until the parent of the child that went to sleep, when it runs, has taken in the child's result and
+// ended its turn on it: the parent works in between, and a test that goes on then finds a turn running. A parent that
+// is a child of childOf keeps its turn open, so there is nothing to wait for.
+func resultTaken(t *testing.T, h *apptest.Harness, child string) {
+	t.Helper()
+	parent := h.Sessions().ParentOf(child)
+	if parent == "" || h.Sessions().ParentOf(parent) != "" {
+		return
+	}
+	if ch, err := h.Sessions().ChatOf(parent); err != nil || !ch.Live {
+		return
+	}
+	eventually(t, "the parent's turn on the child's result to end", func() bool {
+		taken, ended := false, false
+		events, err := h.ChatHistory(parent, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range events {
+			switch {
+			case e.Kind == chat.KindUser && e.From == child && e.Result:
+				taken, ended = true, false
+			case e.Kind == chat.KindTurnEnd:
+				ended = taken
+			}
+		}
+		return ended && stateOf(h, parent) != "working"
+	})
 }
 
 // sleepsByItself ends the child's open turn, so its result goes to its parent and the child goes to sleep by itself, and
@@ -53,6 +84,7 @@ func sleepsByItself(t *testing.T, h *apptest.Harness, id string) {
 	}
 	eventually(t, "the child asleep by itself", func() bool { return stateOf(h, id) == "settled" })
 	assertExits(t, h, id, chat.Event{Kind: chat.KindExit, Stop: chat.StopSettle})
+	resultTaken(t, h, id)
 }
 
 // cleanupOf waits until the thread's clean-up has ended with an entry in the log, and returns the entry.
@@ -541,7 +573,7 @@ func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
 		pushWork(t, parent.Worktree)
 		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
 		other := issueThread(h, t, 8)
-		h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		h.Observe(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
 		eventually(t, "the other thread seen in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
 		putToSleep(t, h, child.ID)
 		cleanupOf(t, h, child)
@@ -584,7 +616,7 @@ func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
 		second := issueThread(h, t, 8)
 		pushWork(t, second.Worktree)
 		tester := childOf(t, h, second, "Tester", sessions.WhereWorktree)
-		h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, tester.Worktree))
+		h.Observe(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, tester.Worktree))
 		eventually(t, "the fork seen in the tester's worktree", func() bool { return h.OwnWorktree(tester.ID) == "" })
 		putToSleep(t, h, tester.ID)
 		cleanupOf(t, h, tester)
@@ -608,7 +640,7 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 		pushWork(t, parent.Worktree)
 		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
 		other := issueThread(h, t, 8)
-		h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		h.Observe(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
 		eventually(t, "the other thread seen in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
 		putToSleep(t, h, child.ID)
 		cleanupOf(t, h, child)
@@ -633,7 +665,7 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 		parent := issueThread(h, t, 7)
 		pushWork(t, parent.Worktree)
 		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
-		h.Hook(t, child.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		h.Observe(t, child.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
 		shell := newShell(t, h, "")
 		t.Cleanup(func() { _ = h.ShellClose(shell) })
 		cdShell(t, h, shell, child.Worktree)
@@ -657,7 +689,7 @@ func TestDeletePlanCountsAWorktreeAnAncestorWorksIn(t *testing.T) {
 	parent := issueThread(h, t, 7)
 	pushWork(t, parent.Worktree)
 	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
-	h.Hook(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+	h.Observe(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
 	eventually(t, "the parent idle in the child's worktree", func() bool { return stateOf(h, parent.ID) == "idle" && h.OwnWorktree(child.ID) == "" })
 	putToSleep(t, h, child.ID)
 	cleanupOf(t, h, child)
@@ -682,7 +714,7 @@ func TestDeletePlanOffersNoBoxWhenTheThreadsOwnWorktreeIsShared(t *testing.T) {
 	putToSleep(t, h, child.ID)
 	cleanupOf(t, h, child)
 	other := issueThread(h, t, 8)
-	h.Hook(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
+	h.Observe(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
 	eventually(t, "the other thread seen in the parent's worktree", func() bool { return h.OwnWorktree(parent.ID) == "" })
 
 	if !exists(child.Worktree) {

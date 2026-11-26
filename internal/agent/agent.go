@@ -50,6 +50,9 @@ type Provider interface {
 	// hook prints on stdout, "" for an agent that reads none. It reports false for a hook agentos does not record.
 	ParseEvent(name string, r io.Reader) (ev session.Event, reply string, ok bool)
 	// Usage reads what the agent's transcripts say it used after the mark's time, from the mark's offsets.
+	// Transcript is the file the agent writes the conversation to, for an agent started in the folder origin; "" when
+	// it cannot say.
+	Transcript(origin, conversation string) string
 	Usage(from usage.Mark) usage.Reader
 }
 

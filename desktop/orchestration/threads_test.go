@@ -72,6 +72,9 @@ func newFamily(t *testing.T) family {
 	f.caller = threadWith(t, h, "Plan the release", session.Supervised).ID
 	f.reader = threadWith(t, h, "Read the code", session.Read).ID
 	f.child = mustDelegate(t, h, f.caller, `{"task":"count the files","access":"read"}`).ID
+	// The child answers, its result goes to the caller, which answers that, and the child goes to sleep.
+	quiet(t, h, f.child)
+	apptest.Eventually(t, "the caller idle", func() bool { return row(t, h, f.caller).State == session.Idle })
 	f.settled = threadWith(t, h, "Done already", session.Supervised).ID
 	if err := h.SettleThread(f.settled); err != nil {
 		t.Fatal(err)
@@ -104,7 +107,7 @@ func TestThreadsListsTheProject(t *testing.T) {
 			rows := map[string]listedThread{
 				f.caller:  {ID: f.caller, Title: "Plan the release", Project: "main", State: "idle", Access: "supervised", You: true},
 				f.reader:  {ID: f.reader, Title: "Read the code", Project: "main", State: "idle", Access: "read"},
-				f.child:   {ID: f.child, Title: "count the files", Project: "main", State: "idle", Access: "read", Parent: f.caller},
+				f.child:   {ID: f.child, Title: "count the files", Project: "main", State: "settled", Access: "read", Parent: f.caller},
 				f.settled: {ID: f.settled, Title: "Done already", Project: "main", State: "settled", Access: "supervised"},
 			}
 			for id, w := range rows {

@@ -85,7 +85,7 @@ func TestAFailedTmuxListingEndsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "PreToolUse", `{"tool_name":"Edit"}`)
+	h.Observe(t, s.ID, "PreToolUse", `{"tool_name":"Edit"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 
 	fake.fail(t, "list", true)
@@ -162,7 +162,7 @@ func TestDeletedThreadStaysGoneAfterALateHook(t *testing.T) {
 	if err := h.DeleteThread(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the delete
+	h.Observe(t, s.ID, "SessionEnd", `{}`) // Claude's hook, running after the delete
 	if rec, _ := bus.ReadState(h.State, s.ID); rec.Session != "" {
 		t.Errorf("the late hook wrote a state file for a deleted thread: %+v", rec)
 	}

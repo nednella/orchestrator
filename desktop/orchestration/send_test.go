@@ -164,7 +164,7 @@ func TestSendNeverAnswersAnApproval(t *testing.T) {
 			}
 			apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
 			if tt.hook {
-				h.Hook(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+				h.Observe(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 				apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
 			}
 
@@ -193,7 +193,7 @@ func TestSendNeverAnswersAnApproval(t *testing.T) {
 				switch {
 				case e.Kind == chat.KindAnswer:
 					answers = append(answers, e.Text)
-				case e.Kind == chat.KindUser && strings.Contains(e.Text, "Yes, go on"):
+				case (e.Kind == chat.KindUser || e.Kind == chat.KindQueued) && strings.Contains(e.Text, "Yes, go on"):
 					from = e.From
 				}
 			}
@@ -212,6 +212,7 @@ func TestHeldMessageWakesAThreadSettledMeanwhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
 	if a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"Yes, go on"}`); !a.Held {
 		t.Fatalf("send answered %+v, want it held", a)
 	}
@@ -243,7 +244,7 @@ func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	target := threadWith(t, h, "Fix the login", session.Supervised).ID
-	h.Hook(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
+	h.Observe(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
 	if a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"first message"}`); !a.Held {
 		t.Fatalf("the first send answered %+v, want it held", a)
@@ -267,7 +268,7 @@ func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 	apptest.Eventually(t, "the long message logged", func() bool {
 		return slices.ContainsFunc(logOf(t, h, target), func(e chat.Event) bool { return e.Kind == chat.KindUser && len(e.Text) == 1<<18 })
 	})
-	h.Hook(t, target, "Stop", `{}`)
+	h.Observe(t, target, "Stop", `{}`)
 	apptest.Eventually(t, "the idle state", func() bool { return row(t, h, target).State == session.Idle })
 	time.Sleep(300 * time.Millisecond) // the held message is on its way to the host
 

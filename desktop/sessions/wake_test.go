@@ -22,7 +22,7 @@ import (
 // ended is a session that had the conversation abc and has settled.
 func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Session {
 	t.Helper()
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func talkedThenSettled(t *testing.T, h *apptest.Harness) sessions.Session {
 		t.Fatal(err)
 	}
 	eventually(t, "the first turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestWakeAfterTheAppRestarts(t *testing.T) {
 // settledWhileClosed quits the app, ends the session as a computer restart would, and opens the app again a minute later.
 func settledWhileClosed(t *testing.T, h *apptest.Harness, id string) *apptest.Harness {
 	t.Helper()
-	h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
 	h.App.Stop()
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+id).Run(); err != nil {
 		t.Fatal(err)
@@ -365,7 +365,7 @@ func TestWokenThreadKeepsItsCost(t *testing.T) {
 	transcript := writtenTranscript(t)
 	stop := fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript)
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
-	h.Hook(t, s.ID, "Stop", stop)
+	h.Observe(t, s.ID, "Stop", stop)
 	eventually(t, "the first turn's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == 1 })
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
@@ -376,8 +376,8 @@ func TestWokenThreadKeepsItsCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	appendLines(t, transcript, assistantLine("msg_2", time.Now().Add(time.Second), 10, 1))
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
-	h.Hook(t, s.ID, "Stop", stop)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
+	h.Observe(t, s.ID, "Stop", stop)
 	eventually(t, "both turns' tokens on the row", func() bool { row, _ := h.Session(s.ID); return row.Tokens == 1111 })
 	eventually(t, "the wake's usage in the event log", func() bool { return len(h.Events(t, activity.Usage)) == 2 })
 	h.App.Stop()

@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,6 +11,9 @@ type line struct {
 	Type           string          `json:"type"`
 	Subtype        string          `json:"subtype"`
 	SessionID      string          `json:"session_id"`
+	Cwd            string          `json:"cwd"`
+	OriginalCwd    string          `json:"original_cwd"`
+	Model          string          `json:"model"`
 	UUID           string          `json:"uuid"`
 	APIMessageID   string          `json:"api_message_id"`
 	Event          json.RawMessage `json:"event"`
@@ -67,7 +71,7 @@ func Parse(data []byte) ([]Event, error) {
 	case "system":
 		switch l.Subtype {
 		case "init":
-			return []Event{{Kind: KindInit, ID: l.SessionID}}, nil
+			return []Event{{Kind: KindInit, ID: l.SessionID, Cwd: l.Cwd, Origin: cmp.Or(l.OriginalCwd, l.Cwd), Model: l.Model}}, nil
 		case "compact_boundary":
 			return []Event{{Kind: KindCompact}}, nil
 		case "status":

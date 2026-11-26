@@ -262,7 +262,7 @@ func TestDeleteOfALiveThreadStopsIt(t *testing.T) {
 	s := talked(t, h)
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
-	h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
+	h.Observe(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
 	eventually(t, "the turn's tokens on the row", func() bool { row, _ := h.Session(s.ID); return row.Tokens == 1100 })
 	chatLog, socket := hostFiles(h, s.ID)
 
@@ -443,7 +443,7 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 		s := issueThread(h, t, 7)
 		wt := s.Worktree
 		pushWork(t, wt)
-		h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
+		h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
 		eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 		shell := newShell(t, h, "")
 		cdShell(t, h, shell, wt)

@@ -80,7 +80,7 @@ func pushedThread(t *testing.T, h *apptest.Harness) sessions.Session {
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	pushWork(t, s.Worktree)
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
 	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 	return s
 }

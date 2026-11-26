@@ -41,6 +41,7 @@ import (
 	"github.com/nednella/agentos/internal/bus"
 	chatlog "github.com/nednella/agentos/internal/chat"
 	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/agentos/internal/session"
 )
 
 type Recorder struct {
@@ -777,35 +778,55 @@ func (h *Harness) Sessions() *sessions.Sessions { return h.App.Sessions() }
 // Notes is the notes store behind the bound service.
 func (h *Harness) Notes() *notes.Notes { return h.App.Notes() }
 
-// Hook runs the built agentos command as Claude Code would. A live session has had its
-// SessionStart, which creates the state file, so one is sent first when the file is missing.
-func (h *Harness) Hook(t *testing.T, id, event, stdin string, env ...string) {
+// Observe gives the thread a change of state in the names and the payload fields of Claude's hooks, as its follower
+// gives the sessions one it read off the host's stream. A live thread has had its SessionStart, so one is given first
+// when the thread has no state file. A test of how the stream makes these changes drives its host instead.
+func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 	t.Helper()
 	live := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", "="+id).Run() == nil
 	if rec, _ := bus.ReadState(h.State, id); live && event != "SessionStart" && rec.Session == "" {
-		h.hook(t, id, "SessionStart", "{}", env)
+		h.Sessions().Observe(id, session.Event{Name: "SessionStart"})
 	}
-	h.hook(t, id, event, stdin, env)
-}
-
-// hook runs the hook as the session's agent would, with env on top. It returns what the hook printed.
-func (h *Harness) hook(t *testing.T, id, event, stdin string, env []string) string {
-	t.Helper()
-	cmd := exec.Command(CLIPath(t), "hook", event)
-	cmd.Env = append(os.Environ(), "AGENTOS_SESSION="+id, "AGENTOS_SOCKET="+filepath.Join(h.State, "agentos.sock"))
-	cmd.Env = append(cmd.Env, env...)
-	cmd.Stdin = strings.NewReader(stdin)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("agentos hook: %v: %s", err, out)
+	var p struct {
+		NotificationType     string         `json:"notification_type"`
+		Message              string         `json:"message"`
+		ToolName             string         `json:"tool_name"`
+		ToolInput            map[string]any `json:"tool_input"`
+		Prompt               string         `json:"prompt"`
+		LastAssistantMessage string         `json:"last_assistant_message"`
+		Cwd                  string         `json:"cwd"`
+		SessionID            string         `json:"session_id"`
+		TranscriptPath       string         `json:"transcript_path"`
 	}
-	return string(out)
-}
-
-// HookReply is Hook, and what the hook printed for its agent.
-func (h *Harness) HookReply(t *testing.T, id, event, stdin string, env ...string) string {
-	t.Helper()
-	return h.hook(t, id, event, stdin, env)
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		t.Fatalf("the payload of %s is not JSON: %v", event, err)
+	}
+	if p.Cwd != "" {
+		// The thread's Claude says so from its next turn on, as after a cd, not the folder it started in.
+		if err := os.WriteFile(h.standIn(id, ".cwd"), []byte(p.Cwd), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ev := session.Event{Name: event, NotificationType: p.NotificationType, Message: p.Message, Cwd: p.Cwd, Conversation: p.SessionID, Transcript: p.TranscriptPath}
+	switch event {
+	case "Notification":
+		ev.Detail = p.Message
+	case "PreToolUse", "PostToolUse":
+		ev.Tool, ev.Detail = p.ToolName, p.ToolName
+		ev.Command, _ = p.ToolInput["command"].(string)
+		for _, key := range []string{"command", "file_path", "pattern", "url", "description"} {
+			if v, _ := p.ToolInput[key].(string); v != "" {
+				ev.Detail = p.ToolName + " " + v
+				break
+			}
+		}
+	case "UserPromptSubmit":
+		ev.Detail = p.Prompt
+	case "Stop":
+		ev.Detail = p.LastAssistantMessage
+		ev.Asks = strings.HasSuffix(strings.TrimRight(p.LastAssistantMessage, " \t\n*_"), "?")
+	}
+	h.Sessions().Observe(id, ev)
 }
 
 // Session is the session with that id in the current project's list.
@@ -829,8 +850,8 @@ var (
 	cliErr  error
 )
 
-// CLIPath builds the agentos command from this checkout, so hooks run the code under test. It is
-// the app's binary with a stub page in place of the front end.
+// CLIPath builds the agentos command from this checkout, so the host and the tools' server run the code under test.
+// It is the app's binary with a stub page in place of the front end.
 func CLIPath(t *testing.T) string {
 	t.Helper()
 	cliOnce.Do(func() {
@@ -859,8 +880,10 @@ func CLIPath(t *testing.T) string {
 // to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
-// mode, and any other control request with a success. The message "ask" asks to run a Bash command instead and replies
-// once answered, one that ends in "slow", such as a task delegated as "slow", replies a second later, one that ends in
+// mode, and any other control request with a success. Each init line names the folder the stand-in runs in, as Claude
+// does, or the one a payload of Observe names. The message "ask", or a task that ends in "needs approval", asks to run a Bash command instead and replies
+// once answered, "tool" runs one and replies, "tool wait" holds its tool call until Proceed and its reply until Finish, "question" replies with a
+// question, one that ends in "slow", such as a task delegated as "slow", replies a second later, one that ends in
 // "fails" replies "half done" and ends its turn with the error "API Error: 500", one that ends in "background shell"
 // starts a shell in the background and replies a second later, and a second after that tells of the shell's end in a
 // turn of its own, which replies "shell done", "stream" streams 200 deltas, "0 " to
@@ -896,6 +919,23 @@ func (h *Harness) RewindAs(t *testing.T, id, mode string, files ...string) {
 // standIn is the path of the stand-in claude's file of the session with that extension.
 func (h *Harness) standIn(id, ext string) string {
 	return filepath.Join(h.claudeDir, strings.ReplaceAll(id, "/", "_")+ext)
+}
+
+// Proceed lets the session's stand-in claude go on from a "tool wait" message: it holds its tool call until then, and
+// its turn after the tool's result until Finish.
+func (h *Harness) Proceed(t *testing.T, id string) {
+	t.Helper()
+	if err := os.WriteFile(h.standIn(id, ".proceed"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Finish lets the stand-in claude end the turn of a "tool wait" message.
+func (h *Harness) Finish(t *testing.T, id string) {
+	t.Helper()
+	if err := os.WriteFile(h.standIn(id, ".finish"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Stdin are the lines the session's stand-in claude has read so far, none before it starts.
@@ -952,7 +992,7 @@ done
 // the turn's end, and ends once it is answered; "subagent lost" starts one that asks and is gone with no end a moment
 // after the turn's end. "limit" streams a rate_limit event before its reply, and a get_usage request is answered with a
 // session and a weekly window.
-const fakeClaudeTurns = `init='{"type":"system","subtype":"init","session_id":"fake-session"}'
+const fakeClaudeTurns = `here=$(pwd -P)
 serve='import os, socket, sys, time
 if os.fork():
     sys.exit(0)
@@ -965,12 +1005,28 @@ open(sys.argv[2] + ".tmp", "w").write(str(os.getpid()))
 os.rename(sys.argv[2] + ".tmp", sys.argv[2])
 time.sleep(300)'
 reply() {
-	printf '%s\n' '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"done"}]}}' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
+	printf '{"type":"assistant","message":{"id":"msg_fake","content":[{"type":"text","text":"%s"}]}}\n' "${1:-done}"
+	printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.01}'
 }
 while IFS= read -r line; do
 	printf '%s\n' "$line" >> "$f.stdin"
+	cwd=$(cat "$f.cwd" 2>/dev/null || echo "$here")
+	init='{"type":"system","subtype":"init","session_id":"fake-session","cwd":"'"$cwd"'","original_cwd":"'"$here"'"}'
 	case "$line" in
-	*'"type":"user"'*'"text":"ask"'*)
+	*'"type":"user"'*'"text":"tool"'*|*'"type":"user"'*'"text":"tool wait"'*)
+		printf '%s\n' "$init" '{"type":"assistant","message":{"id":"msg_tool","content":[{"type":"tool_use","id":"toolu_tool","name":"Bash","input":{"command":"git status"}}]}}'
+		case "$line" in
+		*'"text":"tool wait"'*) until [ -e "$f.proceed" ]; do sleep 0.05; done ;;
+		esac
+		printf '%s\n' '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_tool","content":"clean"}]}}'
+		case "$line" in
+		*'"text":"tool wait"'*) until [ -e "$f.finish" ]; do sleep 0.05; done ;;
+		esac
+		reply ;;
+	*'"type":"user"'*'"text":"question"'*)
+		printf '%s\n' "$init"
+		reply 'Which branch should I use?' ;;
+	*'"type":"user"'*'"text":"ask"'*|*'"type":"user"'*'needs approval"}]}'*)
 		printf '%s\n' "$init" '{"type":"control_request","request_id":"ask-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"touch made.txt"}}}' ;;
 	*'"type":"user"'*'slow"}]}'*)
 		printf '%s\n' "$init"
@@ -1047,10 +1103,12 @@ while IFS= read -r line; do
 		printf '%s\n' "$init"
 		working=1 held= ;;
 	*'"type":"user"'*)
+		uuid=$(printf '%s' "$line" | sed -n 's/.*"uuid":"\([^"]*\)".*/\1/p')
 		if [ -n "$working" ]; then
-			held="$held $(printf '%s' "$line" | sed -n 's/.*"uuid":"\([^"]*\)".*/\1/p')"
+			held="$held $uuid"
 			continue
 		fi
+		printf '{"type":"user","uuid":"%s","isReplay":true,"message":{"role":"user","content":[]}}\n' "$uuid"
 		printf '%s\n' "$init"
 		reply ;;
 	*'"type":"control_response"'*'"request_id":"plan-1"'*'"behavior":"allow"'*)

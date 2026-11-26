@@ -27,7 +27,7 @@ func TestThreadStartsWithoutTheCommandOnPath(t *testing.T) {
 	if !strings.Contains(strings.Join(args, " "), apptest.CLIPath(t)+"' hook Stop") {
 		t.Errorf("claude's hooks do not run the app's own binary: %q", args)
 	}
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"done"}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"done"}`)
 	eventually(t, "the hook to reach the app", func() bool {
 		got, ok := h.Session(s.ID)
 		return ok && got.State == session.Idle

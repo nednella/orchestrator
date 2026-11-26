@@ -115,11 +115,11 @@ claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` a
 
 A new session, or one started from a note, has no action and no labels. When nothing sets a value, no flag is passed and the agent uses its own default.
 
-The row shows that choice until the agent's first turn. From then on it shows what the agent used last: for claude, the model and effort on the newest line of its transcript, read at each Stop hook, so a `/model` change inside the session shows. The state file keeps them, so a restart of the app shows them without a new turn. The usage events keep the model each turn ran on.
+The row shows that choice until the agent's first turn. From then on it shows what the agent used last: for claude, the model and effort on the newest line of its transcript, read at the end of each turn, so a `/model` change inside the session shows. The state file keeps them, so a restart of the app shows them without a new turn. The usage events keep the model each turn ran on.
 
 ### What a session runs
 
-Every thread runs `claude` under `agentos host`, with hooks that run the app's own binary. `claude` must be on PATH: without it a thread does not start, with the error "claude is not installed: it is not on PATH", and the app shows a warning that names it until it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh` or `claude`, the app takes the PATH of the login shell.
+Every thread runs `claude` under `agentos host`, and the app follows the host's stream for the thread's state. `claude` must be on PATH: without it a thread does not start, with the error "claude is not installed: it is not on PATH", and the app shows a warning that names it until it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh` or `claude`, the app takes the PATH of the login shell.
 
 ### Where a thread runs
 

@@ -275,3 +275,50 @@ func TestProjectKey(t *testing.T) {
 		}
 	}
 }
+
+func TestInitTellsTheConversationAndChangesNothingElse(t *testing.T) {
+	at := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	for _, state := range []State{Idle, Working, Waiting} {
+		t.Run(string(state), func(t *testing.T) {
+			prev := Record{Session: "demo/abcdefgh", State: state, Event: "PreToolUse", At: at, Detail: "Bash make", Tool: "Bash", Command: "make", Changes: []Change{{State: state, At: 1}}, Observed: 4}
+			got := Apply("demo/abcdefgh", prev, Event{Name: Init, Conversation: "c1", Cwd: "/w", Transcript: "/t/c1.jsonl", Model: "claude-haiku-5-5", Seq: 5}, at.Add(time.Second))
+			want := prev
+			want.At, want.Conversation, want.Cwd, want.Transcript, want.AgentModel, want.Observed = at.Add(time.Second), "c1", "/w", "/t/c1.jsonl", "claude-haiku-5-5", 5
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("Apply = %+v, want %+v", got, want)
+			}
+		})
+	}
+	// An init that names less keeps what the record holds.
+	prev := Record{Session: "demo/abcdefgh", State: Working, At: at, Conversation: "c1", Transcript: "/t/c1.jsonl", Cwd: "/w"}
+	if got := Apply("demo/abcdefgh", prev, Event{Name: Init}, at.Add(time.Second)); got.Conversation != "c1" || got.Transcript != "/t/c1.jsonl" || got.Cwd != "/w" {
+		t.Errorf("an init that names nothing gave %+v", got)
+	}
+}
+
+func TestApplyKeepsTheLatestSeq(t *testing.T) {
+	at := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	rec := Apply("demo/abcdefgh", Record{}, Event{Name: "SessionStart", Seq: 1}, at)
+	rec = Apply("demo/abcdefgh", rec, Event{Name: "UserPromptSubmit", Seq: 2}, at.Add(time.Second))
+	if rec.Observed != 2 || rec.State != Working {
+		t.Fatalf("record = %+v, want the seq 2 and working", rec)
+	}
+	// An event with no seq, one a test or an old build made, takes none back.
+	if rec = Apply("demo/abcdefgh", rec, Event{Name: "PreToolUse"}, at.Add(2*time.Second)); rec.Observed != 2 {
+		t.Errorf("Observed = %d after an event with no seq, want 2", rec.Observed)
+	}
+	if rec = Apply("demo/abcdefgh", rec, Event{Name: "Stop", Seq: 7}, at.Add(3*time.Second)); rec.Observed != 7 || rec.State != Idle {
+		t.Errorf("record = %+v, want the seq 7 and idle", rec)
+	}
+}
+
+func TestObservedSurvivesTheStateFile(t *testing.T) {
+	data, err := json.Marshal(Record{Session: "demo/abcdefgh", State: Idle, Observed: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec Record
+	if err := json.Unmarshal(data, &rec); err != nil || rec.Observed != 12 {
+		t.Errorf("record = %+v, %v", rec, err)
+	}
+}

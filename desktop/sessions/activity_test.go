@@ -13,12 +13,12 @@ func TestActivityIsCounted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"a"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"a"}`)
 	time.Sleep(50 * time.Millisecond)
-	h.Hook(t, s.ID, "Stop", `{}`)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"b"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"b"}`)
 	time.Sleep(50 * time.Millisecond)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 
 	eventually(t, "two prompts and the work between them", func() bool {
 		led, err := h.Ledger(30, "")

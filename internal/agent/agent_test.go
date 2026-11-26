@@ -396,3 +396,29 @@ func TestClaudeValidModel(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeTranscript(t *testing.T) {
+	// The hash is the one claude's own function gives for this path.
+	long := "/" + strings.Repeat("a/", 120)
+	tests := []struct {
+		name            string
+		configDir       string
+		origin, session string
+		want            string
+	}{
+		{"a folder", "/c", "/tmp/rec", "8a2bd559", "/c/projects/-tmp-rec/8a2bd559.jsonl"},
+		{"characters outside letters and digits", "/c", "/Users/a b/my_dir.v2/x", "s1", "/c/projects/-Users-a-b-my-dir-v2-x/s1.jsonl"},
+		{"a character beyond the basic plane counts twice", "/c", "/a\U0001F600b", "s1", "/c/projects/-a--b/s1.jsonl"},
+		{"a long path is cut and hashed", "/c", long, "s1", "/c/projects/" + strings.Repeat("-a", 100) + "-nkcon3/s1.jsonl"},
+		{"no config folder", "", "/tmp/rec", "s1", ""},
+		{"no folder", "/c", "", "s1", ""},
+		{"no conversation", "/c", "/tmp/rec", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (Claude{ConfigDir: tt.configDir}).Transcript(tt.origin, tt.session); got != tt.want {
+				t.Errorf("Transcript(%q, %q) = %q, want %q", tt.origin, tt.session, got, tt.want)
+			}
+		})
+	}
+}

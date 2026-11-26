@@ -20,7 +20,7 @@ import (
 // withConversation tells the app, as Claude's hook does, that the thread's conversation is abc.
 func withConversation(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
-	h.Hook(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
 	eventually(t, "the thread's conversation", func() bool { got, _ := h.Session(id); return got.State == "idle" })
 }
 
@@ -434,7 +434,7 @@ func TestForkIsRefusedDuringACleanup(t *testing.T) {
 
 func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 	h, wt, ran, src, fork := forkHarness(t)
-	h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
+	h.Observe(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
 	eventually(t, "the fork at work", func() bool { return stateOf(h, fork.ID) == "working" })
 	if err := h.SettleThread(fork.ID); err != nil {
 		t.Fatal(err)

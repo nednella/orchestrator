@@ -660,3 +660,30 @@ func TestRateLimitEventWithoutInfoGivesNone(t *testing.T) {
 		}
 	}
 }
+
+func TestInitCarriesTheFoldersAndTheModel(t *testing.T) {
+	var inits []Event
+	for _, e := range parseFile(t, "hooks.jsonl") {
+		if e.Kind == KindInit {
+			inits = append(inits, e)
+		}
+	}
+	if len(inits) != 6 {
+		t.Fatalf("%d inits, want one for each of 6 turns", len(inits))
+	}
+	// The first turn starts in the folder Claude was started in; after its cd Claude works in sub, and still says where it
+	// started, which names its transcript's folder.
+	if first := inits[0]; first.Cwd != "/tmp/rec" || first.Origin != "/tmp/rec" || first.Model != "claude-haiku-5-5" {
+		t.Errorf("first init = %+v", first)
+	}
+	for _, e := range inits[1:] {
+		if e.Cwd != "/tmp/rec/sub" || e.Origin != "/tmp/rec" || e.ID != inits[0].ID {
+			t.Errorf("init after the cd = %+v, want the folder sub, the start folder and the same conversation", e)
+		}
+	}
+	// A Claude that tells no start folder is in the folder it works in.
+	events, err := Parse([]byte(`{"type":"system","subtype":"init","session_id":"s1","cwd":"/w"}`))
+	if err != nil || len(events) != 1 || events[0].Origin != "/w" || events[0].Cwd != "/w" {
+		t.Errorf("init with no original_cwd = %+v, %v", events, err)
+	}
+}

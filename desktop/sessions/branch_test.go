@@ -29,17 +29,17 @@ func sessionWithoutIssue(h *apptest.Harness, t *testing.T) sessions.Session {
 func worksIn(h *apptest.Harness, t *testing.T, s sessions.Session, dir string) {
 	t.Helper()
 	cwd, _ := json.Marshal(map[string]string{"cwd": dir})
-	h.Hook(t, s.ID, "Stop", string(cwd))
+	h.Observe(t, s.ID, "Stop", string(cwd))
 }
 
 // inToolCall runs do between the PreToolUse and PostToolUse of one of the session's tool calls in dir.
 func inToolCall(h *apptest.Harness, t *testing.T, s sessions.Session, dir string, do func()) {
 	t.Helper()
 	cwd, _ := json.Marshal(map[string]string{"cwd": dir})
-	h.Hook(t, s.ID, "PreToolUse", string(cwd))
+	h.Observe(t, s.ID, "PreToolUse", string(cwd))
 	eventually(t, "the tool call", func() bool { got, _ := h.Session(s.ID); return got.State == "working" })
 	do()
-	h.Hook(t, s.ID, "PostToolUse", string(cwd))
+	h.Observe(t, s.ID, "PostToolUse", string(cwd))
 }
 
 // worktreeThread starts a Supervised thread with no issue in the worktree agentos makes for it, on my-work.

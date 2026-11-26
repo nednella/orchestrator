@@ -20,6 +20,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
 	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // oneThread is a single live thread under a host at socket, with an empty chat log.
@@ -27,7 +28,8 @@ type oneThread struct{ chat sessions.Chat }
 
 func (o oneThread) ChatOf(string) (sessions.Chat, error)          { return o.chat, nil }
 func (o oneThread) Chats() []sessions.Chat                        { return []sessions.Chat{o.chat} }
-func (o oneThread) TurnEnded(string, chatlog.Event)               {}
+func (o oneThread) Observe(string, ...session.Event)              {}
+func (o oneThread) TranscriptPath(string, string) string          { return "" }
 func (o oneThread) BackgroundChanged(string, sessions.Background) {}
 func (o oneThread) AccessChanged(string, string, bool)            {}
 func (o oneThread) FlagRefused(string)                            {}

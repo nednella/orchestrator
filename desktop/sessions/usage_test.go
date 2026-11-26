@@ -45,15 +45,15 @@ func TestUsageIsCountedOncePerMessage(t *testing.T) {
 	appendLines(t, transcript,
 		assistantLine("msg_old", time.Now().Add(-time.Hour), 999, 999), // an earlier session of a resumed conversation
 		assistantLine("msg_1", reply, 1000, 100), assistantLine("msg_1", reply, 1000, 100))
-	h.Hook(t, s.ID, "Stop", stop)
+	h.Observe(t, s.ID, "Stop", stop)
 
 	eventually(t, "the turn's tokens on the row", func() bool {
 		row, ok := h.Session(s.ID)
 		return ok && row.Tokens == 1100
 	})
 	appendLines(t, transcript, assistantLine("msg_2", time.Now().Add(time.Second), 10, 1))
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
-	h.Hook(t, s.ID, "Stop", stop)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
+	h.Observe(t, s.ID, "Stop", stop)
 	eventually(t, "the second turn's tokens", func() bool {
 		row, _ := h.Session(s.ID)
 		return row.Tokens == 1111
@@ -68,8 +68,8 @@ func TestUsageIsCountedOncePerMessage(t *testing.T) {
 		row, ok := second.Session(s.ID)
 		return ok && row.Tokens == 1111
 	})
-	second.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"again"}`)
-	second.Hook(t, s.ID, "Stop", stop)
+	second.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"again"}`)
+	second.Observe(t, s.ID, "Stop", stop)
 	time.Sleep(200 * time.Millisecond)
 	led, err := second.Ledger(30, "")
 	if err != nil {
@@ -97,7 +97,7 @@ func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
 	}
 	reply := time.Now().Add(100 * time.Millisecond)
 	appendLines(t, transcript, line("msg_1", "claude-opus-5-5", "high", reply), line("msg_2", "claude-fable-5-1", "medium", reply.Add(time.Millisecond)))
-	h.Hook(t, s.ID, "Stop", stop)
+	h.Observe(t, s.ID, "Stop", stop)
 	eventually(t, "the row showing the newest line's model", func() bool {
 		row, _ := h.Session(s.ID)
 		return row.Model == "claude-fable-5-1" && row.Effort == "medium"
@@ -124,9 +124,9 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
-	h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
+	h.Observe(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
-	h.Hook(t, s.ID, "PostToolUse", `{"tool_name":"Bash"}`)
+	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Bash"}`)
 	eventually(t, "the tokens of a turn still running", func() bool {
 		row, _ := h.Session(s.ID)
 		return row.Tokens == 1100
@@ -135,7 +135,7 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 		t.Fatalf("usage = %+v, %v: the event log got usage before the turn ended", led.Usage.Totals, err)
 	}
 
-	h.Hook(t, s.ID, "Stop", "{}")
+	h.Observe(t, s.ID, "Stop", "{}")
 	// Claude Code writes a turn's last reply a few milliseconds after its Stop hook.
 	appendLines(t, transcript, assistantLine("msg_2", time.Now().Add(time.Second), 10, 1))
 	eventually(t, "the reply written after the Stop", func() bool {
@@ -150,9 +150,9 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 		t.Errorf("usage = %+v, work = %+v: the stats do not add up to the transcript", led.Usage.Totals, led.Work)
 	}
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
 	appendLines(t, transcript, assistantLine("msg_3", time.Now().Add(2*time.Second), 100, 10))
-	h.Hook(t, s.ID, "PostToolUse", `{"tool_name":"Bash"}`)
+	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Bash"}`)
 	second := h.Restart(t)
 	eventually(t, "the recorded usage and the usage read again after a restart in a turn", func() bool {
 		row, _ := second.Session(s.ID)
@@ -168,7 +168,7 @@ func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
 	}
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
 
 	project, token, _ := strings.Cut(s.ID, "/")
 	path := filepath.Join(h.State, "data", project, "usage", token+".json")

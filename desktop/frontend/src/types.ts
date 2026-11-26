@@ -464,6 +464,10 @@ export type ChatEvent = {
   // body is the bare words of a message from a thread, which text frames for Claude, and result marks a child's result.
   body?: string
   result?: boolean
+  // cwd, origin and model are an init's: the folder Claude works in, the folder it started in and the model it runs.
+  cwd?: string
+  origin?: string
+  model?: string
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

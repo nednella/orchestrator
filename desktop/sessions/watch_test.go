@@ -80,8 +80,8 @@ func TestReviewWakesTheSession(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 2, 0))
 	h.RefreshPRs()
 	time.Sleep(500 * time.Millisecond)
@@ -211,7 +211,7 @@ func TestWakeWaitsUntilTheTurnEnds(t *testing.T) {
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting", func() bool { return stateOf(h, s.ID) == "waiting" })
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
@@ -220,13 +220,13 @@ func TestWakeWaitsUntilTheTurnEnds(t *testing.T) {
 	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session waiting on the user")
 	}
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 	time.Sleep(500 * time.Millisecond)
 	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session in the middle of its turn")
 	}
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the held prompt once the turn ends", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 }
 
@@ -245,7 +245,7 @@ func TestOneReviewAndItsRepliesWakeTheSessionOnce(t *testing.T) {
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 
 	review := reviewBy("bot", "CHANGES_REQUESTED")
@@ -259,7 +259,7 @@ func TestOneReviewAndItsRepliesWakeTheSessionOnce(t *testing.T) {
 	if strings.Contains(sentTo(t, h, s.ID), "/address-review") {
 		t.Fatal("the prompt was typed into a session in the middle of its turn")
 	}
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the review prompt once the turn ends", func() bool { return strings.Contains(sentTo(t, h, s.ID), "/address-review 12") })
 	time.Sleep(500 * time.Millisecond)
 	if n := strings.Count(sentTo(t, h, s.ID), "/address-review 12"); n != 1 {
@@ -280,7 +280,7 @@ func waitingWithHeldReview(t *testing.T, h *apptest.Harness) sessions.Session {
 	s := issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting", func() bool { return stateOf(h, s.ID) == "waiting" })
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 	h.RefreshPRs()
@@ -297,8 +297,8 @@ func TestEveryHeldPromptIsSent(t *testing.T) {
 	if pane := sentTo(t, h, s.ID); strings.Contains(pane, "/address-review") || strings.Contains(pane, "/fix-checks") {
 		t.Fatal("a prompt was typed into a session waiting on the user")
 	}
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "both held prompts", func() bool {
 		pane := sentTo(t, h, s.ID)
 		return strings.Contains(pane, "/address-review 12") && strings.Contains(pane, "/fix-checks 12")
@@ -549,8 +549,8 @@ func TestWakeSendsThroughTheHost(t *testing.T) {
 	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
@@ -566,7 +566,7 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"Fix the checks of {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
-	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting", func() bool { return stateOf(h, s.ID) == "waiting" })
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 1, 0))
 	h.RefreshPRs()
@@ -577,8 +577,8 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 		t.Fatalf("a session waiting on the user got %q", users)
 	}
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"yes"}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "both held prompts on claude's stdin", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
 	time.Sleep(300 * time.Millisecond)
 	users := userLines(t, h, s.ID)

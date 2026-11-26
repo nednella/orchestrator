@@ -52,7 +52,7 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 		t.Errorf("with the fork deleted: reason = %q", reason)
 	}
 
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, wt))
 	own, err := h.ShellNew(s.ID)
 	if err != nil {
 		t.Fatal(err)

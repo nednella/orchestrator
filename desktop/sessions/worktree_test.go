@@ -521,7 +521,7 @@ func TestWakeRestoresTheWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the first turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
 	cleanedUpAfterAMerge(t, h, s)
 	head := gitIn(t, h.Dir, "rev-parse", "issue-7")
 

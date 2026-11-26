@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/nednella/agentos/internal/mcp"
 	"github.com/nednella/agentos/internal/session"
@@ -182,6 +184,48 @@ func (c Claude) ValidModel(model, effort string) error {
 func (c Claude) Prepare(Launch) error { return nil }
 
 func (c Claude) Usage(from usage.Mark) usage.Reader { return usage.NewCursor(from) }
+
+// maxFolderName is how long the name of a project's folder in claude's config may be before claude cuts it.
+const maxFolderName = 200
+
+// Transcript is the file claude writes the conversation to, "" with no config folder. The folder is named from the
+// folder claude started in, not the one it works in now, which a cd changes.
+func (c Claude) Transcript(origin, conversation string) string {
+	if c.ConfigDir == "" || origin == "" || conversation == "" {
+		return ""
+	}
+	return filepath.Join(c.ConfigDir, "projects", folderName(origin), conversation+".jsonl")
+}
+
+// folderName is how claude names the folder of the transcripts of a project: each character that is not a letter or a
+// digit becomes "-", and the name of a long path is cut and followed by the hash of the path, as claude does it. Claude
+// works in UTF-16 units, so a character outside the basic plane counts for two.
+func folderName(path string) string {
+	var b strings.Builder
+	for _, r := range path {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r > 0xFFFF:
+			b.WriteString("--")
+		default:
+			b.WriteByte('-')
+		}
+	}
+	name := b.String()
+	if len(name) <= maxFolderName {
+		return name
+	}
+	var hash int32
+	for _, unit := range utf16.Encode([]rune(path)) {
+		hash = hash<<5 - hash + int32(unit)
+	}
+	abs := int64(hash)
+	if abs < 0 {
+		abs = -abs
+	}
+	return name[:maxFolderName] + "-" + strconv.FormatInt(abs, 36)
+}
 
 type payload struct {
 	NotificationType     string         `json:"notification_type"`

@@ -16,7 +16,7 @@ const (
 	Settled State = "settled" // the agent's session is gone; the row stays until deleted
 )
 
-// Record is what a hook leaves behind: in a state file and on the bus.
+// Record is a session's state as the state file holds it.
 type Record struct {
 	Session      string    `json:"session"`
 	State        State     `json:"state"`
@@ -29,8 +29,9 @@ type Record struct {
 	Cwd          string    `json:"cwd,omitempty"`          // where the agent was working at the latest event
 	Conversation string    `json:"conversation,omitempty"` // the agent's id for its conversation, to resume it
 	Transcript   string    `json:"transcript,omitempty"`   // the file the agent writes its conversation to
-	AgentModel   string    `json:"agentModel,omitempty"`   // the model the agent says it runs, when its hooks say; prices a transcript that names none
+	AgentModel   string    `json:"agentModel,omitempty"`   // the model the agent says it runs, when its stream says; prices a transcript that names none
 	Changes      []Change  `json:"changes,omitempty"`      // the latest state changes, oldest first, so the timeline outlives the app
+	Observed     int64     `json:"observed,omitempty"`     // the latest seq of the chat log whose event the state holds, so a restart folds in each only once
 
 	Identity
 	SettledAt int64 `json:"settledAt,omitempty"` // unix ms, set by the desktop app when it sees the session end
@@ -38,7 +39,7 @@ type Record struct {
 
 // Identity is what the desktop app started a session as. The app writes it when the session starts and wakes, so a
 // session that ends while the app is closed comes back as itself. Model and Effort follow the agent: the start
-// choice until its first turn, then what its transcript or its hooks say it used last.
+// choice until its first turn, then what its transcript or its stream says it used last.
 type Identity struct {
 	N       int    `json:"n,omitempty"` // the thread's number in its project: given once, never changed or given again
 	Title   string `json:"title,omitempty"`

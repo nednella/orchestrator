@@ -46,7 +46,7 @@ func TestSessionLifecycle(t *testing.T) {
 
 	t.Run("hooks", func(t *testing.T) {
 		before := h.Rec.Count("attention")
-		h.Hook(t, second.ID, "Notification", `{"message":"Claude needs your permission"}`)
+		h.Observe(t, second.ID, "Notification", `{"message":"Claude needs your permission"}`)
 		eventually(t, "waiting", func() bool {
 			s := h.Rec.LastSessions()
 			return len(s) == 2 && s[0].ID == second.ID && s[0].State == "waiting"
@@ -61,19 +61,19 @@ func TestSessionLifecycle(t *testing.T) {
 			t.Errorf("last event = %s %s", name, got)
 		}
 
-		h.Hook(t, first.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+		h.Observe(t, first.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 		eventually(t, "working", func() bool {
 			s := h.Rec.LastSessions()
 			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "working"
 		})
 		repliedBefore := h.Rec.CountAttention("replied")
-		h.Hook(t, first.ID, "Stop", `{}`)
+		h.Observe(t, first.ID, "Stop", `{}`)
 		eventually(t, "idle after the reply", func() bool {
 			s := h.Rec.LastSessions()
 			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "idle"
 		})
 		eventually(t, "replied attention for a turn that ended", func() bool { return h.Rec.CountAttention("replied") == repliedBefore+1 })
-		h.Hook(t, second.ID, "PreToolUse", `{"tool_name":"Edit","tool_input":{"file_path":"a.tsx"}}`)
+		h.Observe(t, second.ID, "PreToolUse", `{"tool_name":"Edit","tool_input":{"file_path":"a.tsx"}}`)
 		eventually(t, "idle then working order", func() bool {
 			s := h.Rec.LastSessions()
 			return len(s) == 2 && s[0].ID == first.ID && s[1].State == "working" && s[1].Detail == "Edit a.tsx"
@@ -562,10 +562,10 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 				t.Fatal(err)
 			}
 			transcript := filepath.Join(t.TempDir(), "conv.jsonl")
-			h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
+			h.Observe(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
 			appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
 			for _, hook := range tt.hooks {
-				h.Hook(t, s.ID, hook[0], hook[1])
+				h.Observe(t, s.ID, hook[0], hook[1])
 			}
 			eventually(t, tt.state, func() bool { return stateOf(h, s.ID) == tt.state })
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -581,9 +581,6 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 				t.Fatal(err)
 			}
 			eventually(t, "idle after the interrupt", func() bool { return stateOf(h, s.ID) == "idle" })
-			if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Event != session.TurnError {
-				t.Errorf("state after the interrupt = %+v, %v; want a %s", rec, err, session.TurnError)
-			}
 			eventually(t, "the held prompt once the turn ends", func() bool {
 				users := userLines(t, h, s.ID)
 				return len(users) == 1 && strings.Contains(users[0], "/address-review 12")
@@ -613,7 +610,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 			}
 			_, socket := hostFiles(h, s.ID)
 			eventually(t, "the host's socket", func() bool { return exists(socket) })
-			h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+			h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 			eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 			if err := tt.end(h, s.ID); err != nil {
 				t.Fatal(err)
@@ -627,12 +624,12 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 	}
 }
 
-func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
+func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 	for _, tt := range []struct {
-		name, stop, state string
+		name, message, state string
 	}{
-		{"a reply", `{"last_assistant_message":"Done."}`, "idle"},
-		{"a question", `{"last_assistant_message":"Which branch should I use?"}`, "waiting"},
+		{"a reply", "next", "idle"},
+		{"a question", "question", "waiting"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
@@ -640,30 +637,38 @@ func TestATurnTheStopHookEndedEndsOnce(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			transcript := filepath.Join(t.TempDir(), "conv.jsonl")
-			h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"go","transcript_path":%q}`, transcript))
-			appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
-			h.Hook(t, s.ID, "Stop", tt.stop)
-			stopped, err := bus.ReadState(h.State, s.ID)
-			if err != nil || stopped.Event != "Stop" {
-				t.Fatalf("state after Stop = %+v, %v", stopped, err)
+			// Claude writes its transcript where the folder it starts in and its conversation say.
+			ch, err := h.Sessions().ChatOf(s.ID)
+			if err != nil {
+				t.Fatal(err)
 			}
+			folder, err := filepath.EvalSymlinks(ch.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			transcript := agent.Claude{ConfigDir: os.Getenv("CLAUDE_CONFIG_DIR")}.Transcript(folder, "fake-session")
+			if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(100*time.Millisecond), 1000, 100))
 
-			if err := sendToHost(h, s.ID, "next"); err != nil {
+			if err := sendToHost(h, s.ID, tt.message); err != nil {
 				t.Fatal(err)
 			}
 			chatLog, _ := hostFiles(h, s.ID)
-			eventually(t, "the host's turn_end after the Stop", func() bool {
+			eventually(t, "the host's turn_end", func() bool {
 				data, _ := os.ReadFile(chatLog)
 				return strings.Contains(string(data), `"kind":"turn_end"`)
 			})
-			time.Sleep(1500 * time.Millisecond) // past the wait for the turn's last reply
-			if rec, err := bus.ReadState(h.State, s.ID); err != nil || !rec.At.Equal(stopped.At) {
-				t.Errorf("state after the host's turn_end = %+v, %v; want the Stop's, at %v", rec, err, stopped.At)
+			eventually(t, "the state the turn ends in", func() bool {
+				rec, err := bus.ReadState(h.State, s.ID)
+				return err == nil && rec.Event == "Stop" && stateOf(h, s.ID) == tt.state
+			})
+			if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Transcript != transcript || rec.Conversation != "fake-session" {
+				t.Errorf("state after the turn = %+v, %v; want the transcript %s", rec, err, transcript)
 			}
-			if got := stateOf(h, s.ID); got != tt.state {
-				t.Errorf("state = %s, want %s", got, tt.state)
-			}
+			eventually(t, "the turn's usage in the event log", func() bool { return len(h.Events(t, "usage")) == 1 })
+			time.Sleep(1500 * time.Millisecond)
 			if events := h.Events(t, "usage"); len(events) != 1 || events[0].Tokens.Input != 1000 {
 				t.Errorf("usage events = %+v, want the turn's once", events)
 			}
@@ -681,9 +686,9 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	chatLog, _ := hostFiles(h, s.ID)
 	const turns = 10
 	for i := range turns {
-		h.Hook(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"turn %d","transcript_path":%q}`, i, transcript))
+		h.Observe(t, s.ID, "UserPromptSubmit", fmt.Sprintf(`{"prompt":"turn %d","transcript_path":%q}`, i, transcript))
 		appendLines(t, transcript, assistantLine(fmt.Sprintf("msg_%d", i), time.Now().Add(100*time.Millisecond), 100, 10))
-		h.Hook(t, s.ID, "Stop", "{}")
+		h.Observe(t, s.ID, "Stop", "{}")
 		if err := sendToHost(h, s.ID, "next"); err != nil {
 			t.Fatal(err)
 		}
@@ -692,7 +697,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 			return strings.Count(string(data), `"kind":"turn_end"`) == i+1
 		})
 	}
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"last"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"last"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 	time.Sleep(1500 * time.Millisecond) // past the wait for the last Stop's usage
 	usage := len(h.Events(t, "usage"))
@@ -757,9 +762,9 @@ func TestMacStaysAwakeWhileASessionWorks(t *testing.T) {
 	}
 	awake := func() any { return h.Rec.Last("awake") }
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "the assertion held", func() bool { return awake() == true })
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the assertion released", func() bool { return awake() == false })
 }
 
@@ -776,7 +781,7 @@ func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
 	view := func() sessions.Session { got, _ := h.Session(s.ID); return got }
 	replied := func() int { return h.Rec.CountAttentionFor(s.ID, "replied") }
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return view().State == session.Working })
 	for _, step := range []struct {
 		name       string
@@ -793,7 +798,7 @@ func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
 	} {
 		h.Sessions().BackgroundChanged(s.ID, step.background)
 		if step.hook != "" {
-			h.Hook(t, s.ID, step.hook, `{}`)
+			h.Observe(t, s.ID, step.hook, `{}`)
 		}
 		eventually(t, step.name, func() bool { v := view(); return v.State == step.state && v.Subagents == step.subagents })
 		if got := replied(); got != step.replied {
@@ -814,27 +819,27 @@ func TestIdleReminders(t *testing.T) {
 	state := func() string { got, _ := h.Session(s.ID); return string(got.State) }
 	waits := func() int { st, _ := h.Stats(7, ""); return st.Total }
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return state() == "working" })
 	replied := h.Rec.CountAttention("replied")
-	h.Hook(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
 	eventually(t, "a turn killed by an error to stop showing as working", func() bool { return state() == "idle" })
 	if h.Rec.CountAttention("replied") != replied || waits() != 0 {
 		t.Errorf("an idle reminder raised attention (%d) or opened a wait (%d)", h.Rec.CountAttention("replied")-replied, waits())
 	}
 
-	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting", func() bool { return state() == "waiting" })
-	h.Hook(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
 	time.Sleep(300 * time.Millisecond)
 	if state() != "waiting" {
 		t.Errorf("an idle reminder changed a waiting session to %s", state())
 	}
 
-	h.Hook(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
+	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
 	eventually(t, "working again", func() bool { return state() == "working" })
 	replied = h.Rec.CountAttention("replied")
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"I fixed the test."}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"I fixed the test."}`)
 	eventually(t, "the reply", func() bool { return h.Rec.CountAttention("replied") > replied })
 	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Kind != "permission" {
 		t.Errorf("a finished turn counted as an interruption: %+v", st.ByCause)
@@ -849,11 +854,11 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 	}
 	state := func() string { got, _ := h.Session(s.ID); return string(got.State) }
 
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return state() == "working" })
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Which branch should I use?"}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"Which branch should I use?"}`)
 	eventually(t, "waiting", func() bool { return state() == "waiting" })
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"main"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"main"}`)
 	eventually(t, "working again", func() bool { return state() == "working" })
 	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Label != "Question in reply" {
 		t.Errorf("the question did not count as a wait: %+v", st.ByCause)
@@ -898,9 +903,7 @@ func TestSettledSessionsSurviveARestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "SessionEnd", `{}`)
-	eventually(t, "settled by its hook", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
-	if err := h.SettleThread(s.ID); err != nil && !strings.Contains(err.Error(), "settled") {
+	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "settled after the process is gone", func() bool { got, ok := h.Session(s.ID); return ok && got.State == "settled" && got.SettledAt > 0 })
@@ -937,8 +940,8 @@ func TestProjectCountsFollowTheSessions(t *testing.T) {
 	if got := counts(); got.Sessions != 2 || got.NeedsYou != 0 || got.Working != 0 {
 		t.Errorf("fresh counts = %+v", got)
 	}
-	h.Hook(t, a.ID, "Notification", `{"message":"needs you","notification_type":"permission_prompt"}`)
-	h.Hook(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
+	h.Observe(t, a.ID, "Notification", `{"message":"needs you","notification_type":"permission_prompt"}`)
+	h.Observe(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
 	eventually(t, "counts to follow the hooks", func() bool {
 		got := counts()
 		return got.Sessions == 2 && got.NeedsYou == 1 && got.Working == 1
@@ -946,12 +949,14 @@ func TestProjectCountsFollowTheSessions(t *testing.T) {
 	if h.Rec.Count("projects") == 0 {
 		t.Error("no projects event")
 	}
-	h.Hook(t, b.ID, "Stop", `{}`)
+	h.Observe(t, b.ID, "Stop", `{}`)
 	eventually(t, "a replied session to count as idle, not needing you", func() bool {
 		got := counts()
 		return got.NeedsYou == 1 && got.Working == 0
 	})
-	h.Hook(t, a.ID, "SessionEnd", `{}`)
+	if err := h.SettleThread(a.ID); err != nil {
+		t.Fatal(err)
+	}
 	eventually(t, "a settled session to leave the counts", func() bool { return counts().Sessions == 1 })
 }
 

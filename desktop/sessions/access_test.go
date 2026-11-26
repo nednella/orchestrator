@@ -150,7 +150,7 @@ func TestSetAccessToFullRestarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the first turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
 	pane := paneOf(t, h, s.ID)
 
 	if err := h.SetAccess(s.ID, "full"); err != nil {
@@ -302,7 +302,7 @@ func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I change the file?"}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"Shall I change the file?"}`)
 	eventually(t, "the thread waiting on the owner", func() bool { got, _ := h.Session(s.ID); return got.State == session.Waiting })
 
 	if err := h.SetAccess(s.ID, "supervised"); err != nil {
@@ -324,7 +324,7 @@ func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
-	h.Hook(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
+	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
 	path := os.Getenv("PATH")
 	t.Setenv("PATH", apptest.PathWithout("claude"))
 

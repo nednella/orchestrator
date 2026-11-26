@@ -292,7 +292,7 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	s, _ := h.Session(id)
-	h.Hook(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
+	h.Observe(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
 	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
@@ -327,7 +327,7 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
 	h, id, _ := worktreeThread(t)
 	s, _ := h.Session(id)
-	h.Hook(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
+	h.Observe(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
 	shell, err := h.ShellNew(id)
 	if err != nil {
 		t.Fatal(err)

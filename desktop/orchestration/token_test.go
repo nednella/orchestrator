@@ -177,7 +177,7 @@ func TestForkGetsItsOwnToken(t *testing.T) {
 	if err := os.WriteFile(transcript, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, src.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
+	h.Observe(t, src.ID, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
 	c, err := h.Sessions().ChatOf(src.ID)
 	if err != nil {
 		t.Fatal(err)

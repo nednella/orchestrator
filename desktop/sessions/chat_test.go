@@ -196,9 +196,9 @@ func TestReadThreadCountsInStats(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{read.ID, work.ID} {
-		h.Hook(t, id, "UserPromptSubmit", `{"prompt":"a"}`)
-		h.Hook(t, id, "Notification", `{"message":"Claude needs your permission","notification_type":"permission_prompt"}`)
-		h.Hook(t, id, "Stop", `{}`)
+		h.Observe(t, id, "UserPromptSubmit", `{"prompt":"a"}`)
+		h.Observe(t, id, "Notification", `{"message":"Claude needs your permission","notification_type":"permission_prompt"}`)
+		h.Observe(t, id, "Stop", `{}`)
 	}
 	for _, kind := range []string{activity.Prompt, activity.SessionStart, activity.Worked, activity.Wait} {
 		eventually(t, kind+" of the Read thread", func() bool {
@@ -219,7 +219,7 @@ func TestReadThreadCountsInStats(t *testing.T) {
 
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
 	appendLines(t, transcript, assistantLine("msg_1", time.Now().Add(time.Second), 1000, 100))
-	h.Hook(t, read.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
+	h.Observe(t, read.ID, "Stop", fmt.Sprintf(`{"transcript_path":%q}`, transcript))
 	eventually(t, "the Read thread's usage", func() bool { return len(h.Events(t, activity.Usage)) == 1 })
 }
 
@@ -381,7 +381,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 			h.RefreshPRs()
 			if tt.work {
-				h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+				h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 				eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 			}
 			h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 1))

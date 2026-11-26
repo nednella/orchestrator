@@ -123,6 +123,11 @@ type Event struct {
 	// one that is a child's result.
 	Body   string `json:"body,omitempty"`
 	Result bool   `json:"result,omitempty"`
+	// Cwd, Origin and Model are an init's: the folder Claude works in, the folder it started in, which names its
+	// transcript's folder, and the model it runs.
+	Cwd    string `json:"cwd,omitempty"`
+	Origin string `json:"origin,omitempty"`
+	Model  string `json:"model,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and

@@ -127,7 +127,7 @@ func TestModelSurvivesARestartAndReachesTheTally(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, s.ID, "Notification", `{"message":"Claude needs your permission"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission"}`)
 	eventually(t, "a wait with the model", func() bool {
 		st, _ := h.Stats(7, "")
 		return len(st.Recent) == 1 && st.Recent[0].Model == "opus"

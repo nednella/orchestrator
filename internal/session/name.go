@@ -9,7 +9,7 @@ import (
 
 // Name is the tmux session name: "<project key>/<token>". The token is minted once and
 // never reused, so a session shares nothing with an earlier one. The title shown to the user lives in a tmux
-// option, so renaming never changes the name the agent's hooks report under. A name with
+// option, so renaming never changes the name the agent's events are kept under. A name with
 // Shell set is one of the project's shells, "<project key>/shell" for the first and
 // "<project key>/shell-<k>" for the rest; a shell is not an agent and never reports.
 type Name struct {

@@ -75,8 +75,8 @@ func TestProjects(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h.Hook(t, a.ID, "Notification", `{"message":"needs you"}`)
-		h.Hook(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
+		h.Observe(t, a.ID, "Notification", `{"message":"needs you"}`)
+		h.Observe(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
 		counts := func() string {
 			var out []string
 			list, _ := h.Rec.Last("projects").([]sessions.Project)

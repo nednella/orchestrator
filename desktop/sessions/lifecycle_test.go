@@ -161,13 +161,13 @@ func TestCleanupMerged(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	if resp := h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
 	}
 
 	openThenMerge(h)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the session to be cleaned up", cleanedUp(h, s.ID))
 
 	if exists(wt) || branches(t, h.Dir) == "" {
@@ -634,7 +634,7 @@ func TestBranchStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	cwd, _ := json.Marshal(map[string]string{"cwd": wt}) // the same folder, so only the status is read again
-	h.Hook(t, s.ID, "PostToolUse", string(cwd))
+	h.Observe(t, s.ID, "PostToolUse", string(cwd))
 	eventually(t, "the tool call's change in the row", func() bool { got, _ := h.Session(s.ID); return got.Git != nil && got.Git.Uncommitted == 2 })
 }
 
@@ -1150,7 +1150,7 @@ func TestPROpenedAttention(t *testing.T) {
 		h := newHarness(t)
 		repoFixture(t, h)
 		s := issueSession(h, t, 12)
-		h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+		h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 		eventually(t, "working", func() bool {
 			got, _ := h.Session(s.ID)
 			return got.State == "working"
@@ -1160,7 +1160,7 @@ func TestPROpenedAttention(t *testing.T) {
 		if got := h.Rec.CountAttentionFor(s.ID, "opened"); got != 0 {
 			t.Errorf("opened attention events while working = %d, want 0", got)
 		}
-		h.Hook(t, s.ID, "Stop", `{}`)
+		h.Observe(t, s.ID, "Stop", `{}`)
 		eventually(t, "idle", func() bool {
 			got, _ := h.Session(s.ID)
 			return got.State == "idle"
@@ -1168,8 +1168,8 @@ func TestPROpenedAttention(t *testing.T) {
 		if opened, replied := h.Rec.CountAttentionFor(s.ID, "opened"), h.Rec.CountAttentionFor(s.ID, "replied"); opened != 1 || replied != 0 {
 			t.Errorf("after the reply: opened %d, replied %d; want 1 and 0", opened, replied)
 		}
-		h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
-		h.Hook(t, s.ID, "Stop", `{}`)
+		h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"more"}`)
+		h.Observe(t, s.ID, "Stop", `{}`)
 		eventually(t, "replied again", func() bool { return h.Rec.CountAttentionFor(s.ID, "replied") == 1 })
 		if got := h.Rec.CountAttentionFor(s.ID, "opened"); got != 1 {
 			t.Errorf("opened attention events after a second reply = %d, want 1", got)
@@ -1377,7 +1377,7 @@ func TestWorkingThreadKeepsItsWorktree(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 
 	if err := h.Cleanup(s.ID, false); err != nil {
@@ -1388,7 +1388,7 @@ func TestWorkingThreadKeepsItsWorktree(t *testing.T) {
 		t.Errorf("the clean-up stopped the turn: state %q", got)
 	}
 
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
 	if err := h.Cleanup(s.ID, false); err != nil {
 		t.Fatal(err)
@@ -1554,7 +1554,7 @@ func TestFolderChildIsRefusedDuringACleanup(t *testing.T) {
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
 	pushWork(t, parent.Worktree)
-	h.Hook(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
+	h.Observe(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, parent.Worktree))
 	eventually(t, "idle", func() bool { return stateOf(h, parent.ID) == "idle" })
 	release, done := heldCleanup(t, h, parent.ID)
 
@@ -1594,13 +1594,13 @@ func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 	if err := os.Mkdir(in, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, in))
+	h.Observe(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, in))
 	eventually(t, "the other thread at work", func() bool { return stateOf(h, other.ID) == "working" })
 
 	openThenMerge(h)
 	keptFor(t, h, s.ID, wt, "Thread Look around also works in this worktree")
 
-	h.Hook(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, h.Dir))
+	h.Observe(t, other.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, h.Dir))
 	eventually(t, "the other thread back in the project folder", func() bool { return stateOf(h, other.ID) == "idle" })
 	if err := h.Cleanup(s.ID, false); err != nil {
 		t.Fatal(err)
@@ -1617,7 +1617,7 @@ func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
 	wt := s.Worktree
 	pushWork(t, wt)
 	head := gitIn(t, wt, "rev-parse", "HEAD")
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return stateOf(h, s.ID) == "working" })
 
 	openThenMerge(h)
@@ -1630,7 +1630,7 @@ func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
 		t.Fatalf("the clean-up ran during the turn: worktree there %v, log %+v", exists(wt), h.Cleanups())
 	}
 
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the clean-up once the turn ended", cleanedUp(h, s.ID))
 	if exists(wt) || gitIn(t, h.Dir, "rev-parse", "issue-7") != head {
 		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
@@ -1646,8 +1646,8 @@ func TestMergeWhileAQuestionWaitsCleansUpAtOnce(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
 	eventually(t, "waiting on the owner's answer", func() bool { return stateOf(h, s.ID) == "waiting" })
 
 	openThenMerge(h)
@@ -1663,8 +1663,8 @@ func TestMergeDuringAPermissionPromptWaitsForTheTurn(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	h.Hook(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting on a permission", func() bool { return stateOf(h, s.ID) == "waiting" })
 
 	openThenMerge(h)
@@ -1674,8 +1674,8 @@ func TestMergeDuringAPermissionPromptWaitsForTheTurn(t *testing.T) {
 		t.Fatalf("the merge cut the turn off: row %+v, worktree there %v, log %+v", got, exists(wt), h.Cleanups())
 	}
 
-	h.Hook(t, s.ID, "PostToolUse", `{}`)
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Done."}`)
+	h.Observe(t, s.ID, "PostToolUse", `{}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"Done."}`)
 	eventually(t, "the clean-up once the turn ended", cleanedUp(h, s.ID))
 	if exists(wt) || branches(t, h.Dir) == "" {
 		t.Errorf("worktree there %v, branches %q", exists(wt), branches(t, h.Dir))
@@ -1688,7 +1688,7 @@ func TestQuestionReplyDoesNotKeepTheWorktree(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
+	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"Shall I open the PR?"}`)
 	eventually(t, "waiting on the owner's answer", func() bool { return stateOf(h, s.ID) == "waiting" })
 
 	if err := h.Cleanup(s.ID, false); err != nil {
@@ -1765,7 +1765,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	if resp := h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
 	}
@@ -1777,7 +1777,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	}
 
 	openThenMerge(h)
-	h.Hook(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "Stop", `{}`)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))
 	if got, _ := h.Session(s.ID); got.State != "settled" || got.Evidence != 1 {
 		t.Errorf("row = %+v", got)
