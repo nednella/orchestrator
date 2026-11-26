@@ -35,8 +35,8 @@ export function stepTab(st: PanelState, delta: -1 | 1): PanelState {
   return { ...st, active: st.tabs[(at + delta + st.tabs.length) % st.tabs.length] }
 }
 
-// What the chat column holds, which the expanded panel hides: the focus targets in it, and the centre page, Stats or
-// News, that opens in the chat's place.
+// What the chat column holds, which the expanded panel hides: the focus targets in it, and the centre page, News,
+// that opens in the chat's place.
 type ChatColumnTarget = FocusTarget | 'centre'
 const CHAT_COLUMN: ChatColumnTarget[] = ['thread', 'composer', 'shell', 'centre']
 

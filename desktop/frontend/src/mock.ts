@@ -3,11 +3,11 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
-type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; waits: Wait[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
+type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
 
 const minute = 60_000
 // The reply of the seeded #444 chat that its mock fork is cut at.
@@ -42,46 +42,6 @@ function seedNotes(texts: string[]): Note[] {
     archived: i >= texts.length - 2,
     images: i === 0 ? [shot(210, 'before: banner overlaps'), shot(150, 'after: thin bar')] : i === 3 ? [shot(30, 'postcode lookup')] : [],
   }))
-}
-
-const causes: { kind: WaitKind; label: string; weight: number; waitMin: number }[] = [
-  { kind: 'permission', label: 'Bash: npm run test', weight: 18, waitMin: 2 },
-  { kind: 'permission', label: 'Bash: npx tsc --noEmit', weight: 14, waitMin: 1 },
-  { kind: 'permission', label: 'Edit', weight: 12, waitMin: 1 },
-  { kind: 'permission', label: 'Bash: gh pr create', weight: 6, waitMin: 3 },
-  { kind: 'permission', label: 'Read outside project', weight: 5, waitMin: 2 },
-  { kind: 'question', label: 'Question', weight: 10, waitMin: 7 },
-  { kind: 'idle', label: 'Reply landed', weight: 16, waitMin: 11 },
-]
-
-function seedWaits(titles: [string, number][]): Wait[] {
-  const now = Date.now()
-  let seedValue = 7
-  const random = () => {
-    seedValue = (seedValue * 16807) % 2147483647
-    return seedValue / 2147483647
-  }
-  const total = causes.reduce((sum, c) => sum + c.weight, 0)
-  const waits: Wait[] = []
-  for (let d = 14; d >= 0; d--) {
-    const weekend = new Date(now - d * 86_400_000).getDay() % 6 === 0
-    const count = Math.round((weekend ? 2 : 7) + random() * 6)
-    for (let i = 0; i < count; i++) {
-      let roll = random() * total
-      const cause = causes.find((c) => (roll -= c.weight) < 0) ?? causes[0]
-      const [sessionTitle, issue] = titles[Math.floor(random() * titles.length)]
-      waits.push({
-        sessionTitle,
-        issue,
-        model: 'sonnet',
-        kind: cause.kind,
-        label: cause.label,
-        startedAt: now - d * 86_400_000 - Math.floor(random() * 9 * 3_600_000),
-        waitedMs: Math.round((cause.waitMin * (0.4 + random() * 1.6)) * minute),
-      })
-    }
-  }
-  return waits.sort((a, b) => b.startedAt - a.startedAt)
 }
 
 function pr(number: number, state: PR['state'], checks: PR['checks'], extra: Partial<PR> = {}): PR {
@@ -199,9 +159,9 @@ export function createMock(params: URLSearchParams) {
   const termReaders = new Map<string, { onData: (bytes: Uint8Array) => void; onEnd: () => void }>()
   const sessions: Session[] = []
   const data: ProjectData[] = [
-    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 2 * 3_600_000, sessionTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
-    { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), waits: seedWaits([['#12 session memory', 12]]).slice(0, 12), cleanups: [], needsSetup: true },
-    { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], waits: [], cleanups: [] },
+    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, sessionTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
+    { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), cleanups: [], needsSetup: true },
+    { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], cleanups: [] },
   ]
   let current = data[0]
   let nextN = 1
@@ -614,29 +574,14 @@ export function createMock(params: URLSearchParams) {
     return data.find((p) => p.name === s.project) ?? current
   }
 
-  function closeWait(s: Session, at: number) {
-    const open = owner(s).waits.find((w) => w.sessionTitle === s.title && w.waitedMs === 0)
-    if (open) open.waitedMs = Math.max(at - open.startedAt, 1000)
-  }
-
-  function openWait(s: Session, at: number) {
-    const permission = s.detail.includes('permission')
-    const kind: WaitKind = s.state === 'idle' ? 'idle' : permission ? 'permission' : 'question'
-    const label = { permission: 'Bash: npx tsc --noEmit', question: 'Question', idle: 'Reply landed' }[kind]
-    owner(s).waits.unshift({ sessionTitle: s.title, issue: s.issue, model: s.model, kind, label, startedAt: at, waitedMs: 0 })
-  }
-
   function setState(s: Session, state: State) {
     const at = Date.now()
-    closeWait(s, at)
     s.state = state
     s.detail = pick(details[state])
     s.lastEventAt = at
     s.history = [...s.history, { state, at }].slice(-200)
     publish()
     if (state === 'waiting' || state === 'idle') {
-      openWait(s, at)
-      emit('stats', undefined)
       if (s.project === current.name) emit('attention', { id: s.id, state: state === 'idle' ? 'replied' : 'waiting' })
     }
   }
@@ -669,36 +614,6 @@ export function createMock(params: URLSearchParams) {
   function switchTo(next: ProjectData): Snapshot {
     current = next
     return snapshot()
-  }
-
-  function statsFor(days: number, project: string): Stats {
-    const since = Date.now() - days * 86_400_000
-    const waits = data
-      .filter((p) => !project || p.name === project)
-      .flatMap((p) => p.waits)
-      .filter((w) => w.startedAt >= since)
-      .sort((a, b) => b.startedAt - a.startedAt)
-    const done = waits.filter((w) => w.waitedMs > 0).map((w) => w.waitedMs).sort((a, b) => a - b)
-    const groups = new Map<string, { kind: WaitKind; label: string; count: number; totalWaitMs: number }>()
-    for (const w of waits) {
-      const g = groups.get(w.label) ?? { kind: w.kind, label: w.label, count: 0, totalWaitMs: 0 }
-      g.count++
-      g.totalWaitMs += w.waitedMs
-      groups.set(w.label, g)
-    }
-    const byDay = Array.from({ length: days }, (_, i) => {
-      const day = new Date(Date.now() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10)
-      return { day, count: waits.filter((w) => new Date(w.startedAt).toISOString().slice(0, 10) === day).length }
-    })
-    return {
-      days,
-      total: waits.length,
-      totalWaitMs: done.reduce((sum, ms) => sum + ms, 0),
-      medianWaitMs: done.length ? done[Math.floor(done.length / 2)] : 0,
-      byCause: [...groups.values()].sort((a, b) => b.count - a.count),
-      byDay,
-      recent: waits.slice(0, 50),
-    }
   }
 
   function ledgerFor(days: number, project: string): Ledger {
@@ -1237,7 +1152,7 @@ export function createMock(params: URLSearchParams) {
     },
     AddProject: async () => {
       const name = `picked-folder-${data.length}`
-      data.push({ name, dir: `~/code/${name}`, repo: '', notes: [], issues: [], waits: [], cleanups: [], needsSetup: true })
+      data.push({ name, dir: `~/code/${name}`, repo: '', notes: [], issues: [], cleanups: [], needsSetup: true })
       const snap = switchTo(data[data.length - 1])
       emit('projects', snap.projects)
       return snap
@@ -1246,7 +1161,7 @@ export function createMock(params: URLSearchParams) {
       if (!/^[~/]/.test(dir) || dir.includes('nope')) throw `Folder does not exist: ${dir}`
       const name = dir.replace(/\/+$/, '').split('/').pop() || dir
       if (data.some((p) => p.name === name)) throw `Project ${name} already exists`
-      data.push({ name, dir, repo: '', notes: [], issues: [], waits: [], cleanups: [], needsSetup: true })
+      data.push({ name, dir, repo: '', notes: [], issues: [], cleanups: [], needsSetup: true })
       const snap = switchTo(data[data.length - 1])
       emit('projects', snap.projects)
       return snap
@@ -1422,7 +1337,6 @@ export function createMock(params: URLSearchParams) {
       if (shell) shell.opened = false
       endTermStream(id)
     },
-    Stats: async (days: number, project: string) => delay(statsFor(days, project), 150),
     Ledger: async (days: number, project: string) => delay(ledgerFor(days, project), 300),
     RefreshPRs: async () => github(undefined, 500),
     AckPR: async (id: string) => {

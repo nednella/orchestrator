@@ -28,12 +28,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     run: () => a.setOverlay('settings'),
   },
   {
-    id: 'stats',
-    label: 'Stats: what interrupts you',
-    shortcut: { key: 's', code: 'KeyS', alt: true },
-    run: layout.toggleStats,
-  },
-  {
     id: 'usage',
     label: 'Usage',
     shortcut: { key: 'u' },

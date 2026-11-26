@@ -32,7 +32,7 @@ export function useShortcuts(enabled: boolean) {
         if (!e.repeat) lay.closeOverlay('escape')
         return
       }
-      if (lay.statsOpen || lay.digestOpen) {
+      if (lay.digestOpen) {
         lay.closeCentre()
         orchestrator.focus('thread')
         return

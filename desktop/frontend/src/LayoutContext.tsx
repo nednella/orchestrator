@@ -44,7 +44,6 @@ export type Layout = {
   // The open thread's right panel, or Home's; expanded only while the panel shows beside the chat and takes its room.
   panel: PanelState
   panelExpanded: boolean
-  statsOpen: boolean
   digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
   closeOverlay(why: 'escape' | 'thread-focused'): void
@@ -62,7 +61,6 @@ export type Layout = {
   stepPanelTab(delta: -1 | 1): void
   setSidebarOpen(open: boolean): void
   showHome(): void
-  toggleStats(): void
   toggleDigest(): void
   openDigest(): void
   closeCentre(): void
@@ -118,7 +116,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     return saved !== undefined ? saved : (readStored<Partial<Record<Band, { sidebar?: number | null }>>>(LAYOUT_KEY, {})[band]?.sidebar ?? null)
   })
   const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
-  const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
   const zoomToast = useRef<number | null>(null)
   const focusBefore = useRef<Partial<Record<TogglePanel, Element>>>({})
@@ -183,7 +180,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     previousSelected.current = selectedId
     moveOverlay('thread-opened')
     if (first) return
-    setStatsOpen(false)
     setDigestOpen(false)
   }, [selectedId, moveOverlay])
 
@@ -226,7 +222,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   )
 
   const showHome = useCallback(() => {
-    setStatsOpen(false)
     setDigestOpen(false)
     moveOverlay('thread-opened')
     if (project) selectHome(project.key)
@@ -237,7 +232,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   panelKeyRef.current = panelKey
   useEffect(() => onFocus((target) => updatePanel(panelKeyRef.current, (st) => panelOnFocus(st, target))), [onFocus])
 
-  // A centre page, Stats or News, opens in the chat column: the overlay goes, and the expanded panel gives the room back.
+  // A centre page, News, opens in the chat column: the overlay goes, and the expanded panel gives the room back.
   const showCentre = useCallback(() => {
     moveOverlay('thread-opened')
     updatePanel(panelKey, (st) => panelOnFocus(st, 'centre'))
@@ -277,7 +272,6 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       widths: { sidebar: sidebar.width, right: right.width / 16 },
       panel,
       panelExpanded,
-      statsOpen,
       digestOpen,
       zoom(step) {
         const next = zoomedScale(scale, step)
@@ -345,23 +339,15 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       setSidebarOpen,
       showHome,
-      toggleStats() {
-        if (!statsOpen) showCentre()
-        setStatsOpen(!statsOpen)
-        setDigestOpen(false)
-      },
       toggleDigest() {
         if (!digestOpen) showCentre()
         setDigestOpen(!digestOpen)
-        setStatsOpen(false)
       },
       openDigest() {
         showCentre()
         setDigestOpen(true)
-        setStatsOpen(false)
       },
       closeCentre() {
-        setStatsOpen(false)
         setDigestOpen(false)
       },
       focusChat() {
@@ -369,7 +355,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, prefs, prefs.rightOpen, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, statsOpen, digestOpen, band, setSidebarOpen, setRightOpen, showHome, showCentre, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, prefs, prefs.rightOpen, docked, overlay, sidebar.width, right.width, panel, panelExpanded, panelKey, viewport, row, root, digestOpen, band, setSidebarOpen, setRightOpen, showHome, showCentre, showPanelView, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

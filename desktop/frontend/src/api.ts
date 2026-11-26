@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -44,7 +44,6 @@ type Backend = {
   TermResize(id: string, cols: number, rows: number): Promise<void>
   TermClose(id: string): Promise<void>
   OpenURL(url: string): Promise<void>
-  Stats(days: number, project: string): Promise<Stats>
   Ledger(days: number, project: string): Promise<Ledger>
   RefreshPRs(): Promise<void>
   AckPR(id: string): Promise<void>
@@ -133,7 +132,7 @@ const namespaces = {
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
-  stats: ['Stats', 'Ledger'],
+  stats: ['Ledger'],
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
@@ -210,7 +209,6 @@ export const api = {
   termResize: (id: string, cols: number, rows: number) => backend.TermResize(id, cols, rows).catch(() => {}),
   termClose: (id: string) => backend.TermClose(id),
   openURL: (url: string) => backend.OpenURL(url),
-  stats: (days: number, project: string) => backend.Stats(days, project),
   ledger: (days: number, project: string) => backend.Ledger(days, project),
   refreshPRs: () => backend.RefreshPRs(),
   ackPR: (id: string) => backend.AckPR(id),

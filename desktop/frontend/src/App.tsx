@@ -12,7 +12,6 @@ import { RightPanel } from './components/RightPanel'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
-import { Stats } from './components/Stats'
 import { TerminalDrawer } from './components/TerminalDrawer'
 import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
@@ -34,7 +33,7 @@ export function App() {
   useFocusedPanel()
   const fullscreen = useFullscreen()
   const { selectedId } = useOrchestrator('selectedId')
-  const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen, panelExpanded } = useLayout()
+  const { mode, docked, sidebarOpen, rightOpen, overlay, digestOpen, panelExpanded } = useLayout()
 
   return (
     <>
@@ -53,10 +52,9 @@ export function App() {
               {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
               <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
                 <div className="relative min-h-0 flex-1">
-                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>
+                  <div className={digestOpen ? 'hidden' : 'h-full'}>
                     <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
                   </div>
-                  {statsOpen && <Stats />}
                   {digestOpen && <DigestView />}
                   {overlay && <PanelOverlay panel={overlay} />}
                 </div>

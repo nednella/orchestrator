@@ -23,7 +23,7 @@ export function ThreadCardToggle({ place }: ThreadCardToggleProps) {
   const popover = card.placement === 'popover' && card.popover
   useCardPopoverDismiss(root, popover)
   const besidePanel = layout.docked.right && layout.rightOpen
-  const showsThread = selectedId !== null && !layout.statsOpen && !layout.digestOpen
+  const showsThread = selectedId !== null && !layout.digestOpen
   if (!showsThread || !hasRows || besidePanel !== (place === 'column')) return null
 
   const toggle = actionsFor(latestOrchestrator(), layout).find((a) => a.id === 'toggle-context-card')!

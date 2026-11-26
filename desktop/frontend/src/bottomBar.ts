@@ -1,4 +1,4 @@
-export type BarButtonId = 'settings' | 'pulls' | 'issues' | 'usage' | 'stats' | 'news'
+export type BarButtonId = 'settings' | 'pulls' | 'issues' | 'usage' | 'news'
 
 export type BarButton = { id: BarButtonId; label: string }
 
@@ -7,7 +7,6 @@ export const BAR_BUTTONS: readonly BarButton[] = [
   { id: 'pulls', label: 'Pull requests' },
   { id: 'issues', label: 'Issues' },
   { id: 'usage', label: 'Usage' },
-  { id: 'stats', label: 'Stats' },
   { id: 'news', label: 'News' },
 ]
 

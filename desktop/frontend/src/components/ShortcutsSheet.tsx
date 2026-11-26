@@ -13,7 +13,7 @@ const GROUPS: Group[] = [
   { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session'] },
   { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-shell', 'toggle-right', 'search-threads', 'shortcuts'] },
   { title: 'Queue', ids: ['refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
-  { title: 'Views', ids: ['stats', 'digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
+  { title: 'Views', ids: ['digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
   {
     title: 'Terminal',
     ids: ['new-terminal', 'split-terminal'],

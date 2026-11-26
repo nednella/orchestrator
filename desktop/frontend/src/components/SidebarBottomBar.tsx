@@ -18,7 +18,6 @@ const ICONS: Record<BarButtonId, ReactNode> = {
   pulls: <GitPullRequestArrow size={16} aria-hidden="true" />,
   issues: <CircleDot size={16} aria-hidden="true" />,
   usage: <ChartNoAxesColumn size={16} aria-hidden="true" />,
-  stats: <Icon name="chart" fixed />,
   news: <Icon name="digest" fixed />,
 }
 
@@ -50,10 +49,9 @@ export function SidebarBottomBar() {
     pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),
     issues: () => report(() => layout.showPanelView('issues', { expanded: true })),
     usage: openUsage,
-    stats: () => runAction('stats'),
     news: () => runAction('digest'),
   }
-  const pressed: Partial<Record<BarButtonId, boolean>> = { stats: layout.statsOpen, usage: usageOpen, news: layout.digestOpen }
+  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, news: layout.digestOpen }
   const unseen: Partial<Record<BarButtonId, number>> = { news: digestUnseenCount }
   const { shown, more } = barLayout(width)
 

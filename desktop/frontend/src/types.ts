@@ -235,28 +235,6 @@ export type DataDirChoice = {
   empty: boolean
 }
 
-export type WaitKind = 'permission' | 'question' | 'idle'
-
-export type Wait = {
-  sessionTitle: string
-  issue: number
-  model: string
-  kind: WaitKind
-  label: string
-  startedAt: number
-  waitedMs: number
-}
-
-export type Stats = {
-  days: number
-  total: number
-  totalWaitMs: number
-  medianWaitMs: number
-  byCause: { kind: WaitKind; label: string; count: number; totalWaitMs: number }[]
-  byDay: { day: string; count: number }[]
-  recent: Wait[]
-}
-
 export type LedgerRow = {
   project: string
   prompts: number
@@ -519,7 +497,6 @@ export type EventMap = {
   warnings: Warning
   awake: boolean
   memory: Memory
-  stats: undefined
   network: { online: boolean }
   evidence: { id: string; items: Evidence[] }
   digest: Digest
