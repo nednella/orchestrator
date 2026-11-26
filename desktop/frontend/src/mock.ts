@@ -135,7 +135,8 @@ export function createMock(params: URLSearchParams) {
   const flags = {
     empty: params.has('empty'),
     overlay: params.get('overlay') ?? undefined,
-    view: params.get('view') ?? undefined,
+    // digest=empty is a News that never ran, digest=failed one whose last run failed.
+    digest: params.get('digest'),
     toast: params.has('toast'),
     done: params.has('done'),
     warn: params.has('warn'),
@@ -904,6 +905,8 @@ export function createMock(params: URLSearchParams) {
   }
   const lastDigestRun = Date.now() - 2 * 86_400_000
   let digest: Digest = { running: false, startedAt: lastDigestRun - 124_000, tools: 23, lastRunAt: lastDigestRun, nextRunAt: lastDigestRun + 7 * 86_400_000, error: '', stoppedAt: 0, project: data[0].name, items: seedDigest() }
+  if (flags.digest === 'empty') digest = { ...digest, startedAt: 0, lastRunAt: 0, tools: 0, items: [] }
+  if (flags.digest === 'failed') digest = { ...digest, startedAt: Date.now() - 300_000, error: 'The agent stopped before it wrote the news: the claude command was not found', items: [] }
   const pushDigest = () => emit('digest', { ...digest, items: digest.items.map((i) => ({ ...i })) })
 
   const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms + slow))
