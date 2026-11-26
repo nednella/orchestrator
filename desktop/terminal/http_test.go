@@ -283,7 +283,7 @@ func TestALossWhileReadingOnlyRepaints(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the 10 MB printed", func() bool { _, err := os.Stat(done); return err == nil })
-	time.Sleep(time.Second) // for the last of it to leave tmux
+	time.Sleep(3 * time.Second) // for the last of it to leave tmux, which a loaded machine takes longer for
 	before := len(out.Bytes())
 	out.release()
 	eventually(t, "the repaint", func() bool { return strings.Contains(out.String()[before:], "after-the-clear") })
@@ -306,7 +306,7 @@ func TestQueuedOutputIsCapped(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the 9 MB printed", func() bool { _, err := os.Stat(done); return err == nil })
-	time.Sleep(time.Second) // for the last of it to leave tmux
+	time.Sleep(3 * time.Second) // for the last of it to leave tmux, which a loaded machine takes longer for
 
 	out := read(t, h, id)
 	eventually(t, "the redraw", func() bool { return strings.Contains(out.String(), "after-the-clear") })
