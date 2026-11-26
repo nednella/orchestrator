@@ -41,7 +41,7 @@ const session = (over: Partial<Session> = {}): Session => ({
   ...over,
 })
 
-const facts = (over: Partial<CardFacts> = {}): CardFacts => ({ machine: '', folder: '', editor: '', issueTitle: '', servers: [], agents: [], children: [], parent: null, forks: [], ...over })
+const facts = (over: Partial<CardFacts> = {}): CardFacts => ({ machine: '', folder: '', editor: '', issueTitle: '', servers: [], agents: [], children: [], parent: null, forks: [], sideChats: [], ...over })
 
 const pr: PR = {
   number: 618,
@@ -101,6 +101,18 @@ test('lineage counts the running', () => {
     lineage?.rows.map((row) => row.key),
     ['parent-shop/lead2345', 'child-shop/kid22345', 'child-shop/kid32345', 'agent-a1', 'agent-a2', 'fork-shop/fork2345'],
   )
+})
+
+test("the thread's side chats are a list of their own, after the lineage", () => {
+  const asks = session({ id: 'shop/side2345', title: 'Why the retry?', state: 'waiting', forkOf: 'shop/abcd2345', side: true })
+  const runs = session({ id: 'shop/side3345', title: 'Side chat', state: 'working', forkOf: 'shop/abcd2345', side: true })
+  const sections = cardSections(session(), facts({ forks: [session({ id: 'shop/fork2345' })], sideChats: [asks, runs] }))
+  assert.deepEqual(
+    sections.map((section) => [section.key, section.heading]),
+    [['lineage', 'Lineage'], ['sideChats', 'Side chats · 1 running']],
+  )
+  assert.deepEqual(sections[1].rows, [{ kind: 'sideChat', key: 'side-shop/side2345', thread: asks }, { kind: 'sideChat', key: 'side-shop/side3345', thread: runs }])
+  assert.equal(cardSections(session(), facts({ sideChats: [asks] }))[0].heading, 'Side chats', 'none of them running')
 })
 
 test('popover when the chat would keep under 640 px', () => {

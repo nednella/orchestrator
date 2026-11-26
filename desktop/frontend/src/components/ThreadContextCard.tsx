@@ -1,4 +1,4 @@
-import { Bot, CircleDot, CornerLeftUp, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop } from 'lucide-react'
+import { Bot, CircleDot, CornerLeftUp, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
@@ -13,6 +13,7 @@ import { AGENT_STATE_LABEL, STATE_LABEL } from '../stateMeta'
 import type { PR } from '../types'
 import { useCardFacts } from '../useCardFacts'
 import { useCopied } from '../useCopied'
+import { useSideChat } from '../useSideChat'
 import { ChecksMark } from './ChecksMark'
 import { ClaudeMark } from './ClaudeMark'
 import { ContextCardRow } from './ContextCardRow'
@@ -27,10 +28,11 @@ const RELATION_ICON = { parent: CornerLeftUp, child: Bot, fork: GitFork }
 type ThreadContextCardProps = { id: string; className: string }
 
 // ThreadContextCard is what the thread works with, at a glance: where it runs, its branch, PR and issue, its servers
-// and the threads and subagents around it.
+// and the threads and subagents around it, and its side chats.
 export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const a = useOrchestrator('select', 'report', 'openInEditor', 'openAgent')
   const { showPanelView, focusPanel } = useLayout()
+  const sideChat = useSideChat()
   const { session, sections, refreshServers } = useCardFacts(id)
   const [copied, copyBranch] = useCopied(session?.branch ?? '')
   if (!session || sections.length === 0) return null
@@ -106,6 +108,13 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
         const RelationIcon = RELATION_ICON[r.relation]
         const dot = r.relation === 'child' ? r.thread.state : undefined
         return <ContextCardRow icon={<RelationIcon size={16} aria-hidden="true" />} dot={dot} label={r.thread.title} end={STATE_LABEL[r.thread.state]} onClick={() => a.select(r.thread.id)} />
+      }
+      case 'sideChat': {
+        const open = () => {
+          closeCardPopover()
+          sideChat.open(session.id, r.thread.id)
+        }
+        return <ContextCardRow icon={<MessagesSquare size={16} aria-hidden="true" />} dot={r.thread.state} label={r.thread.title} end={STATE_LABEL[r.thread.state]} title="Open side chat" onClick={open} />
       }
     }
   }

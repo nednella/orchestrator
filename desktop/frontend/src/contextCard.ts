@@ -12,7 +12,7 @@ const MIN_HEIGHT = 160
 
 // CardFacts is what the thread's context card knows beside the thread itself. folder is the full path the thread
 // works in, and editor the app that opens it, '' while the card does not know which; the parent is the thread it was
-// delegated from or forked from, and forks are the threads forked from it.
+// delegated from or forked from, forks are the threads forked from it, and sideChats its side chats.
 export type CardFacts = {
   machine: string
   folder: string
@@ -23,6 +23,7 @@ export type CardFacts = {
   children: Session[]
   parent: Session | null
   forks: Session[]
+  sideChats: Session[]
 }
 
 export type CardRow =
@@ -34,8 +35,9 @@ export type CardRow =
   | { kind: 'server'; key: string; server: Server }
   | { kind: 'thread'; key: string; relation: 'parent' | 'child' | 'fork'; thread: Session }
   | { kind: 'agent'; key: string; agent: AgentItem }
+  | { kind: 'sideChat'; key: string; thread: Session }
 
-export type CardSection = { key: 'workspace' | 'git' | 'servers' | 'lineage'; heading: string; rows: CardRow[] }
+export type CardSection = { key: 'workspace' | 'git' | 'servers' | 'lineage' | 'sideChats'; heading: string; rows: CardRow[] }
 
 const present = <T>(row: T | false): row is T => row !== false
 
@@ -63,6 +65,7 @@ export function cardSections(s: Session, f: CardFacts): CardSection[] {
     { key: 'git', heading: '', rows: git.filter(present) },
     { key: 'servers', heading: 'Servers', rows: f.servers.map((server) => ({ kind: 'server', key: `server-${server.port}`, server })) },
     { key: 'lineage', heading: lineageLabel(f), rows: lineage },
+    { key: 'sideChats', heading: sideChatsHeading(f.sideChats), rows: f.sideChats.map((s): CardRow => ({ kind: 'sideChat', key: `side-${s.id}`, thread: s })) },
   ]
   return sections.filter((section) => section.rows.length > 0)
 }
@@ -90,6 +93,12 @@ export function editorLabel(editor: string): string {
 export function lineageLabel(f: CardFacts): string {
   const running = f.children.filter((c) => c.state === 'working').length + f.agents.filter((a) => a.state === 'running').length
   return running > 0 ? `Lineage · ${running} running` : 'Lineage'
+}
+
+// sideChatsHeading heads the thread's side chats: how many of them work now, if any.
+export function sideChatsHeading(sideChats: Session[]): string {
+  const running = sideChats.filter((s) => s.state === 'working').length
+  return running > 0 ? `Side chats · ${running} running` : 'Side chats'
 }
 
 // cardPlacement floats the card over the chat while the chat keeps room to read beside it, and else leaves it to a

@@ -7,7 +7,7 @@ import type { CardFacts, CardSection } from './contextCard'
 import type { Server, Session } from './types'
 import { useThreadServers } from './useThreadServers'
 
-type Known = Pick<Orchestrator, 'machine' | 'sessions' | 'issues' | 'project' | 'settings'>
+type Known = Pick<Orchestrator, 'machine' | 'sessions' | 'sideChats' | 'issues' | 'project' | 'settings'>
 
 function factsOf(session: Session, a: Known, servers: Server[], agents: AgentItem[]): CardFacts {
   return {
@@ -18,6 +18,7 @@ function factsOf(session: Session, a: Known, servers: Server[], agents: AgentIte
     servers,
     agents,
     ...cardLineage(session, a.sessions),
+    sideChats: a.sideChats.filter((s) => s.forkOf === session.id),
   }
 }
 
@@ -25,7 +26,7 @@ function factsOf(session: Session, a: Known, servers: Server[], agents: AgentIte
 // again. The servers are read when the card opens and at each turn end, when a thread starts
 // or stops one.
 export function useCardFacts(id: string): { session: Session | undefined; sections: CardSection[]; refreshServers(): Promise<void> } {
-  const a = useOrchestrator('machine', 'sessions', 'issues', 'project', 'settings')
+  const a = useOrchestrator('machine', 'sessions', 'sideChats', 'issues', 'project', 'settings')
   const session = a.sessions.find((s) => s.id === id)
   const agents = useThreadAgents(id)
   const { servers, refresh } = useThreadServers(id, session?.state, false)
