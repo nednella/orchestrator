@@ -626,6 +626,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}
+	takeSlot(t)
 	state, err := os.MkdirTemp("", "aos")
 	if err != nil {
 		t.Fatal(err)
