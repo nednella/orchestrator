@@ -266,11 +266,19 @@ func TestShellListsItsStartFolderAndItsFolderNow(t *testing.T) {
 		}
 	}
 	byShell := func(a, b Shell) int { return a.Name.Shell - b.Name.Shell }
-	_, shells, err := tmux.ListAll(ctx)
-	slices.SortFunc(shells, byShell)
-	if err != nil || len(shells) != 2 {
-		t.Fatalf("ListAll shells = %+v, %v", shells, err)
+	// Until a pane's child has run sleep, tmux names the pane's command tmux.
+	var shells []Shell
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(25 * time.Millisecond) {
+		var err error
+		_, shells, err = tmux.ListAll(ctx)
+		if err != nil || len(shells) != 2 {
+			t.Fatalf("ListAll shells = %+v, %v", shells, err)
+		}
+		if !slices.ContainsFunc(shells, func(sh Shell) bool { return sh.Command != "sleep" }) || time.Now().After(deadline) {
+			break
+		}
 	}
+	slices.SortFunc(shells, byShell)
 	for _, sh := range shells {
 		if sh.PID == 0 || sh.Folder != dirs[sh.Name] || sh.Command != "sleep" {
 			t.Errorf("shell %s = %+v; want the folder %s", sh.Name, sh, dirs[sh.Name])
