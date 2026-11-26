@@ -155,7 +155,7 @@ func (c *Commands) waitGets(ctx context.Context, w waitOn, end int64) bool {
 }
 
 // sendResult tells the parent its child's result m until the parent takes it, and says whether it did: false once the
-// parent is gone or ctx ends. A message held for the parent counts once it goes; one a stop of the parent kept goes at
+// parent or the child is gone, or ctx ends. A message held for the parent counts once it goes; one a stop of the parent kept goes at
 // the parent's next turn, as the sessions hold it. One the parent could not take, as when its wake was refused, goes
 // again after a pause that doubles up to a minute.
 func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bool {
@@ -185,6 +185,10 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 		case <-time.After(pause):
 		}
 		pause = min(2*pause, retryMost)
+		if ch, gone := c.threads.ChatOf(w.thread); gone != nil || ch.Deleting {
+			log.Printf("agentos: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
+			return false
+		}
 	}
 }
 

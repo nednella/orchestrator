@@ -365,36 +365,59 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 }
 
 func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
-	h := apptest.New(t)
-	repoFixture(t, h)
-	parent := threadWith(t, h, "Plan the release", session.Supervised)
-	if parent.Worktree == "" {
-		t.Fatalf("the parent has no worktree: %+v", parent)
+	for _, tt := range []struct {
+		name   string
+		delete bool // the child is deleted while its result waits
+		want   int
+	}{
+		{"until the parent wakes", false, 1},
+		{"until the child is deleted", true, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := apptest.New(t)
+			repoFixture(t, h)
+			parent := threadWith(t, h, "Plan the release", session.Supervised)
+			if parent.Worktree == "" {
+				t.Fatalf("the parent has no worktree: %+v", parent)
+			}
+			c := mustDelegate(t, h, parent.ID, `{"task":"slow","title":"Count files","access":"read","where":"worktree"}`).ID
+			if err := h.SettleThread(parent.ID); err != nil {
+				t.Fatal(err)
+			}
+			// A folder that is not the parent's worktree at its path refuses the parent's wake.
+			if err := os.RemoveAll(parent.Worktree); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(parent.Worktree, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
+			time.Sleep(1500 * time.Millisecond)
+			if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
+				t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
+			}
+			if h.Sessions().Reported(c) != 0 {
+				t.Fatal("the result is recorded as given while the parent could not wake for it")
+			}
+			if tt.delete {
+				if err := h.DeleteThread(c, false); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Remove(parent.Worktree); err != nil {
+				t.Fatal(err)
+			}
+			if tt.want > 0 {
+				apptest.Eventually(t, "the result once the parent can wake", func() bool { return len(resultLines(t, h, parent.ID, c)) > 0 })
+			} else {
+				time.Sleep(4 * time.Second) // past the next try, 2 s after the second
+				if !asleep(t, h, parent.ID) {
+					t.Error("the parent woke for the result of a deleted child")
+				}
+			}
+			noMoreResults(t, h, parent.ID, c, tt.want)
+		})
 	}
-	c := mustDelegate(t, h, parent.ID, `{"task":"slow","title":"Count files","access":"read","where":"worktree"}`).ID
-	if err := h.SettleThread(parent.ID); err != nil {
-		t.Fatal(err)
-	}
-	// A folder that is not the parent's worktree at its path refuses the parent's wake.
-	if err := os.RemoveAll(parent.Worktree); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(parent.Worktree, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
-	time.Sleep(1500 * time.Millisecond)
-	if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
-		t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
-	}
-	if h.Sessions().Reported(c) != 0 {
-		t.Fatal("the result is recorded as given while the parent could not wake for it")
-	}
-	if err := os.Remove(parent.Worktree); err != nil {
-		t.Fatal(err)
-	}
-	apptest.Eventually(t, "the result once the parent can wake", func() bool { return len(resultLines(t, h, parent.ID, c)) > 0 })
-	noMoreResults(t, h, parent.ID, c, 1)
 }
 
 func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
