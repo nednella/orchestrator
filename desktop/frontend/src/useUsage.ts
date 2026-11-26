@@ -12,6 +12,8 @@ export function useUsage() {
   const [reading, setReading] = useState(false)
   const [failure, setFailure] = useState('')
   const live = useRef(true)
+  const reportRef = useRef(report)
+  reportRef.current = report
 
   const refresh = useCallback(async () => {
     setReading(true)
@@ -29,19 +31,22 @@ export function useUsage() {
 
   useEffect(() => {
     live.current = true
-    report(async () => {
+    reportRef.current(async () => {
       const [known, ledger] = await Promise.all([api.limits(), api.ledger(1, '')])
       if (!live.current) return
       setLimits((current) => current ?? known)
       setToday(ledger.totals)
     })
     void refresh()
-    const off = on('limits', setLimits)
+    const off = on('limits', (next) => {
+      setLimits(next)
+      if (!next.error) setFailure('')
+    })
     return () => {
       live.current = false
       off()
     }
-  }, [report, refresh])
+  }, [refresh])
 
   return { limits, today, reading, error: limits?.error || failure, refresh }
 }

@@ -2,16 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import { useAgentos } from '../AgentosContext'
 import { answerConfirm, checkConfirm, useConfirm } from '../confirm'
 import { answerFor, initialFocus } from '../confirmQueue'
-
-// keepFocusIn wraps Tab and Shift+Tab around the dialog's controls, so the focus never leaves it.
-export function keepFocusIn(dialog: HTMLElement | null, e: KeyboardEvent) {
-  const controls = [...(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? [])]
-  if (controls.length === 0) return
-  const at = controls.indexOf(document.activeElement as HTMLElement)
-  const next = e.shiftKey ? (at <= 0 ? controls.length - 1 : at - 1) : (at === -1 || at === controls.length - 1 ? 0 : at + 1)
-  e.preventDefault()
-  controls[next].focus()
-}
+import { keepFocusIn } from '../focusTrap'
 
 // ConfirmHost shows the confirm askConfirm asks, one at a time: the next waits until this one is answered and gone.
 // Esc cancels. Cancel has the focus in a danger confirm and the confirm button in the others; the element that had it

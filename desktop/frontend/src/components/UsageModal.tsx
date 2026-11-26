@@ -1,11 +1,11 @@
 import { RefreshCw, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { keepFocusIn } from '../focusTrap'
 import { dollars, tokenCount } from '../spend'
 import { closeUsage, useUsageOpen } from '../usageOpen'
 import { usageRows } from '../usage'
 import { useUsage } from '../useUsage'
-import { keepFocusIn } from './ConfirmHost'
 import { UsageLimitCard } from './UsageLimitCard'
 
 const ICON_BUTTON = 'inline-flex h-[28px] w-[28px] items-center justify-center rounded-[8px] text-soft hover:bg-hover hover:text-ink disabled:opacity-60'
@@ -20,7 +20,15 @@ function Usage() {
   const { limits, today, reading, error, refresh } = useUsage()
   const dialog = useRef<HTMLDivElement>(null)
   const close = useRef<HTMLButtonElement>(null)
-  const rows = limits ? usageRows(limits, Date.now()) : []
+  const [now, setNow] = useState(Date.now)
+  const focusRef = useRef(focus)
+  focusRef.current = focus
+  const rows = limits ? usageRows(limits, now) : []
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(tick)
+  }, [])
 
   useEffect(() => {
     const opener = document.activeElement
@@ -36,14 +44,14 @@ function Usage() {
     return () => {
       window.removeEventListener('keydown', onKey, true)
       if (opener instanceof HTMLElement && opener.isConnected && opener !== document.body) opener.focus()
-      else focus('thread')
+      else focusRef.current('thread')
     }
-  }, [focus])
+  }, [])
 
   return (
     <div className="confirm-back" onMouseDown={(e) => e.target === e.currentTarget && closeUsage()}>
       <div ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-label="Usage">
-        <div className="confirm-head" style={{ textAlign: 'left' }}>
+        <div className="usage-head">
           <div className="flex items-center justify-between">
             <h2 className="confirm-title">Usage</h2>
             <div className="flex items-center gap-1">
@@ -75,7 +83,7 @@ function Usage() {
             </section>
             <section className="flex flex-col gap-1" aria-label="Today">
               <h3 className="text-small font-medium text-soft">Today</h3>
-              <p className="text-body text-ink">{today ? `${dollars(today.cost)} · ${tokenCount(today.tokens)} tokens` : ' '}</p>
+              <p className="min-h-[1.5em] text-body text-ink">{today && `${dollars(today.cost)} · ${tokenCount(today.tokens)} tokens`}</p>
             </section>
           </div>
         </div>

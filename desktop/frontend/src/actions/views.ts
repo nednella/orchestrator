@@ -44,10 +44,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     label: 'Usage',
     group: 'App',
     shortcut: { key: 'u' },
-    run() {
-      if (document.activeElement?.closest('.xterm')) return
-      toggleUsage()
-    },
+    run: toggleUsage,
   },
   {
     id: 'toggle-context-card',

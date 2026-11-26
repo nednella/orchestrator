@@ -1882,6 +1882,13 @@
     text-align: center;
   }
 
+  .usage-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+  }
+
   .confirm-title {
     font-size: 1.25rem;
     font-weight: 600;
