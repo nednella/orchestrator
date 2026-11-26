@@ -50,7 +50,12 @@ func (t *Terms) Handler() http.Handler {
 			case <-rd.wake:
 			}
 			out, lost := st.take(rd)
-			if len(out) > 0 {
+			if lost {
+				// What is left after a drop may start inside an escape sequence; the paint replaces it, as at attach.
+				if !ended {
+					t.repaint(st)
+				}
+			} else if len(out) > 0 {
 				// The window's response never ends its request's context; a write to a request it stopped fails.
 				if _, err := w.Write(out); err != nil {
 					return
@@ -59,9 +64,6 @@ func (t *Terms) Handler() http.Handler {
 			}
 			if ended {
 				return
-			}
-			if lost {
-				t.repaint(st)
 			}
 		}
 	})

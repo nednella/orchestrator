@@ -28,6 +28,7 @@ type reading struct {
 	body    bytes.Buffer
 	writes  int
 	flushes int
+	gate    chan struct{} // while set, a write waits for it to close, as a slow browser holds the reader up
 }
 
 func (r *reading) Header() http.Header { return r.header }
@@ -42,12 +43,34 @@ func (r *reading) WriteHeader(code int) {
 
 func (r *reading) Write(b []byte) (int, error) {
 	r.mu.Lock()
+	gate := r.gate
+	r.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
 	r.writes++
 	return r.body.Write(b)
+}
+
+// hold makes the next writes wait until release.
+func (r *reading) hold() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.gate = make(chan struct{})
+}
+
+func (r *reading) release() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.gate != nil {
+		close(r.gate)
+		r.gate = nil
+	}
 }
 
 func (r *reading) Flush() {
@@ -224,24 +247,52 @@ func TestStreamEndsWhenTheShellExits(t *testing.T) {
 	})
 }
 
+// flood writes a file that, printed, sends n × 512 KB through tmux to the terminal unchanged.
+func flood(t *testing.T, n int) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "capped-output-file")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	chunk := passthrough(bytes.Repeat([]byte("x"), 512<<10)) // tmux keeps at most 1 MB of one sequence
+	for range n {
+		if _, err := f.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return path
+}
+
+func TestALossWhileReadingOnlyRepaints(t *testing.T) {
+	h, id := newShell(t)
+	out := openRead(t, h, id, 100, 30)
+	t.Cleanup(out.release)
+	eventually(t, "the prompt", func() bool { return len(out.Bytes()) > 0 })
+	big, done := flood(t, 20), filepath.Join(t.TempDir(), "done")
+	out.hold()
+	cmd := `printf '\033[H\033[2J'; echo after-the-clear; cat '` + big + `'; touch '` + done + "'\n"
+	if err := h.TermWrite(id, cmd); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the 10 MB printed", func() bool { _, err := os.Stat(done); return err == nil })
+	time.Sleep(time.Second) // for the last of it to leave tmux
+	before := len(out.Bytes())
+	out.release()
+	eventually(t, "the repaint", func() bool { return strings.Contains(out.String()[before:], "after-the-clear") })
+	// The write held up is at most a few reads; what was left after the drop is about 2 MB.
+	if n := len(out.Bytes()) - before; n > 512<<10 {
+		t.Errorf("the reader got %d bytes after the loss, want only the held write and the repaint", n)
+	}
+}
+
 func TestQueuedOutputIsCapped(t *testing.T) {
 	h, id := newShell(t)
 	if err := h.TermOpen(id, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	big, done := filepath.Join(dir, "capped-output-file"), filepath.Join(dir, "done")
-	f, err := os.Create(big)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chunk := passthrough(bytes.Repeat([]byte("x"), 512<<10)) // tmux keeps at most 1 MB of one sequence
-	for range 18 {
-		if _, err := f.Write(chunk); err != nil {
-			t.Fatal(err)
-		}
-	}
-	f.Close()
+	big, done := flood(t, 18), filepath.Join(t.TempDir(), "done")
 	// The screen is cleared and then shows one line before the 9 MB, so only a redraw brings that line back.
 	cmd := `echo before-the-flood; printf '\033[H\033[2J'; echo after-the-clear; cat '` + big + `'; touch '` + done + "'\n"
 	if err := h.TermWrite(id, cmd); err != nil {
