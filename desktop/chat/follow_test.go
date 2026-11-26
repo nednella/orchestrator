@@ -92,6 +92,7 @@ func (f *fakeHost) subscribedAfter() []int64 {
 }
 
 func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aos")
 	if err != nil {
 		t.Fatal(err)
@@ -169,6 +170,7 @@ func serveUpTo(t *testing.T, ln net.Listener, last int64) {
 }
 
 func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aos")
 	if err != nil {
 		t.Fatal(err)
@@ -229,6 +231,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 }
 
 func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
@@ -238,6 +241,7 @@ func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 }
 
 func TestAKilledRunsApprovalDoesNotWaitOnceTheNextRunStarts(t *testing.T) {
+	t.Parallel()
 	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
 	chatLog, err := chatlog.OpenLog(logPath)
 	if err != nil {
@@ -261,6 +265,7 @@ func TestAKilledRunsApprovalDoesNotWaitOnceTheNextRunStarts(t *testing.T) {
 }
 
 func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
+	t.Parallel()
 	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
 	chatLog, err := chatlog.OpenLog(logPath)
 	if err != nil {
@@ -285,6 +290,7 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 }
 
 func TestASubagentClaudesListLeavesOutDoesNotWaitBeforeTheFollowerReadsTheLog(t *testing.T) {
+	t.Parallel()
 	logPath := filepath.Join(t.TempDir(), "chat.jsonl")
 	chatLog, err := chatlog.OpenLog(logPath)
 	if err != nil {
@@ -308,6 +314,7 @@ func TestASubagentClaudesListLeavesOutDoesNotWaitBeforeTheFollowerReadsTheLog(t 
 }
 
 func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aos")
 	if err != nil {
 		t.Fatal(err)
@@ -422,12 +429,14 @@ func keptCommands(t *testing.T, more ...chatlog.Event) func() []chat.Command {
 }
 
 func TestALoggedCommandListIsKeptForItsProject(t *testing.T) {
+	t.Parallel()
 	commands := keptCommands(t)
 	want := []chat.Command{{Name: "review", Description: "Review", ArgumentHint: "<pr>", Builtin: true, Aliases: []string{"pr"}}}
 	apptest.Eventually(t, "the logged list kept", func() bool { return reflect.DeepEqual(commands(), want) })
 }
 
 func TestALiveCommandListReplacesTheKeptOne(t *testing.T) {
+	t.Parallel()
 	commands := keptCommands(t, chatlog.Event{At: 2000, Kind: chatlog.KindCommands, Input: json.RawMessage(`[{"name":"compact","description":"Compact"}]`)})
 	want := []chat.Command{{Name: "compact", Description: "Compact"}}
 	apptest.Eventually(t, "the live list kept", func() bool { return reflect.DeepEqual(commands(), want) })
@@ -541,6 +550,7 @@ func answered(t *testing.T, got <-chan awaited) awaited {
 }
 
 func TestAwaitTurnGetsTheNextTurnEnd(t *testing.T) {
+	t.Parallel()
 	chats, thread, events, _ := awaitable(t,
 		chatlog.Event{Kind: chatlog.KindUser, Text: "first"},
 		chatlog.Event{Kind: chatlog.KindTurnEnd},
@@ -584,6 +594,7 @@ func TestAwaitTurnGetsTheNextTurnEnd(t *testing.T) {
 }
 
 func TestAwaitTurnEndsWhenTheHostExits(t *testing.T) {
+	t.Parallel()
 	user := chatlog.Event{Kind: chatlog.KindUser, Text: "work"}
 	t.Run("claude exits", func(t *testing.T) {
 		chats, thread, events, _ := awaitable(t, user)
@@ -619,6 +630,7 @@ func TestAwaitTurnEndsWhenTheHostExits(t *testing.T) {
 }
 
 func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
+	t.Parallel()
 	user := chatlog.Event{Kind: chatlog.KindUser, Text: "work"}
 	settle := chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle}
 	for _, tt := range []struct {
@@ -677,6 +689,7 @@ func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
 }
 
 func TestRateLimitEventsAreHandedOn(t *testing.T) {
+	t.Parallel()
 	dir, err := os.MkdirTemp("", "aos")
 	if err != nil {
 		t.Fatal(err)

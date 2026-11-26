@@ -36,6 +36,7 @@ func names(t *testing.T, c *commandLists, project string) []string {
 }
 
 func TestCommandListsKeepTheLatestPerProject(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	c := newCommandLists(dir)
 	if got := names(t, c, "main"); len(got) != 0 {
@@ -67,6 +68,7 @@ func TestCommandListsKeepTheLatestPerProject(t *testing.T) {
 }
 
 func TestProjectCommandsNeedsAKnownProject(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	svc := NewService(New(folderThread(dir), dir, func(string, any) {}), nil, func(key string) string {
 		if key == "main" {
@@ -84,6 +86,7 @@ func TestProjectCommandsNeedsAKnownProject(t *testing.T) {
 }
 
 func TestTheSameCommandListIsNotWrittenAgain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	c := newCommandLists(dir)
 	c.keep("main", commandsAt(1000, "review"))

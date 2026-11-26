@@ -13,6 +13,7 @@ func stateOf(h *apptest.Harness, id string) string {
 }
 
 func TestAThreadsStateFollowsItsHost(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	if got := stateOf(h, id); got != "idle" {
 		t.Fatalf("a new thread is %s, want idle from its host's start", got)

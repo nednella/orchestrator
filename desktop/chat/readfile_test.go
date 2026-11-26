@@ -60,6 +60,7 @@ func symlink(t *testing.T, target, link string) {
 }
 
 func TestReadFileInsideTheFolder(t *testing.T) {
+	t.Parallel()
 	dir, projectDir := t.TempDir(), t.TempDir()
 	writeFiles(t, dir, map[string]string{"docs/plan.md": "# Plan", "README.markdown": "# Readme"})
 	writeFiles(t, projectDir, map[string]string{"AGENTS.md": "# Agents"})
@@ -89,6 +90,7 @@ func TestReadFileInsideTheFolder(t *testing.T) {
 }
 
 func TestReadFileRefusesOutside(t *testing.T) {
+	t.Parallel()
 	parent, elsewhere := t.TempDir(), t.TempDir()
 	dir := filepath.Join(parent, "issue-7")
 	writeFiles(t, parent, map[string]string{"x.md": "# Secret", "issue-7/in.md": "# In"})
@@ -114,6 +116,7 @@ func TestReadFileRefusesOutside(t *testing.T) {
 }
 
 func TestReadFileRefusesBigAndOtherFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"big.md":         strings.Repeat("a", maxShown+1),
@@ -147,6 +150,7 @@ func TestReadFileRefusesBigAndOtherFiles(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets a package-level hook.
 func TestReadFileRefusesAFileThatGrowsPastTheCapAfterItsSize(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"full.md": strings.Repeat("a", maxShown)})
@@ -209,6 +213,7 @@ func planInput(t *testing.T, plan string) json.RawMessage {
 }
 
 func TestLatestPlanIsTheLastExitPlanMode(t *testing.T) {
+	t.Parallel()
 	recorded := chatlog.Event{Kind: chatlog.KindAnswer, ID: "72988c6f-7876-4e3e-9fdd-442e209bc19e", Text: "allow"}
 	plan := func(id, text string) chatlog.Event {
 		return chatlog.Event{Kind: chatlog.KindApproval, ID: id, Tool: "ExitPlanMode", Input: planInput(t, text)}
@@ -246,6 +251,7 @@ func TestLatestPlanIsTheLastExitPlanMode(t *testing.T) {
 }
 
 func TestLatestPlanIsReadAgainOnlyOnceTheLogChanges(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "chat.jsonl")
 	l, err := chatlog.OpenLog(path)
 	if err != nil {
@@ -286,6 +292,7 @@ func TestLatestPlanIsReadAgainOnlyOnceTheLogChanges(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets the process environment.
 func TestMarkdownFilesListsOnlyMarkdown(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))

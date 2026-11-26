@@ -8,6 +8,7 @@ import (
 )
 
 func TestAnImageAtTheLimitIsTaken(t *testing.T) {
+	t.Parallel()
 	png := []byte("\x89PNG\r\n\x1a\n")
 	for _, tt := range []struct {
 		size int

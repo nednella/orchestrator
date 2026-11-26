@@ -77,6 +77,7 @@ func claudeTranscripts() *turn {
 }
 
 func TestStateFollowsTheStream(t *testing.T) {
+	t.Parallel()
 	// The state after the first event of a kind that the recorded stream has at a line.
 	want := []struct {
 		line  int
@@ -132,6 +133,7 @@ func TestStateFollowsTheStream(t *testing.T) {
 }
 
 func TestTurnEndNamesTheReplyAndWhetherItAsks(t *testing.T) {
+	t.Parallel()
 	var ends []session.Event
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {
@@ -156,6 +158,7 @@ func TestTurnEndNamesTheReplyAndWhetherItAsks(t *testing.T) {
 }
 
 func TestToolEventsNameTheToolAndItsCommand(t *testing.T) {
+	t.Parallel()
 	var pre, post session.Event
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {
@@ -177,6 +180,7 @@ func TestToolEventsNameTheToolAndItsCommand(t *testing.T) {
 }
 
 func TestInitGivesTheTranscriptHooksReported(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("..", "..", "internal", "chat", "testdata", "hooks-payloads.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -225,6 +229,7 @@ func TestInitGivesTheTranscriptHooksReported(t *testing.T) {
 }
 
 func TestResumeAndForkNameTheirOwnTranscripts(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		init chatlog.Event
@@ -246,6 +251,7 @@ func TestResumeAndForkNameTheirOwnTranscripts(t *testing.T) {
 }
 
 func TestStateEventForEachKind(t *testing.T) {
+	t.Parallel()
 	approval := chatlog.Event{Kind: chatlog.KindApproval, ID: "r1", Tool: "Bash", Input: json.RawMessage(`{"command":"make test"}`)}
 	for _, tt := range []struct {
 		name   string
@@ -294,6 +300,7 @@ func TestStateEventForEachKind(t *testing.T) {
 }
 
 func TestEveryStateEventCarriesItsSeq(t *testing.T) {
+	t.Parallel()
 	var seqs []int64
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {

@@ -66,8 +66,7 @@ func loggedRewinds(t *testing.T, h *apptest.Harness, id string) []string {
 // in that worktree that its stand-in claude's rewind of the files puts back.
 func worktreeThread(t *testing.T) (h *apptest.Harness, id, file string) {
 	t.Helper()
-	t.Setenv("SHELL", "/bin/sh")
-	h = apptest.New(t)
+	h = apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh"}})
 	gitIn(t, h.Dir, "init", "-q")
 	if err := os.WriteFile(filepath.Join(h.Dir, "README"), []byte("hi\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -99,6 +98,7 @@ func read(t *testing.T, path string) string {
 }
 
 func TestRewindTheConversationOnly(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one", "two")
 
@@ -125,6 +125,7 @@ func TestRewindTheConversationOnly(t *testing.T) {
 }
 
 func TestRewindWithTheFiles(t *testing.T) {
+	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one", "two")
 
@@ -156,6 +157,7 @@ func TestRewindWithTheFiles(t *testing.T) {
 }
 
 func TestRewindToAStaleTargetChangesNothing(t *testing.T) {
+	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	h.RewindAs(t, id, "stale")
@@ -172,6 +174,7 @@ func TestRewindToAStaleTargetChangesNothing(t *testing.T) {
 }
 
 func TestRewindOfAThreadWithoutCheckpoints(t *testing.T) {
+	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	h.RewindAs(t, id, "nocheckpoint", file)
@@ -195,6 +198,7 @@ func TestRewindOfAThreadWithoutCheckpoints(t *testing.T) {
 }
 
 func TestEditIsOffForTheRunWhenClaudeCannotRewind(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one")
 	h.RewindAs(t, id, "unsupported")
@@ -223,6 +227,7 @@ func TestEditIsOffForTheRunWhenClaudeCannotRewind(t *testing.T) {
 }
 
 func TestASettledThreadIsWokenThenRewound(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one", "two", "three")
 	if _, err := h.RewindTo(id, ids[2], false); err != nil {
@@ -250,6 +255,7 @@ func TestASettledThreadIsWokenThenRewound(t *testing.T) {
 }
 
 func TestTheRewindOutlivesARestart(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one", "two")
 	if _, err := h.RewindTo(id, ids[1], false); err != nil {
@@ -269,6 +275,7 @@ func TestTheRewindOutlivesARestart(t *testing.T) {
 }
 
 func TestRewindIsRefusedWhileATurnRuns(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ids := talked(t, h, id, "one")
 	send(t, h, id, "slow")
@@ -289,6 +296,7 @@ func typeIn(t *testing.T, h *apptest.Harness, id, line string) {
 }
 
 func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
+	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	s, _ := h.Session(id)
@@ -325,6 +333,7 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 }
 
 func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
+	t.Parallel()
 	h, id, _ := worktreeThread(t)
 	s, _ := h.Session(id)
 	h.Observe(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
@@ -350,6 +359,7 @@ func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
 }
 
 func TestTheFilesOfferWakesNoThread(t *testing.T) {
+	t.Parallel()
 	h, id, _ := worktreeThread(t)
 	ids := talked(t, h, id, "one")
 	if err := h.SettleThread(id); err != nil {

@@ -21,6 +21,7 @@ import (
 func noProject(string) string { return "" }
 
 func TestRankFiles(t *testing.T) {
+	t.Parallel()
 	paths := []string{"src/app/main.go", "readme.md", "cmd/domain.go", "main.go", "mxaxixn.c"}
 	cases := []struct {
 		query string
@@ -39,6 +40,7 @@ func TestRankFiles(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets the process environment.
 func TestChatFilesListsTrackedAndUntracked(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
@@ -63,6 +65,7 @@ func TestChatFilesListsTrackedAndUntracked(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets the process environment.
 func TestProjectFilesListsTheProjectFolder(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
@@ -94,6 +97,7 @@ func TestProjectFilesListsTheProjectFolder(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets the process environment.
 func TestChatFilesOutsideGitIsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
@@ -108,6 +112,7 @@ func TestChatFilesOutsideGitIsEmpty(t *testing.T) {
 }
 
 func TestFilesDropsAPathCutShort(t *testing.T) {
+	t.Parallel()
 	cut := func(context.Context, string, string, ...string) ([]byte, error) {
 		return []byte("a.go\x00src/b.go\x00src/c.g"), nil
 	}
@@ -118,6 +123,7 @@ func TestFilesDropsAPathCutShort(t *testing.T) {
 }
 
 func TestFilesListsAFolderOnceForCallsAtOnce(t *testing.T) {
+	t.Parallel()
 	var runs atomic.Int32
 	release := make(chan struct{})
 	slow := func(context.Context, string, string, ...string) ([]byte, error) {
@@ -146,6 +152,7 @@ func TestFilesListsAFolderOnceForCallsAtOnce(t *testing.T) {
 }
 
 func TestFilesForgetsOldFolders(t *testing.T) {
+	t.Parallel()
 	listed := func(context.Context, string, string, ...string) ([]byte, error) { return []byte("a.go\x00"), nil }
 	f := newFiles(listed)
 	for _, dir := range []string{"/one", "/two"} {

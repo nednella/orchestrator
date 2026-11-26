@@ -10,6 +10,7 @@ import (
 )
 
 func TestShownCutsWhatIsTooLongForTheWindow(t *testing.T) {
+	t.Parallel()
 	big := strings.Repeat("x", 3*maxShownText)
 	bigInput := func(extra string) json.RawMessage {
 		b, _ := json.Marshal(map[string]any{"file_path": "/a/b.go", "content": big, "n": 3, "extra": extra})

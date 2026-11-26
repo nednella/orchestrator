@@ -97,6 +97,7 @@ func send(t *testing.T, h *apptest.Harness, id, text string) string {
 }
 
 func TestHistoryReadsTheChatLog(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	msg := send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
@@ -115,6 +116,7 @@ func TestHistoryReadsTheChatLog(t *testing.T) {
 }
 
 func TestHistoryOfAnEndedThread(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
@@ -136,6 +138,7 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 }
 
 func TestWatchedThreadGetsLiveEvents(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	if err := h.ChatWatch(id); err != nil {
 		t.Fatal(err)
@@ -156,6 +159,7 @@ func TestWatchedThreadGetsLiveEvents(t *testing.T) {
 }
 
 func TestUnwatchedThreadEmitsNoChatEvents(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	if err := h.ChatWatch(id); err != nil {
 		t.Fatal(err)
@@ -170,6 +174,7 @@ func TestUnwatchedThreadEmitsNoChatEvents(t *testing.T) {
 }
 
 func TestRestartResumesWithoutGapsOrDoubles(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "slow")
 
@@ -210,6 +215,7 @@ func TestRestartResumesWithoutGapsOrDoubles(t *testing.T) {
 }
 
 func TestPendingApprovalIsReported(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "ask")
 	eventually(t, "chat:pending", func() bool { return h.Rec.Count("chat:pending") > 0 })
@@ -236,6 +242,7 @@ func TestPendingApprovalIsReported(t *testing.T) {
 }
 
 func TestADenyWithoutReasonReachesClaudeWithOne(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "ask")
 	eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
@@ -266,6 +273,7 @@ func TestADenyWithoutReasonReachesClaudeWithOne(t *testing.T) {
 }
 
 func TestDeltasAreBatched(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	if err := h.ChatWatch(id); err != nil {
 		t.Fatal(err)
@@ -295,6 +303,7 @@ func TestDeltasAreBatched(t *testing.T) {
 }
 
 func TestEndedSessionKeepsItsRowAfterARestart(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
@@ -314,6 +323,7 @@ func TestEndedSessionKeepsItsRowAfterARestart(t *testing.T) {
 }
 
 func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	h.Observe(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { s, _ := h.Session(id); return s.State == "working" })
@@ -336,6 +346,7 @@ func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
 }
 
 func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
@@ -351,6 +362,7 @@ func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
 const dot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 
 func TestImagesAreSavedAndSent(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	sent, err := h.ChatSend(id, "", chat.Image{Base64: dot, Mime: "image/png"})
 	if err != nil || sent.ID == "" || sent.Notice != "" {
@@ -385,6 +397,7 @@ func TestImagesAreSavedAndSent(t *testing.T) {
 }
 
 func TestTooManyImagesAreRefused(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {
@@ -413,6 +426,7 @@ func TestTooManyImagesAreRefused(t *testing.T) {
 }
 
 func TestDeleteRemovesChatImages(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {
@@ -441,6 +455,7 @@ func TestDeleteRemovesChatImages(t *testing.T) {
 }
 
 func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	sent, err := h.ChatSend(id, "see", chat.Image{Base64: dot, Mime: "image/jpeg"})
 	if err != nil {
@@ -454,6 +469,7 @@ func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
 }
 
 func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {
@@ -465,6 +481,7 @@ func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
 }
 
 func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	gitIn(t, h.Dir, "init", "-q")
 	if err := os.WriteFile(filepath.Join(h.Dir, "README"), []byte("hi\n"), 0o600); err != nil {
@@ -509,6 +526,7 @@ func samePending(a, b chat.Pending) bool {
 }
 
 func TestAThreadWorksWhileItsSubagentRuns(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	subagents := func(h *apptest.Harness) (string, int) {
 		s, _ := h.Session(id)
@@ -535,6 +553,7 @@ func TestAThreadWorksWhileItsSubagentRuns(t *testing.T) {
 }
 
 func TestASubagentsApprovalWaitsPastTheTurnUntilItIsAnswered(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "subagent asks")
 	eventually(t, "the subagent's approval after the turn's end", func() bool { return turnEnds(t, h, id) == 1 && len(h.ChatPending()) == 1 })
@@ -552,6 +571,7 @@ func TestASubagentsApprovalWaitsPastTheTurnUntilItIsAnswered(t *testing.T) {
 }
 
 func TestAThreadWhoseSubagentsEndWasMissedStopsWorkingWhenClaudeListsNoTask(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	state := func() (string, int) { s, _ := h.Session(id); return string(s.State), s.Subagents }
 	h.Observe(t, id, "UserPromptSubmit", `{"prompt":"background"}`)
@@ -568,6 +588,7 @@ func TestAThreadWhoseSubagentsEndWasMissedStopsWorkingWhenClaudeListsNoTask(t *t
 }
 
 func TestASubagentsApprovalStopsWaitingWhenClaudeListsNoTask(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "subagent lost")
 	eventually(t, "the subagent's approval after the turn's end", func() bool { return turnEnds(t, h, id) == 1 && len(h.ChatPending()) == 1 })
@@ -575,6 +596,7 @@ func TestASubagentsApprovalStopsWaitingWhenClaudeListsNoTask(t *testing.T) {
 }
 
 func TestChatHistoryCutsAHugeToolResultAndTheLogKeepsIt(t *testing.T) {
+	t.Parallel()
 	h, id := newThread(t)
 	ch, err := h.Sessions().ChatOf(id)
 	if err != nil {

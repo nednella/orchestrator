@@ -16,6 +16,7 @@ import (
 )
 
 func TestToolSummaryMatchesPending(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, tool, input, want string
 	}{
@@ -46,6 +47,7 @@ func TestToolSummaryMatchesPending(t *testing.T) {
 }
 
 func TestPendingInputIsCapped(t *testing.T) {
+	t.Parallel()
 	inputOf := func(size int) json.RawMessage {
 		frame := `{"file_path":"a.go","content":""}`
 		return json.RawMessage(strings.Replace(frame, `""`, `"`+strings.Repeat("a", size-len(frame))+`"`, 1))
@@ -92,6 +94,7 @@ func (m modeThread) Wake(string) (sessions.Chat, error)            { return m.ch
 func (m modeThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
 
 func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		listening bool
