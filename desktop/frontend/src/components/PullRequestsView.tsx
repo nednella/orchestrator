@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, errorMessage } from '../api'
+import { api } from '../api'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import type { PanelViewProps } from '../panelViews'
 import { pullRows } from '../pullRows'
@@ -65,12 +65,15 @@ function PullDetail({ pull, onBack }: PullDetailProps) {
   )
 }
 
+// The last list read of each project, so the view shows it at once when it opens again.
+const known = new Map<string, RepoPull[]>()
+
 // PullRequestsView is the open thread's pull request and the repository's other open ones.
 export function PullRequestsView({ session }: PanelViewProps) {
   const { projectSessions } = useAgentos('projectSessions')
   const project = useAgentosSelector((a) => a.project?.name)
   const repo = useAgentosSelector((a) => a.project?.repo ?? '')
-  const [pulls, setPulls] = useState<RepoPull[] | null>(null)
+  const [pulls, setPulls] = useState<RepoPull[] | null>(known.get(project ?? '') ?? null)
   const [error, setError] = useState('')
   const [reading, setReading] = useState(false)
   const [detail, setDetail] = useState<number | null>(null)
@@ -78,13 +81,14 @@ export function PullRequestsView({ session }: PanelViewProps) {
   const read = useCallback(() => {
     setReading(true)
     api.pullRequests().then(
-      (list) => {
-        setPulls(list)
-        setError('')
+      (got) => {
+        known.set(project ?? '', got.pulls)
+        setPulls(got.pulls)
+        setError(got.error)
       },
-      (err) => setError(errorMessage(err)),
+      () => setError('Could not read the pull requests.'),
     ).finally(() => setReading(false))
-  }, [])
+  }, [project])
   useEffect(() => {
     if (project !== undefined && repo) read()
   }, [project, repo, read])
@@ -128,10 +132,13 @@ export function PullRequestsView({ session }: PanelViewProps) {
             </span>
           </button>
         </div>
-        {error ? (
-          <Notice title="Could not read the pull requests" hint={error} />
-        ) : pulls === null ? (
-          <Loading />
+        {error && (
+          <p role="alert" className="px-4 pb-1 text-small text-danger">
+            {error}
+          </p>
+        )}
+        {pulls === null ? (
+          error ? null : <Loading />
         ) : rest.length === 0 && !mine ? (
           <Notice title="No open pull requests" hint={`${repo || 'This project'} has none right now.`} />
         ) : (

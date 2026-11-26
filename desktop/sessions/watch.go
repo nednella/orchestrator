@@ -203,6 +203,16 @@ func (l *Lifecycle) pollPRs(ctx context.Context, proj project.Project, repo stri
 	}
 	tick := time.NewTicker(every)
 	defer tick.Stop()
+	key := proj.Key()
+	l.mu.Lock()
+	l.polling[key] = true
+	delete(l.etags, key) // an on-demand read may have kept one: the poll must see the list whole
+	l.mu.Unlock()
+	defer func() {
+		l.mu.Lock()
+		delete(l.polling, key)
+		l.mu.Unlock()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -285,7 +295,7 @@ func (l *Lifecycle) listPulls(ctx context.Context, proj project.Project, repo st
 			l.mu.Lock()
 			defer l.mu.Unlock()
 			if kept, ok := l.lists[key]; ok {
-				kept.at = time.Now()
+				kept.at, kept.failedAt = l.now(), time.Time{}
 				l.lists[key] = kept
 			}
 			return nil, true, nil
@@ -301,7 +311,7 @@ func (l *Lifecycle) listPulls(ctx context.Context, proj project.Project, repo st
 	if keepETag {
 		l.etags[key] = etag
 	}
-	l.lists[key] = openPulls{at: time.Now(), pulls: openOf(list)}
+	l.lists[key] = openPulls{at: l.now(), pulls: openOf(list)}
 	return list, false, nil
 }
 

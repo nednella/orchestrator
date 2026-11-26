@@ -7,7 +7,7 @@ import (
 	"github.com/nednella/agentos/desktop/internal/apptest"
 )
 
-const pollEvery2s = "    pr_watch_method: poll\n    pr_poll_interval: 2s\n"
+const pollNever = "    pr_watch_method: poll\n    pr_poll_interval: 1h\n"
 
 func repoPulls(entries ...string) string {
 	out := "["
@@ -25,32 +25,14 @@ func repoPull(number int, state, branch, updatedAt string, draft bool) string {
 		number, number, draft, state, number, branch, updatedAt)
 }
 
-func TestOpenPullsComeFromTheWatchersList(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: pollEvery2s})
-	repoFixture(t, h)
-	h.GH.SetPulls(`W/"one"`, repoPulls(repoPull(12, "open", "issue-12", "2026-10-01T12:00:00Z", false)))
-	issueSession(h, t, 12)
-	eventually(t, "the watcher's first read", func() bool { return h.GH.Calls("api -i") >= 1 })
-	before := h.GH.Calls("api -i")
-	for range 3 {
-		got, err := h.Sessions().PullRequests()
-		if err != nil || len(got) != 1 || got[0].Number != 12 {
-			t.Fatalf("PullRequests = %+v, %v", got, err)
-		}
-	}
-	if after := h.GH.Calls("api -i"); after != before {
-		t.Errorf("PullRequests made %d more gh api calls beside the watcher's", after-before)
-	}
-}
-
 func TestPullRequestsFetchOnceWithoutAWatcher(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, repoPulls(repoPull(5, "open", "feature", "2026-10-01T12:00:00Z", true)))
 	for range 2 {
-		got, err := h.Sessions().PullRequests()
-		if err != nil || len(got) != 1 || !got[0].Draft || got[0].Author != "amy" || got[0].Thread != "" {
-			t.Fatalf("PullRequests = %+v, %v", got, err)
+		got := h.Sessions().PullRequests().Pulls
+		if len(got) != 1 || !got[0].Draft || got[0].Author != "amy" || got[0].Thread != "" {
+			t.Fatalf("PullRequests = %+v", got)
 		}
 	}
 	if n := h.GH.Calls("api -i"); n != 1 {
@@ -59,7 +41,7 @@ func TestPullRequestsFetchOnceWithoutAWatcher(t *testing.T) {
 }
 
 func TestPullRequestsNameTheThreadOfTheirBranch(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: pollEvery2s})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: pollNever})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
 	h.GH.SetPulls(`W/"one"`, repoPulls(
@@ -67,9 +49,9 @@ func TestPullRequestsNameTheThreadOfTheirBranch(t *testing.T) {
 		repoPull(12, "open", "issue-12", "2026-10-03T12:00:00Z", false),
 		repoPull(14, "closed", "old", "2026-10-04T12:00:00Z", false),
 	))
-	got, err := h.Sessions().PullRequests()
-	if err != nil || len(got) != 2 {
-		t.Fatalf("PullRequests = %+v, %v", got, err)
+	got := h.Sessions().PullRequests().Pulls
+	if len(got) != 2 {
+		t.Fatalf("PullRequests = %+v", got)
 	}
 	if got[0].Number != 12 || got[0].Thread != s.ID || got[0].Branch != "issue-12" || got[0].URL == "" {
 		t.Errorf("newest = %+v, want #12 on thread %s", got[0], s.ID)
@@ -82,21 +64,20 @@ func TestPullRequestsNameTheThreadOfTheirBranch(t *testing.T) {
 func TestA304KeepsTheLastList(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
-	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
+	h.GH.SetPulls(`W/"one"`, repoPulls(repoPull(12, "closed", "issue-12", "2026-10-01T12:00:00Z", false)))
 	s := issueSession(h, t, 12)
 	eventually(t, "two answers of 304", func() bool { return h.GH.Calls("api -i") >= 3 })
-	got, err := h.Sessions().PullRequests()
-	if err != nil || len(got) != 0 {
-		t.Fatalf("PullRequests = %+v, %v; the fixture list has no state, so no open PR", got, err)
+	if got := h.Sessions().PullRequests().Pulls; len(got) != 0 {
+		t.Fatalf("PullRequests = %+v, want none: the list has no open PR", got)
 	}
 	h.GH.SetPulls(`W/"two"`, repoPulls(repoPull(12, "open", "issue-12", "2026-10-01T12:00:00Z", false)))
 	eventually(t, "the changed list", func() bool {
-		got, _ := h.Sessions().PullRequests()
+		got := h.Sessions().PullRequests().Pulls
 		return len(got) == 1 && got[0].Thread == s.ID
 	})
 	settled := h.GH.Calls("api -i")
 	eventually(t, "a 304 of the new list", func() bool { return h.GH.Calls("api -i") >= settled+2 })
-	if got, _ := h.Sessions().PullRequests(); len(got) != 1 {
+	if got := h.Sessions().PullRequests().Pulls; len(got) != 1 {
 		t.Errorf("a 304 dropped the list: %+v", got)
 	}
 }

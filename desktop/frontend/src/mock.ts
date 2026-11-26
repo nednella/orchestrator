@@ -3,7 +3,7 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -1177,7 +1177,7 @@ export function createMock(params: URLSearchParams) {
       emit('issues', { project: current.name, items: currentIssues() })
     },
     DeletePlan: async (id: string) => deletePlan(find(id)),
-    PullRequests: async (): Promise<RepoPull[]> => {
+    PullRequests: async (): Promise<RepoPulls> => {
       const tracked = sessions
         .filter((x) => x.project === current.name && x.pr && (x.pr.state === 'open' || x.pr.state === 'draft'))
         .map((x): RepoPull => ({ number: x.pr!.number, title: x.pr!.title, draft: x.pr!.state === 'draft', branch: x.branch, url: x.pr!.url, author: 'ned', updatedAt: x.pr!.updatedAt, thread: x.id }))
@@ -1185,7 +1185,7 @@ export function createMock(params: URLSearchParams) {
         { number: 460, title: 'Bump the image CDN client', draft: false, branch: 'dependabot/cdn-client', url: 'https://github.com/acme/storefront/pull/460', author: 'dependabot', updatedAt: Date.now() - 50 * minute, thread: '' },
         { number: 455, title: 'Draft the loyalty banner', draft: true, branch: 'amy/loyalty-banner', url: 'https://github.com/acme/storefront/pull/455', author: 'amy', updatedAt: Date.now() - 9 * 3_600_000, thread: '' },
       ]
-      return [...tracked, ...others].sort((a, b) => b.updatedAt - a.updatedAt)
+      return { pulls: [...tracked, ...others].sort((a, b) => b.updatedAt - a.updatedAt), error: '' }
     },
     Servers: async (id: string) => [...(servers.get(find(id).id) ?? [])].sort((a, b) => a.port - b.port),
     StopServer: async (id: string, pid: number) => {

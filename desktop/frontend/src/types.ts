@@ -33,6 +33,9 @@ export type RepoPull = {
   thread: string
 }
 
+// RepoPulls is the open pull requests the app knows, and why the latest read of them failed, '' when it did not.
+export type RepoPulls = { pulls: RepoPull[]; error: string }
+
 export type BranchStatus = {
   base: string
   unpushed: number

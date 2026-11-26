@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPull, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -11,7 +11,7 @@ type Backend = {
   DeleteThread(id: string, worktree: boolean): Promise<void>
   DeletePlan(id: string): Promise<DeletePlan>
   Servers(id: string): Promise<Server[]>
-  PullRequests(): Promise<RepoPull[]>
+  PullRequests(): Promise<RepoPulls>
   StopServer(id: string, pid: number): Promise<void>
   OpenServer(port: number): Promise<void>
   WakeThread(id: string): Promise<Session>
