@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 func TestTerminalStream(t *testing.T) {
@@ -149,15 +147,11 @@ func TestClipboardFromTheAgent(t *testing.T) {
 
 func TestTerminalAttachesToTheShell(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh", "HOME=" + t.TempDir()}})
-	shell, err := h.ShellNew("")
-	if err != nil {
-		t.Fatal(err)
-	}
+	h, id := newShell(t)
 	// Wide, so the path in the shell's answer, which has random digits in it, never wraps.
-	out := openRead(t, h, shell.ID, 300, 30)
+	out := openRead(t, h, id, 300, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
-	if err := h.TermWrite(shell.ID, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_SESSION-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
+	if err := h.TermWrite(id, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_SESSION-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(h.Dir)
@@ -167,7 +161,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	eventually(t, "the shell's environment", func() bool {
 		return strings.Contains(out.String(), "\r\nmain|unset|unset|"+want+"\r\n")
 	})
-	h.TermClose(shell.ID)
+	h.TermClose(id)
 }
 
 func TestOpeningAnOpenTerminalKeepsItsStream(t *testing.T) {

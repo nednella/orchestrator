@@ -2,6 +2,8 @@ package terminal_test
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
@@ -22,5 +24,12 @@ func newShell(t *testing.T) (*apptest.Harness, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// What is typed before the shell reads it is shown twice, once by the terminal and once by the shell's line editor,
+	// and a shell on a slow machine starts late: the tests type once it has run a command.
+	ready := filepath.Join(t.TempDir(), "ready")
+	if err := exec.Command("tmux", "-L", h.Socket, "send-keys", "-t", "="+shell.ID+":", "touch '"+ready+"'", "Enter").Run(); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the shell to run a command", func() bool { return apptest.Exists(ready) })
 	return h, shell.ID
 }
