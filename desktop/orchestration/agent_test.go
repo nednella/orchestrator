@@ -63,6 +63,7 @@ func threadTitled(h *apptest.Harness, title string) (sessions.Session, bool) {
 }
 
 func TestNoteToolActsAsTheCaller(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	name, key := otherProject(t, h, t.TempDir())
@@ -92,6 +93,7 @@ func TestNoteToolActsAsTheCaller(t *testing.T) {
 }
 
 func TestToolIgnoresAThreadInItsInput(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	name, key := otherProject(t, h, t.TempDir())
@@ -141,6 +143,7 @@ func TestToolIgnoresAThreadInItsInput(t *testing.T) {
 }
 
 func TestNewThreadToolRefusesMoreAccessThanTheCaller(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		caller session.Access
@@ -188,6 +191,7 @@ func TestNewThreadToolRefusesMoreAccessThanTheCaller(t *testing.T) {
 }
 
 func TestIssueToolStartsTheIssueThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "plan", session.Read)
 	issueThread := func() (sessions.Session, bool) {
@@ -231,6 +235,7 @@ func TestIssueToolStartsTheIssueThread(t *testing.T) {
 }
 
 func TestIssueToolGivesTheLowerOfTheActionsAndTheCallersAccess(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "boss", session.Full)
 	mustUse(t, h, caller.ID, "issue", `{"number":7}`, nil)
@@ -245,6 +250,7 @@ func TestIssueToolGivesTheLowerOfTheActionsAndTheCallersAccess(t *testing.T) {
 }
 
 func TestTrackToolTakesTheBranchForTheCaller(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	reader := threadWith(t, h, "reader", session.Read)
@@ -267,6 +273,7 @@ func TestTrackToolTakesTheBranchForTheCaller(t *testing.T) {
 }
 
 func TestShowToolTakesFilesOnlyFromTheThreadsFolders(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	roots := h.Sessions().ShowRoots(a.ID)
@@ -320,6 +327,7 @@ func TestShowToolTakesFilesOnlyFromTheThreadsFolders(t *testing.T) {
 }
 
 func TestShowToolFilesEvidenceForTheCaller(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	file := filepath.Join(h.Sessions().ShowRoots(a.ID)[0], "result.txt")
@@ -379,6 +387,7 @@ func pageServer(t *testing.T) string {
 }
 
 func TestBrowserToolOpensTheCallersWindow(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	for _, tt := range []struct{ input, err string }{
@@ -412,6 +421,7 @@ func TestBrowserToolOpensTheCallersWindow(t *testing.T) {
 }
 
 func TestRefreshToolReadsTheQueueAgain(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := threadWith(t, h, "reader", session.Read)
 	before := h.GH.IssueCalls()
@@ -428,6 +438,7 @@ func TestRefreshToolReadsTheQueueAgain(t *testing.T) {
 }
 
 func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := threadWith(t, h, "reader", session.Read)
 	data, err := os.ReadFile(configOf(t, h, a.ID))

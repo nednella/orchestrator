@@ -13,6 +13,7 @@ import (
 )
 
 func TestTurnInReadsTheLastTurn(t *testing.T) {
+	t.Parallel()
 	user := func(id string) chatlog.Event { return chatlog.Event{Kind: chatlog.KindUser, ID: id, Text: "go"} }
 	reply := func(text string) chatlog.Event {
 		return chatlog.Event{Kind: chatlog.KindMessage, ID: "msg-" + text, Text: text}
@@ -59,6 +60,7 @@ func TestTurnInReadsTheLastTurn(t *testing.T) {
 }
 
 func TestTurnResultIsWhatEndsTheLastTurn(t *testing.T) {
+	t.Parallel()
 	user := chatlog.Event{Kind: chatlog.KindUser, ID: "u1", Text: "go"}
 	end := chatlog.Event{Kind: chatlog.KindTurnEnd}
 	settle := chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle}
@@ -123,6 +125,7 @@ func loggedFrom(t *testing.T, name string) []chatlog.Event {
 }
 
 func TestTurnInWaitsForTheBackgroundSubagents(t *testing.T) {
+	t.Parallel()
 	events := loggedFrom(t, "background.jsonl")
 	var atEnds []bool
 	for i, e := range events {
@@ -143,6 +146,7 @@ func TestTurnInWaitsForTheBackgroundSubagents(t *testing.T) {
 }
 
 func TestOutcomeTextSaysWhoPutTheChildToSleep(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		t      turn
@@ -164,6 +168,7 @@ func TestOutcomeTextSaysWhoPutTheChildToSleep(t *testing.T) {
 }
 
 func TestThreadDeletedForgetsItsResults(t *testing.T) {
+	t.Parallel()
 	const parent, child, other = "main/parentaa", "main/childaaa", "main/otheraaa"
 	for _, tc := range []struct {
 		name    string

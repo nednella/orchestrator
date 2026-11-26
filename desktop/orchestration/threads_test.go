@@ -95,6 +95,7 @@ func newFamily(t *testing.T) family {
 }
 
 func TestThreadsListsTheProject(t *testing.T) {
+	t.Parallel()
 	f := newFamily(t)
 	for _, input := range []string{`{}`, `{"project":"MAIN"}`, `{"project":"main"}`} {
 		t.Run(input, func(t *testing.T) {
@@ -125,6 +126,7 @@ func TestThreadsListsTheProject(t *testing.T) {
 }
 
 func TestThreadsAllListsEveryProject(t *testing.T) {
+	t.Parallel()
 	f := newFamily(t)
 	got := listThreads(t, f.h, f.reader, `{"project":"all"}`)
 	for _, id := range []string{f.caller, f.reader, f.child, f.settled, f.other} {

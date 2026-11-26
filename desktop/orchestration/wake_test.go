@@ -106,6 +106,7 @@ func noMoreResults(t *testing.T, h *apptest.Harness, parent, child string, want 
 }
 
 func TestChildResultWakesItsParent(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
@@ -125,6 +126,7 @@ func TestChildResultWakesItsParent(t *testing.T) {
 }
 
 func TestChildResultWakesASettledParent(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	// The stand-in takes a second over a task that ends in slow, and the parent sleeps meanwhile.
@@ -150,6 +152,7 @@ func TestChildResultWakesASettledParent(t *testing.T) {
 }
 
 func TestChildResultIsSentOnceAcrossARestart(t *testing.T) {
+	t.Parallel()
 	t.Run("between the turn end and the send", func(t *testing.T) {
 		h := apptest.New(t)
 		parent := newThread(t, h, "Plan the release").ID
@@ -189,6 +192,7 @@ func TestChildResultIsSentOnceAcrossARestart(t *testing.T) {
 }
 
 func TestWaitingParentGetsNoSecondCopy(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
@@ -206,6 +210,7 @@ func TestWaitingParentGetsNoSecondCopy(t *testing.T) {
 }
 
 func TestFailedChildSaysSo(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"this one fails","title":"Count files","access":"read"}`).ID
@@ -218,6 +223,7 @@ func TestFailedChildSaysSo(t *testing.T) {
 }
 
 func TestStopTheParentAskedForWakesNoOne(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"keep working","access":"read"}`).ID
@@ -236,6 +242,7 @@ func TestStopTheParentAskedForWakesNoOne(t *testing.T) {
 }
 
 func TestOwnerStopWakesTheParent(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
@@ -252,6 +259,7 @@ func TestOwnerStopWakesTheParent(t *testing.T) {
 }
 
 func TestFinishedChildSettles(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
@@ -276,6 +284,7 @@ func TestFinishedChildSettles(t *testing.T) {
 }
 
 func TestLaterTurnOfAChildIsALaterResult(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	// The child's turn ends while its shell runs in the background, and the shell's end runs a turn of its own.
@@ -295,6 +304,7 @@ func TestLaterTurnOfAChildIsALaterResult(t *testing.T) {
 }
 
 func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"keep working","access":"read"}`).ID
@@ -315,6 +325,7 @@ func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
 }
 
 func TestChildResultIgnoresManualSend(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
@@ -328,6 +339,7 @@ func TestChildResultIgnoresManualSend(t *testing.T) {
 }
 
 func TestChildResultWaitsForTheParentsSubagentApproval(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	if _, err := h.ChatSend(parent, "subagent asks"); err != nil {
@@ -355,6 +367,7 @@ func TestChildResultWaitsForTheParentsSubagentApproval(t *testing.T) {
 }
 
 func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
@@ -382,6 +395,7 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 }
 
 func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
+	t.Parallel()
 	// The tries come at 0, 0.1, 0.3, 0.7 and 1.5 s: the pause starts at retry and doubles.
 	const retry = 100 * time.Millisecond
 	for _, tt := range []struct {
@@ -440,6 +454,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 }
 
 func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	top := newThread(t, h, "Plan the release").ID
 	parent := mustDelegate(t, h, top, `{"task":"keep working","title":"Check the build"}`).ID
@@ -474,6 +489,7 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 }
 
 func TestWaitAfterTheResultWentSaysSo(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
@@ -492,6 +508,7 @@ func TestWaitAfterTheResultWentSaysSo(t *testing.T) {
 }
 
 func TestWaitWhileTheResultIsHeldSaysSo(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	if _, err := h.ChatSend(parent, "subagent asks"); err != nil {
@@ -516,6 +533,7 @@ func TestWaitWhileTheResultIsHeldSaysSo(t *testing.T) {
 }
 
 func TestChildPutToSleepMidTurnTellsItsParent(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
@@ -538,6 +556,7 @@ func TestChildPutToSleepMidTurnTellsItsParent(t *testing.T) {
 }
 
 func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
+	t.Parallel()
 	t.Run("before its follower starts", func(t *testing.T) {
 		h := apptest.New(t)
 		parent := newThread(t, h, "Plan the release").ID

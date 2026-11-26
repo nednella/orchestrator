@@ -80,6 +80,7 @@ func wantRefused(t *testing.T, h *apptest.Harness, token string) {
 }
 
 func TestTokenNamesItsThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	wantCaller(t, h, tokenOf(t, h, a.ID), a.ID)
@@ -93,6 +94,7 @@ func TestTokenNamesItsThread(t *testing.T) {
 }
 
 func TestTokenIgnoresTheSessionField(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	if got, err := callerOf(h, tokenOf(t, h, a.ID), b.ID); err != nil || got != a.ID {
@@ -108,6 +110,7 @@ func TestTokenIgnoresTheSessionField(t *testing.T) {
 }
 
 func TestUnknownTokenIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	token := tokenOf(t, h, a.ID)
@@ -121,6 +124,7 @@ func TestUnknownTokenIsRefused(t *testing.T) {
 }
 
 func TestWakeReplacesTheToken(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	before := tokenOf(t, h, a.ID)
@@ -139,6 +143,7 @@ func TestWakeReplacesTheToken(t *testing.T) {
 }
 
 func TestSettledThreadsTokenIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	settled, deleted := newThread(t, h, "settled"), newThread(t, h, "deleted")
 	tokens := map[string]string{settled.ID: tokenOf(t, h, settled.ID), deleted.ID: tokenOf(t, h, deleted.ID)}
@@ -158,6 +163,7 @@ func TestSettledThreadsTokenIsRefused(t *testing.T) {
 }
 
 func TestTokenSurvivesAppRestart(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
 	token := tokenOf(t, h, a.ID)
@@ -171,6 +177,7 @@ func TestTokenSurvivesAppRestart(t *testing.T) {
 }
 
 func TestForkGetsItsOwnToken(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src := newThread(t, h, "work")
 	transcript := filepath.Join(t.TempDir(), "transcript.jsonl")
@@ -206,6 +213,7 @@ func TestForkGetsItsOwnToken(t *testing.T) {
 }
 
 func TestUserOnlyCommandsAreGone(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	for _, cmd := range []string{"open", "settle", "pr", "cleanup", "project", "relaunch", "stats", "digest", "digest-add", "queue", "notes", "evidence", "chat", "next", "filter"} {
 		if resp := h.Ask(t, ctl.Request{Cmd: cmd, Args: []string{"1"}}); resp.OK || resp.Error != fmt.Sprintf("unknown command %q", cmd) {
@@ -215,6 +223,7 @@ func TestUserOnlyCommandsAreGone(t *testing.T) {
 }
 
 func TestSocketNeverRunsAnAgentCommandAsAThreadItNames(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	for _, req := range []ctl.Request{

@@ -64,6 +64,7 @@ func texts(p readPage) []string {
 }
 
 func TestReadPagesBackwards(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	var events []chat.Event
 	for i := 1; i <= 25; i++ {
@@ -113,6 +114,7 @@ func TestReadPagesBackwards(t *testing.T) {
 }
 
 func TestReadSaysWhoEachMessageIsFrom(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	target := settledWithLog(t, h,
 		chat.Event{Kind: chat.KindUser, ID: "u1", Text: "fix the login"},
@@ -142,6 +144,7 @@ func TestReadSaysWhoEachMessageIsFrom(t *testing.T) {
 }
 
 func TestReadCutsLongTexts(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	reader := threadWith(t, h, "Read it", session.Read).ID
 
@@ -193,6 +196,7 @@ func TestReadCutsLongTexts(t *testing.T) {
 }
 
 func TestReadActivityShowsToolCalls(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	target := settledWithLog(t, h,
 		chat.Event{Kind: chat.KindUser, ID: "u1", Text: "run the tests"},
@@ -230,6 +234,7 @@ func TestReadActivityShowsToolCalls(t *testing.T) {
 }
 
 func TestReadChecksItsInput(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	reader := threadWith(t, h, "Read it", session.Read).ID
 	gone := threadWith(t, h, "Gone", session.Supervised).ID

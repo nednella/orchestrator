@@ -155,6 +155,7 @@ func repoFixture(t *testing.T, h *apptest.Harness) {
 }
 
 func TestDelegateStartsAChild(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release")
 	if _, err := h.ChatSend(parent.ID, "the parent's own words"); err != nil {
@@ -205,6 +206,7 @@ func TestDelegateStartsAChild(t *testing.T) {
 }
 
 func TestDelegateAboveTheCallersRankIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	supervised := newThread(t, h, "supervised")
 	read := threadWith(t, h, "read", session.Read)
@@ -231,6 +233,7 @@ func TestDelegateAboveTheCallersRankIsRefused(t *testing.T) {
 }
 
 func TestDelegateDefaultsToTheCallersAccess(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	for _, tt := range []struct {
 		access session.Access
@@ -248,6 +251,7 @@ func TestDelegateDefaultsToTheCallersAccess(t *testing.T) {
 }
 
 func TestDelegateChecksItsInput(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	for input, want := range map[string]string{
@@ -273,6 +277,7 @@ func TestDelegateChecksItsInput(t *testing.T) {
 }
 
 func TestChildRunsInTheParentsFolder(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
@@ -292,6 +297,7 @@ func TestChildRunsInTheParentsFolder(t *testing.T) {
 }
 
 func TestChildWorktreeStartsAtTheParentsHead(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
@@ -322,6 +328,7 @@ func TestChildWorktreeStartsAtTheParentsHead(t *testing.T) {
 }
 
 func TestDelegateToAnIssueWithAThreadIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	issue, err := h.StartIssue(7)
@@ -349,6 +356,7 @@ func TestDelegateToAnIssueWithAThreadIsRefused(t *testing.T) {
 }
 
 func TestDelegateDeeperThanTheLimitIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	top := newThread(t, h, "top")
 	ids := []string{top.ID}
@@ -380,6 +388,7 @@ func TestDelegateDeeperThanTheLimitIsRefused(t *testing.T) {
 }
 
 func TestLiveChildrenLimit(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	var children []string
@@ -404,6 +413,7 @@ func TestLiveChildrenLimit(t *testing.T) {
 }
 
 func TestWokenChildKeepsItsAccess(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := threadWith(t, h, "Lead", session.Full)
 	c := mustDelegate(t, h, parent.ID, `{"task":"write the tests","access":"supervised","where":"folder"}`)
@@ -434,6 +444,7 @@ func TestWokenChildKeepsItsAccess(t *testing.T) {
 }
 
 func TestParentLinkSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	running := mustDelegate(t, h, parent.ID, `{"task":"keep working","where":"folder"}`)
@@ -457,6 +468,7 @@ func TestParentLinkSurvivesARestart(t *testing.T) {
 }
 
 func TestChildInTheParentsFolderLeavesTheParentsBranch(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
@@ -474,6 +486,7 @@ func TestChildInTheParentsFolderLeavesTheParentsBranch(t *testing.T) {
 }
 
 func TestChildInTheParentsFolderTracksNoBranch(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
@@ -491,6 +504,7 @@ func TestChildInTheParentsFolderTracksNoBranch(t *testing.T) {
 }
 
 func TestCancelledDelegateStartsNoChild(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	before := tmuxSessions(t, h)
@@ -522,6 +536,7 @@ func otherProject(t *testing.T, h *apptest.Harness, dir string) (name, key strin
 	return snap.Project.Name, snap.Project.Key
 }
 
+// Not parallel: it redirects the process-wide log.
 func TestDelegateToAnotherProject(t *testing.T) {
 	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
@@ -579,6 +594,7 @@ func TestDelegateToAnotherProject(t *testing.T) {
 }
 
 func TestDelegateToAnUnknownProjectNamesTheProjects(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "parent")
 	dir := t.TempDir()
@@ -596,6 +612,7 @@ func TestDelegateToAnUnknownProjectNamesTheProjects(t *testing.T) {
 }
 
 func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
@@ -644,6 +661,7 @@ func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
 }
 
 func TestCrossProjectRankStillApplies(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	supervised := newThread(t, h, "supervised")
 	read := threadWith(t, h, "read", session.Read)

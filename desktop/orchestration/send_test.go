@@ -96,6 +96,7 @@ func countIn(lines []string, part string) int {
 const interruptLine = `"subtype":"interrupt"`
 
 func TestSendQueuesDuringATurn(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	target := threadWith(t, h, "Fix the login", session.Supervised).ID
@@ -125,6 +126,7 @@ func TestSendQueuesDuringATurn(t *testing.T) {
 }
 
 func TestSendWakesASettledThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Read).ID
 	target := threadWith(t, h, "Fix the login", session.Read).ID
@@ -147,6 +149,7 @@ func TestSendWakesASettledThread(t *testing.T) {
 }
 
 func TestSendNeverAnswersAnApproval(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		hook bool // the Notification hook says the thread waits; without it only the host knows
@@ -205,6 +208,7 @@ func TestSendNeverAnswersAnApproval(t *testing.T) {
 }
 
 func TestHeldMessageWakesAThreadSettledMeanwhile(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	target := threadWith(t, h, "Fix the login", session.Supervised).ID
@@ -241,6 +245,7 @@ func claudePID(t *testing.T, h *apptest.Harness, id string) int {
 }
 
 func TestHeldMessagesKeepTheirOrder(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	target := threadWith(t, h, "Fix the login", session.Supervised).ID
@@ -298,6 +303,7 @@ func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 }
 
 func TestSendToAHigherRankIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	threads := map[session.Access]string{}
 	for _, a := range []session.Access{session.Read, session.Supervised, session.Full} {
@@ -348,6 +354,7 @@ func TestSendToAHigherRankIsRefused(t *testing.T) {
 	}
 }
 
+// Not parallel: it redirects the process-wide log.
 func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
@@ -379,6 +386,7 @@ func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 }
 
 func TestSendToItselfIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	gone := threadWith(t, h, "Gone", session.Read).ID
@@ -405,6 +413,7 @@ func TestSendToItselfIsRefused(t *testing.T) {
 }
 
 func TestSteerStopsTheTurnAndSends(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
 	target := threadWith(t, h, "Fix the login", session.Supervised).ID
@@ -467,6 +476,7 @@ func turnOpen(t *testing.T, h *apptest.Harness, id string) bool {
 }
 
 func TestStopReachesDescendants(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	tr := newTree(t, h)
 	working(t, h, tr.child)
@@ -498,6 +508,7 @@ func TestStopReachesDescendants(t *testing.T) {
 }
 
 func TestStopDropsTheMessagesHeldForAThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	tr := newTree(t, h)
 	if _, err := h.ChatSend(tr.child, "ask"); err != nil {
@@ -525,6 +536,7 @@ func TestStopDropsTheMessagesHeldForAThread(t *testing.T) {
 }
 
 func TestStopRefusesAThreadThatIsNotADescendant(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	tr := newTree(t, h)
 	stranger := threadWith(t, h, "Someone else", session.Read).ID

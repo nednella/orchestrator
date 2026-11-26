@@ -111,6 +111,7 @@ func busyChild(t *testing.T, h *apptest.Harness) (parent, id string) {
 }
 
 func TestWaitReturnsTheResult(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files in src","access":"read"}`)
@@ -121,6 +122,7 @@ func TestWaitReturnsTheResult(t *testing.T) {
 }
 
 func TestWaitRightAfterDelegateWaitsForTheTask(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	// The stand-in takes a second over a task that ends in slow.
@@ -141,6 +143,7 @@ func TestWaitRightAfterDelegateWaitsForTheTask(t *testing.T) {
 }
 
 func TestWaitOnAnIdleThreadReturnsAtOnce(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	caller := newThread(t, h, "Plan the release").ID
 	target := newThread(t, h, "Fix the login").ID
@@ -159,6 +162,7 @@ func TestWaitOnAnIdleThreadReturnsAtOnce(t *testing.T) {
 }
 
 func TestWaitReturnsAtItsLimit(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	begin := time.Now()
@@ -172,6 +176,7 @@ func TestWaitReturnsAtItsLimit(t *testing.T) {
 }
 
 func TestWaitReturnsWhenTheChildSettles(t *testing.T) {
+	t.Parallel()
 	// A delete settles the thread first, so the wait may see either.
 	for _, tc := range []struct {
 		name  string
@@ -198,6 +203,7 @@ func TestWaitReturnsWhenTheChildSettles(t *testing.T) {
 }
 
 func TestWaitReturnsWhenTheHostDies(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	got := waitInBackground(t, h, parent, c, 30*time.Second)
@@ -219,6 +225,7 @@ func TestWaitReturnsWhenTheHostDies(t *testing.T) {
 }
 
 func TestWaitGoesOnWhenTheAppStops(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	got := waitInBackground(t, h, parent, c, 30*time.Second)
@@ -233,6 +240,7 @@ func TestWaitGoesOnWhenTheAppStops(t *testing.T) {
 }
 
 func TestWaitWaitsForAHeldMessage(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	// The child waits on the owner at an approval, as its stream says.
@@ -282,6 +290,7 @@ func busyAgain(t *testing.T, h *apptest.Harness, id string) {
 }
 
 func TestAWaitIsKeptUntilItEnds(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	token := tokenOf(t, h, parent)
@@ -334,6 +343,7 @@ func TestAWaitIsKeptUntilItEnds(t *testing.T) {
 }
 
 func TestAWaitEndsWithTheWaitersTurn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		end  func(h *apptest.Harness, id string) error
@@ -375,6 +385,7 @@ func TestAWaitEndsWithTheWaitersTurn(t *testing.T) {
 }
 
 func TestWaitOnAnAncestorIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	top := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, top, `{"task":"Look around","access":"read"}`).ID
@@ -402,6 +413,7 @@ func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 }
 
 func TestWaitReportsWaitingOnOwner(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","access":"supervised"}`).ID
@@ -425,6 +437,7 @@ func TestWaitReportsWaitingOnOwner(t *testing.T) {
 }
 
 func TestWaitEndsWithTheCallersTurn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		end  func(h *apptest.Harness, id string) error
@@ -448,6 +461,7 @@ func TestWaitEndsWithTheCallersTurn(t *testing.T) {
 }
 
 func TestWaitWaitsForAQueuedMessage(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	sent, err := h.ChatSend(c, "and the tests")

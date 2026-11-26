@@ -13,6 +13,7 @@ import (
 )
 
 func TestAgentRequestMakesTheCommandsRequest(t *testing.T) {
+	t.Parallel()
 	const caller, project = "main/abcdefgh", "main"
 	ask := func(cmd string, args []string, opts map[string]string) ctl.Request {
 		return ctl.Request{Cmd: cmd, Session: caller, Project: project, Args: args, Opts: opts}
@@ -44,6 +45,7 @@ func TestAgentRequestMakesTheCommandsRequest(t *testing.T) {
 }
 
 func TestAgentRequestRefusesABadInput(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ tool, input, err string }{
 		{"note", `{"text":""}`, "The note is empty"},
 		{"note", `{"text":"x","session":"main/bbbbbbbb"}`, "The tool's input is not what its schema asks for"},
@@ -74,6 +76,7 @@ func TestAgentRequestRefusesABadInput(t *testing.T) {
 }
 
 func TestEveryAgentToolIsServed(t *testing.T) {
+	t.Parallel()
 	var served []string
 	for _, tool := range mcp.Tools() {
 		served = append(served, tool.Name)
