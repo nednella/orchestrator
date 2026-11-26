@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -22,11 +22,7 @@ type Backend = {
   SwitchProject(name: string): Promise<Snapshot>
   AddProject(): Promise<Snapshot>
   AddProjectDir(dir: string): Promise<Snapshot>
-  NewProject(name: string): Promise<Snapshot>
-  CreateRepo(name: string): Promise<Snapshot>
-  RemoveProject(name: string): Promise<Snapshot>
   SetUpProject(): Promise<Session>
-  DismissSetup(): Promise<Snapshot>
   AddNote(text: string): Promise<Note>
   UpdateNote(id: string, text: string): Promise<Note>
   SetNotePinned(id: string, pinned: boolean): Promise<Note>
@@ -57,7 +53,6 @@ type Backend = {
   ChatWatch(id: string): Promise<void>
   ChatUnwatch(id: string): Promise<void>
   ChatSend(id: string, text: string, images: ChatImage[]): Promise<ChatSent>
-  ChatDraft(id: string, text: string): Promise<void>
   ChatInterrupt(id: string): Promise<void>
   ChatSendNow(id: string, message: string): Promise<void>
   ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
@@ -132,9 +127,9 @@ declare global {
 
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
-  projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
+  projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'SetUpProject'],
   sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
@@ -162,7 +157,7 @@ function bindServices(go: NonNullable<Window['go']>): Backend {
   return { ...Object.fromEntries(methods), OpenURL: openInBrowser } as Backend
 }
 
-export type DevFlags = { overlay?: string; tab?: string; cmd?: string; view?: string }
+export type DevFlags = { overlay?: string; view?: string }
 
 const mock = window.go ? null : createMock(new URLSearchParams(location.search))
 const backend: Backend = window.go ? bindServices(window.go) : mock!.backend
@@ -189,11 +184,7 @@ export const api = {
   switchProject: (name: string) => backend.SwitchProject(name),
   addProject: () => backend.AddProject(),
   addProjectDir: (dir: string) => backend.AddProjectDir(dir),
-  newProject: (name: string) => backend.NewProject(name),
-  createRepo: (name: string) => backend.CreateRepo(name),
-  removeProject: (name: string) => backend.RemoveProject(name),
   setUpProject: () => backend.SetUpProject(),
-  dismissSetup: () => backend.DismissSetup(),
   addNote: (text: string) => backend.AddNote(text),
   updateNote: (id: string, text: string) => backend.UpdateNote(id, text),
   setNotePinned: (id: string, pinned: boolean) => backend.SetNotePinned(id, pinned),
@@ -219,7 +210,7 @@ export const api = {
   termResize: (id: string, cols: number, rows: number) => backend.TermResize(id, cols, rows).catch(() => {}),
   termClose: (id: string) => backend.TermClose(id),
   openURL: (url: string) => backend.OpenURL(url),
-  stats: (days: number, project: string) => backend.Stats(days, project).then(readIdleKinds),
+  stats: (days: number, project: string) => backend.Stats(days, project),
   ledger: (days: number, project: string) => backend.Ledger(days, project),
   refreshPRs: () => backend.RefreshPRs(),
   ackPR: (id: string) => backend.AckPR(id),
@@ -231,7 +222,6 @@ export const api = {
   chatSend: (id: string, text: string, images: ChatImage[] = []) => backend.ChatSend(id, text, images),
   // The mock keeps the images it was sent in memory and has its own address for each.
   chatMediaURL: (thread: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(thread, path),
-  chatDraft: (id: string, text: string) => backend.ChatDraft(id, text),
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),
   chatSendNow: (id: string, message: string) => backend.ChatSendNow(id, message),
   chatAnswer: (id: string, request: string, allow: boolean, message = '') => backend.ChatAnswer(id, request, allow, message),
@@ -289,18 +279,6 @@ export const api = {
   limits: () => backend.Limits(),
   // Reads the limits now: from a live thread, else by a short probe when the values are over 5 minutes old.
   refreshLimits: () => backend.RefreshLimits(),
-}
-
-// The Go side used to call an idle wait "finished"; accept both.
-type LegacyWaitKind = WaitKind | 'finished'
-
-function readIdleKinds(stats: Stats): Stats {
-  const idle = (kind: LegacyWaitKind): WaitKind => (kind === 'finished' ? 'idle' : kind)
-  return {
-    ...stats,
-    byCause: stats.byCause.map((c) => ({ ...c, kind: idle(c.kind) })),
-    recent: stats.recent.map((w) => ({ ...w, kind: idle(w.kind) })),
-  }
 }
 
 export function on<K extends keyof EventMap>(

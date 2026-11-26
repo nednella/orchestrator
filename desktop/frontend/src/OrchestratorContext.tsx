@@ -108,10 +108,7 @@ type OrchestratorActions = {
   startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
   switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
   addProject(dir?: string): Promise<void>
-  newProject(name: string): Promise<void>
-  removeProject(name: string): Promise<void>
   setUpProject(): Promise<void>
-  dismissSetup(): Promise<void>
   refreshIssues(): Promise<void>
   addNote(text: string, images?: PendingImage[]): Promise<void>
   updateNote(id: string, text: string): Promise<void>
@@ -535,36 +532,6 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     [enterProject],
   )
 
-  // A failed GitHub step leaves the project in place; the user retries it or leaves the project local.
-  const createRepo = useCallback(
-    async (name: string) => {
-      const key = pushToast({ tone: 'info', text: `Creating the GitHub repo for ${name}…`, sticky: true })
-      try {
-        const snap = await api.createRepo(name)
-        if (snap.project.name !== projectRef.current?.name) return
-        setProject(snap.project)
-        setProjects(snap.projects)
-        await loadIssues(true)
-      } catch (err) {
-        const failed = pushToast({
-          tone: 'error',
-          text: errorMessage(err),
-          sticky: true,
-          action: {
-            label: 'Retry',
-            run() {
-              dismissToast(failed)
-              report(() => createRepo(name))
-            },
-          },
-        })
-      } finally {
-        dismissToast(key)
-      }
-    },
-    [dismissToast, loadIssues, pushToast, report],
-  )
-
   useEffect(() => {
     report(() => enterFrom(api.snapshot()))
     report(async () => setAwake(await api.awake()))
@@ -929,25 +896,6 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       async addProject(dir) {
         await enterFrom(dir ? api.addProjectDir(dir) : api.addProject())
       },
-      async newProject(name) {
-        const key = pushToast({ tone: 'info', text: `Creating ${name}…`, sticky: true })
-        const before = projectRef.current?.dir
-        let snap: Snapshot
-        try {
-          snap = await enterFrom(api.newProject(name))
-        } finally {
-          dismissToast(key)
-        }
-        if (snap.project.dir !== before) await createRepo(snap.project.name)
-      },
-      async removeProject(name) {
-        const epoch = projectEpoch.current
-        const snap = await api.removeProject(name)
-        if (epoch !== projectEpoch.current) return
-        if (snap.project.name !== projectRef.current?.name) return enterProject(snap, ++projectEpoch.current)
-        setProjects(snap.projects)
-        forgetGone(sessionsRef.current, snap.projects)
-      },
       async setUpProject() {
         try {
           addSession(await api.setUpProject())
@@ -957,11 +905,6 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
           setProjects(snap.projects)
           await loadIssues(true)
         }
-      },
-      async dismissSetup() {
-        const snap = await api.dismissSetup()
-        setProject(snap.project)
-        setProjects(snap.projects)
       },
       refreshIssues: () => loadIssues(true),
       loadBrowserState,
@@ -1124,7 +1067,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
   const live = shownIn(sessions, projects)

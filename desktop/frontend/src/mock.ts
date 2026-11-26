@@ -175,8 +175,6 @@ export function createMock(params: URLSearchParams) {
   const flags = {
     empty: params.has('empty'),
     overlay: params.get('overlay') ?? undefined,
-    tab: params.get('tab') ?? undefined,
-    cmd: params.get('cmd') ?? undefined,
     view: params.get('view') ?? undefined,
     toast: params.has('toast'),
     done: params.has('done'),
@@ -1253,41 +1251,11 @@ export function createMock(params: URLSearchParams) {
       emit('projects', snap.projects)
       return snap
     },
-    NewProject: async (name: string) => {
-      if (!/^[\w.-]+$/.test(name)) throw `${name} is not a project name`
-      if (data.some((p) => p.name === name)) throw `Project ${name} already exists`
-      data.push({ name, dir: `~/code/${name}`, repo: '', notes: [], issues: [], waits: [], cleanups: [], needsSetup: true })
-      const snap = switchTo(data[data.length - 1])
-      emit('projects', snap.projects)
-      return snap
-    },
-    CreateRepo: async (name: string) => {
-      const p = data.find((p) => p.name === name)
-      if (!p) throw `no project called ${name}`
-      if (name.includes('taken')) throw `${name} has no GitHub repo: name already exists`
-      p.repo = `ned/${name}`
-      return snapshot()
-    },
-    RemoveProject: async (name: string) => {
-      const at = data.findIndex((p) => p.name === name)
-      if (at < 0) throw 'No such project'
-      if (data.length === 1) throw 'Cannot remove the last project'
-      data.splice(at, 1)
-      const snap = current.name === name ? switchTo(data[0]) : snapshot()
-      emit('projects', snap.projects)
-      return snap
-    },
     SetUpProject: async () => {
       if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], access: actionAccess('Work'), moves: movesFrom('Inbox') }))
       current.needsSetup = false
       emit('projects', data.map(projectView))
       return startSessionFor('orchestrator setup', 0, 'Set up this project for orchestrator with me.')
-    },
-    DismissSetup: async () => {
-      current.setupDismissed = true
-      const snap = snapshot()
-      emit('projects', snap.projects)
-      return snap
     },
     AddNote: async (text: string) => {
       const now = Date.now()
