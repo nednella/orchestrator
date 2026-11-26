@@ -22,6 +22,7 @@ func say(t *testing.T, h *apptest.Harness, id, text string) {
 }
 
 func TestBranchIsReadAgainAfterAToolCall(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -49,6 +50,7 @@ func TestBranchIsReadAgainAfterAToolCall(t *testing.T) {
 }
 
 func TestPRIsLookedUpWhenATurnEnds(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := worktreeThread(h, t)
@@ -65,6 +67,7 @@ func TestPRIsLookedUpWhenATurnEnds(t *testing.T) {
 }
 
 func TestPromptIsRecordedInTheActivity(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
@@ -83,6 +86,7 @@ func TestPromptIsRecordedInTheActivity(t *testing.T) {
 }
 
 func TestRestartObservesNoEventTwice(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -170,6 +174,7 @@ func steady(t *testing.T, get func() int64) int64 {
 func observe(h *apptest.Harness, id string, evs ...session.Event) { h.Sessions().Observe(id, evs...) }
 
 func TestAnEventOlderThanTheRecordChangesNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -194,6 +199,7 @@ func TestAnEventOlderThanTheRecordChangesNothing(t *testing.T) {
 }
 
 func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -223,6 +229,7 @@ func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
 }
 
 func TestABatchOfEventsReadsUsageOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -247,6 +254,7 @@ func TestABatchOfEventsReadsUsageOnce(t *testing.T) {
 }
 
 func TestABatchThatEndsATurnAndStartsAnotherRecordsItsUsageAndLooksUpThePR(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -277,6 +285,7 @@ func TestABatchThatEndsATurnAndStartsAnotherRecordsItsUsageAndLooksUpThePR(t *te
 }
 
 func TestABatchWithAToolResultReadsTheBranch(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		then session.Event

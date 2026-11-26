@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -23,14 +24,30 @@ import (
 	"github.com/nednella/orchestrator/internal/session"
 )
 
-// freePort is a port in 18000–18999 that nothing listens on now.
+// ports hands each test its own port among 18000–18999: tests run at the same time, and a port that was free when one
+// asked is not yet in use while another asks.
+var ports struct {
+	sync.Mutex
+	taken map[int]bool
+}
+
+// freePort is a port in 18000–18999 that nothing listens on now and no other test of this run was given.
 func freePort(t *testing.T) int {
 	t.Helper()
+	ports.Lock()
+	defer ports.Unlock()
+	if ports.taken == nil {
+		ports.taken = map[int]bool{}
+	}
 	first := rand.IntN(1000)
 	for i := range 1000 {
 		port := 18000 + (first+i)%1000
+		if ports.taken[port] {
+			continue
+		}
 		if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port)); err == nil {
 			ln.Close()
+			ports.taken[port] = true
 			return port
 		}
 	}
@@ -121,6 +138,7 @@ func marker(h *apptest.Harness, id string) []string {
 }
 
 func TestServersListAThreadsListener(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	before := time.Now().Add(-time.Second) // the kernel's start time is rounded down
 	thread, port, pid := threadServing(t, h)
@@ -147,6 +165,7 @@ func TestServersListAThreadsListener(t *testing.T) {
 }
 
 func TestServersOfNoThread(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	shell, err := h.ShellNew("")
 	if err != nil {
@@ -169,6 +188,7 @@ func TestServersOfNoThread(t *testing.T) {
 }
 
 func TestOpenServerTakesOnlyAPort(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, port := range []int{0, -1, 65536} {
 		if err := h.OpenServer(port); err == nil {
@@ -181,6 +201,7 @@ func TestOpenServerTakesOnlyAPort(t *testing.T) {
 }
 
 func TestSleepStopsAThreadsServers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -205,6 +226,7 @@ func TestSleepStopsAThreadsServers(t *testing.T) {
 }
 
 func TestDeleteStopsAThreadsServers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -215,6 +237,7 @@ func TestDeleteStopsAThreadsServers(t *testing.T) {
 }
 
 func TestClaudeEndingStopsAThreadsServers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -226,6 +249,7 @@ func TestClaudeEndingStopsAThreadsServers(t *testing.T) {
 }
 
 func TestAccessRestartKeepsAThreadsServers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -245,6 +269,7 @@ func TestAccessRestartKeepsAThreadsServers(t *testing.T) {
 }
 
 func TestStopServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -279,6 +304,7 @@ func TestStopServer(t *testing.T) {
 // A host killed, as by SIGKILL or a crash, settles its thread without the app stopping anything; the next start of the
 // app stops the servers it left, and no process of a thread it does not know.
 func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	thread, _, pid := threadServing(t, h)
 	started := startOf(pid)
@@ -309,6 +335,7 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 // finds the threads of the first settled. A thread whose host answers runs, so it keeps its servers; one whose host was
 // killed while no app ran loses them. Deleting the one that runs leaves its servers too.
 func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	live, _, livePID := threadServing(t, h)
 	liveStart := startOf(livePID)
@@ -360,6 +387,7 @@ func backdate(t *testing.T, h *apptest.Harness, id string) {
 }
 
 func TestShellCarriesNoThreadMarker(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Env: []string{"ORCHESTRATOR_SESSION=main/aaaaaaaa"}}) // as an app started from a thread's terminal has
 	thread, err := h.NewSession("work", "")
 	if err != nil {

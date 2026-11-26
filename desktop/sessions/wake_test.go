@@ -96,6 +96,7 @@ func assertOneChat(t *testing.T, h *apptest.Harness, id string, users ...string)
 }
 
 func TestWakeKeepsTheThreadID(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	before := talkedThenSettled(t, h)
 
@@ -115,6 +116,7 @@ func TestWakeKeepsTheThreadID(t *testing.T) {
 }
 
 func TestWakeAfterTheAppRestarts(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	before := talkedThenSettled(t, h)
 	saved, err := bus.ReadState(h.State, before.ID)
@@ -167,6 +169,7 @@ func settledWhileClosed(t *testing.T, h *apptest.Harness, id string) *apptest.Ha
 }
 
 func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name  string
 		start func(h *apptest.Harness) (sessions.Session, error)
@@ -215,6 +218,7 @@ func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
 }
 
 func TestWakeWithoutAConversationStartsAfresh(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -239,6 +243,7 @@ func TestWakeWithoutAConversationStartsAfresh(t *testing.T) {
 }
 
 func TestPRReviewWakesASettledThread(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name, extra string
 		draft       bool
@@ -281,6 +286,7 @@ func TestPRReviewWakesASettledThread(t *testing.T) {
 }
 
 func TestIssueStartWakesTheSettledThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.StartIssue(7)
 	if err != nil {
@@ -312,6 +318,7 @@ func TestIssueStartWakesTheSettledThread(t *testing.T) {
 }
 
 func TestPRBeforeTheLastWakeIsAnEarlierWakes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -333,6 +340,7 @@ func TestPRBeforeTheLastWakeIsAnEarlierWakes(t *testing.T) {
 }
 
 func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -357,6 +365,7 @@ func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
 }
 
 func TestWokenThreadKeepsItsCost(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
@@ -394,6 +403,7 @@ func TestWokenThreadKeepsItsCost(t *testing.T) {
 }
 
 func TestWakeOfALiveThreadFails(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -409,6 +419,7 @@ func TestWakeOfALiveThreadFails(t *testing.T) {
 }
 
 func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
@@ -428,6 +439,7 @@ func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
 }
 
 func TestIssueStartReportsACommandTheWokenThreadRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.StartIssue(7)
 	if err != nil {
@@ -447,6 +459,7 @@ func TestIssueStartReportsACommandTheWokenThreadRefused(t *testing.T) {
 }
 
 func TestTwoMessagesAtOnceWakeTheThreadOnce(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s := talkedThenSettled(t, h)
 
@@ -475,6 +488,7 @@ func TestTwoMessagesAtOnceWakeTheThreadOnce(t *testing.T) {
 }
 
 func TestPRReviewWakesASettledThreadWithNoIssue(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("my work", "", "supervised", "worktree")

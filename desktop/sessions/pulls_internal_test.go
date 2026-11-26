@@ -72,6 +72,7 @@ func newListFixture(t *testing.T) *listFixture {
 func (f *listFixture) ask() RepoPulls { return f.l.openPulls(context.Background(), f.proj) }
 
 func TestOpenPullsComeFromTheWatchersListWithoutACall(t *testing.T) {
+	t.Parallel()
 	f := newListFixture(t)
 	if _, _, err := f.l.listPulls(context.Background(), f.proj, "acme/widgets", true); err != nil {
 		t.Fatal(err)
@@ -87,6 +88,7 @@ func TestOpenPullsComeFromTheWatchersListWithoutACall(t *testing.T) {
 }
 
 func TestTheListExpiresAfterAMinute(t *testing.T) {
+	t.Parallel()
 	f := newListFixture(t)
 	f.ask()
 	f.at = f.at.Add(59 * time.Second)
@@ -102,6 +104,7 @@ func TestTheListExpiresAfterAMinute(t *testing.T) {
 }
 
 func TestAFailedReadKeepsTheListAndBacksOff(t *testing.T) {
+	t.Parallel()
 	f := newListFixture(t)
 	f.ask()
 	f.at = f.at.Add(61 * time.Second)
@@ -123,6 +126,7 @@ func TestAFailedReadKeepsTheListAndBacksOff(t *testing.T) {
 }
 
 func TestWithoutAPollTheOnDemandReadKeepsTheETag(t *testing.T) {
+	t.Parallel()
 	f := newListFixture(t)
 	f.ask()
 	f.at = f.at.Add(61 * time.Second)
@@ -135,6 +139,7 @@ func TestWithoutAPollTheOnDemandReadKeepsTheETag(t *testing.T) {
 }
 
 func TestAPollWatcherKeepsItsETagToItself(t *testing.T) {
+	t.Parallel()
 	f := newListFixture(t)
 	f.l.polling[f.proj.Key()] = true
 	f.ask()

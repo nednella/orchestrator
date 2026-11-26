@@ -71,6 +71,7 @@ func kindsAndTexts(events []chat.Event) []string {
 }
 
 func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -162,6 +163,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 }
 
 func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -196,6 +198,7 @@ func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
 }
 
 func TestForkKeepsFolderAccessAndModel(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	for access, mode := range map[session.Access]string{session.Read: "plan", session.Supervised: "default", session.Full: "bypassPermissions"} {
 		t.Run(string(access), func(t *testing.T) {
@@ -226,6 +229,7 @@ func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 }
 
 func TestForkDoesNotTakeOverThePR(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
@@ -268,6 +272,7 @@ func TestForkDoesNotTakeOverThePR(t *testing.T) {
 }
 
 func TestForkOfAnEndedThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -297,6 +302,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 }
 
 func TestForkStaysAFork(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 	if err != nil {
@@ -335,6 +341,7 @@ func TestForkStaysAFork(t *testing.T) {
 }
 
 func TestForkRemembersWhereItForked(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -400,6 +407,7 @@ func cleanupRuns(ran string) []string {
 }
 
 func TestForkIsNeverCleanedUp(t *testing.T) {
+	t.Parallel()
 	h, wt, ran, src, fork := forkHarness(t)
 	if err := h.Cleanup(fork.ID, true); err == nil {
 		t.Error("a forced clean-up of the fork did not fail")
@@ -421,6 +429,7 @@ func TestForkIsNeverCleanedUp(t *testing.T) {
 }
 
 func TestForkIsRefusedDuringACleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	src := issueThread(h, t, 7)
@@ -446,6 +455,7 @@ func TestForkIsRefusedDuringACleanup(t *testing.T) {
 }
 
 func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
+	t.Parallel()
 	h, wt, ran, src, fork := forkHarness(t)
 	h.Observe(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, wt))
 	eventually(t, "the fork at work", func() bool { return stateOf(h, fork.ID) == "working" })
@@ -462,6 +472,7 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 }
 
 func TestForkIsToldNotToTrack(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "Source work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -483,6 +494,7 @@ func TestForkIsToldNotToTrack(t *testing.T) {
 }
 
 func TestForkOfAThreadWhoseFolderIsGoneIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
 	src, err := h.NewThreadIn("work", "", "supervised", "worktree")

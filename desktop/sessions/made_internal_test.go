@@ -63,6 +63,7 @@ func madeTree(t *testing.T, l *Lifecycle, dir, branch, thread string) string {
 }
 
 func TestMadeSurvivesAReload(t *testing.T) {
+	t.Parallel()
 	local := t.TempDir()
 	w := Made{Path: filepath.Join(local, "trees", "issue-7"), Branch: "issue-7", Base: "main", BaseOid: "abc", Thread: "p/aaaaaaaa", Created: 1}
 	if err := newMadeTrees(local).Add("p", w); err != nil {
@@ -78,6 +79,7 @@ func TestMadeSurvivesAReload(t *testing.T) {
 }
 
 func TestMadeTreesRecord(t *testing.T) {
+	t.Parallel()
 	local := t.TempDir()
 	trees := filepath.Join(local, "trees")
 	if err := os.MkdirAll(filepath.Join(trees, "a"), 0o700); err != nil {
@@ -171,6 +173,7 @@ func TestMadeTreesRecord(t *testing.T) {
 }
 
 func TestForgetDropsOnlyTheThreadsRecords(t *testing.T) {
+	t.Parallel()
 	trees := filepath.Join(t.TempDir(), "trees")
 	a, b := filepath.Join(trees, "a"), filepath.Join(trees, "b")
 	tests := []struct {
@@ -215,6 +218,7 @@ func TestForgetDropsOnlyTheThreadsRecords(t *testing.T) {
 }
 
 func TestRecordOfAMissingFolderIsFoundByAnySpelling(t *testing.T) {
+	t.Parallel()
 	trees := filepath.Join(t.TempDir(), "trees")
 	link := filepath.Join(t.TempDir(), "link")
 	if err := os.Symlink(trees, link); err != nil {
@@ -251,6 +255,7 @@ func TestRecordOfAMissingFolderIsFoundByAnySpelling(t *testing.T) {
 }
 
 func TestEmptyThreadIsRefused(t *testing.T) {
+	t.Parallel()
 	l, dir, local := madeRepo(t)
 	wt := filepath.Join(dir, "trees", "issue-7")
 	gitT(t, dir, "worktree", "add", "-b", "issue-7", wt)
@@ -280,6 +285,7 @@ func TestEmptyThreadIsRefused(t *testing.T) {
 }
 
 func TestUnreadableRecordIsNeverOverwritten(t *testing.T) {
+	t.Parallel()
 	local := t.TempDir()
 	m := newMadeTrees(local)
 	if err := os.MkdirAll(filepath.Join(local, "p"), 0o700); err != nil {
@@ -303,6 +309,7 @@ func TestUnreadableRecordIsNeverOverwritten(t *testing.T) {
 }
 
 func TestMarkerIsInvisibleToGit(t *testing.T) {
+	t.Parallel()
 	l, dir, _ := madeRepo(t)
 	wt := filepath.Join(dir, "trees", "issue-7")
 	gitT(t, dir, "worktree", "add", "-b", "issue-7", wt)
@@ -335,6 +342,7 @@ func TestMarkerIsInvisibleToGit(t *testing.T) {
 }
 
 func TestHumanWorktreeAtARecordedPathIsNotOurs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		again func(t *testing.T, dir, wt string)
@@ -379,6 +387,7 @@ func TestHumanWorktreeAtARecordedPathIsNotOurs(t *testing.T) {
 }
 
 func TestRemovedRecordIsNotOurs(t *testing.T) {
+	t.Parallel()
 	l, dir, _ := madeRepo(t)
 	wt := madeTree(t, l, dir, "issue-7", "p/t1")
 	if err := l.sessions.made.Removed("p", wt, time.Now()); err != nil {
@@ -396,6 +405,7 @@ func TestRemovedRecordIsNotOurs(t *testing.T) {
 }
 
 func TestOtherThreadsRecordIsNotOurs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		record, marker string
@@ -422,6 +432,7 @@ func TestOtherThreadsRecordIsNotOurs(t *testing.T) {
 }
 
 func TestProjectFolderIsNeverOurs(t *testing.T) {
+	t.Parallel()
 	l, dir, _ := madeRepo(t)
 	if err := l.mark(t.Context(), dir, "p/t1"); err == nil {
 		t.Error("marked the project folder")

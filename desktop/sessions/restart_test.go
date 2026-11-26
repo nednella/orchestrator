@@ -8,6 +8,7 @@ import (
 )
 
 func TestUntaggedTmuxSessionIsIgnored(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	id := "main/aaaaaaaa"
 	tmuxRun(t, h, "-f", "/dev/null", "new-session", "-d", "-s", id, "-c", h.Dir, "sleep", "600")
@@ -35,6 +36,7 @@ func TestUntaggedTmuxSessionIsIgnored(t *testing.T) {
 }
 
 func TestRestartKeepsAThreadOfThisBuild(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {

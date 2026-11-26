@@ -34,6 +34,7 @@ func appendLines(t *testing.T, path string, lines ...string) {
 }
 
 func TestUsageIsCountedOncePerMessage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
@@ -81,6 +82,7 @@ func TestUsageIsCountedOncePerMessage(t *testing.T) {
 }
 
 func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
@@ -118,6 +120,7 @@ func TestRowShowsTheModelAndEffortTheAgentUsedLast(t *testing.T) {
 }
 
 func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
@@ -161,6 +164,7 @@ func TestUsageIsCountedAtEachHookAndRecordedAtTheEndOfATurn(t *testing.T) {
 }
 
 func TestRecordedUsageSavesHowFarTheTranscriptWasRead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {

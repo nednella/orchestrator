@@ -19,6 +19,7 @@ func pulls(branch, updatedAt string) string {
 }
 
 func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -49,6 +50,7 @@ func TestEndedSessionKeepsItsPRAndIsCleanedUpOnMerge(t *testing.T) {
 }
 
 func TestQueueIsReadAgainWhenAPRMergesOrCloses(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	if _, err := h.Issues(false); err != nil {
@@ -77,6 +79,7 @@ func TestQueueIsReadAgainWhenAPRMergesOrCloses(t *testing.T) {
 }
 
 func TestReviewWakesTheSession(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -112,6 +115,7 @@ func TestReviewWakesTheSession(t *testing.T) {
 }
 
 func TestDraftCommentsAreSeenButSendNoReviewPrompt(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -136,6 +140,7 @@ func TestDraftCommentsAreSeenButSendNoReviewPrompt(t *testing.T) {
 }
 
 func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_review_drafts: true\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -147,6 +152,7 @@ func TestReviewDraftsWakesTheSessionOnADraft(t *testing.T) {
 }
 
 func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"Read PR {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -158,6 +164,7 @@ func TestPlainReviewPromptIsMarkedFromTheApp(t *testing.T) {
 }
 
 func TestFailingChecksWakeOncePerCommit(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -179,6 +186,7 @@ func TestFailingChecksWakeOncePerCommit(t *testing.T) {
 }
 
 func TestConflictWakesOncePerCommit(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_conflict_command: \"/rebase {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -206,6 +214,7 @@ func TestConflictWakesOncePerCommit(t *testing.T) {
 }
 
 func TestWakeWaitsUntilTheTurnEnds(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -240,6 +249,7 @@ func reviewBy(login, state string) string {
 }
 
 func TestOneReviewAndItsRepliesWakeTheSessionOnce(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -288,6 +298,7 @@ func waitingWithHeldReview(t *testing.T, h *apptest.Harness) sessions.Session {
 }
 
 func TestEveryHeldPromptIsSent(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n"})
 	repoFixture(t, h)
 	s := waitingWithHeldReview(t, h)
@@ -309,6 +320,7 @@ func TestEveryHeldPromptIsSent(t *testing.T) {
 }
 
 func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		end  func(h *apptest.Harness, id string) error
@@ -334,6 +346,7 @@ func TestEndingASessionDropsItsHeldPrompts(t *testing.T) {
 }
 
 func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -362,6 +375,7 @@ func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 }
 
 func TestWokenThreadIsCleanedUpOnMerge(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -386,6 +400,7 @@ func TestWokenThreadIsCleanedUpOnMerge(t *testing.T) {
 }
 
 func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	h.GH.SetPRFor("issue-12", "[]")
 	h.GH.SetPRFor("side", prJSON("OPEN", false, "[]", 0, 0))
@@ -419,6 +434,7 @@ func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
 }
 
 func TestPollWatcherFetchesOnlyWhatMoved(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
@@ -440,6 +456,7 @@ func TestPollWatcherFetchesOnlyWhatMoved(t *testing.T) {
 }
 
 func TestStoppingTheAppStopsItsWatchers(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
@@ -454,6 +471,7 @@ func TestStoppingTheAppStopsItsWatchers(t *testing.T) {
 }
 
 func TestPollWatcherKeepsLookingWhileChecksRun(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
@@ -465,6 +483,7 @@ func TestPollWatcherKeepsLookingWhileChecksRun(t *testing.T) {
 }
 
 func TestWebhookWatcherRefreshesThePRAnEventNames(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	h.GH.WebhookWorks()
@@ -488,6 +507,7 @@ func TestWebhookWatcherRefreshesThePRAnEventNames(t *testing.T) {
 }
 
 func TestWebhookAskedForButDownIsWarnedAbout(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: webhook\n"})
 	repoFixture(t, h)
 	issueSession(h, t, 12)
@@ -505,6 +525,7 @@ func TestWebhookAskedForButDownIsWarnedAbout(t *testing.T) {
 }
 
 func TestWebhookThatDoesNotWorkLeavesThePoll(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, pulls("issue-12", "2026-10-01T12:00:00Z"))
@@ -522,6 +543,7 @@ func TestWebhookThatDoesNotWorkLeavesThePoll(t *testing.T) {
 }
 
 func TestNoWakeWithoutACommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -546,6 +568,7 @@ func hostedIssueSession(t *testing.T, extra string) (h *apptest.Harness, s sessi
 }
 
 func TestWakeSendsThroughTheHost(t *testing.T) {
+	t.Parallel()
 	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -563,6 +586,7 @@ func TestWakeSendsThroughTheHost(t *testing.T) {
 }
 
 func TestHeldWakesGoInOrder(t *testing.T) {
+	t.Parallel()
 	h, s := hostedIssueSession(t, "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"Fix the checks of {n}\"\n")
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
@@ -588,6 +612,7 @@ func TestHeldWakesGoInOrder(t *testing.T) {
 }
 
 func TestCleanedUpThreadIsLeftOutOfTheWebhook(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	h.GH.WebhookWorks()
 	repoFixture(t, h)

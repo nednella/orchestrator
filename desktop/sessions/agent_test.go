@@ -40,6 +40,7 @@ func mcpServerOf(t *testing.T, args []string) (command string, env map[string]st
 }
 
 func TestThreadStartsWithoutTheCommandOnPath(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"orchestrator"}})
 	if _, err := environ.LookPath(h.Env, "orchestrator"); err == nil {
 		t.Fatal("an orchestrator command is still on PATH")
@@ -63,6 +64,7 @@ func TestThreadStartsWithoutTheCommandOnPath(t *testing.T) {
 }
 
 func TestNoHookInTheSettings(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -86,6 +88,7 @@ func TestNoHookInTheSettings(t *testing.T) {
 }
 
 func TestNoBusSocket(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.NewSession("work", ""); err != nil {
 		t.Fatal(err)
@@ -108,6 +111,7 @@ func TestNoBusSocket(t *testing.T) {
 }
 
 func TestMCPConfigNamesTheControlSocket(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -120,6 +124,7 @@ func TestMCPConfigNamesTheControlSocket(t *testing.T) {
 }
 
 func TestOldAgentKeysAreIgnored(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{
 		TopExtra: "agent_command: bash\n",
 		Queue:    "    queue_sections:\n      - name: Ready\n        labels: [ready]\n        actions:\n          - {name: Work, command: \"/ship {n}\", agent: agy}\n",
@@ -137,6 +142,7 @@ func TestOldAgentKeysAreIgnored(t *testing.T) {
 }
 
 func TestSessionWithClaudeNotOnPathDoesNotStart(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
 	h.RemoveClaude(t)
 	if _, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
@@ -148,6 +154,7 @@ func TestSessionWithClaudeNotOnPathDoesNotStart(t *testing.T) {
 }
 
 func TestDefaultModelIsWhatClaudesSettingsGive(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	if got := h.DefaultModel(""); got != (sessions.ModelChoice{}) {
 		t.Errorf("with no settings: %+v, want none", got)

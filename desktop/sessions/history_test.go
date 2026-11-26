@@ -10,6 +10,7 @@ import (
 )
 
 func TestTimelineAndWorkOutliveTheApp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#5 work", "", false, 5, session.Supervised)
 	if err != nil {

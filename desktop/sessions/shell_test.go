@@ -12,9 +12,7 @@ import (
 // shellHarness starts an app whose shell is a plain sh run from an empty home, so no profile of the user runs.
 func shellHarness(t *testing.T) *apptest.Harness {
 	t.Helper()
-	t.Setenv("SHELL", "/bin/sh")
-	t.Setenv("HOME", t.TempDir())
-	return newHarness(t)
+	return apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh", "HOME=" + t.TempDir()}})
 }
 
 func tmuxHas(h *apptest.Harness, name string) bool {
@@ -22,6 +20,7 @@ func tmuxHas(h *apptest.Harness, name string) bool {
 }
 
 func TestShellSession(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	if got := h.Snapshot().Shells; len(got) != 0 {
 		t.Fatalf("shells before one is opened = %+v", got)
@@ -69,6 +68,7 @@ func TestShellSession(t *testing.T) {
 }
 
 func TestShellFollowsTheProject(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -96,6 +96,7 @@ func TestShellFollowsTheProject(t *testing.T) {
 }
 
 func TestShellSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	shell, err := h.ShellNew("")
 	if err != nil {
@@ -111,6 +112,7 @@ func TestShellSurvivesARestart(t *testing.T) {
 }
 
 func TestShellTabs(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	first, err := h.ShellNew("")
 	if err != nil || first.ID != "main/shell" {

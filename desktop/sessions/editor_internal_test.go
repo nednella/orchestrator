@@ -40,6 +40,7 @@ func editorSessions(t *testing.T, o *opened, app func() string, projectDir strin
 }
 
 func TestOpenInEditorOpensTheWorktreeOfAThread(t *testing.T) {
+	t.Parallel()
 	projectDir, wt := t.TempDir(), filepath.Join(t.TempDir(), "my trees", "issue 7")
 	if err := os.MkdirAll(wt, 0o700); err != nil {
 		t.Fatal(err)
@@ -57,6 +58,7 @@ func TestOpenInEditorOpensTheWorktreeOfAThread(t *testing.T) {
 }
 
 func TestOpenInEditorPrefersTheWorktreeTheBranchIsReadIn(t *testing.T) {
+	t.Parallel()
 	projectDir, started, followed := t.TempDir(), t.TempDir(), t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
@@ -71,6 +73,7 @@ func TestOpenInEditorPrefersTheWorktreeTheBranchIsReadIn(t *testing.T) {
 }
 
 func TestOpenInEditorOpensTheProjectFolderOfAThreadWithoutAWorktree(t *testing.T) {
+	t.Parallel()
 	projectDir := t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
@@ -84,6 +87,7 @@ func TestOpenInEditorOpensTheProjectFolderOfAThreadWithoutAWorktree(t *testing.T
 }
 
 func TestOpenInEditorOpensTheFolderOfAThreadOfAnotherProject(t *testing.T) {
+	t.Parallel()
 	currentDir, otherDir := t.TempDir(), t.TempDir()
 	o := &opened{}
 	current, other := project.Project{Name: "shop", Dir: currentDir}, project.Project{Name: "blog", Dir: otherDir}
@@ -99,6 +103,7 @@ func TestOpenInEditorOpensTheFolderOfAThreadOfAnotherProject(t *testing.T) {
 }
 
 func TestOpenInEditorNeverFallsBackToTheProjectFolderForARemovedWorktree(t *testing.T) {
+	t.Parallel()
 	projectDir, wt := t.TempDir(), filepath.Join(t.TempDir(), "gone")
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, projectDir)
@@ -113,6 +118,7 @@ func TestOpenInEditorNeverFallsBackToTheProjectFolderForARemovedWorktree(t *test
 }
 
 func TestOpenInEditorWorksForASettledThread(t *testing.T) {
+	t.Parallel()
 	wt := t.TempDir()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
@@ -126,6 +132,7 @@ func TestOpenInEditorWorksForASettledThread(t *testing.T) {
 }
 
 func TestOpenInEditorUsesTheConfiguredApp(t *testing.T) {
+	t.Parallel()
 	o := &opened{}
 	s, name := editorSessions(t, o, func() string { return "Cursor" }, t.TempDir())
 	s.info = []term.Info{{Name: name}}
@@ -138,6 +145,7 @@ func TestOpenInEditorUsesTheConfiguredApp(t *testing.T) {
 }
 
 func TestOpenInEditorSaysWhyItFailed(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -159,6 +167,7 @@ func TestOpenInEditorSaysWhyItFailed(t *testing.T) {
 }
 
 func TestOpenInEditorRefusesWhatIsNotAThread(t *testing.T) {
+	t.Parallel()
 	o := &opened{}
 	s, name := editorSessions(t, o, nil, t.TempDir())
 	for _, id := range []string{name.String(), "../../etc", session.Name{Project: "shop", Shell: 1}.String(), ""} {
@@ -172,6 +181,7 @@ func TestOpenInEditorRefusesWhatIsNotAThread(t *testing.T) {
 }
 
 func TestOpenInEditorOpensAFileInTheFolder(t *testing.T) {
+	t.Parallel()
 	wt := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(wt, "docs"), 0o700); err != nil {
 		t.Fatal(err)
@@ -198,6 +208,7 @@ func TestOpenInEditorOpensAFileInTheFolder(t *testing.T) {
 }
 
 func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	wt := filepath.Join(parent, "issue-7")
 	if err := os.MkdirAll(wt, 0o700); err != nil {
@@ -230,6 +241,7 @@ func TestOpenInEditorRefusesAFileOutside(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets a package-level hook.
 func TestOpenMarkdownRefusesAFileSwappedAfterTheCheck(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "secret.md")
 	for name, swap := range map[string]struct{ target, want string }{

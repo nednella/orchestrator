@@ -21,6 +21,7 @@ func evidenceDir(h *apptest.Harness, id string) string {
 }
 
 func TestNumbersAreNeverReused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	first, err := h.NewSession("first", "")
 	if err != nil {
@@ -49,6 +50,7 @@ func TestNumbersAreNeverReused(t *testing.T) {
 }
 
 func TestNumbersSurviveARestartAndADelete(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	a, err := h.NewSession("a", "")
 	if err != nil {
@@ -92,6 +94,7 @@ func TestNumbersSurviveARestartAndADelete(t *testing.T) {
 }
 
 func TestADeletedNumberIsNotGivenAgainAfterARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var fifth sessions.Session
 	for i := range 5 {
@@ -129,6 +132,7 @@ func numbers(h *apptest.Harness) map[string]int {
 }
 
 func TestNewSessionSeesNothingOfADeletedOne(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	old, err := h.NewSession("old", "")
 	if err != nil {
@@ -158,6 +162,7 @@ func TestNewSessionSeesNothingOfADeletedOne(t *testing.T) {
 }
 
 func TestSessionHasItsOwnTempFolder(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {
@@ -187,6 +192,7 @@ func TestSessionHasItsOwnTempFolder(t *testing.T) {
 }
 
 func TestSettledThreadStays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {

@@ -86,6 +86,7 @@ func pushedThread(t *testing.T, h *apptest.Harness) sessions.Session {
 }
 
 func TestProjectShellHasNoThread(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	id := newShell(t, h, "")
 	if got, ok := shellOf(h, id); !ok || got.Thread != "" {
@@ -97,6 +98,7 @@ func TestProjectShellHasNoThread(t *testing.T) {
 }
 
 func TestThreadShellStartsInItsWorktree(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -117,6 +119,7 @@ func TestThreadShellStartsInItsWorktree(t *testing.T) {
 }
 
 func TestShellsAreReadAgainAfterARestart(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	thread, err := h.NewSession("work", "")
 	if err != nil {
@@ -139,6 +142,7 @@ func TestShellsAreReadAgainAfterARestart(t *testing.T) {
 }
 
 func TestDeleteClosesOnlyTheThreadsShells(t *testing.T) {
+	t.Parallel()
 	t.Run("without the worktree", func(t *testing.T) {
 		h := shellHarness(t)
 		gone, err := h.NewSession("gone", "")
@@ -213,6 +217,7 @@ func TestDeleteClosesOnlyTheThreadsShells(t *testing.T) {
 }
 
 func TestSleepWithCleanUpClosesTheThreadsShells(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	s := pushedThread(t, h)
 	own := newShell(t, h, s.ID)
@@ -236,6 +241,7 @@ func TestSleepWithCleanUpClosesTheThreadsShells(t *testing.T) {
 }
 
 func TestCleanupWaitsForAProjectShellInTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	s := pushedThread(t, h)
 	own := newShell(t, h, s.ID)
@@ -260,6 +266,7 @@ func TestCleanupWaitsForAProjectShellInTheWorktree(t *testing.T) {
 }
 
 func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	s := pushedThread(t, h)
 	release, done := heldCleanup(t, h, s.ID)
@@ -285,9 +292,7 @@ func TestNewShellIsRefusedDuringItsThreadsCleanup(t *testing.T) {
 // never by its name.
 func commandHarness(t *testing.T) *apptest.Harness {
 	t.Helper()
-	t.Setenv("SHELL", "/bin/sh")
-	t.Setenv("HOME", t.TempDir())
-	return newHarness(t)
+	return apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh", "HOME=" + t.TempDir()}})
 }
 
 // shellRuns waits until a refresh finds the shell running command, busy or not. An empty command is the shell itself.
@@ -301,6 +306,7 @@ func shellRuns(t *testing.T, h *apptest.Harness, id, command string, busy bool) 
 }
 
 func TestShellReportsItsRunningCommand(t *testing.T) {
+	t.Parallel()
 	h := commandHarness(t)
 	id := newShell(t, h, "")
 	shellRuns(t, h, id, "", false)
@@ -313,6 +319,7 @@ func TestShellReportsItsRunningCommand(t *testing.T) {
 }
 
 func TestChangedCommandIsSentAgain(t *testing.T) {
+	t.Parallel()
 	h := commandHarness(t)
 	id := newShell(t, h, "")
 	shellRuns(t, h, id, "", false)

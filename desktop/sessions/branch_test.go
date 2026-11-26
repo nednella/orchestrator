@@ -74,6 +74,7 @@ func hasPR(h *apptest.Harness, id string) func() bool {
 }
 
 func TestPRIsFoundWhenTheTurnEnds(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := worktreeThread(h, t)
@@ -89,6 +90,7 @@ func TestPRIsFoundWhenTheTurnEnds(t *testing.T) {
 }
 
 func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := worktreeThread(h, t)
@@ -107,6 +109,7 @@ func TestIdleSessionLooksUpItsPROncePerTurn(t *testing.T) {
 }
 
 func TestSessionReportsItsBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	ownBranch(t, h.Dir)
@@ -134,6 +137,7 @@ func TestSessionReportsItsBranch(t *testing.T) {
 }
 
 func TestNoIssueInTheEnvironment(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s := issueSession(h, t, 9)
 	env := claudeEnv(t, h, s.ID)
@@ -157,6 +161,7 @@ func promptOf(t *testing.T, args []string) string {
 }
 
 func TestIssueThreadIsToldItsIssue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s := issueSession(h, t, 42)
 	const told = "This thread works on GitHub issue #42."
@@ -191,6 +196,7 @@ func TestIssueThreadIsToldItsIssue(t *testing.T) {
 }
 
 func TestThreadBranchComesFromItsRecord(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	other := filepath.Join(t.TempDir(), "other")
@@ -229,6 +235,7 @@ func branchTag(t *testing.T, h *apptest.Harness, id string) string {
 }
 
 func TestTrackMovesTheThreadsBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -255,6 +262,7 @@ func TestTrackMovesTheThreadsBranch(t *testing.T) {
 }
 
 func TestTrackRefusesAnotherThreadsBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	first := issueThread(h, t, 7)
@@ -275,6 +283,7 @@ func TestTrackRefusesAnotherThreadsBranch(t *testing.T) {
 }
 
 func TestTrackRefusesAReadThread(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	read, err := h.NewThreadIn("ask", "", "read", "project")
@@ -290,6 +299,7 @@ func TestTrackRefusesAReadThread(t *testing.T) {
 }
 
 func TestTrackRefusesABranchCheckedOutInAnotherThreadsWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	first := issueThread(h, t, 7)
@@ -307,6 +317,7 @@ func TestTrackRefusesABranchCheckedOutInAnotherThreadsWorktree(t *testing.T) {
 }
 
 func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -339,6 +350,7 @@ func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
 }
 
 func TestTrackRefusesABranchNameGitDoesNotTake(t *testing.T) {
+	t.Parallel()
 	for _, branch := range []string{"fix\tproj/abcd2345", "fix\nproj/abcd2345", "fix\rit", "two words", "@{-1}", "a..b"} {
 		t.Run(fmt.Sprintf("%q", branch), func(t *testing.T) {
 			h := newHarness(t)

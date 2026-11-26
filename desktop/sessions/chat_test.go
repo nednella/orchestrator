@@ -56,6 +56,7 @@ func accessTag(t *testing.T, h *apptest.Harness, id string) string {
 }
 
 func TestNewThreadKeepsItsAccess(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -111,10 +112,12 @@ func TestNewThreadKeepsItsAccess(t *testing.T) {
 }
 
 func TestMissingAccessWakesAsRead(t *testing.T) {
+	t.Parallel()
 	wakesAsRead(t, func(file map[string]any) { delete(file, "access") })
 }
 
 func TestReadThreadIsInPlanModeAfterARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -138,6 +141,7 @@ func TestReadThreadIsInPlanModeAfterARestart(t *testing.T) {
 }
 
 func TestUnknownAccessWakesAsRead(t *testing.T) {
+	t.Parallel()
 	wakesAsRead(t, func(file map[string]any) { file["access"] = "root" })
 }
 
@@ -186,6 +190,7 @@ func wakesAsRead(t *testing.T, edit func(file map[string]any)) {
 }
 
 func TestReadThreadCountsInStats(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -224,6 +229,7 @@ func TestReadThreadCountsInStats(t *testing.T) {
 }
 
 func TestIssueHasOneThread(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	plan, err := h.StartIssueWith(7, "Plan")
 	if err != nil {
@@ -252,6 +258,7 @@ func TestIssueHasOneThread(t *testing.T) {
 }
 
 func TestReadThreadFollowsItsBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
@@ -278,6 +285,7 @@ func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
 }
 
 func TestUnsentPromptIsADraft(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "write the queue", false, 0, session.Supervised)
 	if err != nil {
@@ -290,6 +298,7 @@ func TestUnsentPromptIsADraft(t *testing.T) {
 }
 
 func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
@@ -302,6 +311,7 @@ func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
 }
 
 func TestTypeIntoIsADraft(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -319,6 +329,7 @@ func TestTypeIntoIsADraft(t *testing.T) {
 }
 
 func TestWakeOfAnEndedHostedSession(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name, extra string
 		draft       bool
@@ -367,6 +378,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 }
 
 func TestManualWakeIsADraft(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		work bool
@@ -396,6 +408,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 }
 
 func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("read", "", "", "", "read")
 	if err != nil {
@@ -428,6 +441,7 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 // TestEveryStartKeepsFileCheckpoints: Claude keeps the checkpoints a rewind of the files needs only when the process
 // that edits them runs with the setting, so every start has it: a new thread, a fork and a wake.
 func TestEveryStartKeepsFileCheckpoints(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	const setting = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
 	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)

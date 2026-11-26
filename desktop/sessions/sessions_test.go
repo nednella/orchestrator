@@ -27,6 +27,7 @@ import (
 )
 
 func TestSessionLifecycle(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 
 	first, err := h.NewSession("first", "")
@@ -139,6 +140,7 @@ func TestSessionLifecycle(t *testing.T) {
 }
 
 func TestOwnersPromptIsSentOnceTheAgentIsReady(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("", "printf 'ran-%s' prompt\nignored second line")
 	if err != nil {
@@ -155,6 +157,7 @@ func TestOwnersPromptIsSentOnceTheAgentIsReady(t *testing.T) {
 }
 
 func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	long := strings.Repeat("é", 80)
 
@@ -203,6 +206,7 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 }
 
 func TestThreadWithAnUnknownModelDoesNotStart(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	if s, err := h.NewSessionWith("", "hi", "nope", ""); err == nil {
 		t.Errorf("started %+v with a model claude does not take", s)
@@ -257,6 +261,7 @@ func userLines(t *testing.T, h *apptest.Harness, id string) []string {
 }
 
 func TestClaudeRunsUnderTheHost(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -291,6 +296,7 @@ func TestClaudeRunsUnderTheHost(t *testing.T) {
 	}
 }
 
+// Not parallel: it redirects the process-wide log.
 func TestClaudeThatDoesNotKnowTheThinkingFlagStillWorks(t *testing.T) {
 	logged := &apptest.LockedBuffer{}
 	before := log.Writer()
@@ -334,6 +340,7 @@ func TestClaudeThatDoesNotKnowTheThinkingFlagStillWorks(t *testing.T) {
 }
 
 func TestARefusedFlagIsLeftOutOnlyInTheAppRunThatSawIt(t *testing.T) {
+	t.Parallel()
 	first := apptest.NewWith(t, apptest.Options{ClaudeRejects: agent.ThinkingDisplay})
 	old, err := first.NewThread("old", "hello", "", "", "supervised")
 	if err != nil {
@@ -361,6 +368,7 @@ func TestARefusedFlagIsLeftOutOnlyInTheAppRunThatSawIt(t *testing.T) {
 }
 
 func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
+	t.Parallel()
 	first := apptest.New(t)
 	older := filepath.Join(t.TempDir(), "orchestrator")
 	if err := os.WriteFile(older, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
@@ -387,6 +395,7 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 }
 
 func TestEachHostGetsItsOwnToken(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	tokens := map[string]bool{}
 	for _, title := range []string{"one", "two"} {
@@ -449,6 +458,7 @@ func TestEachHostGetsItsOwnToken(t *testing.T) {
 }
 
 func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	folder := hostFolder(h, "main")
 	if err := os.MkdirAll(folder, 0o755); err != nil {
@@ -469,6 +479,7 @@ func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 }
 
 func TestALongProjectKeyStartsItsHost(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	dir := filepath.Join(t.TempDir(), strings.Repeat("a-long-project-name-", 5))
 	if err := os.Mkdir(dir, 0o700); err != nil {
@@ -489,6 +500,7 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 }
 
 func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "/work 7; and a ';' at the end;", true, 7, session.Supervised)
 	if err != nil {
@@ -514,6 +526,7 @@ func loggedUser(path, text string) bool {
 }
 
 func TestAppPromptKeepsItsMark(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	if _, err := h.Sessions().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
@@ -526,6 +539,7 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 }
 
 func TestInterruptReachesTheHost(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -547,6 +561,7 @@ func TestInterruptReachesTheHost(t *testing.T) {
 }
 
 func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name, state string
 		hooks       [][2]string
@@ -594,6 +609,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 }
 
 func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name    string
 		end     func(h *apptest.Harness, id string) error
@@ -625,6 +641,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 }
 
 func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
+	t.Parallel()
 	const settle = 300 * time.Millisecond
 	for _, tt := range []struct {
 		name, message, state string
@@ -678,6 +695,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 }
 
 func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
+	t.Parallel()
 	const settle = 300 * time.Millisecond
 	h := apptest.NewWith(t, apptest.Options{StopSettle: settle})
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
@@ -722,6 +740,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 }
 
 func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -741,6 +760,7 @@ func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 }
 
 func TestSessionsSurviveWithoutALocale(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Env: []string{"LANG=", "LC_ALL=", "LC_CTYPE="}})
 	s, err := h.NewSession("naïve", "")
 	if err != nil {
@@ -754,6 +774,7 @@ func TestSessionsSurviveWithoutALocale(t *testing.T) {
 }
 
 func TestMacStaysAwakeWhileASessionWorks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("busy", "")
 	if err != nil {
@@ -768,6 +789,7 @@ func TestMacStaysAwakeWhileASessionWorks(t *testing.T) {
 }
 
 func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("beside", "")
 	if err != nil {
@@ -810,6 +832,7 @@ func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
 }
 
 func TestAFinishedTurnIsNoInterruption(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("r", "")
 	if err != nil {
@@ -832,6 +855,7 @@ func TestAFinishedTurnIsNoInterruption(t *testing.T) {
 }
 
 func TestReplyEndingInAQuestionWaits(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("q", "")
 	if err != nil {
@@ -851,6 +875,7 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 }
 
 func TestTheOwnersSleepAndTheAutomaticSleepAtOnceStopTheThreadOnce(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	for i := range 12 {
 		s, err := h.Sessions().Create(h.Sessions().Current(), fmt.Sprintf("race %d", i), "", false, 0, session.Supervised)
@@ -883,6 +908,7 @@ func TestTheOwnersSleepAndTheAutomaticSleepAtOnceStopTheThreadOnce(t *testing.T)
 }
 
 func TestSettledSessionsSurviveARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("keep me", "")
 	if err != nil {
@@ -912,6 +938,7 @@ func TestSettledSessionsSurviveARestart(t *testing.T) {
 }
 
 func TestProjectCountsFollowTheSessions(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	counts := func() sessions.Project { return h.Snapshot().Project }
 	a, err := h.NewSession("a", "")
@@ -946,6 +973,7 @@ func TestProjectCountsFollowTheSessions(t *testing.T) {
 }
 
 func TestRefreshReadsAStateFileAgainOnlyOnceItChanges(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("work", "")
 	if err != nil {

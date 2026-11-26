@@ -10,6 +10,7 @@ import (
 )
 
 func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)

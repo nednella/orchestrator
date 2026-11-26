@@ -65,6 +65,7 @@ func inList(list []sessions.Session, id string) bool {
 }
 
 func TestDeleteRemovesTheThreadAndItsChat(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, _, err := h.Sessions().CreateIssue(h.Sessions().Current(), "#12 work", "hello", 12, project.Action{Name: "Work"}, nil, "what came before", sessions.StartOptions{})
 	if err != nil {
@@ -122,6 +123,7 @@ func TestDeleteRemovesTheThreadAndItsChat(t *testing.T) {
 }
 
 func TestDeleteIsHeard(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name  string
 		child bool // the thread has a running child, which refuses its delete
@@ -154,6 +156,7 @@ func TestDeleteIsHeard(t *testing.T) {
 }
 
 func TestDeleteSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s := talked(t, h)
 	if err := h.SettleThread(s.ID); err != nil {
@@ -179,6 +182,7 @@ func TestDeleteSurvivesARestart(t *testing.T) {
 }
 
 func TestDeletedThreadRefusesMessages(t *testing.T) {
+	t.Parallel()
 	t.Run("the chat and a wake", func(t *testing.T) {
 		h := apptest.New(t)
 		s := talked(t, h)
@@ -255,6 +259,7 @@ func TestDeletedThreadRefusesMessages(t *testing.T) {
 }
 
 func TestDeleteOfALiveThreadStopsIt(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s := talked(t, h)
 	transcript := filepath.Join(t.TempDir(), "conv.jsonl")
@@ -282,6 +287,7 @@ func TestDeleteOfALiveThreadStopsIt(t *testing.T) {
 }
 
 func TestDeleteWithTheWorktreeRemovesItAndKeepsTheBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -321,6 +327,7 @@ func TestDeleteWithTheWorktreeRemovesItAndKeepsTheBranch(t *testing.T) {
 }
 
 func TestDeleteWithTheWorktreeIsRefusedWhileItHoldsWork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -354,6 +361,7 @@ func TestDeleteWithTheWorktreeIsRefusedWhileItHoldsWork(t *testing.T) {
 }
 
 func TestDeleteWithoutTheWorktreeLeavesItOnDisk(t *testing.T) {
+	t.Parallel()
 	ran := filepath.Join(t.TempDir(), "ran")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
 	repoFixture(t, h)
@@ -399,6 +407,7 @@ func TestDeleteWithoutTheWorktreeLeavesItOnDisk(t *testing.T) {
 }
 
 func TestSharedWorktreeIsNotOffered(t *testing.T) {
+	t.Parallel()
 	t.Run("a fork, running and asleep", func(t *testing.T) {
 		h, wt, ran, src, fork := forkHarness(t)
 		wantShared := fmt.Sprintf("Thread %d keeps its worktree: Thread #7 work (fork) also works in this worktree. Delete it without the worktree", src.N)
@@ -455,6 +464,7 @@ func TestSharedWorktreeIsNotOffered(t *testing.T) {
 }
 
 func TestDeleteOfAThreadInTheProjectFolderTouchesNoFolder(t *testing.T) {
+	t.Parallel()
 	h, s, ran := projectFolderThread(t, "")
 	if err := os.WriteFile(filepath.Join(h.Dir, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -475,6 +485,7 @@ func TestDeleteOfAThreadInTheProjectFolderTouchesNoFolder(t *testing.T) {
 }
 
 func TestDeleteIsRefusedDuringACleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -497,6 +508,7 @@ func TestDeleteIsRefusedDuringACleanup(t *testing.T) {
 }
 
 func TestDeleteRefusesAShell(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	thread, err := h.NewSession("work", "")
 	if err != nil {
@@ -543,6 +555,7 @@ func TestDeleteRefusesAShell(t *testing.T) {
 }
 
 func TestDeleteWaitingOnAHostThatDoesNotStopHoldsUpNoNewThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s := talked(t, h)
 	if err := h.SettleThread(s.ID); err != nil {
@@ -585,6 +598,7 @@ func TestDeleteWaitingOnAHostThatDoesNotStopHoldsUpNoNewThread(t *testing.T) {
 }
 
 func TestDeleteIsRefusedWhileAChildRuns(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := talked(t, h)
 	// The child works until stopped: one that finishes goes to sleep once its result went.
@@ -615,6 +629,7 @@ func TestDeleteIsRefusedWhileAChildRuns(t *testing.T) {
 }
 
 func TestThreadBeingDeletedIsNotWoken(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -646,6 +661,7 @@ func TestThreadBeingDeletedIsNotWoken(t *testing.T) {
 }
 
 func TestDeleteKeptAfterItsSettleSaysTheThreadIsAsleep(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -668,6 +684,7 @@ func TestDeleteKeptAfterItsSettleSaysTheThreadIsAsleep(t *testing.T) {
 }
 
 func TestCleanedUpThreadIsNotOfferedAWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)

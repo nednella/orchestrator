@@ -7,6 +7,7 @@ import (
 	"github.com/nednella/orchestrator/internal/session"
 )
 
+// Not parallel: it compares two samples of the test process's own memory, which other tests change.
 func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)

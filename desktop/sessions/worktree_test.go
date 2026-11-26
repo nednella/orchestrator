@@ -87,6 +87,7 @@ func systemPrompt(t *testing.T, h *apptest.Harness, id string) string {
 const worktreeText = "This thread runs in the worktree"
 
 func TestWriteThreadStartsInAWorktreeOrchestratorMade(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Fix the login button", "", "supervised", "")
@@ -121,6 +122,7 @@ func TestWriteThreadStartsInAWorktreeOrchestratorMade(t *testing.T) {
 }
 
 func TestNewThreadStartsWhereTheSettingSays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	unset, err := h.NewThreadIn("Look around", "", "read", "")
@@ -164,6 +166,7 @@ func TestNewThreadStartsWhereTheSettingSays(t *testing.T) {
 }
 
 func TestIssueThreadGetsTheIssueBranch(t *testing.T) {
+	t.Parallel()
 	for _, action := range []string{"Work", "Plan"} {
 		t.Run(action, func(t *testing.T) {
 			h := newHarness(t)
@@ -190,6 +193,7 @@ func TestIssueThreadGetsTheIssueBranch(t *testing.T) {
 }
 
 func TestThreadBranchIsNamedFromItsTitle(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	first, err := h.NewThreadIn("Fix the login button!", "", "supervised", "")
@@ -209,6 +213,7 @@ func TestThreadBranchIsNamedFromItsTitle(t *testing.T) {
 }
 
 func TestWorktreeCommandGetsItsPlaceholders(t *testing.T) {
+	t.Parallel()
 	got := filepath.Join(t.TempDir(), "placeholders")
 	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "printf '%s\\n' {branch} {worktree} {dir} {base} > " + got + " && git worktree add -b {branch} {worktree} {base}"})
 	repoFixture(t, h)
@@ -226,6 +231,7 @@ func TestWorktreeCommandGetsItsPlaceholders(t *testing.T) {
 }
 
 func TestWorktreeMadeElsewhereByTheCommandIsRecorded(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "git worktree add -b {branch} {dir}/elsewhere {base}"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
@@ -245,6 +251,7 @@ func TestWorktreeMadeElsewhereByTheCommandIsRecorded(t *testing.T) {
 }
 
 func TestFailedWorktreeCommandStartsNoThread(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct{ command, says string }{
 		{"echo no room on the disk >&2; exit 3", "session_worktree_command failed for tidy-up: sh -c: exit status 3: no room on the disk"},
 		{"echo all done", "session_worktree_command made no worktree for tidy-up: all done"},
@@ -268,6 +275,7 @@ func TestFailedWorktreeCommandStartsNoThread(t *testing.T) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestFailedStartRemovesOnlyTheWorktreeItMade(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
@@ -302,6 +310,7 @@ func TestFailedStartRemovesOnlyTheWorktreeItMade(t *testing.T) {
 }
 
 func TestExistingBranchIsCheckedOutNotReset(t *testing.T) {
+	t.Parallel()
 	for _, where := range []string{"local", "only on origin"} {
 		t.Run(where, func(t *testing.T) {
 			h := newHarness(t)
@@ -334,6 +343,7 @@ func TestExistingBranchIsCheckedOutNotReset(t *testing.T) {
 }
 
 func TestBranchOfAnotherThreadIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	other, err := h.NewThreadIn("Issue 7", "", "supervised", "")
@@ -355,6 +365,7 @@ func TestBranchOfAnotherThreadIsRefused(t *testing.T) {
 }
 
 func TestBranchCheckedOutByAHumanRunsThereUnrecorded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	human := filepath.Join(h.Dir, "trees", "issue-7")
@@ -376,6 +387,7 @@ func TestBranchCheckedOutByAHumanRunsThereUnrecorded(t *testing.T) {
 }
 
 func TestNotAGitRepoRunsInTheProjectFolder(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewThreadIn("Write it", "", "supervised", "")
 	if err != nil {
@@ -390,6 +402,7 @@ func TestNotAGitRepoRunsInTheProjectFolder(t *testing.T) {
 }
 
 func TestForkStartsInTheSourcesWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	src, err := h.NewThreadIn("Source", "", "supervised", "")
@@ -415,6 +428,7 @@ func TestForkStartsInTheSourcesWorktree(t *testing.T) {
 }
 
 func TestWorktreeKeepsAfterARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	live := issueThread(h, t, 7)
@@ -439,6 +453,7 @@ func TestWorktreeKeepsAfterARestart(t *testing.T) {
 }
 
 func TestWorktreesStayOutOfTheOwnersGitStatus(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	exclude := filepath.Join(h.Dir, ".git", "info", "exclude")
@@ -467,6 +482,7 @@ func TestWorktreesStayOutOfTheOwnersGitStatus(t *testing.T) {
 }
 
 func TestBranchPushedFromAnotherCloneIsFetched(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	other := filepath.Join(t.TempDir(), "other")
@@ -514,6 +530,7 @@ func assertNotWoken(t *testing.T, h *apptest.Harness, s sessions.Session, before
 }
 
 func TestWakeRestoresTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -558,6 +575,7 @@ func TestWakeRestoresTheWorktree(t *testing.T) {
 }
 
 func TestWakeRestoresFromOriginWhenTheLocalBranchIsGone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -584,6 +602,7 @@ func TestWakeRestoresFromOriginWhenTheLocalBranchIsGone(t *testing.T) {
 }
 
 func TestWakeFailsWhenTheBranchIsGone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -603,6 +622,7 @@ func TestWakeFailsWhenTheBranchIsGone(t *testing.T) {
 }
 
 func TestWakeFailsWhenTheBranchIsCheckedOutElsewhere(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -625,6 +645,7 @@ func TestWakeFailsWhenTheBranchIsCheckedOutElsewhere(t *testing.T) {
 }
 
 func TestWakeNeverTakesOverAFolderAtThePath(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -655,6 +676,7 @@ func TestWakeNeverTakesOverAFolderAtThePath(t *testing.T) {
 }
 
 func TestRestoredWorktreeIsCleanedUpAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -681,6 +703,7 @@ func TestRestoredWorktreeIsCleanedUpAgain(t *testing.T) {
 }
 
 func TestWakeNeverTakesOverAnotherThreadsWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -706,6 +729,7 @@ func TestWakeNeverTakesOverAnotherThreadsWorktree(t *testing.T) {
 }
 
 func TestRestoreLeavesAnotherStaleWorktreeEntry(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -729,6 +753,7 @@ func TestRestoreLeavesAnotherStaleWorktreeEntry(t *testing.T) {
 }
 
 func TestWakeRestoresAHandDeletedWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -763,6 +788,7 @@ func TestWakeRestoresAHandDeletedWorktree(t *testing.T) {
 }
 
 func TestWakeFailsWhenAStaleEntryHoldsTheBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -789,6 +815,7 @@ func TestWakeFailsWhenAStaleEntryHoldsTheBranch(t *testing.T) {
 }
 
 func TestWakeIsRefusedDuringACleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -815,6 +842,7 @@ func TestWakeIsRefusedDuringACleanup(t *testing.T) {
 }
 
 func TestToldMessageWaitsForACleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -873,6 +901,7 @@ func heldCleanup(t *testing.T, h *apptest.Harness, id string) (release func(), d
 }
 
 func TestWokenForkFailsWhenItsFolderIsGone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	src, err := h.NewThreadIn("Source", "", "supervised", "")

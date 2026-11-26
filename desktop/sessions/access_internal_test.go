@@ -10,6 +10,7 @@ import (
 // A delegation holds childMu from its check of the parent's access to the child's start, so a change of access waits
 // for it: the parent cannot lose access between the check and a child that has the old one.
 func TestSetAccessWaitsForADelegation(t *testing.T) {
+	t.Parallel()
 	s := newSessions(Options{})
 	s.childMu.Lock()
 	done := make(chan error, 1)

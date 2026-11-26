@@ -78,6 +78,7 @@ func tmuxRun(t *testing.T, h *apptest.Harness, args ...string) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestAFailedTmuxListingEndsNothing(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
@@ -110,6 +111,7 @@ func TestAFailedTmuxListingEndsNothing(t *testing.T) {
 }
 
 func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("comes back", "")
 	if err != nil {
@@ -131,6 +133,7 @@ func TestRefreshRevivesASessionTmuxStillLists(t *testing.T) {
 }
 
 func TestRefreshDoesNotReviveAThreadSettledWhileTmuxWasListed(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("settles", "")
 	if err != nil {
@@ -154,6 +157,7 @@ func TestRefreshDoesNotReviveAThreadSettledWhileTmuxWasListed(t *testing.T) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
@@ -175,6 +179,7 @@ func TestRefreshDoesNotEndASessionBeingCreated(t *testing.T) {
 }
 
 func TestDeletedThreadStaysGoneAfterALateHook(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("done", "")
 	if err != nil {
@@ -195,6 +200,7 @@ func TestDeletedThreadStaysGoneAfterALateHook(t *testing.T) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestSessionIsKilledWhenItsIssueCannotBeRecorded(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
@@ -212,6 +218,7 @@ func TestSessionIsKilledWhenItsIssueCannotBeRecorded(t *testing.T) {
 }
 
 func TestEventsNameTheirProject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.NewSession("x", ""); err != nil {
 		t.Fatal(err)
@@ -225,6 +232,7 @@ func TestEventsNameTheirProject(t *testing.T) {
 }
 
 func TestCleanupStopsWhenTheAppCloses(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "sleep 30; : {worktree} {branch}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -244,6 +252,7 @@ func TestCleanupStopsWhenTheAppCloses(t *testing.T) {
 }
 
 func TestPollFailuresAreWarnedAboutOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	issueThread(h, t, 7)

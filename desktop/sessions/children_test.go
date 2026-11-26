@@ -110,6 +110,7 @@ func hasBranch(t *testing.T, dir, branch string) bool {
 }
 
 func TestDeleteIsRefusedWhileAGrandchildRuns(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := talked(t, h)
 	child := childOf(t, h, parent, "Helper", sessions.WhereFolder)
@@ -133,6 +134,7 @@ func TestDeleteIsRefusedWhileAGrandchildRuns(t *testing.T) {
 }
 
 func TestDeleteTakesAsleepChildrenWithIt(t *testing.T) {
+	t.Parallel()
 	// The parent works in its issue's worktree, a child in a worktree of its own, and a grandchild in the child's.
 	family := func(t *testing.T) (h *apptest.Harness, threads []sessions.Session) {
 		h = newHarness(t)
@@ -205,6 +207,7 @@ func TestDeleteTakesAsleepChildrenWithIt(t *testing.T) {
 }
 
 func TestDeleteStopsAtAChildsKeptWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -230,6 +233,7 @@ func TestDeleteStopsAtAChildsKeptWorktree(t *testing.T) {
 }
 
 func TestSleepingParentsChildGoesOn(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := talked(t, h)
 	child := childOf(t, h, parent, "Helper", sessions.WhereFolder)
@@ -245,6 +249,7 @@ func TestSleepingParentsChildGoesOn(t *testing.T) {
 }
 
 func TestEmptyChildWorktreeGoesWhenItSleeps(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -281,6 +286,7 @@ func TestEmptyChildWorktreeGoesWhenItSleeps(t *testing.T) {
 }
 
 func TestChildWorktreeWithCommitsStays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -301,6 +307,7 @@ func TestChildWorktreeWithCommitsStays(t *testing.T) {
 }
 
 func TestChildWorktreeWithPushedCommitsGoes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -318,6 +325,7 @@ func TestChildWorktreeWithPushedCommitsGoes(t *testing.T) {
 }
 
 func TestChildOnItsParentsUnpushedWorkGoesWithoutAFetch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -339,6 +347,7 @@ func TestChildOnItsParentsUnpushedWorkGoesWithoutAFetch(t *testing.T) {
 }
 
 func TestDeleteTakesAChildWorktreeOnItsParentsUnpushedWork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	commitIn(t, h.Dir, "parent.txt")
@@ -371,6 +380,7 @@ func TestDeleteTakesAChildWorktreeOnItsParentsUnpushedWork(t *testing.T) {
 }
 
 func TestChildWorktreeWithChangesStays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -386,6 +396,7 @@ func TestChildWorktreeWithChangesStays(t *testing.T) {
 	}
 }
 func TestChildInTheParentsFolderRemovesNothing(t *testing.T) {
+	t.Parallel()
 	ran := filepath.Join(t.TempDir(), "ran")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
 	repoFixture(t, h)
@@ -406,6 +417,7 @@ func TestChildInTheParentsFolderRemovesNothing(t *testing.T) {
 }
 
 func TestChildWorktreeUsedByAForkStays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -440,6 +452,7 @@ func childWithShell(t *testing.T, h *apptest.Harness) (child sessions.Session, s
 }
 
 func TestChildSleepKeepsItsWorktreeWhileItsShellIsOpen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		command string
@@ -477,6 +490,7 @@ func TestChildSleepKeepsItsWorktreeWhileItsShellIsOpen(t *testing.T) {
 }
 
 func TestChildWithNoShellLosesItsEmptyWorktree(t *testing.T) {
+	t.Parallel()
 	h := shellHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -498,6 +512,7 @@ func TestChildWithNoShellLosesItsEmptyWorktree(t *testing.T) {
 }
 
 func TestDeleteClosesTheShellsOfAChildItsShellKept(t *testing.T) {
+	t.Parallel()
 	for _, withWorktree := range []bool{false, true} {
 		t.Run(fmt.Sprintf("worktree %v", withWorktree), func(t *testing.T) {
 			h := shellHarness(t)
@@ -521,6 +536,7 @@ func TestDeleteClosesTheShellsOfAChildItsShellKept(t *testing.T) {
 }
 
 func TestDeleteGivesAChildsWorktreeToAForkOfIt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -566,6 +582,7 @@ func recordsOf(t *testing.T, h *apptest.Harness, id string) []string {
 }
 
 func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
+	t.Parallel()
 	t.Run("a thread with a worktree of its own", func(t *testing.T) {
 		h := newHarness(t)
 		repoFixture(t, h)
@@ -633,6 +650,7 @@ func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
 }
 
 func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
+	t.Parallel()
 	t.Run("a thread", func(t *testing.T) {
 		h := newHarness(t)
 		repoFixture(t, h)
@@ -684,6 +702,7 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 }
 
 func TestDeletePlanCountsAWorktreeAnAncestorWorksIn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -706,6 +725,7 @@ func TestDeletePlanCountsAWorktreeAnAncestorWorksIn(t *testing.T) {
 }
 
 func TestDeletePlanOffersNoBoxWhenTheThreadsOwnWorktreeIsShared(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -726,6 +746,7 @@ func TestDeletePlanOffersNoBoxWhenTheThreadsOwnWorktreeIsShared(t *testing.T) {
 }
 
 func TestDeleteGivesAChildsWorktreeToItsNewestFork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	for issue := 7; issue < 10; issue++ {
@@ -758,6 +779,7 @@ func TestDeleteGivesAChildsWorktreeToItsNewestFork(t *testing.T) {
 }
 
 func TestDeleteGivesAChildsWorktreeToTheNewerOfTwoForksMadeInOneSecond(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -813,6 +835,7 @@ func createdAt(h *apptest.Harness, id string) int64 {
 }
 
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -861,6 +884,7 @@ func holdGitDirs(t *testing.T, h *apptest.Harness, wt string, holds int) (reache
 }
 
 func TestWakeDuringAChildsSleepKeepsItsWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -891,6 +915,7 @@ func TestWakeDuringAChildsSleepKeepsItsWorktree(t *testing.T) {
 }
 
 func TestWakeWaitsForAChildsSleepCleanup(t *testing.T) {
+	t.Parallel()
 	hold := t.TempDir()
 	reached, released := filepath.Join(hold, "reached"), filepath.Join(hold, "release")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("touch %s; while [ ! -e %s ]; do sleep 0.05; done; %s", reached, released, project.DefaultCleanupCommand)})
@@ -920,6 +945,7 @@ func TestWakeWaitsForAChildsSleepCleanup(t *testing.T) {
 }
 
 func TestChildKeptAgainForTheSameReasonLogsNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -964,6 +990,7 @@ func TestChildKeptAgainForTheSameReasonLogsNothing(t *testing.T) {
 }
 
 func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
+	t.Parallel()
 	// freeChild is a child whose worktree its sleep kept, for a commit origin lacked, and which may go now it is pushed.
 	freeChild := func(t *testing.T, h *apptest.Harness, parent sessions.Session) sessions.Session {
 		t.Helper()
@@ -1026,6 +1053,7 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 }
 
 func TestDeleteWithoutTheWorktreesKeepsEveryFolderOfTheFamily(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	if _, err := h.SetThreadPlace("project"); err != nil {
@@ -1079,6 +1107,7 @@ func TestDeleteWithoutTheWorktreesKeepsEveryFolderOfTheFamily(t *testing.T) {
 }
 
 func TestDeletePlanNamesTheAsleepDescendants(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	parent := talked(t, h)
 	if got := h.DeletePlan(parent.ID).Children; got == nil || len(got) != 0 {
@@ -1096,6 +1125,7 @@ func TestDeletePlanNamesTheAsleepDescendants(t *testing.T) {
 }
 
 func TestFamilyDeleteThatFailsAfterTheStopSaysTheThreadIsAsleep(t *testing.T) {
+	t.Parallel()
 	// The clean-up command, which runs once the delete has put the parent to sleep, turns the child's state file into a
 	// folder that holds a file, so the child's removal after it fails.
 	broken := filepath.Join(t.TempDir(), "break")

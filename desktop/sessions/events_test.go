@@ -10,6 +10,7 @@ import (
 )
 
 func TestPROpenedThenMergedAcrossARestartCountsOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueSession(h, t, 7)
@@ -43,6 +44,7 @@ func TestPROpenedThenMergedAcrossARestartCountsOnce(t *testing.T) {
 }
 
 func TestPRFirstSeenMergedCountsNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("MERGED", false, "[]", 0, 0))
@@ -54,6 +56,7 @@ func TestPRFirstSeenMergedCountsNothing(t *testing.T) {
 }
 
 func TestPRClosedUnmerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	issueSession(h, t, 7)
@@ -71,6 +74,7 @@ func TestPRClosedUnmerged(t *testing.T) {
 }
 
 func TestReviewChecksAndConflictAreRecordedWhenSent(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    pr_checks_command: \"/fix-checks {n}\"\n    pr_conflict_command: \"/rebase {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -96,6 +100,7 @@ func TestReviewChecksAndConflictAreRecordedWhenSent(t *testing.T) {
 }
 
 func TestReviewWithoutACommandIsNotRecorded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	issueSession(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -108,6 +113,7 @@ func TestReviewWithoutACommandIsNotRecorded(t *testing.T) {
 }
 
 func TestWokenThreadIsLabelled(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)

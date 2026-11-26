@@ -29,6 +29,7 @@ func prJSON(state string, draft bool, rollup string, comments, reviews int) stri
 }
 
 func TestParsePR(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		data         string
@@ -66,6 +67,7 @@ func TestParsePR(t *testing.T) {
 }
 
 func TestParsePRChecksAndTitle(t *testing.T) {
+	t.Parallel()
 	data := `[{"number":12,"title":"Show the status","url":"u","state":"OPEN","isDraft":false,"statusCheckRollup":[` +
 		`{"name":"lint","status":"COMPLETED","conclusion":"FAILURE"},{"context":"ci/test","state":"ERROR"},` +
 		`{"name":"build","status":"IN_PROGRESS"},{"name":"vet","status":"COMPLETED","conclusion":"SUCCESS"}],"comments":[],"reviews":[],"updatedAt":"2026-10-01T12:00:00Z"}]`
@@ -82,6 +84,7 @@ func TestParsePRChecksAndTitle(t *testing.T) {
 }
 
 func TestVerdict(t *testing.T) {
+	t.Parallel()
 	by := func(login, state string) review {
 		r := review{State: state}
 		r.Author.Login = login
@@ -111,6 +114,7 @@ func TestVerdict(t *testing.T) {
 }
 
 func TestParseWorktrees(t *testing.T) {
+	t.Parallel()
 	w := parseWorktrees("worktree /p\nHEAD abc\nbranch refs/heads/main\n\nworktree /p/trees/issue-7\nHEAD def\nbranch refs/heads/issue-7\n\nworktree /p/detached\nHEAD 123\ndetached\n")
 	if w.main != "/p" || w.byBranch["issue-7"] != "/p/trees/issue-7" || w.byBranch["main"] != "/p" || len(w.byBranch) != 2 || !slices.Equal(w.detached, []string{"/p/detached"}) {
 		t.Errorf("worktrees = %+v", w)
@@ -123,6 +127,7 @@ func (noActivity) Record(string, activity.Event)              {}
 func (noActivity) Since(string, string, func(activity.Event)) {}
 
 func TestPollResultForAForgottenSessionIsDropped(t *testing.T) {
+	t.Parallel()
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p"}
 	for _, tt := range []struct {
@@ -145,6 +150,7 @@ func TestPollResultForAForgottenSessionIsDropped(t *testing.T) {
 }
 
 func TestThreadGetsItsPRsCommandsAndOpenedAlert(t *testing.T) {
+	t.Parallel()
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p", OnReview: "/address-review {n}"}
 	tg := target{id: "p/a", proj: proj, branch: "x"}
@@ -158,6 +164,7 @@ func TestThreadGetsItsPRsCommandsAndOpenedAlert(t *testing.T) {
 }
 
 func TestReviewAfterACommentIsDeletedWakesTheSession(t *testing.T) {
+	t.Parallel()
 	l := newLifecycle(nil, nil, t.TempDir(), t.TempDir(), nil, noActivity{}, func(string, any) {})
 	proj := project.Project{Name: "p", OnReview: "/address-review {n}"}
 	tg := target{id: "p/a", proj: proj, branch: "x"}
@@ -172,6 +179,7 @@ func TestReviewAfterACommentIsDeletedWakesTheSession(t *testing.T) {
 }
 
 func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
+	t.Parallel()
 	recordProjectFolder := func(t *testing.T, l *Lifecycle, dir string) {
 		t.Helper()
 		if err := l.sessions.made.Add("p", Made{Path: dir, Branch: "issue-7", Thread: "p/t1"}); err != nil {
@@ -284,6 +292,7 @@ func (w openWindows) Has(string) bool                    { return true }
 func (w openWindows) Close(_ context.Context, id string) { *w.closed = append(*w.closed, id) }
 
 func TestThreadThatWakesDuringTheCleanupKeepsWhatIsLeft(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name    string
 		removed bool
@@ -344,6 +353,7 @@ func asleepAndKept(t *testing.T) (*Sessions, session.Name) {
 }
 
 func TestSweptCleanupStopsForADeleteOrAWake(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		mark func(s *Sessions, id string)
@@ -376,6 +386,7 @@ func TestSweptCleanupStopsForADeleteOrAWake(t *testing.T) {
 }
 
 func TestAChildsSleepCleanupAndADeleteNeverBothGoOn(t *testing.T) {
+	t.Parallel()
 	t.Run("the clean-up decides first", func(t *testing.T) {
 		s, name := asleepAndKept(t)
 		id := name.String()
@@ -419,6 +430,7 @@ func TestAChildsSleepCleanupAndADeleteNeverBothGoOn(t *testing.T) {
 }
 
 func TestNewShellIsRefusedWhileItsThreadIsDeleted(t *testing.T) {
+	t.Parallel()
 	s, name := asleepAndKept(t)
 	s.deleting[name.String()] = true
 	if _, err := s.NewShell(name.String()); err == nil || err.Error() != "Thread 3 is being deleted; open a shell when that ends" {
@@ -427,6 +439,7 @@ func TestNewShellIsRefusedWhileItsThreadIsDeleted(t *testing.T) {
 }
 
 func TestWakeIsRefusedWhileACleanupRuns(t *testing.T) {
+	t.Parallel()
 	s, name := asleepAndKept(t)
 	id := name.String()
 	s.life.tracks[id].cleanup = "pending"
@@ -439,6 +452,7 @@ func TestWakeIsRefusedWhileACleanupRuns(t *testing.T) {
 }
 
 func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
+	t.Parallel()
 	s, name := asleepAndKept(t)
 	id := name.String()
 	s.deleting[id] = true
@@ -450,6 +464,7 @@ func TestSweepLeavesAThreadBeingDeleted(t *testing.T) {
 }
 
 func TestNoSweepRunsWhenItIsOff(t *testing.T) {
+	t.Parallel()
 	s, name := asleepAndKept(t)
 	s.SetCleanupSweep(0)
 	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)

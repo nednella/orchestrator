@@ -52,6 +52,7 @@ func accessIs(h *apptest.Harness, id string, want session.Access) func() bool {
 }
 
 func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -87,6 +88,7 @@ func TestSetAccessReadToSupervisedIsLive(t *testing.T) {
 }
 
 func TestAHaikuThreadChangedToReadKeepsTheFullModelId(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "haiku", "", "supervised")
 	if err != nil {
@@ -108,6 +110,7 @@ func TestAHaikuThreadChangedToReadKeepsTheFullModelId(t *testing.T) {
 }
 
 func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -133,6 +136,7 @@ func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
 }
 
 func TestSetAccessToFullRestarts(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -183,6 +187,7 @@ func TestSetAccessToFullRestarts(t *testing.T) {
 }
 
 func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("stops", "", "", "", "supervised")
 	if err != nil {
@@ -201,6 +206,7 @@ func TestARestartOrASettleTheOwnerAskedForIsNoError(t *testing.T) {
 	assertExits(t, h, s.ID, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopRestart, Text: "full"}, chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle, Text: chatlog.ByOwner})
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestAFailedRestartReleasesTheThread(t *testing.T) {
 	for _, call := range []string{"access", "kill"} {
 		t.Run(call, func(t *testing.T) {
@@ -250,6 +256,7 @@ func assertExits(t *testing.T, h *apptest.Harness, id string, want ...chatlog.Ev
 }
 
 func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
+	t.Parallel()
 	for _, to := range []string{"supervised", "full"} {
 		t.Run(to, func(t *testing.T) {
 			h := apptest.New(t)
@@ -285,6 +292,7 @@ func TestSetAccessIsRefusedDuringATurn(t *testing.T) {
 }
 
 func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("ask", "", "", "", "read")
 	if err != nil {
@@ -307,6 +315,7 @@ func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 }
 
 func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -337,6 +346,7 @@ func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
 }
 
 func TestSetAccessOfASettledThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	before := talkedThenSettled(t, h)
 	args := h.ClaudeDir() + "/" + strings.ReplaceAll(before.ID, "/", "_") + ".args"
@@ -371,6 +381,7 @@ func TestSetAccessOfASettledThread(t *testing.T) {
 }
 
 func TestSetAccessRefusesWhatCannotChange(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s := talkedThenSettled(t, h)
 	if err := h.DeleteThread(s.ID, false); err != nil {
@@ -404,6 +415,7 @@ func modeLogged(h *apptest.Harness, id, mode string) func() bool {
 }
 
 func TestClaudesOwnModeChangeIsFollowed(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("plan it", "", "", "", "read")
 	if err != nil {
@@ -423,6 +435,7 @@ func TestClaudesOwnModeChangeIsFollowed(t *testing.T) {
 }
 
 func TestModeWithoutAnApprovedPlanGivesNoMoreAccess(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("plan it", "", "", "", "read")
 	if err != nil {
@@ -443,6 +456,7 @@ func TestModeWithoutAnApprovedPlanGivesNoMoreAccess(t *testing.T) {
 }
 
 func TestAModeClaudeReportsDoesNotChangeTheAccessOfAFullOrSupervisedThread(t *testing.T) {
+	t.Parallel()
 	for _, access := range []session.Access{session.Full, session.Supervised} {
 		t.Run(string(access), func(t *testing.T) {
 			h := apptest.New(t)
@@ -467,6 +481,7 @@ func TestAModeClaudeReportsDoesNotChangeTheAccessOfAFullOrSupervisedThread(t *te
 }
 
 func TestModeLoggedWhileTheAppWasClosedIsFollowed(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	approved, err := h.NewThread("approved", "", "", "", "read")
 	if err != nil {
@@ -550,6 +565,7 @@ func followedATurn(t *testing.T, h *apptest.Harness, id string) {
 }
 
 func TestAModeOfAKilledRunIsNotFollowedAfterAWake(t *testing.T) {
+	t.Parallel()
 	approvedPlan := []chatlog.Event{
 		{Kind: chatlog.KindApproval, ID: "plan-1", Tool: "ExitPlanMode", Input: json.RawMessage(`{"plan":"p"}`)},
 		{Kind: chatlog.KindAnswer, ID: "plan-1", Text: "allow"},
@@ -582,6 +598,7 @@ func TestAModeOfAKilledRunIsNotFollowedAfterAWake(t *testing.T) {
 }
 
 func TestASendWhileTheThreadRestartsIsRefused(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.NewThread("restarting", "", "", "", "supervised")
 	if err != nil {

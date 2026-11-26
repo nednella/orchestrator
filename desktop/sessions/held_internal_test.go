@@ -9,6 +9,7 @@ import (
 )
 
 func TestHeldPromptsWaitForTheirTurn(t *testing.T) {
+	t.Parallel()
 	const id = "main/abcdefgh"
 	told, command := heldPrompt{Told: Told{From: "main/bbbbbbbb", Text: "Check the tests"}}, heldPrompt{Told: Told{Text: "/review"}, command: true}
 	for _, tt := range []struct {
@@ -42,6 +43,7 @@ func TestHeldPromptsWaitForTheirTurn(t *testing.T) {
 }
 
 func TestDroppedMessageTellsItsSender(t *testing.T) {
+	t.Parallel()
 	const id = "main/abcdefgh"
 	for _, tt := range []struct {
 		name   string
@@ -86,6 +88,7 @@ func TestDroppedMessageTellsItsSender(t *testing.T) {
 }
 
 func TestResultKeptForTheNextTurnGoesWithIt(t *testing.T) {
+	t.Parallel()
 	const id = "main/abcdefgh"
 	s := newSessions(Options{})
 	s.seen[id] = session.Idle
@@ -116,6 +119,7 @@ func TestResultKeptForTheNextTurnGoesWithIt(t *testing.T) {
 }
 
 func TestResultsOfADeletedChildAreDropped(t *testing.T) {
+	t.Parallel()
 	const child, parent, other = "main/childaaa", "main/parentaa", "main/otheraaa"
 	for _, tt := range []struct {
 		name string

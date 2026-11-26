@@ -25,6 +25,7 @@ func systemPrompt(t *testing.T, access session.Access, tree workTree) string {
 }
 
 func TestWorktreeThreadIsToldItsBranchAndFolder(t *testing.T) {
+	t.Parallel()
 	got := systemPrompt(t, session.Supervised, workTree{branch: "issue-7", dir: "/p/trees/issue-7"})
 	if !strings.Contains(got, "`/p/trees/issue-7`") || !strings.Contains(got, "`issue-7`") {
 		t.Errorf("system prompt lacks the worktree and branch:\n%s", got)
@@ -35,6 +36,7 @@ func TestWorktreeThreadIsToldItsBranchAndFolder(t *testing.T) {
 }
 
 func TestProjectFolderThreadGetsNoWorktreeText(t *testing.T) {
+	t.Parallel()
 	got := systemPrompt(t, session.Supervised, workTree{})
 	if strings.Contains(got, "This thread runs in the worktree") {
 		t.Errorf("system prompt holds the worktree text:\n%s", got)
@@ -42,6 +44,7 @@ func TestProjectFolderThreadGetsNoWorktreeText(t *testing.T) {
 }
 
 func TestEveryAccessGetsTheSamePromptInAWorktree(t *testing.T) {
+	t.Parallel()
 	tree := workTree{branch: "issue-7", dir: "/p/trees/issue-7"}
 	read := systemPrompt(t, session.Read, tree)
 	for _, write := range []session.Access{session.Supervised, session.Full} {
@@ -52,6 +55,7 @@ func TestEveryAccessGetsTheSamePromptInAWorktree(t *testing.T) {
 }
 
 func TestBranchFromTitle(t *testing.T) {
+	t.Parallel()
 	for title, want := range map[string]string{
 		"Fix the login button!":        "fix-the-login-button",
 		"  --Wrap: (it) up, please.. ": "wrap-it-up-please",
@@ -68,6 +72,7 @@ func TestBranchFromTitle(t *testing.T) {
 }
 
 func TestPlaceFor(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		setting Place
 		issue   int
@@ -88,6 +93,7 @@ func TestPlaceFor(t *testing.T) {
 }
 
 func TestProjectCommandQuotesItsPlaceholders(t *testing.T) {
+	t.Parallel()
 	l, _, _ := madeRepo(t)
 	dir := filepath.Join(t.TempDir(), "my 'project'")
 	if err := os.Mkdir(dir, 0o700); err != nil {

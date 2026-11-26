@@ -26,6 +26,7 @@ func repoPull(number int, state, branch, updatedAt string, draft bool) string {
 }
 
 func TestPullRequestsFetchOnceWithoutAWatcher(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, repoPulls(repoPull(5, "open", "feature", "2026-10-01T12:00:00Z", true)))
@@ -41,6 +42,7 @@ func TestPullRequestsFetchOnceWithoutAWatcher(t *testing.T) {
 }
 
 func TestPullRequestsNameTheThreadOfTheirBranch(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: pollNever})
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -62,6 +64,7 @@ func TestPullRequestsNameTheThreadOfTheirBranch(t *testing.T) {
 }
 
 func TestA304KeepsTheLastList(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_watch_method: poll\n    pr_poll_interval: 1s\n"})
 	repoFixture(t, h)
 	h.GH.SetPulls(`W/"one"`, repoPulls(repoPull(12, "closed", "issue-12", "2026-10-01T12:00:00Z", false)))

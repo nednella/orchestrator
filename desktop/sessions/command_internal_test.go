@@ -37,6 +37,7 @@ func allowedTools(argv []string) string {
 }
 
 func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
+	t.Parallel()
 	off := false
 	tests := []struct {
 		name    string
@@ -70,6 +71,7 @@ func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
 }
 
 func TestCommandResumesAConversation(t *testing.T) {
+	t.Parallel()
 	s := &Sessions{browsers: fakeBrowsers{}}
 	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "abc", "", "", session.Supervised)
 	if i := slices.Index(argv, "--resume"); i < 0 || argv[i+1] != "abc" {
@@ -78,6 +80,7 @@ func TestCommandResumesAConversation(t *testing.T) {
 }
 
 func TestConversationOfARunningAndAnEndedSession(t *testing.T) {
+	t.Parallel()
 	written := filepath.Join(t.TempDir(), "transcript.jsonl")
 	if err := os.WriteFile(written, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -101,6 +104,7 @@ func TestConversationOfARunningAndAnEndedSession(t *testing.T) {
 }
 
 func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
+	t.Parallel()
 	s := &Sessions{browsers: fakeBrowsers{ready: true}}
 	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "set it up", "", session.Supervised)
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != "set it up" || strings.Contains(allowedTools(argv), "agent-browser") {
@@ -109,6 +113,7 @@ func TestCommandGivesABriefedSessionOnlyTheBrief(t *testing.T) {
 }
 
 func TestHostedRefusesASocketPathTooLong(t *testing.T) {
+	t.Parallel()
 	name := session.Name{Project: "p", Token: session.NewToken()}
 	fits := &Sessions{stateDir: "/" + strings.Repeat("s", 73), agents: agent.Registry{}}
 	if got := len(fits.hostSocket(name)); got != 103 {
@@ -125,6 +130,7 @@ func TestHostedRefusesASocketPathTooLong(t *testing.T) {
 }
 
 func TestCommandEndsATasksPromptWithTheHandover(t *testing.T) {
+	t.Parallel()
 	s := &Sessions{browsers: fakeBrowsers{}}
 	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "", "the patch is in /tmp/x", session.Supervised)
 	want := prompts.Session() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
@@ -134,6 +140,7 @@ func TestCommandEndsATasksPromptWithTheHandover(t *testing.T) {
 }
 
 func TestCommandStartsAReadThreadInPlanModeWithTheBrowser(t *testing.T) {
+	t.Parallel()
 	s := &Sessions{browsers: fakeBrowsers{ready: true}}
 	argv := s.commandFor(project.Project{Name: "p", Dir: "/work/p"}, project.Model{}, "", "", "", session.Read)
 	if i := slices.Index(argv, "--permission-mode"); i < 0 || argv[i+1] != "plan" {

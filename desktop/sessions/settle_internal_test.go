@@ -16,6 +16,7 @@ import (
 )
 
 func TestSettleClosesNoTerminal(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}

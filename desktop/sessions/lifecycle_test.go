@@ -33,6 +33,7 @@ func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session 
 }
 
 func TestPRTracking(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueSession(h, t, 12)
@@ -156,6 +157,7 @@ func branches(t *testing.T, dir string) string {
 }
 
 func TestCleanupMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -195,6 +197,7 @@ func TestCleanupMerged(t *testing.T) {
 }
 
 func TestForceRemovesAKeptWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -235,6 +238,7 @@ func TestForceRemovesAKeptWorktree(t *testing.T) {
 }
 
 func TestUntrackedFileKeepsTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -255,6 +259,7 @@ func TestUntrackedFileKeepsTheWorktree(t *testing.T) {
 }
 
 func TestCommitNotOnOriginKeepsTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -271,6 +276,7 @@ func TestCommitNotOnOriginKeepsTheWorktree(t *testing.T) {
 }
 
 func TestChecksRunAgainWhenTheOwnerConfirms(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -294,6 +300,7 @@ func TestChecksRunAgainWhenTheOwnerConfirms(t *testing.T) {
 }
 
 func TestCleanupClosedAsksFirst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -320,6 +327,7 @@ func closedAt(pr string, at time.Time) string {
 }
 
 func TestPRClosedBeforeTheSessionStartedIsNotItsPR(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		state   string
@@ -350,6 +358,7 @@ func TestPRClosedBeforeTheSessionStartedIsNotItsPR(t *testing.T) {
 }
 
 func TestCleanupMergedWithRemoteBranchGone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -384,6 +393,7 @@ func keptFor(t *testing.T, h *apptest.Harness, id, wt, reason string) {
 }
 
 func TestRebaseMergeAtThePRsLastCommitIsMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -402,6 +412,7 @@ func TestRebaseMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 }
 
 func TestSquashMergeAtThePRsLastCommitIsMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -422,6 +433,7 @@ func TestSquashMergeAtThePRsLastCommitIsMerged(t *testing.T) {
 }
 
 func TestMergeCommitInTheDefaultBranchIsMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -437,6 +449,7 @@ func TestMergeCommitInTheDefaultBranchIsMerged(t *testing.T) {
 }
 
 func TestWorktreePastTheMergedHeadIsKept(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -454,6 +467,7 @@ func TestWorktreePastTheMergedHeadIsKept(t *testing.T) {
 }
 
 func TestWorktreeThatMovedOnAfterTheMergeIsKept(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -468,6 +482,7 @@ func TestWorktreeThatMovedOnAfterTheMergeIsKept(t *testing.T) {
 }
 
 func TestForcePushBeforeTheMergeKeepsTheOldWork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -489,6 +504,7 @@ func TestForcePushBeforeTheMergeKeepsTheOldWork(t *testing.T) {
 }
 
 func TestWorktreeBehindThePRsHeadIsMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -509,6 +525,7 @@ func TestWorktreeBehindThePRsHeadIsMerged(t *testing.T) {
 }
 
 func TestFailedFetchKeepsTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -521,6 +538,7 @@ func TestFailedFetchKeepsTheWorktree(t *testing.T) {
 }
 
 func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -539,6 +557,7 @@ func TestUntrackedFileKeepsTheWorktreeWhenGitHidesThem(t *testing.T) {
 }
 
 func TestMergedPRWithoutAHeadAndNotInMainIsKept(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -551,6 +570,7 @@ func TestMergedPRWithoutAHeadAndNotInMainIsKept(t *testing.T) {
 }
 
 func TestMergedPRAtACommitGitDoesNotKnowIsKept(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -563,6 +583,7 @@ func TestMergedPRAtACommitGitDoesNotKnowIsKept(t *testing.T) {
 }
 
 func TestClosedPRWithPushedWorkIsRemovedOnConfirm(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -604,6 +625,7 @@ func gitStatus(t *testing.T, h *apptest.Harness, id string) sessions.BranchStatu
 }
 
 func TestBranchStatus(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -639,6 +661,7 @@ func TestBranchStatus(t *testing.T) {
 }
 
 func TestBranchStatusOfABranchOriginHasNot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -651,6 +674,7 @@ func TestBranchStatusOfABranchOriginHasNot(t *testing.T) {
 }
 
 func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -669,6 +693,7 @@ func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 }
 
 func TestBranchStatusAfterARebaseMerge(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -689,6 +714,7 @@ func TestBranchStatusAfterARebaseMerge(t *testing.T) {
 }
 
 func TestCleanupCustomCommand(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree} && touch {dir}/cleaned-{branch}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -706,6 +732,7 @@ func TestCleanupCustomCommand(t *testing.T) {
 }
 
 func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "printf '[%s]' {force} > {dir}/force-{branch}; git worktree remove {force} {worktree}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -736,6 +763,7 @@ func TestCleanupCommandGetsForceOnlyWhenForced(t *testing.T) {
 }
 
 func TestSetupCleanupCommand(t *testing.T) {
+	t.Parallel()
 	var set project.Project
 	set.SetUp()
 	if set.CleanupCommand != "" || set.RemoveWorktree() != project.DefaultCleanupCommand {
@@ -759,6 +787,7 @@ func TestSetupCleanupCommand(t *testing.T) {
 }
 
 func TestCleanupRemovesTheWorktreeAndKeepsTheBranch(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -793,6 +822,7 @@ func TestCleanupRemovesTheWorktreeAndKeepsTheBranch(t *testing.T) {
 }
 
 func TestCleanupNeverRemovesAWorktreeAHumanMade(t *testing.T) {
+	t.Parallel()
 	for _, forced := range []bool{false, true} {
 		t.Run(fmt.Sprintf("forced %v", forced), func(t *testing.T) {
 			ran := filepath.Join(t.TempDir(), "ran")
@@ -869,6 +899,7 @@ func projectFolderIntact(t *testing.T, h *apptest.Harness, file string) {
 }
 
 func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
+	t.Parallel()
 	h, s, ran := projectFolderThread(t, "")
 	openThenMerge(h)
 	eventually(t, "the clean-up", cleanedUp(h, s.ID))
@@ -882,6 +913,7 @@ func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
 }
 
 func TestManualModeAsksAThreadWithNothingToRemove(t *testing.T) {
+	t.Parallel()
 	h, s, ran := projectFolderThread(t, "    session_cleanup_mode: {merge: manual}\n")
 	name, _ := session.ParseName(s.ID)
 	tmp := filepath.Join(h.State, "data", name.Project, "tmp", name.Token)
@@ -904,6 +936,7 @@ func TestManualModeAsksAThreadWithNothingToRemove(t *testing.T) {
 }
 
 func TestForcedCleanupNeverRemovesTheProjectFolder(t *testing.T) {
+	t.Parallel()
 	h, s, ran := projectFolderThread(t, "")
 	if err := os.WriteFile(filepath.Join(h.Dir, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -922,6 +955,7 @@ func TestForcedCleanupNeverRemovesTheProjectFolder(t *testing.T) {
 }
 
 func TestHumanWorktreeAtARemovedPathIsNotRemoved(t *testing.T) {
+	t.Parallel()
 	ran := filepath.Join(t.TempDir(), "ran")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
 	repoFixture(t, h)
@@ -961,6 +995,7 @@ func TestHumanWorktreeAtARemovedPathIsNotRemoved(t *testing.T) {
 }
 
 func TestCleanupCommandThatFailsWithTheWorktreeGoneCounts(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "git worktree remove {force} {worktree}; exit 3"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -981,6 +1016,7 @@ func TestCleanupCommandThatFailsWithTheWorktreeGoneCounts(t *testing.T) {
 }
 
 func TestCleanupCommandThatFailsWithTheWorktreeLeftKeeps(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "echo no such luck >&2; exit 3"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1001,6 +1037,7 @@ func TestCleanupCommandThatFailsWithTheWorktreeLeftKeeps(t *testing.T) {
 }
 
 func TestCleanupCommandThatLeavesTheWorktreeKeeps(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: "true {worktree}"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1012,6 +1049,7 @@ func TestCleanupCommandThatLeavesTheWorktreeKeeps(t *testing.T) {
 }
 
 func TestReadThreadHasNothingToCleanUp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("ask", "", "read", "project")
@@ -1055,6 +1093,7 @@ func openThenMergeAt(h *apptest.Harness, head string) {
 }
 
 func TestPRMergedWhileTheAppWasClosedIsCleanedUp(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1077,6 +1116,7 @@ func TestPRMergedWhileTheAppWasClosedIsCleanedUp(t *testing.T) {
 }
 
 func TestOldPRsFileLoads(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1111,6 +1151,7 @@ func TestOldPRsFileLoads(t *testing.T) {
 }
 
 func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1129,6 +1170,7 @@ func TestCleanupAfterRestartBetweenOpenAndMerged(t *testing.T) {
 }
 
 func TestPROpenedAttention(t *testing.T) {
+	t.Parallel()
 	t.Run("a PR seen while the session is idle", func(t *testing.T) {
 		h := newHarness(t)
 		repoFixture(t, h)
@@ -1185,6 +1227,7 @@ func openThenClose(h *apptest.Harness) {
 }
 
 func TestCleanupMergeManualAsks(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1200,6 +1243,7 @@ func TestCleanupMergeManualAsks(t *testing.T) {
 }
 
 func TestCleanupCloseAuto(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1214,6 +1258,7 @@ func TestCleanupCloseAuto(t *testing.T) {
 }
 
 func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1258,6 +1303,7 @@ func keptThenDone(t *testing.T, h *apptest.Harness, log []sessions.Cleanup, wt s
 }
 
 func TestKeptCleanupIsTriedAgainByTheSweep(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 200 * time.Millisecond})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1284,6 +1330,7 @@ func TestKeptCleanupIsTriedAgainByTheSweep(t *testing.T) {
 }
 
 func TestKeptCleanupIsTriedAgainAtStart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1302,6 +1349,7 @@ func TestKeptCleanupIsTriedAgainAtStart(t *testing.T) {
 }
 
 func TestAskedCleanupIsNotSwept(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 100 * time.Millisecond})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1318,6 +1366,7 @@ func TestAskedCleanupIsNotSwept(t *testing.T) {
 }
 
 func TestSweepLeavesAWokenThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{CleanupSweep: 100 * time.Millisecond})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1348,6 +1397,7 @@ func onBranch(h *apptest.Harness, id, branch string) func() bool {
 }
 
 func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1372,6 +1422,7 @@ func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 }
 
 func TestWorkingThreadKeepsItsWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1399,6 +1450,7 @@ func TestWorkingThreadKeepsItsWorktree(t *testing.T) {
 }
 
 func TestHeldWakeKeepsTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
 	s := waitingWithHeldReview(t, h)
@@ -1427,6 +1479,7 @@ func TestHeldWakeKeepsTheWorktree(t *testing.T) {
 }
 
 func TestForkInTheWorktreeKeepsIt(t *testing.T) {
+	t.Parallel()
 	h, wt, ran, src, fork := forkHarness(t)
 
 	openThenMerge(h)
@@ -1451,6 +1504,7 @@ func TestForkInTheWorktreeKeepsIt(t *testing.T) {
 }
 
 func TestChildInTheWorktreeKeepsIt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -1484,6 +1538,7 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 }
 
 func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
+	t.Parallel()
 	// The tries of a result that would wake the parent come at 0, 0.1, 0.3, 0.7 and 1.5 s: the pause starts at retry
 	// and doubles.
 	const retry = 100 * time.Millisecond
@@ -1553,6 +1608,7 @@ func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
 }
 
 func TestFolderChildIsRefusedDuringACleanup(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent := issueThread(h, t, 7)
@@ -1578,6 +1634,7 @@ func TestFolderChildIsRefusedDuringACleanup(t *testing.T) {
 }
 
 func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1614,6 +1671,7 @@ func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 }
 
 func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1644,6 +1702,7 @@ func TestMergeDuringATurnWaitsForTheTurn(t *testing.T) {
 }
 
 func TestMergeWhileAQuestionWaitsCleansUpAtOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1661,6 +1720,7 @@ func TestMergeWhileAQuestionWaitsCleansUpAtOnce(t *testing.T) {
 }
 
 func TestMergeDuringAPermissionPromptWaitsForTheTurn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1686,6 +1746,7 @@ func TestMergeDuringAPermissionPromptWaitsForTheTurn(t *testing.T) {
 }
 
 func TestQuestionReplyDoesNotKeepTheWorktree(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1703,6 +1764,7 @@ func TestQuestionReplyDoesNotKeepTheWorktree(t *testing.T) {
 }
 
 func TestMergedPRSettlesTheThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1723,6 +1785,7 @@ func TestMergedPRSettlesTheThread(t *testing.T) {
 }
 
 func TestClosedPRSettlesTheThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1741,6 +1804,7 @@ func TestClosedPRSettlesTheThread(t *testing.T) {
 }
 
 func TestPRMergedBeforeTheLastWakeDoesNotSettle(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	old := issueSession(h, t, 7)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
@@ -1763,6 +1827,7 @@ func TestPRMergedBeforeTheLastWakeDoesNotSettle(t *testing.T) {
 }
 
 func TestCleanupKeepsTheThread(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1797,6 +1862,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 }
 
 func TestCleanupRunsOncePerWorktree(t *testing.T) {
+	t.Parallel()
 	ran := filepath.Join(t.TempDir(), "ran")
 	h := apptest.NewWith(t, apptest.Options{CleanupCommand: noteCleanups(ran)})
 	repoFixture(t, h)
@@ -1833,6 +1899,7 @@ func TestCleanupRunsOncePerWorktree(t *testing.T) {
 }
 
 func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
@@ -1896,6 +1963,7 @@ func slowOrigin(t *testing.T, h *apptest.Harness, origin string, wait time.Durat
 }
 
 func TestWakeDuringTheCleanupIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)

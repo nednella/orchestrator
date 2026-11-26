@@ -13,6 +13,7 @@ import (
 )
 
 func TestSessionCommands(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	base, err := h.NewSession("base", "")
 	if err != nil {
@@ -61,6 +62,7 @@ func TestSessionCommands(t *testing.T) {
 }
 
 func TestCommandsWorkInTheCallersProject(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -108,6 +110,7 @@ func TestCommandsWorkInTheCallersProject(t *testing.T) {
 }
 
 func TestCommandWithoutAKnownProjectIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	caller, err := h.NewSession("caller", "")
 	if err != nil {
@@ -119,6 +122,7 @@ func TestCommandWithoutAKnownProjectIsRefused(t *testing.T) {
 }
 
 func TestSessionsOfEveryProjectAreListed(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.NewSession("here", ""); err != nil {
 		t.Fatal(err)
@@ -178,6 +182,7 @@ func twoProjectsEachWithSessionOne(t *testing.T) (h *apptest.Harness, other stri
 }
 
 func TestIssueSessionsAreOfTheCurrentProject(t *testing.T) {
+	t.Parallel()
 	h, other := twoProjectsEachWithSessionOne(t)
 	if _, err := h.Sessions().Create(h.Sessions().Current(), "a", "", false, 5, session.Supervised); err != nil {
 		t.Fatal(err)
@@ -191,6 +196,7 @@ func TestIssueSessionsAreOfTheCurrentProject(t *testing.T) {
 }
 
 func TestThreadCannotStartFullAccess(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	supervised, err := h.NewSession("supervised", "")
 	if err != nil {
