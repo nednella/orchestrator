@@ -36,4 +36,3 @@ export function terminalThemeFrom(el: Element): ITheme {
 
 // The Nerd Font after the mono stack, for the glyphs shell prompts draw that the others lack.
 export const TERMINAL_FONT = `"SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "JetBrainsMono Nerd Font Mono", monospace`
-export const terminalFontFrom = (el: Element) => `"JetBrainsMono Nerd Font Mono", ${getComputedStyle(el).getPropertyValue('--font-mono').trim()}`

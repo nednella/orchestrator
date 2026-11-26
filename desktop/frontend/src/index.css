@@ -877,30 +877,6 @@
     border-color: var(--accent);
   }
 
-  .shell-tabs {
-    position: relative;
-    background: var(--bg-app);
-  }
-
-  [data-panel][data-focused] .shell-tabs {
-    background: color-mix(in srgb, var(--accent) 8%, var(--bg-app));
-  }
-
-  .shell-tabs-scroll {
-    --fade-left: 0px;
-    --fade-right: 0px;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade-left), #000 calc(100% - var(--fade-right)), transparent);
-  }
-
-  .shell-tabs-scroll[data-hidden-left='true'] {
-    --fade-left: 1.5rem;
-  }
-
-  .shell-tabs-scroll[data-hidden-right='true'] {
-    --fade-right: 1.5rem;
-  }
-
   .link {
     color: var(--accent);
     text-decoration: underline;
@@ -1456,30 +1432,12 @@
     inset: 0 -4px;
   }
 
-  /* The shell's divider lies on the strip's top border, so the strip itself adds no height. */
-  .divider[aria-orientation='horizontal'] {
-    position: absolute;
-    inset: -1px 0 auto;
-    width: auto;
-    height: 1px;
-    background: transparent;
-    cursor: row-resize;
-  }
-
-  .divider[aria-orientation='horizontal']::before {
-    inset: -4px 0;
-  }
-
   .divider::after {
     content: '';
     position: absolute;
     inset: 0 -1px;
     background: transparent;
     transition: background 0.12s;
-  }
-
-  .divider[aria-orientation='horizontal']::after {
-    inset: -1px 0;
   }
 
   .divider:hover::after,
