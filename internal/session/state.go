@@ -51,6 +51,7 @@ type Identity struct {
 	Path    string `json:"path,omitempty"`
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
 	ForkAt  string `json:"forkAt,omitempty"`  // the uuid of the reply the fork's chat was cut at
+	Side    bool   `json:"side,omitempty"`    // the fork is a side chat of the thread Fork names
 	Parent  string `json:"parent,omitempty"`  // the thread that delegated to this one, "" for a thread the owner started
 	Branch  string `json:"branch,omitempty"`  // the branch the thread works on, in the worktree it started in; "" in the project folder
 	Created int64  `json:"created,omitempty"` // unix ms of the first start

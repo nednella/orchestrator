@@ -82,16 +82,19 @@ type modeThread struct {
 	modes chan string
 }
 
-func (m modeThread) ChatOf(string) (sessions.Chat, error)          { return m.chat, nil }
-func (m modeThread) Chats() []sessions.Chat                        { return []sessions.Chat{m.chat} }
-func (m modeThread) Observe(string, ...session.Event)              {}
-func (m modeThread) TranscriptPath(string, string) string          { return "" }
-func (m modeThread) BackgroundChanged(string, sessions.Background) {}
-func (m modeThread) AccessChanged(_, mode string, _ bool)          { m.modes <- mode }
-func (m modeThread) FlagRefused(string)                            {}
-func (m modeThread) NextTurn(string)                               {}
-func (m modeThread) Wake(string) (sessions.Chat, error)            { return m.chat, nil }
-func (m modeThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
+func (m modeThread) ChatOf(string) (sessions.Chat, error)           { return m.chat, nil }
+func (m modeThread) Chats() []sessions.Chat                         { return []sessions.Chat{m.chat} }
+func (m modeThread) Observe(string, ...session.Event)               {}
+func (m modeThread) TranscriptPath(string, string) string           { return "" }
+func (m modeThread) BackgroundChanged(string, sessions.Background)  {}
+func (m modeThread) AccessChanged(_, mode string, _ bool)           { m.modes <- mode }
+func (m modeThread) FlagRefused(string)                             {}
+func (m modeThread) NextTurn(string)                                {}
+func (m modeThread) Wake(string) (sessions.Chat, error)             { return m.chat, nil }
+func (m modeThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
+func (m modeThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
+func (m modeThread) DeleteSideChat(string, bool) error              { return nil }
+func (m modeThread) NameSideChat(string, string) error              { return nil }
 
 func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 	t.Parallel()

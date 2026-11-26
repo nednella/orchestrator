@@ -73,8 +73,13 @@ type Sent struct {
 
 // ChatSend gives the message, its images saved in the thread's media folder, to Claude: as the user's at once when the
 // thread is idle, as queued while a turn runs, and as the reason to deny each approval that waits. A settled thread is
-// woken for it.
+// woken for it. A side chat's first message names it.
 func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
+	return v.send(id, text, images, hostStarting)
+}
+
+// send is ChatSend with wait as the longest the message waits for the thread's host to listen.
+func (v *Service) send(id, text string, images []Image, wait time.Duration) (Sent, error) {
 	ch, err := v.awake(id)
 	if err != nil {
 		return Sent{}, err
@@ -84,7 +89,7 @@ func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
 		return Sent{}, err
 	}
 	ctx := v.ctx()
-	ready, cancel := context.WithTimeout(ctx, hostStarting)
+	ready, cancel := context.WithTimeout(ctx, wait)
 	err = host.Ready(ready, ch.Socket)
 	cancel()
 	var msg string
@@ -94,8 +99,34 @@ func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
 	if errors.Is(err, host.ErrTooOldForImages) {
 		return Sent{Notice: "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."}, nil
 	}
-	return Sent{ID: msg}, v.failed(id, "the message", err)
+	if err != nil {
+		return Sent{}, v.failed(id, "the message", err)
+	}
+	if err := v.c.threads.NameSideChat(id, text); err != nil {
+		log.Printf("orchestrator: naming side chat %s: %v", id, err)
+	}
+	return Sent{ID: msg}, nil
 }
+
+// SideChatStart starts a side chat of the thread parent, a fork of its conversation at its latest finished reply, and
+// sends it text and images as its first message when there are any, with the parent's model. A first message that does
+// not go deletes the side chat, so a failed start leaves nothing behind.
+func (v *Service) SideChatStart(parent, text string, images []Image) (sessions.Session, error) {
+	side, err := v.c.threads.StartSideChat(parent)
+	if err != nil || strings.TrimSpace(text) == "" && len(images) == 0 {
+		return side, err
+	}
+	if _, err := v.send(side.ID, text, images, sideChatReady); err != nil {
+		if err := v.c.threads.DeleteSideChat(side.ID, false); err != nil {
+			log.Printf("orchestrator: removing side chat %s, which did not take its first message: %v", side.ID, err)
+		}
+		return sessions.Session{}, err
+	}
+	return side, nil
+}
+
+// sideChatReady is how long a new side chat's first message waits for its host to listen.
+const sideChatReady = 10 * time.Second
 
 // ChatInterrupt stops the thread's turn.
 func (v *Service) ChatInterrupt(id string) error {

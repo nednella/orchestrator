@@ -217,6 +217,35 @@ func TestAccessTag(t *testing.T) {
 	}
 }
 
+func TestSideTag(t *testing.T) {
+	tmux := newTestTmux(t)
+	ctx := context.Background()
+	side, fork := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}
+	for _, n := range []session.Name{side, fork} {
+		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+			t.Fatal(err)
+		}
+		if err := tmux.SetAccess(ctx, n, session.Read); err != nil {
+			t.Fatal(err)
+		}
+		if err := tmux.SetFork(ctx, n, "demo/parent00"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tmux.SetSide(ctx, side); err != nil {
+		t.Fatal(err)
+	}
+	infos, err := list(tmux, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range infos {
+		if in.Side != (in.Name == side) || in.Fork != "demo/parent00" {
+			t.Errorf("%s: side %v, fork %q", in.Name, in.Side, in.Fork)
+		}
+	}
+}
+
 func TestListSkipsSessionsOrchestratorDidNotMake(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()

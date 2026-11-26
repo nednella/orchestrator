@@ -1274,6 +1274,8 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool,
 	if reason != "" {
 		return removed, reason
 	}
+	// A side chat runs in its thread's folder and serves the thread only, so it goes before the worktree does.
+	l.sessions.deleteSideChats(t.id)
 	for _, step := range []func(context.Context, target, *cleanupPlan) ([]string, string){l.removeWorktree, l.settleSession} {
 		if ctx.Err() != nil {
 			return removed, closedReason
@@ -1351,7 +1353,7 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 	if reason := l.sessions.pending(t.id); reason != "" {
 		return p, reason
 	}
-	ours := slices.Concat(family, []string{t.id})
+	ours := slices.Concat(family, []string{t.id}, l.sessions.SideChatsOf(t.id))
 	if user := l.sessions.usersOf(w.Path, false, ours...); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}

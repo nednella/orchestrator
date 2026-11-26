@@ -103,6 +103,9 @@ func (v *Service) ForkSession(id, at string) (Session, error) { return v.s.Fork(
 
 func (v *Service) RenameSession(id, title string) error { return v.s.Rename(id, title) }
 
+// SideChatDelete deletes the side chat id; with unused, only when nobody sent it a message, as when its tab closes.
+func (v *Service) SideChatDelete(id string, unused bool) error { return v.s.DeleteSideChat(id, unused) }
+
 // TypeInto types text into the session's prompt, not sent; an agent under a host gets it as a draft in its chat.
 func (v *Service) TypeInto(id, text string) error { return v.s.TypeInto(id, text) }
 

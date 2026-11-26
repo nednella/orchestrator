@@ -26,16 +26,19 @@ import (
 // oneThread is a single live thread under a host at socket, with an empty chat log.
 type oneThread struct{ chat sessions.Chat }
 
-func (o oneThread) ChatOf(string) (sessions.Chat, error)          { return o.chat, nil }
-func (o oneThread) Chats() []sessions.Chat                        { return []sessions.Chat{o.chat} }
-func (o oneThread) Observe(string, ...session.Event)              {}
-func (o oneThread) TranscriptPath(string, string) string          { return "" }
-func (o oneThread) BackgroundChanged(string, sessions.Background) {}
-func (o oneThread) AccessChanged(string, string, bool)            {}
-func (o oneThread) FlagRefused(string)                            {}
-func (o oneThread) NextTurn(string)                               {}
-func (o oneThread) Wake(string) (sessions.Chat, error)            { return o.chat, nil }
-func (o oneThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
+func (o oneThread) ChatOf(string) (sessions.Chat, error)           { return o.chat, nil }
+func (o oneThread) Chats() []sessions.Chat                         { return []sessions.Chat{o.chat} }
+func (o oneThread) Observe(string, ...session.Event)               {}
+func (o oneThread) TranscriptPath(string, string) string           { return "" }
+func (o oneThread) BackgroundChanged(string, sessions.Background)  {}
+func (o oneThread) AccessChanged(string, string, bool)             {}
+func (o oneThread) FlagRefused(string)                             {}
+func (o oneThread) NextTurn(string)                                {}
+func (o oneThread) Wake(string) (sessions.Chat, error)             { return o.chat, nil }
+func (o oneThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
+func (o oneThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
+func (o oneThread) DeleteSideChat(string, bool) error              { return nil }
+func (o oneThread) NameSideChat(string, string) error              { return nil }
 
 // noProject knows no project.
 func noProject(string) string { return "" }

@@ -1369,6 +1369,10 @@ func (h *Harness) ForkSession(id, at string) (sessions.Session, error) {
 	return h.sessions.ForkSession(id, at)
 }
 
+func (h *Harness) SideChatDelete(id string, unused bool) error {
+	return h.sessions.SideChatDelete(id, unused)
+}
+
 func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
 	return h.chat.ChatHistory(id, after)
 }
@@ -1390,6 +1394,10 @@ func (h *Harness) RefreshLimits() (limits.Limits, error) { return h.limits.Refre
 
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
 	return h.chat.ChatSend(id, text, images)
+}
+
+func (h *Harness) SideChatStart(parent, text string, images ...chat.Image) (sessions.Session, error) {
+	return h.chat.SideChatStart(parent, text, images)
 }
 func (h *Harness) ChatInterrupt(id string) error        { return h.chat.ChatInterrupt(id) }
 func (h *Harness) ChatSendNow(id, message string) error { return h.chat.ChatSendNow(id, message) }

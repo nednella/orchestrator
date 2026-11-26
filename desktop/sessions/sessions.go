@@ -80,6 +80,7 @@ type Session struct {
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
 	ForkOf      string           `json:"forkOf"` // the thread the session was forked from, "" when none
 	ForkAt      string           `json:"forkAt"` // the uuid of the reply the fork's chat was cut at, "" when none
+	Side        bool             `json:"side"`   // a side chat of the thread ForkOf names: it shows only in that thread's panel
 	Parent      string           `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
@@ -137,6 +138,7 @@ type Sessions struct {
 	shellMu   sync.Mutex           // one shell check-and-create at a time: two callers at once would both find no shell and start two
 	issueMu   sync.Mutex           // one issue check-and-create at a time: two starts at once would both find no session and start two
 	childMu   sync.Mutex           // one child check-and-create at a time: two delegations at once would both pass the limits
+	sideMu    sync.Mutex           // one side chat start at a time
 
 	settling map[string]chan struct{} // under mu, the threads a settle stops now, each closed once that settle ends: one settle of a thread at a time
 
@@ -473,7 +475,7 @@ func (e *endedSession) record() session.Record {
 
 // identityOf is what the session was started as, with its tmux session's start as both its first and latest start.
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Access: in.Access, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Branch: in.Branch, Parent: in.Parent}
+	id := session.Identity{Title: in.Title, Access: in.Access, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Side: in.Side, Branch: in.Branch, Parent: in.Parent}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -560,7 +562,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		return
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Action: rec.Action, Fork: rec.Fork, Branch: rec.Branch, Parent: rec.Parent}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Action: rec.Action, Fork: rec.Fork, Side: rec.Side, Branch: rec.Branch, Parent: rec.Parent}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -873,7 +875,8 @@ func (s *Sessions) markDeleting(id string) ([]string, error) {
 	}
 	family := s.familyOf(id)
 	for _, d := range family[:len(family)-1] {
-		if in, live := s.liveInfo(d); live {
+		// A side chat goes with its thread, running or not.
+		if in, live := s.liveInfo(d); live && !in.Side {
 			return nil, fmt.Errorf("Thread %d has a running child, %s; stop it first", s.nums[id], cmp.Or(in.Title, defaultTitle))
 		}
 		if s.deleting[d] {
@@ -886,12 +889,25 @@ func (s *Sessions) markDeleting(id string) ([]string, error) {
 	return family, nil
 }
 
-// familyOf is the thread id and its descendants in the order a Delete takes them: the deepest first and id last. It
-// needs mu.
+// familyOf is the thread id and its descendants in the order a Delete takes them: the deepest first and id last, each
+// after its side chats. It needs mu.
 func (s *Sessions) familyOf(id string) []string {
-	family := s.descendants(id)
-	slices.Reverse(family)
-	return append(family, id)
+	threads := s.descendants(id)
+	slices.Reverse(threads)
+	var family []string
+	for _, t := range append(threads, id) {
+		family = append(family, s.sideChatsOf(t)...)
+		family = append(family, t)
+	}
+	return family
+}
+
+// SideChat says whether the thread id is a side chat. It takes mu.
+func (s *Sessions) SideChat(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in, _ := s.infoOf(id)
+	return in.Side
 }
 
 // cleanupRefused says why a clean-up of the thread, marked pending already, must not go on, or nil when it may: a delete
@@ -957,7 +973,7 @@ func (s *Sessions) settleToDelete(name session.Name) error {
 	if !live {
 		return nil
 	}
-	return s.Settle(name.String())
+	return s.settleBy(name.String(), "")
 }
 
 // OnSlept has fn hear of each thread that stops running while the app runs, other than for a restart, once its host has
@@ -1080,12 +1096,24 @@ func (s *Sessions) removeWorktrees(family []string, trees familyTrees) (asleep s
 	if err := s.checkWorktrees(ctx, family, own, "", trees.count()); err != nil {
 		return "", err
 	}
-	if s.isLive(top) && slices.ContainsFunc(own, func(id string) bool { return id == top || s.worksIn(top, s.madeWorktree(id)) }) {
-		name, _ := session.ParseName(top)
-		if err := s.settleToDelete(name); err != nil {
-			return "", err
+	// The thread, and each side chat of the family, that runs in a worktree that is to go stops before the checks run
+	// again. A side chat goes with the family either way.
+	var stop []string
+	for _, d := range family {
+		if (d == top || s.SideChat(d)) && s.isLive(d) && slices.ContainsFunc(own, func(id string) bool { return id == d || s.worksIn(d, s.madeWorktree(id)) }) {
+			stop = append(stop, d)
 		}
-		asleep = top
+	}
+	if len(stop) > 0 {
+		for _, d := range stop {
+			name, _ := session.ParseName(d)
+			if err := s.settleToDelete(name); err != nil {
+				return asleep, s.asleepNow(err, asleep)
+			}
+			if d == top {
+				asleep = top
+			}
+		}
 		if err := s.checkWorktrees(ctx, family, own, asleep, trees.count()); err != nil {
 			return asleep, err
 		}
@@ -1192,7 +1220,7 @@ func (s *Sessions) DeletePlan(id string) DeletePlan {
 	s.mu.Unlock()
 	p := DeletePlan{Children: []string{}, Worktrees: s.familyWorktrees(s.context(), family).count()}
 	for _, d := range family[:len(family)-1] {
-		if !s.isLive(d) {
+		if !s.SideChat(d) && !s.isLive(d) {
 			p.Children = append(p.Children, s.titleOf(d))
 		}
 	}
@@ -1312,7 +1340,7 @@ func (s *Sessions) sync() {
 			s.adoptHistory(id, created)
 			s.saveIdentity(in)
 		}
-		opened := s.loaded && state == session.Idle && s.life.opened(id)
+		opened := s.loaded && state == session.Idle && s.life.opened(id) && !in.Side
 		if opened {
 			attention = append(attention, [2]string{id, "opened"})
 		}
@@ -1329,7 +1357,8 @@ func (s *Sessions) sync() {
 		rec := s.records[id]
 		// A child's reply goes to its parent, which reads it; the owner hears of the parent's.
 		replied := known && prev == session.Working && state == session.Idle && rec.Event == "Stop" && in.Parent == ""
-		if s.loaded {
+		// A side chat's state shows only on its tab.
+		if s.loaded && !in.Side {
 			switch {
 			case state == session.Waiting:
 				attention = append(attention, [2]string{id, "waiting"})
@@ -1500,7 +1529,7 @@ func (s *Sessions) projectViews() []Project {
 	for _, p := range s.projects() {
 		v := Project{Key: p.Key(), Name: p.Name, Dir: p.Dir, Repo: s.repoOf(p.Dir), NeedsSetup: p.NeedsSetup(), SetupDismissed: p.SetupDismissed}
 		for _, in := range s.info {
-			if in.Name.Project != p.Key() {
+			if in.Name.Project != p.Key() || in.Side {
 				continue
 			}
 			switch s.stateOf(in.Name.String()) {
@@ -1544,7 +1573,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt:  s.forkAtOf(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
@@ -1989,7 +2018,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	issue, _ := strconv.Atoi(in.Issue)
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle)}
+	fork := forkStart{of: in.Fork, title: cmp.Or(source.Title, defaultTitle), side: in.Side}
 	if err := s.launch(tctx, p, name, cmp.Or(in.Title, defaultTitle), proj, dir, in.Branch, issue, model, conversation, "", cmp.Or(handover, s.handoverOf(id)), in.Access, in.Action, fork, in.Parent); err != nil {
 		_ = bus.WriteState(s.stateDir, before)
 		return err
@@ -2408,7 +2437,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 		s.life.undoWorktree(ctx, proj, name, work)
 		return Session{}, err
 	}
-	view := s.register(name, title, work, issue, model, created, o.Access, action, fork.of, fork.at, o.Parent)
+	view := s.register(name, title, work, issue, model, created, o.Access, action, fork, o.Parent)
 	if text != "" {
 		go s.giveHost(ctx, name, text, send)
 	}
@@ -2434,6 +2463,7 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 type forkStart struct {
 	of, title, conversation, at string
 	events                      []chat.Event
+	side                        bool // the fork is a side chat of the thread it forks
 }
 
 // Fork starts a thread that continues the conversation of the thread id, live or ended, as a new conversation that
@@ -2620,7 +2650,7 @@ func (s *Sessions) launch(ctx context.Context, p agent.Provider, name session.Na
 			s.mu.Unlock()
 		}
 	}()
-	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork.of, parent)
+	return s.start(ctx, name, title, dir, branch, env, argv, issue, model, access, action, fork, parent)
 }
 
 // hosted is argv run under this app's own host command, with the session's chat log and socket. It makes the socket's
@@ -2729,22 +2759,22 @@ func (s *Sessions) ThreadOfToken(token string) (string, bool) {
 	return "", false
 }
 
-// register adds the new session, which runs in work, to the list and returns its row. forkOf is the thread it was
-// forked from and parent the thread that delegated to it, if any. It takes mu.
-func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action, forkOf, forkAt, parent string) Session {
+// register adds the new session, which runs in work, to the list and returns its row. fork is what it was forked from
+// and parent the thread that delegated to it, if any. It takes mu.
+func (s *Sessions) register(name session.Name, title string, work workPlace, issue int, model project.Model, created time.Time, access session.Access, action string, fork forkStart, parent string) Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if forkAt != "" {
+	if fork.at != "" {
 		rec := session.Record{Session: name.String(), State: session.Idle, At: created}
 		// A later read of the state file has no newer At, so it never adds the start to this record, and tmux dates a
 		// session only to the second: a delete's heir is the fork that started last.
-		rec.ForkAt, rec.Created, rec.Woke = forkAt, created.UnixMilli(), created.UnixMilli()
+		rec.ForkAt, rec.Created, rec.Woke = fork.at, created.UnixMilli(), created.UnixMilli()
 		if err := bus.WriteState(s.stateDir, rec); err != nil {
 			log.Printf("orchestrator: saving where %s was forked: %v", name, err)
 		}
 		s.records[rec.Session] = rec
 	}
-	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Action: action, Fork: forkOf, Parent: parent, Created: created}
+	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Action: action, Fork: fork.of, Side: fork.side, Parent: parent, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
@@ -2761,7 +2791,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 	return Session{}
 }
 
-func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, branch string, env, argv []string, issue int, model project.Model, access session.Access, action, forkOf, parent string) error {
+func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, branch string, env, argv []string, issue int, model project.Model, access session.Access, action string, fork forkStart, parent string) error {
 	if err := s.tmux.NewSession(ctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return err
 	}
@@ -2788,8 +2818,13 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, bra
 			return err
 		}
 	}
-	if forkOf != "" {
-		if err := tag(s.tmux.SetFork(ctx, name, forkOf)); err != nil {
+	if fork.of != "" {
+		if err := tag(s.tmux.SetFork(ctx, name, fork.of)); err != nil {
+			return err
+		}
+	}
+	if fork.side {
+		if err := tag(s.tmux.SetSide(ctx, name)); err != nil {
 			return err
 		}
 	}
@@ -3408,12 +3443,21 @@ func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 }
 
 // Settle stops the session's tmux session, whose host stops Claude, and then the servers it started; its row stays,
-// settled.
-func (s *Sessions) Settle(id string) error { return s.settleBy(id, "") }
+// settled. Its side chats are deleted.
+func (s *Sessions) Settle(id string) error { return s.settleWithSideChats(id, "") }
 
 // SettleAsOwner is Settle at the owner's word, which the exit in the thread's log records: a parent hears that the
 // owner put its child to sleep.
-func (s *Sessions) SettleAsOwner(id string) error { return s.settleBy(id, chat.ByOwner) }
+func (s *Sessions) SettleAsOwner(id string) error { return s.settleWithSideChats(id, chat.ByOwner) }
+
+// settleWithSideChats is settleBy, then a delete of the thread's side chats, which serve the thread only while it runs.
+func (s *Sessions) settleWithSideChats(id, by string) error {
+	if err := s.settleBy(id, by); err != nil {
+		return err
+	}
+	s.deleteSideChats(id)
+	return nil
+}
 
 // settleBy settles the thread, with by as its exit's text: chat.ByOwner or none.
 func (s *Sessions) settleBy(id, by string) error {
@@ -3471,6 +3515,7 @@ func (s *Sessions) SettleIdle(id string) (bool, error) {
 		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
 	}
 	s.stopServers(false, id)
+	s.deleteSideChats(id)
 	return true, nil
 }
 

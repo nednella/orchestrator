@@ -48,6 +48,9 @@ type Threads interface {
 	NextTurn(id string)
 	Wake(id string) (sessions.Chat, error)
 	FilesRewind(id string) (dir string, inProject bool, reason string)
+	StartSideChat(parent string) (sessions.Session, error)
+	DeleteSideChat(id string, unused bool) error
+	NameSideChat(id, text string) error
 }
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.
