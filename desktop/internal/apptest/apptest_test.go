@@ -90,3 +90,20 @@ func TestHarnessesInOneProcessShareNothing(t *testing.T) {
 		t.Error("the harness changed the process's environment")
 	}
 }
+
+func TestRestartKeepsTheHarnessIsolation(t *testing.T) {
+	t.Parallel()
+	for _, env := range [][]string{
+		{"ORCHESTRATOR_TMUX_SOCKET="},
+		{"ORCHESTRATOR_TMUX_SOCKET=orchestrator"},
+		{"ORCHESTRATOR_TMUX_SOCKET=agentos", "ORCHESTRATOR_STATE_DIR=/nonexistent"},
+	} {
+		h := apptest.New(t)
+		second := h.Restart(t, env...)
+		for _, k := range []string{"ORCHESTRATOR_TMUX_SOCKET", "ORCHESTRATOR_STATE_DIR", "ORCHESTRATOR_CONFIG", "ORCHESTRATOR_DEV_DATA_DIR"} {
+			if got, want := environ.Get(second.Env, k), environ.Get(h.Env, k); got != want || got == "" {
+				t.Errorf("after Restart(%v) %s = %q, want the harness's %q", env, k, got, want)
+			}
+		}
+	}
+}

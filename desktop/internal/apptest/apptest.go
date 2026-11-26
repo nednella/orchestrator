@@ -782,10 +782,19 @@ func (h *Harness) build(t *testing.T) *app.App {
 }
 
 // Restart starts a second app on the same dirs, as if the first was quit and opened again. env are entries of its
-// environment that replace the first's.
+// environment that replace the first's, except the harness's isolation: its state, config, folder and data entries, and
+// its tmux socket unless env names another private one, never an empty or a default one.
 func (h *Harness) Restart(t *testing.T, env ...string) *Harness {
 	t.Helper()
-	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, Env: environ.With(h.Env, env...), claudeDir: h.claudeDir, opts: h.opts}
+	isolation := []string{"ORCHESTRATOR_STATE_DIR", "ORCHESTRATOR_CONFIG", "ORCHESTRATOR_DIR", "ORCHESTRATOR_DEV_DATA_DIR"}
+	if sock := environ.Get(env, "ORCHESTRATOR_TMUX_SOCKET"); sock == "" || sock == "orchestrator" || sock == "agentos" {
+		isolation = append(isolation, "ORCHESTRATOR_TMUX_SOCKET")
+	}
+	next := environ.With(h.Env, env...)
+	for _, k := range isolation {
+		next = environ.With(next, k+"="+environ.Get(h.Env, k))
+	}
+	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, Env: next, claudeDir: h.claudeDir, opts: h.opts}
 	second.App = second.build(t)
 	second.shortenWaits()
 	ctx, cancel := context.WithCancel(context.Background())
