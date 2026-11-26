@@ -1581,7 +1581,7 @@ func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
 				h.App.Stop()
 				h = h.Restart(t)
 			}
-			time.Sleep(10 * retry) // past the first tries of a result that would wake the parent
+			time.Sleep(3 * time.Second) // past the first tries of a result that would wake the parent
 			if got := stateOf(h, parent.ID); got != "settled" {
 				t.Fatalf("the parent is %s, want it left asleep for its clean-up", got)
 			}

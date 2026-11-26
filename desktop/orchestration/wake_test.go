@@ -425,7 +425,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 				t.Fatal(err)
 			}
 			apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
-			time.Sleep(6 * retry) // past the first tries
+			time.Sleep(1500 * time.Millisecond) // past the first tries
 			if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
 				t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
 			}
@@ -443,7 +443,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 			if tt.want > 0 {
 				apptest.Eventually(t, "the result once the parent can wake", func() bool { return len(resultLines(t, h, parent.ID, c)) > 0 })
 			} else {
-				time.Sleep(20 * retry) // past the next try, which comes by 1.5 s
+				time.Sleep(4 * time.Second) // past the next try, which comes by 1.5 s
 				if !asleep(t, h, parent.ID) {
 					t.Error("the parent woke for the result of a deleted child")
 				}
