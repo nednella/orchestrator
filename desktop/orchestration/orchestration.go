@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/nednella/agentos/desktop/chat"
 	"github.com/nednella/agentos/desktop/control"
@@ -42,11 +41,11 @@ type Commands struct {
 	tools   map[string]tool
 
 	waitMu  sync.Mutex
-	waiting map[waitOn]time.Time // each wait, until when it lasts
+	waiting map[waitOn]held // each wait, and how long it lasts
 }
 
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router) *Commands {
-	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]time.Time{}}
+	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	return c
 }

@@ -259,27 +259,33 @@ func TestWaitWaitsForAHeldMessage(t *testing.T) {
 	}
 }
 
+// sliceIn runs one slice of a wait that lasts until the time given, in its own goroutine.
+func sliceIn(h *apptest.Harness, token, thread string, length time.Duration, until time.Time) <-chan waitResult {
+	got := make(chan waitResult, 1)
+	go func() {
+		a, refused, err := waitCallUntil(h, token, thread, length, until)
+		got <- waitResult{a, refused, err}
+	}()
+	return got
+}
+
+// busyAgain gives the thread "work" once more and returns once its stand-in claude has read it.
+func busyAgain(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	turns := countIn(h.Stdin(t, id), `"text":"work"`)
+	if _, err := h.ChatSend(id, "work"); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the next turn that works", func() bool { return countIn(h.Stdin(t, id), `"text":"work"`) > turns })
+}
+
 func TestAWaitIsKeptUntilItEnds(t *testing.T) {
 	h := apptest.New(t)
 	parent, c := busyChild(t, h)
 	token := tokenOf(t, h, parent)
 	waits := func() bool { return h.App.Tools().Waits(parent, c) }
-	// slice runs one slice of a wait that lasts until the time given, in its own goroutine.
 	slice := func(length time.Duration, until time.Time) <-chan waitResult {
-		got := make(chan waitResult, 1)
-		go func() {
-			a, refused, err := waitCallUntil(h, token, c, length, until)
-			got <- waitResult{a, refused, err}
-		}()
-		return got
-	}
-	busy := func() {
-		t.Helper()
-		turns := countIn(h.Stdin(t, c), `"text":"work"`)
-		if _, err := h.ChatSend(c, "work"); err != nil {
-			t.Fatal(err)
-		}
-		apptest.Eventually(t, "the next turn that works", func() bool { return countIn(h.Stdin(t, c), `"text":"work"`) > turns })
+		return sliceIn(h, token, c, length, until)
 	}
 
 	if r := waitResultOf(t, slice(time.Second, time.Now().Add(time.Minute)), 5*time.Second); r.err != nil || r.refused != "" || r.a.Done {
@@ -301,7 +307,7 @@ func TestAWaitIsKeptUntilItEnds(t *testing.T) {
 		t.Error("the wait is kept after a slice answered it done")
 	}
 
-	busy()
+	busyAgain(t, h, c)
 	if r := waitResultOf(t, slice(time.Second, time.Now().Add(1500*time.Millisecond)), 5*time.Second); r.a.Done || !waits() {
 		t.Fatalf("a slice before the deadline answered %+v, kept %v; want not done and kept", r, waits())
 	}
@@ -322,6 +328,47 @@ func TestAWaitIsKeptUntilItEnds(t *testing.T) {
 	if waits() {
 		t.Error("the wait is kept after the waiter's turn ended")
 	}
+}
+
+func TestAWaitEndsWithTheWaitersTurn(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		end  func(h *apptest.Harness, id string) error
+	}{
+		{"interrupted", func(h *apptest.Harness, id string) error { return h.Interrupt(id) }},
+		{"settled", func(h *apptest.Harness, id string) error { return h.SettleThread(id) }},
+	} {
+		t.Run(tc.name+" between two slices", func(t *testing.T) {
+			h := apptest.New(t)
+			parent, c := busyChild(t, h)
+			busyAgain(t, h, parent)
+			if r := waitResultOf(t, sliceIn(h, tokenOf(t, h, parent), c, time.Second, time.Now().Add(time.Minute)), 5*time.Second); r.err != nil || r.a.Done {
+				t.Fatalf("the slice answered %+v, want not done", r)
+			}
+			if !h.App.Tools().Waits(parent, c) {
+				t.Fatal("the wait is not kept between two slices")
+			}
+			if err := tc.end(h, parent); err != nil {
+				t.Fatal(err)
+			}
+			apptest.Eventually(t, "the wait ended with the waiter's turn", func() bool { return !h.App.Tools().Waits(parent, c) })
+		})
+	}
+	t.Run("interrupted as a slice ends", func(t *testing.T) {
+		h := apptest.New(t)
+		parent, c := busyChild(t, h)
+		token := tokenOf(t, h, parent)
+		for _, offset := range []time.Duration{-40 * time.Millisecond, -10 * time.Millisecond, 0, 10 * time.Millisecond, 40 * time.Millisecond} {
+			busyAgain(t, h, parent)
+			got := sliceIn(h, token, c, 400*time.Millisecond, time.Now().Add(time.Minute))
+			time.Sleep(400*time.Millisecond + offset)
+			if err := h.Interrupt(parent); err != nil {
+				t.Fatal(err)
+			}
+			waitResultOf(t, got, 5*time.Second)
+			apptest.Eventually(t, "the wait ended with the waiter's turn", func() bool { return !h.App.Tools().Waits(parent, c) })
+		}
+	})
 }
 
 func TestWaitOnAnAncestorIsRefused(t *testing.T) {

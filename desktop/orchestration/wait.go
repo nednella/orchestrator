@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/nednella/agentos/desktop/chat"
@@ -49,27 +49,65 @@ type waited struct {
 // waitOn is a wait: the thread waiter waits on thread.
 type waitOn struct{ waiter, thread string }
 
+// held is how long a wait lasts: until the deadline the agentos command gave, and while the turn of the waiter's that
+// called it runs, the turn that had logged up to seq from when the wait began.
+type held struct {
+	until time.Time
+	from  int64
+}
+
 // Waits says whether waiter waits on thread, so a result the wait answers it with is not also sent. A wait lasts from
-// its first slice until a slice answers it done, the waiter's turn ends, or the deadline the agentos command gave
-// passes; between two slices it still waits.
+// its first slice until a slice answers it done, the waiter's turn ends or it stops running, or the deadline passes;
+// between two slices it still waits.
 func (c *Commands) Waits(waiter, thread string) bool {
-	c.waitMu.Lock()
-	defer c.waitMu.Unlock()
 	w := waitOn{waiter, thread}
-	if time.Now().Before(c.waiting[w]) {
+	c.waitMu.Lock()
+	h, ok := c.waiting[w]
+	c.waitMu.Unlock()
+	if !ok {
+		return false
+	}
+	if time.Now().Before(h.until) && c.inTurn(waiter, h.from) {
 		return true
 	}
-	delete(c.waiting, w)
+	c.waitMu.Lock()
+	if c.waiting[w] == h {
+		delete(c.waiting, w)
+	}
+	c.waitMu.Unlock()
 	return false
 }
 
-// hold keeps the wait until the time until, or a later one it already has.
-func (c *Commands) hold(w waitOn, until time.Time) {
+// inTurn says whether the thread runs and its log has no turn's end, nor Claude's exit or start, after the seq from.
+func (c *Commands) inTurn(id string, from int64) bool {
+	ch, err := c.threads.ChatOf(id)
+	if err != nil || !ch.Live {
+		return false
+	}
+	events, err := chatlog.ReadLog(ch.Log, from)
+	if err != nil {
+		log.Printf("agentos: reading the chat log of %s: %v", id, err)
+		return false
+	}
+	return !slices.ContainsFunc(events, func(e chatlog.Event) bool {
+		return e.Kind == chatlog.KindTurnEnd || e.Kind == chatlog.KindExit || e.Kind == chatlog.KindStart
+	})
+}
+
+// hold keeps the wait until the time until, or a later one it already has. A wait that no longer lasts starts again
+// from the seq newest of the waiter's log.
+func (c *Commands) hold(w waitOn, until time.Time, newest int64) {
+	lasts := c.Waits(w.waiter, w.thread)
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
-	if until.After(c.waiting[w]) {
-		c.waiting[w] = until
+	h := c.waiting[w]
+	if !lasts {
+		h = held{from: newest}
 	}
+	if until.After(h.until) {
+		h.until = until
+	}
+	c.waiting[w] = h
 }
 
 func (c *Commands) release(w waitOn) {
@@ -117,14 +155,18 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 	if err != nil {
 		return "", err
 	}
+	callerChat, err := c.threads.ChatOf(caller)
+	if err != nil {
+		return "", err
+	}
+	newest := c.turnOf(callerChat).newest
 	w := waitOn{caller, in.Thread}
-	c.hold(w, until)
+	c.hold(w, until, newest)
 	ctx, cancel := context.WithTimeout(ctx, slice)
 	defer cancel()
-	var callerEnded atomic.Bool
-	go c.cancelAtTurnEnd(ctx, cancel, caller, &callerEnded)
+	go c.cancelAtTurnEnd(ctx, cancel, caller, newest)
 	got := c.waitFor(ctx, ch)
-	if got.Done || callerEnded.Load() {
+	if got.Done {
 		c.release(w)
 	}
 	data, err := json.Marshal(got)
@@ -146,30 +188,15 @@ func (c *Commands) isAncestor(thread, id string) bool {
 	return false
 }
 
-// cancelAtTurnEnd sets ended and calls cancel once the caller's running turn ends or the caller stops running.
-func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFunc, caller string, ended *atomic.Bool) {
-	ch, err := c.threads.ChatOf(caller)
-	if err != nil {
-		log.Printf("agentos: the wait of %s does not follow its turn: %v", caller, err)
-		return
-	}
-	events, err := chatlog.ReadLog(ch.Log, 0)
-	if err != nil {
-		log.Printf("agentos: reading the chat log of %s: %v", caller, err)
-		return
-	}
-	var newest int64
-	if len(events) > 0 {
-		newest = events[len(events)-1].Seq
-	}
-	_, err = c.chats.AwaitTurn(ctx, caller, newest)
+// cancelAtTurnEnd calls cancel once the caller's turn running at its log's seq newest ends, or the caller stops running.
+func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFunc, caller string, newest int64) {
+	_, err := c.chats.AwaitTurn(ctx, caller, newest)
 	if errors.Is(err, chat.ErrThreadGone) {
 		if _, runs, err := c.stillRuns(caller); err == nil && runs {
 			return
 		}
 	}
 	if err == nil || errors.Is(err, chat.ErrThreadGone) {
-		ended.Store(true)
 		cancel()
 	}
 }
