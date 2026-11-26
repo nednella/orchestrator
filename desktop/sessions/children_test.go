@@ -410,6 +410,85 @@ func TestDeleteGivesAChildsWorktreeToAForkOfIt(t *testing.T) {
 	}
 }
 
+// recordsOf are the paths of the worktree records of the thread id.
+func recordsOf(t *testing.T, h *apptest.Harness, id string) []string {
+	t.Helper()
+	var paths []string
+	for _, w := range madeRecords(t, h) {
+		if w.Thread == id {
+			paths = append(paths, w.Path)
+		}
+	}
+	return paths
+}
+
+func TestDeleteGivesAChildsWorktreeOnlyToAForkWithNoneOfItsOwn(t *testing.T) {
+	t.Run("a thread with a worktree of its own", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		pushWork(t, parent.Worktree)
+		child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+		other := issueThread(h, t, 8)
+		h.Hook(t, other.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+		eventually(t, "the other thread seen in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
+		putToSleep(t, h, child.ID)
+		cleanupOf(t, h, child)
+
+		if err := h.DeleteThread(parent.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := recordsOf(t, h, other.ID); !slices.Equal(got, []string{other.Worktree}) {
+			t.Errorf("the other thread's records = %q, want only its own %s", got, other.Worktree)
+		}
+		if got := h.OwnWorktree(other.ID); got != other.Worktree {
+			t.Errorf("OwnWorktree of the other thread = %q, want %s", got, other.Worktree)
+		}
+		if !exists(child.Worktree) {
+			t.Error("the child's worktree went")
+		}
+	})
+
+	t.Run("a fork with a worktree of its own", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		first := issueThread(h, t, 7)
+		pushWork(t, first.Worktree)
+		builder := childOf(t, h, first, "Builder", sessions.WhereWorktree)
+		withConversation(t, h, builder.ID)
+		writeChat(t, h, builder.ID, oneReply...)
+		fork, err := h.ForkSession(builder.ID, "r1b")
+		if err != nil {
+			t.Fatal(err)
+		}
+		putToSleep(t, h, builder.ID)
+		cleanupOf(t, h, builder)
+		if err := h.DeleteThread(first.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := recordsOf(t, h, fork.ID); !slices.Equal(got, []string{builder.Worktree}) {
+			t.Fatalf("the fork's records = %q, want the builder's %s", got, builder.Worktree)
+		}
+
+		second := issueThread(h, t, 8)
+		pushWork(t, second.Worktree)
+		tester := childOf(t, h, second, "Tester", sessions.WhereWorktree)
+		h.Hook(t, fork.ID, "PreToolUse", fmt.Sprintf(`{"cwd":%q}`, tester.Worktree))
+		eventually(t, "the fork seen in the tester's worktree", func() bool { return h.OwnWorktree(tester.ID) == "" })
+		putToSleep(t, h, tester.ID)
+		cleanupOf(t, h, tester)
+		if err := h.DeleteThread(second.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := recordsOf(t, h, fork.ID); !slices.Equal(got, []string{builder.Worktree}) {
+			t.Errorf("the fork's records = %q, want only the builder's %s", got, builder.Worktree)
+		}
+		if got := h.OwnWorktree(fork.ID); got != builder.Worktree {
+			t.Errorf("OwnWorktree of the fork = %q, want %s", got, builder.Worktree)
+		}
+	})
+}
+
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)

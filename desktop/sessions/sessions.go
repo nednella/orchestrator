@@ -1023,15 +1023,15 @@ func (s *Sessions) checkWorktrees(ctx context.Context, own []string, asleep stri
 	return nil
 }
 
-// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to a thread outside the family
-// that works in it, so the record does not go with id and the worktree is still agentos's to remove.
+// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to the fork outside the family
+// that works in it (heirOf), so the record does not go with id and the worktree is still agentos's to remove.
 func (s *Sessions) handOverWorktree(id string, family []string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
 	if !ok || w.Removed != 0 || gone(w.Path) {
 		return
 	}
-	user, _ := s.userIn(w.Path, true, family...)
+	user := s.heirOf(key, w.Path, family)
 	if user == "" {
 		return
 	}
@@ -3922,32 +3922,48 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 // runs there, as a fork of a thread in its worktree does, or whose last hook came from there. With asleep, a settled
 // thread that would wake there counts too. It takes mu.
 func (s *Sessions) usersOf(dir string, asleep bool, except ...string) string {
-	_, title := s.userIn(dir, asleep, except...)
-	return title
+	if users := s.usersIn(dir, asleep, except...); len(users) > 0 {
+		return cmp.Or(users[0].Title, defaultTitle)
+	}
+	return ""
 }
 
-// userIn is the id and title of a thread that works in dir, as usersOf finds it; "" when none.
-func (s *Sessions) userIn(dir string, asleep bool, except ...string) (id, title string) {
+// usersIn are the threads that usersOf looks for, the live ones first. It takes mu.
+func (s *Sessions) usersIn(dir string, asleep bool, except ...string) []term.Info {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var users []term.Info
 	for _, in := range s.info {
 		id := in.Name.String()
 		if slices.Contains(except, id) {
 			continue
 		}
 		if cwd := s.cwds[id]; in.Path != "" && folder.Inside(in.Path, dir) || cwd != "" && folder.Inside(cwd, dir) {
-			return id, cmp.Or(in.Title, defaultTitle)
+			users = append(users, in)
 		}
 	}
 	if !asleep {
-		return "", ""
+		return users
 	}
 	for id, e := range s.ended {
 		if !slices.Contains(except, id) && e.info.Hosted && e.info.Path != "" && folder.Inside(e.info.Path, dir) {
-			return id, cmp.Or(e.info.Title, defaultTitle)
+			users = append(users, e.info)
 		}
 	}
-	return "", ""
+	return users
+}
+
+// heirOf is the fork outside family that works in the worktree dir, live or asleep, and has no worktree agentos made
+// for it, so a Delete of family may give it the worktree; "" when there is none. A thread with a worktree of its own
+// never gets a second one, and a thread that is not a fork works on a branch of its own.
+func (s *Sessions) heirOf(key, dir string, family []string) string {
+	for _, in := range s.usersIn(dir, true, family...) {
+		id := in.Name.String()
+		if _, made := s.made.Of(key, id); in.Fork != "" && !made {
+			return id
+		}
+	}
+	return ""
 }
 
 // FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
