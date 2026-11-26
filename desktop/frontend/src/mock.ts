@@ -3,7 +3,7 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -191,6 +191,8 @@ export function createMock(params: URLSearchParams) {
     lineage: params.has('lineage'),
     // childask=question or childask=plan has the child ask that; any other value a tool approval.
     childAsk: params.get('childask'),
+    // limits=unsupported is a Claude Code without get_usage, limits=failed a probe that did not answer.
+    limits: params.get('limits'),
   }
   const handlers = new Map<string, Set<Handler>>()
   // The reader of each open terminal's output, as GET /term/<id> has one.
@@ -1108,6 +1110,22 @@ export function createMock(params: URLSearchParams) {
 
   let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/agentos', dataDirFixed: false, editorApp: 'Visual Studio Code' }
 
+  // limitsNow are the plan limits as the Go side would read them at the time.
+  const limitsNow = (): Limits => {
+    const at = Date.now()
+    const hours = (h: number) => at + h * 3_600_000
+    const weekly = { name: 'seven_day', label: 'Weekly', left: 18, resetsAt: hours(3 * 24 + 4) }
+    if (flags.limits === 'unsupported') return { windows: [weekly], at, unsupported: true, error: '' }
+    if (flags.limits === 'failed') return { windows: [], at: 0, unsupported: false, error: 'the usage probe did not answer: context deadline exceeded' }
+    return {
+      windows: [{ name: 'five_hour', label: 'Session', left: 62, resetsAt: hours(2) + 5 * 60_000 }, weekly, { name: 'model:Fable', label: 'Weekly · Fable', left: 9, resetsAt: hours(3 * 24 + 4) }],
+      at,
+      unsupported: false,
+      error: '',
+    }
+  }
+  let limits = limitsNow()
+
   const issueRefreshes = { count: 0 }
   Object.assign(window, { issueRefreshes })
 
@@ -1605,6 +1623,12 @@ export function createMock(params: URLSearchParams) {
     InstallUpdate: installUpdate,
     PatchNotes: async () => (flags.patchNotes ? PATCH_NOTES : []),
     Changelog: async () => PATCH_NOTES,
+    Limits: async () => limits,
+    RefreshLimits: async () => {
+      limits = await delay(limitsNow(), 900)
+      emit('limits', limits)
+      return limits
+    },
     OpenURL: async (url: string) => {
       window.open(url, '_blank')
     },

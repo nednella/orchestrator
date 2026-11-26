@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -92,6 +92,8 @@ type Backend = {
   InstallUpdate(): Promise<void>
   PatchNotes(): Promise<Release[]>
   Changelog(): Promise<Release[]>
+  Limits(): Promise<Limits>
+  RefreshLimits(): Promise<Limits>
   Awake(): Promise<boolean>
   Settings(): Promise<Settings>
   SetTheme(theme: ThemeSetting): Promise<Settings>
@@ -136,6 +138,7 @@ const namespaces = {
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
   update: ['Update', 'UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
+  limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
   settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'PickDataDir', 'SetDataDir'],
 }
@@ -271,6 +274,9 @@ export const api = {
   installUpdate: () => backend.InstallUpdate(),
   patchNotes: () => backend.PatchNotes(),
   changelog: () => backend.Changelog(),
+  limits: () => backend.Limits(),
+  // Reads the limits now: from a live thread, else by a short probe when the values are over 5 minutes old.
+  refreshLimits: () => backend.RefreshLimits(),
 }
 
 // The Go side used to call an idle wait "finished"; accept both.

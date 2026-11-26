@@ -301,6 +301,25 @@ export type Ledger = {
   work: WorkRow[]
 }
 
+// LimitWindow is one plan limit: name is five_hour, seven_day, model:<name> or spend; left is the percent left, 0 to
+// 100; resetsAt is unix ms, 0 when Claude does not say.
+export type LimitWindow = {
+  name: string
+  label: string
+  left: number
+  resetsAt: number
+}
+
+// Limits are the plan limits as last read (desktop/limits.Limits). at is when a value last came, unix ms, 0 before any;
+// unsupported says that Claude Code does not report its plan usage, so the windows are what its turns told of; error is
+// why the latest read failed, '' when it did not.
+export type Limits = {
+  windows: LimitWindow[]
+  at: number
+  unsupported: boolean
+  error: string
+}
+
 export type Cleanup = {
   at: number
   sessionTitle: string
@@ -490,4 +509,5 @@ export type EventMap = {
     state: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence'
   }
   update: UpdateState
+  limits: Limits
 }
