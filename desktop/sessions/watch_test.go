@@ -397,7 +397,7 @@ func TestReviewOnASettledThreadLeavesTheIssuesLiveThread(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	live, err := h.Sessions().Create("#12 again", "", false, 12, session.Supervised)
+	live, err := h.Sessions().Create(h.Sessions().Current(), "#12 again", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

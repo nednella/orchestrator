@@ -34,7 +34,7 @@ func usageRequests(lines []string) (asks int, user bool) {
 
 func TestRefreshAsksALiveThread(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestRefreshAsksALiveThread(t *testing.T) {
 
 func TestARateLimitInATurnReachesTheLimits(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

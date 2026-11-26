@@ -29,6 +29,10 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("issue needs a number")
 	}
+	proj, ok := c.issues.sessions.ProjectByKey(req.Project)
+	if !ok {
+		return "", fmt.Errorf("no project %q", req.Project)
+	}
 	var started, woken, running, failed []string
 	for _, arg := range req.Args {
 		n, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
@@ -36,7 +40,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, did, err := c.issues.Start(ctx, n, "", req.Opts["prompt"], sessions.StartOptions{Asker: req.Session})
+		s, did, err := c.issues.Start(ctx, proj, n, "", req.Opts["prompt"], sessions.StartOptions{Asker: req.Session})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))
@@ -77,11 +81,16 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 }
 
 // Refresh reads the issues and the pull requests afresh.
-func (c *Commands) Refresh(ctx context.Context, _ ctl.Request) (string, error) {
-	list, err := c.issues.List(ctx, c.issues.sessions.Current(), true)
+func (c *Commands) Refresh(ctx context.Context, req ctl.Request) (string, error) {
+	proj, ok := c.issues.sessions.ProjectByKey(req.Project)
+	if !ok {
+		return "", fmt.Errorf("no project %q", req.Project)
+	}
+	list, err := c.issues.List(ctx, proj, true)
 	if err != nil {
 		return "", err
 	}
+	c.issues.emitFor(proj)
 	c.prs.RefreshPRs()
 	return fmt.Sprintf("refreshed %d issues and the pull requests", len(list)), nil
 }

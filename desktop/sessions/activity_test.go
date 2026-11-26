@@ -9,7 +9,7 @@ import (
 
 func TestActivityIsCounted(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -142,7 +142,7 @@ func TestALiveChangeIsRecordedBeforeClaudeReportsIt(t *testing.T) {
 
 func TestSetAccessToFullRestarts(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 
 func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,9 +26,10 @@ import (
 // Sessions is what the issues need of the session list.
 type Sessions interface {
 	Current() project.Project
+	ProjectByKey(key string) (project.Project, bool)
 	IssueSessions() map[int]string
 	List() []sessions.Session
-	CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error)
+	CreateIssue(proj project.Project, title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error)
 }
 
 // Issue is a GitHub issue placed in a section of the queue.
@@ -272,11 +273,13 @@ func (i *Issues) WithSessions(list []Issue) []Issue {
 	return list
 }
 
-// Emit sends the cached issues of the current project, when there are any, with their current sessions.
-func (i *Issues) Emit() {
-	cur := i.sessions.Current()
-	if list, ok := i.Cached(cur.Dir); ok {
-		i.emit("issues", scoped.Of(cur.Key(), i.WithSessions(list)))
+// Emit sends the cached issues of the current project, when there are any, with their current sessions. emitFor does
+// it for any project; the window drops a list of a project it does not show.
+func (i *Issues) Emit() { i.emitFor(i.sessions.Current()) }
+
+func (i *Issues) emitFor(proj project.Project) {
+	if list, ok := i.Cached(proj.Dir); ok {
+		i.emit("issues", scoped.Of(proj.Key(), i.WithSessions(list)))
 	}
 }
 
@@ -291,9 +294,8 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 // section's default action when action is "". An issue that already has a live session gets that session back
 // instead of a second agent, and one whose thread settled gets it woken, as did says. An issue not in the cached list
 // may be new: the list is read again once. A new thread runs where an issue thread does, in its own worktree.
-func (i *Issues) Start(ctx context.Context, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error) {
+func (i *Issues) Start(ctx context.Context, proj project.Project, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error) {
 	o.Place = ""
-	proj := i.sessions.Current()
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)
 		if err != nil {
@@ -304,7 +306,7 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover string,
 			continue
 		}
 		if refresh {
-			i.Emit()
+			i.emitFor(proj)
 		}
 		is := list[at]
 		_, section := proj.Section(is.Labels)
@@ -312,7 +314,7 @@ func (i *Issues) Start(ctx context.Context, number int, action, handover string,
 		if !ok {
 			return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
-		return i.sessions.CreateIssue(fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
+		return i.sessions.CreateIssue(proj, fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
 	}
 	return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d is not open in this project", number)
 }

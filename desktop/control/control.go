@@ -25,15 +25,14 @@ type Sessions interface {
 // Router sends each command to its handler.
 type Router struct {
 	sessions Sessions
-	switchTo func(name string) error
 	handlers map[string]Handler
 	external map[string]bool
 	server   *ctl.Server
 }
 
-// New routes commands. switchTo makes a project current.
-func New(s Sessions, switchTo func(name string) error) *Router {
-	return &Router{sessions: s, switchTo: switchTo, handlers: map[string]Handler{}, external: map[string]bool{}}
+// New routes commands.
+func New(s Sessions) *Router {
+	return &Router{sessions: s, handlers: map[string]Handler{}, external: map[string]bool{}}
 }
 
 // Handle registers the handler of a command that only a tool call reaches, through Answer. Such a handler trusts the
@@ -120,25 +119,4 @@ func (r *Router) AskerProject(req ctl.Request) string {
 		return name.Project
 	}
 	return r.sessions.Current().Key()
-}
-
-// Enter makes the project the command comes from the current one: the caller's
-// own project, else its session's. The screen follows.
-func (r *Router) Enter(req ctl.Request) {
-	key := req.Project
-	if name, err := session.ParseName(req.Session); key == "" && err == nil {
-		key = name.Project
-	}
-	if key == "" || key == r.sessions.Current().Key() {
-		return
-	}
-	_ = r.switchTo(key) // an unknown project leaves the current one
-}
-
-// Scope wraps a handler so it works in the project the command comes from.
-func (r *Router) Scope(h Handler) Handler {
-	return func(ctx context.Context, req ctl.Request) (string, error) {
-		r.Enter(req)
-		return h(ctx, req)
-	}
 }

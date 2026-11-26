@@ -3,6 +3,7 @@ package sessions_test
 import (
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
@@ -61,31 +62,60 @@ func TestSessionCommands(t *testing.T) {
 
 func TestCommandsWorkInTheCallersProject(t *testing.T) {
 	h := newHarness(t)
-	root := t.TempDir()
-	if _, err := h.AddProjectDir(root); err != nil {
+	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	other := h.Snapshot().Project.Name
+	other := h.Snapshot().Project.Key
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+	here, err := h.NewSession("here", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject(other); err != nil {
+		t.Fatal(err)
+	}
+	there, err := h.NewSession("there", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}
 
+	var wg sync.WaitGroup
+	for _, c := range []struct{ id, title string }{{here.ID, "from here"}, {there.ID, "from there"}} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if resp := h.AskTool(t, ctl.Request{Cmd: "new", Session: c.id, Args: []string{c.title}}); !resp.OK {
+				t.Errorf("new from %s = %+v", c.id, resp)
+			}
+		}()
+	}
+	wg.Wait()
+	projectOf := map[string]string{}
+	for _, s := range h.Sessions().List() {
+		projectOf[s.Title] = s.Project
+	}
+	if projectOf["from here"] != "main" || projectOf["from there"] != other {
+		t.Errorf("project of each new thread = %v, want from here in main and from there in %q", projectOf, other)
+	}
+	if got := h.Snapshot().Project.Key; got != "main" {
+		t.Errorf("the owner's project is now %q, want main", got)
+	}
+}
+
+func TestCommandWithoutAKnownProjectIsRefused(t *testing.T) {
+	h := newHarness(t)
 	caller, err := h.NewSession("caller", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp := h.AskTool(t, ctl.Request{Cmd: "new", Session: caller.ID, Project: other, Args: []string{"elsewhere"}})
-	if !resp.OK || h.Snapshot().Project.Name != other {
-		t.Fatalf("new = %+v, project now %q", resp, h.Snapshot().Project.Name)
+	if resp := h.AskTool(t, ctl.Request{Cmd: "new", Session: caller.ID, Project: "nowhere", Args: []string{"x"}}); resp.OK {
+		t.Errorf("new in an unknown project = %+v", resp)
 	}
-	eventually(t, "the session in the other project", func() bool {
-		for _, s := range h.Sessions().List() {
-			if s.Title == "elsewhere" {
-				return true
-			}
-		}
-		return false
-	})
 }
 
 func TestSessionsOfEveryProjectAreListed(t *testing.T) {
@@ -149,7 +179,7 @@ func twoProjectsEachWithSessionOne(t *testing.T) (h *apptest.Harness, other stri
 
 func TestIssueSessionsAreOfTheCurrentProject(t *testing.T) {
 	h, other := twoProjectsEachWithSessionOne(t)
-	if _, err := h.Sessions().Create("a", "", false, 5, session.Supervised); err != nil {
+	if _, err := h.Sessions().Create(h.Sessions().Current(), "a", "", false, 5, session.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.SwitchProject(other); err != nil {

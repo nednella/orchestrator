@@ -35,7 +35,7 @@ func ended(t *testing.T, h *apptest.Harness, s sessions.Session) sessions.Sessio
 // settled.
 func talkedThenSettled(t *testing.T, h *apptest.Harness) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
 	}{
 		{"read", func(h *apptest.Harness) (sessions.Session, error) { return h.NewThread("ask", "", "", "", "read") }},
 		{"issue task", func(h *apptest.Harness) (sessions.Session, error) {
-			return h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+			return h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 		}},
 		{"renamed task", func(h *apptest.Harness) (sessions.Session, error) {
 			s, err := h.NewSession("work", "")
@@ -358,7 +358,7 @@ func TestWokenThreadIsCleanedUpAgain(t *testing.T) {
 
 func TestWokenThreadKeepsItsCost(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestWakeOfALiveThreadFails(t *testing.T) {
 func TestWokenThreadShowsItsPRAtOnce(t *testing.T) {
 	h := apptest.New(t)
 	repoFixture(t, h)
-	s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestIssueStartReportsACommandTheWokenThreadRefused(t *testing.T) {
 	ended(t, h, s)
 
 	tooLong := strings.Repeat("x", 1<<20) // over what the host reads as one request
-	_, did, err := h.Sessions().CreateIssue("#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{Prompt: tooLong})
+	_, did, err := h.Sessions().CreateIssue(h.Sessions().Current(), "#7 work", "/ship 7", 7, project.Action{Name: "Work"}, nil, "", sessions.StartOptions{Prompt: tooLong})
 	want := "Thread " + s.ID + " woke but did not take the issue's command"
 	if err == nil || err.Error() != want || did != sessions.Woken {
 		t.Errorf("CreateIssue = %v, %v; want %q", did, err, want)

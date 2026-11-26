@@ -30,7 +30,7 @@ var eventually = apptest.Eventually
 func newThread(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +472,7 @@ func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
 	}
 	gitIn(t, h.Dir, "add", "README")
 	gitIn(t, h.Dir, "commit", "-q", "-m", "first")
-	s, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

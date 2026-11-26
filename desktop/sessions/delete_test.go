@@ -48,7 +48,7 @@ func hasState(t *testing.T, h *apptest.Harness, id string) bool {
 // talked is a thread whose chat log has the message hello.
 func talked(t *testing.T, h *apptest.Harness) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create("work", "hello", true, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "hello", true, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func inList(list []sessions.Session, id string) bool {
 
 func TestDeleteRemovesTheThreadAndItsChat(t *testing.T) {
 	h := apptest.New(t)
-	s, _, err := h.Sessions().CreateIssue("#12 work", "hello", 12, project.Action{Name: "Work"}, nil, "what came before", sessions.StartOptions{})
+	s, _, err := h.Sessions().CreateIssue(h.Sessions().Current(), "#12 work", "hello", 12, project.Action{Name: "Work"}, nil, "what came before", sessions.StartOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

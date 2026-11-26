@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"slices"
 	"testing"
 
 	ctl "github.com/nednella/orchestrator/internal/control"
@@ -23,7 +22,7 @@ func TestRouterAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	r := New(fakeSessions{}, nil)
+	r := New(fakeSessions{})
 	r.HandleExternal("echo", func(_ context.Context, req ctl.Request) (string, error) { return "got " + req.Args[0], nil })
 	r.HandleExternal("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
 	r.Handle("inside", func(_ context.Context, req ctl.Request) (string, error) { return "as " + req.Session, nil })
@@ -48,7 +47,7 @@ func TestRouterAnswers(t *testing.T) {
 }
 
 func TestAnswerRunsTheCommandsHandler(t *testing.T) {
-	r := New(fakeSessions{}, nil)
+	r := New(fakeSessions{})
 	r.Handle("echo", func(_ context.Context, req ctl.Request) (string, error) { return req.Session + " " + req.Args[0], nil })
 	r.Handle("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
 	for _, tt := range []struct {
@@ -66,7 +65,7 @@ func TestAnswerRunsTheCommandsHandler(t *testing.T) {
 }
 
 func TestAskers(t *testing.T) {
-	r := New(fakeSessions{running: map[string]bool{"p/1": true}}, nil)
+	r := New(fakeSessions{running: map[string]bool{"p/1": true}})
 	if id, err := r.AskerSession(ctl.Request{Session: "p/1"}); err != nil || id != "p/1" {
 		t.Errorf("AskerSession = %q, %v", id, err)
 	}
@@ -87,45 +86,5 @@ func TestAskers(t *testing.T) {
 		if got := r.AskerProject(tt.req); got != tt.want {
 			t.Errorf("AskerProject(%+v) = %q, want %q", tt.req, got, tt.want)
 		}
-	}
-}
-
-func TestRouterEntersTheAskersProject(t *testing.T) {
-	tests := []struct {
-		name string
-		req  ctl.Request
-		want []string
-	}{
-		{"caller project", ctl.Request{Project: "other", Session: "p/1"}, []string{"other"}},
-		{"session project", ctl.Request{Session: "p/1"}, []string{"p"}},
-		{"current project", ctl.Request{}, nil},
-		{"already there", ctl.Request{Project: "current-one"}, nil},
-		{"not a session", ctl.Request{Session: "nope"}, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var switched []string
-			r := New(fakeSessions{}, func(name string) error {
-				switched = append(switched, name)
-				return errors.New("no such project")
-			})
-			r.Enter(tt.req)
-			if !slices.Equal(switched, tt.want) {
-				t.Errorf("switched to %v, want %v", switched, tt.want)
-			}
-		})
-	}
-}
-
-func TestRouterScopesAHandlerToTheCallersProject(t *testing.T) {
-	var switched []string
-	r := New(fakeSessions{}, func(name string) error { switched = append(switched, name); return nil })
-	ran := false
-	scoped := r.Scope(func(context.Context, ctl.Request) (string, error) { ran = true; return "done", nil })
-	if out, err := scoped(context.Background(), ctl.Request{Project: "third"}); err != nil || out != "done" || !ran {
-		t.Errorf("Scope = %q, %v", out, err)
-	}
-	if !slices.Equal(switched, []string{"third"}) {
-		t.Errorf("switched = %v", switched)
 	}
 }

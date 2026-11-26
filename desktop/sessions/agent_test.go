@@ -140,7 +140,7 @@ func TestOldAgentKeysAreIgnored(t *testing.T) {
 func TestSessionWithClaudeNotOnPathDoesNotStart(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("PATH", apptest.PathWithout("claude"))
-	if _, err := h.Sessions().Create("work", "", false, 0, session.Supervised); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
+	if _, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
 		t.Fatalf("start error = %v", err)
 	}
 	if list := h.Sessions().List(); len(list) != 0 {

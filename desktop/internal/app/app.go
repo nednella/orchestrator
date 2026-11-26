@@ -143,7 +143,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	}
 	proj := projects.NewService(c.Registry, sess, store, iss, runner, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
-	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err })
+	a.router = control.New(sess)
 	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)
 	chats.OnTurnEnd(a.tools.ChildTurnEnded)
 	sess.OnSlept(a.tools.ChildSlept)
@@ -157,13 +157,11 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"note":    notes.NewCommands(store, a.router, sess, h.Emit).Note,
 		"show":    evidence.NewCommands(proofs, a.router, sess, changes).Show,
 		"browser": browser.NewCommands(browsers, a.router, proofs, changes).Browser,
-	})
-	a.handleScoped(map[string]control.Handler{
 		"issue":   ic.Issue,
 		"refresh": ic.Refresh,
 		"new":     sc.New,
 	})
-	// Unscoped: a tool call never moves the screen to another project.
+	// The socket answers this one only, and it takes its caller from the token.
 	a.router.HandleExternal("orchestrate", a.tools.Orchestrate)
 	a.services = []any{
 		proj,
@@ -187,13 +185,6 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 func (a *App) handle(handlers map[string]control.Handler) {
 	for cmd, h := range handlers {
 		a.router.Handle(cmd, h)
-	}
-}
-
-// handleScoped registers commands that work in the project they come from.
-func (a *App) handleScoped(handlers map[string]control.Handler) {
-	for cmd, h := range handlers {
-		a.router.Handle(cmd, a.router.Scope(h))
 	}
 }
 

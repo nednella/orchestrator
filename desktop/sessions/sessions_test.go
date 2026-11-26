@@ -257,7 +257,7 @@ func userLines(t *testing.T, h *apptest.Harness, id string) []string {
 
 func TestClaudeRunsUnderTheHost(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +369,7 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	first.App.Stop()
 	h := first.Restart(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +390,7 @@ func TestEachHostGetsItsOwnToken(t *testing.T) {
 	h := apptest.New(t)
 	tokens := map[string]bool{}
 	for _, title := range []string{"one", "two"} {
-		s, err := h.Sessions().Create(title, "", false, 0, session.Supervised)
+		s, err := h.Sessions().Create(h.Sessions().Current(), title, "", false, 0, session.Supervised)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -457,7 +457,7 @@ func TestAWideSocketFolderIsMadePrivate(t *testing.T) {
 	if err := os.Chmod(folder, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +477,7 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 	if _, err := h.AddProjectDir(dir); err != nil {
 		t.Fatal(err)
 	}
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,7 +490,7 @@ func TestALongProjectKeyStartsItsHost(t *testing.T) {
 
 func TestSentPromptReachesClaudeAsAMessage(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("#7 work", "/work 7; and a ';' at the end;", true, 7, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "/work 7; and a ';' at the end;", true, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +527,7 @@ func TestAppPromptKeepsItsMark(t *testing.T) {
 
 func TestInterruptReachesTheHost(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -557,7 +557,7 @@ func TestAnInterruptedTurnEndsWhenTheHostSaysSo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 			repoFixture(t, h)
-			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+			s, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -604,7 +604,7 @@ func TestOnlyATurnEndWithNoErrorAlertsAReply(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
-			s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+			s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -633,7 +633,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
-			s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+			s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -678,7 +678,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 
 func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,7 +721,7 @@ func TestARestartOverManyTurnsLeavesTheRunningOneAlone(t *testing.T) {
 
 func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -854,7 +854,7 @@ func TestReplyEndingInAQuestionWaits(t *testing.T) {
 func TestTheOwnersSleepAndTheAutomaticSleepAtOnceStopTheThreadOnce(t *testing.T) {
 	h := apptest.New(t)
 	for i := range 12 {
-		s, err := h.Sessions().Create(fmt.Sprintf("race %d", i), "", false, 0, session.Supervised)
+		s, err := h.Sessions().Create(h.Sessions().Current(), fmt.Sprintf("race %d", i), "", false, 0, session.Supervised)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -36,7 +36,11 @@ func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
 	if prompt != "" {
 		prompt = FromApp(prompts.Handover(prompt))
 	}
-	s, err := c.s.Create(strings.Join(req.Args, " "), prompt, c.s.Current().SendsPrompt(), 0, access)
+	proj, ok := c.s.ProjectByKey(req.Project)
+	if !ok {
+		return "", fmt.Errorf("no project %q", req.Project)
+	}
+	s, err := c.s.Create(proj, strings.Join(req.Args, " "), prompt, proj.SendsPrompt(), 0, access)
 	if err != nil {
 		return "", err
 	}

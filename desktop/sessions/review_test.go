@@ -187,7 +187,7 @@ func TestRemovingAProjectWithLiveIssueSessionsIsRefused(t *testing.T) {
 
 func TestRemovingAProjectEndsItsSessions(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestSessionIsKilledWhenItsIssueCannotBeRecorded(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)
 	fake.fail(t, "issue", true)
-	if _, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised); err == nil {
+	if _, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "", false, 7, session.Supervised); err == nil {
 		t.Fatal("Create succeeded although the issue could not be recorded")
 	}
 	if got := h.Sessions().List(); len(got) != 0 {

@@ -23,7 +23,7 @@ const refused = "This thread token is not valid: the thread settled or was woken
 // newThread starts a Supervised thread with no prompt.
 func newThread(t *testing.T, h *apptest.Harness, title string) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create(title, "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), title, "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func tokenOf(t *testing.T, h *apptest.Harness, id string) string {
 
 // callerOf is the thread a call with that token and that session field acts as, or why there is none.
 func callerOf(h *apptest.Harness, token, sessionField string) (string, error) {
-	return control.New(h.Sessions(), nil).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Session: sessionField})
+	return control.New(h.Sessions()).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Session: sessionField})
 }
 
 func wantCaller(t *testing.T, h *apptest.Harness, token, want string) {

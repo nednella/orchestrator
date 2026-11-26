@@ -1828,10 +1828,21 @@ func (s *Sessions) IssueSessions() map[int]string {
 	return out
 }
 
-// Create starts the agent in the current project with the access given. A non-empty text is given to the agent through
-// its host: sent when send is set, else left as a draft in its chat.
-func (s *Sessions) Create(title, text string, send bool, issue int, access session.Access) (Session, error) {
-	return s.createIn(s.Current(), title, text, send, issue, "", "", "", forkStart{}, StartOptions{Access: access, Place: placeFor(s.placeSetting(), issue, "")})
+// ProjectByKey is the project with that key among the known ones: the configured, the current and those with live threads.
+func (s *Sessions) ProjectByKey(key string) (project.Project, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.projects(), func(p project.Project) bool { return p.Key() == key })
+	if i < 0 {
+		return project.Project{}, false
+	}
+	return s.projects()[i], true
+}
+
+// Create starts the agent in proj with the access given. A non-empty text is given to the agent through its host: sent
+// when send is set, else left as a draft in its chat.
+func (s *Sessions) Create(proj project.Project, title, text string, send bool, issue int, access session.Access) (Session, error) {
+	return s.createIn(proj, title, text, send, issue, "", "", "", forkStart{}, StartOptions{Access: access, Place: placeFor(s.placeSetting(), issue, "")})
 }
 
 // placeSetting is the config's new_thread_place, "" when it is unset.
@@ -1913,8 +1924,7 @@ const (
 // had when one is given, and given text. The owner's prompt follows the action's command in the same first message,
 // and the owner's model and effort win over the labels' and the action's; a thread that is live or woken keeps its
 // own, and its access.
-func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o StartOptions) (view Session, did IssueStart, err error) {
-	proj := s.Current()
+func (s *Sessions) CreateIssue(proj project.Project, title, text string, issue int, action project.Action, labels []string, handover string, o StartOptions) (view Session, did IssueStart, err error) {
 	p := s.Provider()
 	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
 		return Session{}, Kept, err

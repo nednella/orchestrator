@@ -1531,9 +1531,16 @@ func (h *Harness) Ask(t *testing.T, req ctl.Request) ctl.Response {
 }
 
 // AskTool runs a command as a tool call does: the router's handler, with the session and project the request names. A
-// tool call sets both from the thread's token, and the control socket never answers such a command.
+// tool call sets both from the thread's token, and the control socket never answers such a command. A request with no
+// project gets the asking thread's, else the current one, as a tool call from a thread of that project would.
 func (h *Harness) AskTool(t *testing.T, req ctl.Request) ctl.Response {
 	t.Helper()
+	if req.Project == "" {
+		req.Project = h.Sessions().Current().Key()
+		if name, err := session.ParseName(req.Session); err == nil {
+			req.Project = name.Project
+		}
+	}
 	return h.App.Answer(context.Background(), req)
 }
 

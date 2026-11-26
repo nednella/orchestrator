@@ -29,7 +29,7 @@ func (s *Service) Issues(refresh bool) ([]Issue, error) {
 // default for "", followed by the prompt. A model or effort that is not empty wins over the action's and the labels'.
 // An issue that has a live session gets it back, and neither the prompt nor the model reaches it.
 func (s *Service) StartIssue(number int, action, prompt, model, effort string) (sessions.Session, error) {
-	v, _, err := s.issues.Start(s.ctx(), number, action, "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
+	v, _, err := s.issues.Start(s.ctx(), s.issues.sessions.Current(), number, action, "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
 	return v, err
 }
 

@@ -345,7 +345,7 @@ func TestDeleteTakesAChildWorktreeOnItsParentsUnpushedWork(t *testing.T) {
 	if _, err := h.SetThreadPlace("project"); err != nil {
 		t.Fatal(err)
 	}
-	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	parent, err := h.Sessions().Create(h.Sessions().Current(), "Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1031,7 +1031,7 @@ func TestDeleteWithoutTheWorktreesKeepsEveryFolderOfTheFamily(t *testing.T) {
 	if _, err := h.SetThreadPlace("project"); err != nil {
 		t.Fatal(err)
 	}
-	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	parent, err := h.Sessions().Create(h.Sessions().Current(), "Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)
 	}

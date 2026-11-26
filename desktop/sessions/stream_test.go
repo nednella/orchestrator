@@ -66,7 +66,7 @@ func TestPRIsLookedUpWhenATurnEnds(t *testing.T) {
 
 func TestPromptIsRecordedInTheActivity(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("#4 work", "", false, 4, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "#4 work", "", false, 4, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestPromptIsRecordedInTheActivity(t *testing.T) {
 
 func TestRestartObservesNoEventTwice(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func observe(h *apptest.Harness, id string, evs ...session.Event) { h.Sessions()
 
 func TestAnEventOlderThanTheRecordChangesNothing(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestAnEventOlderThanTheRecordChangesNothing(t *testing.T) {
 
 func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
 
 func TestABatchOfEventsReadsUsageOnce(t *testing.T) {
 	h := newHarness(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

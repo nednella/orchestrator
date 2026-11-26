@@ -72,7 +72,7 @@ func kindsAndTexts(events []chat.Event) []string {
 
 func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 			t.Errorf("fork at %q: %v", at, err)
 		}
 	}
-	fresh, err := h.Sessions().Create("fresh", "", false, 0, session.Supervised)
+	fresh, err := h.Sessions().Create(h.Sessions().Current(), "fresh", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestForkCopiesTheChatUpToTheMessage(t *testing.T) {
 
 func TestForkStartsOnlyAfterTheLastCompaction(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 func TestForkDoesNotTakeOverThePR(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n"})
 	repoFixture(t, h)
-	src, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestForkDoesNotTakeOverThePR(t *testing.T) {
 
 func TestForkOfAnEndedThread(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestForkOfAnEndedThread(t *testing.T) {
 
 func TestForkStaysAFork(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestForkStaysAFork(t *testing.T) {
 
 func TestForkRemembersWhereItForked(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func forkHarness(t *testing.T) (h *apptest.Harness, wt, ran string, src, fork se
 	ran = filepath.Join(t.TempDir(), "cleanups")
 	h = apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf("echo {branch} >> %q && ", ran) + project.DefaultCleanupCommand})
 	repoFixture(t, h)
-	src, err := h.Sessions().Create("#7 work", "", false, 7, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "", false, 7, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestEndedForkInTheWorktreeDoesNotBlock(t *testing.T) {
 
 func TestForkIsToldNotToTrack(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("Source work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "Source work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

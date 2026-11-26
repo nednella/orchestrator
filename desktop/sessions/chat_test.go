@@ -279,7 +279,7 @@ func chatLogHas(h *apptest.Harness, id, kind, text string) bool {
 
 func TestUnsentPromptIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "write the queue", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "write the queue", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestManualPromptIsADraftOnAHostedSession(t *testing.T) {
 
 func TestTypeIntoIsADraft(t *testing.T) {
 	h := apptest.New(t)
-	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestWakeOfAnEndedHostedSession(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
 			repoFixture(t, h)
-			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+			s, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -374,7 +374,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
 			repoFixture(t, h)
-			s, err := h.Sessions().Create("#12 work", "", false, 12, session.Supervised)
+			s, err := h.Sessions().Create(h.Sessions().Current(), "#12 work", "", false, 12, session.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -430,7 +430,7 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 func TestEveryStartKeepsFileCheckpoints(t *testing.T) {
 	h := apptest.New(t)
 	const setting = "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

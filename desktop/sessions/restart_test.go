@@ -36,7 +36,7 @@ func TestUntaggedTmuxSessionIsIgnored(t *testing.T) {
 
 func TestRestartKeepsAThreadOfThisBuild(t *testing.T) {
 	h := apptest.New(t)
-	src, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	src, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}

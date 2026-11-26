@@ -54,7 +54,7 @@ func mustDelegate(t *testing.T, h *apptest.Harness, caller, input string) child 
 // threadWith starts a thread with the access given and no prompt.
 func threadWith(t *testing.T, h *apptest.Harness, title string, access session.Access) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create(title, "", false, 0, access)
+	s, err := h.Sessions().Create(h.Sessions().Current(), title, "", false, 0, access)
 	if err != nil {
 		t.Fatal(err)
 	}

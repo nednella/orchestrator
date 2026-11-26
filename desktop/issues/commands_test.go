@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
@@ -254,5 +255,59 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 	}
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: owner.ID, Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
 		t.Errorf("issue 7 from a Full thread on the settled Full thread = %+v", resp)
+	}
+}
+
+func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
+	h := newHarness(t)
+	if _, err := h.AddProjectDir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	other := h.Snapshot().Project.Key
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+	here, err := h.NewSession("here", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject(other); err != nil {
+		t.Fatal(err)
+	}
+	there, err := h.NewSession("there", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SwitchProject("main"); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	for _, c := range []struct {
+		id, issue string
+	}{{here.ID, "7"}, {there.ID, "8"}} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: c.id, Args: []string{c.issue}}); !resp.OK {
+				t.Errorf("issue %s from %s = %+v", c.issue, c.id, resp)
+			}
+			if resp := h.AskTool(t, ctl.Request{Cmd: "refresh", Session: c.id}); !resp.OK {
+				t.Errorf("refresh from %s = %+v", c.id, resp)
+			}
+		}()
+	}
+	wg.Wait()
+	projectOf := map[int]string{}
+	for _, s := range h.Sessions().List() {
+		if s.Issue > 0 {
+			projectOf[s.Issue] = s.Project
+		}
+	}
+	if projectOf[7] != "main" || projectOf[8] != other {
+		t.Errorf("project of each issue thread = %v, want #7 in main and #8 in %q", projectOf, other)
+	}
+	if got := h.Snapshot().Project.Key; got != "main" {
+		t.Errorf("the owner's project is now %q, want main", got)
 	}
 }

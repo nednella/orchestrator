@@ -23,7 +23,7 @@ import (
 
 func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session {
 	t.Helper()
-	s, err := h.Sessions().Create(fmt.Sprintf("#%d work", issue), "", false, issue, session.Supervised)
+	s, err := h.Sessions().Create(h.Sessions().Current(), fmt.Sprintf("#%d work", issue), "", false, issue, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1583,7 +1583,7 @@ func TestThreadWhoseLastHookIsInTheWorktreeKeepsIt(t *testing.T) {
 	if _, err := h.SetThreadPlace("project"); err != nil {
 		t.Fatal(err)
 	}
-	other, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	other, err := h.Sessions().Create(h.Sessions().Current(), "Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)
 	}
