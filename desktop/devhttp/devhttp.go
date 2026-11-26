@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/nednella/agentos/desktop/internal/media"
+	"github.com/nednella/agentos/desktop/terminal"
 	"io"
 	"io/fs"
 	"net/http"
@@ -144,7 +145,7 @@ type Options struct {
 	Stop     func()
 	Hub      *Hub
 	Assets   fs.FS
-	Media    http.Handler // serves /media/
+	Handler  http.Handler // serves /media/ and /term/
 	Addr     string
 }
 
@@ -168,12 +169,9 @@ func Serve(o Options) error {
 		io.WriteString(w, devShim)
 	})
 	mux.HandleFunc("/__events", o.Hub.serve)
-	mux.Handle(media.Prefix, o.Media)
-	mux.HandleFunc("/__call/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(callHeader) != "1" {
-			http.Error(w, "missing "+callHeader+" header", http.StatusForbidden)
-			return
-		}
+	mux.Handle(media.Prefix, o.Handler)
+	mux.Handle(terminal.Prefix, fromShim(o.Handler))
+	mux.Handle("/__call/", fromShim(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -188,7 +186,7 @@ func Serve(o Options) error {
 		if result != nil {
 			json.NewEncoder(w).Encode(result)
 		}
-	})
+	})))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
 			w.Header().Set("Content-Type", "text/html")
@@ -201,8 +199,19 @@ func Serve(o Options) error {
 	return http.ListenAndServe(o.Addr, sameOrigin(o.Addr, mux))
 }
 
-// callHeader marks a /__call/ request as sent by the shim: a page on another site cannot add it without a preflight this server refuses.
+// callHeader marks a /__call/ or /term/ request as sent by the shim: a page on another site cannot add it without a preflight this server refuses.
 const callHeader = "X-Agentos"
+
+// fromShim refuses a request without callHeader.
+func fromShim(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(callHeader) != "1" {
+			http.Error(w, "missing "+callHeader+" header", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // sameOrigin refuses requests meant for another host name (DNS rebinding) and requests from a page on another origin.
 func sameOrigin(addr string, next http.Handler) http.Handler {

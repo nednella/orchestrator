@@ -5,7 +5,7 @@ type Service struct{ terms *Terms }
 
 func NewService(t *Terms) *Service { return &Service{terms: t} }
 
-// TermOpen attaches a terminal stream to the shell; opening an open one redraws everything.
+// TermOpen attaches a terminal to the shell, whose output GET /term/<id> then reads; opening an open one resizes it.
 func (s *Service) TermOpen(id string, cols, rows int) error { return s.terms.Open(id, cols, rows) }
 
 // TermWrite sends raw input bytes (xterm.js onData) to the shell.

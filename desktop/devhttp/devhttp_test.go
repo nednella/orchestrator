@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -109,7 +111,9 @@ func TestEventHubReachesEveryTab(t *testing.T) {
 	}
 }
 
-func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
+// serve runs a new app in browser mode and returns the harness and the address it serves on.
+func serve(t *testing.T) (*apptest.Harness, string) {
+	t.Helper()
 	h := apptest.New(t)
 	hub := NewHub()
 	cfg, err := app.Load()
@@ -120,7 +124,7 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 	assets := fstest.MapFS{"index.html": {Data: []byte("<!doctype html><html><head></head><body>stub</body></html>")}}
 	addr := "127.0.0.1:" + freePort(t)
 	go func() {
-		_ = Serve(Options{Services: a.Services(), Start: a.Start, Stop: a.Stop, Hub: hub, Assets: assets, Media: a.Media(), Addr: addr})
+		_ = Serve(Options{Services: a.Services(), Start: a.Start, Stop: a.Stop, Hub: hub, Assets: assets, Handler: a.Assets(), Addr: addr})
 	}()
 	base := "http://" + addr
 	eventually(t, "the server", func() bool {
@@ -131,7 +135,11 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode == 200
 	})
+	return h, base
+}
 
+func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
+	h, base := serve(t)
 	resp, err := http.Get(base + "/")
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +204,83 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 	}
 }
 
+func TestTermStreamNeedsTheAppHeader(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	t.Setenv("HOME", t.TempDir())
+	_, base := serve(t)
+	var shell sessions.ShellInfo
+	callJSON(t, base, "sessions.Service/ShellNew", `[""]`, &shell)
+	callJSON(t, base, "terminal.Service/TermOpen", `["`+shell.ID+`",80,24]`, nil)
+
+	for _, tt := range []struct {
+		name    string
+		headers map[string]string
+		want    int
+	}{
+		{"no marker header", map[string]string{callHeader: ""}, http.StatusForbidden},
+		{"another origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"the shim's read", map[string]string{"Origin": base}, http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, "GET", base+"/term/"+url.PathEscape(shell.ID), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set(callHeader, "1")
+			for k, v := range tt.headers {
+				if v == "" {
+					req.Header.Del(k)
+				} else {
+					req.Header.Set(k, v)
+				}
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status %d, want %d", resp.StatusCode, tt.want)
+			}
+			if tt.want != http.StatusOK {
+				return
+			}
+			if got := resp.Header.Get("Content-Type"); got != "application/octet-stream" {
+				t.Errorf("Content-Type = %q", got)
+			}
+			if _, err := io.ReadFull(resp.Body, make([]byte, 1)); err != nil {
+				t.Errorf("no output from the shell: %v", err)
+			}
+		})
+	}
+}
+
+// callJSON makes a call as the shim does and decodes its result into out.
+func callJSON(t *testing.T, base, method, args string, out any) {
+	t.Helper()
+	req, err := http.NewRequest("POST", base+"/__call/"+method, strings.NewReader(args))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(callHeader, "1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("%s: %d %s", method, resp.StatusCode, body)
+	}
+	if out != nil {
+		if err := json.Unmarshal(body, out); err != nil {
+			t.Fatalf("%s: %v in %s", method, err, body)
+		}
+	}
+}
+
 func withHost(host string) func(*http.Request) {
 	return func(r *http.Request) {
 		if host != "" {
@@ -224,15 +309,19 @@ func post(url string, headers map[string]string, edits ...func(*http.Request)) (
 	return http.DefaultClient.Do(req)
 }
 
+// freePort is a free port among 18000–18999, the ports tests may listen on.
 func freePort(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	start := os.Getpid() % 1000
+	for i := range 1000 {
+		port := strconv.Itoa(18000 + (start+i)%1000)
+		if ln, err := net.Listen("tcp", "127.0.0.1:"+port); err == nil {
+			ln.Close()
+			return port
+		}
 	}
-	defer ln.Close()
-	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	return port
+	t.Fatal("no free port among 18000–18999")
+	return ""
 }
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }

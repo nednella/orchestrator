@@ -10,15 +10,13 @@ import (
 
 func TestTerminalStream(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 100, 30); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "shell output", func() bool { return len(h.Rec.Output(id)) > 0 })
+	out := openRead(t, h, id, 100, 30)
+	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
 
 	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "echo result", func() bool { return strings.Contains(h.Rec.Output(id), "\r\n42\r\n") })
+	eventually(t, "echo result", func() bool { return strings.Contains(out.String(), "\r\n42\r\n") })
 
 	if err := h.TermResize(id, 77, 20); err != nil {
 		t.Fatal(err)
@@ -27,7 +25,7 @@ func TestTerminalStream(t *testing.T) {
 	if err := h.TermWrite(id, "stty size\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "resized pty", func() bool { return strings.Contains(h.Rec.Output(id), "\r\n20 77\r\n") })
+	eventually(t, "resized pty", func() bool { return strings.Contains(out.String(), "\r\n20 77\r\n") })
 
 	h.TermClose(id)
 	if err := h.TermWrite(id, "x"); err == nil {
@@ -80,71 +78,61 @@ func TestTerminalReportsAShellThatEnds(t *testing.T) {
 
 func TestReopeningRedrawsTheScreen(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the first draw", func() bool { return len(h.Rec.Output(id)) > 0 })
+	first := openRead(t, h, id, 80, 24)
+	eventually(t, "the first draw", func() bool { return len(first.String()) > 0 })
 	if err := h.TermWrite(id, "echo before-reopen\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the command and its output", func() bool { return strings.Count(h.Rec.Output(id), "before-reopen") == 2 })
+	eventually(t, "the command and its output", func() bool { return strings.Count(first.String(), "before-reopen") == 2 })
 	time.Sleep(300 * time.Millisecond)
-	n := len(h.Rec.Output(id))
-	if err := h.TermOpen(id, 80, 24); err != nil {
-		t.Fatal(err)
-	}
+	second := openRead(t, h, id, 80, 24)
 	// Soon, so a later redraw for some other reason does not pass for this one.
 	deadline := time.Now().Add(time.Second)
-	for strings.Count(h.Rec.Output(id)[n:], "before-reopen") < 2 {
+	for strings.Count(second.String(), "before-reopen") < 2 {
 		if time.Now().After(deadline) {
-			t.Fatalf("no full redraw that still shows the screen; got %q", h.Rec.Output(id)[n:])
+			t.Fatalf("the reopened stream got no full redraw that still shows the screen; got %q", second.String())
 		}
 		time.Sleep(25 * time.Millisecond)
+	}
+	if n := strings.Count(first.String(), "before-reopen"); n != 2 {
+		t.Errorf("the replaced reader saw before-reopen %d times, want the 2 from before the reopen", n)
 	}
 }
 
 func TestReopeningBeforeTheFirstDrawWorks(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.TermOpen(id, 80, 24); err != nil {
-		t.Errorf("a reopen before tmux drew failed: %v", err)
-	}
-	eventually(t, "the first draw", func() bool { return len(h.Rec.Output(id)) > 0 })
+	openRead(t, h, id, 80, 24)
+	out := openRead(t, h, id, 80, 24)
+	eventually(t, "the first draw", func() bool { return len(out.String()) > 0 })
 }
 
 func TestHeavyOutputIsMerged(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 120, 30); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the prompt", func() bool { return len(h.Rec.Output(id)) > 0 })
-	before := h.Rec.Count("term:data")
+	out := openRead(t, h, id, 120, 30)
+	eventually(t, "the prompt", func() bool { return len(out.String()) > 0 })
+	before := out.Writes()
 	if err := h.TermWrite(id, "seq 1 30000; echo done-seq\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the end of the output", func() bool { return strings.Contains(h.Rec.Output(id), "done-seq") })
-	events := h.Rec.Count("term:data") - before
-	if bytes := len(h.Rec.Output(id)); events > bytes/200 {
-		t.Errorf("%d events for %d bytes: output is not merged", events, bytes)
+	eventually(t, "the end of the output", func() bool { return strings.Contains(out.String(), "done-seq") })
+	writes := out.Writes() - before
+	if bytes := len(out.String()); writes > bytes/200 {
+		t.Errorf("%d writes for %d bytes: output is not merged", writes, bytes)
 	}
 }
 
 func TestClipboardFromTheAgent(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 100, 30); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "shell output", func() bool { return len(h.Rec.Output(id)) > 0 })
+	out := openRead(t, h, id, 100, 30)
+	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
 	cmd := `printf '\033]52;c;%s\a' $(printf copied-text | base64)` + "\n"
 	if err := h.TermWrite(id, cmd); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the clipboard", func() bool { return h.Rec.HasClip("copied-text") })
-	// The clipboard copy runs synchronously off each PTY read; the matching term:data event
-	// waits for the output flush timer, so it can still be pending once HasClip turns true.
-	eventually(t, "the OSC 52 bytes forwarded in the output", func() bool { return strings.Contains(h.Rec.Output(id), "\x1b]52;") })
+	// The clipboard copy runs synchronously off each PTY read; the output waits for the flush
+	// timer, so it can still be pending once HasClip turns true.
+	eventually(t, "the OSC 52 bytes forwarded in the output", func() bool { return strings.Contains(out.String(), "\x1b]52;") })
 }
 
 func TestTerminalAttachesToTheShell(t *testing.T) {
@@ -155,10 +143,8 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.TermOpen(shell.ID, 100, 30); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "shell output", func() bool { return len(h.Rec.Output(shell.ID)) > 0 })
+	out := openRead(t, h, shell.ID, 100, 30)
+	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
 	if err := h.TermWrite(shell.ID, "echo \"$AGENTOS_PROJECT|${AGENTOS_SESSION-unset}|${AGENTOS_SOCKET:+set}|$(pwd -P)\"\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -167,17 +153,15 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the shell's environment", func() bool {
-		return strings.Contains(h.Rec.Output(shell.ID), "\r\nmain|unset|set|"+want+"\r\n")
+		return strings.Contains(out.String(), "\r\nmain|unset|set|"+want+"\r\n")
 	})
 	h.TermClose(shell.ID)
 }
 
 func TestOpeningAnOpenTerminalKeepsItsStream(t *testing.T) {
 	h, id := newShell(t)
-	if err := h.TermOpen(id, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "the first draw", func() bool { return len(h.Rec.Output(id)) > 0 })
+	out := openRead(t, h, id, 80, 24)
+	eventually(t, "the first draw", func() bool { return len(out.String()) > 0 })
 	clients := func() string {
 		out, err := exec.Command("tmux", "-L", h.Socket, "list-clients", "-F", "#{client_pid} #{client_width}x#{client_height}").Output()
 		if err != nil {
@@ -201,5 +185,5 @@ func TestOpeningAnOpenTerminalKeepsItsStream(t *testing.T) {
 	if err := h.TermWrite(id, "echo still-here\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the stream to carry on", func() bool { return strings.Contains(h.Rec.Output(id), "still-here") })
+	eventually(t, "the stream to carry on", func() bool { return strings.Contains(out.String(), "still-here") })
 }

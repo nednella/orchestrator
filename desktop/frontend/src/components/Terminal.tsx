@@ -4,8 +4,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal as Xterm } from '@xterm/xterm'
 import { useEffect, useRef } from 'react'
 import { useAgentos } from '../AgentosContext'
-import { api, on } from '../api'
-import { decodeBase64 } from '../base64'
+import { api } from '../api'
 import { useLayout } from '../LayoutContext'
 import { terminalFontFrom, terminalThemeFrom } from '../terminalTheme'
 
@@ -43,6 +42,7 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
   const sent = useRef({ cols: 0, rows: 0 })
   const settle = useRef(0)
   const renderer = useRef({ attach() {}, detach() {} })
+  const startStream = useRef(() => {})
 
   // A terminal mounted hidden has no size, so the core opens it at the first fit while visible.
   // The grid refits on every size change; the core hears only when the cell count moves, and only
@@ -65,7 +65,8 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
     }
     opened.current = true
     sent.current = { cols, rows }
-    void api.termOpen(id, cols, rows)
+    const start = startStream.current
+    void api.termOpen(id, cols, rows).then(start)
   }
 
   useEffect(() => {
@@ -175,12 +176,12 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
     })
     term.onBinary((data) => void api.termWrite(id, data))
 
-    const offData = on('term:data', (payload) => {
-      if (payload.id === id) term.write(decodeBase64(payload.data))
-    })
-    const offExit = on('term:exit', (payload) => {
-      if (payload.id === id) term.write('\r\n\x1b[2m[session ended]\x1b[0m\r\n')
-    })
+    let stopStream = () => {}
+    let disposed = false
+    startStream.current = () => {
+      if (disposed) return
+      stopStream = api.termStream(id, (bytes) => term.write(bytes), () => term.write('\r\n\x1b[2m[session ended]\x1b[0m\r\n'))
+    }
 
     xterm.current = term
     fit.current = fitAddon
@@ -192,8 +193,8 @@ export function Terminal({ id, active, kind = 'session', onLeave }: TerminalProp
       observer.disconnect()
       window.clearTimeout(settle.current)
       hostEl.removeEventListener('wheel', wheel, { capture: true })
-      offData()
-      offExit()
+      disposed = true
+      stopStream()
       if (opened.current) {
         // Deferred a tick: an immediate remount of this id bumps the generation and keeps the session open.
         setTimeout(() => {

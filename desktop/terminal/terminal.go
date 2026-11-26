@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -22,6 +23,7 @@ import (
 const (
 	flushEvery = 16 * time.Millisecond
 	flushSize  = 32 << 10
+	maxQueued  = 8 << 20 // the most output kept for a terminal no one reads; past it tmux paints the screen again instead
 	oscLimit   = 1 << 20 // the most base64 text of one OSC 52 sequence that reaches the clipboard
 	tmuxWait   = 5 * time.Second
 )
@@ -31,7 +33,7 @@ var (
 	errNotShell  = errors.New("Only a shell has a terminal")
 )
 
-// Terms streams shells to the front end, one PTY per opened shell.
+// Terms streams shells to the front end, one PTY per opened shell, read over Handler.
 type Terms struct {
 	tmux *term.Tmux
 	emit func(event string, payload any)
@@ -41,13 +43,13 @@ type Terms struct {
 	streams map[string]*stream
 }
 
-// New streams the shells of tmux; emit sends the output and clip gets what a shell copies.
+// New streams the shells of tmux; emit tells of a shell that exits and clip gets what a shell copies.
 func New(tmux *term.Tmux, emit func(string, any), clip func(string)) *Terms {
 	return &Terms{tmux: tmux, emit: emit, clip: clip, streams: map[string]*stream{}}
 }
 
 // Open attaches a PTY of the given size to the shell. Opening an open shell keeps its
-// stream, at the new size, and makes tmux redraw the whole screen.
+// stream, at the new size; the next reader gets the whole screen painted again.
 func (t *Terms) Open(id string, cols, rows int) error {
 	name, err := session.ParseName(id)
 	if err != nil || !name.IsShell() {
@@ -56,7 +58,10 @@ func (t *Terms) Open(id string, cols, rows int) error {
 	t.mu.Lock()
 	if st := t.streams[id]; st != nil {
 		t.mu.Unlock()
-		return t.redraw(st, cols, rows)
+		if err := st.resize(cols, rows); err != nil {
+			return fmt.Errorf("resizing %s: %w", id, err)
+		}
+		return nil
 	}
 	argv := t.tmux.AttachArgv(name)
 	cmd := exec.Command(argv[0], argv[1:]...)
@@ -68,7 +73,7 @@ func (t *Terms) Open(id string, cols, rows int) error {
 		return fmt.Errorf("attaching to %s: %w", id, err)
 	}
 	// StartWithSize gives the attach its tty as stdin, and tmux names the client by that tty.
-	st := &stream{id: id, client: cmd.Stdin.(*os.File).Name(), pty: f, cmd: cmd, emit: t.emit, clip: t.clip}
+	st := &stream{id: id, client: cmd.Stdin.(*os.File).Name(), pty: f, cmd: cmd, clip: t.clip, ended: make(chan struct{})}
 	t.streams[id] = st
 	t.mu.Unlock()
 	go func() {
@@ -85,20 +90,13 @@ func (t *Terms) Open(id string, cols, rows int) error {
 	return nil
 }
 
-// redraw makes tmux paint the whole screen again, at the size asked for, for a front end that mounted the stream anew.
-func (t *Terms) redraw(st *stream, cols, rows int) error {
-	if err := st.resize(cols, rows); err != nil {
-		return fmt.Errorf("resizing %s: %w", st.id, err)
-	}
-	if !st.hasDrawn() {
-		return nil // tmux may not know the client yet, and its first draw is the whole screen
-	}
+// repaint makes tmux paint the whole screen again, for a reader that missed output.
+func (t *Terms) repaint(st *stream) {
 	ctx, cancel := context.WithTimeout(context.Background(), tmuxWait)
 	defer cancel()
 	if err := t.tmux.Redraw(ctx, st.client); err != nil {
-		return fmt.Errorf("redrawing %s: %w", st.id, err)
+		log.Printf("agentos: redrawing %s: %v", st.id, err)
 	}
-	return nil
 }
 
 func (t *Terms) get(id string) *stream {
@@ -155,17 +153,27 @@ type stream struct {
 	client string // the tty tmux names the attach client by
 	pty    *os.File
 	cmd    *exec.Cmd
-	emit   func(string, any)
 	clip   func(string)
+	ended  chan struct{} // closed once the attach client's last output is flushed
 
 	ptyMu   sync.Mutex // the pty is resized and closed one at a time: Setsize reads the file's descriptor
 	mu      sync.Mutex
 	pending []byte
 	timer   *time.Timer
 	flushed time.Time // when output last went out
+	queue   []byte    // output flushed and not yet taken by a reader
+	lost    bool      // the queue went over maxQueued and was dropped
+	reader  *reader
+	read    bool // a reader has attached before, so a new one needs the whole screen
 	done    bool
 	drawn   bool   // tmux has sent output, so it knows the client
 	osc     []byte // the unfinished tail of an OSC 52 sequence
+}
+
+// reader is the one request that takes a stream's output.
+type reader struct {
+	wake chan struct{} // output is queued
+	gone chan struct{} // a newer reader took its place
 }
 
 func (s *stream) resize(cols, rows int) error {
@@ -186,10 +194,46 @@ func (s *stream) closed() bool {
 	return s.done
 }
 
-func (s *stream) hasDrawn() bool {
+// attach makes a new reader the stream's only one, and says whether it needs tmux to paint the whole screen: it
+// comes after another reader, or after output was dropped. A reader that does throws away the queue, which the
+// paint replaces. tmux may not know the client before its first draw, and that draw is the whole screen.
+func (s *stream) attach() (*reader, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.drawn
+	if s.reader != nil {
+		close(s.reader.gone)
+	}
+	r := &reader{wake: make(chan struct{}, 1), gone: make(chan struct{})}
+	s.reader = r
+	repaint := s.drawn && (s.read || s.lost)
+	s.read = true
+	if repaint {
+		s.queue, s.lost = nil, false
+	}
+	if len(s.queue) > 0 {
+		r.wake <- struct{}{}
+	}
+	return r, repaint
+}
+
+func (s *stream) detach(r *reader) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reader == r {
+		s.reader = nil
+	}
+}
+
+// take hands r the queued output, and says whether output was dropped since r last took any.
+func (s *stream) take(r *reader) (out []byte, lost bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reader != r {
+		return nil, false
+	}
+	out, s.queue = s.queue, nil
+	lost, s.lost = s.lost, false
+	return out, lost
 }
 
 func (s *stream) close() {
@@ -206,6 +250,7 @@ func (s *stream) pump() {
 		s.mu.Lock()
 		s.flush()
 		s.mu.Unlock()
+		close(s.ended)
 		s.closePTY()
 		_ = s.cmd.Wait()
 	}()
@@ -250,9 +295,18 @@ func (s *stream) flush() {
 		s.pending = s.pending[:0]
 		return
 	}
-	s.emit("term:data", map[string]string{"id": s.id, "data": base64.StdEncoding.EncodeToString(s.pending)})
+	if len(s.queue)+len(s.pending) > maxQueued {
+		s.queue, s.lost = nil, true
+	}
+	s.queue = append(s.queue, s.pending...)
 	s.pending = s.pending[:0]
 	s.flushed = time.Now()
+	if s.reader != nil {
+		select {
+		case s.reader.wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // flushNow says whether pending output goes out at once: the first after a pause, so an echo waits for nothing, or a

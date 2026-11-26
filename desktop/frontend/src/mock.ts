@@ -129,15 +129,6 @@ const accessOfMode: Record<string, Access> = { plan: 'read', default: 'supervise
 
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)]
 
-function toBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-  }
-  return btoa(binary)
-}
-
 const PATCH_NOTES: Release[] = [
   {
     version: '0.14.0',
@@ -202,6 +193,8 @@ export function createMock(params: URLSearchParams) {
     childAsk: params.get('childask'),
   }
   const handlers = new Map<string, Set<Handler>>()
+  // The reader of each open terminal's output, as GET /term/<id> has one.
+  const termReaders = new Map<string, { onData: (bytes: Uint8Array) => void; onEnd: () => void }>()
   const sessions: Session[] = []
   const data: ProjectData[] = [
     { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), waits: seedWaits([['#454 product page split', 454], ['#444 checkout route', 444], ['#326 cart rounding', 326], ['#389 webhook retries', 389], ['checkout tests scratch', 0]]), cleanups: [{ at: Date.now() - 2 * 3_600_000, sessionTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
@@ -317,7 +310,7 @@ export function createMock(params: URLSearchParams) {
 
   function shellWrite(shell: Shell, text: string) {
     shell.buffer += text
-    if (shell.opened) emit('term:data', { id: shell.id, data: toBase64(text) })
+    termReaders.get(shell.id)?.onData(new TextEncoder().encode(text))
   }
 
   function shellRun(shell: Shell, line: string) {
@@ -1327,7 +1320,6 @@ export function createMock(params: URLSearchParams) {
       const shell = findShell(id)
       if (!shell) throw 'Only a shell has a terminal'
       shell.opened = true
-      emit('term:data', { id, data: toBase64(`\x1bc${shell.buffer}`) })
     },
     TermWrite: async (id: string, data: string) => {
       const shell = findShell(id)
@@ -1358,6 +1350,7 @@ export function createMock(params: URLSearchParams) {
     TermClose: async (id: string) => {
       const shell = findShell(id)
       if (shell) shell.opened = false
+      endTermStream(id)
     },
     Stats: async (days: number, project: string) => delay(statsFor(days, project), 150),
     Ledger: async (days: number, project: string) => delay(ledgerFor(days, project), 300),
@@ -1531,5 +1524,27 @@ export function createMock(params: URLSearchParams) {
     },
   }
 
-  return { backend, on, flags, mediaURL: chats.mediaURL }
+  function endTermStream(id: string) {
+    const reader = termReaders.get(id)
+    termReaders.delete(id)
+    reader?.onEnd()
+  }
+
+  // termStream acts as GET /term/<id>: a second reader ends the first, and a new one gets the whole screen.
+  function termStream(id: string, onData: (bytes: Uint8Array) => void, onEnd: () => void): () => void {
+    const shell = findShell(id)
+    if (!shell?.opened) {
+      onEnd()
+      return () => {}
+    }
+    endTermStream(id)
+    const reader = { onData, onEnd }
+    termReaders.set(id, reader)
+    onData(new TextEncoder().encode(`\x1bc${shell.buffer}`))
+    return () => {
+      if (termReaders.get(id) === reader) termReaders.delete(id)
+    }
+  }
+
+  return { backend, on, flags, mediaURL: chats.mediaURL, termStream }
 }

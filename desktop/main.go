@@ -58,7 +58,7 @@ func launch() error {
 			Awake: awake.Caffeinate, Machine: computerName,
 		}, run.Exec, run.Stream, run.ExecEnv)
 		quitOnSignal(a)
-		return devhttp.Serve(devhttp.Options{Services: a.Services(), Start: a.Start, Stop: func() { stop(a) }, Hub: hub, Assets: assets, Media: a.Media(), Addr: addr})
+		return devhttp.Serve(devhttp.Options{Services: a.Services(), Start: a.Start, Stop: func() { stop(a) }, Hub: hub, Assets: assets, Handler: a.Assets(), Addr: addr})
 	}
 
 	var window atomic.Pointer[context.Context]
@@ -93,7 +93,7 @@ func launch() error {
 		MinWidth:         420,
 		MinHeight:        360,
 		BackgroundColour: &options.RGBA{R: 7, G: 9, B: 13, A: 255},
-		AssetServer:      &assetserver.Options{Assets: assets, Handler: a.Media()},
+		AssetServer:      &assetserver.Options{Assets: assets, Handler: a.Assets()},
 		OnStartup: func(c context.Context) {
 			window.Store(&c)
 			stripMenuShortcuts()

@@ -1,6 +1,7 @@
 import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
+import { openTermStream } from './termStream'
 import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
 
 type Backend = {
@@ -196,6 +197,8 @@ export const api = {
   shellNew: (thread: string) => backend.ShellNew(thread),
   shellClose: (id: string) => backend.ShellClose(id),
   termOpen: (id: string, cols: number, rows: number) => backend.TermOpen(id, cols, rows),
+  // A shell's output is no event: it comes as raw bytes on a stream of its own, readable once termOpen returns.
+  termStream: (id: string, onData: (bytes: Uint8Array) => void, onEnd: () => void) => (mock ? mock.termStream(id, onData, onEnd) : openTermStream(id, onData, onEnd)),
   // A terminal can close (project switch, session end) while keys or a resize
   // are still in flight; that is not an error worth surfacing.
   termWrite: (id: string, data: string) => backend.TermWrite(id, data).catch(() => {}),

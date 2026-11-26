@@ -469,7 +469,6 @@ export type EventMap = {
   evidence: { id: string; items: Evidence[] }
   digest: Digest
   'browser:state': BrowserState
-  'term:data': { id: string; data: string }
   'term:exit': { id: string }
   attention: {
     id: string

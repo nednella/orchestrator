@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -120,20 +119,6 @@ func (r *Recorder) HasClip(text string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Contains(r.clips, text)
-}
-
-// Output is everything a terminal stream has sent for the session, decoded.
-func (r *Recorder) Output(id string) string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	var out bytes.Buffer
-	for _, e := range r.events {
-		if m, ok := e.payload.(map[string]string); ok && e.name == "term:data" && m["id"] == id {
-			b, _ := base64.StdEncoding.DecodeString(m["data"])
-			out.Write(b)
-		}
-	}
-	return out.String()
 }
 
 func (r *Recorder) Count(name string) int {

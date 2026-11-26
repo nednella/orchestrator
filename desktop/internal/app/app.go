@@ -62,6 +62,7 @@ type App struct {
 	issues   *issues.Issues
 	warn     *warn.Warnings
 	media    http.Handler
+	assets   http.Handler
 	stateDir string
 	services []any
 }
@@ -96,6 +97,10 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.sessions, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
 	a.browsers, a.awake = browsers, stayAwake
 	a.media = media.Handler(c.DataDir, c.LocalDir)
+	assets := http.NewServeMux()
+	assets.Handle(media.Prefix, a.media)
+	assets.Handle(terminal.Prefix, terms.Handler())
+	a.assets = assets
 	browsers.Hook(func(id string) string {
 		name, err := session.ParseName(id)
 		if err != nil {
@@ -259,6 +264,10 @@ func (a *App) Stop() {
 
 // Media serves the pictures of notes, evidence and chats under /media/<project key>/<folder>/.
 func (a *App) Media() http.Handler { return a.media }
+
+// Assets serves what the front end fetches besides its own files: the pictures under /media/ and the shells' output
+// under /term/.
+func (a *App) Assets() http.Handler { return a.assets }
 
 // Tools returns the commands that answer the agentos tools threads call, for tests and wiring.
 func (a *App) Tools() *orchestration.Commands { return a.tools }
