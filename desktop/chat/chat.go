@@ -382,6 +382,15 @@ func (f *follower) run(ctx context.Context) {
 			}
 		}
 	}
+	// TurnOver answers from these once the log is read.
+	f.mu.Lock()
+	if turnEnd != nil {
+		f.turnEnd = *turnEnd
+	}
+	if exit != nil {
+		f.exit = *exit
+	}
+	f.mu.Unlock()
 	close(f.read)
 	f.chats.threads.BackgroundChanged(f.chat.ID, f.backgroundNow())
 	if commands != nil {
