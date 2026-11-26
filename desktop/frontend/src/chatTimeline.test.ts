@@ -772,21 +772,42 @@ test('failed delegate stays a tool row', () => {
 })
 
 test('child result becomes a result card', () => {
+  const result: Draft = { kind: 'user', id: 'u2', text: 'APPLICATION_PROMPT: Task Flaky test in thread shop/abcd2345 completed:\n\nThe retry test.', from: 'shop/abcd2345', body: 'The retry test.', result: true }
+  const t = buildTimeline(log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), result, message('msg_2', 'The child found it.')), {})
+  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'childResult', 'working', 'reply', 'thinking'])
+  assert.deepEqual(only(t.items, 'childResult'), [{ kind: 'childResult', key: 'result-u2', at: 5000, child: 'shop/abcd2345', text: 'The retry test.' }], 'the card shows the bare result')
+  assert.equal(t.turnOpen, true, 'the result starts a turn, as a message does')
+  const later = buildTimeline(log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), result, turnEnd(), { ...result, id: 'u3', body: 'And the cart test.' }), {})
+  assert.deepEqual(only(later.items, 'childResult').map((r) => r.text), ['The retry test.', 'And the cart test.'], 'a later result is a card of its own')
+})
+
+test('message from a child that is no result is a From row', () => {
   const t = buildTimeline(
-    log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), { kind: 'user', id: 'u2', text: 'APPLICATION_PROMPT: Task Flaky test is done:\n\nThe retry test.', from: 'shop/abcd2345' }, message('msg_2', 'The child found it.')),
+    log(user('u1', 'Go'), delegate('d1'), started('d1', 'shop/abcd2345'), turnEnd(), { kind: 'user', id: 'u2', text: 'APPLICATION_PROMPT: Thread "Flaky test" (shop/abcd2345) sends you the message below.\n\nShould I look at the cart too?', from: 'shop/abcd2345', body: 'Should I look at the cart too?' }),
     {},
   )
-  assert.deepEqual(kinds(t.items), ['user', 'work', 'child', 'childResult', 'working', 'reply', 'thinking'])
-  assert.deepEqual(only(t.items, 'childResult'), [{ kind: 'childResult', key: 'result-u2', at: 5000, child: 'shop/abcd2345', text: 'Task Flaky test is done:\n\nThe retry test.' }])
-  assert.equal(t.turnOpen, true, 'the result starts a turn, as a message does')
+  assert.deepEqual(only(t.items, 'childResult'), [], 'only a marked message is a result')
+  const sent = only(t.items, 'user')[1]
+  assert.equal(sent.from, 'shop/abcd2345')
+  assert.equal(sent.text, 'Should I look at the cart too?', 'the row shows the bare words')
 })
 
 test('message from another thread is headed with its sender', () => {
   const t = buildTimeline(log({ kind: 'user', id: 'u1', text: 'APPLICATION_PROMPT: Look at the cart too.', from: 'shop/other234' }, turnEnd(), user('u2', 'Mine')), {})
   const [theirs, mine] = only(t.items, 'user')
   assert.equal(theirs.from, 'shop/other234')
-  assert.equal(theirs.text, 'Look at the cart too.')
+  assert.equal(theirs.text, 'Look at the cart too.', 'a log from before the body shows the text without the mark')
   assert.equal(mine.from, undefined, "the owner's message names no sender")
+})
+
+test("the app's mark is off every message the chat shows", () => {
+  const t = buildTimeline(log(user('u1', 'APPLICATION_PROMPT: /review 12'), turnEnd(), user('u2', 'Go'), { kind: 'queued', id: 'q1', text: 'APPLICATION_PROMPT: Look at the cart too.', from: 'shop/other234', body: 'Look at the cart too.' }), {})
+  assert.equal(only(t.items, 'user')[0].text, '/review 12', "the app's own message")
+  assert.deepEqual(
+    t.queued.map((q) => q.text),
+    ['Look at the cart too.'],
+    'a queued message from a thread',
+  )
 })
 
 test('a delegate call that gets no answer ends with its turn', () => {
@@ -795,6 +816,9 @@ test('a delegate call that gets no answer ends with its turn', () => {
   for (const end of [{ kind: 'exit', error: true } as Draft, turnEnd(true), { kind: 'start' } as Draft]) {
     assert.equal(only(buildTimeline(log(...asked, end), {}).items, 'child')[0].expired, true, `${end.kind} ends it`)
   }
+  const held = log(user('u1', 'Go'), agentCall('a1', 'Look'), taskStart('a1'), delegate('d1'), turnEnd())
+  assert.equal(buildTimeline(held, {}).agentsRunning, true, 'the subagent holds the turn open')
+  assert.equal(only(buildTimeline(held, {}).items, 'child')[0].expired, true, 'a turn end held open by a subagent ends it')
   const answered = buildTimeline(log(...asked, started('d1', 'shop/abcd2345'), turnEnd()), {})
   assert.equal(only(answered.items, 'child')[0].expired, false, 'one that got its answer stays')
   const split = buildTimeline(log(...asked, user('u2', 'And this')), {})

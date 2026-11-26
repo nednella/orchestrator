@@ -414,6 +414,9 @@ export type ChatEvent = {
   // from is the thread that sent a user or queued message, or that asked for an interrupt; left out for the owner or
   // the app.
   from?: string
+  // body is the bare words of a message from a thread, which text frames for Claude, and result marks a child's result.
+  body?: string
+  result?: boolean
 }
 
 // ChatImage is an image attached to a message: its bytes in base64 and its type.

@@ -32,7 +32,7 @@ export type TimelineItem =
   // edit from the message rewinds to; '' for the text of a denial, which Claude holds as no message, and for a message
   // from before the last compaction. from is the thread that sent it, missing for the owner's.
   | { kind: 'user'; key: string; at: number; id: string; uuid: string; text: string; files: string[]; forkAt: string; from?: string }
-  // childResult is a message from a child of the thread: its result.
+  // childResult is a child's result, as the app marks it, with the child's bare words.
   | { kind: 'childResult'; key: string; at: number; child: string; text: string }
   // uuid is that of the reply's last logged block, which a fork from the reply ends at; '' when none or when the reply
   // is from before the last compaction. at is when its last block came. ended is set on the reply a turn stopped or
@@ -102,6 +102,10 @@ const appPrompt = 'APPLICATION_PROMPT: '
 
 const fromApp = (text: string) => (text.startsWith(appPrompt) ? text.slice(appPrompt.length) : text)
 
+// shownText is what the chat shows of a message: a thread's bare words, which its text frames for Claude, else its text
+// without the app's mark.
+const shownText = (e: ChatEvent) => e.body ?? fromApp(e.text ?? '')
+
 const childTitle = (input: unknown) => {
   const { title, task } = (input ?? {}) as { title?: unknown; task?: unknown }
   if (typeof title === 'string' && title.trim() !== '') return title.trim()
@@ -143,7 +147,6 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   const queued = new Map<string, QueuedMessage>()
   const agents = new Map<string, AgentItem>()
   const delegations = new Map<string, Delegation>()
-  const children = new Set<string>()
   // The calls each subagent makes, by call, to the Agent call of the subagent.
   const agentOfCall = new Map<string, string>()
   // Every approval, oldest first. One waits until it is answered, Claude withdraws it, its call has its result, the
@@ -237,7 +240,6 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
     d.item.expired = false
     if (!e.error) {
       d.item.child = childOf(e.text)
-      if (d.item.child) children.add(d.item.child)
       return
     }
     d.call.error = true
@@ -281,14 +283,14 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
         const forkAt = items.findLast((i): i is ReplyItem => i.kind === 'reply')?.uuid ?? ''
         const uuid = e.parent || i <= compacted ? '' : (e.id ?? '')
         const from = e.from ?? ''
-        const text = from ? fromApp(e.text ?? '') : (e.text ?? '')
-        if (children.has(from)) items.push({ kind: 'childResult', key: `result-${e.id || e.seq}`, at: e.at, child: from, text })
+        const text = shownText(e)
+        if (from && e.result) items.push({ kind: 'childResult', key: `result-${e.id || e.seq}`, at: e.at, child: from, text })
         else items.push({ kind: 'user', key: `user-${e.id || e.seq}`, at: e.at, id: e.id ?? '', uuid, text, files: e.files ?? noFiles, forkAt, ...(from ? { from } : {}) })
         if (!e.agent || running) open(e).approvals.push(...left)
         return
       }
       case 'queued':
-        if (e.id) queued.set(e.id, { id: e.id, text: e.text ?? '', files: e.files ?? [] })
+        if (e.id) queued.set(e.id, { id: e.id, text: shownText(e), files: e.files ?? [] })
         return
       // An unsent error is a message a Claude that failed at its start never read, sent or queued.
       case 'unsent': {

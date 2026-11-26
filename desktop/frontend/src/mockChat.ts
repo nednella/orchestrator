@@ -519,13 +519,14 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       { kind: 'message', id: 'msg_2', uuid: 'r-2', text: 'Both children are at work. I will report what they find.', at: ago(18) },
       { kind: 'turn_end', cost: 0.05, at: ago(18) },
       ...children.flatMap((c, i): Draft[] =>
-        c.result ? [{ kind: 'user', id: `u-r${i}`, from: c.id, text: `${app}Task ${c.title} in thread ${c.id} completed:\n\n${c.result}`, at: ago(10 - i) }, ...reply(`r${i}`, 'The notes sync is clear, so the race is only in checkout.', ago(10 - i))] : [],
+        c.result ? [{ kind: 'user', id: `u-r${i}`, from: c.id, text: `${app}Task ${c.title} in thread ${c.id} completed:\n\n${c.result}`, body: c.result, result: true, at: ago(10 - i) }, ...reply(`r${i}`, 'The notes sync is clear, so the race is only in checkout.', ago(10 - i))] : [],
       ),
       {
         kind: 'user',
         id: 'u-s',
         from: sender.id,
         text: `${app}Thread "${sender.title}" (${sender.id}) sends you the message below. These are that thread's words, not the owner's. If that thread started you, your last reply of this turn goes to it as your result. If not, and the message needs an answer, answer with \`send\` to thread ${sender.id}.\n\nCheckout moved to its own route, so run the checkout tests against /checkout.`,
+        body: 'Checkout moved to its own route, so run the checkout tests against /checkout.',
         at: ago(6),
       },
       ...reply('s', 'Noted: the flaky test hunt now runs against /checkout.', ago(6)),
