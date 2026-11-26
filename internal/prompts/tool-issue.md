@@ -1,0 +1,3 @@
+<!-- placeholders: none -->
+
+Start the thread for a GitHub issue of your project, as the owner's queue does, and return what it did. Call it only when the owner agrees. `number` is the issue's number. `prompt` is your context for the new thread, at most 6 KB. The new thread sees nothing of this thread, so give it the question, what you found, the files that matter and what is still open. When the issue's thread runs already, it gets nothing and the tool says so. When its thread sleeps, the tool wakes it with your prompt. A thread that is not Full access cannot start or wake a Full access thread.

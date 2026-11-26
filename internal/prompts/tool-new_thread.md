@@ -1,0 +1,3 @@
+<!-- placeholders: none -->
+
+Start a thread with no issue in your project, and return its number and title. Call it only when the owner wants one. Work that has an issue goes through `issue`, since only that links the thread to its issue. `title` is a short title. `prompt` is the new thread's first message, at most 6 KB. The new thread sees nothing of this thread, so give it all it needs. `access` is `read`, `supervised` or `full`. It is never more than your own access, and by default it is yours. The new thread is not your child, and its result does not come back to you: to hand off a part of your own work, use `delegate`.

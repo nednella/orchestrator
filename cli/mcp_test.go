@@ -70,6 +70,33 @@ func TestMCPCallCarriesTheToken(t *testing.T) {
 	}
 }
 
+func TestMCPBrowserCallGetsTheBrowsersTime(t *testing.T) {
+	tests := []struct {
+		tool, input string
+		timeoutMs   int
+	}{
+		{"browser", `{"action":"open","url":"http://127.0.0.1:18001/"}`, browserTimeoutMs},
+		{"note", `{"text":"slow build"}`, 0},
+		{"delegate", `{"task":"fix it"}`, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			var got control.Request
+			fakeApp(t, func(_ context.Context, req control.Request) control.Response {
+				got = req
+				return control.Response{OK: true, Out: "ok"}
+			})
+			t.Setenv("AGENTOS_MCP_TOKEN", "tok-1")
+			if text, isErr := callTool(t, tt.tool, tt.input); text != "ok" || isErr {
+				t.Fatalf("result = %q, error %v", text, isErr)
+			}
+			if got.Cmd != "orchestrate" || got.Args[0] != tt.tool || got.Opts["input"] != tt.input || got.TimeoutMs != tt.timeoutMs {
+				t.Errorf("request = %+v, want %s with a timeout of %d ms", got, tt.tool, tt.timeoutMs)
+			}
+		})
+	}
+}
+
 func TestMCPWithoutTokenRefusesCalls(t *testing.T) {
 	var calls atomic.Int32
 	fakeApp(t, func(context.Context, control.Request) control.Response {

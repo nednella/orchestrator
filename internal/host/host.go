@@ -455,7 +455,7 @@ func (h *host) handleLine(line []byte) {
 			h.modeIs(e.Text)
 			continue
 		case chat.KindApproval:
-			if slices.Contains(mcp.ClaudeNames(), e.Tool) {
+			if h.allowsAgentosTool(e.Tool) {
 				h.allowAgentosTool(e)
 				continue
 			}
@@ -466,9 +466,23 @@ func (h *host) handleLine(line []byte) {
 	}
 }
 
-// allowAgentosTool answers Claude's ask to run an agentos tool with yes, and logs nothing: every thread may run them,
-// and in plan mode Claude asks for a tool that changes things even when it is allowed. Only the six tools agentos
-// serves are answered so, never another tool of a server that is also named agentos.
+// allowsAgentosTool says whether the host answers Claude's ask to run tool itself: in plan mode Claude asks for a tool
+// that changes things even when it is allowed. Every thread runs the agentos tools a Read thread may; the ones only a
+// thread that writes may run, it runs once Claude reports a mode other than plan, so a Read thread asks the owner for
+// them. Only the tools agentos serves are answered so, never another tool of a server that is also named agentos.
+func (h *host) allowsAgentosTool(tool string) bool {
+	if slices.Contains(mcp.ReadNames(), tool) {
+		return true
+	}
+	if !slices.Contains(mcp.ClaudeNames(), tool) {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.mode != "" && h.mode != "plan"
+}
+
+// allowAgentosTool answers Claude's ask to run an agentos tool with yes, and logs nothing.
 func (h *host) allowAgentosTool(e chat.Event) {
 	if err := h.write(chat.Allow(e.ID, e.Input)); err != nil {
 		fmt.Fprintf(h.echo, "host: allowing %s: %v\n", e.Tool, err)

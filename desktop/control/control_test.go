@@ -45,6 +45,24 @@ func TestRouterAnswers(t *testing.T) {
 	}
 }
 
+func TestAnswerRunsTheCommandsHandler(t *testing.T) {
+	r := New(fakeSessions{}, nil, nil)
+	r.Handle("echo", func(_ context.Context, req ctl.Request) (string, error) { return req.Session + " " + req.Args[0], nil })
+	r.Handle("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
+	for _, tt := range []struct {
+		req  ctl.Request
+		want ctl.Response
+	}{
+		{ctl.Request{Cmd: "echo", Session: "p/1", Args: []string{"x"}}, ctl.Response{OK: true, Out: "p/1 x"}},
+		{ctl.Request{Cmd: "fail"}, ctl.Response{Error: "it failed"}},
+		{ctl.Request{Cmd: ""}, ctl.Response{Error: `unknown command ""`}},
+	} {
+		if got := r.Answer(context.Background(), tt.req); got != tt.want {
+			t.Errorf("Answer(%+v) = %+v, want %+v", tt.req, got, tt.want)
+		}
+	}
+}
+
 func TestAskers(t *testing.T) {
 	r := New(fakeSessions{running: map[string]bool{"p/1": true}}, nil, nil)
 	if id, err := r.AskerSession(ctl.Request{Session: "p/1"}); err != nil || id != "p/1" {

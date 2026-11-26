@@ -14,13 +14,9 @@ import (
 	"github.com/nednella/agentos/internal/util"
 )
 
-// threadTools are the commands every thread may run without asking, at every access, so a change between Read and
-// Supervised needs no restart: the ones that hand work to the owner's queue, plan an issue in it, or open the
-// thread's own browser window.
-var threadTools = []string{
-	"Bash(agentos issue:*)", "Bash(agentos new:*)", "Bash(agentos note:*)", "Bash(agentos refresh:*)", "Bash(agentos browser:*)",
-	"Bash(gh issue create:*)", "Bash(gh issue comment:*)", "Bash(gh issue edit:*)",
-}
+// threadTools are the commands every thread may run without asking, at every access: the ones that file an issue for
+// the owner's queue or plan one in it.
+var threadTools = []string{"Bash(gh issue create:*)", "Bash(gh issue comment:*)", "Bash(gh issue edit:*)"}
 
 // browserTool drives the session's browser tab. A session with a browser may run it without asking.
 const browserTool = "Bash(agent-browser:*)"
@@ -104,7 +100,11 @@ func (c Claude) Command(l Launch) []string {
 	}
 	if l.MCPConfig != "" {
 		argv = append(argv, "--mcp-config", l.MCPConfig)
-		allowed = append(slices.Clip(allowed), mcp.ClaudeNames()...)
+		agentos := mcp.ClaudeNames()
+		if l.Access == session.Read {
+			agentos = mcp.ReadNames()
+		}
+		allowed = append(slices.Clip(allowed), agentos...)
 	}
 	argv = append(argv, "--permission-mode", PermissionMode(l.Access), "--allowedTools", strings.Join(allowed, ","))
 	if l.Prompt != "" {

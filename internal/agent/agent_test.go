@@ -65,7 +65,7 @@ func TestClaudeGrantsDirs(t *testing.T) {
 // supervised is what a launch that sets nothing ends with: Supervised, and the tools every thread may run.
 var supervised = []string{"--permission-mode", "default", "--allowedTools", tools}
 
-const tools = "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"
+const tools = "Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*)"
 
 func TestClaudeLaunch(t *testing.T) {
 	tests := []struct {
@@ -161,20 +161,75 @@ func TestClaudeEnv(t *testing.T) {
 	}
 }
 
+// allowedTools is the --allowedTools of argv, one rule each.
+func allowedTools(t *testing.T, argv []string) []string {
+	t.Helper()
+	i := slices.Index(argv, "--allowedTools")
+	if i < 0 || i+1 >= len(argv) {
+		t.Fatalf("argv = %q, want --allowedTools", argv)
+	}
+	return strings.Split(argv[i+1], ",")
+}
+
 func TestMCPConfigFlag(t *testing.T) {
-	agentos := "mcp__agentos__delegate,mcp__agentos__threads,mcp__agentos__read,mcp__agentos__send,mcp__agentos__wait,mcp__agentos__stop"
-	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
+	const orchestration = "mcp__agentos__delegate,mcp__agentos__threads,mcp__agentos__read,mcp__agentos__send,mcp__agentos__wait,mcp__agentos__stop"
+	const readTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__refresh,mcp__agentos__browser"
+	const writeTools = orchestration + ",mcp__agentos__note,mcp__agentos__issue,mcp__agentos__new_thread,mcp__agentos__show,mcp__agentos__track,mcp__agentos__refresh,mcp__agentos__browser"
+	for access, agentos := range map[session.Access]string{session.Read: readTools, session.Supervised: writeTools, session.Full: writeTools} {
 		argv := Claude{Exe: "/x"}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
 		if n := slices.Index(argv, "--mcp-config"); n < 0 || argv[n+1] != "/state/hosts/ab/tok.mcp.json" || slices.Index(argv[n+1:], "--mcp-config") >= 0 {
 			t.Errorf("%s: argv = %q, want --mcp-config and its path once", access, argv)
 		}
-		if i := slices.Index(argv, "--allowedTools"); i < 0 || argv[i+1] != tools+","+agentos {
-			t.Errorf("%s: --allowedTools = %q, want the thread tools and the six agentos tools", access, argv[i+1])
+		if got := strings.Join(allowedTools(t, argv), ","); got != tools+","+agentos {
+			t.Errorf("%s: --allowedTools = %q, want the thread tools and %s", access, got, agentos)
 		}
 	}
 	argv := Claude{Exe: "/x"}.Command(Launch{})
 	if slices.Contains(argv, "--mcp-config") || strings.Contains(strings.Join(argv, " "), "mcp__agentos__") {
 		t.Errorf("without a config: argv = %q", argv)
+	}
+}
+
+func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
+	tests := []struct {
+		access     session.Access
+		showTrack  bool
+		agentTools int
+	}{
+		{session.Read, false, 11},
+		{session.Supervised, true, 13},
+		{session.Full, true, 13},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.access), func(t *testing.T) {
+			allowed := allowedTools(t, Claude{Exe: "/x"}.Command(Launch{Access: tt.access, Browser: true, MCPConfig: "/m.json"}))
+			for _, tool := range []string{"mcp__agentos__show", "mcp__agentos__track"} {
+				if slices.Contains(allowed, tool) != tt.showTrack {
+					t.Errorf("%s allowed = %v, want %v: %q", tool, !tt.showTrack, tt.showTrack, allowed)
+				}
+			}
+			n := 0
+			for _, rule := range allowed {
+				if strings.HasPrefix(rule, "mcp__agentos__") {
+					n++
+				}
+			}
+			if n != tt.agentTools || !slices.Contains(allowed, "mcp__agentos__note") || !slices.Contains(allowed, "Bash(agent-browser:*)") {
+				t.Errorf("allowed = %q, want %d agentos tools, note among them, and agent-browser", allowed, tt.agentTools)
+			}
+		})
+	}
+}
+
+func TestNoAllowRuleNamesTheCommand(t *testing.T) {
+	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
+		for _, l := range []Launch{{Access: access}, {Access: access, Browser: true, MCPConfig: "/m.json"}} {
+			for _, rule := range allowedTools(t, Claude{Exe: "/x"}.Command(l)) {
+				if strings.Contains(rule, "agentos ") || strings.Contains(rule, "agentos:") {
+					t.Errorf("%s: the allow rule %q runs the agentos command", access, rule)
+				}
+			}
+		}
 	}
 }
 

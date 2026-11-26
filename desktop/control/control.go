@@ -48,7 +48,7 @@ func (r *Router) Handle(cmd string, h Handler) { r.handlers[cmd] = h }
 // Listen starts answering at the control socket in stateDir. Without it agents
 // cannot use the app, which is logged and not fatal.
 func (r *Router) Listen(stateDir string) {
-	srv, err := ctl.Listen(ctl.SocketPath(stateDir), r.answer)
+	srv, err := ctl.Listen(ctl.SocketPath(stateDir), r.Answer)
 	if err != nil {
 		log.Printf("agentos: agents cannot reach the app: %v", err)
 		return
@@ -63,7 +63,8 @@ func (r *Router) Close() {
 	}
 }
 
-func (r *Router) answer(ctx context.Context, req ctl.Request) ctl.Response {
+// Answer runs the handler of the request's command and returns what it printed, or why it failed.
+func (r *Router) Answer(ctx context.Context, req ctl.Request) ctl.Response {
 	h, ok := r.handlers[req.Cmd]
 	if !ok {
 		return ctl.Response{Error: fmt.Sprintf("unknown command %q", req.Cmd)}

@@ -163,7 +163,7 @@ func TestDigestNamesTheDependencies(t *testing.T) {
 }
 
 func TestEveryToolHasADescription(t *testing.T) {
-	for _, name := range []string{"delegate", "threads", "read", "send", "wait", "stop"} {
+	for _, name := range []string{"delegate", "threads", "read", "send", "wait", "stop", "note", "issue", "new_thread", "show", "track", "refresh", "browser"} {
 		got := Tool(name)
 		if got == "" || strings.Contains(got, "<!--") || strings.HasSuffix(got, "\n") {
 			t.Errorf("Tool(%q) = %q", name, got)

@@ -139,7 +139,7 @@ func TestCommandStartsAReadThreadInPlanModeWithTheBrowser(t *testing.T) {
 	if i := slices.Index(argv, "--permission-mode"); i < 0 || argv[i+1] != "plan" {
 		t.Errorf("no plan mode: %q", argv)
 	}
-	const tools = "Bash(agentos issue:*),Bash(agentos new:*),Bash(agentos note:*),Bash(agentos refresh:*),Bash(agentos browser:*),Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)"
+	const tools = "Bash(gh issue create:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(agent-browser:*)"
 	if got := allowedTools(argv); got != tools {
 		t.Errorf("allowed tools = %q", got)
 	}

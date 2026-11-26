@@ -66,6 +66,20 @@ var (
 	toolWait string
 	//go:embed tool-stop.md
 	toolStop string
+	//go:embed tool-note.md
+	toolNote string
+	//go:embed tool-issue.md
+	toolIssue string
+	//go:embed tool-new_thread.md
+	toolNewThread string
+	//go:embed tool-show.md
+	toolShow string
+	//go:embed tool-track.md
+	toolTrack string
+	//go:embed tool-refresh.md
+	toolRefresh string
+	//go:embed tool-browser.md
+	toolBrowser string
 )
 
 // Digest is what the weekly digest run asks Claude to do, given the names the project depends on.
@@ -76,7 +90,7 @@ func Digest(dependencies []string) string {
 // Browser is appended to a thread's system prompt when it has a browser.
 func Browser() string { return body(browser) }
 
-// Session starts the system prompt of every Claude thread: where it runs and the commands every thread uses.
+// Session starts the system prompt of every Claude thread: where it runs and the tools every thread uses.
 func Session() string { return body(session) }
 
 // Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
@@ -140,7 +154,7 @@ func Denied(text string) string { return strings.Replace(body(denied), "{text}",
 // DeniedWithoutReason is the reason a tool call is denied with when the user gives none.
 func DeniedWithoutReason() string { return body(deniedNoReason) }
 
-// Tool is the description of an orchestration tool, by its name; empty for a name that is not one.
+// Tool is the description of an agentos tool, by its name; empty for a name that is not one.
 func Tool(name string) string {
 	switch name {
 	case "delegate":
@@ -155,11 +169,25 @@ func Tool(name string) string {
 		return body(toolWait)
 	case "stop":
 		return body(toolStop)
+	case "note":
+		return body(toolNote)
+	case "issue":
+		return body(toolIssue)
+	case "new_thread":
+		return body(toolNewThread)
+	case "show":
+		return body(toolShow)
+	case "track":
+		return body(toolTrack)
+	case "refresh":
+		return body(toolRefresh)
+	case "browser":
+		return body(toolBrowser)
 	}
 	return ""
 }
 
-// BrowserHelp is what agentos browser help prints.
+// BrowserHelp is what agentos browser help prints: that the browser tool's text has the rules.
 func BrowserHelp() string { return body(browserHelp) }
 
 // SetupBrief is added to the system prompt of the session that sets up a project's repository.

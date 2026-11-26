@@ -28,7 +28,7 @@ const (
 	waitPauseMost  = 8 * time.Second
 )
 
-// newMCPCmd serves the orchestration tools to the agent that started it, over stdin and stdout.
+// newMCPCmd serves the agentos tools to the agent that started it, over stdin and stdout.
 func newMCPCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "mcp",
@@ -46,8 +46,11 @@ func newMCPCmd() *cobra.Command {
 				if token == "" {
 					return "", errors.New(notInAThread)
 				}
-				if tool == "wait" {
+				switch tool {
+				case "wait":
 					return waitInSlices(ctx, socket, token, input)
+				case "browser":
+					return orchestrate(ctx, socket, token, tool, input, nil, browserTimeoutMs*time.Millisecond)
 				}
 				return orchestrate(ctx, socket, token, tool, input, nil, 0)
 			}

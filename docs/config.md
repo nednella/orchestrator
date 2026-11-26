@@ -126,14 +126,14 @@ Every thread runs `claude` under `agentos host`, with hooks that call the `agent
 A thread runs in one folder from its start, and a wake starts it there again.
 
 - An issue thread, at every access, runs in its own worktree on the issue's branch, `issue-<n>` unless `session_branch_fallback` names it otherwise.
-- A thread with no issue runs where `new_thread_place` says, at every access. Unset or `worktree`, it runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. `project`, it runs in the project folder, on the branch checked out there. This holds for the composer, `agentos new` and a thread started from a note alike. A child runs where `delegate`'s `where` puts it.
+- A thread with no issue runs where `new_thread_place` says, at every access. Unset or `worktree`, it runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. `project`, it runs in the project folder, on the branch checked out there. This holds for the composer, the `new_thread` tool, `agentos new` and a thread started from a note alike. A child runs where `delegate`'s `where` puts it.
 - The set-up session runs in the project folder.
 
 The worktree is `<project>/trees/<branch>`. Before it makes the first one, agentos adds `/trees/` to the repository's `.git/info/exclude`, which is never committed, so the worktrees stay out of `git status` and `git add -A`; it never edits a `.gitignore`. A branch that exists, locally or on origin (fetched first when this clone has no copy), is checked out there as it is and never reset; a new one comes from `session_worktree_command`. A branch that a worktree already has checked out, such as one you made by hand, runs the thread in that worktree, and agentos never removes it. A branch that another thread works on, running or asleep, is refused with `Thread <n> works on <branch>`. A folder already at `<project>/trees/<branch>` that is no worktree of the branch stops the start, and agentos leaves it as it is. A project that is not a git repository runs every thread in its folder.
 
 A start that fails after agentos made the worktree removes that worktree with `git worktree remove`, never forced, so one with changes stays; the branch stays too. A fork runs in its thread's folder and has no branch of its own.
 
-A thread's branch is the one agentos made its worktree on, or the one it reported with `agentos track --branch <name>`; the folder the agent works in never changes it. A thread in the project folder has no branch, and so no pull request and no clean-up, until it runs `agentos track`. `track` refuses the default branch, a branch another thread works on (`Thread <n> works on <branch>`), a fork and a Read thread (`A Read thread works on no branch`). When the thread's own worktree has the branch checked out, the record of the worktree follows it.
+A thread's branch is the one agentos made its worktree on, or the one it reported with the `track` tool; the folder the agent works in never changes it. A thread in the project folder has no branch, and so no pull request and no clean-up, until it calls `track`. `track` refuses the default branch, a branch another thread works on (`Thread <n> works on <branch>`), a fork and a Read thread (`A Read thread works on no branch`). When the thread's own worktree has the branch checked out, the record of the worktree follows it.
 
 ### Keeping the Mac awake
 
@@ -150,6 +150,22 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 | PR tracking, clean-up log, the worktrees agentos made (`worktrees.json`), browser profile, session temp folders, chat logs (`chats/`) | `~/.local/share/agentos/<key>/` |
 | state files, sockets (each Claude session's host under `hosts/<first 8 hex characters of the key's SHA-256>/`), tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/agentos` |
 
+## Agent tools
+
+A thread reaches the app through the tools of its agentos MCP server, not through a command; Claude names each one `mcp__agentos__<name>`. A call acts as the thread that makes it, in that thread's project, whatever its input says, and an input with a field the tool does not take is refused.
+
+| Tool | Input | Does |
+|---|---|---|
+| `note` | `text` | adds a note to the thread's project |
+| `issue` | `number`, `prompt` | starts the issue's thread, as the queue does; one whose thread runs is reported as running and gets nothing, and one whose thread is asleep has it woken. `prompt`, at most 6 KB, is the new or woken thread's handover. From a thread that is not Full access, an issue whose action is `access: full` or whose sleeping thread is Full access is refused (`A thread that is not Full access cannot start one that is`) |
+| `new_thread` | `title`, `prompt`, `access` | starts a thread with no issue, where `new_thread_place` says, and gives it `prompt`, at most 6 KB, framed as the caller's handover and sent unless `session_prompt_send` is `manual`. `access` is `read`, `supervised` or `full`, by default the caller's, and refused above it (`A thread with supervised access cannot start a thread with full access`) |
+| `show` | `file` or `text`, `caption` | files evidence for the thread: an image, or a text file under 64 KB, by its absolute path, or a text card |
+| `track` | `branch` | makes the branch the thread's; see [Where a thread runs](#where-a-thread-runs) |
+| `refresh` | none | reloads the issues and the pull requests |
+| `browser` | `action` (`open`, `screenshot` or `close`), `url`, `front`, `caption`, `full` | opens `url` in the thread's browser window, raised in front with `front`; files a screenshot of it as evidence, the whole page with `full`; or closes the window. A call may take 75 s |
+
+A Read thread runs every tool but `show` and `track` without asking; for those two the owner gets an approval card. The orchestration tools, `delegate`, `threads`, `read`, `send`, `wait` and `stop`, start and follow child threads; each tool's text is in `internal/prompts/tool-<name>.md`.
+
 ## Command line
 
 `agentos` with no command opens the app. `agentos --help` lists the commands by group. Every command below except `settle` without a number, `browser help`, `version` and `update` talks to the running app, and exits 1 with "agentos is not running: open the app and try again" when there is none. The project is `AGENTOS_PROJECT` (set in the app's shell), else the asking session's, else the current one; the app switches to it.
@@ -161,7 +177,6 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 | Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs; `cleanup <n>` cleans up after thread n with every check and prints `Removed <what>`, or fails with `Kept: <reason>`; `cleanup` lists what waits: a clean-up that asks you, one the checks kept (`Kept: <reason>`), which the app tries again every hour only while the thread sleeps after the PR of its branch merged or closed, and one that runs |
 | Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
 | Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |
-| From inside a session | `issue <n> --prompt -`, `new <title> [--access read\|supervised] --prompt -`, `browser open <url>`, `browser screenshot`, `browser close`, `show <file> [--caption …] \| --text …`, `note <text>`, `track --branch <name>` (makes it the thread's branch; see [Where a thread runs](#where-a-thread-runs)) | `issue` and `new` hand work to a new thread, a read-only one with `--access read`, as under Work; `agentos browser help` explains the browser |
 
 `stats [--days N] [--json]` prints the interruption tally. `agentos settle` without a number puts this project's threads to sleep directly through tmux, with the app closed too, and keeps their state files, so the app shows them as sleeping and stops their servers, at once when it runs, else at its next start; `--all` does it for every project and stops the shells. Neither touches a session that ran in a terminal before the host; the command says how many it left. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
 

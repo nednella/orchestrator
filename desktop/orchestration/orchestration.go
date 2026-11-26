@@ -1,5 +1,5 @@
-// Package orchestration answers the agentos tools a thread's Claude calls. Each call acts as the thread its token
-// names.
+// Package orchestration answers the agentos tools a thread's Claude calls: the orchestration tools, and the agent tools
+// that do what the agentos commands did. Each call acts as the thread its token names.
 package orchestration
 
 import (
@@ -60,6 +60,9 @@ type Commands struct {
 func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
 	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, reporting: map[string]bool{}, reportNext: map[string]report{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
+	for name := range agentTools() {
+		c.tools[name] = c.agentTool(name)
+	}
 	return c
 }
 
