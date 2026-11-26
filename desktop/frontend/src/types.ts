@@ -30,6 +30,10 @@ export type BranchStatus = {
   notInMain: number
 }
 
+// LatestPlan is the plan a thread's own Claude last asked to have approved, '' for none, and whether it still waits on
+// the owner (desktop/chat.Plan).
+export type LatestPlan = { text: string; waiting: boolean }
+
 export type Session = {
   id: string
   project: string

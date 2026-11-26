@@ -1,4 +1,4 @@
-import type { Access, ChatEvent, ChatImage, EventMap, FilesRewind, Pending, State } from './types'
+import type { Access, ChatEvent, ChatImage, EventMap, FilesRewind, LatestPlan, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
@@ -704,10 +704,17 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       known(project)
       return Object.keys(markdown).sort()
     },
-    ChatLatestPlan: async (id: string) => {
+    // The thread's own latest plan that the owner did not deny, as the service reads it from the log.
+    ChatLatestPlan: async (id: string): Promise<LatestPlan> => {
       thread(id)
-      const asked = logOf(id).findLast((e) => e.kind === 'approval' && e.tool === 'ExitPlanMode')
-      return (asked?.input as { plan?: string } | undefined)?.plan ?? ''
+      const log = logOf(id)
+      const asked = log.findLast((e) => {
+        const plan = (e.input as { plan?: unknown } | undefined)?.plan
+        const answered = log.find((a) => a.kind === 'answer' && a.id === e.id && a.seq > e.seq)
+        return e.kind === 'approval' && e.tool === 'ExitPlanMode' && !e.agent && typeof plan === 'string' && plan !== '' && answered?.text !== 'deny'
+      })
+      if (!asked) return { text: '', waiting: false }
+      return { text: (asked.input as { plan: string }).plan, waiting: pending.get(id)?.request === asked.id }
     },
     ProjectCommands: async (project: string) => {
       known(project)

@@ -95,8 +95,11 @@ func TestReadFileRefusesOutside(t *testing.T) {
 	writeFiles(t, elsewhere, map[string]string{"y.md": "# Elsewhere"})
 	symlink(t, filepath.Join(parent, "x.md"), filepath.Join(dir, "out.md"))
 	symlink(t, elsewhere, filepath.Join(dir, "docs"))
+	symlink(t, filepath.Join(parent, "gone.md"), filepath.Join(dir, "dangling.md"))
+	symlink(t, "../x.md", filepath.Join(dir, "up.md"))
 	svc := readService(t, dir, dir, "")
-	for _, path := range []string{"../x.md", "../issue-7/../x.md", filepath.Join(parent, "x.md"), filepath.Join(elsewhere, "y.md"), "out.md", "docs/y.md", "../gone.md"} {
+	// A path out of the folder gets the same answer whether its file is there or not.
+	for _, path := range []string{"../x.md", "../gone.md", "../issue-7/../x.md", filepath.Join(parent, "x.md"), filepath.Join(parent, "gone.md"), filepath.Join(elsewhere, "y.md"), "out.md", "dangling.md", "up.md", "docs/y.md", "docs/gone.md"} {
 		got, err := svc.ChatReadFile("main/abcdefgh", path)
 		if want := "This file is outside thread 7's folder"; err == nil || err.Error() != want {
 			t.Errorf("ChatReadFile(%q) = %q, %v; want %q", path, got, err, want)
@@ -133,6 +136,7 @@ func TestReadFileRefusesBigAndOtherFiles(t *testing.T) {
 		"folder.md": "This is not a markdown file",
 		"pipe.md":   "This is not a markdown file",
 		"gone.md":   "This file does not exist",
+		"full.md/x": "This file does not exist",
 	} {
 		if got, err := svc.ChatReadFile("main/abcdefgh", path); err == nil || err.Error() != want {
 			t.Errorf("ChatReadFile(%q) = %.20q, %v; want %q", path, got, err, want)
@@ -140,6 +144,26 @@ func TestReadFileRefusesBigAndOtherFiles(t *testing.T) {
 	}
 	if got, err := svc.ChatReadFile("main/abcdefgh", "full.md"); err != nil || len(got) != maxShown {
 		t.Errorf("ChatReadFile(full.md) = %d bytes, %v; want the whole file", len(got), err)
+	}
+}
+
+func TestReadFileRefusesAFileThatGrowsPastTheCapAfterItsSize(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"full.md": strings.Repeat("a", maxShown)})
+	beforeRead = func() {
+		f, err := os.OpenFile(filepath.Join(dir, "full.md"), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer f.Close()
+		if _, err := f.WriteString("more"); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { beforeRead = nil })
+	if got, err := readService(t, dir, dir, "").ChatReadFile("main/abcdefgh", "full.md"); err == nil || err.Error() != "This file is too big to show" {
+		t.Errorf("ChatReadFile = %d bytes, %v; want it too big", len(got), err)
 	}
 }
 
@@ -185,24 +209,80 @@ func planInput(t *testing.T, plan string) json.RawMessage {
 }
 
 func TestLatestPlanIsTheLastExitPlanMode(t *testing.T) {
-	svc := readService(t, t.TempDir(), "", logOf(t, "planexit.jsonl"))
-	got, err := svc.ChatLatestPlan("main/abcdefgh")
-	if err != nil || !strings.HasPrefix(got, "# Plan: add made.txt\n") {
-		t.Errorf("ChatLatestPlan = %.40q, %v; want the recorded plan", got, err)
+	recorded := chatlog.Event{Kind: chatlog.KindAnswer, ID: "72988c6f-7876-4e3e-9fdd-442e209bc19e", Text: "allow"}
+	plan := func(id, text string) chatlog.Event {
+		return chatlog.Event{Kind: chatlog.KindApproval, ID: id, Tool: "ExitPlanMode", Input: planInput(t, text)}
+	}
+	answer := func(id, text string) chatlog.Event {
+		return chatlog.Event{Kind: chatlog.KindAnswer, ID: id, Text: text}
+	}
+	subagents := plan("plan-s", "# A subagent's plan")
+	subagents.Agent = "toolu_agent"
+	cases := []struct {
+		name string
+		more []chatlog.Event
+		want func(Plan) bool
+	}{
+		{"the recorded plan, approved", []chatlog.Event{recorded}, func(p Plan) bool { return strings.HasPrefix(p.Text, "# Plan: add made.txt\n") && !p.Waiting }},
+		{"a later plan", []chatlog.Event{recorded, plan("plan-2", "# Second"), answer("plan-2", "allow")}, func(p Plan) bool { return p == Plan{Text: "# Second"} }},
+		{"a subagent's plan is left out", []chatlog.Event{recorded, plan("plan-2", "# Second"), answer("plan-2", "allow"), subagents, answer("plan-s", "allow")}, func(p Plan) bool { return p == Plan{Text: "# Second"} }},
+		{"a denied plan is left out", []chatlog.Event{recorded, plan("plan-2", "# Second"), answer("plan-2", "allow"), plan("plan-3", "# Denied"), answer("plan-3", "deny")}, func(p Plan) bool { return p == Plan{Text: "# Second"} }},
+		{"an input that does not parse is left out", []chatlog.Event{recorded, plan("plan-2", "# Second"), answer("plan-2", "allow"), {Kind: chatlog.KindApproval, ID: "plan-4", Tool: "ExitPlanMode", Input: json.RawMessage(`{"plan":7}`)}}, func(p Plan) bool { return p.Text == "# Second" }},
+		{"a plan that waits says so", []chatlog.Event{recorded, plan("plan-5", "# Asked")}, func(p Plan) bool { return p == Plan{Text: "# Asked", Waiting: true} }},
+		{"a denied request id asked again", []chatlog.Event{recorded, plan("plan-6", "# No"), answer("plan-6", "deny"), plan("plan-6", "# Yes"), answer("plan-6", "allow")}, func(p Plan) bool { return p == Plan{Text: "# Yes"} }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc := readService(t, t.TempDir(), "", logOf(t, "planexit.jsonl", c.more...))
+			if got, err := svc.ChatLatestPlan("main/abcdefgh"); err != nil || !c.want(got) {
+				t.Errorf("ChatLatestPlan = %+.60v, %v", got, err)
+			}
+		})
+	}
+	svc := readService(t, t.TempDir(), "", filepath.Join(t.TempDir(), "none.jsonl"))
+	if got, err := svc.ChatLatestPlan("main/abcdefgh"); err != nil || got != (Plan{}) {
+		t.Errorf("ChatLatestPlan of a chat with no log = %+v, %v; want none", got, err)
+	}
+}
+
+func TestLatestPlanIsReadAgainOnlyOnceTheLogChanges(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chat.jsonl")
+	l, err := chatlog.OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if _, err := l.Append(chatlog.Event{Kind: chatlog.KindApproval, ID: "p1", Tool: "ExitPlanMode", Input: planInput(t, "# One")}); err != nil {
+		t.Fatal(err)
+	}
+	svc := readService(t, t.TempDir(), "", path)
+	if got, _ := svc.ChatLatestPlan("main/abcdefgh"); got.Text != "# One" {
+		t.Fatalf("ChatLatestPlan = %+v, want # One", got)
 	}
 
-	later := []chatlog.Event{
-		{Kind: chatlog.KindApproval, ID: "plan-2", Tool: "ExitPlanMode", Input: planInput(t, "# Second plan")},
-		{Kind: chatlog.KindApproval, ID: "bash-1", Tool: "Bash", Input: json.RawMessage(`{"command":"ls","plan":"no"}`)},
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	svc = readService(t, t.TempDir(), "", logOf(t, "planexit.jsonl", later...))
-	if got, err := svc.ChatLatestPlan("main/abcdefgh"); err != nil || got != "# Second plan" {
-		t.Errorf("ChatLatestPlan = %q, %v; want the later plan", got, err)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(data), "# One", "# Two", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := svc.ChatLatestPlan("main/abcdefgh"); got.Text != "# One" {
+		t.Errorf("ChatLatestPlan of a log of the same size and time = %+v, want the plan read before", got)
 	}
 
-	svc = readService(t, t.TempDir(), "", filepath.Join(t.TempDir(), "none.jsonl"))
-	if got, err := svc.ChatLatestPlan("main/abcdefgh"); err != nil || got != "" {
-		t.Errorf("ChatLatestPlan of a chat with no plan = %q, %v; want none", got, err)
+	if _, err := l.Append(chatlog.Event{Kind: chatlog.KindApproval, ID: "p3", Tool: "ExitPlanMode", Input: planInput(t, "# Three")}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := svc.ChatLatestPlan("main/abcdefgh"); got.Text != "# Three" {
+		t.Errorf("ChatLatestPlan of a grown log = %+v, want # Three", got)
 	}
 }
 
@@ -214,7 +294,7 @@ func TestMarkdownFilesListsOnlyMarkdown(t *testing.T) {
 	writeFiles(t, dir, map[string]string{".git/info/exclude": "build/\n"})
 	git(t, dir, "add", "README.md")
 	svc := readService(t, dir, dir, "")
-	want := []string{"NOTES.MD", "README.md", "docs/config.markdown"}
+	want := []string{"README.md", "docs/config.markdown", "NOTES.MD"}
 	if got, err := svc.ChatMarkdownFiles("main/abcdefgh"); err != nil || !slices.Equal(got, want) {
 		t.Errorf("ChatMarkdownFiles = %q, %v; want %q", got, err, want)
 	}
@@ -224,11 +304,16 @@ func TestMarkdownFilesListsOnlyMarkdown(t *testing.T) {
 
 	var listed strings.Builder
 	for i := range maxMarkdownFiles + 10 {
-		fmt.Fprintf(&listed, "doc-%03d.md\x00", i)
+		fmt.Fprintf(&listed, "a/doc-%03d.md\x00", i)
 	}
+	listed.WriteString("docs/z.md\x00z/AGENTS.md\x00AGENTS.md\x00README.md\x00")
 	many := func(context.Context, string, string, ...string) ([]byte, error) { return []byte(listed.String()), nil }
 	svc = NewService(New(folderThread(dir), t.TempDir(), func(string, any) {}), many, noProject, context.Background)
-	if got, err := svc.ChatMarkdownFiles("main/abcdefgh"); err != nil || len(got) != maxMarkdownFiles {
-		t.Errorf("ChatMarkdownFiles of a folder with %d = %d files, %v; want %d", maxMarkdownFiles+10, len(got), err, maxMarkdownFiles)
+	got, err := svc.ChatMarkdownFiles("main/abcdefgh")
+	if err != nil || len(got) != maxMarkdownFiles {
+		t.Fatalf("ChatMarkdownFiles of a folder with %d = %d files, %v; want %d", maxMarkdownFiles+14, len(got), err, maxMarkdownFiles)
+	}
+	if first := got[:4]; !slices.Equal(first, []string{"AGENTS.md", "README.md", "docs/z.md", "a/doc-000.md"}) {
+		t.Errorf("ChatMarkdownFiles starts %q, want AGENTS.md, README.md and docs/ kept ahead of the cap", first)
 	}
 }

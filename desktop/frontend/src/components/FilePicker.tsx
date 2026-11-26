@@ -6,10 +6,11 @@ import { fileLabel, LATEST_PLAN } from '../filesView'
 import { useFloatingAt } from '../useFloatingAt'
 import type { Point } from '../useFloatingAt'
 
-type FilePickerProps = { at: Point; choices: string[]; current: string; onChoose(choice: string): void; onClose(): void }
+// planWaiting says the latest plan still waits on the owner.
+type FilePickerProps = { at: Point; choices: string[]; current: string; planWaiting: boolean; onChoose(choice: string): void; onClose(): void }
 
 // FilePicker is the Files view's list of the files it can show, the one shown ticked.
-export function FilePicker({ at, choices, current, onChoose, onClose }: FilePickerProps) {
+export function FilePicker({ at, choices, current, planWaiting, onChoose, onClose }: FilePickerProps) {
   const menu = useRef<HTMLDivElement>(null)
   const style = useFloatingAt(menu, at, onClose)
 
@@ -46,6 +47,7 @@ export function FilePicker({ at, choices, current, onChoose, onClose }: FilePick
               {folders && <span className="text-soft">{folders} / </span>}
               <span className="text-ink">{name}</span>
             </span>
+            {choice === LATEST_PLAN && planWaiting && <span className="flex-none text-waiting">Waiting for you</span>}
             {checked && <Check size={14} className="flex-none" aria-hidden="true" />}
           </button>
         )

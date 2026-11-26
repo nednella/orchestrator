@@ -1,11 +1,13 @@
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronDown, CodeXml, Copy, Eye, FileText, WrapText } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
 import { editorLabel } from '../contextCard'
 import { FILES_MODE_KEY, fileLabel, filesKey, LATEST_PLAN, onPicked, pickedFile, pickerOrder, pickFile } from '../filesView'
 import type { FilesMode } from '../filesView'
 import type { PanelViewProps } from '../panelViews'
+import type { LatestPlan } from '../types'
 import { readStored, writeStored } from '../storage'
 import { useCopied } from '../useCopied'
 import type { Point } from '../useFloatingAt'
@@ -17,7 +19,7 @@ import { Notice } from './Notice'
 
 const toolButton = 'btn btn-ghost h-7 w-7 flex-none justify-center px-0 aria-pressed:bg-(--bg-segment-on) aria-pressed:text-ink'
 
-type Listing = { key: string; files: string[]; plan: string } | { key: string; error: string }
+type Listing = { key: string; files: string[]; plan: LatestPlan } | { key: string; error: string }
 type Read = { key: string; name: string; text: string } | { key: string; name: string; error: string }
 
 const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
@@ -44,7 +46,7 @@ export function FilesView({ session }: PanelViewProps) {
   useEffect(() => {
     let stale = false
     const files = thread ? api.chatMarkdownFiles(thread) : api.projectMarkdownFiles(project)
-    const plan = thread ? api.chatLatestPlan(thread) : Promise.resolve('')
+    const plan = thread ? api.chatLatestPlan(thread) : Promise.resolve({ text: '', waiting: false })
     Promise.all([files, plan]).then(
       ([f, p]) => !stale && setListing({ key, files: pickerOrder(f), plan: p }),
       (err) => !stale && setListing({ key, error: reason(err) }),
@@ -55,7 +57,8 @@ export function FilesView({ session }: PanelViewProps) {
   }, [thread, project, key, state])
 
   const listed = listing?.key === key && !('error' in listing) ? listing : null
-  const name = picked === LATEST_PLAN && !listed?.plan ? null : (picked ?? (listed?.plan ? LATEST_PLAN : (listed?.files[0] ?? null)))
+  const plan = listed?.plan.text ? listed.plan : null
+  const name = picked === LATEST_PLAN && !plan ? null : (picked ?? (plan ? LATEST_PLAN : (listed?.files[0] ?? null)))
 
   useEffect(() => {
     if (name === null || name === LATEST_PLAN) return
@@ -70,8 +73,12 @@ export function FilesView({ session }: PanelViewProps) {
     }
   }, [thread, project, key, name, state])
 
-  const shown = name === LATEST_PLAN ? { text: listed?.plan ?? '' } : read?.key === key && read.name === name ? read : null
+  const shown = name === LATEST_PLAN ? { text: plan?.text ?? '' } : read?.key === key && read.name === name ? read : null
   const text = shown && 'text' in shown ? shown.text : null
+  const rendered = mode === 'rendered'
+  const lines = useMemo(() => text?.split('\n') ?? [], [text])
+  const scroller = useRef<HTMLDivElement>(null)
+  const rows = useVirtualizer({ count: rendered ? 0 : lines.length, getScrollElement: () => scroller.current, estimateSize: () => 20, overscan: 20 })
   const [copied, copy] = useCopied(text ?? '')
   const linksFrom = useMemo(() => ({ key, path: name === LATEST_PLAN ? '' : (name ?? '') }), [key, name])
 
@@ -79,7 +86,7 @@ export function FilesView({ session }: PanelViewProps) {
   if (!listed) return <Loading />
   if (name === null) return <Notice title="No markdown files" hint={`${thread ? "This thread's" : "This project's"} folder has no markdown files git knows of.`} centered />
 
-  const choices = listed.plan ? [LATEST_PLAN, ...listed.files] : listed.files
+  const choices = plan ? [LATEST_PLAN, ...listed.files] : listed.files
   const choose = (choice: string) => {
     setPickerAt(null)
     pickFile(key, choice)
@@ -100,8 +107,7 @@ export function FilesView({ session }: PanelViewProps) {
 
   const { folders, name: fileName } = fileLabel(name)
   const editor = editorLabel(settings.editorApp)
-  const rendered = mode === 'rendered'
-  const lines = text?.split('\n') ?? []
+  const digits = `${String(lines.length).length}ch`
   return (
     <div className="absolute inset-0 flex flex-col">
       <div className="flex flex-none items-center gap-1 border-b border-line px-2 py-1.5">
@@ -121,6 +127,7 @@ export function FilesView({ session }: PanelViewProps) {
             {folders && <span>{folders} / </span>}
             <span className="font-medium text-ink">{fileName}</span>
           </span>
+          {name === LATEST_PLAN && plan?.waiting && <span className="flex-none text-waiting">Waiting for you</span>}
           <ChevronDown size={12} className="flex-none" aria-hidden="true" />
         </button>
         <span className="flex-1" />
@@ -141,7 +148,7 @@ export function FilesView({ session }: PanelViewProps) {
           </button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div key={name} ref={scroller} className="min-h-0 flex-1 overflow-auto">
         {shown === null && <Loading />}
         {shown && 'error' in shown && <Notice title="Could not show this file" hint={shown.error} centered />}
         {text !== null && rendered && (
@@ -150,17 +157,19 @@ export function FilesView({ session }: PanelViewProps) {
           </div>
         )}
         {text !== null && !rendered && (
-          <div className={`mono grid grid-cols-[auto_1fr] py-3 text-small leading-relaxed ${wrap ? '' : 'w-max min-w-full'}`}>
-            {lines.map((line, i) => (
-              <Fragment key={i}>
-                <span className="px-3 text-right text-dim select-none">{i + 1}</span>
-                <span className={`pr-3 ${wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre'}`}>{line || ' '}</span>
-              </Fragment>
+          <div className="mono relative my-3 text-small leading-relaxed" style={{ height: rows.getTotalSize() }}>
+            {rows.getVirtualItems().map((row) => (
+              <div key={row.key} data-index={row.index} ref={rows.measureElement} className={`absolute top-0 left-0 flex ${wrap ? 'w-full' : 'w-max min-w-full'}`} style={{ transform: `translateY(${row.start}px)` }}>
+                <span className="flex-none px-3 text-right text-dim select-none" style={{ width: `calc(${digits} + 1.5rem)` }}>
+                  {row.index + 1}
+                </span>
+                <span className={`min-w-0 flex-1 pr-3 ${wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre'}`}>{lines[row.index] || ' '}</span>
+              </div>
             ))}
           </div>
         )}
       </div>
-      {pickerAt && <FilePicker at={pickerAt} choices={choices} current={name} onChoose={choose} onClose={() => setPickerAt(null)} />}
+      {pickerAt && <FilePicker at={pickerAt} choices={choices} current={name} planWaiting={plan?.waiting ?? false} onChoose={choose} onClose={() => setPickerAt(null)} />}
     </div>
   )
 }

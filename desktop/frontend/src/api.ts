@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -72,7 +72,7 @@ type Backend = {
   ProjectReadFile(project: string, path: string): Promise<string>
   ChatMarkdownFiles(id: string): Promise<string[]>
   ProjectMarkdownFiles(project: string): Promise<string[]>
-  ChatLatestPlan(id: string): Promise<string>
+  ChatLatestPlan(id: string): Promise<LatestPlan>
   ProjectCommands(project: string): Promise<Command[]>
   Cleanup(id: string, force: boolean): Promise<void>
   Cleanups(): Promise<Cleanup[]>

@@ -61,7 +61,7 @@ export function fileLabel(path: string): { folders: string; name: string } {
 // each alphabetical.
 export function pickerOrder(files: string[]): string[] {
   const rank = (f: string) => (f === 'AGENTS.md' ? 0 : f === 'README.md' ? 1 : f.startsWith('docs/') ? 2 : 3)
-  return [...files].sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))
+  return [...files].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
 }
 
 // The file each Files view was asked to show, by its thread's id or by filesKey for Home, while the app runs.
