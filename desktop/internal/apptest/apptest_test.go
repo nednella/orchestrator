@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 )
@@ -105,5 +106,18 @@ func TestRestartKeepsTheHarnessIsolation(t *testing.T) {
 				t.Errorf("after Restart(%v) %s = %q, want the harness's %q", env, k, got, want)
 			}
 		}
+	}
+}
+
+func TestObserveWaitsForTheStartOfTheHost(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	s, err := h.NewSession("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
+	if rec, _ := bus.ReadState(h.State, s.ID); rec.Observed == 0 {
+		t.Errorf("state after Observe = %+v, want the host's start taken in before the event", rec)
 	}
 }

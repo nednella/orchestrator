@@ -874,7 +874,7 @@ func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 // busy machine: the start is then newer than the change. A thread that runs no host is not waited for.
 func (h *Harness) followsHost(t *testing.T, id string) {
 	t.Helper()
-	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id, "#{pane_start_command}").Output()
+	out, err := exec.Command("tmux", "-L", h.Socket, "display-message", "-p", "-t", "="+id+":", "#{pane_start_command}").Output()
 	if err != nil || !strings.Contains(string(out), " host ") {
 		return
 	}
