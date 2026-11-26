@@ -81,7 +81,8 @@ type Chats struct {
 	threads  Threads
 	emit     func(string, any)
 	commands *commandLists
-	// turnEnded hears of each turn_end a follower takes, after the threads do; OnTurnEnd sets it before Start.
+	// turnEnded hears of each turn_end a follower takes, after the threads do, and of each exit of a thread that
+	// settled; OnTurnEnd sets it before Start.
 	turnEnded func(id string, e chatlog.Event)
 	// since is when this run of the app began, in unix milliseconds: a flag Claude refused before it was an earlier
 	// run's, which may have run another claude.
@@ -101,8 +102,9 @@ func New(t Threads, dir string, emit func(string, any)) *Chats {
 }
 
 // OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.TurnEnded and before an AwaitTurn does: the
-// latest one of the log when the follower starts, and each one the host streams after it. fn runs on the follower, so
-// it must not block. It comes before Start.
+// latest one of the log when the follower starts, and each one the host streams after it. fn also hears of the exit
+// the host streams when the thread settles, which may end a turn with no turn_end. fn runs on the follower, so it must
+// not block. It comes before Start.
 func (c *Chats) OnTurnEnd(fn func(id string, e chatlog.Event)) { c.turnEnded = fn }
 
 // Start follows the live threads' hosts until ctx ends. Each live thread has its follower when Start returns.
@@ -454,6 +456,9 @@ func (f *follower) take(e chatlog.Event) {
 		f.chats.turnEnded(f.chat.ID, e)
 		f.reached(e)
 	case chatlog.KindExit:
+		if e.Stop == chatlog.StopSettle {
+			f.chats.turnEnded(f.chat.ID, e)
+		}
 		f.reached(e)
 	case chatlog.KindMode:
 		f.chats.threads.AccessChanged(f.chat.ID, mode, approved)

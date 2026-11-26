@@ -22,21 +22,23 @@ const (
 	retryMost  = time.Minute
 )
 
-// report is a child's turn that ended at the seq end, whose result goes to its parent. waited says that the parent's
-// wait on the child was in flight when the turn ended, and so gives the parent the result.
+// report is a child's turn_end, or its exit when it was put to sleep, at the seq end, which may give its parent the
+// child's result. waited says that the parent's wait on the child was in flight then, and so gives the parent the
+// result.
 type report struct {
 	child, parent string
 	end           int64
 	waited        bool
 }
 
-// ChildTurnEnded hears of each turn_end a thread's follower takes. When the thread is a child and its turn is over, as
-// a wait counts it, the result goes to its parent once: by the parent's wait on it when one is in flight, else as a
-// message from the child that wakes a parent that sleeps and is sent whatever session_prompt_send says. Then the child
-// goes to sleep, unless a task of its own still runs in the background; a later message wakes it, and each later turn's
-// result goes to the parent as a later one. A turn that a thread stopped, as stop does, gives none: the stop answered
-// that thread. It runs on the follower, so it looks only at the wait here and gives the result in a goroutine of its
-// own, one child at a time, in order.
+// ChildTurnEnded hears of each turn_end a thread's follower takes, and of the exit when the thread settles. When the
+// thread is a child and its turn is over, as a wait counts it, or it was put to sleep in the middle of one, the result
+// goes to its parent once: by the parent's wait on it when one is in flight, else as a message from the child that
+// wakes a parent that sleeps and is sent whatever session_prompt_send says. Then the child goes to sleep, unless a task
+// of its own still runs in the background; a later message wakes it, and each later turn's result goes to the parent
+// as a later one. A turn that a thread stopped, as stop does, gives none: the stop answered that thread. It runs on the
+// follower, so it looks only at the wait here and gives the result in a goroutine of its own, one child at a time, in
+// order.
 func (c *Commands) ChildTurnEnded(id string, e chatlog.Event) {
 	parent := c.threads.ParentOf(id)
 	if parent == "" || e.Seq <= c.threads.Reported(id) {
@@ -72,37 +74,41 @@ func (c *Commands) reportAll(r report) {
 	}
 }
 
-// give gives the child's result to its parent, records it given and puts the child to sleep. It gives nothing for a
-// turn that is not the child's last, or not over yet.
+// give gives the child's result to its parent, records it given and puts the child to sleep. It gives nothing while
+// the child's last turn has no result, or one that went already.
 func (c *Commands) give(r report) {
 	ctx := c.ctx()
 	ch, err := c.threads.ChatOf(r.child)
-	if err != nil {
+	if err != nil || ch.Deleting {
 		return
 	}
 	t := c.turnOf(ch)
-	if !t.ended || t.end != r.end || t.asks || c.threads.HoldsTold(r.child) {
+	end := t.result()
+	asleep := end != t.end
+	switch {
+	case end == 0 || end <= c.threads.Reported(r.child) || c.threads.HoldsTold(r.child):
 		return
-	}
-	if t.outcome == outcomeStopped && t.stopper != "" {
+	case !asleep && (!t.ended || t.asks):
+		return
+	case !asleep && t.outcome == outcomeStopped && t.stopper != "":
 		return
 	}
 	w := waitOn{r.parent, r.child}
-	given := r.waited && c.waitGets(ctx, w, r.end)
+	given := r.waited && c.waitGets(ctx, w, end)
 	if ctx.Err() != nil {
 		return
 	}
-	if !given && c.claim(w, r.end, false) {
+	if !given && c.claim(w, end, false) {
 		later := c.threads.Reported(r.child) > 0
-		text := sessions.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
-		if !c.sendResult(ctx, w, r.end, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
+		text := sessions.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t, asleep), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
+		if !c.sendResult(ctx, w, end, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
 			return
 		}
 	}
-	if err := c.threads.SetReported(r.child, r.end); err != nil {
+	if err := c.threads.SetReported(r.child, end); err != nil {
 		log.Printf("agentos: %v", err)
 	}
-	if t.open > 0 {
+	if t.open > 0 || asleep {
 		return
 	}
 	if now, err := c.threads.ChatOf(r.child); err != nil || !now.Live {
@@ -206,15 +212,17 @@ func (c *Commands) untilRuns(ctx context.Context, ch sessions.Chat) bool {
 	}
 }
 
-// outcomeText is how a child's turn ended, as its result tells the parent.
-func outcomeText(t turn) string {
-	switch t.outcome {
-	case outcomeStopped:
+// outcomeText is how a child's turn ended, as its result tells the parent; asleep says the owner put the child to
+// sleep before it ended.
+func outcomeText(t turn, asleep bool) string {
+	switch {
+	case asleep:
+		return "was put to sleep by the owner"
+	case t.outcome == outcomeStopped:
 		return "was stopped by the owner"
-	case outcomeFailed:
-		if t.reason != "" {
-			return "failed: " + t.reason
-		}
+	case t.outcome == outcomeFailed && t.reason != "":
+		return "failed: " + t.reason
+	case t.outcome == outcomeFailed:
 		return "failed"
 	}
 	return "completed"

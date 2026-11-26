@@ -31,17 +31,17 @@ func TestTurnInReadsTheLastTurn(t *testing.T) {
 		{"a queued message waits", []chatlog.Event{user("u1"), {Kind: chatlog.KindQueued, ID: "q1"}, end}, turn{user: 1, end: 3, outcome: outcomeCompleted}},
 		{"a queued message taken in", []chatlog.Event{user("u1"), {Kind: chatlog.KindQueued, ID: "q1"}, end, user("q1"), reply("done"), end}, turn{user: 4, end: 6, ended: true, outcome: outcomeCompleted, reply: "done"}},
 		{"a queued message unsent", []chatlog.Event{user("u1"), {Kind: chatlog.KindQueued, ID: "q1"}, {Kind: chatlog.KindUnsent, ID: "q1"}, end}, turn{user: 1, end: 4, ended: true, outcome: outcomeCompleted}},
-		{"an earlier run's queued message", []chatlog.Event{user("u1"), {Kind: chatlog.KindQueued, ID: "q1"}, {Kind: chatlog.KindExit}, {Kind: chatlog.KindStart}, user("u2"), end}, turn{user: 5, end: 6, ended: true, outcome: outcomeCompleted}},
+		{"an earlier run's queued message", []chatlog.Event{user("u1"), {Kind: chatlog.KindQueued, ID: "q1"}, {Kind: chatlog.KindExit}, {Kind: chatlog.KindStart}, user("u2"), end}, turn{user: 5, exit: 3, end: 6, ended: true, outcome: outcomeCompleted}},
 		{"a stopped turn", []chatlog.Event{user("u1"), {Kind: chatlog.KindInterrupt}, {Kind: chatlog.KindTurnEnd, Error: true}}, turn{user: 1, end: 3, ended: true, outcome: outcomeStopped}},
 		{"an interrupt of an earlier turn", []chatlog.Event{user("u1"), {Kind: chatlog.KindInterrupt}, end, user("u2"), end}, turn{user: 4, end: 5, ended: true, outcome: outcomeCompleted}},
 		{"a failed turn", []chatlog.Event{user("u1"), {Kind: chatlog.KindTurnEnd, Error: true, Text: "API Error: 529"}}, turn{user: 1, end: 2, ended: true, outcome: outcomeFailed, reason: "API Error: 529"}},
 		{"an approval waits", []chatlog.Event{user("u1"), {Kind: chatlog.KindApproval, ID: "ask-1", Input: json.RawMessage(`{}`)}}, turn{user: 1, outcome: outcomeCompleted, asks: true}},
 		{"an approval answered", []chatlog.Event{user("u1"), {Kind: chatlog.KindApproval, ID: "ask-1"}, {Kind: chatlog.KindAnswer, ID: "ask-1", Text: "allow"}}, turn{user: 1, outcome: outcomeCompleted}},
-		{"claude exited", []chatlog.Event{user("u1"), {Kind: chatlog.KindExit, Error: true}}, turn{user: 1, outcome: outcomeCompleted, ran: true}},
-		{"the thread settled", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}}, turn{user: 1, end: 2, ended: true, outcome: outcomeCompleted, ran: true, settled: true}},
+		{"claude exited", []chatlog.Event{user("u1"), {Kind: chatlog.KindExit, Error: true}}, turn{user: 1, exit: 2, outcome: outcomeCompleted, ran: true}},
+		{"the thread settled", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}}, turn{user: 1, exit: 3, end: 2, ended: true, outcome: outcomeCompleted, ran: true, settled: true}},
 		{"a turn a thread stopped", []chatlog.Event{user("u1"), {Kind: chatlog.KindInterrupt, From: "main/parentaa"}, {Kind: chatlog.KindTurnEnd, Error: true}}, turn{user: 1, end: 3, ended: true, outcome: outcomeStopped, stopper: "main/parentaa"}},
 		{"a shell runs in the background", []chatlog.Event{user("u1"), {Kind: chatlog.KindTaskStart, Parent: "t1", ID: "b1", Tool: chatlog.TaskShell}, end}, turn{user: 1, end: 3, ended: true, outcome: outcomeCompleted, open: 1}},
-		{"a woken run", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}, {Kind: chatlog.KindStart}}, turn{user: 1, end: 2, ended: true, outcome: outcomeCompleted}},
+		{"a woken run", []chatlog.Event{user("u1"), end, {Kind: chatlog.KindExit, Stop: chatlog.StopSettle}, {Kind: chatlog.KindStart}}, turn{user: 1, exit: 3, end: 2, ended: true, outcome: outcomeCompleted}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for i := range tc.events {
@@ -50,6 +50,35 @@ func TestTurnInReadsTheLastTurn(t *testing.T) {
 			tc.want.newest = int64(len(tc.events))
 			if got := turnIn(tc.events); got != tc.want {
 				t.Errorf("turnIn = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTurnResultIsWhatEndsTheLastTurn(t *testing.T) {
+	user := chatlog.Event{Kind: chatlog.KindUser, ID: "u1", Text: "go"}
+	end := chatlog.Event{Kind: chatlog.KindTurnEnd}
+	settle := chatlog.Event{Kind: chatlog.KindExit, Stop: chatlog.StopSettle}
+	for _, tc := range []struct {
+		name   string
+		events []chatlog.Event
+		want   int64
+	}{
+		{"no turn", nil, 0},
+		{"a turn that runs", []chatlog.Event{user}, 0},
+		{"a turn that ended", []chatlog.Event{user, end}, 2},
+		{"a turn that ended and then slept", []chatlog.Event{user, end, settle}, 2},
+		{"a turn put to sleep", []chatlog.Event{user, settle}, 2},
+		{"a turn whose Claude crashed", []chatlog.Event{user, {Kind: chatlog.KindExit, Error: true}}, 0},
+		{"a turn put to sleep, then woken", []chatlog.Event{user, settle, {Kind: chatlog.KindStart}}, 0},
+		{"a message after the end", []chatlog.Event{user, end, {Kind: chatlog.KindUser, ID: "u2"}}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := range tc.events {
+				tc.events[i].Seq = int64(i + 1)
+			}
+			if got := turnIn(tc.events).result(); got != tc.want {
+				t.Errorf("result = %d, want %d", got, tc.want)
 			}
 		})
 	}

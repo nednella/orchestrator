@@ -308,6 +308,7 @@ type turn struct {
 	newest int64 // the seq of the log's last event
 	end    int64 // the seq of the log's last turn_end
 	user   int64 // the seq of the log's last user message
+	exit   int64 // the seq of Claude's last exit
 	// ended says the last turn_end comes after the last user message, no queued message waits to be taken in, no
 	// subagent works in the background and no turn Claude runs to tell of a task's end is due: Claude runs one after
 	// a task of its own ends.
@@ -364,6 +365,7 @@ func turnIn(events []chatlog.Event) turn {
 		case chatlog.KindExit:
 			clear(queued)
 			t.ran, t.settled, reporting = true, e.Stop == chatlog.StopSettle, false
+			t.exit = e.Seq
 		}
 	}
 	t.asks, t.open, t.end, t.user = len(approvals) > 0, len(tasks.Open()), end.Seq, user
@@ -384,10 +386,14 @@ func turnIn(events []chatlog.Event) turn {
 	return t
 }
 
-// result is the seq that ends the last turn as its result: its turn_end, 0 while the last turn has none.
+// result is the seq that ends the last turn as its result: its turn_end, or the exit of a thread put to sleep before
+// the turn ended. It is 0 while the last turn has neither.
 func (t turn) result() int64 {
-	if t.end > t.user {
+	switch {
+	case t.end > t.user:
 		return t.end
+	case t.user > 0 && t.ran && t.settled && t.exit > t.user:
+		return t.exit
 	}
 	return 0
 }

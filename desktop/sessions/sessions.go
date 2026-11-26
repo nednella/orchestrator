@@ -4070,6 +4070,7 @@ func (s *Sessions) stateOf(id string) session.State {
 type Chat struct {
 	ID, Project, Log, Socket, Media, Dir string
 	Live                                 bool // the session runs; an ended one has only its log
+	Deleting                             bool // a delete of the thread runs
 }
 
 // ChatOf is the chat of the session id, live or ended. An old terminal session has none, and a deleted thread gives
@@ -4113,7 +4114,7 @@ func (s *Sessions) Chats() []Chat {
 func (s *Sessions) chatOf(in term.Info, live bool) Chat {
 	name := in.Name
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, Live: live}
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, Live: live, Deleting: s.deleting[name.String()]}
 }
 
 // isOld says whether the session runs in a terminal it was started in before sessions ran under a host. The app

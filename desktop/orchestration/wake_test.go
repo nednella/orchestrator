@@ -470,3 +470,25 @@ func TestWaitWhileTheResultIsHeldSaysSo(t *testing.T) {
 	apptest.Eventually(t, "the result once the approval is answered", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
 	noMoreResults(t, h, parent, c, 1)
 }
+
+func TestChildPutToSleepMidTurnTellsItsParent(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release").ID
+	c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
+	apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
+	// The owner has the child open, so its chat is followed when they put it to sleep.
+	if err := h.ChatWatch(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.SettleThread(c); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the sleep on the parent's stdin", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
+	if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep by the owner:") {
+		t.Errorf("the parent read %q, want one result that says the owner put the child to sleep", lines)
+	}
+	if h.Sessions().Reported(c) == 0 {
+		t.Error("the result of the sleep is not recorded as given")
+	}
+	noMoreResults(t, h, parent, c, 1)
+}
