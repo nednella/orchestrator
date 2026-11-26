@@ -260,7 +260,7 @@ func (a *App) Stop() {
 // Media serves the pictures of notes, evidence and chats under /media/<project key>/<folder>/.
 func (a *App) Media() http.Handler { return a.media }
 
-// Tools answer the agentos tools that threads call, for tests and wiring.
+// Tools returns the commands that answer the agentos tools threads call, for tests and wiring.
 func (a *App) Tools() *orchestration.Commands { return a.tools }
 
 // Sessions is the session list, for tests and wiring.

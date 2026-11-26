@@ -2975,8 +2975,8 @@ func (s *Sessions) awaken(id string) error {
 	return nil
 }
 
-// HoldsTold says whether a message a thread told the thread id is held for it, or is being given to it now: it starts a
-// turn once it goes. It takes mu.
+// HoldsTold says whether a message a thread told the thread id is held for it, or held prompts are being given to it
+// now, a PR command among them: each starts a turn once it goes. It takes mu.
 func (s *Sessions) HoldsTold(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
