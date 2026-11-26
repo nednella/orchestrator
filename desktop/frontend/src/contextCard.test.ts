@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentItem } from './chatTimeline.ts'
-import { cardLineage, cardPlacement, cardSections, editorLabel, lineageLabel } from './contextCard.ts'
+import { cardLineage, cardPlacement, cardSections, editorLabel, lineageLabel, serverMeta, VS_CODE_APP } from './contextCard.ts'
 import type { CardFacts } from './contextCard.ts'
 import type { PR, Session } from './types.ts'
 
@@ -81,7 +81,7 @@ test('a thread with no PR has no PR row', () => {
 test('an empty section is dropped', () => {
   const keys = cardSections(session({ branch: 'issue-612' }), facts({ machine: 'MacBook Air', folder: '/code/shop', editor: 'VS Code' })).map((section) => section.key)
   assert.deepEqual(keys, ['workspace', 'git'], 'no servers and no lineage: no heading for either')
-  const served = cardSections(session(), facts({ servers: [{ port: 5173, pid: 41, command: 'vite --port 5173' }] }))
+  const served = cardSections(session(), facts({ servers: [{ port: 5173, pid: 41, command: 'vite --port 5173', started: 0 }] }))
   assert.deepEqual(
     served.map((section) => [section.key, section.heading]),
     [['servers', 'Servers']],
@@ -120,6 +120,17 @@ test('the editor row names the editor only when it is known', () => {
   assert.equal(editorLabel('Zed'), 'Open in Zed')
   const row = cardSections(session(), facts({ folder: '/code/shop' }))[0].rows.find((r) => r.kind === 'editor')
   assert.deepEqual(row, { kind: 'editor', key: 'editor', editor: '' })
+})
+
+test("the editor row opens the config's editor app", () => {
+  const row = cardSections(session(), facts({ folder: '/code/shop', editor: VS_CODE_APP }))[0].rows.find((r) => r.kind === 'editor')
+  assert.deepEqual(row, { kind: 'editor', key: 'editor', editor: 'Visual Studio Code' })
+  assert.equal(editorLabel(VS_CODE_APP), 'Open in VS Code')
+})
+
+test('a server says how long it has run, once known', () => {
+  assert.equal(serverMeta('/usr/local/bin/vite --port 5173', '4m'), 'Agent · vite · 4m')
+  assert.equal(serverMeta('node server/api.js', ''), 'Agent · node', 'no start time, no age')
 })
 
 test("a fork's parent is the thread it was forked from", () => {

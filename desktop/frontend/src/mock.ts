@@ -507,8 +507,8 @@ export function createMock(params: URLSearchParams) {
     Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { hosted: false, detail: 'Ran in a terminal before chats' })
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     servers.set(byIssue(454).id, [
-      { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173' },
-      { port: 8787, pid: 48230, command: 'node server/api.js --watch' },
+      { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173', started: Date.now() - 4 * 60_000 },
+      { port: 8787, pid: 48230, command: 'node server/api.js --watch', started: Date.now() - 72 * 60_000 },
     ])
     if (flags.lineage) {
       const split = byIssue(454)
@@ -1104,7 +1104,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/agentos', dataDirFixed: false }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/agentos', dataDirFixed: false, editorApp: 'Visual Studio Code' }
 
   const issueRefreshes = { count: 0 }
   Object.assign(window, { issueRefreshes })

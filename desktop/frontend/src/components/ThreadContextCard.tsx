@@ -5,7 +5,7 @@ import { api } from '../api'
 import { splitBranch } from '../branchLabel'
 import { openAgent } from '../chatAgents'
 import type { AgentState } from '../chatTimeline'
-import { editorLabel, folderName, serverProcess } from '../contextCard'
+import { editorLabel, folderName } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { STATE_LABEL } from '../stateMeta'
 import type { PR } from '../types'
@@ -15,6 +15,7 @@ import { ChecksMark } from './ChecksMark'
 import { ClaudeMark } from './ClaudeMark'
 import { ContextCardRow } from './ContextCardRow'
 import { EditorMark } from './EditorMark'
+import { ServerMeta } from './ServerMeta'
 
 const PR_ICON = { open: GitPullRequestArrow, draft: GitPullRequestDraft, closed: GitPullRequestClosed, merged: GitMerge }
 const PR_STATE: Record<PR['state'], string> = { open: 'Open', draft: 'Draft', closed: 'Closed', merged: 'Merged' }
@@ -84,7 +85,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
       case 'server': {
         const { port, pid, command } = r.server
         const stop = { label: `Stop the server on port ${port}`, run: () => a.report(() => api.stopServer(session.id, pid).then(refreshServers)) }
-        return <ContextCardRow icon={<Globe size={16} aria-hidden="true" />} label={`localhost:${port}`} meta={`Agent · ${serverProcess(command)}`} title={command} onClick={() => a.report(() => api.openServer(port))} stop={stop} />
+        return <ContextCardRow icon={<Globe size={16} aria-hidden="true" />} label={`localhost:${port}`} meta={<ServerMeta server={r.server} />} title={command} onClick={() => a.report(() => api.openServer(port))} stop={stop} />
       }
       case 'agent': {
         const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE[r.agent.state]}</span>

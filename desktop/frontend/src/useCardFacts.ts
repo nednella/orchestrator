@@ -7,15 +7,13 @@ import type { CardFacts, CardSection } from './contextCard'
 import type { Server, Session } from './types'
 import { useThreadServers } from './useThreadServers'
 
-type Known = Pick<Agentos, 'machine' | 'sessions' | 'issues' | 'project'>
+type Known = Pick<Agentos, 'machine' | 'sessions' | 'issues' | 'project' | 'settings'>
 
-// The app opens a thread's folder with the config's editor_app, which it does not tell the front end, so the card names
-// no editor.
 function factsOf(session: Session, a: Known, servers: Server[], agents: AgentItem[]): CardFacts {
   return {
     machine: a.machine,
     folder: session.worktree || a.project?.dir || '',
-    editor: '',
+    editor: a.settings.editorApp,
     issueTitle: a.issues.find((i) => i.number === session.issue)?.title ?? '',
     servers,
     agents,
@@ -27,7 +25,7 @@ function factsOf(session: Session, a: Known, servers: Server[], agents: AgentIte
 // and a read of its servers again. The servers are read when the card opens and at each turn end, when a thread starts
 // or stops one.
 export function useCardFacts(id: string): { session: Session | undefined; sections: CardSection[]; issueURL: string; refreshServers(): Promise<void> } {
-  const a = useAgentos('machine', 'sessions', 'issues', 'project')
+  const a = useAgentos('machine', 'sessions', 'issues', 'project', 'settings')
   const session = a.sessions.find((s) => s.id === id)
   const agents = useThreadAgents(id)
   const { servers, refresh } = useThreadServers(id, session?.state, false)

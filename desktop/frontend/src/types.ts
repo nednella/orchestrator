@@ -72,10 +72,12 @@ export type DeletePlan = {
 }
 
 // One port a server the thread started listens on.
+// started is when the server's process started, in ms since the epoch.
 export type Server = {
   port: number
   pid: number
   command: string
+  started: number
 }
 
 export type Memory = {
@@ -207,6 +209,8 @@ export type Settings = {
   threadAccess: Access | ''
   dataDir: string
   dataDirFixed: boolean
+  // editorApp is the macOS app that opens a thread's folder.
+  editorApp: string
 }
 
 export type DataDirChoice = {

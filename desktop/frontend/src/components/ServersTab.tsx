@@ -3,6 +3,7 @@ import { useAgentos } from '../AgentosContext'
 import { api } from '../api'
 import type { Server, Session } from '../types'
 import { Icon } from './Icon'
+import { ServerMeta } from './ServerMeta'
 
 type ServersTabProps = { session: Session; servers: Server[]; refresh(): Promise<void> }
 
@@ -37,11 +38,13 @@ export function ServersTab({ session, servers, refresh }: ServersTabProps) {
         <li key={server.port} className="flex items-center gap-1 pr-2 hover:bg-hover">
           <button
             className="flex min-w-0 flex-1 flex-col items-start gap-0.5 py-2 pl-4 text-left"
-            title={`Open http://localhost:${server.port}`}
+            title={`Open http://localhost:${server.port}\n${server.command}`}
             onClick={() => report(() => api.openServer(server.port))}
           >
             <span className="mono text-body text-ink">localhost:{server.port}</span>
-            <span className="mono w-full truncate text-small text-dim">{server.command}</span>
+            <span className="w-full truncate text-small text-dim">
+              <ServerMeta server={server} />
+            </span>
           </button>
           <button
             className="btn btn-ghost h-7 w-7 flex-none justify-center px-0"

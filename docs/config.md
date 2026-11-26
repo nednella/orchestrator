@@ -40,7 +40,7 @@ projects:
     setup_dismissed: false     # saved by DismissSetup; the UI no longer writes it
 ```
 
-`editor_app` is the app the thread menu's and the palette's *Open in VS Code* opens a thread's folder with: `open -a <editor_app> <folder>`, run without a shell. The folder is the thread's own worktree when it has one, else the project folder; a thread whose worktree is gone opens nothing and says so.
+`editor_app` is the app the thread menu's, the palette's and the thread details card's *Open in VS Code* opens a thread's folder with: `open -a <editor_app> <folder>`, run without a shell. The card names the app: *Open in Zed* for `editor_app: Zed`. The folder is the thread's own worktree when it has one, else the project folder; a thread whose worktree is gone opens nothing and says so.
 
 `session_worktree_command` runs through `sh -c` in the project folder when agentos starts a thread in a worktree on a branch that is not there yet (see [Where a thread runs](#where-a-thread-runs)). `{branch}` (the issue's branch from `session_branch_fallback`, or one named from the thread's title), `{worktree}` (the folder agentos picks, `<project>/trees/<branch>`), `{dir}` (the project folder) and `{base}` (`origin/<default branch>`, fetched just before, or the local default branch when origin has none) are shell-quoted. The command may put the worktree in another folder: the thread runs in the one git then lists on the branch. A command that fails, or that leaves no worktree on the branch, starts no thread, and the error gives its first line of output. A woken thread whose worktree is gone gets it back at the same path on its own branch with plain `git worktree add`, never with this command.
 

@@ -108,3 +108,9 @@ export function folderName(path: string): string {
 export function serverProcess(command: string): string {
   return folderName(command.trim().split(/\s+/)[0] ?? '')
 }
+
+// serverMeta is the line under a server's address: who started it, its program, and how long it has run, age, when
+// known.
+export function serverMeta(command: string, age: string): string {
+  return ['Agent', serverProcess(command), age].filter(Boolean).join(' · ')
+}
