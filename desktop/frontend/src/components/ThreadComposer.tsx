@@ -117,11 +117,6 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     [update, pending.images.length],
   )
 
-  // A settled thread with a chat keeps its composer, and a message wakes it; one that ran in a terminal cannot wake.
-  if (session.state === 'settled' && !session.hosted) {
-    return <div className="glass mx-auto w-fit rounded-full px-3 py-1 text-small text-dim">This thread is asleep</div>
-  }
-
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
 

@@ -263,7 +263,6 @@ func readEvents(r io.Reader, each func(activity.Event)) {
 // Day is what one project's agents did on one local day.
 type Day struct {
 	Prompts       int
-	Chats         int // chats started; a chat counts in no other figure
 	Sessions      int
 	IssueSessions int   // of Sessions, those started from an issue
 	WorkMs        int64 // time sessions spent working
@@ -283,7 +282,6 @@ type Day struct {
 
 func (d *Day) add(o Day) {
 	d.Prompts += o.Prompts
-	d.Chats += o.Chats
 	d.Sessions += o.Sessions
 	d.IssueSessions += o.IssueSessions
 	d.WorkMs += o.WorkMs

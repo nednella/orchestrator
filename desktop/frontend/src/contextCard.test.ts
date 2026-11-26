@@ -29,7 +29,6 @@ const session = (over: Partial<Session> = {}): Session => ({
   browser: false,
   evidence: 0,
   access: 'supervised',
-  hosted: true,
   action: '',
   forkOf: '',
   forkAt: '',

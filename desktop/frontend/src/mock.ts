@@ -247,7 +247,6 @@ export function createMock(params: URLSearchParams) {
       browser: s.browser,
       evidence: s.evidence,
       access: s.access,
-      hosted: s.hosted,
       action: s.action,
       forkOf: s.forkOf,
       forkAt: s.forkAt,
@@ -425,7 +424,6 @@ export function createMock(params: URLSearchParams) {
       browser: false,
       evidence: 0,
       access,
-      hosted: true,
       action: issue ? 'Work' : '',
       forkOf: '',
       forkAt: '',
@@ -440,13 +438,11 @@ export function createMock(params: URLSearchParams) {
   }
 
   // Two seeded threads have a chat, one waiting on a tool and one on a question; the others start with an empty one,
-  // and one ran in a terminal before agentos showed chats, so it has none. With chatcases, one chat log cannot be read
-  // and one more thread waits on a plan. With stale, the tool's approval ends on the host's side and the app is not told.
+  // With chatcases, one chat log cannot be read and one more thread waits on a plan. With stale, the tool's approval ends on the host's side and the app is not told.
   const deleted = new Set<string>()
   const chats = mockChat(emit, (id) => {
     if (deleted.has(id)) throw `Thread ${id} was deleted`
     const s = find(id)
-    if (!s.hosted) throw 'This thread ran in a terminal before agentos showed chats'
     return {
       n: s.n,
       settled: s.state === 'settled',
@@ -472,7 +468,6 @@ export function createMock(params: URLSearchParams) {
 
   // wake starts a settled thread again under its id, as the sessions do.
   function wake(s: Session) {
-    if (!s.hosted) throw `Thread ${s.id} ran in a terminal and cannot be woken`
     if (s.state !== 'settled') throw `Thread ${s.id} is not asleep`
     s.wokeAt = Date.now()
     setState(s, 'idle')
@@ -502,7 +497,6 @@ export function createMock(params: URLSearchParams) {
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
     seed('retry banner experiment', 0, 'settled', [['working', 400], ['idle', 380], ['settled', 300]])
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
-    Object.assign(sessions.find((x) => x.title === 'spike: websocket retry')!, { hosted: false, detail: 'Ran in a terminal before chats' })
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     servers.set(byIssue(454).id, [
       { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173', started: Date.now() - 4 * 60_000 },
@@ -715,7 +709,6 @@ export function createMock(params: URLSearchParams) {
     const row = (project: string, prompts: number): LedgerRow => ({
       project,
       prompts: Math.round(prompts * scale),
-      chats: Math.round(prompts * scale * 0.03),
       sessions: Math.round(prompts * scale * 0.08),
       issueSessions: Math.round(prompts * scale * 0.045),
       workMs: Math.round(prompts * scale * 0.13 * 3_600_000),
@@ -741,7 +734,6 @@ export function createMock(params: URLSearchParams) {
     const totals: LedgerRow = {
       project: '',
       prompts: projects.reduce((a, r) => a + r.prompts, 0),
-      chats: projects.reduce((a, r) => a + r.chats, 0),
       sessions: projects.reduce((a, r) => a + r.sessions, 0),
       issueSessions: projects.reduce((a, r) => a + r.issueSessions, 0),
       workMs: projects.reduce((a, r) => a + r.workMs, 0),
@@ -787,7 +779,7 @@ export function createMock(params: URLSearchParams) {
       { project: 'storefront', issue: 0, session: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', sessions: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
       { project: 'agentos', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
-    const usage = { totals: usageRow('', '', 1, totals.sessions + totals.chats), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
+    const usage = { totals: usageRow('', '', 1, totals.sessions), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
     const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
     const perDay = shape.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.weight) / weight), workMs: Math.round((totals.workMs * d.weight) / weight), cost: (totals.cost * d.weight) / weight }))
     const before = (n: number) => Math.round(n * 0.88)
@@ -1199,7 +1191,6 @@ export function createMock(params: URLSearchParams) {
     },
     ForkSession: async (id: string, at: string) => {
       const from = find(id)
-      if (!from.hosted) throw 'Only a thread with a chat can be forked'
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.access)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
       Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, forkAt: at, worktree: '' })
@@ -1228,7 +1219,6 @@ export function createMock(params: URLSearchParams) {
       if (!access) throw 'Pick an access level'
       if (!['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       const s = find(id)
-      if (!s.hosted) throw `Thread ${id} ran in a terminal; its access cannot change`
       if (s.state !== 'settled' && chats.busy(id)) throw s.state === 'working' && s.subagents > 0 && !chats.turnRuns(id) ? 'Change access when the subagents end' : 'Change access when the turn ends'
       if (s.access === access) return
       if (s.state !== 'settled' && (s.access === 'full' || access === 'full')) {
@@ -1386,7 +1376,7 @@ export function createMock(params: URLSearchParams) {
       if (action && !issue.actions.includes(action)) throw `issue #${number} has no action "${action}"`
       const name = action || issue.actions[0]
       const command = { Work: `/work ${number}`, Plan: `/plan ${number}`, Investigate: `/investigate ${number}` }[name] ?? `Work on issue #${number}: ${issue.title}`
-      const settled = mine.filter((s) => s.hosted).at(-1)
+      const settled = mine.at(-1)
       if (settled) {
         wake(settled)
         void chats.backend.ChatSend(settled.id, `${command} ${prompt}`.trim(), [])
@@ -1482,7 +1472,6 @@ export function createMock(params: URLSearchParams) {
     },
     TypeInto: async (id: string, text: string) => {
       const s = find(id)
-      if (!s.hosted) throw `Thread ${id} runs in an old terminal`
       if (s.state === 'settled') throw `Thread ${id} is asleep`
       return chats.backend.ChatDraft(id, text)
     },

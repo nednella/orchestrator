@@ -74,7 +74,6 @@ type Session struct {
 	WokeAt      int64            `json:"wokeAt"`    // when it last started: its first start, or its latest wake
 	Issue       int              `json:"issue"`
 	Access      session.Access   `json:"access"`
-	Hosted      bool             `json:"hosted"` // the agent runs, or ran, under a host, whose chat log the chat service serves
 	Action      string           `json:"action"` // the queue action the session was started with, "" when none
 	ForkOf      string           `json:"forkOf"` // the thread the session was forked from, "" when none
 	ForkAt      string           `json:"forkAt"` // the uuid of the reply the fork's chat was cut at, "" when none
@@ -764,14 +763,14 @@ func (s *Sessions) handoverOf(id string) string {
 
 // Delete stops the thread when it runs, as a settle does, and removes it for good: its row, state file, chat log, chat
 // images, evidence, handover, usage mark, temp folder, browser window, host socket and shells. Its clean-up log entries
-// and its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a
-// clean-up with every check, and only when no other thread or shell works in it; a worktree that stays refuses the
-// Delete, and no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes
-// with the thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the
-// deepest first, so none is left without the parent that reaches it. With worktree their worktrees go with the
-// thread's, all or none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over
-// to that thread, so a Delete of it can take the worktree later. A thread with a running descendant is refused. While the delete runs, neither the thread nor a descendant can be woken or
-// forked, and none starts a child.
+// and its events stay, and so does its branch. With worktree, the worktree agentos made for it goes first, by a clean-
+// up with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete,
+// and no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
+// thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
+// first, so none is left without the parent that reaches it. With worktree their worktrees go with the thread's, all or
+// none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over to that thread,
+// so a Delete of it can take the worktree later. A thread with a running descendant is refused. While the delete runs,
+// neither the thread nor a descendant can be woken or forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -1606,7 +1605,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Hosted: true, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt:  s.forkAtOf(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
@@ -4064,7 +4063,8 @@ func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 	return target{id: id, title: cmp.Or(in.Title, defaultTitle), branch: w.Branch, dir: w.Path, proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke, made: true}, true
 }
 
-// targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork and a thread started before agentos recorded branches have none. It needs mu.
+// targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork and a thread started
+// before agentos recorded branches have none. It needs mu.
 func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool) {
 	proj, ok := projectIn(projs, in)
 	if !ok || in.Fork != "" || in.Branch == "" {

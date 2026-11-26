@@ -168,7 +168,7 @@ export function ChatView({ session }: ChatViewProps) {
     [thread, worktree, report, readRewindOff, threadDraft, setThreadDraft],
   )
   const folder = session.worktree || project?.dir || ''
-  const edit: ChatEdit | undefined = session.hosted ? { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom } : undefined
+  const edit: ChatEdit = { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom }
 
   const stop = () => stopWith(() => api.chatInterrupt(session.id))
   const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
@@ -191,8 +191,7 @@ export function ChatView({ session }: ChatViewProps) {
 
   return (
     <div ref={pane} data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties} onKeyDown={onKeyDown}>
-      {empty && !loading && error && !session.hosted && <p className="flex flex-1 items-center justify-center px-4 text-center text-small text-dim">{error}</p>}
-      {empty && !loading && error && session.hosted && <Notice title="The chat did not load" hint={error} centered />}
+      {empty && !loading && error && <Notice title="The chat did not load" hint={error} centered />}
       {empty && (loading || !error) && <div className="flex-1" />}
       {!empty && (
         <ChatTimeline

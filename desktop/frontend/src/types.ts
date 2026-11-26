@@ -73,7 +73,6 @@ export type Session = {
   browser: boolean
   evidence: number
   access: Access
-  hosted: boolean
   action: string
   forkOf: string // the thread this one was forked from, '' when none
   forkAt: string // the uuid of the reply the fork's chat was cut at, '' when none
@@ -261,7 +260,6 @@ export type Stats = {
 export type LedgerRow = {
   project: string
   prompts: number
-  chats: number
   sessions: number
   issueSessions: number
   workMs: number

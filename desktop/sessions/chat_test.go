@@ -110,11 +110,31 @@ func TestNewThreadKeepsItsAccess(t *testing.T) {
 	}
 }
 
-func TestOlderBuildsChatWakesAsRead(t *testing.T) {
-	wakesAsRead(t, func(file map[string]any) {
-		delete(file, "access")
-		file["chat"] = true
+func TestMissingAccessWakesAsRead(t *testing.T) {
+	wakesAsRead(t, func(file map[string]any) { delete(file, "access") })
+}
+
+func TestReadThreadIsInPlanModeAfterARestart(t *testing.T) {
+	h := newHarness(t)
+	read, err := h.NewThread("ask", "", "", "", "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Join(claudeArgs(t, h, read.ID), " "); !strings.Contains(args, "--permission-mode plan") {
+		t.Fatalf("args of the Read thread = %s", args)
+	}
+	h.App.Stop()
+	fresh := h.Restart(t)
+	eventually(t, "the Read thread after a restart", func() bool {
+		got, ok := fresh.Session(read.ID)
+		return ok && got.Access == session.Read && accessTag(t, fresh, read.ID) == "read"
 	})
+	if rec, _ := bus.ReadState(fresh.State, read.ID); rec.Access != session.Read {
+		t.Errorf("state file access = %q, want read", rec.Access)
+	}
+	if args := strings.Join(claudeArgs(t, fresh, read.ID), " "); !strings.Contains(args, "--permission-mode plan") {
+		t.Errorf("args of the Read thread after a restart = %s", args)
+	}
 }
 
 func TestUnknownAccessWakesAsRead(t *testing.T) {
@@ -193,7 +213,7 @@ func TestReadThreadCountsInStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if led.Totals.Prompts != 2 || led.Totals.Sessions != 2 || led.Totals.Chats != 0 {
+	if led.Totals.Prompts != 2 || led.Totals.Sessions != 2 {
 		t.Errorf("totals = %+v", led.Totals)
 	}
 

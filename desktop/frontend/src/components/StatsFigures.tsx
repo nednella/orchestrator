@@ -19,7 +19,7 @@ export function StatsFigures({ ledger }: StatsFiguresProps) {
         icon={ListChecks}
         label="Tasks"
         value={totals.sessions.toLocaleString()}
-        sub={`${counted(totals.issueSessions, 'issue', 'issues')} · ${counted(totals.chats, 'chat', 'chats')}`}
+        sub={counted(totals.issueSessions, 'issue', 'issues')}
         change={change(totals.sessions, previous.sessions)}
         period={period}
       />

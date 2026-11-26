@@ -161,11 +161,9 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
             {settled ? (
               <span className="relative z-[1] flex flex-none items-center gap-1.5">
                 <CleanupMark session={session} />
-                {session.hosted && (
-                  <button className="btn h-[1.375rem] px-2 text-label" title="Start this thread again" onClick={() => a.report(() => a.wakeThread(session.id))}>
-                    Wake
-                  </button>
-                )}
+                <button className="btn h-[1.375rem] px-2 text-label" title="Start this thread again" onClick={() => a.report(() => a.wakeThread(session.id))}>
+                  Wake
+                </button>
                 <button className="btn h-[1.375rem] px-2 text-label" title="Remove this thread and its chat" onClick={askDelete}>
                   Delete
                 </button>

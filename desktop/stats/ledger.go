@@ -34,7 +34,6 @@ type DayFigures struct {
 type LedgerRow struct {
 	Project       string  `json:"project"`
 	Prompts       int     `json:"prompts"`
-	Chats         int     `json:"chats"`
 	Sessions      int     `json:"sessions"`
 	IssueSessions int     `json:"issueSessions"`
 	WorkMs        int64   `json:"workMs"`
@@ -58,7 +57,7 @@ type total struct {
 
 func (t total) row(project string) LedgerRow {
 	r := LedgerRow{
-		Project: project, Prompts: t.Prompts, Chats: t.Chats, Sessions: t.Sessions, IssueSessions: t.IssueSessions, WorkMs: t.WorkMs, SessionMs: t.SessionMs,
+		Project: project, Prompts: t.Prompts, Sessions: t.Sessions, IssueSessions: t.IssueSessions, WorkMs: t.WorkMs, SessionMs: t.SessionMs,
 		PRsOpened: t.PRsOpened, PRsMerged: t.PRsMerged, PRsClosed: t.PRsClosed, IssuesFiled: t.IssuesFiled, IssuesClosed: t.issuesClosed,
 		Tokens: t.spending.all.Total(), Cost: t.spending.all.Dollars(),
 	}

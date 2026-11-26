@@ -30,7 +30,6 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session
     browser: false,
     evidence: 0,
     access: 'supervised',
-    hosted: true,
     action: '',
     forkOf: '',
     forkAt: '',

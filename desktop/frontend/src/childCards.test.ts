@@ -27,7 +27,6 @@ const session = (over: Partial<Session>): Session => ({
   browser: false,
   evidence: 0,
   access: 'read',
-  hosted: true,
   action: '',
   forkOf: '',
   forkAt: '',

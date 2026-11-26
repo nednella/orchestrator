@@ -21,9 +21,9 @@ export function ChildMenu({ child, at, onClose }: ChildMenuProps) {
       items={[
         { label: 'Open', run: () => a.select(child.id) },
         working && { label: 'Stop', run: () => a.report(() => api.chatInterrupt(child.id)) },
-        asleep && child.hosted && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
+        asleep && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
         !asleep && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
-        { label: 'Delete', danger: true, separated: asleep && !child.hosted, run: () => a.report(() => confirmDelete(child, () => latest().sessions, a.deleteThread)) },
+        { label: 'Delete', danger: true, run: () => a.report(() => confirmDelete(child, () => latest().sessions, a.deleteThread)) },
       ]}
     />
   )

@@ -294,7 +294,7 @@ func TestDeltasAreBatched(t *testing.T) {
 	}
 }
 
-func TestEndedHostedSessionKeepsItsHostedMark(t *testing.T) {
+func TestEndedSessionKeepsItsRowAfterARestart(t *testing.T) {
 	h, id := newThread(t)
 	send(t, h, id, "hi")
 	eventually(t, "the turn's end in the log", func() bool { return turnEnds(t, h, id) == 1 })
@@ -302,14 +302,11 @@ func TestEndedHostedSessionKeepsItsHostedMark(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
-	if s, _ := h.Session(id); !s.Hosted {
-		t.Errorf("ended row = %+v, want hosted", s)
-	}
 
 	second := h.Restart(t)
 	s, ok := second.Session(id)
-	if !ok || s.State != "settled" || !s.Hosted {
-		t.Fatalf("ended row after a restart = %+v (%v), want hosted", s, ok)
+	if !ok || s.State != "settled" {
+		t.Fatalf("ended row after a restart = %+v (%v), want settled", s, ok)
 	}
 	if events := history(t, second, id, 0); len(events) < 4 {
 		t.Errorf("history after a restart = %v", kinds(events))

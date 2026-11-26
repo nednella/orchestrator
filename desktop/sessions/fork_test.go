@@ -196,7 +196,7 @@ func TestForkKeepsFolderAccessAndModel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if fork.Title != "ask (fork)" || fork.Access != access || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || !fork.Hosted || fork.State == "settled" {
+			if fork.Title != "ask (fork)" || fork.Access != access || fork.Model != "haiku" || fork.Effort != "low" || fork.ForkOf != src.ID || fork.State == "settled" {
 				t.Errorf("fork = %+v", fork)
 			}
 			srcChat, _ := h.Sessions().ChatOf(src.ID)
