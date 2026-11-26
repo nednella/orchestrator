@@ -1475,12 +1475,64 @@ func TestChildInTheWorktreeKeepsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the child settled", func() bool { return stateOf(h, child.ID) == "settled" })
-	// The child's result wakes the sleeping parent, which this fixture's worktree refuses, so a clean-up started during
-	// one of those wakes is refused until the next pause.
-	eventually(t, "the clean-up", func() bool { return h.Cleanup(parent.ID, false) == nil })
+	if err := h.Cleanup(parent.ID, false); err != nil {
+		t.Fatal(err)
+	}
 	if !cleanedUp(h, parent.ID)() || exists(wt) {
 		t.Errorf("the clean-up after the child settled: cleaned up %v, worktree there %v", cleanedUp(h, parent.ID)(), exists(wt))
 	}
+}
+
+func TestChildResultWaitsOutTheParentsCleanup(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	wt := parent.Worktree
+	pushWork(t, wt)
+	// The worktree is the parent's own, so nothing but the hold keeps a wake from taking it back.
+	marker := filepath.Join(gitIn(t, wt, "rev-parse", "--path-format=absolute", "--git-dir"), "agentos-thread")
+	if err := os.WriteFile(marker, []byte(parent.ID+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	child, err := h.Sessions().CreateChild(context.Background(), sessions.ChildOptions{Parent: parent.ID, Task: "keep working", Title: "Helper", Access: parent.Access, Where: sessions.WhereFolder})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
+	h.RefreshPRs()
+	h.GH.SetPR(prJSON("CLOSED", false, "[]", 0, 0))
+	h.RefreshPRs()
+	eventually(t, "the parent asleep with its clean-up due", func() bool {
+		got, _ := h.Session(parent.ID)
+		return got.State == "settled" && got.Cleanup == "ask"
+	})
+
+	if err := h.SettleThread(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the child settled", func() bool { return stateOf(h, child.ID) == "settled" })
+	time.Sleep(3 * time.Second) // past the first tries of a result that would wake the parent
+	if got := stateOf(h, parent.ID); got != "settled" {
+		t.Fatalf("the parent is %s, want it left asleep for its clean-up", got)
+	}
+	for _, line := range h.Stdin(t, parent.ID) {
+		if strings.Contains(line, "in thread "+child.ID) {
+			t.Errorf("the parent read the child's result during its clean-up: %s", line)
+		}
+	}
+	if err := h.Cleanup(parent.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cleanedUp(h, parent.ID)() || exists(wt) {
+		t.Errorf("the clean-up after the child settled: cleaned up %v, worktree there %v", cleanedUp(h, parent.ID)(), exists(wt))
+	}
+	// The owner's next wake of the parent gives it the result.
+	if _, err := h.WakeThread(parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the result once the owner woke the parent", func() bool {
+		return slices.ContainsFunc(h.Stdin(t, parent.ID), func(l string) bool { return strings.Contains(l, "in thread "+child.ID) })
+	})
 }
 
 func TestFolderChildIsRefusedDuringACleanup(t *testing.T) {

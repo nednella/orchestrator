@@ -1445,6 +1445,18 @@ func (l *Lifecycle) CleaningUp(id string) bool {
 	return tr != nil && tr.cleanup == "pending"
 }
 
+// cleanupDue says whether the thread's PR merged or closed and its clean-up has not finished: it waits to run or for
+// the owner's word, runs or was blocked. It takes mu.
+func (l *Lifecycle) cleanupDue(id string) bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tr := l.tracks[id]
+	return tr != nil && tr.pr != nil && (tr.pr.State == "merged" || tr.pr.State == "closed") && !l.retired(id)
+}
+
 // gone says whether nothing is at path.
 func gone(path string) bool {
 	_, err := os.Lstat(path)

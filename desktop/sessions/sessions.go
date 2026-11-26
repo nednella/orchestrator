@@ -3220,7 +3220,7 @@ func (m Told) gone(err error) {
 }
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
-// woken for it. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
+// woken for it, but for a child's result while a clean-up of it is due or runs: that waits for its next wake. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
 // the approval, and one whose host is held for a restart until it runs again; one with messages held, or being sent,
 // holds it after them. A working thread's host queues it, for the
 // turn's next step or, with Steer, at once. A thread that is deleted, or being deleted, or ran in a terminal takes none.
@@ -3236,6 +3236,12 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 		if err != nil {
 			return "", err
 		}
+	}
+	if m.Result && s.asleepForCleanup(id) {
+		s.mu.Lock()
+		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m, nextTurn: true})
+		s.mu.Unlock()
+		return "", nil
 	}
 	if err := s.awaken(id); err != nil {
 		return "", err
@@ -3256,6 +3262,15 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	}
 	s.doneDelivering(id, refused)
 	return msg, err
+}
+
+// asleepForCleanup says whether the thread sleeps with a clean-up due or running: a child's result does not wake it,
+// and waits for its next wake. It takes mu.
+func (s *Sessions) asleepForCleanup(id string) bool {
+	s.mu.Lock()
+	_, settled := s.ended[id]
+	s.mu.Unlock()
+	return settled && s.life.cleanupDue(id)
 }
 
 // outranked is the rank rule's refusal: a thread with access may not message a thread with more.
@@ -4404,7 +4419,8 @@ func (s *Sessions) pending(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
-	case len(s.wakes[id]) > 0:
+	// A child's result kept for the next wake does not: it waits out the clean-up.
+	case slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.nextTurn }):
 		return "messages wait for this thread"
 	case s.turnRuns(id):
 		return "a turn is running"
