@@ -229,15 +229,7 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l, dir, _ := madeRepo(t)
-			l.sessions.tmux, l.sessions.closeTerm = testTmux(t), func(string) {}
 			projDir, path := tt.place(t, l, dir)
-			shell := session.Name{Project: "p", Shell: 1}
-			if err := l.sessions.tmux.NewSession(t.Context(), shell, "shell", path, nil, []string{"sleep", "60"}, 80, 24); err != nil {
-				t.Fatal(err)
-			}
-			if err := l.sessions.tmux.SetThread(t.Context(), shell, "p/t1"); err != nil {
-				t.Fatal(err)
-			}
 			ran := filepath.Join(t.TempDir(), "ran")
 			proj := project.Project{Name: "p", Dir: projDir, CleanupCommand: fmt.Sprintf("echo {worktree} >> %q && git worktree remove --force {worktree}", ran)}
 			plan := cleanupPlan{branchPlan: branchPlan{branch: "issue-7", worktree: path, made: true}, force: true}
@@ -246,16 +238,10 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 				if reason != "" || !slices.Equal(removed, []string{"worktree " + path}) || !gone(path) {
 					t.Errorf("removed %q, reason %q, folder gone %v", removed, reason, gone(path))
 				}
-				if l.sessions.tmux.Has(t.Context(), shell) {
-					t.Error("the thread's shell still runs")
-				}
 				return
 			}
 			if !strings.Contains(reason, tt.reason) || len(removed) != 0 {
 				t.Errorf("removed %q, reason %q, want %q", removed, reason, tt.reason)
-			}
-			if !l.sessions.tmux.Has(t.Context(), shell) {
-				t.Error("a refused removal closed the thread's shell")
 			}
 			if _, err := os.Stat(ran); err == nil {
 				t.Error("the clean-up command ran")
@@ -434,7 +420,7 @@ func TestNewShellIsRefusedWhileItsThreadIsDeleted(t *testing.T) {
 	s, name := asleepAndKept(t)
 	s.deleting[name.String()] = true
 	if _, err := s.NewShell(name.String()); err == nil || err.Error() != "Thread 3 is being deleted; open a shell when that ends" {
-		t.Errorf("shell = %v, want it refused while the delete runs, which closes the thread's shells", err)
+		t.Errorf("shell = %v, want it refused while the delete runs, which needs the worktree free of shells", err)
 	}
 }
 

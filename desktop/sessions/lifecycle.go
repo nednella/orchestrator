@@ -1193,9 +1193,6 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if user := l.sessions.usersOf(t.dir, true, id); reason == "" && user != "" {
 		reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	if reason == "" {
-		reason = l.shellOf(ctx, id)
-	}
 	var removed []string
 	if reason == "" {
 		removed, reason = l.removeWorktree(ctx, t, &plan)
@@ -1207,24 +1204,6 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if !again {
 		l.logCleanup(ctx, t, nil, removed, reason)
 	}
-}
-
-// shellOf says why a shell of the thread keeps its worktree: one is open, or tmux could not say. It holds shellMu, so a
-// shell that started before the clean-up's mark is listed, and NewShell refuses one after it.
-func (l *Lifecycle) shellOf(ctx context.Context, id string) string {
-	s := l.sessions
-	s.shellMu.Lock()
-	defer s.shellMu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
-	defer cancel()
-	shells, err := s.tmux.ShellPaths(ctx)
-	if err != nil {
-		return shellsUnlisted(err)
-	}
-	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id }) {
-		return "a shell of this thread is open"
-	}
-	return ""
 }
 
 // startChildCleanup marks the clean-up of the asleep child id as running and returns its track and the clean-up state
@@ -1376,23 +1355,26 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 	if user := l.sessions.usersOf(w.Path, false, ours...); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	return p, l.shellIn(ctx, t.proj.Key(), w.Path, ours...)
+	return p, l.shellIn(ctx, t.proj.Key(), w.Path)
 }
 
 // shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, or a shell of the project is
-// open in a folder tmux does not know. It is "" when none is. The shells of threads do not count: what asks closes
-// them when the worktree goes.
-func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads ...string) string {
+// open in a folder tmux does not know. It is "" when none is. A shell belongs to the project, so one in a thread's
+// worktree keeps it until the owner closes the shell. It holds shellMu, so a shell that started before a clean-up's
+// mark is listed, and NewShell refuses one after it.
+func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string) string {
+	s := l.sessions
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	shells, err := l.sessions.tmux.ShellPaths(ctx)
+	shells, err := s.tmux.ShellPaths(ctx)
 	if err != nil {
 		return shellsUnlisted(err)
 	}
 	unknown := false
 	for _, sh := range shells {
 		switch {
-		case slices.Contains(threads, sh.Thread):
 		case sh.Path == "":
 			unknown = unknown || sh.Name.Project == key
 		case folder.Inside(sh.Path, worktree):
@@ -1437,7 +1419,6 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	if !gone(path) && !l.ours(ctx, t.proj.Key(), path, t.id) {
 		return nil, fmt.Sprintf("%s is not the worktree orchestrator made for this thread", path)
 	}
-	l.sessions.closeShellsOf(t.id, path, p.family...)
 	if !gone(path) {
 		force := ""
 		if p.force {

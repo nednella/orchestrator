@@ -60,16 +60,13 @@ func TestFilesRewindOnlyInTheThreadsOwnWorktree(t *testing.T) {
 	}
 	eventually(t, "the thread's shell in the worktree", func() bool { return shellFolder(t, h, own.ID) == resolved(wt) })
 	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != "" {
-		t.Errorf("with the thread's idle shell in the worktree: reason = %q", reason)
+		t.Errorf("with an idle shell in the worktree: reason = %q", reason)
 	}
-	other, err := h.ShellNew("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cdShell(t, h, other.ID, wt)
-	if _, _, reason := h.Sessions().FilesRewind(s.ID); reason != "a shell is open in this worktree" {
-		t.Errorf("with a shell of the project in the worktree: reason = %q", reason)
-	}
+	typeIn(t, h, own.ID, "sleep 30")
+	eventually(t, "the shell's command keeps the files", func() bool {
+		_, _, reason := h.Sessions().FilesRewind(s.ID)
+		return reason == "a shell in this worktree runs a command"
+	})
 }
 
 func samePath(a, b string) bool {

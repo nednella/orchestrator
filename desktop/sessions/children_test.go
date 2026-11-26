@@ -469,7 +469,7 @@ func TestChildSleepKeepsItsWorktreeWhileItsShellIsOpen(t *testing.T) {
 			shellRuns(t, h, shell, tc.command, tc.command != "")
 
 			sleepsByItself(t, h, child.ID)
-			if entry := cleanupOf(t, h, child); entry.Status != "blocked" || entry.Reason != "a shell of this thread is open" || len(entry.Removed) != 0 {
+			if entry := cleanupOf(t, h, child); entry.Status != "blocked" || entry.Reason != "a shell is open in this worktree" || len(entry.Removed) != 0 {
 				t.Errorf("the clean-up = %+v, want it kept for the child's shell", entry)
 			}
 			if !exists(child.Worktree) || !tmuxHas(h, shell) {
@@ -511,7 +511,7 @@ func TestChildWithNoShellLosesItsEmptyWorktree(t *testing.T) {
 	}
 }
 
-func TestDeleteClosesTheShellsOfAChildItsShellKept(t *testing.T) {
+func TestDeleteOfAChildKeepsItsShellAndRefusesTheWorktreeUnderIt(t *testing.T) {
 	t.Parallel()
 	for _, withWorktree := range []bool{false, true} {
 		t.Run(fmt.Sprintf("worktree %v", withWorktree), func(t *testing.T) {
@@ -522,14 +522,12 @@ func TestDeleteClosesTheShellsOfAChildItsShellKept(t *testing.T) {
 				t.Fatalf("the clean-up = %+v, want it kept for the child's shell", entry)
 			}
 
-			if err := h.DeleteThread(child.ID, withWorktree); err != nil {
-				t.Fatal(err)
+			err := h.DeleteThread(child.ID, withWorktree)
+			if withWorktree != (err != nil) {
+				t.Fatalf("delete with the worktree %v = %v", withWorktree, err)
 			}
-			if tmuxHas(h, shell) {
-				t.Error("the deleted child's shell still runs")
-			}
-			if exists(child.Worktree) != !withWorktree {
-				t.Errorf("worktree there %v after a delete with the worktree %v", exists(child.Worktree), withWorktree)
+			if !tmuxHas(h, shell) || !exists(child.Worktree) {
+				t.Errorf("the shell runs %v, the worktree is there %v; want both", tmuxHas(h, shell), exists(child.Worktree))
 			}
 		})
 	}

@@ -741,7 +741,7 @@ func (s *Sessions) handoverOf(id string) string {
 }
 
 // Delete stops the thread when it runs, as a settle does, and removes it for good: its row, state file, chat log, chat
-// images, evidence, handover, usage mark, temp folder, browser window, host socket and shells. Its clean-up log entries
+// images, evidence, handover, usage mark, temp folder, browser window and host socket. Its clean-up log entries
 // and its events stay, and so does its branch. With worktree, the worktree orchestrator made for it goes first, by a clean-
 // up with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete,
 // and no thread goes. Without, the worktree stays on disk as it is, and the record that orchestrator made it goes with the
@@ -786,7 +786,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	return nil
 }
 
-// remove stops the thread id of a Delete and its shells, and removes it with its files, and says whether it stopped the thread.
+// remove stops the thread id of a Delete, and removes it with its files, and says whether it stopped the thread.
 func (s *Sessions) remove(id string) (settled bool, err error) {
 	name, err := session.ParseName(id)
 	if err != nil {
@@ -802,7 +802,6 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 	if err := s.settleToDelete(name); err != nil {
 		return false, err
 	}
-	s.closeShellsOf(id, "")
 	// Counted here: the count sync starts when the session goes, also at the settle of the clean-up, may run after the
 	// delete and find no thread.
 	if rec.Transcript != "" {
@@ -1040,7 +1039,7 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 		if id != top {
 			heir = s.heirOf(key, path, family)
 		}
-		reason := s.life.shellIn(ctx, key, path, family...)
+		reason := s.life.shellIn(ctx, key, path)
 		if user := s.usersOf(path, true, family...); reason == "" && user != "" && heir == "" {
 			reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 		}
@@ -1062,7 +1061,7 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 }
 
 // removeWorktrees removes the worktrees of a Delete's family, trees, once every one has passed every check of a
-// clean-up, so a worktree kept refuses the Delete before any goes; each that goes takes the family's shells in it.
+// clean-up, so a worktree kept refuses the Delete before any goes; each that goes is checked for shells in it.
 // A worktree kept because a shell or a thread outside the family works in it refuses the Delete with no check run; one
 // a fork takes over stays for the fork. When the thread runs and works in a worktree that is to go, its own or a
 // descendant's, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed the
@@ -1213,8 +1212,7 @@ func (s *Sessions) OwnWorktree(id string) string {
 
 // ownWorktree is the worktree orchestrator made for the thread id that is on disk, "" when there is none or the thread's
 // clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
-// it, as a fork does, or a shell is open in it. Its descendants and the shells of the thread and its descendants do not
-// count, as a Delete takes them with it.
+// it, as a fork does, or a shell is open in it. Its descendants do not count, as a Delete takes them with it.
 func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
 	path = s.madeWorktree(id)
 	if path == "" {
@@ -1224,7 +1222,7 @@ func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared str
 	if user := s.usersOf(path, true, family...); user != "" {
 		return path, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	return path, s.life.shellIn(ctx, session.ProjectKey(id), path, family...)
+	return path, s.life.shellIn(ctx, session.ProjectKey(id), path)
 }
 
 // madeWorktree is the worktree orchestrator made for the thread id that is on disk, "" when there is none or the thread's
@@ -4363,9 +4361,8 @@ func (s *Sessions) heirOf(key, dir string, family []string) string {
 }
 
 // FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree orchestrator
-// made for the thread, while no other live thread and no shell but the thread's own works there, and none of the
-// thread's own shells runs a command. inProject is set for a thread that runs in the project folder, whose files a
-// rewind never touches. reason says why the files cannot be rewound, "" when dir is where they may be.
+// made for the thread, while no other live thread works there and no shell in it runs a command. inProject is set for
+// a thread that runs in the project folder, whose files a rewind never touches. reason says why the files cannot be rewound, "" when dir is where they may be.
 func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason string) {
 	s.mu.Lock()
 	in, found := s.infoOf(id)
@@ -4385,26 +4382,34 @@ func (s *Sessions) FilesRewind(id string) (dir string, inProject bool, reason st
 	if user := s.usersOf(w.Path, true, id); user != "" {
 		return "", false, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	if shell := s.life.shellIn(ctx, proj.Key(), w.Path, id); shell != "" {
-		return "", false, shell
-	}
-	if shell := s.busyShellOf(ctx, id); shell != "" {
+	if shell := s.busyShellIn(ctx, w.Path); shell != "" {
 		return "", false, shell
 	}
 	return w.Path, false, ""
 }
 
-// busyShellOf says why a shell of the thread keeps a rewind from its files: one runs a command, which may write them.
-// It is "" when none does.
-func (s *Sessions) busyShellOf(ctx context.Context, id string) string {
+// busyShellIn says why a shell keeps a rewind from the files in worktree: one in it runs a command, which may write
+// them, or tmux could not say. It is "" when none does. An idle shell does not keep the rewind.
+func (s *Sessions) busyShellIn(ctx context.Context, worktree string) string {
+	s.shellMu.Lock()
+	defer s.shellMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	_, shells, err := s.tmux.ListAll(ctx)
+	_, running, err := s.tmux.ListAll(ctx)
 	if err != nil {
 		return shellsUnlisted(err)
 	}
-	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id && shellBusy(sh) }) {
-		return "a shell of this thread runs a command"
+	paths, err := s.tmux.ShellPaths(ctx)
+	if err != nil {
+		return shellsUnlisted(err)
+	}
+	for _, sh := range paths {
+		if sh.Path != "" && !folder.Inside(sh.Path, worktree) {
+			continue
+		}
+		if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) {
+			return "a shell in this worktree runs a command"
+		}
 	}
 	return ""
 }
@@ -4440,7 +4445,7 @@ func (s *Sessions) closeBrowser(id string) {
 // Shell is one shell of the current project.
 type Shell struct {
 	ID      string `json:"id"`
-	Thread  string `json:"thread"`  // the thread the shell belongs to, "" for a shell of the project
+	Folder  string `json:"folder"`  // the folder the shell started in
 	Command string `json:"command"` // the name of the process in front in the shell, such as zsh, vim or node, or ""
 	Busy    bool   `json:"busy"`    // Command is not the login shell, so closing the shell stops what runs in it
 }
@@ -4463,7 +4468,7 @@ func (s *Sessions) shellsIn(key string) []Shell {
 	slices.SortFunc(mine, func(a, b term.Shell) int { return a.Name.Shell - b.Name.Shell })
 	list := make([]Shell, len(mine))
 	for i, sh := range mine {
-		list[i] = Shell{ID: sh.Name.String(), Thread: sh.Thread, Command: sh.Command, Busy: shellBusy(sh)}
+		list[i] = Shell{ID: sh.Name.String(), Folder: sh.Folder, Command: sh.Command, Busy: shellBusy(sh)}
 	}
 	return list
 }
@@ -4502,10 +4507,10 @@ func (s *Sessions) announceShells() {
 func (s *Sessions) loginShell() string { return cmp.Or(environ.Get(s.tmux.Env(), "SHELL"), "/bin/zsh") }
 
 // NewShell starts a shell in the current project, numbered after the shells it has, and returns its id. A shell is a
-// login shell; it reports nothing: it is not an agent, so it gets no events and no session number. With thread "" it
-// is a shell of the project, in the project folder. Else it belongs to the thread and starts in the thread's
-// worktree, or in the project folder once that is gone; it is refused while a clean-up or a delete of the thread
-// runs, which closes the thread's shells.
+// login shell; it reports nothing: it is not an agent, so it gets no events and no session number. It belongs to the
+// project. The thread only picks where it starts: in the thread's worktree, or in the project folder with thread ""
+// or once the worktree is gone. It is refused while a clean-up or a delete of the thread runs, which needs the
+// worktree free of shells.
 func (s *Sessions) NewShell(thread string) (string, error) {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
@@ -4529,11 +4534,11 @@ func (s *Sessions) NewShell(thread string) (string, error) {
 			return "", err
 		}
 	}
-	return s.startShell(proj, thread, dir)
+	return s.startShell(proj, dir)
 }
 
-// startShell starts a shell of the project proj that belongs to thread in dir. It needs shellMu.
-func (s *Sessions) startShell(proj project.Project, thread, dir string) (string, error) {
+// startShell starts a shell of the project proj in dir. It needs shellMu.
+func (s *Sessions) startShell(proj project.Project, dir string) (string, error) {
 	s.mu.Lock()
 	ctx := s.ctx
 	var used []int
@@ -4550,19 +4555,11 @@ func (s *Sessions) startShell(proj project.Project, thread, dir string) (string,
 	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{s.loginShell(), "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}
-	if thread != "" {
-		if err := s.tmux.SetThread(tctx, name, thread); err != nil {
-			if err := s.tmux.Kill(tctx, name); err != nil {
-				log.Printf("orchestrator: stopping the untagged shell %s: %v", name, err)
-			}
-			return "", err
-		}
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// A refresh may have listed the shell before its tag was on.
+	// A refresh may have listed the shell before it was added here.
 	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
-	s.shells = append(s.shells, term.Shell{Name: name, Thread: thread})
+	s.shells = append(s.shells, term.Shell{Name: name, Folder: dir})
 	s.announceShells()
 	return name.String(), nil
 }
@@ -4577,32 +4574,6 @@ func (s *Sessions) CloseShell(id string) error {
 		return fmt.Errorf("%s is not a shell", id)
 	}
 	return s.stopShell(name)
-}
-
-// closeShellsOf stops every shell of the thread, and those of the threads in others that are in the worktree or in a
-// folder tmux cannot read, as tmux lists them now. A shell it cannot stop is logged and left running.
-func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
-	if thread == "" {
-		return
-	}
-	s.shellMu.Lock()
-	defer s.shellMu.Unlock()
-	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
-	defer cancel()
-	shells, err := s.tmux.ShellPaths(ctx)
-	if err != nil {
-		log.Printf("orchestrator: listing the shells of thread %s: %v", thread, err)
-		return
-	}
-	for _, sh := range shells {
-		inWorktree := worktree != "" && (sh.Path == "" || folder.Inside(sh.Path, worktree))
-		if sh.Thread != thread && (!inWorktree || !slices.Contains(others, sh.Thread)) {
-			continue
-		}
-		if err := s.stopShell(sh.Name); err != nil {
-			log.Printf("orchestrator: closing shell %s of thread %s: %v", sh.Name, thread, err)
-		}
-	}
 }
 
 // stopShell stops the shell name and its terminal.

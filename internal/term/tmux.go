@@ -26,7 +26,6 @@ const (
 	forkOption   = "@orchestrator-fork"
 	branchOption = "@orchestrator-branch"
 	parentOption = "@orchestrator-parent"
-	threadOption = "@orchestrator-thread"
 )
 
 const conf = `
@@ -92,7 +91,7 @@ type Info struct {
 // Shell is one shell session as tmux reports it.
 type Shell struct {
 	Name    session.Name
-	Thread  string // the thread the shell belongs to, "" for a shell of the project
+	Folder  string // the folder the shell started in; only ListAll reads it
 	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
 	PID     int    // the shell's own process, which its pane runs
 	Path    string // the folder the shell is in now; only ShellPaths reads it
@@ -141,9 +140,9 @@ func (t *Tmux) cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
-	const fields = 15
+	const fields = 14
 	// The process name comes last, so a tab in it stays in its own field.
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+threadOption+"}\t#{pane_current_command}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -164,7 +163,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 		}
 		if name.IsShell() {
 			pid, _ := strconv.Atoi(f[10])
-			shells = append(shells, Shell{Name: name, Thread: f[13], Command: f[14], PID: pid})
+			shells = append(shells, Shell{Name: name, Folder: f[2], Command: f[13], PID: pid})
 			continue
 		}
 		// Every thread of this build has an access tag; a session with none is not one of its threads.
@@ -181,11 +180,11 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 	return infos, shells, nil
 }
 
-// ShellPaths are the shell sessions with the thread each belongs to and the folder each is in now: a shell's folder
+// ShellPaths are the shell sessions with the folder each is in now: a shell's folder
 // follows its cd, so it is the pane's current folder, not the one the session started in. No running server means no
 // shells.
 func (t *Tmux) ShellPaths(ctx context.Context) ([]Shell, error) {
-	out, err := t.run(ctx, "list-panes", "-a", "-F", "#{session_name}\t#{"+threadOption+"}\t#{pane_current_path}")
+	out, err := t.run(ctx, "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_path}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -196,12 +195,12 @@ func (t *Tmux) ShellPaths(ctx context.Context) ([]Shell, error) {
 	var shells []Shell
 	for line := range strings.SplitSeq(out, "\n") {
 		// The folder comes last, so a tab in it stays in its own field.
-		f := strings.SplitN(line, "\t", 3)
-		if len(f) != 3 {
+		f := strings.SplitN(line, "\t", 2)
+		if len(f) != 2 {
 			continue
 		}
 		if name, err := session.ParseName(f[0]); err == nil && name.IsShell() {
-			shells = append(shells, Shell{Name: name, Thread: f[1], Path: f[2]})
+			shells = append(shells, Shell{Name: name, Path: f[1]})
 		}
 	}
 	return shells, nil
@@ -339,17 +338,6 @@ func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) 
 	}
 	if _, err := t.run(ctx, "set-option", "-t", target(name), parentOption, parent); err != nil {
 		return fmt.Errorf("tagging the parent of session %s: %w", name, err)
-	}
-	return nil
-}
-
-// SetThread records the thread a shell belongs to.
-func (t *Tmux) SetThread(ctx context.Context, name session.Name, thread string) error {
-	if err := plain(thread); err != nil {
-		return fmt.Errorf("recording the thread of shell %s: %w", name, err)
-	}
-	if _, err := t.run(ctx, "set-option", "-t", target(name), threadOption, thread); err != nil {
-		return fmt.Errorf("tagging the thread of shell %s: %w", name, err)
 	}
 	return nil
 }

@@ -295,7 +295,7 @@ func typeIn(t *testing.T, h *apptest.Harness, id, line string) {
 	}
 }
 
-func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
+func TestFilesAreNotRewoundWhileAShellRunsACommandInTheWorktree(t *testing.T) {
 	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
@@ -305,20 +305,20 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	typeIn(t, h, shell.ID, fmt.Sprintf("cd %q", s.Worktree))
-	eventually(t, "the shell in the worktree", func() bool {
+	typeIn(t, h, shell.ID, fmt.Sprintf("cd %q && sleep 30", s.Worktree))
+	eventually(t, "the shell's command in the worktree", func() bool {
 		_, _, reason := h.Sessions().FilesRewind(id)
 		return reason != ""
 	})
 
-	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell is open in this worktree" {
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell in this worktree runs a command" {
 		t.Errorf("RewindFilesOffer = %+v", offer)
 	}
 	preview, err := h.RewindPreview(id, ids[0])
-	if err != nil || !preview.Offered || preview.Reason != "A shell is open in this worktree" {
+	if err != nil || !preview.Offered || preview.Reason != "A shell in this worktree runs a command" {
 		t.Errorf("RewindPreview = %+v, %v", preview, err)
 	}
-	if _, err := h.RewindTo(id, ids[0], true); err == nil || err.Error() != "A shell is open in this worktree" {
+	if _, err := h.RewindTo(id, ids[0], true); err == nil || err.Error() != "A shell in this worktree runs a command" {
 		t.Errorf("RewindTo with the files = %v", err)
 	}
 	if got := rewinds(t, h, id); len(got) != 0 {
@@ -332,7 +332,7 @@ func TestFilesAreNotRewoundInASharedWorktree(t *testing.T) {
 	}
 }
 
-func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
+func TestFilesAreRewoundBesideAnIdleShell(t *testing.T) {
 	t.Parallel()
 	h, id, _ := worktreeThread(t)
 	s, _ := h.Session(id)
@@ -342,7 +342,7 @@ func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "" {
-		t.Errorf("RewindFilesOffer beside an idle shell of the thread = %+v", offer)
+		t.Errorf("RewindFilesOffer beside an idle shell = %+v", offer)
 	}
 
 	typeIn(t, h, shell.ID, "sleep 30")
@@ -350,8 +350,8 @@ func TestFilesAreRewoundBesideTheThreadsOwnIdleShell(t *testing.T) {
 		_, _, reason := h.Sessions().FilesRewind(id)
 		return reason != ""
 	})
-	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell of this thread runs a command" {
-		t.Errorf("RewindFilesOffer while a shell of the thread runs a command = %+v", offer)
+	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A shell in this worktree runs a command" {
+		t.Errorf("RewindFilesOffer while a shell runs a command = %+v", offer)
 	}
 	if err := h.ShellClose(shell.ID); err != nil {
 		t.Fatal(err)

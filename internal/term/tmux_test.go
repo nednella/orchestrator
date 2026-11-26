@@ -255,35 +255,31 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 	}
 }
 
-func TestShellIsTaggedWithItsThread(t *testing.T) {
+func TestShellListsItsStartFolderAndItsFolderNow(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	thread, project := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
-	for _, n := range []session.Name{thread, project} {
-		if err := tmux.NewSession(ctx, n, "shell", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+	first, second := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
+	dirs := map[session.Name]string{first: t.TempDir(), second: t.TempDir()}
+	for n, dir := range dirs {
+		if err := tmux.NewSession(ctx, n, "shell", dir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := tmux.SetThread(ctx, thread, "demo/a1"); err != nil {
-		t.Fatal(err)
 	}
 	byShell := func(a, b Shell) int { return a.Name.Shell - b.Name.Shell }
 	_, shells, err := tmux.ListAll(ctx)
 	slices.SortFunc(shells, byShell)
-	for i := range shells {
-		if shells[i].PID == 0 {
-			t.Errorf("%s has no process", shells[i].Name)
-		}
-		shells[i].PID = 0
+	if err != nil || len(shells) != 2 {
+		t.Fatalf("ListAll shells = %+v, %v", shells, err)
 	}
-	want := []Shell{{Name: thread, Thread: "demo/a1", Command: "sleep"}, {Name: project, Command: "sleep"}}
-	if err != nil || !slices.Equal(shells, want) {
-		t.Errorf("ListAll shells = %+v, %v; want %+v", shells, err, want)
+	for _, sh := range shells {
+		if sh.PID == 0 || sh.Folder != dirs[sh.Name] || sh.Command != "sleep" {
+			t.Errorf("shell %s = %+v; want the folder %s", sh.Name, sh, dirs[sh.Name])
+		}
 	}
 	paths, err := tmux.ShellPaths(ctx)
 	slices.SortFunc(paths, byShell)
-	if err != nil || len(paths) != 2 || paths[0].Thread != "demo/a1" || paths[1].Thread != "" {
-		t.Errorf("ShellPaths = %+v, %v; want %s tagged demo/a1 and %s untagged", paths, err, thread, project)
+	if err != nil || len(paths) != 2 || paths[0].Name != first || paths[1].Name != second {
+		t.Errorf("ShellPaths = %+v, %v", paths, err)
 	}
 }
 
@@ -510,7 +506,6 @@ func TestOptionValuesWithATabOrLineBreakAreRefused(t *testing.T) {
 		{"fork", func(v string) error { return tmux.SetFork(ctx, name, v) }},
 		{"branch", func(v string) error { return tmux.SetBranch(ctx, name, v) }},
 		{"parent", func(v string) error { return tmux.SetParent(ctx, name, v) }},
-		{"thread", func(v string) error { return tmux.SetThread(ctx, name, v) }},
 		{"action", func(v string) error { return tmux.SetAction(ctx, name, v) }},
 		{"model", func(v string) error { return tmux.SetModel(ctx, name, v, "high") }},
 		{"effort", func(v string) error { return tmux.SetModel(ctx, name, "opus", v) }},
