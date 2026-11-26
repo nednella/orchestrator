@@ -495,7 +495,7 @@ func TestModeLoggedWhileTheAppWasClosedIsFollowed(t *testing.T) {
 	h.App.Stop()
 
 	_, socket := hostFiles(h, approved.ID)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := host.Answer(ctx, socket, "plan-1", true, ""); err != nil {
 		t.Fatal(err)
@@ -608,7 +608,7 @@ func TestASendWhileTheThreadRestartsIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, socket := hostFiles(h, s.ID)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := host.Ready(ctx, socket); err != nil {
 		t.Fatal(err)

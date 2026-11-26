@@ -43,7 +43,7 @@ func TestRefreshAsksALiveThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := host.Ready(ctx, chat.Socket); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestARateLimitInATurnReachesTheLimits(t *testing.T) {
 	want := limits.Window{Name: "five_hour", Label: "Session", Left: 50, ResetsAt: 1795705200000}
 	// A rate_limit event is live only: one Claude streams before the follower subscribes is gone, so the test sends
 	// again until one arrives.
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !slices.Contains(h.Limits().Windows, want) {
 		if time.Now().After(deadline) {
 			t.Fatalf("limits = %+v, want the turn's session window", h.Limits())

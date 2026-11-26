@@ -154,7 +154,7 @@ func afterStart(t *testing.T, h *apptest.Harness, id string) time.Time {
 // steady waits until get gives the same value for a while, and returns it.
 func steady(t *testing.T, get func() int64) int64 {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	last, same := get(), 0
 	for same < 25 {
 		if time.Now().After(deadline) {

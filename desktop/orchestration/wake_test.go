@@ -196,7 +196,7 @@ func TestWaitingParentGetsNoSecondCopy(t *testing.T) {
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
-	if a := waitOn(t, h, parent, c, 10*time.Second); !a.Done || a.Text != "done" {
+	if a := waitOn(t, h, parent, c, 30*time.Second); !a.Done || a.Text != "done" {
 		t.Fatalf("wait answered %+v, want the result", a)
 	}
 	apptest.Eventually(t, "the child asleep", func() bool { return asleep(t, h, c) })
@@ -289,7 +289,7 @@ func TestLaterTurnOfAChildIsALaterResult(t *testing.T) {
 	parent := newThread(t, h, "Plan the release").ID
 	// The child's turn ends while its shell runs in the background, and the shell's end runs a turn of its own.
 	c := mustDelegate(t, h, parent, `{"task":"sleep in a background shell","title":"Sleep","access":"read"}`).ID
-	if a := waitOn(t, h, parent, c, 10*time.Second); !a.Done || a.Text != "done" {
+	if a := waitOn(t, h, parent, c, 30*time.Second); !a.Done || a.Text != "done" {
 		t.Fatalf("wait answered %+v, want the first turn's result", a)
 	}
 	if asleep(t, h, c) {
@@ -582,7 +582,7 @@ func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
 			t.Fatal(err)
 		}
 		h.App.Stop()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := host.PlanStop(ctx, ch.Socket, chat.StopSettle, ""); err != nil {
 			t.Fatal(err)

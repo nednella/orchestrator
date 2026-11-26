@@ -234,7 +234,7 @@ func hostFiles(h *apptest.Harness, id string) (chatLog, socket string) {
 // sendToHost sends text to the session's agent through its host, as the chat composer will.
 func sendToHost(h *apptest.Harness, id, text string) error {
 	_, socket := hostFiles(h, id)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := host.Ready(ctx, socket); err != nil {
 		return err

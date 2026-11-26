@@ -133,7 +133,7 @@ func TestWaitRightAfterDelegateWaitsForTheTask(t *testing.T) {
 	if r := row(t, h, c.ID); r.State != session.Idle {
 		t.Logf("the child's row is %s before its first turn", r.State)
 	}
-	a := waitOn(t, h, parent, c.ID, 10*time.Second)
+	a := waitOn(t, h, parent, c.ID, 30*time.Second)
 	if !a.Done || a.Text != "done" {
 		t.Errorf("wait answered %+v, want the task's reply", a)
 	}
@@ -260,7 +260,7 @@ func TestWaitWaitsForAHeldMessage(t *testing.T) {
 	if err := h.ChatAnswer(c, "ask-1", true, ""); err != nil {
 		t.Fatal(err)
 	}
-	r := waitResultOf(t, got, 10*time.Second)
+	r := waitResultOf(t, got, 30*time.Second)
 	if r.err != nil || !r.a.Done || r.a.Text != "done" {
 		t.Errorf("wait answered %+v, want the held message's turn done", r)
 	}
@@ -403,7 +403,7 @@ func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 			}
 		})
 	}
-	if a := waitOn(t, h, top, g, 10*time.Second); !a.Done || a.Text != "done" {
+	if a := waitOn(t, h, top, g, 30*time.Second); !a.Done || a.Text != "done" {
 		t.Errorf("a wait on a grandchild answered %+v, want it done", a)
 	}
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, top), Args: []string{"wait"}, Opts: map[string]string{"input": `{"thread":"` + g + `"}`, "slice_ms": "60001"}})

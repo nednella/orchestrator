@@ -279,9 +279,11 @@ func (r *Recorder) ProjectOf(name string) string {
 	return ""
 }
 
+// Eventually waits until cond holds. The time it gives is long, since tests run at the same time on a busy machine; a
+// test that fails does not take it, only one that waits for what does not come.
 func Eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)

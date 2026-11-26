@@ -232,7 +232,7 @@ func TestTermStreamNeedsTheAppHeader(t *testing.T) {
 		{"the shim's read", map[string]string{"Origin": base}, http.StatusOK},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			req, err := http.NewRequestWithContext(ctx, "GET", base+"/term/"+url.PathEscape(shell.ID), nil)
 			if err != nil {
