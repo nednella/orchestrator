@@ -4,7 +4,7 @@ import type { Ref } from 'react'
 import { ACCESS_LABEL } from '../access'
 import { useShowAgents } from '../chatAgents'
 import { jumpOffset } from '../chatMinimap'
-import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from '../chatScroll'
+import { ANCHOR_SLACK, followScroll, keepScroll, keptScroll, stillFollows } from '../chatScroll'
 import type { ChildItem, TimelineItem } from '../chatTimeline'
 import { ChatAgentRow } from './ChatAgentRow'
 import { ChatApprovalCard } from './ChatApprovalCard'
@@ -183,9 +183,7 @@ export function ChatTimeline({ id, items, folder, inset, endRef, onFollowing, on
   const onScroll = () => {
     const el = scroller.current
     if (!el) return
-    // A row that grew before it was measured moves the end down with no scroll up, so only scrolling up stops the
-    // follow.
-    const next = isAtBottom(el.scrollTop, el.clientHeight, el.scrollHeight, END_SLACK) || (following.current && el.scrollTop >= lastTop.current)
+    const next = stillFollows({ following: following.current, top: el.scrollTop, lastTop: lastTop.current, client: el.clientHeight, height: el.scrollHeight })
     lastTop.current = el.scrollTop
     if (next === following.current) return
     following.current = next

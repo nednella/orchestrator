@@ -13,6 +13,12 @@ export const END_SLACK = 40
 // narrowest and the last row ends in 20px of padding.
 export const ANCHOR_SLACK = 32
 
+// stillFollows says whether a view follows its end after a scroll: at its end, or following and not scrolled up. A row
+// that grows moves the end down with no scroll up, so only scrolling up stops the follow.
+export function stillFollows({ following, top, lastTop, client, height }: { following: boolean; top: number; lastTop: number; client: number; height: number }): boolean {
+  return isAtBottom(top, client, height, END_SLACK) || (following && top >= lastTop)
+}
+
 // followScroll says whether a following chat scrolls to its end after it renders: when the composer over its end grew,
 // which is no row the virtualizer anchors, or when the chat grew while too far from its end to be anchored.
 export function followScroll({ following, grew, insetGrew, fromEnd }: { following: boolean; grew: boolean; insetGrew: boolean; fromEnd: number }): 'end' | 'stay' {

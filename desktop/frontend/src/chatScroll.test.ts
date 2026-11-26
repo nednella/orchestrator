@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll } from './chatScroll.ts'
+import { ANCHOR_SLACK, END_SLACK, followScroll, isAtBottom, keepScroll, keptScroll, stillFollows } from './chatScroll.ts'
 
 test('at bottom within 48 px', () => {
   assert.equal(isAtBottom(1000, 500, 1500), true)
@@ -20,6 +20,14 @@ test('a following chat the virtualizer does not anchor scrolls to its end as it 
   assert.equal(followScroll({ following: true, grew: true, insetGrew: false, fromEnd: ANCHOR_SLACK + 1 }), 'end', 'inside the follow slack, past the anchor')
   assert.equal(followScroll({ following: true, grew: false, insetGrew: false, fromEnd: END_SLACK }), 'stay', 'nothing grew')
   assert.equal(followScroll({ following: false, grew: true, insetGrew: false, fromEnd: 500 }), 'stay', 'a reader scrolled up stays')
+})
+
+test('only scrolling up stops the follow', () => {
+  const view = { client: 500, height: 1500 }
+  assert.equal(stillFollows({ ...view, following: false, top: 1000 - END_SLACK, lastTop: 0 }), true, 'back at the end it follows again')
+  assert.equal(stillFollows({ ...view, following: true, top: 600, lastTop: 600 }), true, 'a row that grew moved the end away')
+  assert.equal(stillFollows({ ...view, following: true, top: 599, lastTop: 600 }), false, 'scrolled up')
+  assert.equal(stillFollows({ ...view, following: false, top: 700, lastTop: 600 }), false, 'scrolled down, short of the end')
 })
 
 test('restores a kept position', () => {
