@@ -118,7 +118,7 @@ func serve(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
 	h := apptest.New(t)
 	hub := NewHub()
-	cfg, err := app.Load()
+	cfg, err := app.LoadEnv(h.Env)
 	if err != nil {
 		t.Fatal(err)
 	}

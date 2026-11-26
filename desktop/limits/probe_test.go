@@ -250,7 +250,7 @@ func TestOneProbeAtATime(t *testing.T) {
 
 func TestAProbeThatEndsWithoutAnAnswerFails(t *testing.T) {
 	start := func(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
-		return Exec(ctx, dir, []string{"sh", "-c", "read line; echo 'not logged in' >&2; exit 1"})
+		return Exec(os.Environ())(ctx, dir, []string{"sh", "-c", "read line; echo 'not logged in' >&2; exit 1"})
 	}
 	_, err := probe(context.Background(), start, t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "ended without an answer") {
@@ -259,7 +259,7 @@ func TestAProbeThatEndsWithoutAnAnswerFails(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
-	t.Setenv("ORCHESTRATOR_SESSION", "main/abcdefgh")
+	env := append(os.Environ(), "ORCHESTRATOR_SESSION=main/abcdefgh")
 	for _, tt := range []struct {
 		name    string
 		argv    []string
@@ -280,7 +280,7 @@ func TestExec(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			stdin, stdout, wait, err := Exec(ctx, dir, tt.argv)
+			stdin, stdout, wait, err := Exec(env)(ctx, dir, tt.argv)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -306,7 +306,7 @@ func TestExec(t *testing.T) {
 			}
 		})
 	}
-	if _, _, _, err := Exec(context.Background(), t.TempDir(), nil); err == nil {
+	if _, _, _, err := Exec(env)(context.Background(), t.TempDir(), nil); err == nil {
 		t.Error("Exec with no command started one")
 	}
 }
@@ -326,7 +326,7 @@ read line
 echo '` + usageReply + `'
 cat >/dev/null`
 	start := func(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
-		return Exec(ctx, dir, []string{"sh", "-c", script})
+		return Exec(os.Environ())(ctx, dir, []string{"sh", "-c", script})
 	}
 	raw, err := probe(context.Background(), start, filepath.Join(t.TempDir(), "usage-probe"))
 	if err != nil || len(raw) == 0 {

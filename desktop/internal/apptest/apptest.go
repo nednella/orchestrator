@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	"github.com/nednella/orchestrator/internal/bus"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
@@ -576,6 +578,8 @@ type Options struct {
 	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
 	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
 	CleanupSweep    time.Duration // how often kept clean-ups are tried again; 0 keeps the app's hour
+	Env             []string      // entries of the environment the app and its sessions run in; the harness's own isolation wins over them
+	PathWithout     []string      // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
 }
 
 // Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
@@ -588,6 +592,7 @@ type Harness struct {
 	Dir    string
 	State  string
 	Conf   string
+	Env    []string // the environment the app and its sessions run in: the process's, with the harness's own entries
 
 	claudeDir string
 	cancel    context.CancelFunc // ends the context the app started with
@@ -651,25 +656,33 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	socket := fmt.Sprintf("aostest-%d", os.Getpid())
-	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", socket)
-	t.Setenv("ORCHESTRATOR_STATE_DIR", state)
-	t.Setenv("ORCHESTRATOR_CONFIG", confPath)
-	t.Setenv("ORCHESTRATOR_DIR", dir)
-	if o.DataDirConfig {
-		t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", "")
-		t.Setenv("HOME", filepath.Join(state, "home")) // the local folder sits under home
-	} else {
-		t.Setenv("ORCHESTRATOR_DEV_DATA_DIR", filepath.Join(state, "data"))
-	}
-	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(state, "claude")) // never the user's own settings
-
+	socket := fmt.Sprintf("aostest-%d-%d", os.Getpid(), harnesses.Add(1))
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	start := standInEnv
 	if o.ClaudeRejects != "" {
 		start += rejecting(o.ClaudeRejects)
 	}
 	h.claudeDir = agentOnPath(t, "claude", start, fakeClaudeTurns)
+	env := environ.With(os.Environ(), o.Env...)
+	path := environ.Get(env, "PATH")
+	if len(o.PathWithout) > 0 {
+		path = environ.PathWithout(env, o.PathWithout...)
+	}
+	set := []string{
+		"ORCHESTRATOR_TMUX_SOCKET=" + socket,
+		"ORCHESTRATOR_STATE_DIR=" + state,
+		"ORCHESTRATOR_CONFIG=" + confPath,
+		"ORCHESTRATOR_DIR=" + dir,
+		"ORCHESTRATOR_BROWSER_HEADLESS=1",                     // tests never open windows on the owner's screen
+		"CLAUDE_CONFIG_DIR=" + filepath.Join(state, "claude"), // never the user's own settings
+		"PATH=" + h.claudeDir + string(os.PathListSeparator) + path,
+	}
+	if o.DataDirConfig {
+		set = append(set, "ORCHESTRATOR_DEV_DATA_DIR=", "HOME="+filepath.Join(state, "home")) // the local folder sits under home
+	} else {
+		set = append(set, "ORCHESTRATOR_DEV_DATA_DIR="+filepath.Join(state, "data"))
+	}
+	h.Env = environ.With(env, set...)
 	h.App = h.build(t)
 	first, tick := o.DigestFirst, o.DigestTick
 	if first == 0 {
@@ -705,7 +718,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 // build wires an app from the environment the harness set up.
 func (h *Harness) build(t *testing.T) *app.App {
 	t.Helper()
-	cfg, err := app.Load()
+	cfg, err := app.LoadEnv(h.Env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,10 +755,11 @@ func (h *Harness) build(t *testing.T) *app.App {
 	return a
 }
 
-// Restart starts a second app on the same dirs, as if the first was quit and opened again.
-func (h *Harness) Restart(t *testing.T) *Harness {
+// Restart starts a second app on the same dirs, as if the first was quit and opened again. env are entries of its
+// environment that replace the first's.
+func (h *Harness) Restart(t *testing.T, env ...string) *Harness {
 	t.Helper()
-	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, claudeDir: h.claudeDir}
+	second := &Harness{Rec: &Recorder{}, GH: h.GH, Claude: h.Claude, Socket: h.Socket, Dir: h.Dir, State: h.State, Conf: h.Conf, Env: environ.With(h.Env, env...), claudeDir: h.claudeDir}
 	second.App = second.build(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -825,6 +839,9 @@ func (h *Harness) Session(id string) (sessions.Session, bool) {
 	}
 	return sessions.Session{}, false
 }
+
+// harnesses numbers the harnesses of this process, so each has a tmux socket of its own.
+var harnesses atomic.Int64
 
 // startEnv is the environment the tests started in. The command is built in it, not in one a test changed: under a
 // throwaway HOME, go would fetch every module again.
@@ -1150,7 +1167,7 @@ done
 `
 
 // agentOnPath writes the stand-in named so, with first run before it records its arguments and then run after it,
-// and puts it first on PATH. Both may use f, the path of the args file without its extension.
+// in a folder of its own, which it returns. Both may use f, the path of the args file without its extension.
 func agentOnPath(t *testing.T, name, first, then string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -1160,19 +1177,30 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return dir
 }
 
-// PathWithout is PATH without the folders that hold command.
-func PathWithout(command string) string {
-	dirs := slices.DeleteFunc(filepath.SplitList(os.Getenv("PATH")), func(dir string) bool { return Exists(filepath.Join(dir, command)) })
-	return strings.Join(dirs, string(os.PathListSeparator))
+// ClaudeConfigDir is the folder the app's Claude sessions keep their settings and transcripts in.
+func (h *Harness) ClaudeConfigDir() string { return environ.Get(h.Env, "CLAUDE_CONFIG_DIR") }
+
+// RemoveClaude takes the stand-in claude off the harness's PATH, as if claude were not installed.
+func (h *Harness) RemoveClaude(t *testing.T) {
+	t.Helper()
+	if err := os.Rename(filepath.Join(h.claudeDir, "claude"), filepath.Join(h.claudeDir, "claude.removed")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// RestoreClaude puts the stand-in claude back after RemoveClaude.
+func (h *Harness) RestoreClaude(t *testing.T) {
+	t.Helper()
+	if err := os.Rename(filepath.Join(h.claudeDir, "claude.removed"), filepath.Join(h.claudeDir, "claude")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Main runs a package's tests and removes the command they built.
 func Main(m *testing.M) int {
-	os.Setenv("ORCHESTRATOR_BROWSER_HEADLESS", "1") // tests never open windows on the owner's screen
 	code := m.Run()
 	if cliDir != "" {
 		os.RemoveAll(cliDir)

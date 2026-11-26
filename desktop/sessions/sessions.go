@@ -35,6 +35,7 @@ import (
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/folder"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/mcp"
@@ -1992,7 +1993,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	}
 
 	p := s.Provider()
-	if err := agent.CheckInstalled(p); err != nil {
+	if err := s.agents.CheckInstalled(p); err != nil {
 		return err
 	}
 	if err := s.life.restore(ctx, proj, id); err != nil {
@@ -2401,7 +2402,7 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 
 	p := s.Provider()
 	var err error
-	if err := agent.CheckInstalled(p); err != nil {
+	if err := s.agents.CheckInstalled(p); err != nil {
 		return Session{}, err
 	}
 	model := fill(p, proj.Dir, o.Model)
@@ -4513,8 +4514,8 @@ func (s *Sessions) announceShells() {
 	}
 }
 
-// loginShell is the shell a new shell session runs, as a login shell.
-func loginShell() string { return cmp.Or(os.Getenv("SHELL"), "/bin/zsh") }
+// loginShell is the shell a new shell session runs, as a login shell: the one in the environment tmux starts it with.
+func (s *Sessions) loginShell() string { return cmp.Or(environ.Get(s.tmux.Env(), "SHELL"), "/bin/zsh") }
 
 // NewShell starts a shell in the current project, numbered after the shells it has, and returns its id. A shell is a
 // login shell; it reports nothing: it is not an agent, so it gets no events and no session number. With thread "" it
@@ -4562,7 +4563,7 @@ func (s *Sessions) startShell(proj project.Project, thread, dir string) (string,
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	env := []string{"ORCHESTRATOR_PROJECT=" + proj.Key()}
-	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{loginShell(), "-l"}, startCols, startRows); err != nil {
+	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{s.loginShell(), "-l"}, startCols, startRows); err != nil {
 		return "", err
 	}
 	if thread != "" {

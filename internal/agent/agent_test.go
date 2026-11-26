@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -238,23 +239,51 @@ func TestNoAllowRuleNamesTheCommand(t *testing.T) {
 }
 
 func TestCheckInstalled(t *testing.T) {
+	t.Parallel()
 	bin := t.TempDir()
-	t.Setenv("PATH", bin)
-	if err := CheckInstalled(Claude{}); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
-		t.Errorf("without claude: %v", err)
-	}
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := CheckInstalled(Claude{}); err != nil {
-		t.Errorf("with claude: %v", err)
+	empty := t.TempDir()
+	tests := []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"claude on PATH", []string{"PATH=" + bin}, ""},
+		{"claude in a later folder", []string{"PATH=" + empty + string(os.PathListSeparator) + bin}, ""},
+		{"claude not on PATH", []string{"PATH=" + empty}, "claude is not installed: it is not on PATH"},
+		{"no PATH", []string{}, "claude is not installed: it is not on PATH"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := Registry{Env: tt.env}.CheckInstalled(Claude{})
+			if got := fmt.Sprint(err); (err == nil) != (tt.want == "") || err != nil && got != tt.want {
+				t.Errorf("CheckInstalled = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
 func TestRegistryProvider(t *testing.T) {
-	got := Registry{Dirs: []string{"/d"}}.Provider()
-	if want := (Claude{ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); !reflect.DeepEqual(got, want) {
-		t.Errorf("Provider() = %#v, want %#v", got, want)
+	tests := []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"the settings folder", []string{"HOME=/h", "CLAUDE_CONFIG_DIR=/c"}, "/c"},
+		{"under home", []string{"HOME=/h"}, "/h/.claude"},
+		{"no home", []string{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := Registry{Dirs: []string{"/d"}, Env: tt.env}.Provider()
+			if want := (Claude{ConfigDir: tt.want, Dirs: []string{"/d"}}); !reflect.DeepEqual(got, want) {
+				t.Errorf("Provider() = %#v, want %#v", got, want)
+			}
+		})
 	}
 }
 

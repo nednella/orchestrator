@@ -10,17 +10,18 @@ import (
 	"strings"
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 )
 
-// DefaultDir is where state files and the sockets live. ORCHESTRATOR_STATE_DIR overrides it.
-func DefaultDir() (string, error) {
-	if dir := os.Getenv("ORCHESTRATOR_STATE_DIR"); dir != "" {
+// DefaultDir is where state files and the sockets live for the environment env. ORCHESTRATOR_STATE_DIR overrides it.
+func DefaultDir(env []string) (string, error) {
+	if dir := environ.Get(env, "ORCHESTRATOR_STATE_DIR"); dir != "" {
 		return dir, nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("finding home dir: %w", err)
+	home := environ.Get(env, "HOME")
+	if home == "" {
+		return "", errors.New("finding home dir: $HOME is not defined")
 	}
 	return filepath.Join(home, ".local", "state", "orchestrator"), nil
 }

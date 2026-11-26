@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 )
 
@@ -61,13 +62,13 @@ const chromeForTesting = "Google Chrome for Testing.app/Contents/MacOS/Google Ch
 var errNoBrowser = errors.New("no Chrome for Testing found: run install.sh again, or set ORCHESTRATOR_BROWSER")
 
 // findBrowser returns the browser to drive: ORCHESTRATOR_BROWSER, else Chrome for Testing in ~/Applications or
-// /Applications.
-func findBrowser() string {
-	if p := os.Getenv("ORCHESTRATOR_BROWSER"); p != "" {
+// /Applications, with env as the environment.
+func findBrowser(env []string) string {
+	if p := environ.Get(env, "ORCHESTRATOR_BROWSER"); p != "" {
 		return p
 	}
 	dirs := []string{"/Applications"}
-	if home, err := os.UserHomeDir(); err == nil {
+	if home := environ.Get(env, "HOME"); home != "" {
 		dirs = append([]string{filepath.Join(home, "Applications")}, dirs...)
 	}
 	for _, dir := range dirs {
@@ -85,6 +86,7 @@ type Browsers struct {
 	dataDir      string
 	binary       string
 	agentBrowser string
+	env          []string
 	headless     bool
 	emit         func(event string, payload any)
 	dialogWait   time.Duration
@@ -100,10 +102,10 @@ type Browsers struct {
 	opening map[string]*sync.Mutex  // by session id: one Open at a time per session
 }
 
-// New runs the browsers with their profiles under dataDir.
-func New(dataDir string, emit func(string, any)) *Browsers {
+// New runs the browsers with their profiles under dataDir, and reads the environment env.
+func New(dataDir string, emit func(string, any), env []string) *Browsers {
 	return &Browsers{
-		dataDir: dataDir, binary: findBrowser(), agentBrowser: findAgentBrowser(), headless: os.Getenv("ORCHESTRATOR_BROWSER_HEADLESS") == "1",
+		dataDir: dataDir, binary: findBrowser(env), agentBrowser: findAgentBrowser(env), env: env, headless: environ.Get(env, "ORCHESTRATOR_BROWSER_HEADLESS") == "1",
 		emit: emit, dialogWait: dialogWait,
 		urlFor: func(string) string { return "" }, labelFor: func(string) string { return "" }, onTabs: func() {},
 		procs: map[string]*browserProc{}, tabs: map[string]*tab{}, opening: map[string]*sync.Mutex{},

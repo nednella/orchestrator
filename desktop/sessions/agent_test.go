@@ -3,7 +3,6 @@ package sessions_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/mcp"
 	"github.com/nednella/orchestrator/internal/session"
 )
@@ -40,9 +40,8 @@ func mcpServerOf(t *testing.T, args []string) (command string, env map[string]st
 }
 
 func TestThreadStartsWithoutTheCommandOnPath(t *testing.T) {
-	t.Setenv("PATH", apptest.PathWithout("orchestrator"))
-	h := newHarness(t)
-	if _, err := exec.LookPath("orchestrator"); err == nil {
+	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"orchestrator"}})
+	if _, err := environ.LookPath(h.Env, "orchestrator"); err == nil {
 		t.Fatal("an orchestrator command is still on PATH")
 	}
 	s, err := h.NewSession("work", "")
@@ -138,8 +137,8 @@ func TestOldAgentKeysAreIgnored(t *testing.T) {
 }
 
 func TestSessionWithClaudeNotOnPathDoesNotStart(t *testing.T) {
-	h := newHarness(t)
-	t.Setenv("PATH", apptest.PathWithout("claude"))
+	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
+	h.RemoveClaude(t)
 	if _, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised); err == nil || err.Error() != "claude is not installed: it is not on PATH" {
 		t.Fatalf("start error = %v", err)
 	}
@@ -163,7 +162,7 @@ func TestDefaultModelIsWhatClaudesSettingsGive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "settings.json"), `{"model": "sonnet", "effortLevel": "low", "modelSettings": {"opus": {"effortLevel": "max"}}}`)
+	write(filepath.Join(h.ClaudeConfigDir(), "settings.json"), `{"model": "sonnet", "effortLevel": "low", "modelSettings": {"opus": {"effortLevel": "max"}}}`)
 	tests := []struct {
 		name, pick string
 		want       sessions.ModelChoice

@@ -22,7 +22,7 @@ func TestStrayBrowserIsReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	first := New(dir, func(string, any) {})
+	first := New(dir, func(string, any) {}, testEnv())
 	if !first.Available() {
 		t.Skip("no Chrome for Testing installed")
 	}
@@ -42,7 +42,7 @@ func TestStrayBrowserIsReplaced(t *testing.T) {
 	if err := first.savePort("p", other); err != nil {
 		t.Fatal(err)
 	}
-	second := New(dir, func(string, any) {})
+	second := New(dir, func(string, any) {}, testEnv())
 	defer second.CloseAll()
 	if _, err := second.Open(ctx, "p/1", "about:blank"); err != nil {
 		t.Fatalf("the restarted app could not get a browser: %v", err)
@@ -61,7 +61,7 @@ func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	label := func(id string) string { return "demo · " + id }
-	first := New(dir, func(string, any) {})
+	first := New(dir, func(string, any) {}, testEnv())
 	if !first.Available() {
 		t.Skip("no Chrome for Testing installed")
 	}
@@ -85,7 +85,7 @@ func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 	// The app forgot the browser while it ran on: the next start takes it back with the windows in it.
 	first.exited(old)
 	waitLabelled(t, ctx, first, old, "p/1", 2)
-	second := New(dir, func(string, any) {})
+	second := New(dir, func(string, any) {}, testEnv())
 	second.Hook(func(string) string { return "" }, label, func() {})
 	defer second.CloseAll()
 	st, err := second.Open(ctx, "p/1", "")
@@ -117,7 +117,7 @@ func TestStopStraysEndsTheLastRunsBrowsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	first := New(dir, func(string, any) {})
+	first := New(dir, func(string, any) {}, testEnv())
 	if !first.Available() {
 		t.Skip("no Chrome for Testing installed")
 	}
@@ -129,7 +129,7 @@ func TestStopStraysEndsTheLastRunsBrowsers(t *testing.T) {
 	}
 	gone := first.tab("p/1").proc.gone
 	// The app was killed: a new one starts while the old browser still runs.
-	New(dir, func(string, any) {}).StopStrays()
+	New(dir, func(string, any) {}, testEnv()).StopStrays()
 	select {
 	case <-gone:
 	case <-time.After(10 * time.Second):
@@ -220,7 +220,7 @@ func TestPIDsAreTheRunningBrowsers(t *testing.T) {
 }
 
 func TestNoBrowserFound(t *testing.T) {
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary = ""
 	if b.Available() {
 		t.Error("available without a browser")
@@ -234,10 +234,12 @@ func TestNoBrowserFound(t *testing.T) {
 	}
 }
 
+// testEnv is the process's environment with the browser headless: a test never opens a window on the owner's screen.
+func testEnv() []string { return append(os.Environ(), "ORCHESTRATOR_BROWSER_HEADLESS=1") }
+
 func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("ORCHESTRATOR_BROWSER", "")
+	env := []string{"HOME=" + home, "ORCHESTRATOR_BROWSER="}
 	install := func(app string) string {
 		p := filepath.Join(home, "Applications", app)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -249,21 +251,20 @@ func TestFindBrowserSkipsTheOwnersBrowser(t *testing.T) {
 		return p
 	}
 	brave := install("Brave Browser.app/Contents/MacOS/Brave Browser")
-	if got := findBrowser(); got == brave {
+	if got := findBrowser(env); got == brave {
 		t.Errorf("findBrowser picked the owner's Brave: %s", got)
 	}
 	cft := install(chromeForTesting)
-	if got := findBrowser(); got != cft {
+	if got := findBrowser(env); got != cft {
 		t.Errorf("findBrowser = %q, want %q", got, cft)
 	}
-	t.Setenv("ORCHESTRATOR_BROWSER", brave)
-	if got := findBrowser(); got != brave {
+	if got := findBrowser(append(env, "ORCHESTRATOR_BROWSER="+brave)); got != brave {
 		t.Errorf("findBrowser = %q, want the ORCHESTRATOR_BROWSER %q", got, brave)
 	}
 }
 
 func TestLaunchArgsPerMode(t *testing.T) {
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.headless = true
 	if args := b.launchArgs("/p", 24680); !slices.Contains(args, "--headless=new") || !slices.Contains(args, "--hide-scrollbars") || !slices.Contains(args, "--disable-brave-update") ||
 		!slices.Contains(args, "--disable-features=MacAppCodeSignClone") {
@@ -306,7 +307,7 @@ func TestWebAddress(t *testing.T) {
 
 func newTestBrowsers(t *testing.T) (*Browsers, context.Context) {
 	t.Helper()
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	if !b.Available() {
 		t.Skip("no Chrome for Testing installed")
 	}
@@ -418,7 +419,7 @@ func TestConsoleShownKeepsTheLastLines(t *testing.T) {
 		if event == "browser:state" {
 			events++
 		}
-	})
+	}, testEnv())
 	tb := &tab{b: b, id: "demo/1"}
 	if got := tb.snapshotState().Console; got == nil || len(got) != 0 {
 		t.Fatalf("Console = %#v, want an empty list", got)
@@ -440,14 +441,14 @@ func TestConsoleShownKeepsTheLastLines(t *testing.T) {
 
 func TestPortIsChosenOnceAndKept(t *testing.T) {
 	dir := t.TempDir()
-	first := New(dir, func(string, any) {}).Port("demo")
+	first := New(dir, func(string, any) {}, testEnv()).Port("demo")
 	if first < portMin || first > portMax {
 		t.Fatalf("port = %d, want %d to %d", first, portMin, portMax)
 	}
-	if again := New(dir, func(string, any) {}).Port("demo"); again != first {
+	if again := New(dir, func(string, any) {}, testEnv()).Port("demo"); again != first {
 		t.Errorf("a new app got port %d, want the saved %d", again, first)
 	}
-	if other := New(dir, func(string, any) {}).Port("other"); other == 0 {
+	if other := New(dir, func(string, any) {}, testEnv()).Port("other"); other == 0 {
 		t.Error("a second project got no port")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "demo", "browser-port")); err != nil {
@@ -459,7 +460,7 @@ func TestPortIsChosenOnceAndKept(t *testing.T) {
 }
 
 func TestLaunchPortReplacesAPortSomethingElseHolds(t *testing.T) {
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	saved := b.Port("demo")
 	if got, err := b.launchPort("demo"); err != nil || got != saved {
 		t.Fatalf("launchPort with the saved port free = %d, %v; want %d", got, err, saved)

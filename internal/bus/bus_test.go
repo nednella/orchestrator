@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -64,12 +63,23 @@ func TestStateFiles(t *testing.T) {
 }
 
 func TestDefaultDirHonoursTheOverride(t *testing.T) {
-	t.Setenv("ORCHESTRATOR_STATE_DIR", "/somewhere")
-	if dir, err := DefaultDir(); err != nil || dir != "/somewhere" {
-		t.Errorf("DefaultDir = %q, %v", dir, err)
+	tests := []struct {
+		name    string
+		env     []string
+		want    string
+		wantErr bool
+	}{
+		{"the override", []string{"HOME=/home/x", "ORCHESTRATOR_STATE_DIR=/somewhere"}, "/somewhere", false},
+		{"an empty override", []string{"HOME=/home/x", "ORCHESTRATOR_STATE_DIR="}, "/home/x/.local/state/orchestrator", false},
+		{"home alone", []string{"HOME=/home/x"}, "/home/x/.local/state/orchestrator", false},
+		{"no home", nil, "", true},
 	}
-	t.Setenv("ORCHESTRATOR_STATE_DIR", "")
-	if dir, err := DefaultDir(); err != nil || !strings.HasSuffix(dir, filepath.Join(".local", "state", "orchestrator")) {
-		t.Errorf("DefaultDir = %q, %v", dir, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if dir, err := DefaultDir(tt.env); (err != nil) != tt.wantErr || dir != tt.want {
+				t.Errorf("DefaultDir = %q, %v, want %q, error %v", dir, err, tt.want, tt.wantErr)
+			}
+		})
 	}
 }

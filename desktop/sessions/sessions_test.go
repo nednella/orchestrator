@@ -21,6 +21,7 @@ import (
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/session"
 )
@@ -366,9 +367,8 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An orchestrator earlier on PATH is no one's: the app starts again with it there and still runs its own binary.
-	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	first.App.Stop()
-	h := first.Restart(t)
+	h := first.Restart(t, "PATH="+filepath.Dir(older)+string(os.PathListSeparator)+environ.Get(first.Env, "PATH"))
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
@@ -646,7 +646,7 @@ func TestUsageIsCountedOnceAfterTheTurn(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			transcript := agent.Claude{ConfigDir: os.Getenv("CLAUDE_CONFIG_DIR")}.Transcript(folder, "fake-session")
+			transcript := agent.Claude{ConfigDir: h.ClaudeConfigDir()}.Transcript(folder, "fake-session")
 			if err := os.MkdirAll(filepath.Dir(transcript), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -739,10 +739,7 @@ func TestASettledSessionTakesNoTextOrInterrupt(t *testing.T) {
 }
 
 func TestSessionsSurviveWithoutALocale(t *testing.T) {
-	for _, name := range []string{"LANG", "LC_ALL", "LC_CTYPE"} {
-		t.Setenv(name, "")
-	}
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Env: []string{"LANG=", "LC_ALL=", "LC_CTYPE="}})
 	s, err := h.NewSession("naïve", "")
 	if err != nil {
 		t.Fatal(err)

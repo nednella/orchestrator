@@ -93,7 +93,7 @@ func TestSessionWithoutAnIssueGetsNoModelFlags(t *testing.T) {
 
 func TestSessionsGetClaudesOwnSettings(t *testing.T) {
 	h := apptest.New(t)
-	user := os.Getenv("CLAUDE_CONFIG_DIR")
+	user := h.ClaudeConfigDir()
 	if err := os.MkdirAll(user, 0o700); err != nil {
 		t.Fatal(err)
 	}

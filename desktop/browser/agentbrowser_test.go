@@ -49,7 +49,7 @@ func calls(t *testing.T, log string) []string {
 }
 
 func TestAgentEnvBindsTheSessionToNoTab(t *testing.T) {
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary = "/chrome"
 	fakeAgentBrowser(t, b)
 	env, err := b.AgentEnv("p/abcd2345", "/tmp/session")
@@ -78,7 +78,7 @@ func TestAgentEnvBindsTheSessionToNoTab(t *testing.T) {
 }
 
 func TestAgentEnvNeedsAgentBrowser(t *testing.T) {
-	b := New(t.TempDir(), func(string, any) {})
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary, b.agentBrowser = "/chrome", ""
 	if _, err := b.AgentEnv("p/abcd2345", "/tmp/session"); err == nil || b.AgentReady() {
 		t.Errorf("without agent-browser: ready %v, AgentEnv error %v", b.AgentReady(), err)
@@ -156,7 +156,7 @@ func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(data) })
-	b := New(data, func(string, any) {})
+	b := New(data, func(string, any) {}, testEnv())
 	if !b.Available() {
 		t.Skip("no Chrome for Testing installed")
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/term"
@@ -35,22 +36,26 @@ type Config struct {
 	Tmux         *term.Tmux
 	Agents       agent.Registry
 	Binary       string // this app's own binary: hosted agents run under its host command
+	Env          []string
 }
 
-// Load reads the config file and the environment. The project is the one holding ORCHESTRATOR_DIR
-// or the current folder. An app started from Finder (folder "/") gets the first
-// configured project, else the home folder.
-func Load() (Config, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return Config{}, fmt.Errorf("finding home dir: %w", err)
+// Load reads the config file and the process's environment.
+func Load() (Config, error) { return LoadEnv(os.Environ()) }
+
+// LoadEnv reads the config file and the environment env, which the app and the services it starts keep in place of the
+// process's. The project is the one holding ORCHESTRATOR_DIR or the current folder. An app started from Finder
+// (folder "/") gets the first configured project, else the home folder.
+func LoadEnv(env []string) (Config, error) {
+	home := environ.Get(env, "HOME")
+	if home == "" {
+		return Config{}, errors.New("finding home dir: $HOME is not defined")
 	}
-	path := ConfigPath(home)
+	path := configPath(env, home)
 	cfg, err := project.Load(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("loading config: %w", err)
 	}
-	stateDir, err := bus.DefaultDir()
+	stateDir, err := bus.DefaultDir(env)
 	if err != nil {
 		return Config{}, err
 	}
@@ -60,11 +65,11 @@ func Load() (Config, error) {
 	}
 	dataDir := cmp.Or(cfg.DataDir, filepath.Join(home, ".local", "share", "orchestrator"))
 	localDir := filepath.Join(home, ".local", "share", "orchestrator")
-	override := os.Getenv("ORCHESTRATOR_DEV_DATA_DIR")
+	override := environ.Get(env, "ORCHESTRATOR_DEV_DATA_DIR")
 	if override != "" {
 		dataDir, localDir = override, override
 	}
-	dir := os.Getenv("ORCHESTRATOR_DIR")
+	dir := environ.Get(env, "ORCHESTRATOR_DIR")
 	if dir == "" {
 		if dir, err = os.Getwd(); err != nil {
 			return Config{}, fmt.Errorf("finding the current folder: %w", err)
@@ -85,7 +90,7 @@ func Load() (Config, error) {
 	} else {
 		current = cfg.Resolve(dir)
 	}
-	socket := os.Getenv("ORCHESTRATOR_TMUX_SOCKET")
+	socket := environ.Get(env, "ORCHESTRATOR_TMUX_SOCKET")
 	if socket == "" {
 		socket = defaultTmuxSocket
 	}
@@ -93,6 +98,7 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	tmux = tmux.WithEnv(env)
 	binary, err := os.Executable()
 	if err != nil {
 		return Config{}, fmt.Errorf("finding the app's own binary: %w", err)
@@ -100,12 +106,14 @@ func Load() (Config, error) {
 	if real, err := filepath.EvalSymlinks(binary); err == nil {
 		binary = real
 	}
-	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agent.Registry{Dirs: slices.Compact([]string{dataDir, localDir})}, Binary: binary}, nil
+	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agent.Registry{Dirs: slices.Compact([]string{dataDir, localDir}), Env: env}, Binary: binary, Env: env}, nil
 }
 
 // ConfigPath is the config file: ORCHESTRATOR_CONFIG, else the one in home's config folder.
-func ConfigPath(home string) string {
-	return cmp.Or(os.Getenv("ORCHESTRATOR_CONFIG"), filepath.Join(home, ".config", "orchestrator", "config.yaml"))
+func ConfigPath(home string) string { return configPath(os.Environ(), home) }
+
+func configPath(env []string, home string) string {
+	return cmp.Or(environ.Get(env, "ORCHESTRATOR_CONFIG"), filepath.Join(home, ".config", "orchestrator", "config.yaml"))
 }
 
 // machineID is this machine's id, made on first use and kept in the state folder, which is never synced.

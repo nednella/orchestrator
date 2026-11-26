@@ -307,7 +307,7 @@ func TestSetAccessAfterAReplyThatAsks(t *testing.T) {
 }
 
 func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
-	h := apptest.New(t)
+	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
 		t.Fatal(err)
@@ -317,8 +317,7 @@ func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
 	}
 	eventually(t, "the turn's end", func() bool { return turnEnds(h, s.ID) == 1 })
 	h.Observe(t, s.ID, "Stop", fmt.Sprintf(`{"session_id":"fake-session","transcript_path":%q}`, writtenTranscript(t)))
-	path := os.Getenv("PATH")
-	t.Setenv("PATH", apptest.PathWithout("claude"))
+	h.RemoveClaude(t)
 
 	if err := h.SetAccess(s.ID, "full"); err == nil || !strings.Contains(err.Error(), "claude is not installed") {
 		t.Fatalf("err = %v, want the wake's", err)
@@ -328,7 +327,7 @@ func TestSetAccessKeepsTheAccessWhenTheWakeFails(t *testing.T) {
 	}
 	eventually(t, "the access in the row and the state file", accessIs(h, s.ID, session.Full))
 
-	t.Setenv("PATH", path)
+	h.RestoreClaude(t)
 	if _, err := h.WakeThread(s.ID); err != nil {
 		t.Fatal(err)
 	}

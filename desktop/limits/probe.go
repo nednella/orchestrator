@@ -17,6 +17,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/host"
 )
 
@@ -37,16 +38,27 @@ var probeArgv = []string{"claude", "-p", "--input-format", "stream-json", "--out
 // ends.
 type Starter func(ctx context.Context, dir string, argv []string) (stdin io.WriteCloser, stdout io.Reader, wait func() error, err error)
 
-// Exec is the Starter that runs the command, with only the environment Claude needs to start and find its login, in a
-// process group of its own that is killed when ctx ends. wait kills what is left of the group once the command has
-// exited, so nothing it started outlives it; its error names the first line of the command's stderr.
-func Exec(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
+// Exec is the Starter that runs the command, with only the environment Claude needs to start and find its login, made
+// from env, in a process group of its own that is killed when ctx ends. The command is the one on env's PATH. wait kills
+// what is left of the group once the command has exited, so nothing it started outlives it; its error names the first
+// line of the command's stderr.
+func Exec(env []string) Starter {
+	return func(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
+		return execIn(ctx, env, dir, argv)
+	}
+}
+
+func execIn(ctx context.Context, env []string, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
 	if len(argv) == 0 {
 		return nil, nil, nil, errors.New("start a probe: no command given")
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	program, err := environ.LookPath(env, argv[0])
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("start %s: %w", argv[0], err)
+	}
+	cmd := exec.CommandContext(ctx, program, argv[1:]...)
 	cmd.Dir = dir
-	cmd.Env = append(agent.ClaudeHeadless.Env(os.Environ()), "TMPDIR="+dir, "CLAUDE_CODE_TMPDIR="+dir)
+	cmd.Env = append(agent.ClaudeHeadless.Env(env), "TMPDIR="+dir, "CLAUDE_CODE_TMPDIR="+dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = waitDelay

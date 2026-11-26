@@ -383,13 +383,42 @@ func TestListFailureIsNotNoSessions(t *testing.T) {
 	}
 }
 
+func TestWithEnvReplacesTheProcessEnvironment(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		env  []string
+		want []string
+	}{
+		{"its own", []string{"A=1", "ORCHESTRATOR_SESSION=x/1", "TMUX=/t", "B=2"}, []string{"A=1", "B=2"}},
+		{"none", []string{}, []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			base := &Tmux{socket: "unused"}
+			before := slices.Clone(tt.env)
+			got := base.WithEnv(tt.env).cleanEnv()
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("cleanEnv = %v, want %v", got, tt.want)
+			}
+			if !slices.Equal(tt.env, before) {
+				t.Errorf("cleanEnv changed the environment it was given to %v", tt.env)
+			}
+			if base.env != nil {
+				t.Error("WithEnv changed the Tmux it was called on")
+			}
+		})
+	}
+}
+
 func TestCleanEnvDropsInheritedSession(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-1/default,1,0")
 	t.Setenv("ORCHESTRATOR_SESSION", "other/abc")
 	t.Setenv("ORCHESTRATOR_CONTROL", "/other/control.sock")
 	t.Setenv("ORCHESTRATOR_PROJECT", "other")
 	t.Setenv("ORCHESTRATOR_KEEP", "yes")
-	env := strings.Join(cleanEnv(), "\n")
+	env := strings.Join(newTestTmux(t).cleanEnv(), "\n")
 	for _, name := range inherited {
 		if strings.Contains(env, name+"=") {
 			t.Errorf("%s was passed on", name)

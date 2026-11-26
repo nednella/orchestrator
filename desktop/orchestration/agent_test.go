@@ -450,7 +450,7 @@ func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
 	cmd := exec.CommandContext(ctx, server.Command, server.Args...)
 	// The server runs with Claude's environment, which names the app's socket, and the config's, which holds the token.
 	// A session and a project set there name another thread; the call still acts as the token's.
-	cmd.Env = append(os.Environ(), "ORCHESTRATOR_SESSION=main/bbbbbbbb", "ORCHESTRATOR_PROJECT=elsewhere")
+	cmd.Env = append(slices.Clone(h.Env), "ORCHESTRATOR_SESSION=main/bbbbbbbb", "ORCHESTRATOR_PROJECT=elsewhere")
 	for k, v := range server.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

@@ -49,6 +49,7 @@ set -g history-limit 50000
 type Tmux struct {
 	socket string
 	conf   string
+	env    []string // the environment tmux and its sessions start with; the process's when nil
 }
 
 // NewTmux prepares the config file in dir. socket names the private server.
@@ -61,6 +62,14 @@ func NewTmux(socket, dir string) (*Tmux, error) {
 		return nil, fmt.Errorf("writing tmux config: %w", err)
 	}
 	return &Tmux{socket: socket, conf: path}, nil
+}
+
+// WithEnv is t with env, in place of the process's environment, as the environment of the tmux server and of the
+// processes that attach to it.
+func (t *Tmux) WithEnv(env []string) *Tmux {
+	with := *t
+	with.env = env
+	return &with
 }
 
 // Info is one agent session as tmux reports it.
@@ -96,7 +105,7 @@ func (t *Tmux) argv(args ...string) []string {
 }
 
 func (t *Tmux) run(ctx context.Context, args ...string) (string, error) {
-	return t.runWith(ctx, cleanEnv(), args...)
+	return t.runWith(ctx, t.cleanEnv(), args...)
 }
 
 // runWith is run with env as the environment of the tmux client.
@@ -117,8 +126,12 @@ func (t *Tmux) runWith(ctx context.Context, env []string, args ...string) (strin
 // an orchestrator session does not pass it on to every session and shell it starts.
 var inherited = []string{"TMUX", "ORCHESTRATOR_SESSION", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}
 
-func cleanEnv() []string {
-	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
+func (t *Tmux) cleanEnv() []string {
+	env := os.Environ()
+	if t.env != nil {
+		env = slices.Clone(t.env)
+	}
+	return slices.DeleteFunc(env, func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
 		return slices.Contains(inherited, name)
 	})
@@ -237,7 +250,7 @@ func (t *Tmux) NewSession(ctx context.Context, name session.Name, title, dir str
 		"new-session", "-d", "-s", name.String(), "-c", dir,
 		"-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows),
 	}
-	client := cleanEnv()
+	client := t.cleanEnv()
 	for _, kv := range env {
 		args = append(args, "-e", kv)
 		// tmux gives a new pane the PATH of the client that starts it, whatever -e says.
@@ -377,7 +390,7 @@ func (t *Tmux) Redraw(ctx context.Context, tty string) error {
 }
 
 // Env is the environment for a process that attaches to the server.
-func (t *Tmux) Env() []string { return cleanEnv() }
+func (t *Tmux) Env() []string { return t.cleanEnv() }
 
 // plain refuses a value with a tab or a line break: ListAll splits the tags of a session on them, so one in a tag
 // would move the tags after it.

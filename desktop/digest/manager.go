@@ -33,6 +33,7 @@ type Manager struct {
 	project Projects
 	notes   Notes
 	run     run.EnvRunner
+	env     []string // what the agent's environment is made from
 	emit    func(event string, payload any)
 	ctx     func() context.Context
 	walk    func(dir string) []string // lists the project's dependencies
@@ -40,9 +41,9 @@ type Manager struct {
 	tick    time.Duration             // between checks after that
 }
 
-// NewManager runs the digests with run in the project's folder.
-func NewManager(d *Digests, p Projects, n Notes, runner run.EnvRunner, emit func(string, any), ctx func() context.Context) *Manager {
-	return &Manager{digests: d, project: p, notes: n, run: runner, emit: emit, ctx: ctx, walk: dependencies, first: time.Minute, tick: time.Hour}
+// NewManager runs the digests with run in the project's folder, with an environment made from env.
+func NewManager(d *Digests, p Projects, n Notes, runner run.EnvRunner, env []string, emit func(string, any), ctx func() context.Context) *Manager {
+	return &Manager{digests: d, project: p, notes: n, run: runner, env: env, emit: emit, ctx: ctx, walk: dependencies, first: time.Minute, tick: time.Hour}
 }
 
 // SetLoop sets how long to wait before the first automatic check, and between checks.
@@ -98,7 +99,7 @@ func (m *Manager) start(proj project.Project) error {
 func (m *Manager) available(ctx context.Context) (agent.Headless, error) {
 	var tried []string
 	for _, a := range agent.Headlesses {
-		if _, err := m.run(ctx, "", os.Environ(), a.Check[0], a.Check[1:]...); err == nil {
+		if _, err := m.run(ctx, "", m.env, a.Check[0], a.Check[1:]...); err == nil {
 			return a, nil
 		} else if ctx.Err() != nil {
 			return agent.Headless{}, err
@@ -122,7 +123,7 @@ func (m *Manager) runAgent(ctx context.Context, key string, deps []string) error
 	}
 	defer os.RemoveAll(dir)
 	argv := a.Argv(prompts.Digest(deps))
-	reply, err := m.run(ctx, dir, a.Env(os.Environ()), argv[0], argv[1:]...)
+	reply, err := m.run(ctx, dir, a.Env(m.env), argv[0], argv[1:]...)
 	if err != nil {
 		return err
 	}

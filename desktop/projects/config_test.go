@@ -121,13 +121,12 @@ func TestAppFollowsConfigEdits(t *testing.T) {
 }
 
 func TestAppWarnsWhileClaudeIsNotInstalled(t *testing.T) {
-	h := newHarness(t)
-	path := os.Getenv("PATH")
-	t.Setenv("PATH", apptest.PathWithout("claude"))
+	h := apptest.NewWith(t, apptest.Options{PathWithout: []string{"claude"}})
+	h.RemoveClaude(t)
 	eventually(t, "a warning naming claude", func() bool {
 		return slices.Contains(h.Rec.Warnings(), warn.Warning{Source: "agent", Message: "claude is not installed: it is not on PATH"})
 	})
-	t.Setenv("PATH", path)
+	h.RestoreClaude(t)
 	eventually(t, "the warning to clear", func() bool {
 		w := h.Rec.Warnings()
 		return len(w) > 0 && w[len(w)-1] == warn.Warning{Source: "agent"}

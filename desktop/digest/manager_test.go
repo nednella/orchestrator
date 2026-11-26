@@ -26,7 +26,7 @@ func TestRunStartsBeforeItCountsTheTools(t *testing.T) {
 	notSignedIn := func(context.Context, string, []string, string, ...string) ([]byte, error) {
 		return nil, errors.New("signed out")
 	}
-	m := NewManager(New(t.TempDir()), oneProject{project.Project{Name: "demo", Dir: t.TempDir()}}, noNotes{}, notSignedIn,
+	m := NewManager(New(t.TempDir()), oneProject{project.Project{Name: "demo", Dir: t.TempDir()}}, noNotes{}, notSignedIn, nil,
 		func(_ string, payload any) { events <- payload.(Digest) }, context.Background)
 	release := make(chan struct{})
 	m.walk = func(string) []string {

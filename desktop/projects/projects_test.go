@@ -10,6 +10,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/app"
 	"github.com/nednella/orchestrator/desktop/projects"
 	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/project"
 )
 
@@ -103,20 +104,17 @@ func TestProjects(t *testing.T) {
 		if _, err := h.SwitchProject("other-2"); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("ORCHESTRATOR_DIR", "/")
-		cfg, err := app.Load()
+		cfg, err := app.LoadEnv(environ.With(h.Env, "ORCHESTRATOR_DIR=/"))
 		if err != nil || cfg.Project.Name != "other-2" {
 			t.Errorf("from Finder: %+v, %v", cfg.Project, err)
 		}
-		t.Setenv("ORCHESTRATOR_DIR", h.Dir)
-		if cfg, _ = app.Load(); cfg.Project.Name != "main" {
+		if cfg, _ = app.LoadEnv(environ.With(h.Env, "ORCHESTRATOR_DIR="+h.Dir)); cfg.Project.Name != "main" {
 			t.Errorf("inside a known folder: %q", cfg.Project.Name)
 		}
-		t.Setenv("ORCHESTRATOR_DIR", "/")
 		if err := projects.WriteLast(h.State, "gone"); err != nil {
 			t.Fatal(err)
 		}
-		if cfg, _ = app.Load(); cfg.Project.Name != "main" {
+		if cfg, _ = app.LoadEnv(environ.With(h.Env, "ORCHESTRATOR_DIR=/")); cfg.Project.Name != "main" {
 			t.Errorf("unknown last project gave %q, want the first one", cfg.Project.Name)
 		}
 	})

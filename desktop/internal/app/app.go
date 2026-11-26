@@ -64,6 +64,7 @@ type App struct {
 	router   *control.Router
 	tools    *orchestration.Commands
 	registry *projects.Registry
+	agents   agent.Registry
 	issues   *issues.Issues
 	warn     *warn.Warnings
 	media    http.Handler
@@ -86,7 +87,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	events := stats.NewLog(c.DataDir, c.Machine)
 	waits := stats.New(events)
 	proofs := evidence.New(c.DataDir, events)
-	browsers := browser.New(c.LocalDir, h.Emit)
+	browsers := browser.New(c.LocalDir, h.Emit, c.Env)
 	terms := terminal.New(c.Tmux, h.Emit, h.Clipboard)
 	stayAwake := awake.New(h.Awake, h.Emit)
 	sess := sessions.New(sessions.Options{
@@ -95,11 +96,11 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
 	})
 	chats := chat.New(sess, c.LocalDir, h.Emit)
-	a.limits = limits.New(sess, host.Usage, limits.Exec, filepath.Join(c.StateDir, "usage-probe"), h.Emit)
+	a.limits = limits.New(sess, host.Usage, limits.Exec(c.Env), filepath.Join(c.StateDir, "usage-probe"), h.Emit)
 	chats.OnRateLimit(a.limits.Seen)
 	iss := issues.New(runner, sess, h.Emit)
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)
-	a.registry, a.issues, a.warn = c.Registry, iss, warn.New(h.Emit)
+	a.registry, a.issues, a.warn, a.agents = c.Registry, iss, warn.New(h.Emit), c.Agents
 	store := notes.New(c.DataDir)
 	a.sessions, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
 	a.browsers, a.awake = browsers, stayAwake
@@ -132,7 +133,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		}
 		return fmt.Sprintf("%s · %d %s", project, sess.Number(id), sess.Title(id))
 	}, sess.Touch)
-	mgr := digest.NewManager(digest.New(c.DataDir), sess, store, claude, h.Emit, ctx)
+	mgr := digest.NewManager(digest.New(c.DataDir), sess, store, claude, c.Env, h.Emit, ctx)
 	a.digests = mgr
 	a.updates = update.New(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runner(ctx, "", name, args...)
@@ -221,7 +222,7 @@ func (a *App) followConfig(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		if err := agent.CheckInstalled(a.sessions.Provider()); err != nil {
+		if err := a.agents.CheckInstalled(a.sessions.Provider()); err != nil {
 			a.warn.Report("agent", err.Error())
 		} else {
 			a.warn.Clear("agent")

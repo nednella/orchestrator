@@ -8,16 +8,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 )
 
 // findAgentBrowser returns the agent-browser that sessions drive their tab with: ORCHESTRATOR_AGENT_BROWSER, else the one
 // the app bundle carries beside this binary, else "".
-func findAgentBrowser() string {
-	if p := os.Getenv("ORCHESTRATOR_AGENT_BROWSER"); p != "" {
+func findAgentBrowser(env []string) string {
+	if p := environ.Get(env, "ORCHESTRATOR_AGENT_BROWSER"); p != "" {
 		return p
 	}
 	exe, err := os.Executable()
@@ -63,7 +65,7 @@ func (b *Browsers) AgentEnv(id, tmpDir string) ([]string, error) {
 		return nil, err
 	}
 	return []string{
-		"PATH=" + filepath.Dir(b.agentBrowser) + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"PATH=" + filepath.Dir(b.agentBrowser) + string(os.PathListSeparator) + environ.Get(b.env, "PATH"),
 		"AGENT_BROWSER_SESSION=" + name.Token,
 		"AGENT_BROWSER_SOCKET_DIR=" + b.agentDir(),
 		"AGENT_BROWSER_CDP=" + strconv.Itoa(port),
@@ -123,7 +125,7 @@ func (b *Browsers) stopAgent(ctx context.Context, name session.Name) error {
 	ctx, cancel := context.WithTimeout(ctx, stopLimit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, b.agentBrowser, "close")
-	cmd.Env = append(os.Environ(), "AGENT_BROWSER_SESSION="+name.Token, "AGENT_BROWSER_SOCKET_DIR="+b.agentDir())
+	cmd.Env = append(slices.Clone(b.env), "AGENT_BROWSER_SESSION="+name.Token, "AGENT_BROWSER_SOCKET_DIR="+b.agentDir())
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("stopping the agent-browser of %s: %v: %s", name, err, out)
 	}

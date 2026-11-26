@@ -3,12 +3,12 @@ package agent
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/usage"
 )
@@ -51,10 +51,10 @@ type Provider interface {
 	Usage(from usage.Mark) usage.Reader
 }
 
-// CheckInstalled reports a provider whose command is not on PATH, naming the command.
-func CheckInstalled(p Provider) error {
+// CheckInstalled reports a provider whose command is not on the registry's PATH, naming the command.
+func (r Registry) CheckInstalled(p Provider) error {
 	program := p.Command(Launch{})[0]
-	if _, err := exec.LookPath(program); err != nil {
+	if _, err := environ.LookPath(r.environ(), program); err != nil {
 		return fmt.Errorf("%s is not installed: it is not on PATH", program)
 	}
 	return nil
@@ -101,23 +101,32 @@ func checkModel(agent string, models []Model, model, effort string) error {
 	return nil
 }
 
-// Registry makes the provider each session starts with. Dirs are the app's folders the agent may use.
+// Registry makes the provider each session starts with. Dirs are the app's folders the agent may use. Env is the
+// environment the agent is found and told its settings by; the process's when nil.
 type Registry struct {
 	Dirs []string
+	Env  []string
 }
 
 // Provider is claude.
 func (r Registry) Provider() Provider {
-	return Claude{ConfigDir: claudeConfigDir(), Dirs: r.Dirs}
+	return Claude{ConfigDir: claudeConfigDir(r.environ()), Dirs: r.Dirs}
 }
 
-// claudeConfigDir is where claude keeps the user's settings, "" when there is no home.
-func claudeConfigDir() string {
-	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+func (r Registry) environ() []string {
+	if r.Env != nil {
+		return r.Env
+	}
+	return os.Environ()
+}
+
+// claudeConfigDir is where claude keeps the user's settings in the environment env, "" when there is no home.
+func claudeConfigDir(env []string) string {
+	if dir := environ.Get(env, "CLAUDE_CONFIG_DIR"); dir != "" {
 		return dir
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	home := environ.Get(env, "HOME")
+	if home == "" {
 		return ""
 	}
 	return filepath.Join(home, ".claude")

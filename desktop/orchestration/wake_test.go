@@ -87,7 +87,7 @@ func withConversation(t *testing.T, h *apptest.Harness, id string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	standIn := agent.Claude{ConfigDir: os.Getenv("CLAUDE_CONFIG_DIR")}.Transcript(folder, "fake-session")
+	standIn := agent.Claude{ConfigDir: h.ClaudeConfigDir()}.Transcript(folder, "fake-session")
 	if err := os.MkdirAll(filepath.Dir(standIn), 0o700); err != nil {
 		t.Fatal(err)
 	}

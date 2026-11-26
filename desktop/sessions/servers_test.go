@@ -321,8 +321,7 @@ func TestStartLeavesTheServersOfAThreadWhoseHostAnswers(t *testing.T) {
 	backdate(t, h, live.ID)
 	backdate(t, h, killed.ID)
 
-	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", h.Socket+"-other")
-	second := h.Restart(t)
+	second := h.Restart(t, "ORCHESTRATOR_TMUX_SOCKET="+h.Socket+"-other")
 	eventually(t, "the second app sees the live thread settled", func() bool {
 		for _, s := range second.Sessions().List() {
 			if s.ID == live.ID {
@@ -361,8 +360,7 @@ func backdate(t *testing.T, h *apptest.Harness, id string) {
 }
 
 func TestShellCarriesNoThreadMarker(t *testing.T) {
-	t.Setenv("ORCHESTRATOR_SESSION", "main/aaaaaaaa") // as an app started from a thread's terminal has
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Env: []string{"ORCHESTRATOR_SESSION=main/aaaaaaaa"}}) // as an app started from a thread's terminal has
 	thread, err := h.NewSession("work", "")
 	if err != nil {
 		t.Fatal(err)

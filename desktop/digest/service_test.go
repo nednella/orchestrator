@@ -37,10 +37,11 @@ const wailsReply = `[
 ]`
 
 func TestDigestRun(t *testing.T) {
-	h := newHarness(t)
-	t.Setenv("ORCHESTRATOR_SESSION", "main/9") // a run must not inherit a session
-	t.Setenv("DEPLOY_TOKEN", "secret")
-	t.Setenv("ANTHROPIC_API_KEY", "claude-needs-this")
+	h := apptest.NewWith(t, apptest.Options{Env: []string{
+		"ORCHESTRATOR_SESSION=main/9", // a run must not inherit a session
+		"DEPLOY_TOKEN=secret",
+		"ANTHROPIC_API_KEY=claude-needs-this",
+	}})
 	if err := os.WriteFile(filepath.Join(h.Dir, "package.json"), []byte(`{"dependencies":{"wails-ish":"1"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
