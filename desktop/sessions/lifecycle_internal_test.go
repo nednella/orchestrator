@@ -374,6 +374,49 @@ func TestSweptCleanupStopsForADeleteOrAWake(t *testing.T) {
 	}
 }
 
+func TestAChildsSleepCleanupAndADeleteNeverBothGoOn(t *testing.T) {
+	t.Run("the clean-up decides first", func(t *testing.T) {
+		s, name := asleepAndKept(t)
+		id := name.String()
+		// The clean-up holds createMu from its look for a delete until its mark is on.
+		s.createMu.Lock()
+		done := make(chan error, 1)
+		go func() { _, err := s.startDelete(id); done <- err }()
+		time.Sleep(100 * time.Millisecond)
+		s.mu.Lock()
+		marked := s.deleting[id]
+		s.mu.Unlock()
+		if marked {
+			t.Error("the delete marked itself while the clean-up decided")
+		}
+		s.life.mu.Lock()
+		s.life.tracks[id].cleanup = "pending"
+		s.life.mu.Unlock()
+		s.createMu.Unlock()
+		if err := <-done; err == nil || err.Error() != "Thread 3 is being cleaned up; delete it when that ends" {
+			t.Errorf("delete = %v, want it refused for the clean-up", err)
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.deleting[id] {
+			t.Error("the refused delete left its mark")
+		}
+	})
+
+	t.Run("the delete decides first", func(t *testing.T) {
+		s, name := asleepAndKept(t)
+		id := name.String()
+		family, err := s.startDelete(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.endDelete(family)
+		if _, _, ok := s.life.startChildCleanup(id); ok {
+			t.Error("the clean-up went on beside the delete")
+		}
+	})
+}
+
 func TestNewShellIsRefusedWhileItsThreadIsDeleted(t *testing.T) {
 	s, name := asleepAndKept(t)
 	s.deleting[name.String()] = true

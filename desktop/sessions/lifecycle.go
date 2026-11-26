@@ -1229,7 +1229,8 @@ func (l *Lifecycle) shellOf(ctx context.Context, id string) string {
 // startChildCleanup marks the clean-up of the asleep child id as running and returns its track and the clean-up state
 // it had, unless the child runs again, a delete of it runs or it went, or another clean-up of it runs or finished. It
 // holds createMu, which a wake holds from its check that no clean-up runs until the thread is live, so a wake either
-// comes first and the child is found running, or waits for the clean-up.
+// comes first and the child is found running, or waits for the clean-up; a delete holds it as it marks itself and looks
+// for a clean-up, so either the delete or the clean-up goes on, never both.
 func (l *Lifecycle) startChildCleanup(id string) (tr *track, before string, ok bool) {
 	s := l.sessions
 	s.createMu.Lock()

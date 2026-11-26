@@ -812,18 +812,7 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		s.mu.Lock()
-		for _, d := range family {
-			delete(s.deleting, d)
-		}
-		s.mu.Unlock()
-	}()
-	for _, d := range family {
-		if s.life.CleaningUp(d) {
-			return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
-		}
-	}
+	defer s.endDelete(family)
 	trees := s.familyWorktrees(s.context(), family)
 	// stopped is the thread this Delete has put to sleep, so an error after that says it is asleep now.
 	stopped := ""
@@ -893,11 +882,38 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 
 // startDelete marks the thread id and its descendants as being deleted and returns them, the deepest first and id
 // last, or says why they cannot be: it was deleted, a delete of it or of a descendant runs, it runs in an old terminal,
-// or one of its descendants runs. It takes childMu, so a child whose start passed its checks is running before the
-// descendants are looked at, and mu.
+// one of its descendants runs, or a clean-up of one of them runs. It takes childMu, so a child whose start passed its
+// checks is running before the descendants are looked at, and createMu, under which a child's clean-up at its sleep
+// decides too, so only one of the two goes on. Any other clean-up marks itself before it looks for a delete.
 func (s *Sessions) startDelete(id string) ([]string, error) {
 	s.childMu.Lock()
 	defer s.childMu.Unlock()
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+	family, err := s.markDeleting(id)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range family {
+		if s.life.CleaningUp(d) {
+			s.endDelete(family)
+			return nil, fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
+		}
+	}
+	return family, nil
+}
+
+// endDelete takes off the marks startDelete put on the family. It takes mu.
+func (s *Sessions) endDelete(family []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range family {
+		delete(s.deleting, d)
+	}
+}
+
+// markDeleting is startDelete's checks and marks, under mu.
+func (s *Sessions) markDeleting(id string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
