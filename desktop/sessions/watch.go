@@ -225,6 +225,50 @@ func (l *Lifecycle) pollPRs(ctx context.Context, proj project.Project, repo stri
 // changedBranches are the tracked branches whose pull request was updated since the last fetch,
 // as the repo's PR list says. A list GitHub reports unchanged (304) names none.
 func (l *Lifecycle) changedBranches(ctx context.Context, proj project.Project, repo string, targets []target) ([]string, error) {
+	list, unchanged, err := l.listPulls(ctx, proj, repo, true)
+	if err != nil {
+		return nil, err
+	}
+	changed := []string{}
+	if unchanged {
+		return changed, nil
+	}
+	updated := map[string]int64{}
+	for _, pr := range slices.Backward(list) { // the newest PR of a branch wins
+		updated[pr.Head.Ref] = util.Millis(pr.UpdatedAt)
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, t := range targets {
+		at, listed := updated[t.branch]
+		if !listed {
+			continue
+		}
+		tr := l.tracks[t.id]
+		known := tr != nil && tr.pr != nil && tr.branch == t.branch
+		if (!known || tr.pr.UpdatedAt != at) && !slices.Contains(changed, t.branch) {
+			changed = append(changed, t.branch)
+		}
+	}
+	return changed, nil
+}
+
+// listedPull is one entry of the repo's REST pull request list.
+type listedPull struct {
+	Number    int                    `json:"number"`
+	Title     string                 `json:"title"`
+	Draft     bool                   `json:"draft"`
+	State     string                 `json:"state"`
+	HTMLURL   string                 `json:"html_url"`
+	User      struct{ Login string } `json:"user"`
+	Head      struct{ Ref string }   `json:"head"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+// listPulls reads the repo's pull request list with the ETag of the last answer and keeps the open pull requests
+// of a 200 for PullRequests; a 304 keeps the last list and says unchanged. The ETag is kept only when keepETag:
+// a caller that does not act on what moved must not hide it from the poll.
+func (l *Lifecycle) listPulls(ctx context.Context, proj project.Project, repo string, keepETag bool) (list []listedPull, unchanged bool, err error) {
 	key := proj.Key()
 	l.mu.Lock()
 	etag := l.etags[key]
@@ -238,38 +282,27 @@ func (l *Lifecycle) changedBranches(ctx context.Context, proj project.Project, r
 	out, err := l.run(ctx, proj.Dir, "gh", args...)
 	if err != nil {
 		if strings.Contains(err.Error(), "HTTP 304") {
-			return []string{}, nil
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			if kept, ok := l.lists[key]; ok {
+				kept.at = time.Now()
+				l.lists[key] = kept
+			}
+			return nil, true, nil
 		}
-		return nil, fmt.Errorf("listing the pull requests of %s: %w", repo, err)
+		return nil, false, fmt.Errorf("listing the pull requests of %s: %w", repo, err)
 	}
 	etag, body := splitResponse(out)
-	var list []struct {
-		Head      struct{ Ref string } `json:"head"`
-		UpdatedAt time.Time            `json:"updated_at"`
-	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return nil, fmt.Errorf("reading the pull request list of %s: %w", repo, err)
-	}
-	updated := map[string]int64{}
-	for _, pr := range slices.Backward(list) { // the newest PR of a branch wins
-		updated[pr.Head.Ref] = util.Millis(pr.UpdatedAt)
+		return nil, false, fmt.Errorf("reading the pull request list of %s: %w", repo, err)
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.etags[key] = etag
-	changed := []string{}
-	for _, t := range targets {
-		at, listed := updated[t.branch]
-		if !listed {
-			continue
-		}
-		tr := l.tracks[t.id]
-		known := tr != nil && tr.pr != nil && tr.branch == t.branch
-		if (!known || tr.pr.UpdatedAt != at) && !slices.Contains(changed, t.branch) {
-			changed = append(changed, t.branch)
-		}
+	if keepETag {
+		l.etags[key] = etag
 	}
-	return changed, nil
+	l.lists[key] = openPulls{at: time.Now(), pulls: openOf(list)}
+	return list, false, nil
 }
 
 // splitResponse takes the ETag and the body out of what gh api -i printed: the headers, a blank line, the body.

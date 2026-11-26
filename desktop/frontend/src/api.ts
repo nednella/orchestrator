@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPull, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -11,6 +11,7 @@ type Backend = {
   DeleteThread(id: string, worktree: boolean): Promise<void>
   DeletePlan(id: string): Promise<DeletePlan>
   Servers(id: string): Promise<Server[]>
+  PullRequests(): Promise<RepoPull[]>
   StopServer(id: string, pid: number): Promise<void>
   OpenServer(port: number): Promise<void>
   WakeThread(id: string): Promise<Session>
@@ -132,7 +133,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'NewProject', 'CreateRepo', 'RemoveProject', 'SetUpProject', 'DismissSetup'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatDraft', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -175,6 +176,7 @@ export const api = {
   deleteThread: (id: string, worktree: boolean) => backend.DeleteThread(id, worktree),
   deletePlan: (id: string) => backend.DeletePlan(id),
   servers: (id: string) => backend.Servers(id),
+  pullRequests: () => backend.PullRequests(),
   // The Go side stops pid only once it finds it among the thread's servers again.
   stopServer: (id: string, pid: number) => backend.StopServer(id, pid),
   openServer: (port: number) => backend.OpenServer(port),

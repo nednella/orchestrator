@@ -26,7 +26,7 @@ export type PanelView = { id: PanelViewId; label: string; icon: LucideIcon; thre
 const VIEWS: Partial<Record<PanelViewId, PanelView>> = {
   agents: { id: 'agents', label: 'Agents', icon: Bot, thread: true, Component: AgentsView },
   servers: { id: 'servers', label: 'Servers', icon: Server, thread: true, Component: ServersView },
-  pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: true, Component: PullRequestsView },
+  pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: false, Component: PullRequestsView },
   issues: { id: 'issues', label: 'Issues', icon: CircleDot, thread: false, Component: IssuesView },
   notes: { id: 'notes', label: 'Notes', icon: StickyNote, thread: false, Component: NotesView },
   files: { id: 'files', label: 'Files', icon: Files, thread: false, Component: FilesView },

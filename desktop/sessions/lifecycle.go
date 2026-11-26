@@ -160,11 +160,13 @@ type Lifecycle struct {
 
 	mu       sync.Mutex
 	tracks   map[string]*track
-	gone     map[string]bool     // forgotten ids: a poll that was waiting on gh must not write for them
-	files    map[string]*prsFile // by project key
-	etags    map[string]string   // by project key: the ETag of the last pull request list
-	watchers map[string]*watcher // by project key
-	logins   map[string]string   // by project folder: the gh user's login
+	gone     map[string]bool      // forgotten ids: a poll that was waiting on gh must not write for them
+	files    map[string]*prsFile  // by project key
+	etags    map[string]string    // by project key: the ETag of the last pull request list
+	watchers map[string]*watcher  // by project key
+	lists    map[string]openPulls // by project key: the open pull requests of the last list
+	listMu   sync.Mutex           // one PullRequests read at a time
+	logins   map[string]string    // by project folder: the gh user's login
 	// polled closes once Run's first poll has read every thread's PR: until then no track says a clean-up is due.
 	polled chan struct{}
 
@@ -181,7 +183,7 @@ func newLifecycle(runner run.Runner, stream run.Streamer, dataDir, stateDir stri
 	stopped, stop := context.WithCancel(context.Background())
 	return &Lifecycle{
 		run: runner, stream: stream, dataDir: dataDir, stateDir: stateDir, sessions: s, activity: activity, emit: emit, warn: warn.New(emit), repos: noRepos{},
-		tracks: map[string]*track{}, gone: map[string]bool{}, files: map[string]*prsFile{}, etags: map[string]string{}, watchers: map[string]*watcher{}, logins: map[string]string{},
+		tracks: map[string]*track{}, gone: map[string]bool{}, files: map[string]*prsFile{}, etags: map[string]string{}, watchers: map[string]*watcher{}, lists: map[string]openPulls{}, logins: map[string]string{},
 		polled: make(chan struct{}), sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
 	}
 }

@@ -21,6 +21,18 @@ export type PR = {
   newComments: number
 }
 
+// RepoPull is an open pull request of the repository; thread is the thread that tracks its branch, '' for none.
+export type RepoPull = {
+  number: number
+  title: string
+  draft: boolean
+  branch: string
+  url: string
+  author: string
+  updatedAt: number
+  thread: string
+}
+
 export type BranchStatus = {
   base: string
   unpushed: number
