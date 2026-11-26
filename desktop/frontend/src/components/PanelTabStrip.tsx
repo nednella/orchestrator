@@ -1,19 +1,18 @@
 import { List, Maximize2, Minimize2, X } from 'lucide-react'
-import { useOrchestratorSelector } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
-import { agentsWait, panelView } from '../panelViews'
+import { panelView } from '../panelViews'
 import type { PanelViewId } from '../panelTabs'
-import type { Session } from '../types'
+import { titleBarButton } from './TitleBarButton'
 
-type PanelTabStripProps = { session: Session | undefined }
 
-const stripButton = 'btn btn-ghost h-8 w-8 flex-none justify-center px-0 aria-pressed:bg-(--bg-segment-on) aria-pressed:text-ink'
+const iconProps = { size: 14, strokeWidth: 2.25, 'aria-hidden': true } as const
+const pressedColor = (pressed: boolean) => ({ color: pressed ? 'var(--text)' : undefined })
 
 // PanelTabStrip heads the right panel: the list of views, a tab for each view open, marked while it waits on the owner,
-// then Expand, offered only beside the chat, and Close.
-export function PanelTabStrip({ session }: PanelTabStripProps) {
+// then Expand, offered only beside the chat, and Close. Its buttons are the top bar's, in the same box and at the same
+// right edge, so the two rows read as one column.
+export function PanelTabStrip() {
   const { panel, panelExpanded, docked, showPanelList, showPanelView, closePanelTab, togglePanelExpanded, togglePanel } = useLayout()
-  const agentsWaiting = useOrchestratorSelector((a) => agentsWait(session, a.sessions))
   const expand = panelExpanded ? 'Restore panel size' : 'Expand panel'
 
   const tab = (id: PanelViewId) => {
@@ -33,7 +32,6 @@ export function PanelTabStrip({ session }: PanelTabStripProps) {
         </button>
         <span className="pointer-events-none absolute top-1/2 left-1 grid size-4 -translate-y-1/2 place-items-center group-focus-within:opacity-0 group-hover:opacity-0">
           <view.icon size={12} aria-hidden="true" />
-          {id === 'agents' && agentsWaiting && <span className="absolute right-0 bottom-0 size-1.5 rounded-full bg-(--waiting)" title="Waits on you" />}
         </span>
         <button
           className="absolute top-1/2 left-1 grid size-4 -translate-y-1/2 place-items-center rounded-sm text-soft opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-(--bg-segment-on) hover:text-ink"
@@ -47,21 +45,23 @@ export function PanelTabStrip({ session }: PanelTabStripProps) {
   }
 
   return (
-    <div className="flex h-[52px] flex-none items-center gap-1 border-b border-line pr-2 pl-2">
-      <button className={stripButton} title="All views" aria-label="All views" aria-pressed={panel.active === null} onClick={showPanelList}>
-        <List size={16} aria-hidden="true" />
+    <div className="flex h-[52px] flex-none items-center gap-1 border-b border-line pl-2" style={{ paddingRight: 'var(--corner-pad)' }}>
+      <button className={titleBarButton} style={pressedColor(panel.active === null)} title="All views" aria-label="All views" aria-pressed={panel.active === null} onClick={showPanelList}>
+        <List {...iconProps} />
       </button>
       <div role="tablist" aria-label="Open views" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {panel.tabs.map(tab)}
       </div>
-      {docked.right && (
-        <button className={stripButton} title={expand} aria-label={expand} aria-pressed={panelExpanded} onClick={togglePanelExpanded}>
-          {panelExpanded ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+      <div className="flex flex-none items-center gap-0.5">
+        {docked.right && (
+          <button className={titleBarButton} style={pressedColor(panelExpanded)} title={expand} aria-label={expand} aria-pressed={panelExpanded} onClick={togglePanelExpanded}>
+            {panelExpanded ? <Minimize2 {...iconProps} /> : <Maximize2 {...iconProps} />}
+          </button>
+        )}
+        <button className={titleBarButton} title="Close the panel" aria-label="Close the panel" onClick={() => togglePanel('right')}>
+          <X {...iconProps} />
         </button>
-      )}
-      <button className={stripButton} title="Close the panel" aria-label="Close the panel" onClick={() => togglePanel('right')}>
-        <X size={16} aria-hidden="true" />
-      </button>
+      </div>
     </div>
   )
 }

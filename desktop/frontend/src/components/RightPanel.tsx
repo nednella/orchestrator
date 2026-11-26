@@ -15,7 +15,7 @@ export function RightPanel() {
   const view = panel.active ? panelView(panel.active) : undefined
   const root = useRef<HTMLElement>(null)
 
-  useFocusRequest('right', () => (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [data-panel-view]') ?? root.current)?.focus())
+  useFocusRequest('right', () => (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [data-panel-view]:not([aria-disabled="true"])') ?? root.current)?.focus())
 
   return (
     <aside
@@ -25,7 +25,7 @@ export function RightPanel() {
       className={`panel flex h-full min-h-0 flex-col overflow-hidden ${panelExpanded ? 'min-w-0 flex-1' : 'flex-none'}`}
       style={panelExpanded ? undefined : { width: `${widths.right}rem` }}
     >
-      <PanelTabStrip session={session} />
+      <PanelTabStrip />
       <div className="@container relative min-h-0 flex-1">{view ? <view.Component key={`${projectKey} ${view.id}`} session={session} /> : <PanelHome session={session} />}</div>
     </aside>
   )
