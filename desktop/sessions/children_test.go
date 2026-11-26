@@ -14,6 +14,7 @@ import (
 	"github.com/nednella/agentos/desktop/sessions"
 	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // childOf starts a child of the live thread parent, with parent's access, working where says.
@@ -136,15 +137,21 @@ func TestDeleteTakesAsleepChildrenWithIt(t *testing.T) {
 		}
 	})
 
-	t.Run("without the worktrees", func(t *testing.T) {
-		h, threads := family(t)
-		parent, child := threads[0], threads[1]
+	t.Run("without the worktree, children in its folder", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		child := childOf(t, h, parent, "Helper", sessions.WhereFolder)
+		putToSleep(t, h, child.ID)
+		if got, want := h.DeletePlan(parent.ID), (sessions.DeletePlan{Worktrees: 1}); got != want {
+			t.Errorf("DeletePlan = %+v, want %+v", got, want)
+		}
 		if err := h.DeleteThread(parent.ID, false); err != nil {
 			t.Fatal(err)
 		}
-		gone(t, h, threads)
-		if !exists(parent.Worktree) || !exists(child.Worktree) {
-			t.Errorf("worktrees there: the parent's %v, the child's %v; want both", exists(parent.Worktree), exists(child.Worktree))
+		gone(t, h, []sessions.Session{parent, child})
+		if !exists(parent.Worktree) {
+			t.Error("the parent's worktree went")
 		}
 	})
 }
@@ -552,4 +559,52 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 			t.Errorf("the parent = %+v, there %v; want it asleep", got, ok)
 		}
 	})
+}
+
+func TestDeleteOfAFamilyTakesItsChildrensWorktrees(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parent.Worktree != "" {
+		t.Fatalf("the parent has a worktree: %+v", parent)
+	}
+	var children []sessions.Session
+	for _, title := range []string{"Builder", "Tester"} {
+		c := childOf(t, h, parent, title, sessions.WhereWorktree)
+		commitIn(t, c.Worktree, "work.txt")
+		putToSleep(t, h, c.ID)
+		cleanupOf(t, h, c)
+		children = append(children, c)
+	}
+	if got, want := h.DeletePlan(parent.ID), (sessions.DeletePlan{Worktrees: 2, Required: true}); got != want {
+		t.Errorf("DeletePlan of the parent = %+v, want %+v", got, want)
+	}
+	if got, want := h.DeletePlan(children[0].ID), (sessions.DeletePlan{Worktrees: 1}); got != want {
+		t.Errorf("DeletePlan of a child = %+v, want %+v", got, want)
+	}
+
+	err = h.DeleteThread(parent.ID, false)
+	if want := fmt.Sprintf("Thread %d has children with worktrees of their own: delete it with the worktrees", parent.N); err == nil || err.Error() != want {
+		t.Errorf("Delete without the worktrees = %v, want %q", err, want)
+	}
+	for _, c := range children {
+		if _, ok := h.Session(c.ID); !ok || !exists(c.Worktree) {
+			t.Errorf("child %s: row there %v, worktree there %v", c.Title, ok, exists(c.Worktree))
+		}
+		gitIn(t, c.Worktree, "push", "-u", "origin", "HEAD")
+	}
+	if err := h.DeleteThread(parent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range children {
+		if _, ok := h.Session(c.ID); ok || exists(c.Worktree) || !hasBranch(t, h.Dir, c.Branch) {
+			t.Errorf("child %s: row there %v, worktree there %v, branch there %v", c.Title, ok, exists(c.Worktree), hasBranch(t, h.Dir, c.Branch))
+		}
+	}
+	if !exists(filepath.Join(h.Dir, "README")) {
+		t.Error("the project folder lost its files")
+	}
 }

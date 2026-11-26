@@ -757,7 +757,9 @@ func (s *Sessions) handoverOf(id string) string {
 // with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
 // no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
 // thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
-// first, so none is left without the parent that reaches it; their worktrees go with the thread's, all or none. A thread with a
+// first, so none is left without the parent that reaches it. Their worktrees go with the thread's, all or none, and a
+// descendant's worktree cannot stay: once its thread goes, nothing would clean it up. One that a thread outside the
+// family works in stays on disk for it. A thread with a
 // running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
 // until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
 // nor a descendant can be woken or forked, and none starts a child.
@@ -784,6 +786,9 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		if s.life.CleaningUp(d) {
 			return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
 		}
+	}
+	if !worktree && s.DeletePlan(id).Required {
+		return fmt.Errorf("Thread %d has children with worktrees of their own: delete it with the worktrees", s.Number(id))
 	}
 	if worktree {
 		if err := s.removeWorktrees(family); err != nil {
@@ -961,18 +966,20 @@ func (s *Sessions) removeState(id string) error {
 
 // removeWorktrees removes the worktrees agentos made for the threads of a Delete, family, the deepest first and the
 // thread last, once every one has passed every check of a clean-up, so a worktree kept refuses the Delete before any
-// goes. A worktree another thread or a shell works in refuses it with no check run. When the thread runs and its own
+// goes. A worktree of the thread that another thread or a shell works in refuses it with no check run; a descendant's
+// stays for that user. When the thread runs and its own
 // worktree is to go, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed
 // the worktree until it stopped; a refusal then says it is asleep.
 func (s *Sessions) removeWorktrees(family []string) error {
 	ctx := s.context()
+	top := family[len(family)-1]
 	var own []string
 	for _, id := range family {
 		path, shared := s.ownWorktree(ctx, id)
 		switch {
-		case shared != "":
+		case shared != "" && id == top:
 			return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(id), shared)
-		case path != "":
+		case path != "" && shared == "":
 			own = append(own, id)
 		}
 	}
@@ -980,7 +987,7 @@ func (s *Sessions) removeWorktrees(family []string) error {
 		return err
 	}
 	asleep := ""
-	if top := family[len(family)-1]; slices.Contains(own, top) && s.isLive(top) {
+	if slices.Contains(own, top) && s.isLive(top) {
 		name, _ := session.ParseName(top)
 		if err := s.settleToDelete(name); err != nil {
 			return err
@@ -1036,6 +1043,25 @@ func (s *Sessions) isLive(id string) bool {
 	defer s.mu.Unlock()
 	_, live := s.liveInfo(id)
 	return live
+}
+
+// DeletePlan is what a Delete of a thread would take with it, for its confirm.
+type DeletePlan struct {
+	Worktrees int  `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that no other thread and no shell works in
+	Required  bool `json:"required"`  // a descendant has one, which cannot stay once its thread goes, so the Delete takes them or is refused
+}
+
+// DeletePlan is what a Delete of the thread id would take with it.
+func (s *Sessions) DeletePlan(id string) DeletePlan {
+	ctx := s.context()
+	var p DeletePlan
+	for _, d := range append(s.Descendants(id), id) {
+		if path, shared := s.ownWorktree(ctx, d); path != "" && shared == "" {
+			p.Worktrees++
+			p.Required = p.Required || d != id
+		}
+	}
+	return p
 }
 
 // OwnWorktree is the worktree agentos made for the thread id that only it uses, which a Delete may take with it; ""

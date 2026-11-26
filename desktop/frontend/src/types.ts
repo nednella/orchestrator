@@ -64,6 +64,12 @@ export type Session = {
   subagents: number // the subagents its Claude runs in the background, which a settle stops
 }
 
+// What a delete of a thread would take with it, as DeletePlan says.
+export type DeletePlan = {
+  worktrees: number // the worktrees agentos made for the thread and its descendants that no other thread and no shell works in
+  required: boolean // a descendant has one, which cannot stay once its thread goes, so the delete takes them or is refused
+}
+
 // One port a server the thread started listens on.
 export type Server = {
   port: number

@@ -4,7 +4,7 @@ import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { defaultPlace } from './place'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -810,11 +810,31 @@ export function createMock(params: URLSearchParams) {
   }
 
   // worktreeUser is another thread that works in the thread's worktree, as far as the mock can tell: a fork of it, or a
-  // child in its folder.
-  const worktreeUser = (s: Session) => sessions.find((x) => x.id !== s.id && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+  // child in its folder. The threads of a delete's family do not count.
+  const worktreeUser = (s: Session, family: Session[]) =>
+    sessions.find((x) => x.id !== s.id && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
 
-  // ownWorktree is the thread's worktree when no other thread works in it, as the sessions say.
-  const ownWorktree = (s: Session) => (worktreeUser(s) ? '' : s.worktree)
+  // descendants are the thread's children, their children and so on, nearest first.
+  const descendants = (id: string): Session[] => {
+    const out: Session[] = []
+    for (let next = [id]; next.length > 0; ) {
+      const children = sessions.filter((x) => next.includes(x.parent))
+      out.push(...children)
+      next = children.map((x) => x.id)
+    }
+    return out
+  }
+
+  // takenWorktrees are the threads of the thread s's family whose worktrees a delete of s may take, the deepest first.
+  const takenWorktrees = (s: Session) => {
+    const family = [...descendants(s.id).reverse(), s]
+    return family.filter((x) => x.worktree && !worktreeUser(x, family))
+  }
+
+  const deletePlan = (s: Session): DeletePlan => {
+    const taken = takenWorktrees(s)
+    return { worktrees: taken.length, required: taken.some((x) => x !== s) }
+  }
 
   const merging = sessions.find((s) => s.cleanup === 'pending')
   if (merging) setTimeout(() => finishCleanup(merging), flags.done ? 1500 : 9000)
@@ -991,30 +1011,35 @@ export function createMock(params: URLSearchParams) {
       if (s.cleanup === 'pending') throw `Thread ${s.n} is being cleaned up; delete it when that ends`
       const child = runningDescendant(id)
       if (child) throw `Thread ${s.n} has a running child, ${child.title}; stop it first`
-      const user = worktree && s.worktree ? worktreeUser(s) : undefined
+      const family = [...descendants(id).reverse(), s]
+      const busy = family.find((x) => x.cleanup === 'pending')
+      if (busy) throw `Thread ${busy.n} is being cleaned up; delete it when that ends`
+      if (!worktree && deletePlan(s).required) throw `Thread ${s.n} has children with worktrees of their own: delete it with the worktrees`
+      const user = worktree && s.worktree ? worktreeUser(s, family) : undefined
       if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree`
-      const own = worktree ? s.worktree : ''
-      if (own) {
-        const reason = keptFor(s)
-        if (reason) {
-          Object.assign(s, { cleanup: 'blocked', cleanupReason: reason })
-          logCleanup(s, [], reason)
-          publish()
-          throw `Thread ${s.n} keeps its worktree: ${reason}. Delete it without the worktree, or clean it up first`
+      const taken = worktree ? takenWorktrees(s) : []
+      for (const x of taken) {
+        const reason = keptFor(x)
+        if (!reason) continue
+        Object.assign(x, { cleanup: 'blocked', cleanupReason: reason })
+        logCleanup(x, [], reason)
+        publish()
+        throw `Thread ${x.n} keeps its worktree: ${reason}. Delete it without the worktree, or clean it up first`
+      }
+      for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
+      for (const x of family) {
+        if (x.state !== 'settled') {
+          emit('term:exit', { id: x.id })
+          chats.end(x.id, 'settle')
         }
-        logCleanup(s, [`worktree ${own}`, 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder'], '')
+        deleted.add(x.id)
+        servers.delete(x.id)
+        sessions.splice(sessions.indexOf(x), 1)
       }
-      if (s.state !== 'settled') {
-        emit('term:exit', { id })
-        chats.end(id, 'settle')
-      }
-      deleted.add(id)
-      servers.delete(id)
-      sessions.splice(sessions.indexOf(s), 1)
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
     },
-    OwnWorktree: async (id: string) => ownWorktree(find(id)),
+    DeletePlan: async (id: string) => deletePlan(find(id)),
     Servers: async (id: string) => [...(servers.get(find(id).id) ?? [])].sort((a, b) => a.port - b.port),
     StopServer: async (id: string, pid: number) => {
       const list = servers.get(find(id).id) ?? []

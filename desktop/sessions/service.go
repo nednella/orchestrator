@@ -68,9 +68,9 @@ func (v *Service) SettleThread(id string) error { return v.s.Settle(id) }
 // for it goes too, unless a safety check keeps it, which refuses the delete; the branch always stays.
 func (v *Service) DeleteThread(id string, worktree bool) error { return v.s.Delete(id, worktree) }
 
-// OwnWorktree is the worktree agentos made for the thread that no other thread or shell uses, which DeleteThread may
-// remove with it; "" when there is none.
-func (v *Service) OwnWorktree(id string) string { return v.s.OwnWorktree(id) }
+// DeletePlan is what DeleteThread of the thread would take with it, for its confirm: how many worktrees agentos made for
+// it and its descendants may go, and whether they must.
+func (v *Service) DeletePlan(id string) DeletePlan { return v.s.DeletePlan(id) }
 
 // Servers are the ports the servers thread id started listen on, one row per port: the processes that carry the
 // thread's marker, without its host and Claude. [] when it has none.
