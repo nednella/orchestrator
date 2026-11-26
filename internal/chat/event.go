@@ -113,6 +113,10 @@ type Event struct {
 	// From is the thread that sent a user or queued message, or that asked for an interrupt; "" for the owner or the
 	// app.
 	From string `json:"from,omitempty"`
+	// Body is the bare words of a user or queued message from a thread, which Text frames for Claude, and Result marks
+	// one that is a child's result.
+	Body   string `json:"body,omitempty"`
+	Result bool   `json:"result,omitempty"`
 }
 
 // Persisted reports whether the event belongs in the log. A delta or a piece of thinking only feeds the live view, and

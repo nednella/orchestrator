@@ -1875,6 +1875,57 @@ func TestSendKeepsWhoItIsFrom(t *testing.T) {
 	}
 }
 
+func TestSendKeepsTheBodyAndTheResultMark(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	send := func(m Message) string {
+		t.Helper()
+		id, err := SendMessage(ctxT(t), h.socket, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	result := send(Message{Text: "APPLICATION_PROMPT: Task done:\n\nfound it", From: "main/aaaaaaaa", Body: "found it", Result: true})
+	waitKind(t, events, chat.KindTurnEnd)
+	send(Message{Text: "slow"})
+	waitKind(t, events, chat.KindMessage)
+	queued := send(Message{Text: "APPLICATION_PROMPT: check the tests", From: "main/bbbbbbbb", Body: "check the tests"})
+	if err := Interrupt(ctxT(t), h.socket); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the queued message taken in", func() bool { return index(logged(t, h.log), chat.KindUser, queued) >= 0 })
+
+	log := logged(t, h.log)
+	for _, tt := range []struct {
+		name   string
+		kind   chat.Kind
+		id     string
+		body   string
+		result bool
+	}{
+		{"a result to an idle Claude", chat.KindUser, result, "found it", true},
+		{"a message queued during a turn", chat.KindQueued, queued, "check the tests", false},
+		{"the queued message once taken in", chat.KindUser, queued, "check the tests", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			i := index(log, tt.kind, tt.id)
+			if i < 0 {
+				t.Fatalf("no %s event %s in %+v", tt.kind, tt.id, log)
+			}
+			if log[i].Body != tt.body || log[i].Result != tt.result {
+				t.Errorf("%s event has body %q and result %v, want %q and %v", tt.kind, log[i].Body, log[i].Result, tt.body, tt.result)
+			}
+		})
+	}
+	if i := index(log, chat.KindUser, result); log[i].Text != "APPLICATION_PROMPT: Task done:\n\nfound it" {
+		t.Errorf("the result's text is %q, want the framed text Claude got", log[i].Text)
+	}
+}
+
 func TestAThreadsMessageNeverAnswersAnApproval(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)

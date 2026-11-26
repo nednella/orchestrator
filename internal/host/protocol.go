@@ -33,6 +33,8 @@ type request struct {
 	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
 	Access  string          `json:"access,omitempty"` // the stop op's, for a restart: the access the thread starts again with
 	From    string          `json:"from,omitempty"`   // the send and interrupt ops': the thread that sends or stops, "" for the owner or the app
+	Body    string          `json:"body,omitempty"`   // the send op's: a thread's bare words, which Text frames for Claude
+	Result  bool            `json:"result,omitempty"` // the send op's: the message is a child's result
 	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are;
 	// the rewind_preview op's: the folder outside which a file is a reason not to rewind the files.
 	Within string `json:"within,omitempty"`

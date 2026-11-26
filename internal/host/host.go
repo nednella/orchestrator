@@ -54,10 +54,19 @@ const MaxImage = 3932160
 
 var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true}
 
-type queuedMessage struct {
-	text  string
-	files []string
-	from  string
+// message is a message the user sends: its text, the paths of its images and the thread it is from, "" for the owner or
+// the app. A thread's message, framed for Claude, logs its bare words as body, and result marks a child's result.
+type message struct {
+	text   string
+	files  []string
+	from   string
+	body   string
+	result bool
+}
+
+// event is the message as a user or queued event of the log, under the id.
+func (m message) event(kind chat.Kind, id string) chat.Event {
+	return chat.Event{Kind: kind, ID: id, Text: m.text, Files: m.files, From: m.from, Body: m.body, Result: m.result}
 }
 
 // interruptRequest is an interrupt written to Claude and the messages that were queued then.
@@ -113,7 +122,7 @@ type host struct {
 	tasks chat.Tasks
 	// queued holds the messages written during a turn that Claude has not taken in yet. Claude runs one written during
 	// a turn's last step as a turn of its own after that turn ends, so the host stays busy while any is left.
-	queued map[string]queuedMessage
+	queued map[string]message
 	// interrupted is the latest interrupt that Claude has not answered yet.
 	interrupted interruptRequest
 	// replies are the control requests written to Claude that wait on its reply, by request ID.
@@ -169,7 +178,7 @@ func Run(ctx context.Context, c Config) error {
 		echo:    &lockedWriter{w: echo},
 		subs:    map[*subscriber]struct{}{},
 		conns:   map[net.Conn]struct{}{},
-		queued:  map[string]queuedMessage{},
+		queued:  map[string]message{},
 		replies: map[string]chan chat.Event{},
 		prompts: prompts,
 
@@ -685,7 +694,7 @@ func (h *host) handle(conn net.Conn) {
 func (h *host) do(req request) (string, error) {
 	switch req.Op {
 	case opSend:
-		return h.send(req.Text, req.Files, req.From)
+		return h.send(message{text: req.Text, files: req.Files, from: req.From, body: req.Body, result: req.Result})
 	case opSendNow:
 		if req.ID == "" {
 			return "", errors.New("send_now needs the id of a queued message")
@@ -709,14 +718,14 @@ func (h *host) do(req request) (string, error) {
 	return "", fmt.Errorf("unknown op %q", req.Op)
 }
 
-// send gives the message to Claude and returns its id; from is the thread that sends it, "" for the owner or the app.
+// send gives the message to Claude and returns its id.
 // While an approval waits, the owner's message denies each waiting tool with the text as the reason and is not written
 // as a message, and a thread's is refused: only the owner answers an approval. While a turn runs, it is logged as queued
 // and written at once: Claude takes it in at the turn's next step, or runs it as its own turn after this one, and its
 // echo then logs it as the user's. Logging and writing happen under stdinMu, so the log and stdin hold messages in the
 // same order. The lock order is stdinMu, then h.mu.
-func (h *host) send(text string, files []string, from string) (string, error) {
-	images, err := readImages(files)
+func (h *host) send(m message) (string, error) {
+	images, err := readImages(m.files)
 	if err != nil {
 		return "", err
 	}
@@ -735,7 +744,7 @@ func (h *host) send(text string, files []string, from string) (string, error) {
 		h.mu.Unlock()
 		return "", errRewinding
 	}
-	lines, logged, err := h.sendLocked(id, text, files, from, images)
+	lines, logged, err := h.sendLocked(id, m, images)
 	h.mu.Unlock()
 	for _, e := range logged {
 		h.echoEvent(e)
@@ -749,14 +758,14 @@ func (h *host) send(text string, files []string, from string) (string, error) {
 		return "", err
 	}
 	if !h.spoke.Load() {
-		h.unreached = append(h.unreached, chat.Event{ID: id, Text: text})
+		h.unreached = append(h.unreached, chat.Event{ID: id, Text: m.text})
 	}
 	return id, nil
 }
 
 // sendLocked must be called with stdinMu and h.mu held. It logs the message and returns the lines to write for what it
 // logged, also when it fails partway.
-func (h *host) sendLocked(id, text string, files []string, from string, images []chat.Image) (lines [][]byte, logged []chat.Event, err error) {
+func (h *host) sendLocked(id string, m message, images []chat.Image) (lines [][]byte, logged []chat.Event, err error) {
 	log := func(e chat.Event) error {
 		e, err := h.appendLocked(e)
 		if err == nil {
@@ -765,10 +774,10 @@ func (h *host) sendLocked(id, text string, files []string, from string, images [
 		return err
 	}
 	if len(h.approvals) > 0 {
-		if from != "" {
+		if m.from != "" {
 			return nil, nil, errApprovalWaits
 		}
-		if len(files) > 0 {
+		if len(m.files) > 0 {
 			return nil, nil, errors.New("Answer the approval before sending images")
 		}
 		// The text denies every approval that waits. When only subagents ask, it answers the first of them and starts no
@@ -782,19 +791,19 @@ func (h *host) sendLocked(id, text string, files []string, from string, images [
 			if err := log(chat.Event{Kind: chat.KindAnswer, ID: a.ID, Text: "deny"}); err != nil {
 				return lines, logged, err
 			}
-			lines = append(lines, chat.Deny(a.ID, prompts.Denied(text)))
+			lines = append(lines, chat.Deny(a.ID, prompts.Denied(m.text)))
 		}
-		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Parent: parent, Agent: agent})
+		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Parent: parent, Agent: agent})
 	}
-	line := chat.UserMessageWith(id, text, images)
+	line := chat.UserMessageWith(id, m.text, images)
 	if h.turnOpen || len(h.queued) > 0 {
-		if err := log(chat.Event{Kind: chat.KindQueued, ID: id, Text: text, Files: files, From: from}); err != nil {
+		if err := log(m.event(chat.KindQueued, id)); err != nil {
 			return nil, logged, err
 		}
-		h.queued[id] = queuedMessage{text: text, files: files, from: from}
+		h.queued[id] = m
 		return [][]byte{line}, logged, nil
 	}
-	if err := log(chat.Event{Kind: chat.KindUser, ID: id, Text: text, Files: files, From: from}); err != nil {
+	if err := log(m.event(chat.KindUser, id)); err != nil {
 		return nil, logged, err
 	}
 	h.turnOpen = true
@@ -812,7 +821,7 @@ func (h *host) echoed(id string) {
 	}
 	delete(h.queued, id)
 	h.turnOpen = true
-	e, err := h.appendLocked(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Files: m.files, From: m.from})
+	e, err := h.appendLocked(m.event(chat.KindUser, id))
 	h.mu.Unlock()
 	if err != nil {
 		fmt.Fprintf(h.echo, "host: %v\n", err)

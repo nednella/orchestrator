@@ -31,11 +31,14 @@ type Refused struct {
 func (r *Refused) Error() string { return r.Reason }
 
 // Message is what the user sends: text and the paths of images to go before it. From is the thread that sends it, ""
-// for the owner or the app.
+// for the owner or the app. Body is a thread's bare words, which Text frames for Claude, and Result marks a child's
+// result; the log keeps both beside the text.
 type Message struct {
-	Text  string
-	Files []string
-	From  string
+	Text   string
+	Files  []string
+	From   string
+	Body   string
+	Result bool
 }
 
 // ErrTooOldForImages is what SendMessage returns when a host from before message ids sent the text of a message and
@@ -50,7 +53,7 @@ var ErrApprovalWaits = &Refused{Reason: "this thread waits on an approval"}
 // text and drops the images, so a reply with no id is ErrTooOldForImages when m has images. A host from before From
 // sends the message as the owner's, also while an approval waits.
 func SendMessage(ctx context.Context, socket string, m Message) (string, error) {
-	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files, From: m.From})
+	rep, err := call(ctx, socket, request{Op: opSend, Text: m.Text, Files: m.Files, From: m.From, Body: m.Body, Result: m.Result})
 	if err == nil && rep.ID == "" && len(m.Files) > 0 {
 		return "", ErrTooOldForImages
 	}
