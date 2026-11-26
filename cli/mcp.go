@@ -93,7 +93,8 @@ func waitInSlices(ctx context.Context, socket, token string, input json.RawMessa
 		}
 		slice := min(waitSlice, time.Until(deadline))
 		slice = max(slice, time.Millisecond)
-		out, err := orchestrate(ctx, socket, token, "wait", input, map[string]string{"slice_ms": strconv.FormatInt(slice.Milliseconds(), 10)}, waitSliceCall)
+		opts := map[string]string{"slice_ms": strconv.FormatInt(slice.Milliseconds(), 10), "until_ms": strconv.FormatInt(deadline.UnixMilli(), 10)}
+		out, err := orchestrate(ctx, socket, token, "wait", input, opts, waitSliceCall)
 		if err != nil {
 			return "", err
 		}

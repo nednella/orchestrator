@@ -26,10 +26,18 @@ type waitAnswer struct {
 // waitCall runs one slice of wait over the control socket with the caller's token, as the agentos command does. It
 // gives the answer, or the error the tool gave; it calls no t method, so it may run in its own goroutine.
 func waitCall(h *apptest.Harness, token, thread string, slice time.Duration) (waitAnswer, string, error) {
+	return waitCallUntil(h, token, thread, slice, time.Time{})
+}
+
+// waitCallUntil is waitCall for a wait whose agentos command stops calling at until, which it sends unless it is zero.
+func waitCallUntil(h *apptest.Harness, token, thread string, slice time.Duration, until time.Time) (waitAnswer, string, error) {
 	ms := slice.Milliseconds()
+	opts := map[string]string{"input": `{"thread":"` + thread + `","timeout_seconds":600}`, "slice_ms": strconv.FormatInt(ms, 10)}
+	if !until.IsZero() {
+		opts["until_ms"] = strconv.FormatInt(until.UnixMilli(), 10)
+	}
 	resp, err := ctl.Call(context.Background(), ctl.SocketPath(h.State), ctl.Request{
-		Cmd: "orchestrate", Token: token, Args: []string{"wait"}, TimeoutMs: int(ms) + 5000,
-		Opts: map[string]string{"input": `{"thread":"` + thread + `","timeout_seconds":600}`, "slice_ms": strconv.FormatInt(ms, 10)},
+		Cmd: "orchestrate", Token: token, Args: []string{"wait"}, TimeoutMs: int(ms) + 5000, Opts: opts,
 	})
 	if err != nil {
 		return waitAnswer{}, "", err
@@ -248,6 +256,71 @@ func TestWaitWaitsForAHeldMessage(t *testing.T) {
 	}
 	if !slices.ContainsFunc(logOf(t, h, c), func(e chat.Event) bool { return e.Kind == chat.KindUser && e.From == sibling }) {
 		t.Error("the wait returned before the held message was taken in")
+	}
+}
+
+func TestAWaitIsKeptUntilItEnds(t *testing.T) {
+	h := apptest.New(t)
+	parent, c := busyChild(t, h)
+	token := tokenOf(t, h, parent)
+	waits := func() bool { return h.App.Tools().Waits(parent, c) }
+	// slice runs one slice of a wait that lasts until the time given, in its own goroutine.
+	slice := func(length time.Duration, until time.Time) <-chan waitResult {
+		got := make(chan waitResult, 1)
+		go func() {
+			a, refused, err := waitCallUntil(h, token, c, length, until)
+			got <- waitResult{a, refused, err}
+		}()
+		return got
+	}
+	busy := func() {
+		t.Helper()
+		turns := countIn(h.Stdin(t, c), `"text":"work"`)
+		if _, err := h.ChatSend(c, "work"); err != nil {
+			t.Fatal(err)
+		}
+		apptest.Eventually(t, "the next turn that works", func() bool { return countIn(h.Stdin(t, c), `"text":"work"`) > turns })
+	}
+
+	if r := waitResultOf(t, slice(time.Second, time.Now().Add(time.Minute)), 5*time.Second); r.err != nil || r.refused != "" || r.a.Done {
+		t.Fatalf("the first slice answered %+v, want not done", r)
+	}
+	if !waits() {
+		t.Error("between two slices the wait is not kept")
+	}
+
+	got := slice(30*time.Second, time.Now().Add(time.Minute))
+	time.Sleep(300 * time.Millisecond)
+	if err := h.Interrupt(c); err != nil {
+		t.Fatal(err)
+	}
+	if r := waitResultOf(t, got, 5*time.Second); !r.a.Done {
+		t.Fatalf("the slice answered %+v, want done", r)
+	}
+	if waits() {
+		t.Error("the wait is kept after a slice answered it done")
+	}
+
+	busy()
+	if r := waitResultOf(t, slice(time.Second, time.Now().Add(1500*time.Millisecond)), 5*time.Second); r.a.Done || !waits() {
+		t.Fatalf("a slice before the deadline answered %+v, kept %v; want not done and kept", r, waits())
+	}
+	time.Sleep(time.Second)
+	if waits() {
+		t.Error("the wait is kept after its deadline")
+	}
+
+	working(t, h, parent)
+	got = slice(30*time.Second, time.Now().Add(time.Minute))
+	time.Sleep(300 * time.Millisecond)
+	if err := h.Interrupt(parent); err != nil {
+		t.Fatal(err)
+	}
+	if r := waitResultOf(t, got, 5*time.Second); r.a.Done {
+		t.Fatalf("the slice answered %+v, want not done", r)
+	}
+	if waits() {
+		t.Error("the wait is kept after the waiter's turn ended")
 	}
 }
 

@@ -100,6 +100,10 @@ func TestMCPWaitIsSliced(t *testing.T) {
 	if last.Opts["slice_ms"] != "60000" || last.TimeoutMs != 65000 {
 		t.Errorf("last slice = %+v", last)
 	}
+	until, err := strconv.ParseInt(last.Opts["until_ms"], 10, 64)
+	if left := time.Until(time.UnixMilli(until)); err != nil || left < 590*time.Second || left > 600*time.Second {
+		t.Errorf("until_ms = %q, want the deadline 600 s from the start", last.Opts["until_ms"])
+	}
 }
 
 func TestMCPWaitStopsAtItsLimit(t *testing.T) {

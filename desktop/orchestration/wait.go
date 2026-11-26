@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/nednella/agentos/desktop/chat"
@@ -15,9 +16,13 @@ import (
 	ctl "github.com/nednella/agentos/internal/control"
 )
 
-// sliceMost is the longest one call of wait waits, in milliseconds: the agentos command waits in slices, so no control
-// call outlasts control.MaxTimeout.
-const sliceMost = 60000
+const (
+	// sliceMost is the longest one call of wait waits, in milliseconds: the agentos command waits in slices, so no
+	// control call outlasts control.MaxTimeout.
+	sliceMost = 60000
+	// waitMost is the longest a whole wait lasts, as the agentos command limits it.
+	waitMost = time.Hour
+)
 
 // The ways a wait ends, each with its own answer.
 const (
@@ -41,28 +46,36 @@ type waited struct {
 	Text string `json:"text"`
 }
 
-// waitOn is a wait in flight: the thread waiter waits on thread.
+// waitOn is a wait: the thread waiter waits on thread.
 type waitOn struct{ waiter, thread string }
 
-// Waits says whether waiter has a wait on thread in flight, so a result the wait answers it with is not also sent.
+// Waits says whether waiter waits on thread, so a result the wait answers it with is not also sent. A wait lasts from
+// its first slice until a slice answers it done, the waiter's turn ends, or the deadline the agentos command gave
+// passes; between two slices it still waits.
 func (c *Commands) Waits(waiter, thread string) bool {
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
-	return c.waiting[waitOn{waiter, thread}] > 0
+	w := waitOn{waiter, thread}
+	if time.Now().Before(c.waiting[w]) {
+		return true
+	}
+	delete(c.waiting, w)
+	return false
 }
 
-func (c *Commands) hold(w waitOn) {
+// hold keeps the wait until the time until, or a later one it already has.
+func (c *Commands) hold(w waitOn, until time.Time) {
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
-	c.waiting[w]++
+	if until.After(c.waiting[w]) {
+		c.waiting[w] = until
+	}
 }
 
 func (c *Commands) release(w waitOn) {
 	c.waitMu.Lock()
 	defer c.waitMu.Unlock()
-	if c.waiting[w]--; c.waiting[w] <= 0 {
-		delete(c.waiting, w)
-	}
+	delete(c.waiting, w)
 }
 
 // wait answers one slice of the wait tool: it returns once the thread's turn has ended, it settles or is deleted, or
@@ -77,6 +90,21 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 	if err != nil || ms < 1 || ms > sliceMost {
 		return "", fmt.Errorf("slice_ms is 1 to %d, not %q", sliceMost, req.Opts["slice_ms"])
 	}
+	now, slice := time.Now(), time.Duration(ms)*time.Millisecond
+	// until_ms is when the agentos command stops calling; without it the wait lasts the slice.
+	until := now.Add(slice)
+	if s := req.Opts["until_ms"]; s != "" {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("until_ms is a time in unix milliseconds, not %q", s)
+		}
+		if asked := time.UnixMilli(n); asked.After(until) {
+			until = asked
+		}
+		if last := now.Add(waitMost); until.After(last) {
+			until = last
+		}
+	}
 	switch {
 	case in.Thread == "":
 		return "", errors.New("wait needs the id of a thread")
@@ -90,12 +118,16 @@ func (c *Commands) wait(ctx context.Context, caller string, req ctl.Request) (st
 		return "", err
 	}
 	w := waitOn{caller, in.Thread}
-	c.hold(w)
-	defer c.release(w)
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(ms)*time.Millisecond)
+	c.hold(w, until)
+	ctx, cancel := context.WithTimeout(ctx, slice)
 	defer cancel()
-	go c.cancelAtTurnEnd(ctx, cancel, caller)
-	data, err := json.Marshal(c.waitFor(ctx, ch))
+	var callerEnded atomic.Bool
+	go c.cancelAtTurnEnd(ctx, cancel, caller, &callerEnded)
+	got := c.waitFor(ctx, ch)
+	if got.Done || callerEnded.Load() {
+		c.release(w)
+	}
+	data, err := json.Marshal(got)
 	if err != nil {
 		return "", fmt.Errorf("writing the answer: %w", err)
 	}
@@ -114,8 +146,8 @@ func (c *Commands) isAncestor(thread, id string) bool {
 	return false
 }
 
-// cancelAtTurnEnd calls cancel once the caller's running turn ends or the caller stops running.
-func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFunc, caller string) {
+// cancelAtTurnEnd sets ended and calls cancel once the caller's running turn ends or the caller stops running.
+func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFunc, caller string, ended *atomic.Bool) {
 	ch, err := c.threads.ChatOf(caller)
 	if err != nil {
 		log.Printf("agentos: the wait of %s does not follow its turn: %v", caller, err)
@@ -137,6 +169,7 @@ func (c *Commands) cancelAtTurnEnd(ctx context.Context, cancel context.CancelFun
 		}
 	}
 	if err == nil || errors.Is(err, chat.ErrThreadGone) {
+		ended.Store(true)
 		cancel()
 	}
 }

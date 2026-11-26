@@ -57,6 +57,7 @@ type App struct {
 	digests  *digest.Manager
 	updates  *update.Updater
 	router   *control.Router
+	tools    *orchestration.Commands
 	registry *projects.Registry
 	issues   *issues.Issues
 	warn     *warn.Warnings
@@ -131,6 +132,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	proj := projects.NewService(c.Registry, sess, store, iss, a.updates, runner, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
 	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err }, h.Emit)
+	a.tools = orchestration.NewCommands(sess, chats, a.router)
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}
 	digests, sc, ic := digest.NewCommands(mgr, a.router), sessions.NewCommands(sess, a.router), issues.NewCommands(iss, sessSvc)
 	a.handle(map[string]control.Handler{
@@ -144,7 +146,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		"project":    projects.NewCommands(proj).Project,
 		"relaunch":   update.NewCommands(a.updates).Relaunch,
 		// Unscoped: a tool call never moves the screen to another project.
-		"orchestrate": orchestration.NewCommands(sess, chats, a.router).Orchestrate,
+		"orchestrate": a.tools.Orchestrate,
 	})
 	a.handleScoped(map[string]control.Handler{
 		"issue":   ic.Issue,
@@ -257,6 +259,9 @@ func (a *App) Stop() {
 
 // Media serves the pictures of notes, evidence and chats under /media/<project key>/<folder>/.
 func (a *App) Media() http.Handler { return a.media }
+
+// Tools answer the agentos tools that threads call, for tests and wiring.
+func (a *App) Tools() *orchestration.Commands { return a.tools }
 
 // Sessions is the session list, for tests and wiring.
 func (a *App) Sessions() *sessions.Sessions { return a.sessions }
