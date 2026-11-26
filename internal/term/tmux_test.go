@@ -258,11 +258,17 @@ func TestShellIsTaggedWithItsThread(t *testing.T) {
 	if err := tmux.SetThread(ctx, thread, "demo/a1"); err != nil {
 		t.Fatal(err)
 	}
+	byShell := func(a, b Shell) int { return a.Name.Shell - b.Name.Shell }
 	_, shells, err := tmux.ListAll(ctx)
+	slices.SortFunc(shells, byShell)
 	want := []Shell{{Name: thread, Thread: "demo/a1", Command: "sleep"}, {Name: project, Command: "sleep"}}
-	slices.SortFunc(shells, func(a, b Shell) int { return a.Name.Shell - b.Name.Shell })
 	if err != nil || !slices.Equal(shells, want) {
 		t.Errorf("ListAll shells = %+v, %v; want %+v", shells, err, want)
+	}
+	paths, err := tmux.ShellPaths(ctx)
+	slices.SortFunc(paths, byShell)
+	if err != nil || len(paths) != 2 || paths[0].Thread != "demo/a1" || paths[1].Thread != "" {
+		t.Errorf("ShellPaths = %+v, %v; want %s tagged demo/a1 and %s untagged", paths, err, thread, project)
 	}
 }
 
@@ -391,11 +397,15 @@ func TestShellPathsNamesEachShellsFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolved := func(p string) string { r, _ := filepath.EvalSymlinks(p); return r }
-	var paths map[session.Name]string
+	paths := map[session.Name]string{}
 	for range 50 {
-		var err error
-		if paths, err = tmux.ShellPaths(ctx); err != nil {
+		shells, err := tmux.ShellPaths(ctx)
+		if err != nil {
 			t.Fatal(err)
+		}
+		clear(paths)
+		for _, sh := range shells {
+			paths[sh.Name] = sh.Path
 		}
 		if resolved(paths[second]) == resolved(moved) {
 			break

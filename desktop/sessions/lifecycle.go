@@ -1359,23 +1359,13 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads .
 	if err != nil {
 		return fmt.Sprintf("tmux could not list the open shells: %v", err)
 	}
-	if len(threads) > 0 {
-		_, tagged, err := l.sessions.tmux.ListAll(ctx)
-		if err != nil {
-			return fmt.Sprintf("tmux could not list the open shells: %v", err)
-		}
-		for _, sh := range tagged {
-			if slices.Contains(threads, sh.Thread) {
-				delete(shells, sh.Name)
-			}
-		}
-	}
 	unknown := false
-	for name, path := range shells {
+	for _, sh := range shells {
 		switch {
-		case path == "":
-			unknown = unknown || name.Project == key
-		case folder.Inside(path, worktree):
+		case slices.Contains(threads, sh.Thread):
+		case sh.Path == "":
+			unknown = unknown || sh.Name.Project == key
+		case folder.Inside(sh.Path, worktree):
 			return "a shell is open in this worktree"
 		}
 	}

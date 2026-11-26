@@ -88,6 +88,7 @@ type Shell struct {
 	Name    session.Name
 	Thread  string // the thread the shell belongs to, "" for a shell of the project
 	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
+	Path    string // the folder the shell is in now; only ShellPaths reads it
 }
 
 // argv runs tmux with -u: without a UTF-8 locale (an app started from Finder has none)
@@ -164,28 +165,30 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 	return infos, shells, nil
 }
 
-// ShellPaths are the folders the shell sessions are in now: a shell's folder follows its cd, so it is the pane's
-// current folder, not the one the session started in. No running server means no shells.
-func (t *Tmux) ShellPaths(ctx context.Context) (map[session.Name]string, error) {
-	out, err := t.run(ctx, "list-panes", "-a", "-F", "#{session_name}\t#{pane_current_path}")
+// ShellPaths are the shell sessions with the thread each belongs to and the folder each is in now: a shell's folder
+// follows its cd, so it is the pane's current folder, not the one the session started in. No running server means no
+// shells.
+func (t *Tmux) ShellPaths(ctx context.Context) ([]Shell, error) {
+	out, err := t.run(ctx, "list-panes", "-a", "-F", "#{session_name}\t#{"+threadOption+"}\t#{pane_current_path}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
-			return map[session.Name]string{}, nil
+			return nil, nil
 		}
 		return nil, err
 	}
-	paths := map[session.Name]string{}
+	var shells []Shell
 	for line := range strings.SplitSeq(out, "\n") {
-		id, path, ok := strings.Cut(line, "\t")
-		if !ok {
+		// The folder comes last, so a tab in it stays in its own field.
+		f := strings.SplitN(line, "\t", 3)
+		if len(f) != 3 {
 			continue
 		}
-		if name, err := session.ParseName(id); err == nil && name.IsShell() {
-			paths[name] = path
+		if name, err := session.ParseName(f[0]); err == nil && name.IsShell() {
+			shells = append(shells, Shell{Name: name, Thread: f[1], Path: f[2]})
 		}
 	}
-	return paths, nil
+	return shells, nil
 }
 
 // accessOf is the access a session's tags give: its access tag, else Read for an older build's chat tag.
