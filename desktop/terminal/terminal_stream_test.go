@@ -86,6 +86,11 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 	h, id := newShell(t)
 	first := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(first.String()) > 0 })
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("the first reader got %q", first.String())
+		}
+	})
 	if err := h.TermWrite(id, "echo before-reopen\n"); err != nil {
 		t.Fatal(err)
 	}
