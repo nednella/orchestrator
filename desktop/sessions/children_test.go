@@ -501,6 +501,9 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 		eventually(t, "the other thread seen in the child's worktree", func() bool { return h.OwnWorktree(child.ID) == "" })
 		putToSleep(t, h, child.ID)
 		cleanupOf(t, h, child)
+		if got := h.DeletePlan(parent.ID).Worktrees; got != 2 {
+			t.Errorf("the box offers %d worktrees, want the 2 the refusal counts", got)
+		}
 
 		err := h.DeleteThread(parent.ID, true)
 		if want := fmt.Sprintf("Thread %d keeps its worktree: Thread %s also works in this worktree. Untick the box to keep the worktrees, or clean Thread %d up first", child.N, other.Title, child.N); err == nil || err.Error() != want {
@@ -537,6 +540,60 @@ func TestFamilyDeleteRefusesAChildWorktreeSharedOutsideTheFamily(t *testing.T) {
 			t.Errorf("the child's row there %v, its worktree there %v, the parent's there %v; want all", ok, exists(child.Worktree), exists(parent.Worktree))
 		}
 	})
+}
+
+func TestDeletePlanCountsAWorktreeAnAncestorWorksIn(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	pushWork(t, parent.Worktree)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	h.Hook(t, parent.ID, "Stop", fmt.Sprintf(`{"cwd":%q}`, child.Worktree))
+	eventually(t, "the parent idle in the child's worktree", func() bool { return stateOf(h, parent.ID) == "idle" && h.OwnWorktree(child.ID) == "" })
+	putToSleep(t, h, child.ID)
+	cleanupOf(t, h, child)
+
+	if got := h.DeletePlan(parent.ID).Worktrees; got != 2 {
+		t.Errorf("the box offers %d worktrees, want both", got)
+	}
+	if err := h.DeleteThread(parent.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(parent.Worktree) || exists(child.Worktree) {
+		t.Errorf("worktrees there: the parent's %v, the child's %v; want neither", exists(parent.Worktree), exists(child.Worktree))
+	}
+}
+
+func TestDeleteGivesAChildsWorktreeToItsNewestFork(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	for issue := 7; issue < 10; issue++ {
+		parent := issueThread(h, t, issue)
+		pushWork(t, parent.Worktree)
+		child := childOf(t, h, parent, fmt.Sprintf("Builder %d", issue), sessions.WhereWorktree)
+		withConversation(t, h, child.ID)
+		writeChat(t, h, child.ID, oneReply...)
+		var forks []sessions.Session
+		for range 2 {
+			fork, err := h.ForkSession(child.ID, "r1b")
+			if err != nil {
+				t.Fatal(err)
+			}
+			forks = append(forks, fork)
+		}
+		for _, f := range forks {
+			putToSleep(t, h, f.ID)
+		}
+		putToSleep(t, h, child.ID)
+		cleanupOf(t, h, child)
+
+		if err := h.DeleteThread(parent.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		if older, newer := recordsOf(t, h, forks[0].ID), recordsOf(t, h, forks[1].ID); len(older) != 0 || !slices.Equal(newer, []string{child.Worktree}) {
+			t.Errorf("#%d: the older fork's records %q, the newer's %q; want the child's worktree for the newer only", issue, older, newer)
+		}
+	}
 }
 
 func TestDeleteWithoutTheWorktreeKeepsAnEmptyChildWorktree(t *testing.T) {

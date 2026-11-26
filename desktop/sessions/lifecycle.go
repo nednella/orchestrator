@@ -1096,7 +1096,8 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cl
 
 // checkCleanup runs the checks a clean-up of the thread id starts with, and removes nothing. It says why one keeps the
 // worktree, "" when none does, and logs a kept worktree and shows it on the row, as a clean-up that stopped there does.
-func (l *Lifecycle) checkCleanup(ctx context.Context, id string) (string, error) {
+// The threads of family, the Delete's that asks, do not count as others in the worktree.
+func (l *Lifecycle) checkCleanup(ctx context.Context, id string, family ...string) (string, error) {
 	t, err := l.sessions.target(id)
 	if err != nil {
 		return "", err
@@ -1117,7 +1118,7 @@ func (l *Lifecycle) checkCleanup(ctx context.Context, id string) (string, error)
 		pr = &c
 	}
 	l.mu.Unlock()
-	_, reason := l.planFor(ctx, t, pr, false, l.unchanged(ctx, t))
+	_, reason := l.planFor(ctx, t, pr, false, l.unchanged(ctx, t), family...)
 	if reason == "" {
 		return "", nil
 	}
@@ -1297,8 +1298,8 @@ type branchPlan struct {
 // what changed since the first. A thread with no such worktree, or one removed already, has nothing on disk to lose:
 // the branch always stays. The worktree goes only while it is on the thread's branch, the one whose PR merged or
 // closed. With unchanged, the worktree holds no commit since the one it started at, so only its changes count and
-// origin is not fetched.
-func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchanged bool) (cleanupPlan, string) {
+// origin is not fetched. The threads of family, a Delete's, do not count as others in the worktree.
+func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchanged bool, family ...string) (cleanupPlan, string) {
 	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force}
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
 	if !ok || w.Removed != 0 {
@@ -1337,7 +1338,7 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 	if reason := l.sessions.pending(t.id); reason != "" {
 		return p, reason
 	}
-	if user := l.sessions.usersOf(w.Path, false, t.id); user != "" {
+	if user := l.sessions.usersOf(w.Path, false, append(family, t.id)...); user != "" {
 		return p, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
 	return p, l.shellIn(ctx, t.proj.Key(), w.Path)

@@ -786,13 +786,14 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 			return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
 		}
 	}
+	trees := s.familyWorktrees(s.context(), family)
 	if worktree {
-		if err := s.removeWorktrees(family); err != nil {
+		if err := s.removeWorktrees(family, trees); err != nil {
 			return err
 		}
 	}
-	for _, d := range family[:len(family)-1] {
-		s.handOverWorktree(d, family)
+	for d, heir := range trees.heirs {
+		s.handOverWorktree(d, heir)
 	}
 	for _, d := range family {
 		if err := s.remove(d); err != nil {
@@ -860,8 +861,8 @@ func (s *Sessions) startDelete(id string) ([]string, error) {
 	case s.isOld(id):
 		return nil, fmt.Errorf("Thread %s runs in an old terminal; end it there", id)
 	}
-	family := s.descendants(id)
-	for _, d := range family {
+	family := s.familyOf(id)
+	for _, d := range family[:len(family)-1] {
 		if in, live := s.liveInfo(d); live {
 			return nil, fmt.Errorf("Thread %d has a running child, %s; stop it first", s.nums[id], cmp.Or(in.Title, defaultTitle))
 		}
@@ -869,12 +870,18 @@ func (s *Sessions) startDelete(id string) ([]string, error) {
 			return nil, fmt.Errorf("Thread %d is being deleted", s.nums[d])
 		}
 	}
-	slices.Reverse(family)
-	family = append(family, id)
 	for _, d := range family {
 		s.deleting[d] = true
 	}
 	return family, nil
+}
+
+// familyOf is the thread id and its descendants in the order a Delete takes them: the deepest first and id last. It
+// needs mu.
+func (s *Sessions) familyOf(id string) []string {
+	family := s.descendants(id)
+	slices.Reverse(family)
+	return append(family, id)
 }
 
 // cleanupRefused says why a clean-up of the thread, marked pending already, must not go on, or nil when it may: a delete
@@ -963,54 +970,87 @@ func (s *Sessions) removeState(id string) error {
 	return bus.RemoveState(s.stateDir, id)
 }
 
-// removeWorktrees removes the worktrees agentos made for the threads of a Delete, family, the deepest first and the
-// thread last, once every one has passed every check of a clean-up, so a worktree kept refuses the Delete before any
-// goes. A worktree that a shell or a thread outside the family works in refuses it with no check run, but for a
-// descendant's that a fork takes over (handOverWorktree), which stays for the fork. When the thread runs and its own
-// worktree is to go, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed
-// the worktree until it stopped; a refusal then says it is asleep.
-func (s *Sessions) removeWorktrees(family []string) error {
-	ctx := s.context()
+// familyTrees are the worktrees agentos made for the threads of a Delete's family that are on disk, as a Delete with the
+// box would take them. The box offers count of them, and a refusal counts the same.
+type familyTrees struct {
+	own     []string          // the threads whose worktrees only the family works in, the deepest first
+	kept    []keptTree        // the descendants' worktrees that a shell or a thread outside the family works in
+	topKept string            // why the thread's own worktree is kept, as kept's are; "" when it is not
+	heirs   map[string]string // by descendant, the fork outside the family that takes its worktree over
+}
+
+// keptTree is a worktree of a descendant that a Delete with the box keeps, and why.
+type keptTree struct{ id, reason string }
+
+// count is how many worktrees the box offers: the thread's own worktree when only the family works in it, and every
+// descendant's but one a fork takes over. A thread whose own worktree is shared gets no box for it, as without children.
+func (t familyTrees) count() int { return len(t.own) + len(t.kept) }
+
+// familyWorktrees sorts the worktrees of family, the deepest first and the thread last, by who else works in them: no
+// one outside the family, a fork outside it that takes a descendant's over (heirOf), or a shell or another thread,
+// which keeps it. A shell keeps a worktree a fork takes over too, but the fork still gets it when the Delete runs
+// without the box.
+func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyTrees {
 	top := family[len(family)-1]
-	type shared struct{ id, reason string }
-	var own []string
-	var kept []shared
+	trees := familyTrees{heirs: map[string]string{}}
 	for _, id := range family {
-		path, _ := s.ownWorktree(ctx, id)
+		path := s.madeWorktree(id)
 		if path == "" {
 			continue
 		}
 		key := session.ProjectKey(id)
+		heir := ""
+		if id != top {
+			heir = s.heirOf(key, path, family)
+		}
 		reason := s.life.shellIn(ctx, key, path)
-		if user := s.usersOf(path, true, family...); reason == "" && user != "" {
-			if id != top && s.heirOf(key, path, family) != "" {
-				continue
-			}
+		if user := s.usersOf(path, true, family...); reason == "" && user != "" && heir == "" {
 			reason = fmt.Sprintf("Thread %s also works in this worktree", user)
 		}
 		switch {
+		case heir != "":
+			trees.heirs[id] = heir
+			if reason != "" {
+				trees.kept = append(trees.kept, keptTree{id, reason})
+			}
 		case reason != "" && id == top:
-			return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(id), reason)
+			trees.topKept = reason
 		case reason != "":
-			kept = append(kept, shared{id, reason})
+			trees.kept = append(trees.kept, keptTree{id, reason})
 		default:
-			own = append(own, id)
+			trees.own = append(trees.own, id)
 		}
 	}
-	if len(kept) > 0 {
-		return s.keptBy(kept[0].id, kept[0].reason, "", len(own)+len(kept))
+	return trees
+}
+
+// removeWorktrees removes the worktrees of a Delete's family, trees, once every one has passed every check of a
+// clean-up, so a worktree kept refuses the Delete before any goes. A worktree kept because a shell or a thread outside
+// the family works in it refuses the Delete with no check run; one a fork takes over stays for the fork. When the
+// thread runs and works in a worktree that is to go, its own or a descendant's, the Delete puts it to sleep after the
+// checks and runs them again, since its agent may have changed the worktree until it stopped; a refusal then says it is
+// asleep. The family does not count as others in a worktree.
+func (s *Sessions) removeWorktrees(family []string, trees familyTrees) error {
+	ctx := s.context()
+	top := family[len(family)-1]
+	switch {
+	case trees.topKept != "":
+		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(top), trees.topKept)
+	case len(trees.kept) > 0:
+		return s.keptBy(trees.kept[0].id, trees.kept[0].reason, "", trees.count())
 	}
-	if err := s.checkWorktrees(ctx, own, ""); err != nil {
+	own := trees.own
+	if err := s.checkWorktrees(ctx, family, own, "", trees.count()); err != nil {
 		return err
 	}
 	asleep := ""
-	if slices.Contains(own, top) && s.isLive(top) {
+	if s.isLive(top) && slices.ContainsFunc(own, func(id string) bool { return id == top || s.worksIn(top, s.madeWorktree(id)) }) {
 		name, _ := session.ParseName(top)
 		if err := s.settleToDelete(name); err != nil {
 			return err
 		}
 		asleep = top
-		if err := s.checkWorktrees(ctx, own, asleep); err != nil {
+		if err := s.checkWorktrees(ctx, family, own, asleep, trees.count()); err != nil {
 			return err
 		}
 	}
@@ -1020,41 +1060,38 @@ func (s *Sessions) removeWorktrees(family []string) error {
 		case err != nil:
 			return err
 		case reason != "":
-			return s.keptBy(id, reason, asleep, len(own))
+			return s.keptBy(id, reason, asleep, trees.count())
 		}
 	}
 	return nil
 }
 
-// checkWorktrees runs the checks of a clean-up for each thread of own, and refuses the Delete with the first worktree
-// one keeps. asleep is the thread the Delete has put to sleep, "" before it has.
-func (s *Sessions) checkWorktrees(ctx context.Context, own []string, asleep string) error {
+// checkWorktrees runs the checks of a clean-up for each thread of own, and refuses the Delete of family and its
+// worktrees worktrees with the first worktree one keeps. asleep is the thread the Delete has put to sleep, "" before it
+// has.
+func (s *Sessions) checkWorktrees(ctx context.Context, family, own []string, asleep string, worktrees int) error {
 	for _, id := range own {
-		reason, err := s.life.checkCleanup(ctx, id)
+		reason, err := s.life.checkCleanup(ctx, id, family...)
 		switch {
 		case err != nil:
 			return err
 		case reason != "":
-			return s.keptBy(id, reason, asleep, len(own))
+			return s.keptBy(id, reason, asleep, worktrees)
 		}
 	}
 	return nil
 }
 
-// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to the fork outside the family
-// that works in it (heirOf), so the record does not go with id and the worktree is still agentos's to remove.
-func (s *Sessions) handOverWorktree(id string, family []string) {
+// handOverWorktree gives the worktree agentos made for the thread id of a Delete's family to heir, the fork outside the
+// family that works in it, so the record does not go with id and the worktree is still agentos's to remove.
+func (s *Sessions) handOverWorktree(id, heir string) {
 	key := session.ProjectKey(id)
 	w, ok := s.made.Of(key, id)
 	if !ok || w.Removed != 0 || gone(w.Path) {
 		return
 	}
-	user := s.heirOf(key, w.Path, family)
-	if user == "" {
-		return
-	}
-	if err := s.life.handOver(s.context(), key, w.Path, id, user); err != nil {
-		log.Printf("agentos: giving the worktree %s of %s to %s: %v", w.Path, id, user, err)
+	if err := s.life.handOver(s.context(), key, w.Path, id, heir); err != nil {
+		log.Printf("agentos: giving the worktree %s of %s to %s: %v", w.Path, id, heir, err)
 	}
 }
 
@@ -1086,25 +1123,22 @@ func (s *Sessions) isLive(id string) bool {
 
 // DeletePlan is what a Delete of a thread would take with it, for its confirm.
 type DeletePlan struct {
-	Worktrees int      `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that no other thread and no shell works in
+	Worktrees int      `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that the box would take, as a Delete counts them
 	Children  []string `json:"children"`  // the titles of the asleep descendants that go with the thread, nearest first
 }
 
 // DeletePlan is what a Delete of the thread id would take with it.
 func (s *Sessions) DeletePlan(id string) DeletePlan {
-	ctx := s.context()
-	p := DeletePlan{Children: []string{}}
-	descendants := s.Descendants(id)
-	for _, d := range descendants {
+	s.mu.Lock()
+	family := s.familyOf(id)
+	s.mu.Unlock()
+	p := DeletePlan{Children: []string{}, Worktrees: s.familyWorktrees(s.context(), family).count()}
+	for _, d := range family[:len(family)-1] {
 		if !s.isLive(d) {
 			p.Children = append(p.Children, s.titleOf(d))
 		}
 	}
-	for _, d := range append(descendants, id) {
-		if path, shared := s.ownWorktree(ctx, d); path != "" && shared == "" {
-			p.Worktrees++
-		}
-	}
+	slices.Reverse(p.Children)
 	return p
 }
 
@@ -1122,15 +1156,24 @@ func (s *Sessions) OwnWorktree(id string) string {
 // clean-up finished, and why it is not the thread's alone, "" when it is: another thread, running or asleep, works in
 // it, as a fork does, or a shell is open in it. Its descendants do not count, as a Delete takes them with it.
 func (s *Sessions) ownWorktree(ctx context.Context, id string) (path, shared string) {
-	key := session.ProjectKey(id)
-	w, ok := s.made.Of(key, id)
-	if !ok || w.Removed != 0 || gone(w.Path) || s.life.cleanedUp(id) {
+	path = s.madeWorktree(id)
+	if path == "" {
 		return "", ""
 	}
-	if user := s.usersOf(w.Path, true, append(s.Descendants(id), id)...); user != "" {
-		return w.Path, fmt.Sprintf("Thread %s also works in this worktree", user)
+	if user := s.usersOf(path, true, append(s.Descendants(id), id)...); user != "" {
+		return path, fmt.Sprintf("Thread %s also works in this worktree", user)
 	}
-	return w.Path, s.life.shellIn(ctx, key, w.Path)
+	return path, s.life.shellIn(ctx, session.ProjectKey(id), path)
+}
+
+// madeWorktree is the worktree agentos made for the thread id that is on disk, "" when there is none or the thread's
+// clean-up finished.
+func (s *Sessions) madeWorktree(id string) string {
+	w, ok := s.made.Of(session.ProjectKey(id), id)
+	if !ok || w.Removed != 0 || gone(w.Path) || s.life.cleanedUp(id) {
+		return ""
+	}
+	return w.Path
 }
 
 // observe folds in a hook's record. The hooks of an old terminal session are dropped before anything is recorded, so
@@ -3971,17 +4014,36 @@ func (s *Sessions) usersIn(dir string, asleep bool, except ...string) []term.Inf
 	return users
 }
 
+// worksIn says whether the live thread id works in dir, as usersOf finds it.
+func (s *Sessions) worksIn(id, dir string) bool {
+	return dir != "" && slices.ContainsFunc(s.usersIn(dir, false), func(in term.Info) bool { return in.Name.String() == id })
+}
+
 // heirOf is the fork outside family that works in the worktree dir, live or asleep, and has no worktree agentos made
 // for it, so a Delete of family may give it the worktree; "" when there is none. A thread with a worktree of its own
-// never gets a second one, and a thread that is not a fork works on a branch of its own.
+// never gets a second one, and a thread that is not a fork works on a branch of its own. Of several, it is the one that
+// started last, and of those the first by id, so a refusal and the Delete after it pick the same.
 func (s *Sessions) heirOf(key, dir string, family []string) string {
+	type fork struct {
+		id      string
+		created time.Time
+	}
+	var forks []fork
 	for _, in := range s.usersIn(dir, true, family...) {
 		id := in.Name.String()
 		if _, made := s.made.Of(key, id); in.Fork != "" && !made {
-			return id
+			s.mu.Lock()
+			created, _ := s.startsOf(id, in)
+			s.mu.Unlock()
+			forks = append(forks, fork{id, created})
 		}
 	}
-	return ""
+	if len(forks) == 0 {
+		return ""
+	}
+	return slices.MinFunc(forks, func(a, b fork) int {
+		return cmp.Or(b.created.Compare(a.created), strings.Compare(a.id, b.id))
+	}).id
 }
 
 // FilesRewind says whether a rewind may put back the files of the thread id, and where: only in the worktree agentos
