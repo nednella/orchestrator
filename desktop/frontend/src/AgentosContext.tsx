@@ -4,7 +4,7 @@ import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { answeredLate } from './chatQuestions'
 import { shellsOf } from './shells'
-import { back, current, forward, goneAgent, NO_HISTORY, push, threadOf } from './navHistory'
+import { back, current, forward, goneAgent, NO_HISTORY, prune, push, stepTo, threadOf } from './navHistory'
 import type { History, View } from './navHistory'
 import { forgetPanel } from './panelStore'
 import type { PanelViewId } from './panelTabs'
@@ -42,8 +42,10 @@ type AgentosState = {
   threadTree: ThreadTree
   selectedId: string | null
   // The views the owner went through, for Back and Forward; the one shown now may be a subagent's view of the selected
-  // thread.
+  // thread. Back and Forward are on while a view whose thread and project are still there lies that way.
   viewHistory: History
+  canGoBack: boolean
+  canGoForward: boolean
   issues: Issue[]
   issuesLoading: boolean
   issuesDisabled: boolean
@@ -248,6 +250,15 @@ function forgetThread(id: string) {
 // viewOf is the view that shows the thread, or with none the project's home.
 const viewOf = (id: string | null, project: string): View => (id ? { kind: 'thread', id } : { kind: 'home', project })
 
+// projectOf is the project the view is in, undefined when its thread is gone.
+const projectOf = (view: View, sessions: Session[]) => (view.kind === 'home' ? view.project : sessions.find((s) => s.id === threadOf(view))?.project)
+
+// liveIn is whether a view's thread and project are still among sessions and projects.
+const liveIn = (sessions: Session[], projects: Project[]) => (view: View) => {
+  const key = projectOf(view, sessions)
+  return projects.some((p) => p.key === key)
+}
+
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // Keeps each item of prev that next holds unchanged, and prev itself when nothing changed, so the rows
@@ -337,6 +348,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [moveHistory],
   )
 
+  // forgetGone drops from history the views whose thread or project is no longer among sessions and projects.
+  const forgetGone = useCallback((sessions: Session[], projects: Project[]) => moveHistory(prune(historyRef.current, liveIn(sessions, projects))), [moveHistory])
+
   // quietly makes the selections in run without adding them to history.
   const quietly = useCallback((run: () => void) => {
     quiet.current = true
@@ -425,9 +439,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     (projectKey: string, items: Session[]) => {
       goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThread)
       setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
-      if (projectKey === projectRef.current?.key) selectAmong(items, [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items])
+      const all = [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items]
+      if (projectKey === projectRef.current?.key) selectAmong(items, all)
+      forgetGone(all, projectsRef.current)
     },
-    [selectAmong],
+    [selectAmong, forgetGone],
   )
 
   const loadIssues = useCallback(async (refresh: boolean) => {
@@ -481,9 +497,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
       quietly(() => selectAmong(snap.sessions.filter((s) => s.project === snap.project.key), snap.sessions, homeUnlessRemembered))
       if (record) remember(viewOf(selectedRef.current, snap.project.key))
+      forgetGone(snap.sessions, snap.projects)
       report(() => loadIssues(false))
     },
-    [selectAmong, loadIssues, report, selectId, remember, quietly],
+    [selectAmong, loadIssues, report, selectId, remember, quietly, forgetGone],
   )
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
@@ -632,12 +649,13 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     () =>
       on('projects', (list) => {
         setProjects((prev) => keepUnchanged(prev, list, (p) => p.name))
+        forgetGone(sessionsRef.current, list)
         setProject((p) => {
           const next = list.find((x) => x.name === p?.name)
           return next && !sameJSON(next, p) ? next : p
         })
       }),
-    [],
+    [forgetGone],
   )
 
   useEffect(
@@ -743,11 +761,18 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, focus, report, enterFrom, remember],
   )
 
-  // showView shows a view Back or Forward reached, entering its project first, without adding to history.
-  const showView = useCallback(
-    (view: View, owner: Project) => {
-      const reached = historyRef.current
-      const show = () =>
+  // goThrough steps through history to the first view whose thread and project are still there, entering its project
+  // first. History moves only once the view shows, so a project that fails to open leaves it where it was; a view the
+  // owner left meanwhile is not shown.
+  const goThrough = useCallback(
+    (step: (h: History) => History) => {
+      const from = historyRef.current
+      const to = stepTo(from, step, liveIn(sessionsRef.current, projectsRef.current))
+      if (to === from) return
+      const view = current(to)!
+      const owner = projectsRef.current.find((p) => p.key === projectOf(view, sessionsRef.current))!
+      const show = () => {
+        moveHistory(to)
         quietly(() => {
           if (view.kind === 'home') {
             detached.current = true
@@ -757,31 +782,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
           selectId(threadOf(view))
           focus('thread')
         })
+      }
       if (owner.key === projectRef.current?.key) return show()
       report(async () => {
         await enterFrom(api.switchProject(owner.name), false, false)
-        if (historyRef.current === reached && projectRef.current?.key === owner.key) show()
+        if (current(historyRef.current) === current(from) && projectRef.current?.key === owner.key) show()
       })
     },
-    [quietly, selectId, focus, report, enterFrom],
-  )
-
-  // goThrough steps through history to the first view whose thread or project is still there.
-  const goThrough = useCallback(
-    (step: (h: History) => History) => {
-      let h = historyRef.current
-      for (let next = step(h); next !== h; next = step(next)) {
-        h = next
-        const view = current(h)!
-        const key = view.kind === 'home' ? view.project : sessionsRef.current.find((s) => s.id === threadOf(view))?.project
-        const owner = projectsRef.current.find((p) => p.key === key)
-        if (!owner) continue
-        moveHistory(h)
-        showView(view, owner)
-        return
-      }
-    },
-    [moveHistory, showView],
+    [moveHistory, quietly, selectId, focus, report, enterFrom],
   )
 
   // An answer the host refused because its approval no longer waits says so, and drops the approval from pending in
@@ -860,6 +868,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         setSessions((prev) => prev.filter((s) => !gone.has(s.id)))
         const left = sessionsRef.current.filter((s) => !gone.has(s.id))
         if (owner === projectRef.current?.key) selectAmong(left.filter((s) => s.project === owner), left)
+        forgetGone(left, projectsRef.current)
       },
       async wakeThread(id) {
         return addSession(await api.wakeThread(id))
@@ -906,8 +915,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         const epoch = projectEpoch.current
         const snap = await api.removeProject(name)
         if (epoch !== projectEpoch.current) return
-        if (snap.project.name === projectRef.current?.name) setProjects(snap.projects)
-        else enterProject(snap, ++projectEpoch.current)
+        if (snap.project.name !== projectRef.current?.name) return enterProject(snap, ++projectEpoch.current)
+        setProjects(snap.projects)
+        forgetGone(sessionsRef.current, snap.projects)
       },
       async setUpProject() {
         try {
@@ -1084,6 +1094,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
+  const live = liveIn(sessions, projects)
+  const canGoBack = stepTo(viewHistory, back, live) !== viewHistory
+  const canGoForward = stepTo(viewHistory, forward, live) !== viewHistory
+
   const value = useMemo<Agentos>(
     () => ({
       project,
@@ -1093,6 +1107,8 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       threadTree,
       selectedId,
       viewHistory,
+      canGoBack,
+      canGoForward,
       issues,
       issuesLoading,
       issuesDisabled,
@@ -1122,7 +1138,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

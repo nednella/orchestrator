@@ -29,6 +29,29 @@ export const back = (h: History): History => (h.at > 0 ? { ...h, at: h.at - 1 } 
 
 export const forward = (h: History): History => (h.at < h.views.length - 1 ? { ...h, at: h.at + 1 } : h)
 
+// stepTo is the history at the first view step reaches whose thread or project is still there, h itself when there is
+// none.
+export function stepTo(h: History, step: (h: History) => History, live: (view: View) => boolean): History {
+  for (let from = h, next = step(h); next !== from; from = next, next = step(next)) {
+    if (live(current(next)!)) return next
+  }
+  return h
+}
+
+// prune drops the views whose thread or project is gone, so they take no room among the fifty. Neighbours that become
+// the same view merge, and the view shown is the nearest one kept at or before it.
+export function prune(h: History, live: (view: View) => boolean): History {
+  const views: View[] = []
+  let at = -1
+  h.views.forEach((view, i) => {
+    if (!live(view)) return
+    if (!same(views[views.length - 1], view)) views.push(view)
+    if (i <= h.at) at = views.length - 1
+  })
+  if (views.length === h.views.length) return h
+  return { views, at: at < 0 && views.length > 0 ? 0 : at }
+}
+
 // threadOf is the thread the view shows, '' for a home.
 export const threadOf = (view: View): string => (view.kind === 'thread' ? view.id : view.kind === 'agent' ? view.thread : '')
 

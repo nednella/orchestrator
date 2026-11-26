@@ -11,7 +11,7 @@ import type { Action } from './types'
 import { viewActions } from './views'
 
 export type { Action, ActionGroup, Shortcut } from './types'
-export { formatShortcut, LIST_KEYS, matchShortcut } from './shortcut'
+export { formatShortcut, LIST_KEYS, matchShortcut, withShortcut } from './shortcut'
 
 export function useActions(): Action[] {
   return actionsFor(useAgentos(), useLayout())

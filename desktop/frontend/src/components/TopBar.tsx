@@ -2,7 +2,7 @@ import { SquareMenu } from 'lucide-react'
 import { useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { useAgentos, useAgentosSelector, useLatestAgentos } from '../AgentosContext'
-import { actionsFor, formatShortcut } from '../actions'
+import { actionsFor, withShortcut } from '../actions'
 import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import { selectedCardHasRows } from '../useCardFacts'
@@ -25,10 +25,7 @@ export function TopBar() {
   const cardPressed = card.placement === 'inline' ? card.shown : popover
   useCardPopoverDismiss(cardToggle, popover)
   const find = (id: string) => actionsFor(latestAgentos(), layout).find((a) => a.id === id)!
-  const named = (label: string, id: string) => {
-    const shortcut = find(id).shortcut
-    return shortcut ? `${label} (${formatShortcut(shortcut)})` : label
-  }
+  const named = (label: string, id: string) => withShortcut(label, find(id).shortcut)
   const showsThread = selectedId !== null && !statsOpen && !digestOpen
   // With no sidebar beside it the bar starts after the window buttons.
   const left = sidebarOpen && docked.sidebar ? '0px' : 'calc(var(--title-inset) - 0.75rem)'

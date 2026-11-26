@@ -7,6 +7,11 @@ export function formatShortcut(shortcut: Shortcut): string {
   return `⌘${shortcut.alt ? '⌥' : ''}${shortcut.shift ? '⇧' : ''}${key}`
 }
 
+// withShortcut is the label with the shortcut that runs it, as a tooltip shows it.
+export function withShortcut(label: string, shortcut: Shortcut | undefined): string {
+  return shortcut ? `${label} (${formatShortcut(shortcut)})` : label
+}
+
 export function matchShortcut(e: KeyboardEvent, shortcut: Shortcut): boolean {
   if (!e.metaKey || e.ctrlKey || e.altKey !== Boolean(shortcut.alt)) return false
   if (!shortcut.anyShift && e.shiftKey !== Boolean(shortcut.shift)) return false

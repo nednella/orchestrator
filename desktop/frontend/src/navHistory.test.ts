@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { back, closeAgent, current, forward, goneAgent, NO_HISTORY, push, viewedAgent } from './navHistory.ts'
+import { back, closeAgent, current, forward, goneAgent, NO_HISTORY, prune, push, stepTo, viewedAgent } from './navHistory.ts'
 import type { History, View } from './navHistory.ts'
 
 const home: View = { kind: 'home', project: 'p' }
@@ -40,6 +40,29 @@ test('history keeps fifty', () => {
   assert.equal(h.at, 49)
   assert.deepEqual(h.views[0], thread('p/10'), 'the oldest go')
   assert.deepEqual(current(h), thread('p/59'))
+})
+
+const alive = (...gone: string[]) => (view: View) => view.kind === 'home' || !gone.includes(view.kind === 'thread' ? view.id : view.thread)
+
+test('back skips views that are gone', () => {
+  const h = of(thread('p/a'), thread('p/gone'), agent('p/gone', 'a1'), thread('p/b'))
+  assert.deepEqual(current(stepTo(h, back, alive('p/gone'))), thread('p/a'))
+  assert.equal(stepTo(h, forward, alive('p/gone')), h, 'nothing ahead')
+  const lone = of(thread('p/gone'), thread('p/b'))
+  assert.equal(stepTo(lone, back, alive('p/gone')), lone, 'no live view behind: Back is off')
+})
+
+test('gone views leave history and take no room', () => {
+  const h = of(thread('p/a'), thread('p/gone'), thread('p/a'), thread('p/b'), thread('p/c'))
+  const pruned = prune(back(h), alive('p/gone'))
+  assert.deepEqual(pruned.views, [thread('p/a'), thread('p/b'), thread('p/c')], 'the neighbours of a gone view merge')
+  assert.deepEqual(current(pruned), thread('p/b'))
+  assert.equal(prune(h, alive()), h)
+  const shownGone = prune(of(thread('p/a'), thread('p/gone')), alive('p/gone'))
+  assert.deepEqual(current(shownGone), thread('p/a'), 'a gone view shown gives way to the one before it')
+  assert.deepEqual(prune(of(thread('p/gone')), alive('p/gone')), NO_HISTORY)
+  const full = of(...Array.from({ length: 50 }, (_, i) => thread(i % 2 ? 'p/gone' : `p/${i}`)))
+  assert.equal(push(prune(full, alive('p/gone')), thread('p/new')).views.length, 26, 'the gone half no longer counts')
 })
 
 const viewing = of(thread('p/a'), agent('p/a', 'a1'))
