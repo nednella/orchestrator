@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ownStart, sideChatAsked, sideChatDot, sideChatReason } from './sideChat.ts'
+import { ownStart, sideChatAsked, sideChatCommands, sideChatDot, sideChatQuestion, sideChatReason } from './sideChat.ts'
 import type { ChatEvent, Session } from './types.ts'
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'>
@@ -10,6 +10,25 @@ const user = (id: string, text = 'ask'): Draft => ({ kind: 'user', id, text })
 const reply = (uuid: string, agent?: string): Draft => ({ kind: 'message', id: `msg-${uuid}`, uuid, text: 'answer', ...(agent ? { agent } : {}) })
 const end: Draft = { kind: 'turn_end' }
 const thread = (over: Partial<Session> = {}) => ({ id: 'shop/abcd2345', parent: '', side: false, ...over }) as Session
+
+test('/side and /btw take the rest of the message as the question', () => {
+  assert.equal(sideChatQuestion('/side why is the cart slow?'), 'why is the cart slow?')
+  assert.equal(sideChatQuestion('/btw  what about\nthe tests? '), 'what about\nthe tests?')
+  assert.equal(sideChatQuestion('/SIDE'), '', 'no question opens an empty side chat')
+  assert.equal(sideChatQuestion(' /btw '), '')
+  for (const text of ['/sides', '/review', 'side note', 'ask /side', '']) assert.equal(sideChatQuestion(text), null, text)
+})
+
+test('the slash menu shows why a side chat cannot start in place of what the command does', () => {
+  assert.deepEqual(
+    sideChatCommands('').map((c) => [c.name, c.description]),
+    [['side', 'Ask a side question in a new side chat'], ['btw', 'Same as /side']],
+  )
+  assert.deepEqual(
+    sideChatCommands('Side chats start after the first message.').map((c) => c.description),
+    ['Side chats start after the first message.', 'Side chats start after the first message.'],
+  )
+})
 
 test('a side chat starts from a finished reply of the thread', () => {
   assert.equal(sideChatReason(undefined), 'Available from a thread.')

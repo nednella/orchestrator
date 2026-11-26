@@ -10,11 +10,13 @@ import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkdown'
 import { pickCursor, pickListKey } from '../composerPick'
 import { modelAlias } from '../model'
+import { sideChatCommands, sideChatQuestion, sideChatReason } from '../sideChat'
 import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { usePromptHistory } from '../usePromptHistory'
 import { usePromptPicks } from '../usePromptPicks'
+import { useSideChat } from '../useSideChat'
 import { ChatQueued } from './ChatQueued'
 import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
@@ -31,7 +33,7 @@ const sendWait = 15_000
 export type ThreadComposerDraft = { empty(): boolean; replace(text: string): void; append(text: string): void }
 
 // onEscape does what Esc does in the thread's chat, given whether a picker of the composer is open, and says what that was.
-// embedded is a side chat's composer in its tab, which takes no focus asked for the composer.
+// embedded is a side chat's composer in its tab, which starts no side chat and takes no focus asked for the composer.
 type ThreadComposerProps = {
   inputRef: RefObject<ComposerInput | null>
   draftRef: Ref<ThreadComposerDraft>
@@ -52,6 +54,8 @@ const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue
 export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, embedded = false, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
   const { id } = session
+  const sideChat = useSideChat()
+  const sideReason = embedded ? '' : sideChatReason(session, events)
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
   const latestReply = useRef(reply)
@@ -67,7 +71,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     input,
     caret,
     off: dismissed,
-    commands: timeline.commands,
+    commands: embedded ? timeline.commands : [...sideChatCommands(sideReason), ...timeline.commands],
     noCommands: 'Commands load when the thread starts',
     listFiles,
     onPicked: () => setCursor(-1),
@@ -122,11 +126,17 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
 
+  // /side and /btw start a side chat with the rest of the message, and the images, as its first message.
   const send = () => {
     const typed = sendText(latest.current.draft.text)
     const images = pending.images
     if (sending || (typed.trim() === '' && images.length === 0)) return
-    const text = (reply === null ? '' : replyPrefix(reply)) + typed
+    const question = embedded ? null : sideChatQuestion(typed)
+    if (question !== null && sideReason) {
+      pushToast({ tone: 'info', text: 'Side chat not started', detail: sideReason })
+      return
+    }
+    const prefix = reply === null ? '' : replyPrefix(reply)
     setSending(true)
     const release = setTimeout(() => setSending(false), sendWait)
     const sent = latest.current.draft
@@ -135,8 +145,11 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     onReply(null)
     report(async () => {
       try {
-        const { notice } = await api.chatSend(id, text, images.map(({ base64, mime }) => ({ base64, mime })))
-        if (notice) pushToast({ tone: 'info', text: notice })
+        if (question !== null) await sideChat.start(id, question === '' ? '' : prefix + question, images)
+        else {
+          const { notice } = await api.chatSend(id, prefix + typed, images.map(({ base64, mime }) => ({ base64, mime })))
+          if (notice) pushToast({ tone: 'info', text: notice })
+        }
       } catch (err) {
         const now = latest.current.draft
         if (typed.trim() !== '') update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, typed) })

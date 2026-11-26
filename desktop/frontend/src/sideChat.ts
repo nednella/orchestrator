@@ -1,6 +1,23 @@
+import type { Command } from './chatTimeline'
 import type { ChatEvent, Session, State } from './types'
 
 export const SIDE_CHAT_TITLE = 'Side chat'
+
+// The slash commands that start a side chat from a thread's composer, as the slash menu lists them. reason is why the
+// thread cannot start one, which the menu shows in place of what the command does; '' when it can.
+export function sideChatCommands(reason: string): Command[] {
+  return [
+    { name: 'side', description: reason || 'Ask a side question in a new side chat', argumentHint: '', builtin: true },
+    { name: 'btw', description: reason || 'Same as /side', argumentHint: '', builtin: true },
+  ]
+}
+
+// sideChatQuestion reads a message that starts a side chat, /side or /btw then the question: the question, '' for
+// none, or null for a message that is no such command.
+export function sideChatQuestion(text: string): string | null {
+  const match = /^\/(side|btw)(?:\s+([\s\S]*))?$/i.exec(text.trim())
+  return match ? (match[2] ?? '').trim() : null
+}
 
 // ownStart is where a side chat's own chat starts in its events: at its host's first start, since the chat it was
 // forked with is its thread's. Before that start all of them are the thread's.
