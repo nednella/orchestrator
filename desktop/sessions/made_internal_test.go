@@ -69,6 +69,8 @@ func TestMadeSurvivesAReload(t *testing.T) {
 	if err := newMadeTrees(local).Add("p", w); err != nil {
 		t.Fatal(err)
 	}
+	// The record keeps the folder as the file system names it, where a temp folder under a link is not the link's.
+	w.Path = folder.Canonical(w.Path)
 	got, ok := newMadeTrees(local).Of("p", "p/aaaaaaaa")
 	if !ok || got != w {
 		t.Errorf("reloaded record = %+v, %v; want %+v", got, ok, w)
