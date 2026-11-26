@@ -7,7 +7,7 @@ import { Ago } from './Ago'
 import { Icon } from './Icon'
 import { FIT, ZOOM_STEP, ZoomableImage, zoomTo, type ImageView } from './ZoomableImage'
 
-const DELETE_EVIDENCE = { title: 'Delete this evidence?', confirm: 'Delete', tone: 'danger' } as const
+const DELETE_EVIDENCE = { title: 'Delete this media?', confirm: 'Delete', tone: 'danger' } as const
 
 type EvidenceViewerProps = {
   sessionId: string

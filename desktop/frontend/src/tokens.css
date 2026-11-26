@@ -65,6 +65,7 @@
   --bg-card: var(--bg-raised);
   --bg-tile: var(--bg-segment);
   --bg-row-hover: color-mix(in srgb, var(--text) 5%, transparent);
+  --bg-key-badge: color-mix(in srgb, var(--text) 7%, transparent);
   --bg-row-active: color-mix(in srgb, var(--text) 9%, transparent);
   /* The sidebar's bottom bar: its icons, and the update button's fill while an update is in play, which its marks
      are ringed with. */

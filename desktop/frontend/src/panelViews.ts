@@ -1,21 +1,15 @@
-import { Bot, CircleDot, Files, GitPullRequestArrow, Globe, Image, Server, StickyNote } from 'lucide-react'
+import { CircleDot, Files, GitPullRequestArrow, Globe, Image, MessagesSquare, Newspaper, SquareTerminal, StickyNote } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
-import { useOrchestrator } from './OrchestratorContext'
-import { useAgentsRunning, useThreadAgents } from './chatAgents'
-import { AgentsView } from './components/AgentsView'
 import { BrowserView } from './components/BrowserView'
 import { EvidenceView } from './components/EvidenceView'
 import { FilesView } from './components/FilesView'
 import { IssuesView } from './components/IssuesView'
 import { NotesView } from './components/NotesView'
 import { PullRequestsView } from './components/PullRequestsView'
-import { ServersView } from './components/ServersView'
-import { PANEL_ORDER } from './panelTabs'
+import { PANEL_KEYS } from './panelTabs'
 import type { PanelViewId } from './panelTabs'
-import { descendantsOf } from './threads'
 import type { Session } from './types'
-import { useThreadServers } from './useThreadServers'
 
 // session is the open thread, none on Home.
 export type PanelViewProps = { session: Session | undefined }
@@ -23,45 +17,26 @@ export type PanelViewProps = { session: Session | undefined }
 // thread says the view shows one thread's things: Home lists it, but cannot open it.
 export type PanelView = { id: PanelViewId; label: string; icon: LucideIcon; thread: boolean; Component: ComponentType<PanelViewProps> }
 
-const VIEWS: Partial<Record<PanelViewId, PanelView>> = {
-  agents: { id: 'agents', label: 'Agents', icon: Bot, thread: true, Component: AgentsView },
-  servers: { id: 'servers', label: 'Servers', icon: Server, thread: true, Component: ServersView },
-  pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: false, Component: PullRequestsView },
-  issues: { id: 'issues', label: 'Issues', icon: CircleDot, thread: false, Component: IssuesView },
+const VIEWS: Record<PanelViewId, PanelView> = {
   notes: { id: 'notes', label: 'Notes', icon: StickyNote, thread: false, Component: NotesView },
   files: { id: 'files', label: 'Files', icon: Files, thread: false, Component: FilesView },
-  evidence: { id: 'evidence', label: 'Evidence', icon: Image, thread: true, Component: EvidenceView },
+  issues: { id: 'issues', label: 'Issues', icon: CircleDot, thread: false, Component: IssuesView },
+  pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: false, Component: PullRequestsView },
   browser: { id: 'browser', label: 'Browser', icon: Globe, thread: true, Component: BrowserView },
+  media: { id: 'media', label: 'Media', icon: Image, thread: true, Component: EvidenceView },
 }
 
 export const panelView = (id: PanelViewId): PanelView | undefined => VIEWS[id]
 
-// The panel's list of views, in its order.
-export const LISTED_VIEWS: PanelView[] = PANEL_ORDER.flatMap((id) => VIEWS[id] ?? [])
+// A row of the panel's list. A row with no view is one that no surface is built for yet: it shows, shut, to keep the
+// list's order, and the surface that comes takes the view's place.
+export type PanelRow = { label: string; icon: LucideIcon; key: string; view: PanelViewId | null }
+export type PanelGroup = { heading: string; rows: PanelRow[] }
 
-// agentsWait says whether the Agents view of s holds a thread that waits on the owner.
-export function agentsWait(s: Session | undefined, sessions: Session[]): boolean {
-  return s !== undefined && descendantsOf(s.id, sessions).some((d) => d.state === 'waiting')
-}
+const rowOf = (id: PanelViewId): PanelRow => ({ label: VIEWS[id].label, icon: VIEWS[id].icon, key: PANEL_KEYS[id], view: id })
 
-// usePanelMeta is the short fact the list shows beside each view, '' for none.
-export function usePanelMeta(s: Session | undefined): Partial<Record<PanelViewId, string>> {
-  const { sessions, issues, notes, browserStates } = useOrchestrator('sessions', 'issues', 'notes', 'browserStates')
-  const id = s?.id ?? ''
-  const subagents = useThreadAgents(id)
-  const subagentsRunning = useAgentsRunning(id) ?? 0
-  const { servers } = useThreadServers(id, s?.state, false)
-  const family = s ? descendantsOf(s.id, sessions) : []
-  const running = subagentsRunning + family.filter((d) => d.state === 'working').length
-  const agents = subagents.length + family.length
-  const shown = notes.filter((n) => !n.archived).length
-  return {
-    agents: running > 0 ? `${running} running` : agents > 0 ? String(agents) : '',
-    servers: servers.length > 0 ? `${servers.length} running` : '',
-    pulls: s?.pr ? `#${s.pr.number} ${s.pr.state}` : '',
-    issues: issues.length > 0 ? `${issues.length} open` : '',
-    notes: shown > 0 ? String(shown) : '',
-    evidence: s && s.evidence > 0 ? String(s.evidence) : '',
-    browser: s && (browserStates[s.id]?.open ?? s.browser) ? 'Open' : '',
-  }
-}
+export const PANEL_GROUPS: PanelGroup[] = [
+  { heading: 'This project', rows: [rowOf('notes'), rowOf('files'), rowOf('issues'), rowOf('pulls'), { label: 'Terminal', icon: SquareTerminal, key: 'T', view: null }] },
+  { heading: 'This thread', rows: [rowOf('browser'), rowOf('media'), { label: 'Side chat', icon: MessagesSquare, key: 'S', view: null }] },
+  { heading: 'Everywhere', rows: [{ label: 'News', icon: Newspaper, key: 'W', view: null }] },
+]

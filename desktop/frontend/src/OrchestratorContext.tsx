@@ -679,7 +679,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
             pushToast({ tone: state, text: `${top.title} · ${current.title} needs you`, sessionId: top.id })
             return
           }
-          pushToast({ tone: state, text: `${current.title} ${describe(current)}`, sessionId: id, view: state === 'evidence' ? 'evidence' : undefined })
+          pushToast({ tone: state, text: `${current.title} ${describe(current)}`, sessionId: id, view: state === 'evidence' ? 'media' : undefined })
         }, 50)
       }),
     [pushToast],

@@ -1,12 +1,12 @@
 import type { FocusTarget } from './OrchestratorContext'
 
-export type PanelViewId = 'agents' | 'servers' | 'pulls' | 'issues' | 'notes' | 'files' | 'evidence' | 'browser'
+export type PanelViewId = 'notes' | 'files' | 'issues' | 'pulls' | 'browser' | 'media'
 
 // The letter that opens each view from the panel's list.
-export const PANEL_KEYS: Record<PanelViewId, string> = { agents: 'A', servers: 'S', pulls: 'P', issues: 'I', notes: 'N', files: 'F', evidence: 'E', browser: 'B' }
+export const PANEL_KEYS: Record<PanelViewId, string> = { notes: 'N', files: 'F', issues: 'I', pulls: 'P', browser: 'B', media: 'M' }
 
 // The views the panel lists, in its order.
-export const PANEL_ORDER: PanelViewId[] = ['agents', 'servers', 'pulls', 'issues', 'notes', 'files', 'evidence', 'browser']
+export const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media']
 
 // What the right panel shows for one thread, or for Home: the views open as tabs, the one shown (null for the list of
 // views), and whether it takes the chat's room too.
@@ -50,13 +50,16 @@ export function viewForKey(key: string): PanelViewId | null {
   return PANEL_ORDER.find((view) => PANEL_KEYS[view] === key.toUpperCase()) ?? null
 }
 
-// panelStateOf is a saved panel as the panel can show it: a view it no longer lists drops out.
+// panelStateOf is a saved panel as the panel can show it: a view it no longer lists drops out, and Media is what Evidence
+// was saved as.
 export function panelStateOf(saved: unknown): PanelState {
   if (typeof saved !== 'object' || saved === null) return EMPTY_PANEL
   const { tabs, active, expanded } = saved as Record<string, unknown>
   const known = (view: unknown): view is PanelViewId => PANEL_ORDER.includes(view as PanelViewId)
-  const kept = Array.isArray(tabs) ? [...new Set(tabs.filter(known))] : []
-  return { tabs: kept, active: known(active) && kept.includes(active) ? active : null, expanded: expanded === true }
+  const renamed = (view: unknown) => (view === 'evidence' ? 'media' : view)
+  const kept = Array.isArray(tabs) ? [...new Set(tabs.map(renamed).filter(known))] : []
+  const shown = renamed(active)
+  return { tabs: kept, active: known(shown) && kept.includes(shown) ? shown : null, expanded: expanded === true }
 }
 
 // At this window width or less the panel opens over the chat as a sheet, and so it does where the row has no room for

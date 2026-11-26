@@ -26,6 +26,6 @@ export const LIST_KEYS: { keys: string; summary: string }[] = [
   { keys: 'A / D or ← / →', summary: 'Fold or unfold the Sleeping threads' },
   { keys: 'Space', summary: 'Fold or unfold the section under the cursor' },
   { keys: 'P / E in notes', summary: 'Pin or archive the note under the cursor' },
-  { keys: 'A S P I N E B', summary: 'Open a right panel view: Agents, Servers, Pull requests, Issues, Notes, Evidence or Browser' },
+  { keys: 'N F I P B M', summary: 'Open a right panel view: Notes, Files, Issues, Pull requests, Browser or Media' },
   { keys: 'Esc', summary: 'Close a panel or overlay. In a thread, Esc stops the agent’s turn' },
 ]

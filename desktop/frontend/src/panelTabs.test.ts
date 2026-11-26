@@ -7,22 +7,22 @@ import type { PanelState } from './panelTabs.ts'
 const state = (over: Partial<PanelState> = {}): PanelState => ({ ...EMPTY_PANEL, ...over })
 
 test('opening a view adds its tab and makes it active', () => {
-  assert.deepEqual(openTab(EMPTY_PANEL, 'agents'), { tabs: ['agents'], active: 'agents', expanded: false })
-  assert.deepEqual(openTab(state({ tabs: ['agents'], active: 'agents', expanded: true }), 'issues'), { tabs: ['agents', 'issues'], active: 'issues', expanded: true })
+  assert.deepEqual(openTab(EMPTY_PANEL, 'notes'), { tabs: ['notes'], active: 'notes', expanded: false })
+  assert.deepEqual(openTab(state({ tabs: ['notes'], active: 'notes', expanded: true }), 'issues'), { tabs: ['notes', 'issues'], active: 'issues', expanded: true })
 })
 
 test('opening an open view only selects it', () => {
-  const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'issues' })
-  assert.deepEqual(openTab(st, 'agents'), { ...st, active: 'agents' })
-  assert.deepEqual(openTab(state({ tabs: ['agents'], active: null }), 'agents'), { tabs: ['agents'], active: 'agents', expanded: false }, 'from the list')
+  const st = state({ tabs: ['notes', 'files', 'issues'], active: 'issues' })
+  assert.deepEqual(openTab(st, 'notes'), { ...st, active: 'notes' })
+  assert.deepEqual(openTab(state({ tabs: ['notes'], active: null }), 'notes'), { tabs: ['notes'], active: 'notes', expanded: false }, 'from the list')
 })
 
 test('closing the active tab picks its left neighbour', () => {
-  const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'servers', expanded: true })
-  assert.deepEqual(closeTab(st, 'servers'), { tabs: ['agents', 'issues'], active: 'agents', expanded: true })
-  assert.deepEqual(closeTab(st, 'agents'), { tabs: ['servers', 'issues'], active: 'servers', expanded: true }, 'a tab that is not active leaves the active one')
-  assert.deepEqual(closeTab(state({ tabs: ['agents', 'servers'], active: 'agents' }), 'agents'), { tabs: ['servers'], active: 'servers', expanded: false }, 'the first tab has no left neighbour: the next one')
-  assert.equal(closeTab(st, 'notes'), st, 'a view with no tab changes nothing')
+  const st = state({ tabs: ['notes', 'files', 'issues'], active: 'files', expanded: true })
+  assert.deepEqual(closeTab(st, 'files'), { tabs: ['notes', 'issues'], active: 'notes', expanded: true })
+  assert.deepEqual(closeTab(st, 'notes'), { tabs: ['files', 'issues'], active: 'files', expanded: true }, 'a tab that is not active leaves the active one')
+  assert.deepEqual(closeTab(state({ tabs: ['notes', 'files'], active: 'notes' }), 'notes'), { tabs: ['files'], active: 'files', expanded: false }, 'the first tab has no left neighbour: the next one')
+  assert.equal(closeTab(st, 'browser'), st, 'a view with no tab changes nothing')
 })
 
 test('closing the last tab shows the list and restores the size', () => {
@@ -31,9 +31,9 @@ test('closing the last tab shows the list and restores the size', () => {
 })
 
 test('letters open their views', () => {
-  const keys: [string, string][] = [['a', 'agents'], ['S', 'servers'], ['p', 'pulls'], ['i', 'issues'], ['N', 'notes'], ['f', 'files'], ['e', 'evidence'], ['b', 'browser']]
+  const keys: [string, string][] = [['n', 'notes'], ['F', 'files'], ['i', 'issues'], ['p', 'pulls'], ['B', 'browser'], ['m', 'media']]
   for (const [key, view] of keys) assert.equal(viewForKey(key), view, key)
-  for (const key of ['x', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
+  for (const key of ['a', 'e', 's', 't', 'w', 'Enter', 'ArrowDown', '1', '']) assert.equal(viewForKey(key), null, `${key}: no view`)
 })
 
 test('the width keeps 360 px of chat', () => {
@@ -84,18 +84,20 @@ test('a window of 980 px or less shows the panel as a sheet', () => {
 })
 
 test('the tab keys step through the open tabs, round the ends', () => {
-  const st = state({ tabs: ['agents', 'servers', 'issues'], active: 'servers' })
+  const st = state({ tabs: ['notes', 'files', 'issues'], active: 'files' })
   assert.equal(stepTab(st, 1).active, 'issues')
-  assert.equal(stepTab(stepTab(st, 1), 1).active, 'agents')
-  assert.equal(stepTab(st, -1).active, 'agents')
-  assert.equal(stepTab(state({ tabs: ['agents', 'servers'], active: null }), 1).active, 'agents', 'from the list, the first')
-  assert.equal(stepTab(state({ tabs: ['agents', 'servers'], active: null }), -1).active, 'servers', 'from the list back, the last')
+  assert.equal(stepTab(stepTab(st, 1), 1).active, 'notes')
+  assert.equal(stepTab(st, -1).active, 'notes')
+  assert.equal(stepTab(state({ tabs: ['notes', 'files'], active: null }), 1).active, 'notes', 'from the list, the first')
+  assert.equal(stepTab(state({ tabs: ['notes', 'files'], active: null }), -1).active, 'files', 'from the list back, the last')
   assert.equal(stepTab(EMPTY_PANEL, 1), EMPTY_PANEL)
 })
 
 test('a saved panel keeps only the views it knows', () => {
   assert.deepEqual(panelStateOf(undefined), EMPTY_PANEL)
-  assert.deepEqual(panelStateOf({ tabs: ['agents', 'details', 'agents', 'diff', 'files'], active: 'details', expanded: true }), { tabs: ['agents', 'files'], active: null, expanded: true })
+  assert.deepEqual(panelStateOf({ tabs: ['notes', 'details', 'notes', 'diff', 'files'], active: 'details', expanded: true }), { tabs: ['notes', 'files'], active: null, expanded: true })
+  assert.deepEqual(panelStateOf({ tabs: ['agents', 'servers', 'issues'], active: 'agents', expanded: false }), { tabs: ['issues'], active: null, expanded: false }, 'Agents and Servers are gone')
+  assert.deepEqual(panelStateOf({ tabs: ['evidence'], active: 'evidence', expanded: false }), { tabs: ['media'], active: 'media', expanded: false }, 'Evidence was saved as Media')
   assert.deepEqual(panelStateOf({ tabs: ['issues'], active: 'issues', expanded: false }), { tabs: ['issues'], active: 'issues', expanded: false })
   assert.deepEqual(panelStateOf({ tabs: 'issues', active: 7, expanded: 'yes' }), EMPTY_PANEL)
 })
