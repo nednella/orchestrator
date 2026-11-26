@@ -26,9 +26,6 @@ func (s *Service) DownloadUpdate() error { return s.u.Download(s.ctx()) }
 // InstallUpdate installs the newest release and relaunches the app.
 func (s *Service) InstallUpdate() error { return s.u.Install(s.ctx()) }
 
-// Update is InstallUpdate for the front end that still calls it by this name.
-func (s *Service) Update() error { return s.u.Install(s.ctx()) }
-
 // PatchNotes is the releases since the version the app last ran; it returns them once.
 func (s *Service) PatchNotes() ([]Release, error) { return s.u.PatchNotes() }
 

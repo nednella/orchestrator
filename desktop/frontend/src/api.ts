@@ -85,7 +85,6 @@ type Backend = {
   RunDigest(): Promise<void>
   DigestToNote(itemId: string): Promise<Note>
   DismissDigestItem(itemId: string): Promise<void>
-  Update(): Promise<void>
   UpdateState(): Promise<UpdateState>
   CheckUpdate(): Promise<void>
   DownloadUpdate(): Promise<void>
@@ -137,7 +136,7 @@ const namespaces = {
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
-  update: ['Update', 'UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
+  update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
   limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
   settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'PickDataDir', 'SetDataDir'],
@@ -267,7 +266,6 @@ export const api = {
   runDigest: () => backend.RunDigest(),
   digestToNote: (itemId: string) => backend.DigestToNote(itemId),
   dismissDigestItem: (itemId: string) => backend.DismissDigestItem(itemId),
-  update: () => backend.Update(),
   updateState: () => backend.UpdateState(),
   checkUpdate: () => backend.CheckUpdate(),
   downloadUpdate: () => backend.DownloadUpdate(),

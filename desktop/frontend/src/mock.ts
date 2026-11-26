@@ -1616,7 +1616,6 @@ export function createMock(params: URLSearchParams) {
     SetDataDir: async (_dir: string, withData: boolean) => {
       await delay(undefined, withData ? 2500 : 400)
     },
-    Update: installUpdate,
     UpdateState: async () => ({ ...update }),
     CheckUpdate: () => runUpdateAction('check', checkUpdate),
     DownloadUpdate: () => runUpdateAction('download', downloadUpdate),
