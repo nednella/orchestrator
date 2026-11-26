@@ -4299,6 +4299,9 @@ func (s *Sessions) setBranch(id, branch string) (project.Project, error) {
 		return proj, errors.New("A Read thread works on no branch")
 	}
 	ctx := s.context()
+	if out, err := s.life.git(ctx, proj.Dir, "check-ref-format", "--branch", branch); err != nil || strings.TrimSpace(string(out)) != branch {
+		return proj, fmt.Errorf("%q is not a branch name git takes", branch)
+	}
 	if branch == s.life.mainBranch(ctx, proj.Dir) {
 		return proj, fmt.Errorf("%s is the project's default branch; track the branch your work is on", branch)
 	}

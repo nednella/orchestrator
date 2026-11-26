@@ -337,3 +337,24 @@ func TestCleanupOfABranchTrackedElsewhereLeavesTheMadeWorktree(t *testing.T) {
 		t.Errorf("the forced clean-up: worktree there %v, branches %q", exists(s.Worktree), gitIn(t, h.Dir, "branch", "--list", "issue-7", "side"))
 	}
 }
+
+func TestTrackRefusesABranchNameGitDoesNotTake(t *testing.T) {
+	for _, branch := range []string{"fix\tproj/abcd2345", "fix\nproj/abcd2345", "fix\rit", "two words", "@{-1}", "a..b"} {
+		t.Run(fmt.Sprintf("%q", branch), func(t *testing.T) {
+			h := newHarness(t)
+			repoFixture(t, h)
+			s := issueThread(h, t, 7)
+			if err := h.Sessions().Track(s.ID, branch); err == nil {
+				t.Fatal("the branch was taken")
+			}
+			if resp := h.AskTool(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": branch}}); resp.OK {
+				t.Fatal("the tool took the branch")
+			}
+			h.Sessions().Refresh()
+			got, ok := h.Session(s.ID)
+			if !ok || got.Branch != "issue-7" || got.Parent != "" || branchTag(t, h, s.ID) != "issue-7" {
+				t.Errorf("the thread after the refusal = %+v, tag %q", got, branchTag(t, h, s.ID))
+			}
+		})
+	}
+}
