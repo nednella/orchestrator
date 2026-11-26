@@ -7,6 +7,7 @@ import { openAgent } from '../chatAgents'
 import { editorLabel, folderName } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
+import { askToReadIssue } from '../issueReadRequest'
 import { useLayout } from '../LayoutContext'
 import type { PanelViewId } from '../panelTabs'
 import { AGENT_STATE_LABEL, STATE_LABEL } from '../stateMeta'
@@ -34,7 +35,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const { session, sections, refreshServers } = useCardFacts(id)
   const [copied, copyBranch] = useCopied(session?.branch ?? '')
   if (!session || sections.length === 0) return null
-  const show = (view: PanelViewId) => () => {
+  const show = (view: PanelViewId) => {
     closeCardPopover()
     showPanelView(view)
   }
@@ -83,10 +84,20 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
             )}
           </>
         )
-        return <ContextCardRow icon={<PRIcon size={16} color={`var(--pr-${r.pr.state})`} aria-hidden="true" />} label={`#${r.pr.number}: ${r.pr.title}`} wrap meta={meta} onClick={show('pulls')} />
+        return <ContextCardRow icon={<PRIcon size={16} color={`var(--pr-${r.pr.state})`} aria-hidden="true" />} label={`#${r.pr.number}: ${r.pr.title}`} wrap meta={meta} onClick={() => show('pulls')} />
       }
       case 'issue':
-        return <ContextCardRow icon={<CircleDot size={16} color="var(--pr-open)" aria-hidden="true" />} label={r.title ? `#${r.number}: ${r.title}` : `#${r.number}`} wrap onClick={show('issues')} />
+        return (
+          <ContextCardRow
+            icon={<CircleDot size={16} color="var(--pr-open)" aria-hidden="true" />}
+            label={r.title ? `#${r.number}: ${r.title}` : `#${r.number}`}
+            wrap
+            onClick={() => {
+              askToReadIssue(r.number)
+              show('issues')
+            }}
+          />
+        )
       case 'server': {
         const { port, pid, command } = r.server
         const stop = { label: `Stop the server on port ${port}`, run: () => a.report(() => api.stopServer(session.id, pid).then(refreshServers)) }

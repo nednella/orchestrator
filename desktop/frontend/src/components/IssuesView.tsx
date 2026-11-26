@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useAgentos, useAgentosSelector } from '../AgentosContext'
 import { api } from '../api'
 import { filterIssues, isFiltering } from '../issueFilter'
+import { useIssueReadRequest } from '../issueReadRequest'
 import { useFocusRequest } from '../useFocusRequest'
 import { useRefreshQueueOnShow } from '../useRefreshQueueOnShow'
 import { IssueList } from './IssueList'
@@ -22,7 +23,12 @@ export function IssuesView() {
   // Searching or filtering the queue from a shortcut or a command shows the list again.
   const closeReader = useCallback(() => setReading(null), [])
   useFocusRequest('queue-filter', closeReader)
-  useEffect(closeReader, [issueFilter, closeReader])
+  const [filterShown, setFilterShown] = useState(issueFilter)
+  if (filterShown !== issueFilter) {
+    setFilterShown(issueFilter)
+    setReading(null)
+  }
+  useIssueReadRequest(setReading)
 
   if (projectName !== undefined && !repo) {
     return <Notice title="No repo linked" hint={`${projectName} has no GitHub repo, so it has no issues.`} centered />
