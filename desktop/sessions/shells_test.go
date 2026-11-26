@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -192,6 +193,21 @@ func TestDeleteClosesOnlyTheThreadsShells(t *testing.T) {
 		}
 		if !tmuxHas(h, project) {
 			t.Error("the project shell went with the thread")
+		}
+	})
+
+	t.Run("a refused delete", func(t *testing.T) {
+		h := shellHarness(t)
+		s := pushedThread(t, h)
+		own := newShell(t, h, s.ID)
+		if err := os.WriteFile(filepath.Join(s.Worktree, "unsaved.txt"), []byte("work\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := h.DeleteThread(s.ID, true); err == nil {
+			t.Fatal("the delete went through with changes in the worktree")
+		}
+		if !tmuxHas(h, own) {
+			t.Error("a refused delete closed the thread's shell")
 		}
 	})
 }

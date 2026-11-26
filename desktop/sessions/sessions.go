@@ -830,7 +830,6 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	s.closeShellsOf(id)
 	s.mu.Lock()
 	rec := s.records[id]
 	if e, ok := s.ended[id]; ok {
@@ -841,6 +840,7 @@ func (s *Sessions) remove(id string) (settled bool, err error) {
 	if err := s.settleToDelete(name); err != nil {
 		return false, err
 	}
+	s.closeShellsOf(id, "")
 	// Counted here: the count sync starts when the session goes, also at the settle of the clean-up, may run after the
 	// delete and find no thread.
 	if rec.Transcript != "" {
@@ -1054,7 +1054,7 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 }
 
 // removeWorktrees removes the worktrees of a Delete's family, trees, once every one has passed every check of a
-// clean-up, so a worktree kept refuses the Delete before any goes, and the family's shells close before the first goes.
+// clean-up, so a worktree kept refuses the Delete before any goes; each that goes takes the family's shells in it.
 // A worktree kept because a shell or a thread outside the family works in it refuses the Delete with no check run; one
 // a fork takes over stays for the fork. When the thread runs and works in a worktree that is to go, its own or a
 // descendant's, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed the
@@ -1083,11 +1083,8 @@ func (s *Sessions) removeWorktrees(family []string, trees familyTrees) (asleep s
 			return asleep, err
 		}
 	}
-	for _, id := range family {
-		s.closeShellsOf(id)
-	}
 	for _, id := range own {
-		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
+		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete, family...)
 		switch {
 		case err != nil:
 			return asleep, s.asleepNow(err, asleep)
@@ -4313,9 +4310,9 @@ func (s *Sessions) CloseShell(id string) error {
 	return s.stopShell(name)
 }
 
-// closeShellsOf stops every shell that belongs to the thread, as tmux lists them now. A shell it cannot stop is logged
-// and left running.
-func (s *Sessions) closeShellsOf(thread string) {
+// closeShellsOf stops every shell of the thread, and those of the threads in others that are in the worktree, as tmux
+// lists them now. A shell it cannot stop is logged and left running.
+func (s *Sessions) closeShellsOf(thread, worktree string, others ...string) {
 	if thread == "" {
 		return
 	}
@@ -4323,13 +4320,14 @@ func (s *Sessions) closeShellsOf(thread string) {
 	defer s.shellMu.Unlock()
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
-	_, shells, err := s.tmux.ListAll(ctx)
+	shells, err := s.tmux.ShellPaths(ctx)
 	if err != nil {
 		log.Printf("agentos: listing the shells of thread %s: %v", thread, err)
 		return
 	}
 	for _, sh := range shells {
-		if sh.Thread != thread {
+		inWorktree := worktree != "" && sh.Path != "" && folder.Inside(sh.Path, worktree)
+		if sh.Thread != thread && (!inWorktree || !slices.Contains(others, sh.Thread)) {
 			continue
 		}
 		if err := s.stopShell(sh.Name); err != nil {

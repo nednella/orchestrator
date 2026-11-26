@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -210,11 +212,23 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 		{"another thread's", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
 			return dir, madeTree(t, l, dir, "issue-7", "p/t2")
 		}, "is not the worktree agentos made for this thread"},
+		{"the thread's own, once the thread woke", func(t *testing.T, l *Lifecycle, dir string) (string, string) {
+			l.sessions.info = append(l.sessions.info, term.Info{Name: session.Name{Project: "p", Token: "t1"}})
+			return dir, madeTree(t, l, dir, "issue-7", "p/t1")
+		}, "woke during the clean-up"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l, dir, _ := madeRepo(t)
+			l.sessions.tmux, l.sessions.closeTerm = testTmux(t), func(string) {}
 			projDir, path := tt.place(t, l, dir)
+			shell := session.Name{Project: "p", Shell: 1}
+			if err := l.sessions.tmux.NewSession(t.Context(), shell, "shell", path, nil, []string{"sleep", "60"}, 80, 24); err != nil {
+				t.Fatal(err)
+			}
+			if err := l.sessions.tmux.SetThread(t.Context(), shell, "p/t1"); err != nil {
+				t.Fatal(err)
+			}
 			ran := filepath.Join(t.TempDir(), "ran")
 			proj := project.Project{Name: "p", Dir: projDir, CleanupCommand: fmt.Sprintf("echo {worktree} >> %q && git worktree remove --force {worktree}", ran)}
 			plan := cleanupPlan{branchPlan: branchPlan{branch: "issue-7", worktree: path, made: true}, force: true}
@@ -223,10 +237,16 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 				if reason != "" || !slices.Equal(removed, []string{"worktree " + path}) || !gone(path) {
 					t.Errorf("removed %q, reason %q, folder gone %v", removed, reason, gone(path))
 				}
+				if l.sessions.tmux.Has(t.Context(), shell) {
+					t.Error("the thread's shell still runs")
+				}
 				return
 			}
 			if !strings.Contains(reason, tt.reason) || len(removed) != 0 {
 				t.Errorf("removed %q, reason %q, want %q", removed, reason, tt.reason)
+			}
+			if !l.sessions.tmux.Has(t.Context(), shell) {
+				t.Error("a refused removal closed the thread's shell")
 			}
 			if _, err := os.Stat(ran); err == nil {
 				t.Error("the clean-up command ran")
@@ -236,6 +256,21 @@ func TestRemoveWorktreeRemovesOnlyTheThreadsOwn(t *testing.T) {
 			}
 		})
 	}
+}
+
+// testTmux is a tmux server on a private socket, stopped when the test ends.
+func testTmux(t *testing.T) *term.Tmux {
+	t.Helper()
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	socket := fmt.Sprintf("aostest-life-%d-%d", os.Getpid(), rand.Uint32())
+	t.Cleanup(func() { _ = exec.Command("tmux", "-L", socket, "kill-server").Run() })
+	tmux, err := term.NewTmux(socket, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tmux
 }
 
 // openWindows is a browser with a window open for every thread; closed lists the windows it closed.

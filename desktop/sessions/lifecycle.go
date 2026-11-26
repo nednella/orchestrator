@@ -1035,8 +1035,8 @@ const (
 
 // cleanupNow is Cleanup, which it runs to the end before it returns what it removed and the reason the clean-up
 // stopped, "" when it went through. A clean-up that cannot start is an error, as one of a thread being deleted, unless
-// the delete runs it.
-func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cleanupBy) (removed []string, reason string, err error) {
+// the delete runs it. The threads of family, the Delete's that runs it, do not count as others in the worktree.
+func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cleanupBy, family ...string) (removed []string, reason string, err error) {
 	t, err := l.sessions.target(id)
 	if err != nil {
 		return nil, "", err
@@ -1077,7 +1077,7 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cl
 	}
 	l.sessions.changed()
 
-	removed, reason = l.removeAll(ctx, t, pr, force)
+	removed, reason = l.removeAll(ctx, t, pr, force, family...)
 	again := by == bySweep && was == "blocked" && reason == wasReason && len(removed) == 0 && ctx.Err() == nil
 	if !again {
 		reason = l.logCleanup(ctx, t, pr, removed, reason)
@@ -1185,9 +1185,6 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	}
 	var removed []string
 	if reason == "" {
-		if plan.made {
-			l.sessions.closeShellsOf(id)
-		}
 		removed, reason = l.removeWorktree(ctx, t, &plan)
 	}
 	l.mu.Lock()
@@ -1245,12 +1242,12 @@ func (l *Lifecycle) unchanged(ctx context.Context, t target) bool {
 
 // removeAll runs the clean-up steps in order: the checks, the settle of a live thread, the checks again, since its agent
 // may have changed the worktree until it stopped, each measuring the worktree from the commit it started at as a
-// child's sleep does, the close of the thread's shells and the worktree's removal, and the rest of the settle. A
-// non-empty reason means it stopped before the end. A step that finds the context cancelled stops with closedReason,
-// and one that finds the thread woken stops and keeps what is left, as does the end.
-func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool) (removed []string, reason string) {
+// child's sleep does, the worktree's removal, and the rest of the settle. A non-empty reason means it stopped before the
+// end. A step that finds the context cancelled stops with closedReason, and one that finds the thread woken stops and
+// keeps what is left, as does the end. The threads of family, a Delete's, do not count as others in the worktree.
+func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool, family ...string) (removed []string, reason string) {
 	removed = []string{}
-	if _, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t)); reason != "" {
+	if _, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t), family...); reason != "" {
 		return removed, reason
 	}
 	if ctx.Err() != nil {
@@ -1262,11 +1259,11 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 		}
 		t.ended = true
 	}
-	plan, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t))
+	plan, reason := l.planFor(ctx, t, pr, force, l.unchanged(ctx, t), family...)
 	if reason != "" {
 		return removed, reason
 	}
-	for _, step := range []func(context.Context, target, *cleanupPlan) ([]string, string){l.closeShells, l.removeWorktree, l.settleSession} {
+	for _, step := range []func(context.Context, target, *cleanupPlan) ([]string, string){l.removeWorktree, l.settleSession} {
 		if ctx.Err() != nil {
 			return removed, closedReason
 		}
@@ -1285,7 +1282,8 @@ func (l *Lifecycle) removeAll(ctx context.Context, t target, pr *PR, force bool)
 // cleanupPlan is what a clean-up found out before it removes anything.
 type cleanupPlan struct {
 	branchPlan
-	force bool
+	force  bool
+	family []string // the threads of the Delete that runs the clean-up, whose shells in the worktree go with it
 }
 
 // branchPlan is the thread's branch and the worktree agentos made for it.
@@ -1302,9 +1300,9 @@ type branchPlan struct {
 // the branch always stays. The worktree goes only while it is on the thread's branch, the one whose PR merged or
 // closed. With unchanged, the worktree holds no commit since the one it started at, so only its changes count and
 // origin is not fetched. The threads of family, a Delete's, do not count as others in the worktree, and neither do
-// their shells or the thread's own, which the clean-up or the Delete closes before the worktree goes.
+// their shells or the thread's own, which the worktree's removal closes.
 func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchanged bool, family ...string) (cleanupPlan, string) {
-	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force}
+	p := cleanupPlan{branchPlan: branchPlan{branch: t.branch}, force: force, family: family}
 	w, ok := l.sessions.made.Of(t.proj.Key(), t.id)
 	if !ok || w.Removed != 0 {
 		return p, ""
@@ -1351,7 +1349,7 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 
 // shellIn says why a shell keeps the worktree: one is open in it, or tmux could not say, or a shell of the project is
 // open in a folder tmux does not know. It is "" when none is. The shells of threads do not count: what asks closes
-// them before the worktree goes.
+// them when the worktree goes.
 func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads ...string) string {
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
@@ -1375,20 +1373,12 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads .
 	return ""
 }
 
-// closeShells closes the thread's shells when the clean-up removes the worktree agentos made for it, so none is left
-// in a folder that is gone.
-func (l *Lifecycle) closeShells(_ context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
-	if p.made {
-		l.sessions.closeShellsOf(t.id)
-	}
-	return nil, ""
-}
-
 // removeWorktree removes the worktree agentos made for the thread with the project's session_cleanup_command, and
 // records it removed. Forced or not, it never runs the command on the project folder, git's main worktree, a folder
 // that holds either, or a worktree that is not the one agentos made for the thread, as one a human made again at a path
-// agentos used, and it keeps everything when the thread woke since the clean-up settled it. A worktree whose folder is
-// gone already counts as removed.
+// agentos used, and it keeps everything when the thread woke since the clean-up settled it. Once nothing keeps the
+// worktree, it closes the thread's shells and those of the plan's family in the worktree, so none is left in a folder
+// that is gone. A worktree whose folder is gone already counts as removed.
 func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan) (removed []string, reason string) {
 	if !p.made {
 		return nil, ""
@@ -1407,10 +1397,11 @@ func (l *Lifecycle) removeWorktree(ctx context.Context, t target, p *cleanupPlan
 	if reason := l.woke(t.id); reason != "" {
 		return nil, reason
 	}
+	if !gone(path) && !l.ours(ctx, t.proj.Key(), path, t.id) {
+		return nil, fmt.Sprintf("%s is not the worktree agentos made for this thread", path)
+	}
+	l.sessions.closeShellsOf(t.id, path, p.family...)
 	if !gone(path) {
-		if !l.ours(ctx, t.proj.Key(), path, t.id) {
-			return nil, fmt.Sprintf("%s is not the worktree agentos made for this thread", path)
-		}
 		force := ""
 		if p.force {
 			force = "--force"
