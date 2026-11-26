@@ -152,13 +152,16 @@ func TestHandoverEndsWithTheContext(t *testing.T) {
 
 func TestDigestNamesTheDependencies(t *testing.T) {
 	got := Digest([]string{"react", "gopkg.in/yaml.v3"})
-	for _, want := range []string{"react\ngopkg.in/yaml.v3\n", "agentos digest add --title", "Do nothing else."} {
+	for _, want := range []string{"react\ngopkg.in/yaml.v3\n", `"url"`, "at most five", "`[]`"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the digest prompt lacks %q:\n%s", want, got)
 		}
 	}
 	if strings.Contains(got, "{dependencies}") || strings.Contains(got, "<!--") {
 		t.Errorf("the digest prompt keeps its framing:\n%s", got)
+	}
+	if strings.Contains(got, "agentos") {
+		t.Errorf("the digest prompt names a command:\n%s", got)
 	}
 	if strings.Contains(Digest(nil), "{dependencies}") {
 		t.Error("an empty list left the placeholder")

@@ -10,7 +10,7 @@ type Headless struct {
 	Name string
 	// Check exits 0 when the agent is installed and signed in. It must not spend a request.
 	Check []string
-	// Argv is the command that runs prompt with the web and `agentos digest add`, and nothing else.
+	// Argv is the command that runs prompt with the web, and nothing else.
 	Argv func(prompt string) []string
 	// Env keeps what the agent needs to start, find its login and reach its provider.
 	Env func(environ []string) []string
@@ -24,7 +24,7 @@ var ClaudeHeadless = Headless{
 	Name:  "claude",
 	Check: []string{"claude", "auth", "status"},
 	Argv: func(prompt string) []string {
-		return []string{"claude", "-p", prompt, "--allowedTools", "WebSearch WebFetch Bash(agentos digest add:*)"}
+		return []string{"claude", "-p", prompt, "--allowedTools", "WebSearch WebFetch"}
 	},
 	Env: func(environ []string) []string {
 		exact := []string{"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",

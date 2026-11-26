@@ -19,12 +19,11 @@ import (
 )
 
 const (
-	digestEvery    = 7 * 24 * time.Hour
-	digestKept     = 30
-	digestPerRun   = 5
-	digestTimeout  = 10 * time.Minute
-	digestRetry    = 6 * time.Hour
-	digestProjects = "AGENTOS_DIGEST_PROJECT"
+	digestEvery   = 7 * 24 * time.Hour
+	digestKept    = 30
+	digestPerRun  = 5
+	digestTimeout = 10 * time.Minute
+	digestRetry   = 6 * time.Hour
 )
 
 // DigestItem is one thing the digest found.
@@ -174,10 +173,10 @@ func (d *Digests) Finish(key string, now time.Time, reason string) {
 func (d *Digests) Add(key string, item DigestItem) (bool, error) {
 	item.Title, item.Why, item.URL, item.Source = strings.TrimSpace(item.Title), strings.TrimSpace(item.Why), strings.TrimSpace(item.URL), strings.TrimSpace(item.Source)
 	if item.Title == "" || item.URL == "" {
-		return false, errors.New("an item needs a --title and a --url")
+		return false, errors.New("an item needs a title and a url")
 	}
 	if u, err := url.Parse(item.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return false, errors.New("the --url must be an http or https link")
+		return false, errors.New("the url must be an http or https link")
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

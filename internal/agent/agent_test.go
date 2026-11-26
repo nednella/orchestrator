@@ -321,7 +321,7 @@ func TestBrowserPromptNamesTheTool(t *testing.T) {
 
 func TestClaudeHeadless(t *testing.T) {
 	argv := ClaudeHeadless.Argv("find things")
-	if want := []string{"claude", "-p", "find things", "--allowedTools", "WebSearch WebFetch Bash(agentos digest add:*)"}; !slices.Equal(argv, want) {
+	if want := []string{"claude", "-p", "find things", "--allowedTools", "WebSearch WebFetch"}; !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
 	env := ClaudeHeadless.Env([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "DEPLOY_TOKEN=s", "AGENTOS_SESSION=main/9"})

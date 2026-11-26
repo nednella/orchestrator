@@ -2,6 +2,7 @@ package digest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"github.com/nednella/agentos/desktop/internal/scoped"
 	"github.com/nednella/agentos/desktop/notes"
 	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/bus"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/util"
@@ -29,21 +29,20 @@ type Notes interface {
 
 // Manager runs the digests of the current project.
 type Manager struct {
-	digests  *Digests
-	project  Projects
-	notes    Notes
-	run      run.EnvRunner
-	emit     func(event string, payload any)
-	stateDir string
-	ctx      func() context.Context
-	walk     func(dir string) []string // lists the project's dependencies
-	first    time.Duration             // wait before the first automatic check
-	tick     time.Duration             // between checks after that
+	digests *Digests
+	project Projects
+	notes   Notes
+	run     run.EnvRunner
+	emit    func(event string, payload any)
+	ctx     func() context.Context
+	walk    func(dir string) []string // lists the project's dependencies
+	first   time.Duration             // wait before the first automatic check
+	tick    time.Duration             // between checks after that
 }
 
 // NewManager runs the digests with run in the project's folder.
-func NewManager(d *Digests, p Projects, n Notes, runner run.EnvRunner, emit func(string, any), stateDir string, ctx func() context.Context) *Manager {
-	return &Manager{digests: d, project: p, notes: n, run: runner, emit: emit, stateDir: stateDir, ctx: ctx, walk: dependencies, first: time.Minute, tick: time.Hour}
+func NewManager(d *Digests, p Projects, n Notes, runner run.EnvRunner, emit func(string, any), ctx func() context.Context) *Manager {
+	return &Manager{digests: d, project: p, notes: n, run: runner, emit: emit, ctx: ctx, walk: dependencies, first: time.Minute, tick: time.Hour}
 }
 
 // SetLoop sets how long to wait before the first automatic check, and between checks.
@@ -110,7 +109,8 @@ func (m *Manager) available(ctx context.Context) (agent.Headless, error) {
 }
 
 // runAgent runs the digest prompt in an empty folder, with the few tools the digest needs and
-// only the environment the agent needs: the run reads the web, so it must not see the project or its secrets.
+// only the environment the agent needs: the run reads the web, so it must not see the project or its secrets. The
+// agent hands in its items as a JSON array that ends its reply.
 func (m *Manager) runAgent(ctx context.Context, key string, deps []string) error {
 	a, err := m.available(ctx)
 	if err != nil {
@@ -122,9 +122,54 @@ func (m *Manager) runAgent(ctx context.Context, key string, deps []string) error
 	}
 	defer os.RemoveAll(dir)
 	argv := a.Argv(prompts.Digest(deps))
-	env := append(a.Env(os.Environ()), digestProjects+"="+key, "AGENTOS_SOCKET="+bus.SocketPath(m.stateDir))
-	_, err = m.run(ctx, dir, env, argv[0], argv[1:]...)
-	return err
+	reply, err := m.run(ctx, dir, a.Env(os.Environ()), argv[0], argv[1:]...)
+	if err != nil {
+		return err
+	}
+	items, err := parseItems(string(reply))
+	if err != nil {
+		return err
+	}
+	added := 0
+	for _, item := range items {
+		if _, err := m.digests.Add(key, item); err == nil {
+			added++
+		}
+	}
+	if len(items) > 0 && added == 0 {
+		return errors.New("the reply held no item with a title and a web link")
+	}
+	return nil
+}
+
+// parseItems reads the items from the JSON array that ends the agent's reply, which may sit in a code fence, after
+// some words. It reads at most digestPerRun.
+func parseItems(reply string) ([]DigestItem, error) {
+	text := strings.TrimSpace(reply)
+	if body, ok := strings.CutSuffix(text, "```"); ok {
+		if i := strings.LastIndex(body, "```"); i >= 0 {
+			text = strings.TrimSpace(strings.TrimPrefix(body[i+3:], "json"))
+		}
+	}
+	if !strings.HasPrefix(text, "[") {
+		if i := strings.LastIndex(text, "\n["); i >= 0 {
+			text = strings.TrimSpace(text[i:])
+		}
+	}
+	var found []struct {
+		Title  string `json:"title"`
+		Why    string `json:"why"`
+		URL    string `json:"url"`
+		Source string `json:"source"`
+	}
+	if err := json.Unmarshal([]byte(text), &found); err != nil {
+		return nil, errors.New("the reply did not end in a JSON array of items")
+	}
+	items := make([]DigestItem, 0, min(len(found), digestPerRun))
+	for _, f := range found[:min(len(found), digestPerRun)] {
+		items = append(items, DigestItem{Title: f.Title, Why: f.Why, URL: f.URL, Source: f.Source})
+	}
+	return items, nil
 }
 
 // Loop starts the current project's digest when it is due, checking first after m.first, then every m.tick, until ctx ends.

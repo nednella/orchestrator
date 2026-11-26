@@ -131,7 +131,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		}
 		return fmt.Sprintf("%s · %d %s", project, sess.Number(id), sess.Title(id))
 	}, sess.Touch)
-	mgr := digest.NewManager(digest.New(c.DataDir), sess, store, claude, h.Emit, c.StateDir, ctx)
+	mgr := digest.NewManager(digest.New(c.DataDir), sess, store, claude, h.Emit, ctx)
 	a.digests = mgr
 	a.updates = update.New(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runner(ctx, "", name, args...)

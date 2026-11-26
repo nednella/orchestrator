@@ -7,13 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nednella/agentos/desktop/digest"
 	"github.com/nednella/agentos/desktop/internal/apptest"
-	ctl "github.com/nednella/agentos/internal/control"
 )
 
 func envValue(env []string, key string) string {
@@ -30,6 +30,12 @@ func lastDigest(h *apptest.Harness) digest.Digest {
 	return d
 }
 
+const wailsReply = `[
+  {"title": "Wails 2.15 released", "why": "you build on Wails", "url": "https://example.com/wails", "source": "wails"},
+  {"title": "Duplicate", "why": "same link", "url": "https://example.com/wails", "source": "wails"},
+  {"title": "Claude Code hooks", "why": "hooks can match commands", "url": "https://example.com/hooks", "source": "Claude Code"}
+]`
+
 func TestDigestRun(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("AGENTOS_SESSION", "main/9") // a run must not inherit a session
@@ -38,25 +44,15 @@ func TestDigestRun(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(h.Dir, "package.json"), []byte(`{"dependencies":{"wails-ish":"1"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	h.Claude.SetReply(wailsReply)
 	h.Claude.SetDo(func(call apptest.DigestCall) {
-		for _, leaked := range []string{"AGENTOS_SESSION", "DEPLOY_TOKEN"} {
+		for _, leaked := range []string{"AGENTOS_SESSION", "DEPLOY_TOKEN", "AGENTOS_SOCKET", "AGENTOS_DIGEST_PROJECT"} {
 			if envValue(call.Env, leaked) != "" {
 				t.Errorf("%s leaked into the digest run", leaked)
 			}
 		}
 		if entries, err := os.ReadDir(call.Dir); err != nil || len(entries) != 0 {
 			t.Errorf("the run's folder %s is not empty: %v, %v", call.Dir, entries, err)
-		}
-		for i, item := range [][4]string{
-			{"Wails 2.15 released", "you build on Wails", "https://example.com/wails", "wails"},
-			{"Duplicate", "same link", "https://example.com/wails", "wails"},
-			{"Claude Code hooks", "hooks can match commands", "https://example.com/hooks", "Claude Code"},
-		} {
-			resp := h.Ask(t, ctl.Request{Cmd: "digest-add", Project: envValue(call.Env, "AGENTOS_DIGEST_PROJECT"),
-				Opts: map[string]string{"title": item[0], "why": item[1], "url": item[2], "source": item[3]}})
-			if !resp.OK || (i == 1 && resp.Out != "already in the digest") {
-				t.Errorf("digest-add %d = %+v", i, resp)
-			}
 		}
 	})
 	if err := h.RunDigest(); err != nil {
@@ -78,11 +74,8 @@ func TestDigestRun(t *testing.T) {
 		t.Errorf("the prompt does not list the project's dependencies:\n%s", call.Args[2])
 	}
 	if len(call.Args) != 5 || call.Args[0] != "claude" || call.Args[1] != "-p" || call.Args[3] != "--allowedTools" ||
-		call.Args[4] != "WebSearch WebFetch Bash(agentos digest add:*)" || !strings.Contains(call.Args[2], "agentos digest add --title") {
+		call.Args[4] != "WebSearch WebFetch" || strings.Contains(call.Args[2], "agentos") {
 		t.Errorf("command = %q in %s", call.Args, call.Dir)
-	}
-	if envValue(call.Env, "AGENTOS_DIGEST_PROJECT") != "main" || envValue(call.Env, "AGENTOS_SOCKET") == "" {
-		t.Errorf("env = %v", call.Env)
 	}
 	if got := lastDigest(h).Project; got != "main" {
 		t.Errorf("digest event project = %q", got)
@@ -110,36 +103,95 @@ func TestDigestRun(t *testing.T) {
 	if err := h.DismissDigestItem("nope"); err == nil {
 		t.Error("dismissed an unknown item")
 	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "digest-add", Project: "main", Opts: map[string]string{"title": "x", "url": "https://example.com"}}); resp.OK {
-		t.Error("digest-add outside a run succeeded")
-	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "digest-add", Opts: map[string]string{"title": "x", "url": "https://example.com"}}); resp.OK {
-		t.Error("digest-add without a project succeeded")
-	}
 }
 
-func TestDigestAddOnlyTakesWebLinks(t *testing.T) {
-	h := newHarness(t)
-	h.Claude.SetDo(func(call apptest.DigestCall) {
-		for url, ok := range map[string]bool{
-			"https://example.com/a": true, "http://example.com/b": true,
-			"javascript:alert(1)": false, "file:///etc/passwd": false, "ftp://example.com/x": false, "example.com/c": false, "https://": false,
-		} {
-			resp := h.Ask(t, ctl.Request{Cmd: "digest-add", Project: envValue(call.Env, "AGENTOS_DIGEST_PROJECT"), Opts: map[string]string{"title": "t", "url": url}})
-			if resp.OK != ok {
-				t.Errorf("digest-add %q: ok %v, want %v (%s)", url, resp.OK, ok, resp.Error)
-			}
-			if !ok && !strings.Contains(resp.Error, "http or https") {
-				t.Errorf("digest-add %q: error %q does not say why", url, resp.Error)
-			}
-		}
-	})
+func runDigest(t *testing.T, h *apptest.Harness) digest.Digest {
+	t.Helper()
 	if err := h.RunDigest(); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the digest to finish", func() bool { d := lastDigest(h); return !d.Running && d.LastRunAt > 0 })
-	if n := len(h.Digest().Items); n != 2 {
-		t.Errorf("%d items kept, want the 2 web links", n)
+	eventually(t, "the digest run to end", func() bool { d := lastDigest(h); return !d.Running && (d.LastRunAt > 0 || d.Error != "") })
+	return h.Digest()
+}
+
+func TestDigestReadsItemsFromTheReply(t *testing.T) {
+	item := func(n int) string {
+		return fmt.Sprintf(`{"title":"Item %d","why":"why %d","url":"https://example.com/%d","source":"src"}`, n, n, n)
+	}
+	tests := []struct {
+		name, reply string
+		want        []string
+	}{
+		{"the array alone", "[" + item(1) + "," + item(2) + "]", []string{"Item 1", "Item 2"}},
+		{"words and a fenced array", "Here is what I found.\n\n```json\n[" + item(1) + "]\n```", []string{"Item 1"}},
+		{"a fence with no language", "```\n[" + item(1) + "]\n```\n", []string{"Item 1"}},
+		{"words and an array on the last lines", "Done.\n[\n" + item(1) + "\n]\n", []string{"Item 1"}},
+		{"nothing worth it", "Nothing this time.\n[]", nil},
+		{"more than five", "[" + strings.Join([]string{item(1), item(2), item(3), item(4), item(5), item(6), item(7)}, ",") + "]",
+			[]string{"Item 1", "Item 2", "Item 3", "Item 4", "Item 5"}},
+		{"one item without a web link", `[{"title":"bad","why":"","url":"javascript:alert(1)","source":""},` + item(2) + `]`, []string{"Item 2"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.Claude.SetReply(tt.reply)
+			d := runDigest(t, h)
+			var got []string
+			for _, it := range d.Items {
+				got = append(got, it.Title)
+			}
+			if d.Error != "" || !slices.Equal(got, tt.want) || d.LastRunAt == 0 {
+				t.Errorf("digest = %+v, titles %v, want %v", d, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDigestKeepsOnlyWebLinks(t *testing.T) {
+	h := newHarness(t)
+	var items []string
+	for url, ok := range map[string]bool{
+		"https://example.com/a": true, "http://example.com/b": true,
+		"javascript:alert(1)": false, "file:///etc/passwd": false, "ftp://example.com/x": false, "example.com/c": false, "https://": false,
+	} {
+		if ok {
+			items = append(items, fmt.Sprintf(`{"title":"t","url":%q}`, url))
+		}
+	}
+	for _, url := range []string{"javascript:alert(1)", "file:///etc/passwd", "ftp://example.com/x", "example.com/c", "https://"} {
+		items = append(items, fmt.Sprintf(`{"title":"t","url":%q}`, url))
+	}
+	h.Claude.SetReply("[" + strings.Join(items, ",") + "]")
+	d := runDigest(t, h)
+	if len(d.Items) != 2 || d.Error != "" {
+		t.Errorf("digest = %+v, want the 2 web links", d)
+	}
+}
+
+func TestDigestRefusesABadReply(t *testing.T) {
+	for _, tt := range []struct{ name, reply, want string }{
+		{"words", "I found some things but forgot the list.", "did not end in a JSON array"},
+		{"an object", `{"title":"x","url":"https://example.com"}`, "did not end in a JSON array"},
+		{"a broken array", `[{"title":"x","url":"https://example.com"}`, "did not end in a JSON array"},
+		{"an array and then words", "[]\nHope that helps.", "did not end in a JSON array"},
+		{"only items with no web link", `[{"title":"x","url":"file:///etc/passwd"},{"url":"https://example.com"}]`, "no item with a title and a web link"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			good := `[{"title":"kept","why":"w","url":"https://example.com/kept","source":"s"}]`
+			h.Claude.SetReply(good)
+			if d := runDigest(t, h); len(d.Items) != 1 {
+				t.Fatalf("the first run kept %+v", d.Items)
+			}
+			h.Claude.SetReply(tt.reply)
+			d := runDigest(t, h)
+			if !strings.Contains(d.Error, tt.want) || d.StoppedAt == 0 {
+				t.Errorf("error = %q, want one with %q", d.Error, tt.want)
+			}
+			if len(d.Items) != 1 || d.Items[0].Title != "kept" {
+				t.Errorf("a refused reply changed the digest: %+v", d.Items)
+			}
+		})
 	}
 }
 
@@ -204,16 +256,4 @@ func TestDigestAutomaticRuns(t *testing.T) {
 	if n := len(off.Claude.Calls()); n != 0 || off.Digest().NextRunAt != 0 {
 		t.Errorf("a project with the digest off ran %d times, next run %d", n, off.Digest().NextRunAt)
 	}
-}
-
-func TestDigestCommand(t *testing.T) {
-	h := newHarness(t)
-	if resp := h.Ask(t, ctl.Request{Cmd: "digest"}); !resp.OK || resp.Out != "ok" || h.Rec.LastUI().Name != "digest" {
-		t.Errorf("digest = %+v, ui %+v", resp, h.Rec.LastUI())
-	}
-	resp := h.Ask(t, ctl.Request{Cmd: "digest", Opts: map[string]string{"run": "1"}})
-	if !resp.OK || resp.Out != "digest started" {
-		t.Fatalf("digest --run = %+v", resp)
-	}
-	eventually(t, "the run to call claude", func() bool { return len(h.Claude.Calls()) > 0 })
 }
