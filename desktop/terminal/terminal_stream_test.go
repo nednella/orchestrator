@@ -7,9 +7,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 func TestTerminalStream(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 100, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
@@ -38,6 +41,7 @@ func TestTerminalStream(t *testing.T) {
 }
 
 func TestOpenRefusesAThreadID(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, _ := h.NewSession("a thread", "")
 	if err := h.TermOpen(s.ID, 80, 24); err == nil || err.Error() != "Only a shell has a terminal" {
@@ -52,6 +56,7 @@ func TestOpenRefusesAThreadID(t *testing.T) {
 }
 
 func TestClosingATerminalKeepsTheShellRunning(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	if err := h.TermOpen(id, 80, 24); err != nil {
 		t.Fatal(err)
@@ -67,6 +72,7 @@ func TestClosingATerminalKeepsTheShellRunning(t *testing.T) {
 }
 
 func TestTerminalReportsAShellThatEnds(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	if err := h.TermOpen(id, 80, 24); err != nil {
 		t.Fatal(err)
@@ -78,6 +84,7 @@ func TestTerminalReportsAShellThatEnds(t *testing.T) {
 }
 
 func TestReopeningRedrawsTheScreen(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	first := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(first.String()) > 0 })
@@ -101,6 +108,7 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 }
 
 func TestReopeningBeforeTheFirstDrawWorks(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	first := openRead(t, h, id, 80, 24)
 	eventually(t, "the first reader attached", func() bool { return first.Status() == http.StatusOK })
@@ -109,6 +117,7 @@ func TestReopeningBeforeTheFirstDrawWorks(t *testing.T) {
 }
 
 func TestHeavyOutputIsMerged(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 120, 30)
 	eventually(t, "the prompt", func() bool { return len(out.String()) > 0 })
@@ -124,6 +133,7 @@ func TestHeavyOutputIsMerged(t *testing.T) {
 }
 
 func TestClipboardFromTheAgent(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 100, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
@@ -138,9 +148,8 @@ func TestClipboardFromTheAgent(t *testing.T) {
 }
 
 func TestTerminalAttachesToTheShell(t *testing.T) {
-	t.Setenv("SHELL", "/bin/sh")
-	t.Setenv("HOME", t.TempDir())
-	h := newHarness(t)
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh", "HOME=" + t.TempDir()}})
 	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +171,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 }
 
 func TestOpeningAnOpenTerminalKeepsItsStream(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(out.String()) > 0 })

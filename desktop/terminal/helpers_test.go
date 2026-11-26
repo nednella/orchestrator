@@ -17,9 +17,7 @@ func newHarness(t *testing.T) *apptest.Harness { return apptest.New(t) }
 // that runs what the test types.
 func newShell(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
-	t.Setenv("SHELL", "/bin/sh")
-	t.Setenv("HOME", t.TempDir())
-	h := newHarness(t)
+	h := apptest.NewWith(t, apptest.Options{Env: []string{"SHELL=/bin/sh", "HOME=" + t.TempDir()}})
 	shell, err := h.ShellNew("")
 	if err != nil {
 		t.Fatal(err)

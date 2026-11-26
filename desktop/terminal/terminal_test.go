@@ -9,6 +9,7 @@ import (
 )
 
 func TestFlushRule(t *testing.T) {
+	t.Parallel()
 	last := time.Date(2026, 11, 26, 9, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name      string
@@ -31,6 +32,7 @@ func TestFlushRule(t *testing.T) {
 }
 
 func TestCopyOSC52(t *testing.T) {
+	t.Parallel()
 	b64 := base64.StdEncoding.EncodeToString([]byte("hello"))
 	big := strings.Repeat("QUFB", oscLimit/4) // the most base64 text that is taken
 	tests := []struct {
@@ -67,6 +69,7 @@ func TestCopyOSC52(t *testing.T) {
 	}
 }
 
+// Not parallel: testing.AllocsPerRun cannot run in a parallel test.
 func TestCopyOSC52LeavesAPlainChunkUncopied(t *testing.T) {
 	tests := []struct {
 		name   string

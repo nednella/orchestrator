@@ -143,6 +143,7 @@ func passthrough(b []byte) []byte {
 }
 
 func TestStreamCarriesRawBytesInOrder(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 100, 30)
 	eventually(t, "the prompt", func() bool { return out.Status() == http.StatusOK && len(out.Bytes()) > 0 })
@@ -171,6 +172,7 @@ func TestStreamCarriesRawBytesInOrder(t *testing.T) {
 }
 
 func TestStreamRefusesAThreadID(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("a thread", "")
 	if err != nil {
@@ -187,6 +189,7 @@ func TestStreamRefusesAThreadID(t *testing.T) {
 }
 
 func TestStreamNeedsTheAppHeader(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(out.Bytes()) > 0 })
@@ -214,6 +217,7 @@ func TestStreamNeedsTheAppHeader(t *testing.T) {
 }
 
 func TestSecondReaderReplacesTheFirst(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	first := openRead(t, h, id, 80, 24)
 	eventually(t, "the first draw", func() bool { return len(first.Bytes()) > 0 })
@@ -229,6 +233,7 @@ func TestSecondReaderReplacesTheFirst(t *testing.T) {
 }
 
 func TestStreamEndsWhenTheShellExits(t *testing.T) {
+	t.Parallel()
 	t.Run("the shell exits", func(t *testing.T) {
 		h, id := newShell(t)
 		out := openRead(t, h, id, 80, 24)
@@ -266,6 +271,7 @@ func flood(t *testing.T, n int) string {
 }
 
 func TestALossWhileReadingOnlyRepaints(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	out := openRead(t, h, id, 100, 30)
 	t.Cleanup(out.release)
@@ -288,6 +294,7 @@ func TestALossWhileReadingOnlyRepaints(t *testing.T) {
 }
 
 func TestQueuedOutputIsCapped(t *testing.T) {
+	t.Parallel()
 	h, id := newShell(t)
 	if err := h.TermOpen(id, 100, 30); err != nil {
 		t.Fatal(err)
