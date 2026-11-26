@@ -17,6 +17,11 @@ func TestWaitsAreRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The follower replays the thread's log when it starts, and that must come before the events below, which a loaded
+	// machine may otherwise let it overtake.
+	if err := h.ChatWatch(s.ID); err != nil {
+		t.Fatal(err)
+	}
 	h.Observe(t, s.ID, "PreToolUse", `{"tool_name":"Bash","tool_input":{"command":"make test api foo/bar.test.ts"}}`)
 	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	eventually(t, "open wait", func() bool {
