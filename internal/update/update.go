@@ -33,6 +33,7 @@ const (
 	downloadURL = "https://github.com/" + Repo + "/releases/download/"
 	cacheFile   = "update.json"
 	bundle      = "agentos.app"
+	sizeEvery   = 250 * time.Millisecond
 )
 
 // Runner runs a command and returns its stdout: curl and ditto. Tests inject one that never
@@ -122,18 +123,95 @@ func parse(v string) ([3]int, bool) {
 	return n, true
 }
 
-// Install downloads rel, checks its sha256 and puts its bundle in place of the one at path.
-// The download goes through curl, which sets no quarantine flag on what it fetches.
+// Install downloads rel and puts its bundle in place of the one at path.
 func Install(ctx context.Context, run Runner, rel Release, path string) error {
-	work, err := os.MkdirTemp(filepath.Dir(path), ".agentos-update-") // beside the bundle: the swap is then a rename
+	dir, err := os.MkdirTemp(filepath.Dir(path), ".agentos-download-")
 	if err != nil {
 		return fmt.Errorf("making room for the download: %w", err)
 	}
-	defer os.RemoveAll(work)
-	zip := filepath.Join(work, Asset)
-	if _, err := run(ctx, "curl", "-fsSL", "--max-time", "600", "-o", zip, rel.Zip); err != nil {
-		return fmt.Errorf("downloading %s: %w", rel.Zip, err)
+	defer os.RemoveAll(dir)
+	zip, err := Download(ctx, run, rel, dir, func(int) {})
+	if err != nil {
+		return err
 	}
+	return InstallZip(ctx, run, rel, zip, path)
+}
+
+// Download fetches rel's bundle into dir and says how far it got: at each 10% step and at 100%, or -1 once when
+// GitHub sends no size. The download goes through curl, which sets no quarantine flag on what it fetches.
+func Download(ctx context.Context, run Runner, rel Release, dir string, progress func(percent int)) (string, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("making room for the download: %w", err)
+	}
+	zip := filepath.Join(dir, Asset)
+	size := downloadSize(ctx, run, rel.Zip)
+	if size <= 0 {
+		progress(-1)
+	}
+	done := make(chan struct{})
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		if size > 0 {
+			watchSize(zip, size, done, progress)
+		}
+	}()
+	_, err := run(ctx, "curl", "-fsSL", "--max-time", "600", "-o", zip, rel.Zip)
+	close(done)
+	<-watched
+	if err != nil {
+		_ = os.Remove(zip)
+		return "", fmt.Errorf("downloading %s: %w", rel.Zip, err)
+	}
+	progress(100)
+	return zip, nil
+}
+
+// downloadSize is the content-length of the last response on the way to url, or 0 when there is none.
+func downloadSize(ctx context.Context, run Runner, url string) int64 {
+	out, err := run(ctx, "curl", "-fsSIL", "--max-time", "10", url)
+	if err != nil {
+		return 0
+	}
+	var size int64
+	for _, line := range strings.Split(string(out), "\n") {
+		name, value, ok := strings.Cut(line, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(name), "content-length") {
+			continue
+		}
+		if n, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil {
+			size = n
+		}
+	}
+	return size
+}
+
+// watchSize reads how big the partial file at path is until done, and reports each new 10% step below 100: only a
+// finished curl makes it 100.
+func watchSize(path string, size int64, done <-chan struct{}, progress func(int)) {
+	tick := time.NewTicker(sizeEvery)
+	defer tick.Stop()
+	last := 0
+	for {
+		select {
+		case <-done:
+			return
+		case <-tick.C:
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		step := min(int(info.Size()*10/size)*10, 90)
+		if step > last {
+			last = step
+			progress(step)
+		}
+	}
+}
+
+// InstallZip checks the downloaded zip against rel's sha256 and puts its bundle in place of the one at path.
+func InstallZip(ctx context.Context, run Runner, rel Release, zip, path string) error {
 	sum, err := run(ctx, "curl", "-fsSL", "--max-time", "60", rel.Sum)
 	if err != nil {
 		return fmt.Errorf("downloading %s: %w", rel.Sum, err)
@@ -141,6 +219,11 @@ func Install(ctx context.Context, run Runner, rel Release, path string) error {
 	if err := verify(zip, string(sum)); err != nil {
 		return err
 	}
+	work, err := os.MkdirTemp(filepath.Dir(path), ".agentos-update-") // beside the bundle: the swap is then a rename
+	if err != nil {
+		return fmt.Errorf("making room for the new app: %w", err)
+	}
+	defer os.RemoveAll(work)
 	if _, err := run(ctx, "ditto", "-x", "-k", zip, work); err != nil {
 		return fmt.Errorf("unpacking %s: %w", Asset, err)
 	}

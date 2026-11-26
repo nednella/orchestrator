@@ -12,26 +12,25 @@ import (
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 
-func TestANewerReleaseIsAnnouncedOnceAndShowsInTheSnapshot(t *testing.T) {
+func TestANewerReleaseShowsInTheStateAndTheSnapshot(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{UpdateTick: 50 * time.Millisecond, Releases: "v9.0.0", Version: "1.0.0"})
-	apptest.Eventually(t, "the update event", func() bool { return h.Rec.Count("update") == 1 })
-	if got := h.Rec.Last("update"); got != (update.Available{Version: "9.0.0"}) {
-		t.Errorf("update event = %+v", got)
-	}
+	ready := update.State{Status: "available", Version: "9.0.0"}
+	apptest.Eventually(t, "the update event", func() bool { return h.Rec.Last("update") == ready })
 	if snap := h.Snapshot(); snap.Update != "9.0.0" {
 		t.Errorf("snapshot.update = %q", snap.Update)
 	}
-	apptest.Eventually(t, "a second check", func() bool { return h.GH.Calls("curl") >= 3 })
-	if h.Rec.Count("update") != 1 {
-		t.Errorf("the same release was announced %d times", h.Rec.Count("update"))
-	}
+	apptest.Eventually(t, "a second check", func() bool { return h.GH.Calls("curl") >= 4 })
+	apptest.Eventually(t, "the second check's end", func() bool { return h.App.Updates().State() == ready })
 }
 
 func TestAFailedCheckLeavesTheAppCurrent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{UpdateTick: time.Hour, Version: "1.0.0"})
-	apptest.Eventually(t, "the check", func() bool { return h.GH.Calls("curl") == 1 })
-	if snap := h.Snapshot(); snap.Update != "" || h.Rec.Count("update") != 0 {
-		t.Errorf("snapshot.update = %q, %d update events", snap.Update, h.Rec.Count("update"))
+	apptest.Eventually(t, "the check", func() bool { return h.App.Updates().State().Error != "" })
+	if got := h.App.Updates().State(); got.Status != "idle" || got.Version != "" {
+		t.Errorf("after a failed check: %+v", got)
+	}
+	if snap := h.Snapshot(); snap.Update != "" {
+		t.Errorf("snapshot.update = %q", snap.Update)
 	}
 }
 

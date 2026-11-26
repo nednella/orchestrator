@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, WaitKind } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, Ledger, LightTheme, Memory, ModelChoice, Note, Pending, Place, Release, Server, Session, PromptSend, Settings, Snapshot, Stats, ThemeSetting, UpdateState, WaitKind } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -86,6 +86,10 @@ type Backend = {
   DigestToNote(itemId: string): Promise<Note>
   DismissDigestItem(itemId: string): Promise<void>
   Update(): Promise<void>
+  UpdateState(): Promise<UpdateState>
+  CheckUpdate(): Promise<void>
+  DownloadUpdate(): Promise<void>
+  InstallUpdate(): Promise<void>
   PatchNotes(): Promise<Release[]>
   Changelog(): Promise<Release[]>
   Awake(): Promise<boolean>
@@ -131,7 +135,7 @@ const namespaces = {
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
-  update: ['Update', 'PatchNotes', 'Changelog'],
+  update: ['Update', 'UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
   awake: ['Awake'],
   settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'PickDataDir', 'SetDataDir'],
 }
@@ -261,6 +265,10 @@ export const api = {
   digestToNote: (itemId: string) => backend.DigestToNote(itemId),
   dismissDigestItem: (itemId: string) => backend.DismissDigestItem(itemId),
   update: () => backend.Update(),
+  updateState: () => backend.UpdateState(),
+  checkUpdate: () => backend.CheckUpdate(),
+  downloadUpdate: () => backend.DownloadUpdate(),
+  installUpdate: () => backend.InstallUpdate(),
   patchNotes: () => backend.PatchNotes(),
   changelog: () => backend.Changelog(),
 }

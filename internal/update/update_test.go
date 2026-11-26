@@ -203,3 +203,203 @@ func TestInstallReportsAFailedDownload(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// fakeRelease answers curl for one release whose zip holds body, and unpacks the zip as ditto would into a bundle
+// whose binary is the zip's bytes; ditto itself never runs.
+type fakeRelease struct {
+	rel     Release
+	body    []byte
+	sum     string
+	size    string                           // the content-length GitHub sends; "" sends none
+	written func(n int)                      // called after each tenth of the body is written, when set
+	cut     bool                             // the download breaks off halfway
+	calls   func(name string, args []string) // sees every command, when set
+}
+
+func (f *fakeRelease) run(_ context.Context, name string, args ...string) ([]byte, error) {
+	if f.calls != nil {
+		f.calls(name, args)
+	}
+	switch name {
+	case "ditto":
+		data, err := os.ReadFile(args[2])
+		if err != nil {
+			return nil, err
+		}
+		bin := filepath.Join(args[3], bundle, "Contents", "MacOS")
+		if err := os.MkdirAll(bin, 0o700); err != nil {
+			return nil, err
+		}
+		return nil, os.WriteFile(filepath.Join(bin, "agentos"), data, 0o700)
+	case "curl":
+	default:
+		return nil, fmt.Errorf("unexpected %s", name)
+	}
+	url := args[len(args)-1]
+	switch {
+	case url == f.rel.Zip && slices.Contains(args, "-fsSIL"):
+		if f.size == "" {
+			return nil, errors.New("curl: (22) 403")
+		}
+		return []byte("HTTP/2 302\r\ncontent-length: 0\r\nlocation: https://objects/x\r\n\r\nHTTP/2 200\r\nContent-Length: " + f.size + "\r\n\r\n"), nil
+	case url == f.rel.Zip:
+		out := args[slices.Index(args, "-o")+1]
+		file, err := os.Create(out)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		for i := 1; i <= 10; i++ {
+			if _, err := file.Write(f.body[(i-1)*len(f.body)/10 : i*len(f.body)/10]); err != nil {
+				return nil, err
+			}
+			if f.written != nil {
+				f.written(i)
+			}
+			if f.cut && i == 5 {
+				return nil, errors.New("curl: (18) transfer closed with bytes remaining")
+			}
+		}
+		return nil, nil
+	case url == f.rel.Sum:
+		return []byte(f.sum), nil
+	}
+	return nil, fmt.Errorf("curl: (22) 404 for %s", url)
+}
+
+func newFakeRelease(version string) *fakeRelease {
+	body := []byte(strings.Repeat("agentos "+version+"\n", 100))
+	h := sha256.Sum256(body)
+	return &fakeRelease{
+		rel:  Release{Version: version, Zip: "https://x/" + version + "/zip", Sum: "https://x/" + version + "/sum"},
+		body: body,
+		sum:  hex.EncodeToString(h[:]) + "  " + Asset + "\n",
+		size: fmt.Sprint(len(body)),
+	}
+}
+
+func TestDownloadSaysHowFarItGotInTenPercentSteps(t *testing.T) {
+	f := newFakeRelease("2.0.0")
+	steps := make(chan int, 32)
+	// Each tenth waits until its step is reported, so every step shows however the reads fall.
+	f.written = func(i int) {
+		if i == 10 {
+			return
+		}
+		deadline := time.After(5 * time.Second)
+		for {
+			select {
+			case p := <-steps:
+				steps <- p
+				if p >= i*10 {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			case <-deadline:
+				return
+			}
+		}
+	}
+	var got []int
+	progress := func(p int) {
+		got = append(got, p)
+		select {
+		case <-steps:
+		default:
+		}
+		steps <- p
+	}
+	dir := filepath.Join(t.TempDir(), "update")
+	zip, err := Download(context.Background(), f.run, f.rel, dir, progress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}; !slices.Equal(got, want) {
+		t.Errorf("progress %v, want %v", got, want)
+	}
+	if data, err := os.ReadFile(zip); err != nil || string(data) != string(f.body) || zip != filepath.Join(dir, Asset) {
+		t.Errorf("the zip at %s holds %d bytes, %v", zip, len(data), err)
+	}
+}
+
+func TestDownloadWithNoSizeSaysSoOnce(t *testing.T) {
+	f := newFakeRelease("2.0.0")
+	f.size = ""
+	var got []int
+	if _, err := Download(context.Background(), f.run, f.rel, t.TempDir(), func(p int) { got = append(got, p) }); err != nil {
+		t.Fatal(err)
+	}
+	if want := []int{-1, 100}; !slices.Equal(got, want) {
+		t.Errorf("progress %v, want %v", got, want)
+	}
+}
+
+func TestAFailedDownloadLeavesNoZip(t *testing.T) {
+	f := newFakeRelease("2.0.0")
+	f.cut = true
+	dir := t.TempDir()
+	if _, err := Download(context.Background(), f.run, f.rel, dir, func(int) {}); err == nil || !strings.Contains(err.Error(), "downloading https://x/2.0.0/zip") {
+		t.Errorf("err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, Asset)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a zip stayed: %v", err)
+	}
+}
+
+// installed makes an app bundle at <temp>/Applications/agentos.app whose binary holds "old".
+func installed(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "Applications", bundle)
+	if err := os.MkdirAll(filepath.Join(path, "Contents", "MacOS"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "Contents", "MacOS", "agentos"), []byte("old"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func binary(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(path, "Contents", "MacOS", "agentos"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestInstallZipSwapsInTheVerifiedBundle(t *testing.T) {
+	f := newFakeRelease("2.0.0")
+	path := installed(t)
+	zip, err := Download(context.Background(), f.run, f.rel, t.TempDir(), func(int) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallZip(context.Background(), f.run, f.rel, zip, path); err != nil {
+		t.Fatal(err)
+	}
+	if got := binary(t, path); got != string(f.body) {
+		t.Errorf("the installed binary is %q", got)
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
+		t.Errorf("leftovers beside the bundle: %v", entries)
+	}
+}
+
+func TestInstallZipRefusesABadSum(t *testing.T) {
+	f := newFakeRelease("2.0.0")
+	path := installed(t)
+	zip, err := Download(context.Background(), f.run, f.rel, t.TempDir(), func(int) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.sum = strings.Repeat("0", 64) + "  " + Asset + "\n"
+	unpacked := false
+	f.calls = func(name string, _ []string) { unpacked = unpacked || name == "ditto" }
+	if err := InstallZip(context.Background(), f.run, f.rel, zip, path); err == nil || !strings.Contains(err.Error(), "sha256") {
+		t.Errorf("a wrong sum installed anyway: %v", err)
+	}
+	if unpacked || binary(t, path) != "old" {
+		t.Errorf("unpacked %v, the bundle holds %q", unpacked, binary(t, path))
+	}
+}

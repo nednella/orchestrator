@@ -3,7 +3,7 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
-import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UsageRow, Wait, WaitKind, WorkRow } from './types'
+import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Memory, Note, BranchStatus, Place, PR, Project, Release, Server, Session, PromptSend, Settings, Snapshot, State, Stats, ThemeSetting, UpdateState, UsageRow, Wait, WaitKind, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -180,7 +180,7 @@ export function createMock(params: URLSearchParams) {
     done: params.has('done'),
     warn: params.has('warn'),
     offline: params.has('offline'),
-    update: params.has('update'),
+    update: params.get('update'),
     patchNotes: params.has('patchnotes'),
     fullDataDir: params.has('fulldata'),
     noModel: params.has('nomodel'),
@@ -366,7 +366,7 @@ export function createMock(params: URLSearchParams) {
       sessions: data.flatMap((p) => sessionsOf(p.name)),
       notes: currentNotes(),
       version: 'mock',
-      update: flags.update ? '1.4.0' : '',
+      update: update.version,
       shells: shellsOf(current.name).map(shellView),
       machine: 'Studio MacBook Pro',
     }
@@ -1002,6 +1002,78 @@ export function createMock(params: URLSearchParams) {
 
   const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
 
+  // The update walks the states the Go side does, one action at a time. ?update=<status> starts it in that status,
+  // a download at 40%; ?update alone starts it available, and ?update=installfailed with a failed install.
+  const UPDATE_VERSION = '1.4.0'
+  let update = startingUpdate(flags.update)
+  let updateAction: '' | 'check' | 'download' | 'install' = ''
+
+  function startingUpdate(status: string | null): UpdateState {
+    const known = { version: UPDATE_VERSION, percent: 0, error: '' }
+    switch (status) {
+      case null:
+      case 'idle':
+        return { status: 'idle', version: '', percent: 0, error: '' }
+      case 'checking':
+        return { status: 'checking', version: '', percent: 0, error: '' }
+      case 'downloading':
+        return { ...known, status: 'downloading', percent: 40 }
+      case 'downloaded':
+        return { ...known, status: 'downloaded', percent: 100 }
+      case 'failed':
+        return { ...known, status: 'failed', percent: 40, error: 'curl: (18) transfer closed with bytes remaining' }
+      case 'installfailed':
+        return { ...known, status: 'failed', percent: 100, error: 'The mock cannot relaunch' }
+      default:
+        return { ...known, status: 'available' }
+    }
+  }
+
+  function setUpdate(next: UpdateState) {
+    update = next
+    emit('update', { ...next })
+  }
+
+  async function runUpdateAction(action: 'check' | 'download' | 'install', run: () => Promise<void>) {
+    if (updateAction) throw 'An update action is running'
+    updateAction = action
+    try {
+      await run()
+    } finally {
+      updateAction = ''
+    }
+  }
+
+  async function checkUpdate() {
+    const before = update
+    setUpdate({ status: 'checking', version: before.version, percent: before.percent, error: '' })
+    await delay(undefined, 1200)
+    setUpdate(before.status === 'downloaded' ? { ...before, error: '' } : { status: 'available', version: UPDATE_VERSION, percent: 0, error: '' })
+  }
+
+  async function downloadUpdate() {
+    if (!update.version) throw 'There is no update to download'
+    if (update.status === 'downloaded') return
+    const version = update.version
+    setUpdate({ status: 'downloading', version, percent: 0, error: '' })
+    for (let percent = 10; percent <= 100; percent += 10) {
+      await delay(undefined, 250)
+      setUpdate({ status: 'downloading', version, percent, error: '' })
+    }
+    setUpdate({ status: 'downloaded', version, percent: 100, error: '' })
+  }
+
+  async function installUpdate() {
+    for (let waited = 0; updateAction === 'check' && waited < 90_000; waited += 100) await delay(undefined, 100)
+    await runUpdateAction('install', async () => {
+      await checkUpdate()
+      await downloadUpdate()
+      await delay(undefined, 600)
+      setUpdate({ status: 'failed', version: update.version, percent: 100, error: 'The mock cannot relaunch' })
+      throw 'The mock cannot relaunch'
+    })
+  }
+
   // With ?offline, GitHub calls get no answer for the first 12 seconds, as when the Mac has no network.
   const networkBackAt = flags.offline ? Date.now() + 12_000 : 0
   let offline = false
@@ -1513,10 +1585,11 @@ export function createMock(params: URLSearchParams) {
     SetDataDir: async (_dir: string, withData: boolean) => {
       await delay(undefined, withData ? 2500 : 400)
     },
-    Update: async () => {
-      await delay(undefined, 2500)
-      throw 'The mock cannot relaunch'
-    },
+    Update: installUpdate,
+    UpdateState: async () => ({ ...update }),
+    CheckUpdate: () => runUpdateAction('check', checkUpdate),
+    DownloadUpdate: () => runUpdateAction('download', downloadUpdate),
+    InstallUpdate: installUpdate,
     PatchNotes: async () => (flags.patchNotes ? PATCH_NOTES : []),
     Changelog: async () => PATCH_NOTES,
     OpenURL: async (url: string) => {

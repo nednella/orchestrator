@@ -165,6 +165,12 @@ export type Snapshot = {
   machine: string
 }
 
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'failed'
+
+// version is the newer release, '' when none is known. percent is how far its download got, -1 while the size is
+// unknown; a failed state at 100 is a failed install, below it a failed download. error is why the last action failed.
+export type UpdateState = { status: UpdateStatus; version: string; percent: number; error: string }
+
 export type ThemeSetting = 'system' | 'light' | 'dark'
 
 export type DarkTheme = 'black' | 'violet'
@@ -477,5 +483,5 @@ export type EventMap = {
     id: string
     state: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence'
   }
-  update: { version: string }
+  update: UpdateState
 }
