@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { CentreBoundary } from './components/CentreBoundary'
 import { ConfirmHost } from './components/ConfirmHost'
 import { UsageModal } from './components/UsageModal'
 import { DigestView } from './components/DigestView'
@@ -52,7 +53,9 @@ export function App() {
               {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
               <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
                 <div className="relative min-h-0 flex-1">
-                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>{selectedId ? <Viewport /> : <Home />}</div>
+                  <div className={statsOpen || digestOpen ? 'hidden' : 'h-full'}>
+                    <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
+                  </div>
                   {statsOpen && <Stats />}
                   {digestOpen && <DigestView />}
                   {overlay && <PanelOverlay panel={overlay} />}

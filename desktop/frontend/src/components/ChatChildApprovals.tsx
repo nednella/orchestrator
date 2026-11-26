@@ -43,9 +43,9 @@ function ChildApproval({ id }: ChildApprovalProps) {
       <p className="px-1 text-small text-dim">
         <span className="font-medium text-ink">{child.title}</span> asks
       </p>
-      {known && pending.kind === 'tool' && <ChatApprovalCard thread={id} request={pending.request} tool={pending.tool} input={pending.input} expired={false} folder={child.worktree || projectDir} />}
-      {known && pending.kind === 'question' && <ChatQuestionCard thread={id} id={pending.request} request={pending.request} input={pending.input} answer={undefined} answers={null} expired={false} result={null} />}
-      {known && pending.kind === 'plan' && <ChatPlanCard thread={id} request={pending.request} input={pending.input} answer={undefined} expired={false} result={null} />}
+      {known && pending.kind === 'tool' && <ChatApprovalCard key={pending.request} thread={id} request={pending.request} tool={pending.tool} input={pending.input} expired={false} folder={child.worktree || projectDir} />}
+      {known && pending.kind === 'question' && <ChatQuestionCard key={pending.request} thread={id} id={pending.request} request={pending.request} input={pending.input} answer={undefined} answers={null} expired={false} result={null} />}
+      {known && pending.kind === 'plan' && <ChatPlanCard key={pending.request} thread={id} request={pending.request} input={pending.input} answer={undefined} expired={false} result={null} />}
       {!known && (
         <div className="chat-card flex-row items-center gap-2 text-small" data-waiting="true">
           <span className="min-w-0 truncate text-ink">{pending.summary}</span>
