@@ -45,16 +45,33 @@ func TestExecEnvCapsOutput(t *testing.T) {
 
 func TestExecEnvKillsChildrenWhenCancelled(t *testing.T) {
 	pidFile := t.TempDir() + "/pid"
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	start := time.Now()
+	// The shell is cancelled a moment after it wrote the grandchild's pid, however long it took to start.
+	cancelled := make(chan time.Time, 1)
+	go func() {
+		for ctx.Err() == nil {
+			if data, err := os.ReadFile(pidFile); err == nil && strings.HasSuffix(string(data), "\n") {
+				time.Sleep(100 * time.Millisecond)
+				cancelled <- time.Now()
+				cancel()
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
 	// The grandchild holds stdout open and outlives the shell.
 	_, err := ExecEnv(ctx, "", nil, "sh", "-c", "sleep 300 & echo $! > "+pidFile+"; wait")
 	if err == nil {
 		t.Error("a cancelled command succeeded")
 	}
-	if took := time.Since(start); took > 3*time.Second {
-		t.Errorf("took %v: the grandchild kept the call open", took)
+	select {
+	case at := <-cancelled:
+		if took := time.Since(at); took > 3*time.Second {
+			t.Errorf("took %v after the cancel: the grandchild kept the call open", took)
+		}
+	default:
+		t.Error("the command ended before it was cancelled")
 	}
 	data, rerr := os.ReadFile(pidFile)
 	if rerr != nil {
