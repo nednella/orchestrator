@@ -1,5 +1,6 @@
 import { Newspaper, RefreshCw } from 'lucide-react'
 import { DigestTile } from './DigestTile'
+import { Spinner } from './Spinner'
 
 // button is the header's own: Run now once the digest has items, Checking while a run goes, none otherwise,
 // since the empty and failed states carry their own.
@@ -26,7 +27,7 @@ export function DigestHeader({ project, tools, automatic, button, onRun }: Diges
       </div>
       {button === 'checking' && (
         <button className="btn" disabled>
-          <span className="spinner" aria-hidden="true" />
+          <Spinner size={14} />
           Checking
         </button>
       )}

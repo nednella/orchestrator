@@ -14,7 +14,7 @@ import type { Point } from '../useFloatingAt'
 import { ChatMarkdown } from './ChatMarkdown'
 import { EditorMark } from './EditorMark'
 import { FilePicker } from './FilePicker'
-import { Loading } from './Loading'
+import { CenteredSpinner } from './CenteredSpinner'
 import { Notice } from './Notice'
 
 const toolButton = 'btn btn-ghost h-7 w-7 flex-none justify-center px-0 aria-pressed:bg-(--bg-segment-on) aria-pressed:text-ink'
@@ -83,7 +83,7 @@ export function FilesView({ session }: PanelViewProps) {
   const linksFrom = useMemo(() => ({ key, path: name === LATEST_PLAN ? '' : (name ?? '') }), [key, name])
 
   if (listing?.key === key && 'error' in listing) return <Notice title="Could not list the files" hint={listing.error} centered />
-  if (!listed) return <Loading />
+  if (!listed) return <CenteredSpinner />
   if (name === null) return <Notice title="No markdown files" hint={`${thread ? "This thread's" : "This project's"} folder has no markdown files git knows of.`} centered />
 
   const choices = plan ? [LATEST_PLAN, ...listed.files] : listed.files
@@ -149,7 +149,7 @@ export function FilesView({ session }: PanelViewProps) {
         )}
       </div>
       <div key={name} ref={scroller} className="min-h-0 flex-1 overflow-auto">
-        {shown === null && <Loading />}
+        {shown === null && <CenteredSpinner />}
         {shown && 'error' in shown && <Notice title="Could not show this file" hint={shown.error} centered />}
         {text !== null && rendered && (
           <div className="mx-auto max-w-[56rem] px-6 pt-5 pb-6">

@@ -209,7 +209,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 // says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that
 // is just "exit". The images sent are kept in memory, at the paths the service would save them to, and mediaURL gives
 // each one's address. thread throws for an id that has no chat, and isProject says whether a project key is configured.
-export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean) {
+export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProject: (key: string) => boolean, slow = 0) {
   const logs = new Map<string, ChatEvent[]>()
   const unreadable = new Set<string>()
   const watched = new Set<string>()
@@ -591,6 +591,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   const backend = {
     ChatHistory: async (id: string, after: number) => {
       thread(id)
+      if (slow) await new Promise((resolve) => setTimeout(resolve, slow))
       if (unreadable.has(id)) throw `The chat log of ${id} could not be read`
       return logOf(id).filter((e) => e.seq > after).map((e) => ({ ...e }))
     },

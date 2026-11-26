@@ -6,10 +6,9 @@ import { useLayout } from '../LayoutContext'
 import { rangeLabel } from '../statsChart'
 import { periodBefore } from '../statsFigures'
 import { readStored, writeStored } from '../storage'
-import { useMinimumLoading } from '../useMinimumLoading'
 import type { Ledger } from '../types'
 import { CleanupsList } from './CleanupsList'
-import { Loading } from './Loading'
+import { StatsSkeleton } from './StatsSkeleton'
 import { MemoryTotal } from './MemoryTotal'
 import { SegmentedControl } from './SegmentedControl'
 import { StatsCard } from './StatsCard'
@@ -43,7 +42,6 @@ export function Stats() {
   const [ledger, setLedger] = useState<Ledger | null>(null)
   const panel = useRef<HTMLElement>(null)
   const project = projects.some((p) => p.key === picked) ? picked : ''
-  const loading = useMinimumLoading(ledger === null)
 
   useEffect(() => {
     if (focusRequest.target === 'thread') panel.current?.focus()
@@ -106,8 +104,8 @@ export function Stats() {
             <StatsProjectPicker projects={projects} value={project} onChange={pickProject} />
           </span>
         </div>
-        {loading || ledger === null ? (
-          <Loading />
+        {ledger === null ? (
+          <StatsSkeleton />
         ) : ledger.since === '' ? (
           <p className="mt-5 text-center text-small text-soft">Nothing recorded yet. Chats, tasks, prompts, worked time and tokens are counted from now on.</p>
         ) : (

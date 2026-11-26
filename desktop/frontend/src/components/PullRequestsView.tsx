@@ -7,7 +7,7 @@ import type { PullsRead } from '../pullRows'
 import type { RepoPull } from '../types'
 import { Ago } from './Ago'
 import { Icon } from './Icon'
-import { Loading } from './Loading'
+import { CenteredSpinner } from './CenteredSpinner'
 import { Notice } from './Notice'
 import { PRTab } from './PRTab'
 
@@ -151,7 +151,7 @@ export function PullRequestsView({ session }: PanelViewProps) {
           </p>
         )}
         {pulls === null ? (
-          error ? null : <Loading />
+          error ? null : <CenteredSpinner />
         ) : rest.length === 0 && !mine ? (
           <Notice title="No open pull requests" hint={`${repo || 'This project'} has none right now.`} />
         ) : (

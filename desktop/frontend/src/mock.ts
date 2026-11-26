@@ -170,6 +170,8 @@ const PATCH_NOTES: Release[] = [
 ]
 
 export function createMock(params: URLSearchParams) {
+  // ?slow=<ms> adds that long to every answer, so a loading state stays on screen to be looked at.
+  const slow = Number(params.get('slow') ?? 0)
   const flags = {
     empty: params.has('empty'),
     overlay: params.get('overlay') ?? undefined,
@@ -464,7 +466,7 @@ export function createMock(params: URLSearchParams) {
         publish()
       },
     }
-  }, (key) => data.some((p) => p.name === key))
+  }, (key) => data.some((p) => p.name === key), slow)
 
   // followMode records the access Claude's permission mode gives, as the sessions do.
   function followMode(s: Session, mode: string) {
@@ -1005,7 +1007,7 @@ export function createMock(params: URLSearchParams) {
   let digest: Digest = { running: false, startedAt: lastDigestRun - 124_000, tools: 23, lastRunAt: lastDigestRun, nextRunAt: lastDigestRun + 7 * 86_400_000, error: '', stoppedAt: 0, project: data[0].name, items: seedDigest() }
   const pushDigest = () => emit('digest', { ...digest, items: digest.items.map((i) => ({ ...i })) })
 
-  const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
+  const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms + slow))
 
   // The update walks the states the Go side does, one action at a time. ?update=<status> starts it in that status,
   // a download at 40%; ?update alone starts it available, and ?update=installfailed with a failed install. A check

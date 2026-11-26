@@ -13,7 +13,7 @@ import { ChatLineageDivider } from './ChatLineageDivider'
 import { ChatMarkdown } from './ChatMarkdown'
 import { ChatSteps } from './ChatSteps'
 import { ChatUserText } from './ChatUserText'
-import { Loading } from './Loading'
+import { CenteredSpinner } from './CenteredSpinner'
 import { SubagentBar } from './SubagentBar'
 
 type SubagentViewProps = { parent: Session; agent: string }
@@ -39,7 +39,7 @@ export function SubagentView({ parent, agent }: SubagentViewProps) {
         <div ref={content} className="chat-column flex flex-col gap-4 pb-6">
           <ChatLineageDivider parent={parent.title} onOpenParent={back} />
           {found && <SubagentRun thread={parent.id} folder={parent.worktree || project?.dir || ''} id={found.key} prompt={found.prompt} state={found.state} steps={found.steps} result={found.result} />}
-          {!found && loading && <Loading />}
+          {!found && loading && <CenteredSpinner />}
         </div>
       </div>
       {found && (

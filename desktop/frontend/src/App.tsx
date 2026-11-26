@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ConfirmHost } from './components/ConfirmHost'
 import { UsageModal } from './components/UsageModal'
@@ -12,7 +11,6 @@ import { RightPanel } from './components/RightPanel'
 import { PatchNotes } from './components/PatchNotes'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
-import { Splash, type SplashStage } from './components/Splash'
 import { Stats } from './components/Stats'
 import { TerminalDrawer } from './components/TerminalDrawer'
 import { Toasts } from './components/Toasts'
@@ -28,12 +26,6 @@ import { useNetwork } from './useNetwork'
 import { useShortcuts } from './useShortcuts'
 import { useUiCommands } from './useUiCommands'
 
-const appEnterClass: Record<SplashStage, string> = {
-  playing: 'app-enter',
-  leaving: 'app-enter shown',
-  done: '',
-}
-
 export function App() {
   const network = useNetwork()
   const confirming = useConfirming()
@@ -44,14 +36,11 @@ export function App() {
   const fullscreen = useFullscreen()
   const { selectedId } = useAgentos('selectedId')
   const { mode, docked, sidebarOpen, rightOpen, overlay, statsOpen, digestOpen, panelExpanded } = useLayout()
-  const [splash, setSplash] = useState<SplashStage>(() =>
-    matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'playing',
-  )
 
   return (
     <>
       <div
-        className={`flex h-full flex-col bg-app ${appEnterClass[splash]}`}
+        className="flex h-full flex-col bg-app"
         style={{ '--title-inset': fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)' } as CSSProperties}
         data-mode={mode}
         {...(network.online ? {} : { inert: '' })}
@@ -85,7 +74,6 @@ export function App() {
       <UsageModal />
       <ConfirmHost />
       {!network.online && <OfflineSplash retrying={network.retrying} onRetry={() => void network.retry()} />}
-      {splash !== 'done' && <Splash stage={splash} onStage={setSplash} />}
     </>
   )
 }

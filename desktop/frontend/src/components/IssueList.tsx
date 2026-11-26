@@ -3,13 +3,12 @@ import type { KeyboardEvent } from 'react'
 import { useAgentos } from '../AgentosContext'
 import type { Issue } from '../types'
 import { isTyping } from '../useListNav'
-import { useMinimumLoading } from '../useMinimumLoading'
 import { useProjectStored } from '../useProjectStored'
 import { useDragEdgeScroll } from '../useDragEdgeScroll'
 import { useIssueDrag } from '../useIssueDrag'
 import { Collapse } from './Collapse'
 import { IssueRow } from './IssueRow'
-import { Loading } from './Loading'
+import { SkeletonRows } from './SkeletonRows'
 import { Notice } from './Notice'
 import { QueueSection } from './QueueSection'
 import { QueueUnsortedHeader } from './QueueUnsortedHeader'
@@ -68,10 +67,10 @@ export function IssueList({ shown: coreShown, filtering, onRead }: IssueListProp
   }
 
   useDragEdgeScroll(list, drag.dragging !== null)
-  const loading = useMinimumLoading(issuesLoading && issues.length === 0)
+  const loading = issuesLoading && issues.length === 0
 
   const body = () => {
-    if (loading) return <Loading />
+    if (loading) return <SkeletonRows />
     if (issues.length === 0) return <Notice title="No open issues" hint="This repo has nothing in the queue." centered />
     if (filtering && shown.length === 0) return <Notice title="No issues match" hint="Clear the filter to see all of them." centered />
     return sections.map((section) => (

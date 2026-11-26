@@ -126,6 +126,7 @@
   /* The terminal drawer and its list of terminals. */
   --border-terminal: color-mix(in srgb, var(--border) 80%, transparent);
   --border-terminal-soft: color-mix(in srgb, var(--border) 70%, transparent);
+  --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   --bg-terminal-list: color-mix(in srgb, var(--text-dim) 10%, transparent);
   --bg-terminal-group: color-mix(in srgb, var(--bg-hover) 50%, transparent);
   --bg-terminal-row-hover: color-mix(in srgb, var(--bg-hover) 60%, transparent);
@@ -167,6 +168,7 @@
 }
 
 :root[data-theme='violet'] {
+  --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   --bg-app: #0d0f13;
   --bg-surface: #13161c;
   --bg-raised: #191d25;
@@ -198,6 +200,7 @@
 }
 
 :root[data-theme='light'] {
+  --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   color-scheme: light;
 
   --bg-app: #f4f5f8;

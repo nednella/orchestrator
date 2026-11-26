@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from '../api'
 import { useAgentos } from '../AgentosContext'
 import { isTyping } from '../useListNav'
-import { useMinimumLoading } from '../useMinimumLoading'
 import type { IssueDetail } from '../types'
 import { Ago } from './Ago'
 import { Icon } from './Icon'
 import { IssueBody } from './IssueBody'
 import { IssueThread } from './IssueThread'
 import { IssueWorkflow } from './IssueWorkflow'
-import { Loading } from './Loading'
+import { IssueReaderSkeleton } from './IssueReaderSkeleton'
 import { TypeMark } from './TypeMark'
 
 const dateOf = (at: number) => new Date(at).toLocaleString()
@@ -21,7 +20,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
   const body = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<IssueDetail | null>(null)
   const [error, setError] = useState('')
-  const loading = useMinimumLoading(!detail && !error)
+  const loading = !detail && !error
   const issue = issues.find((i) => i.number === number)
   const session = sessions.find((s) => s.id === issue?.sessionId)
 
@@ -78,7 +77,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
       </header>
       <div ref={body} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 outline-none">
         {loading ? (
-          <Loading />
+          <IssueReaderSkeleton />
         ) : (
           <div className="flex flex-col gap-6">
             {error && <p className="text-small text-danger">{error}</p>}

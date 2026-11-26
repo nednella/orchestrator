@@ -4,6 +4,7 @@ import type { BrowserState } from '../types'
 import { Ago } from './Ago'
 import { CaptureButton } from './CaptureButton'
 import { Icon } from './Icon'
+import { Spinner } from './Spinner'
 
 type BrowserStatusHeaderProps = { id: string; state: BrowserState }
 
@@ -22,7 +23,7 @@ export function BrowserStatusHeader({ id, state }: BrowserStatusHeaderProps) {
           </span>
           {state.loading ? (
             <span className="flex flex-none items-center gap-1.5">
-              <span className="spinner" role="status" aria-label="Loading" />
+              <Spinner size={12} muted />
               loading
             </span>
           ) : (

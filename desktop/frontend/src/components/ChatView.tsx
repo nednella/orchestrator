@@ -21,7 +21,6 @@ import { ChatNotice } from './ChatNotice'
 import { ChatTimeline } from './ChatTimeline'
 import type { ChatEdit, ChatTimelineEnd } from './ChatTimeline'
 import type { ComposerInput } from './ComposerEditor'
-import { Loading } from './Loading'
 import { Notice } from './Notice'
 import { ThreadComposer } from './ThreadComposer'
 import type { ThreadComposerDraft } from './ThreadComposer'
@@ -192,10 +191,9 @@ export function ChatView({ session }: ChatViewProps) {
 
   return (
     <div ref={pane} data-chat className="relative flex h-full min-h-0 flex-col bg-app" style={{ '--chat-column': `${column}rem` } as CSSProperties} onKeyDown={onKeyDown}>
-      {empty && loading && <Loading />}
       {empty && !loading && error && !session.hosted && <p className="flex flex-1 items-center justify-center px-4 text-center text-small text-dim">{error}</p>}
       {empty && !loading && error && session.hosted && <Notice title="The chat did not load" hint={error} centered />}
-      {empty && !loading && !error && <div className="flex-1" />}
+      {empty && (loading || !error) && <div className="flex-1" />}
       {!empty && (
         <ChatTimeline
           id={session.id}
