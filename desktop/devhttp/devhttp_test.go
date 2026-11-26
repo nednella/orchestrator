@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -23,6 +24,7 @@ import (
 )
 
 func TestCallRunsABoundMethod(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	got, err := call(h.App.Services(), "sessions.Service", "NewThread", []byte(`["via call","","","","supervised",""]`))
 	if err != nil {
@@ -41,6 +43,7 @@ func TestCallRunsABoundMethod(t *testing.T) {
 }
 
 func TestCallReportsProblems(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	for _, tt := range []struct{ method, body string }{
 		{"sessions.Service/NoSuchMethod", `[]`},
@@ -58,6 +61,7 @@ func TestCallReportsProblems(t *testing.T) {
 }
 
 func TestEventHubReachesEveryTab(t *testing.T) {
+	t.Parallel()
 	hub := NewHub()
 	srv := httptest.NewServer(http.HandlerFunc(hub.serve))
 	defer srv.Close()
@@ -114,9 +118,9 @@ func TestEventHubReachesEveryTab(t *testing.T) {
 const testToken = "test-token"
 
 // serve runs a new app in browser mode and returns the harness and the address it serves on.
-func serve(t *testing.T) (*apptest.Harness, string) {
+func serve(t *testing.T, env ...string) (*apptest.Harness, string) {
 	t.Helper()
-	h := apptest.New(t)
+	h := apptest.NewWith(t, apptest.Options{Env: env})
 	hub := NewHub()
 	cfg, err := app.LoadEnv(h.Env)
 	if err != nil {
@@ -141,6 +145,7 @@ func serve(t *testing.T) (*apptest.Harness, string) {
 }
 
 func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
+	t.Parallel()
 	h, base := serve(t)
 	resp, err := http.Get(base + "/")
 	if err != nil {
@@ -209,9 +214,8 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 }
 
 func TestTermStreamNeedsTheAppHeader(t *testing.T) {
-	t.Setenv("SHELL", "/bin/sh")
-	t.Setenv("HOME", t.TempDir())
-	_, base := serve(t)
+	t.Parallel()
+	_, base := serve(t, "SHELL=/bin/sh", "HOME="+t.TempDir())
 	var shell sessions.ShellInfo
 	callJSON(t, base, "sessions.Service/ShellNew", `[""]`, &shell)
 	callJSON(t, base, "terminal.Service/TermOpen", `["`+shell.ID+`",80,24]`, nil)
@@ -318,15 +322,31 @@ func post(url string, headers map[string]string, edits ...func(*http.Request)) (
 	return http.DefaultClient.Do(req)
 }
 
-// freePort is a free port among 18000–18999, the ports tests may listen on.
+// ports hands each test its own port: tests run at the same time, and a port that was free when one asked is not yet
+// in use while another asks.
+var ports struct {
+	sync.Mutex
+	taken map[int]bool
+}
+
+// freePort is a free port among 18000–18999, the ports tests may listen on, that no other test of this run was given.
 func freePort(t *testing.T) string {
 	t.Helper()
+	ports.Lock()
+	defer ports.Unlock()
+	if ports.taken == nil {
+		ports.taken = map[int]bool{}
+	}
 	start := os.Getpid() % 1000
 	for i := range 1000 {
-		port := strconv.Itoa(18000 + (start+i)%1000)
-		if ln, err := net.Listen("tcp", "127.0.0.1:"+port); err == nil {
+		port := 18000 + (start+i)%1000
+		if ports.taken[port] {
+			continue
+		}
+		if ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port)); err == nil {
 			ln.Close()
-			return port
+			ports.taken[port] = true
+			return strconv.Itoa(port)
 		}
 	}
 	t.Fatal("no free port among 18000–18999")
@@ -338,6 +358,7 @@ func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 func eventually(t *testing.T, what string, cond func() bool) { apptest.Eventually(t, what, cond) }
 
 func TestEventStreamNeedsTheToken(t *testing.T) {
+	t.Parallel()
 	_, base := serve(t)
 	for _, tt := range []struct {
 		name, query string
@@ -367,6 +388,7 @@ func TestEventStreamNeedsTheToken(t *testing.T) {
 }
 
 func TestShimSendsTheToken(t *testing.T) {
+	t.Parallel()
 	_, base := serve(t)
 	resp, err := http.Get(base + "/__shim.js")
 	if err != nil {
@@ -382,6 +404,7 @@ func TestShimSendsTheToken(t *testing.T) {
 }
 
 func TestServeRefusesAnAddressThatIsNotLoopback(t *testing.T) {
+	t.Parallel()
 	for _, addr := range []string{"0.0.0.0:34000", ":34000", "192.168.1.5:34000", "example.com:34000", "[::]:34000", "34000"} {
 		t.Run(addr, func(t *testing.T) {
 			err := Serve(Options{Addr: addr, Start: func(context.Context) error {
