@@ -5,7 +5,7 @@ type DigestEmptyProps = { onRun(): void }
 
 export function DigestEmpty({ onRun }: DigestEmptyProps) {
   return (
-    <section className="mt-6 flex flex-col items-center gap-2 rounded-xl bg-[var(--bg-card)] px-6 py-10 text-center shadow-[inset_0_0_0_1px_var(--border)]" aria-labelledby="digest-empty">
+    <section className="mt-6 flex flex-col items-center gap-2 rounded-xl bg-[var(--bg-card)] px-6 py-10 text-center @max-[40rem]:mt-4 @max-[40rem]:px-4 @max-[40rem]:py-6 shadow-[inset_0_0_0_1px_var(--border)]" aria-labelledby="digest-empty">
       <DigestTile size="lg">
         <Newspaper size={20} aria-hidden />
       </DigestTile>

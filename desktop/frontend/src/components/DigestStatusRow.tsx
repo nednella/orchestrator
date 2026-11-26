@@ -12,7 +12,7 @@ export function DigestStatusRow({ digest }: DigestStatusRowProps) {
   const state = runState(digest)
 
   return (
-    <div className="mt-4 flex min-h-6 flex-wrap items-center gap-2 border-b border-[var(--border-rule)] px-1 pt-1 pb-2 text-body leading-[1.625] text-soft tabular-nums" role={state === 'running' ? 'status' : undefined}>
+    <div className="mt-4 @max-[40rem]:mt-3 flex min-h-6 flex-wrap items-center gap-2 border-b border-[var(--border-rule)] px-1 pt-1 pb-2 text-body leading-[1.625] text-soft tabular-nums" role={state === 'running' ? 'status' : undefined}>
       {state === 'running' && <LoaderCircle size={16} className="animate-spin text-dim" aria-hidden />}
       {state === 'failed' && <CircleAlert size={16} className="text-danger" aria-hidden />}
       <span>{text}</span>

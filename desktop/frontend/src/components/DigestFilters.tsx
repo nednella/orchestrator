@@ -10,7 +10,7 @@ type DigestFiltersProps = { value: DigestFilter; counts: Record<DigestFilter, nu
 
 export function DigestFilters({ value, counts, onChange }: DigestFiltersProps) {
   return (
-    <div role="group" aria-label="Show" className="segments-track">
+    <div role="group" aria-label="Show" className="segments-track shrink overflow-x-auto">
       {FILTERS.map((filter) => (
         <button key={filter.value} aria-pressed={value === filter.value} onClick={() => onChange(filter.value)}>
           {filter.label}

@@ -39,7 +39,7 @@ export function DigestToolsMenu({ tools, onPick }: DigestToolsMenuProps) {
         onClick={() => setOpen(!open)}
       >
         <ListFilter size={14} className="text-soft" aria-hidden />
-        {tools.length === 1 ? '1 tool' : `${tools.length} tools`}
+        <span className="@max-[40rem]:sr-only">{tools.length === 1 ? '1 tool' : `${tools.length} tools`}</span>
         <ChevronDown size={12} className="text-soft" aria-hidden />
       </button>
       {open && (
