@@ -19,18 +19,26 @@ import (
 // fakeGitHub answers curl for the releases, without the network, and unpacks a zip as ditto would into a bundle
 // whose binary is the zip's bytes; neither curl nor ditto runs.
 type fakeGitHub struct {
-	mu      sync.Mutex
-	tag     string        // the latest release's tag; "" fails the check
-	badSum  bool          // the sha256 file does not match the zip
-	hold    chan struct{} // when set, the ask for the latest release waits until it closes
-	asked   chan struct{} // gets a value at each ask for the latest release, when set
-	written func(i int)   // called after each tenth of a zip is written, when set
+	mu       sync.Mutex
+	tag      string        // the latest release's tag; "" fails the check
+	badSum   bool          // the sha256 file does not match the zip
+	hold     chan struct{} // when set, the ask for the latest release waits until it closes
+	asked    chan struct{} // gets a value at each ask for the latest release, when set
+	written  func(i int)   // called after each tenth of a zip is written, when set
+	fetched  int           // how many zips were downloaded
+	unpacked int           // how many times ditto ran
 }
 
 func (f *fakeGitHub) set(change func(f *fakeGitHub)) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	change(f)
+}
+
+func (f *fakeGitHub) counts() (fetched, unpacked int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.fetched, f.unpacked
 }
 
 func body(version string) []byte { return []byte(strings.Repeat("agentos "+version+"\n", 100)) }
@@ -40,6 +48,7 @@ func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte
 	tag, badSum, hold, asked, written := f.tag, f.badSum, f.hold, f.asked, f.written
 	f.mu.Unlock()
 	if name == "ditto" {
+		f.set(func(f *fakeGitHub) { f.unpacked++ })
 		data, err := os.ReadFile(args[2])
 		if err != nil {
 			return nil, err
@@ -78,6 +87,7 @@ func (f *fakeGitHub) run(_ context.Context, name string, args ...string) ([]byte
 	case slices.Contains(args, "-fsSIL"):
 		return []byte(fmt.Sprintf("HTTP/2 200\r\ncontent-length: %d\r\n\r\n", len(data))), nil
 	case slices.Contains(args, "-o"):
+		f.set(func(f *fakeGitHub) { f.fetched++ })
 		out, err := os.Create(args[slices.Index(args, "-o")+1])
 		if err != nil {
 			return nil, err
@@ -109,11 +119,15 @@ type rig struct {
 	mu         sync.Mutex
 	states     []State
 	relaunched []string
+	refuse     error // what the relaunch fails with, when set
 	quits      atomic.Int32
 }
 
 // newRig makes an updater on version 1.0.0 whose latest release is tag, for an app installed in a temp folder.
-func newRig(t *testing.T, tag string) *rig {
+func newRig(t *testing.T, tag string) *rig { t.Helper(); return newRigIn(t, tag, t.TempDir()) }
+
+// newRigIn is newRig with its state in stateDir, as the app after a restart.
+func newRigIn(t *testing.T, tag, stateDir string) *rig {
 	t.Helper()
 	r := &rig{gh: &fakeGitHub{tag: tag}, bundle: filepath.Join(t.TempDir(), "Applications", "agentos.app")}
 	if err := os.MkdirAll(filepath.Join(r.bundle, "Contents", "MacOS"), 0o700); err != nil {
@@ -131,11 +145,14 @@ func newRig(t *testing.T, tag string) *rig {
 	}
 	relaunch := func(bundle string) error {
 		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.refuse != nil {
+			return r.refuse
+		}
 		r.relaunched = append(r.relaunched, bundle)
-		r.mu.Unlock()
 		return nil
 	}
-	r.u = New(r.gh.run, t.TempDir(), r.bundle, emit, relaunch, func() { r.quits.Add(1) })
+	r.u = New(r.gh.run, stateDir, r.bundle, emit, relaunch, func() { r.quits.Add(1) })
 	r.u.SetVersion("1.0.0")
 	return r
 }
@@ -174,17 +191,36 @@ func eventually(t *testing.T, what string, ok func() bool) {
 	}
 }
 
-func TestFirstCheckAfterFifteenSeconds(t *testing.T) {
-	r := newRig(t, "v2.0.0")
-	waits := make(chan time.Duration)
-	fire := make(chan time.Time)
+// loop runs the rig's Loop on a clock the test moves: each wait it asks for comes on waits, and fire ends it.
+func (r *rig) loop(t *testing.T) (waits chan time.Duration, fire chan time.Time) {
+	t.Helper()
+	waits, fire = make(chan time.Duration), make(chan time.Time)
 	r.u.after = func(d time.Duration) <-chan time.Time {
 		waits <- d
 		return fire
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go r.u.Loop(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.u.Loop(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-waits: // a Loop that had not seen the cancel asks for its next wait instead
+			<-done
+		case <-time.After(5 * time.Second):
+			t.Error("Loop did not return after its context ended")
+		}
+	})
+	return waits, fire
+}
+
+func TestFirstCheckAfterFifteenSeconds(t *testing.T) {
+	r := newRig(t, "v2.0.0")
+	waits, fire := r.loop(t)
 	if d := <-waits; d != 15*time.Second {
 		t.Fatalf("the first check waits %v", d)
 	}
@@ -195,13 +231,90 @@ func TestFirstCheckAfterFifteenSeconds(t *testing.T) {
 	if d := <-waits; d != 4*time.Hour {
 		t.Fatalf("the next check waits %v", d)
 	}
-	if got := r.u.State(); got != (State{Status: available, Version: "2.0.0"}) {
-		t.Errorf("after the first check: %+v", got)
+	if got := r.emitted(); !slices.Equal(got, []State{{Status: available, Version: "2.0.0"}}) {
+		t.Errorf("the first check emitted %+v", got)
 	}
 	r.gh.set(func(f *fakeGitHub) { f.tag = "" })
 	fire <- time.Now()
 	if d := <-waits; d != 4*time.Hour {
 		t.Errorf("after a failed check the next waits %v, with no retry sooner", d)
+	}
+}
+
+func TestLoopReturnsWhenItsContextEnds(t *testing.T) {
+	r := newRig(t, "v2.0.0")
+	r.u.SetLoop(time.Hour, time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.u.Loop(ctx)
+	}()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Loop did not return")
+	}
+}
+
+func TestABackgroundCheckKeepsTheState(t *testing.T) {
+	r := newRig(t, "v2.0.0")
+	r.downloaded(t)
+	ready := State{Status: downloaded, Version: "2.0.0", Percent: 100}
+	before := len(r.emitted())
+	waits, fire := r.loop(t)
+	<-waits
+	fire <- time.Now()
+	<-waits
+	if got := r.u.State(); got != ready {
+		t.Errorf("after a background check that found the same release: %+v", got)
+	}
+	if got := r.emitted()[before:]; len(got) != 0 {
+		t.Errorf("a background check that found nothing new emitted %+v", got)
+	}
+
+	r.gh.set(func(f *fakeGitHub) { f.tag = "" })
+	fire <- time.Now()
+	<-waits
+	if got := r.u.State(); got != ready || len(r.emitted()) != before {
+		t.Errorf("after a background check that failed: %+v, emitted %+v", got, r.emitted()[before:])
+	}
+
+	r.gh.set(func(f *fakeGitHub) { f.tag = "v2.1.0" })
+	fire <- time.Now()
+	<-waits
+	if got := r.emitted()[before:]; !slices.Equal(got, []State{{Status: available, Version: "2.1.0"}}) {
+		t.Errorf("a background check that found a newer release emitted %+v", got)
+	}
+}
+
+func TestInstallWaitsForABackgroundCheck(t *testing.T) {
+	r := newRig(t, "v2.0.0")
+	r.downloaded(t)
+	waits, fire := r.loop(t)
+	<-waits
+	hold, asked := make(chan struct{}), make(chan struct{}, 2)
+	r.gh.set(func(f *fakeGitHub) { f.hold, f.asked = hold, asked })
+	fire <- time.Now()
+	<-asked
+	if got := r.u.State().Status; got != downloaded {
+		t.Errorf("during a background check the state is %s", got)
+	}
+	installed := make(chan error)
+	go func() { installed <- r.u.Install(context.Background()) }()
+	select {
+	case err := <-installed:
+		t.Fatalf("the install did not wait for the check: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(hold)
+	<-waits
+	if err := <-installed; err != nil {
+		t.Fatal(err)
+	}
+	if got := r.binary(t); got != string(body("2.0.0")) {
+		t.Errorf("installed %q", got[:min(len(got), 20)])
 	}
 }
 
@@ -230,23 +343,22 @@ func TestStatesOfADownload(t *testing.T) {
 	}
 }
 
-func TestAFailedDownloadSaysHowFarItGot(t *testing.T) {
+func TestAFailedDownloadCanBeTriedAgain(t *testing.T) {
 	r := newRig(t, "v2.0.0")
 	if err := r.u.Check(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	broken := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	r.u.run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if slices.Contains(args, "-o") {
 			return nil, errors.New("curl: (18) transfer closed with bytes remaining")
 		}
-		return (&fakeGitHub{tag: "v2.0.0"}).run(ctx, name, args...)
+		return r.gh.run(ctx, name, args...)
 	}
-	r.u.run = broken
 	err := r.u.Download(context.Background())
 	if err == nil {
 		t.Fatal("a broken download succeeded")
 	}
-	if got := r.u.State(); got.Status != failed || got.Version != "2.0.0" || got.Percent >= 100 || got.Error != err.Error() {
+	if got := r.u.State(); got != (State{Status: failed, Version: "2.0.0", FailedStep: "download", Error: err.Error()}) {
 		t.Errorf("after a broken download: %+v", got)
 	}
 	if _, err := os.Stat(r.u.downloads()); !errors.Is(err, os.ErrNotExist) {
@@ -269,8 +381,11 @@ func TestDownloadVerifiesTheSum(t *testing.T) {
 	if got := r.binary(t); got != "old" {
 		t.Errorf("the bundle was swapped: %q", got)
 	}
-	if got := r.u.State(); got.Status != failed || got.Version != "2.0.0" || got.Percent != 100 {
+	if got := r.u.State(); got != (State{Status: failed, Version: "2.0.0", FailedStep: "install", Error: err.Error()}) {
 		t.Errorf("after the failed install: %+v", got)
+	}
+	if _, unpacked := r.gh.counts(); unpacked != 0 {
+		t.Errorf("ditto ran %d times after a bad sum", unpacked)
 	}
 	if _, err := os.Stat(r.u.downloads()); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the zip that failed its sum stayed: %v", err)
@@ -407,6 +522,75 @@ func TestFailedCheckKeepsTheDownload(t *testing.T) {
 	}
 	if got := r.binary(t); got != string(body("2.0.0")) {
 		t.Errorf("the waiting download was not installed: %q", got[:min(len(got), 20)])
+	}
+}
+
+func TestAFailedRestartAsksForARestart(t *testing.T) {
+	r := newRig(t, "v2.0.0")
+	r.downloaded(t)
+	r.refuse = errors.New("open: the app could not be opened")
+	if err := r.u.Install(context.Background()); err == nil {
+		t.Fatal("the relaunch did not fail")
+	}
+	if got := r.u.State(); got != (State{Status: installed, Version: "2.0.0", Error: "open: the app could not be opened"}) {
+		t.Errorf("after a failed restart: %+v", got)
+	}
+	if got := r.binary(t); got != string(body("2.0.0")) {
+		t.Errorf("the new bundle is not in place: %q", got)
+	}
+	if err := r.u.Check(context.Background()); err != nil || r.u.State().Status != installed {
+		t.Errorf("a check that finds the same release: %+v, %v", r.u.State(), err)
+	}
+	r.refuse = nil
+	fetched, unpacked := r.gh.counts()
+	if err := r.u.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f, u := r.gh.counts(); f != fetched || u != unpacked {
+		t.Errorf("the restart downloaded %d and unpacked %d again", f-fetched, u-unpacked)
+	}
+	if !slices.Equal(r.relaunched, []string{r.bundle}) {
+		t.Errorf("relaunched %v", r.relaunched)
+	}
+}
+
+func TestADownloadSurvivesARestart(t *testing.T) {
+	state := t.TempDir()
+	newRigIn(t, "v2.0.0", state).downloaded(t)
+
+	r := newRigIn(t, "v2.0.0", state)
+	if err := r.u.Check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.u.State(); got != (State{Status: downloaded, Version: "2.0.0", Percent: 100}) {
+		t.Errorf("after the restart: %+v", got)
+	}
+	if err := r.u.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if fetched, _ := r.gh.counts(); fetched != 0 || r.binary(t) != string(body("2.0.0")) {
+		t.Errorf("downloaded %d times, installed %q", fetched, r.binary(t)[:min(len(r.binary(t)), 20)])
+	}
+}
+
+func TestADownloadThatDoesNotMatchGoesAtTheStart(t *testing.T) {
+	state := t.TempDir()
+	zip := filepath.Join(state, "update", "agentos-darwin-arm64.zip")
+	if err := os.MkdirAll(filepath.Dir(zip), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zip, []byte("half a zip"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := newRigIn(t, "v2.0.0", state)
+	if err := r.u.Check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.u.State(); got != (State{Status: available, Version: "2.0.0"}) {
+		t.Errorf("after the restart: %+v", got)
+	}
+	if _, err := os.Stat(zip); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the zip that does not match stayed: %v", err)
 	}
 }
 

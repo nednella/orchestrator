@@ -33,8 +33,10 @@ const (
 	downloadURL = "https://github.com/" + Repo + "/releases/download/"
 	cacheFile   = "update.json"
 	bundle      = "agentos.app"
-	sizeEvery   = 250 * time.Millisecond
 )
+
+// sizeEvery is how often a download's partial file is measured; a var so tests can shorten it.
+var sizeEvery = 250 * time.Millisecond
 
 // Runner runs a command and returns its stdout: curl and ditto. Tests inject one that never
 // reaches the network.
@@ -210,13 +212,18 @@ func watchSize(path string, size int64, done <-chan struct{}, progress func(int)
 	}
 }
 
-// InstallZip checks the downloaded zip against rel's sha256 and puts its bundle in place of the one at path.
-func InstallZip(ctx context.Context, run Runner, rel Release, zip, path string) error {
+// Verify checks the downloaded zip against rel's sha256.
+func Verify(ctx context.Context, run Runner, rel Release, zip string) error {
 	sum, err := run(ctx, "curl", "-fsSL", "--max-time", "60", rel.Sum)
 	if err != nil {
 		return fmt.Errorf("downloading %s: %w", rel.Sum, err)
 	}
-	if err := verify(zip, string(sum)); err != nil {
+	return verify(zip, string(sum))
+}
+
+// InstallZip checks the downloaded zip against rel's sha256 and puts its bundle in place of the one at path.
+func InstallZip(ctx context.Context, run Runner, rel Release, zip, path string) error {
+	if err := Verify(ctx, run, rel, zip); err != nil {
 		return err
 	}
 	work, err := os.MkdirTemp(filepath.Dir(path), ".agentos-update-") // beside the bundle: the swap is then a rename

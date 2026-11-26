@@ -1003,27 +1003,31 @@ export function createMock(params: URLSearchParams) {
   const delay = <T,>(value: T, ms = 220) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms))
 
   // The update walks the states the Go side does, one action at a time. ?update=<status> starts it in that status,
-  // a download at 40%; ?update alone starts it available, and ?update=installfailed with a failed install.
+  // a download at 40%; ?update alone starts it available, and ?update=installfailed with a failed install. A check
+  // finds 1.4.0, and the restart an install ends with always fails.
   const UPDATE_VERSION = '1.4.0'
   let update = startingUpdate(flags.update)
   let updateAction: '' | 'check' | 'download' | 'install' = ''
 
   function startingUpdate(status: string | null): UpdateState {
-    const known = { version: UPDATE_VERSION, percent: 0, error: '' }
+    const none: UpdateState = { status: 'idle', version: '', percent: 0, failedStep: '', error: '' }
+    const known: UpdateState = { ...none, version: UPDATE_VERSION }
     switch (status) {
       case null:
       case 'idle':
-        return { status: 'idle', version: '', percent: 0, error: '' }
+        return none
       case 'checking':
-        return { status: 'checking', version: '', percent: 0, error: '' }
+        return { ...none, status: 'checking' }
       case 'downloading':
         return { ...known, status: 'downloading', percent: 40 }
       case 'downloaded':
         return { ...known, status: 'downloaded', percent: 100 }
       case 'failed':
-        return { ...known, status: 'failed', percent: 40, error: 'curl: (18) transfer closed with bytes remaining' }
+        return { ...known, status: 'failed', failedStep: 'download', error: 'curl: (18) transfer closed with bytes remaining' }
       case 'installfailed':
-        return { ...known, status: 'failed', percent: 100, error: 'The mock cannot relaunch' }
+        return { ...known, status: 'failed', failedStep: 'install', error: 'the download\'s sha256 does not match the release' }
+      case 'installed':
+        return { ...known, status: 'installed', error: 'The mock cannot relaunch' }
       default:
         return { ...known, status: 'available' }
     }
@@ -1046,30 +1050,37 @@ export function createMock(params: URLSearchParams) {
 
   async function checkUpdate() {
     const before = update
-    setUpdate({ status: 'checking', version: before.version, percent: before.percent, error: '' })
+    setUpdate({ ...before, status: 'checking', failedStep: '', error: '' })
     await delay(undefined, 1200)
-    setUpdate(before.status === 'downloaded' ? { ...before, error: '' } : { status: 'available', version: UPDATE_VERSION, percent: 0, error: '' })
+    if (before.status === 'downloaded' || before.status === 'installed') setUpdate(before)
+    else setUpdate({ status: 'available', version: UPDATE_VERSION, percent: 0, failedStep: '', error: '' })
   }
 
   async function downloadUpdate() {
     if (!update.version) throw 'There is no update to download'
     if (update.status === 'downloaded') return
     const version = update.version
-    setUpdate({ status: 'downloading', version, percent: 0, error: '' })
+    const downloading = (percent: number): UpdateState => ({ status: 'downloading', version, percent, failedStep: '', error: '' })
+    setUpdate(downloading(0))
     for (let percent = 10; percent <= 100; percent += 10) {
       await delay(undefined, 250)
-      setUpdate({ status: 'downloading', version, percent, error: '' })
+      setUpdate(downloading(percent))
     }
-    setUpdate({ status: 'downloaded', version, percent: 100, error: '' })
+    setUpdate({ status: 'downloaded', version, percent: 100, failedStep: '', error: '' })
   }
 
   async function installUpdate() {
-    for (let waited = 0; updateAction === 'check' && waited < 90_000; waited += 100) await delay(undefined, 100)
+    for (let waited = 0; updateAction === 'check'; waited += 100) {
+      if (waited >= 90_000) throw 'The update check did not finish'
+      await delay(undefined, 100)
+    }
     await runUpdateAction('install', async () => {
-      await checkUpdate()
-      await downloadUpdate()
+      if (update.status !== 'installed') {
+        await checkUpdate()
+        await downloadUpdate()
+      }
       await delay(undefined, 600)
-      setUpdate({ status: 'failed', version: update.version, percent: 100, error: 'The mock cannot relaunch' })
+      setUpdate({ status: 'installed', version: update.version, percent: 0, failedStep: '', error: 'The mock cannot relaunch' })
       throw 'The mock cannot relaunch'
     })
   }

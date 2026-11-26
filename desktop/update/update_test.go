@@ -25,12 +25,12 @@ func TestANewerReleaseShowsInTheStateAndTheSnapshot(t *testing.T) {
 
 func TestAFailedCheckLeavesTheAppCurrent(t *testing.T) {
 	h := apptest.NewWith(t, apptest.Options{UpdateTick: time.Hour, Version: "1.0.0"})
-	apptest.Eventually(t, "the check", func() bool { return h.App.Updates().State().Error != "" })
-	if got := h.App.Updates().State(); got.Status != "idle" || got.Version != "" {
+	apptest.Eventually(t, "the check", func() bool { return h.GH.Calls("curl") == 1 })
+	if got := h.App.Updates().State(); got != (update.State{Status: "idle"}) {
 		t.Errorf("after a failed check: %+v", got)
 	}
-	if snap := h.Snapshot(); snap.Update != "" {
-		t.Errorf("snapshot.update = %q", snap.Update)
+	if snap := h.Snapshot(); snap.Update != "" || h.Rec.Count("update") != 0 {
+		t.Errorf("snapshot.update = %q, %d update events", snap.Update, h.Rec.Count("update"))
 	}
 }
 

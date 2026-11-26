@@ -31,18 +31,21 @@ const (
 	downloading = "downloading"
 	downloaded  = "downloaded"
 	failed      = "failed"
+	// installed: the new bundle is in place, and only the restart into it failed.
+	installed = "installed"
 )
 
 var errBusy = errors.New("An update action is running")
 
 // State is where the update stands, the payload of the update event. Version is the newer release, "" when none is
-// known. Percent is how far its download got, -1 while the size is unknown; a failed state at 100 is a failed
-// install, below it a failed download. Error is why the last action failed.
+// known. Percent is how far its download got, -1 while the size is unknown. FailedStep says which step a failed
+// state failed at: "download" or "install". Error is why the last action failed.
 type State struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-	Percent int    `json:"percent"`
-	Error   string `json:"error"`
+	Status     string `json:"status"`
+	Version    string `json:"version"`
+	Percent    int    `json:"percent"`
+	FailedStep string `json:"failedStep"`
+	Error      string `json:"error"`
 }
 
 // Updater checks for releases, downloads one and installs it, one action at a time.
@@ -83,7 +86,8 @@ func (u *Updater) SetLoop(first, every time.Duration) { u.first, u.every = first
 func (u *Updater) SetRelaunch(relaunch func(string) error) { u.relaunch = relaunch }
 
 // Loop checks for a newer release after the first wait and then after every wait, until ctx ends. A check that
-// fails waits for the next one: there is no retry sooner.
+// fails waits for the next one: there is no retry sooner. These checks run unseen: the state changes only when what
+// they find does.
 func (u *Updater) Loop(ctx context.Context) {
 	wait := u.first
 	for {
@@ -92,8 +96,11 @@ func (u *Updater) Loop(ctx context.Context) {
 			return
 		case <-u.after(wait):
 		}
-		if err := u.Check(ctx); err != nil && !errors.Is(err, errBusy) {
-			log.Printf("agentos: checking for a newer release: %v", err)
+		if err := u.begin(ctx, "check"); err == nil {
+			if err := u.check(ctx, false); err != nil {
+				log.Printf("agentos: checking for a newer release: %v", err)
+			}
+			u.end()
 		}
 		wait = u.every
 	}
@@ -113,13 +120,14 @@ func (u *Updater) Available() string {
 	return u.latest.Version
 }
 
-// Check asks GitHub for the latest release. A check that fails keeps what the one before it found, and its download.
+// Check asks GitHub for the latest release, showing that it checks. A check that fails keeps what the one before it
+// found, and its download.
 func (u *Updater) Check(ctx context.Context) error {
 	if err := u.begin(ctx, "check"); err != nil {
 		return err
 	}
 	defer u.end()
-	return u.check(ctx)
+	return u.check(ctx, true)
 }
 
 // Download fetches the newer release the last check found into the state folder, where it waits for the install.
@@ -132,7 +140,8 @@ func (u *Updater) Download(ctx context.Context) error {
 }
 
 // Install checks for a newer release, downloads it unless it waits already, installs it and relaunches the app;
-// threads live in their hosts and keep going. When the check fails, a download that waits is installed.
+// threads live in their hosts and keep going. When the check fails, a download that waits is installed. Once the
+// new bundle is in place, Install only relaunches.
 func (u *Updater) Install(ctx context.Context) error {
 	if u.bundle == "" {
 		return errors.New("agentos runs from no .app bundle, so it cannot replace itself")
@@ -141,7 +150,10 @@ func (u *Updater) Install(ctx context.Context) error {
 		return err
 	}
 	defer u.end()
-	err := u.check(ctx)
+	if s := u.State(); s.Status == installed {
+		return u.restart(s.Version)
+	}
+	err := u.check(ctx, true)
 	u.mu.Lock()
 	rel, waiting := u.latest, u.zip != ""
 	u.mu.Unlock()
@@ -160,13 +172,20 @@ func (u *Updater) Install(ctx context.Context) error {
 	err = update.InstallZip(ctx, u.run, rel, zip, u.bundle)
 	// Installed, the zip is done with; failed, it is not trusted again.
 	u.dropDownload()
-	if err == nil {
-		err = u.Relaunch()
-	}
 	if err != nil {
-		u.set(State{Status: failed, Version: rel.Version, Percent: 100, Error: err.Error()})
+		u.set(State{Status: failed, Version: rel.Version, FailedStep: "install", Error: err.Error()})
+		return err
 	}
-	return err
+	return u.restart(rel.Version)
+}
+
+// restart relaunches into the bundle that is in place; a relaunch that fails leaves it there, to restart later.
+func (u *Updater) restart(version string) error {
+	if err := u.Relaunch(); err != nil {
+		u.set(State{Status: installed, Version: version, Error: err.Error()})
+		return err
+	}
+	return nil
 }
 
 // begin takes the one action slot. An install waits for a check that runs, as it checks again itself; any other
@@ -207,28 +226,44 @@ func (u *Updater) end() {
 	u.running = ""
 }
 
-func (u *Updater) check(ctx context.Context) error {
+// check asks for the latest release. shown says the owner asked: the state says it checks, and a failure says why.
+// Unseen, a check moves the state on only when it finds another release than the last one.
+func (u *Updater) check(ctx context.Context, shown bool) error {
 	before := u.State()
-	u.set(State{Status: checking, Version: before.Version, Percent: before.Percent})
+	if shown {
+		u.set(State{Status: checking, Version: before.Version, Percent: before.Percent})
+	}
 	rel, err := update.Check(ctx, u.run, u.stateDir, 0, time.Now())
 	if err != nil {
-		before.Error = err.Error()
-		u.set(before)
+		if shown {
+			before.Error = err.Error()
+			u.set(before)
+		}
 		return err
 	}
 	if !update.Newer(u.current, rel.Version) {
 		rel = update.Release{}
 	}
 	u.mu.Lock()
-	stale := u.latest != rel
+	changed := u.latest != rel
 	u.latest = rel
-	u.mu.Unlock()
-	if stale {
-		u.dropDownload()
+	if changed {
+		u.zip = ""
 	}
-	u.mu.Lock()
 	zip := u.zip
 	u.mu.Unlock()
+	if before.Status == installed && !changed {
+		u.set(before)
+		return nil
+	}
+	adopted := false
+	if zip == "" {
+		zip = u.kept(ctx, rel)
+		adopted = zip != ""
+	}
+	if !shown && !changed && !adopted {
+		return nil
+	}
 	switch {
 	case rel.Version == "":
 		u.set(State{Status: idle})
@@ -238,6 +273,24 @@ func (u *Updater) check(ctx context.Context) error {
 		u.set(State{Status: available, Version: rel.Version})
 	}
 	return nil
+}
+
+// kept takes up a download of rel an earlier run of the app left, when its sha256 matches; anything else in the
+// download folder goes.
+func (u *Updater) kept(ctx context.Context, rel update.Release) string {
+	zip := filepath.Join(u.downloads(), update.Asset)
+	if _, err := os.Stat(zip); err != nil {
+		_ = os.RemoveAll(u.downloads())
+		return ""
+	}
+	if rel.Version == "" || update.Verify(ctx, u.run, rel, zip) != nil {
+		_ = os.RemoveAll(u.downloads())
+		return ""
+	}
+	u.mu.Lock()
+	u.zip = zip
+	u.mu.Unlock()
+	return zip
 }
 
 func (u *Updater) download(ctx context.Context) error {
@@ -256,7 +309,7 @@ func (u *Updater) download(ctx context.Context) error {
 	})
 	if err != nil {
 		_ = os.RemoveAll(u.downloads())
-		u.set(State{Status: failed, Version: rel.Version, Percent: u.State().Percent, Error: err.Error()})
+		u.set(State{Status: failed, Version: rel.Version, FailedStep: "download", Error: err.Error()})
 		return err
 	}
 	u.mu.Lock()
@@ -266,7 +319,7 @@ func (u *Updater) download(ctx context.Context) error {
 	return nil
 }
 
-// downloads is where a downloaded release waits for its install.
+// downloads is where a downloaded release waits for its install, also over a restart of the app.
 func (u *Updater) downloads() string { return filepath.Join(u.stateDir, "update") }
 
 func (u *Updater) dropDownload() {

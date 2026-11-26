@@ -165,11 +165,13 @@ export type Snapshot = {
   machine: string
 }
 
-export type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'failed'
+// installed: the new bundle is in place, and only the restart into it failed.
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'failed' | 'installed'
 
 // version is the newer release, '' when none is known. percent is how far its download got, -1 while the size is
-// unknown; a failed state at 100 is a failed install, below it a failed download. error is why the last action failed.
-export type UpdateState = { status: UpdateStatus; version: string; percent: number; error: string }
+// unknown. failedStep says which step a failed state failed at, '' in any other state. error is why the last action
+// failed.
+export type UpdateState = { status: UpdateStatus; version: string; percent: number; failedStep: '' | 'download' | 'install'; error: string }
 
 export type ThemeSetting = 'system' | 'light' | 'dark'
 

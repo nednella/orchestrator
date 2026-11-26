@@ -279,6 +279,9 @@ func newFakeRelease(version string) *fakeRelease {
 }
 
 func TestDownloadSaysHowFarItGotInTenPercentSteps(t *testing.T) {
+	every := sizeEvery
+	sizeEvery = 10 * time.Millisecond
+	t.Cleanup(func() { sizeEvery = every })
 	f := newFakeRelease("2.0.0")
 	steps := make(chan int, 32)
 	// Each tenth waits until its step is reported, so every step shows however the reads fall.
