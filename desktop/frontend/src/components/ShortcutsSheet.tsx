@@ -6,7 +6,7 @@ import { Icon } from './Icon'
 import { Keycap } from './Keycap'
 import { Overlay } from './Overlay'
 
-type Row = { id: string; label: string; keys?: string; mono?: boolean }
+type Row = { id: string; label: string; keys?: string }
 type Group = { title: string; ids: string[]; extra?: Row[] }
 
 const GROUPS: Group[] = [
@@ -18,13 +18,7 @@ const GROUPS: Group[] = [
   {
     title: 'Terminal',
     ids: ['new-terminal', 'split-terminal'],
-    extra: [
-      { id: 'shell-keys', label: 'Back to the chat', keys: 'Esc Esc' },
-      { id: 'shell-ex-1', label: 'agentos issue 394 393', mono: true },
-      { id: 'shell-ex-2', label: 'agentos open 2', mono: true },
-      { id: 'shell-ex-3', label: 'agentos filter @nednella type:bug', mono: true },
-      { id: 'shell-ex-4', label: 'agentos next', mono: true },
-    ],
+    extra: [{ id: 'shell-keys', label: 'Back to the chat', keys: 'Esc Esc' }],
   },
   { title: 'In a list', ids: [], extra: LIST_KEYS.map((k) => ({ id: k.keys, label: k.summary, keys: k.keys })) },
 ]
@@ -44,7 +38,7 @@ type RowViewProps = { row: Row }
 function RowView({ row }: RowViewProps) {
   return (
     <li className="flex h-7 items-center gap-3 border-b border-line last:border-b-0">
-      <span className={`min-w-0 flex-1 truncate ${row.mono ? 'mono text-small text-accent' : 'text-body'}`}>{row.label}</span>
+      <span className="min-w-0 flex-1 truncate text-body">{row.label}</span>
       {row.keys && <Keycap>{row.keys}</Keycap>}
     </li>
   )

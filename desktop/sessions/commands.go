@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	ctl "github.com/nednella/agentos/internal/control"
@@ -12,35 +11,10 @@ import (
 	"github.com/nednella/agentos/internal/session"
 )
 
-// Scene shows things on the screen of the project a command comes from.
-type Scene interface {
-	UI(req ctl.Request, name string, args ...string) string
-}
+// Commands answers the tools that work on threads.
+type Commands struct{ s *Sessions }
 
-// Commands answers the agentos commands that work on sessions.
-type Commands struct {
-	s     *Sessions
-	scene Scene
-}
-
-func NewCommands(s *Sessions, scene Scene) *Commands { return &Commands{s: s, scene: scene} }
-
-// here is the sessions of the current project, the one the router made current for the command.
-func (c *Commands) here() []Session { return c.s.ListOf(c.s.Current().Key()) }
-
-// find is the session with that number in the current project.
-func (c *Commands) find(arg string) (Session, error) {
-	n, err := strconv.Atoi(strings.TrimPrefix(arg, "#"))
-	if err != nil {
-		return Session{}, fmt.Errorf("%q is not a session number", arg)
-	}
-	for _, s := range c.here() {
-		if s.N == n {
-			return s, nil
-		}
-	}
-	return Session{}, fmt.Errorf("no session %d in this project", n)
-}
+func NewCommands(s *Sessions) *Commands { return &Commands{s: s} }
 
 func started(s Session) string { return fmt.Sprintf("started session %d: %s", s.N, s.Title) }
 
@@ -70,7 +44,7 @@ func (c *Commands) New(_ context.Context, req ctl.Request) (string, error) {
 func (c *Commands) Track(_ context.Context, req ctl.Request) (string, error) {
 	branch := strings.TrimSpace(req.Opts["branch"])
 	if branch == "" {
-		return "", errors.New("usage: agentos track --branch <name>")
+		return "", errors.New("track needs a branch")
 	}
 	if _, err := session.ParseName(req.Session); err != nil {
 		return "", errors.New("this command works inside an agentos session; AGENTOS_SESSION is not set")
@@ -79,120 +53,4 @@ func (c *Commands) Track(_ context.Context, req ctl.Request) (string, error) {
 		return "", err
 	}
 	return "tracking " + branch, nil
-}
-
-// Open shows a session, named by its number or by words of its title, once it is one and only one.
-func (c *Commands) Open(_ context.Context, req ctl.Request) (string, error) {
-	if len(req.Args) == 0 {
-		return "", errors.New("usage: agentos open <n|title>")
-	}
-	want := strings.Join(req.Args, " ")
-	list := c.here()
-	if n, err := strconv.Atoi(strings.TrimPrefix(want, "#")); err == nil {
-		for _, s := range list {
-			if s.N == n {
-				return c.scene.UI(req, "open", want), nil
-			}
-		}
-		return "", fmt.Errorf("no session %d in this project", n)
-	}
-	var hits int
-	for _, s := range list {
-		if strings.Contains(strings.ToLower(s.Title), strings.ToLower(want)) {
-			hits++
-		}
-	}
-	switch hits {
-	case 0:
-		return "", fmt.Errorf("no session matching %q", want)
-	case 1:
-		return c.scene.UI(req, "open", want), nil
-	}
-	return "", fmt.Errorf("%d sessions match %q: use a number", hits, want)
-}
-
-// Settle settles the thread with that number.
-func (c *Commands) Settle(_ context.Context, req ctl.Request) (string, error) {
-	if len(req.Args) == 0 {
-		return "", errors.New("usage: agentos settle <n>")
-	}
-	s, err := c.find(req.Args[0])
-	if err != nil {
-		return "", err
-	}
-	if s.State == session.Settled {
-		return "", fmt.Errorf("thread %d is asleep", s.N)
-	}
-	settle := c.s.Settle
-	if req.Session == "" { // typed at a shell, not run by a thread
-		settle = c.s.SettleAsOwner
-	}
-	if err := settle(s.ID); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("put thread %d to sleep: %s", s.N, s.Title), nil
-}
-
-// PR lists the pull requests of the sessions, or of one session.
-func (c *Commands) PR(_ context.Context, req ctl.Request) (string, error) {
-	list := c.here()
-	one := len(req.Args) > 0
-	if one {
-		s, err := c.find(req.Args[0])
-		if err != nil {
-			return "", err
-		}
-		list = []Session{s}
-	}
-	var lines []string
-	for _, s := range list {
-		if s.PR == nil {
-			if one {
-				lines = append(lines, fmt.Sprintf("%d: no pull request for %s", s.N, s.Branch))
-			}
-			continue
-		}
-		line := fmt.Sprintf("%d: #%d %s, checks %s, %d comments, %s", s.N, s.PR.Number, s.PR.State, s.PR.Checks, s.PR.Comments, s.PR.URL)
-		if s.PRAttention != "" {
-			line += " (" + s.PRAttention + " need you)"
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 0 {
-		return "no pull requests", nil
-	}
-	return strings.Join(lines, "\n"), nil
-}
-
-// Cleanup cleans up after the session with that number, or lists what waits for clean-up.
-func (c *Commands) Cleanup(ctx context.Context, req ctl.Request) (string, error) {
-	if len(req.Args) == 0 {
-		var lines []string
-		for _, s := range c.here() {
-			switch s.Cleanup {
-			case "ask":
-				lines = append(lines, fmt.Sprintf("%d: waiting for you: its pull request is closed or was merged before the session", s.N))
-			case "blocked":
-				lines = append(lines, fmt.Sprintf("%d: Kept: %s", s.N, s.CleanupReason))
-			case "pending":
-				lines = append(lines, fmt.Sprintf("%d: running", s.N))
-			}
-		}
-		if len(lines) == 0 {
-			return "nothing to clean up", nil
-		}
-		return strings.Join(lines, "\n"), nil
-	}
-	s, err := c.find(req.Args[0])
-	if err != nil {
-		return "", err
-	}
-	removed, reason, err := c.s.life.cleanupNow(ctx, s.ID, false, byOwner)
-	switch {
-	case err != nil:
-		return "", err
-	case reason != "":
-		return "", fmt.Errorf("Kept: %s", reason)
-	}
-	return "Removed " + strings.Join(removed, ", "), nil
 }

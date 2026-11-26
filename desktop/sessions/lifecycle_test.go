@@ -162,7 +162,7 @@ func TestCleanupMerged(t *testing.T) {
 	wt := s.Worktree
 	pushWork(t, wt)
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	if resp := h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
 	}
 
@@ -1766,7 +1766,7 @@ func TestCleanupKeepsTheThread(t *testing.T) {
 	wt := s.Worktree
 	pushWork(t, wt)
 	h.Hook(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
-	if resp := h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Opts: map[string]string{"text": "tested by hand"}}); !resp.OK {
 		t.Fatalf("show = %+v", resp)
 	}
 	chatLog, _ := hostFiles(h, s.ID)

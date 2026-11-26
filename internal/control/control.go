@@ -1,4 +1,4 @@
-// Package control carries commands from the agentos command line to the running
+// Package control carries tool calls from the agentos mcp server to the running
 // desktop app: one JSON request line, one JSON response line, over a unix socket.
 package control
 

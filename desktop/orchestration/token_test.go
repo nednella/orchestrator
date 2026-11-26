@@ -62,7 +62,7 @@ func tokenOf(t *testing.T, h *apptest.Harness, id string) string {
 
 // callerOf is the thread a call with that token and that session field acts as, or why there is none.
 func callerOf(h *apptest.Harness, token, sessionField string) (string, error) {
-	return control.New(h.Sessions(), nil, nil).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Session: sessionField})
+	return control.New(h.Sessions(), nil).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Session: sessionField})
 }
 
 func wantCaller(t *testing.T, h *apptest.Harness, token, want string) {
@@ -203,4 +203,38 @@ func TestForkGetsItsOwnToken(t *testing.T) {
 	}
 	wantCaller(t, h, srcToken, src.ID)
 	wantCaller(t, h, forkToken, fork.ID)
+}
+
+func TestUserOnlyCommandsAreGone(t *testing.T) {
+	h := apptest.New(t)
+	for _, cmd := range []string{"open", "settle", "pr", "cleanup", "project", "relaunch", "stats", "digest", "digest-add", "queue", "notes", "evidence", "chat", "next", "filter"} {
+		if resp := h.Ask(t, ctl.Request{Cmd: cmd, Args: []string{"1"}}); resp.OK || resp.Error != fmt.Sprintf("unknown command %q", cmd) {
+			t.Errorf("%s over the socket = %+v, want unknown command", cmd, resp)
+		}
+	}
+}
+
+func TestSocketNeverRunsAnAgentCommandAsAThreadItNames(t *testing.T) {
+	h := apptest.New(t)
+	a, b := newThread(t, h, "a"), newThread(t, h, "b")
+	for _, req := range []ctl.Request{
+		{Cmd: "note", Session: b.ID, Project: "main", Opts: map[string]string{"text": "forged"}},
+		{Cmd: "issue", Session: b.ID, Project: "main", Args: []string{"7"}, Opts: map[string]string{"prompt": "forged"}},
+		{Cmd: "new", Session: b.ID, Project: "main", Args: []string{"forged"}, Opts: map[string]string{"access": "full"}},
+		{Cmd: "show", Session: b.ID, Opts: map[string]string{"text": "forged"}},
+		{Cmd: "track", Session: b.ID, Opts: map[string]string{"branch": "forged"}},
+		{Cmd: "refresh", Session: b.ID, Project: "main"},
+		{Cmd: "browser", Session: b.ID, Args: []string{"open", "http://127.0.0.1:1/"}},
+		{Cmd: "note", Token: tokenOf(t, h, a.ID), Session: b.ID, Opts: map[string]string{"text": "forged"}},
+	} {
+		if resp := h.Ask(t, req); resp.OK || resp.Error != fmt.Sprintf("unknown command %q", req.Cmd) {
+			t.Errorf("%s as %s over the socket = %+v, want unknown command", req.Cmd, req.Session, resp)
+		}
+	}
+	if n := len(h.Sessions().List()); n != 2 {
+		t.Errorf("%d threads, want the 2 that were there", n)
+	}
+	if notes, err := h.Notes().List("main"); err != nil || len(notes) != 0 {
+		t.Errorf("notes = %v, %v; none was asked for through a tool", notes, err)
+	}
 }

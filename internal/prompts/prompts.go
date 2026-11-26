@@ -12,8 +12,6 @@ var (
 	digest string
 	//go:embed browser.md
 	browser string
-	//go:embed browser-help.md
-	browserHelp string
 	//go:embed setup-brief.md
 	setupBrief string
 	//go:embed setup-start.md
@@ -186,9 +184,6 @@ func Tool(name string) string {
 	}
 	return ""
 }
-
-// BrowserHelp is what agentos browser help prints: that the browser tool's text has the rules.
-func BrowserHelp() string { return body(browserHelp) }
 
 // SetupBrief is added to the system prompt of the session that sets up a project's repository.
 func SetupBrief() string { return body(setupBrief) }

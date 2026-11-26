@@ -23,7 +23,6 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'show-queue',
     label: 'Search the queue',
     group: 'Queue',
-    uiCommand: 'queue',
     run() {
       layout.showPanelView('issues')
       a.focus('queue-filter')
@@ -33,7 +32,6 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     id: 'filter-queue',
     label: 'Filter the queue…',
     group: 'Queue',
-    uiCommand: 'filter',
     run(args) {
       layout.showPanelView('issues')
       a.setIssueFilter(args.join(' '))
@@ -45,7 +43,6 @@ export const queueActions = ({ a, layout }: ActionContext): Action[] => [
     label: 'Refresh issues and PRs',
     group: 'Queue',
     shortcut: { key: 'r' },
-    uiCommand: 'refresh',
     async run() {
       await Promise.all([a.refreshIssues(), a.refreshPRs()])
       return 'Issues and pull requests refreshed'

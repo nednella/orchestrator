@@ -19,7 +19,6 @@ export type Action = {
   label: string
   group: ActionGroup
   shortcut?: Shortcut
-  uiCommand?: string
   run(args: string[]): string | void | Promise<string | void>
 }
 

@@ -517,7 +517,6 @@ export type EventMap = {
   memory: Memory
   stats: undefined
   network: { online: boolean }
-  'ui:command': { name: string; args: string[] }
   evidence: { id: string; items: Evidence[] }
   digest: Digest
   'browser:state': BrowserState

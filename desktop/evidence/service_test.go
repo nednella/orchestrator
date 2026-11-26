@@ -28,7 +28,7 @@ func TestShowFilesEvidence(t *testing.T) {
 		}
 	}
 	show := func(args []string, opts map[string]string) ctl.Response {
-		return h.Ask(t, ctl.Request{Cmd: "show", Session: s.ID, Args: args, Opts: opts})
+		return h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Args: args, Opts: opts})
 	}
 	before := h.Rec.CountAttention("evidence")
 	for _, resp := range []ctl.Response{show([]string{img}, map[string]string{"caption": "pixel"}), show([]string{note}, nil), show(nil, map[string]string{"text": "ran 40 tests", "caption": "tests"})} {

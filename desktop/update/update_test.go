@@ -7,7 +7,6 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/update"
-	ctl "github.com/nednella/agentos/internal/control"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
@@ -28,17 +27,5 @@ func TestAFailedCheckLeavesTheAppCurrent(t *testing.T) {
 	}
 	if n := h.Rec.Count("update"); n != 0 {
 		t.Errorf("%d update events", n)
-	}
-}
-
-func TestRelaunchOpensTheBundleAgainAndQuits(t *testing.T) {
-	h := apptest.New(t)
-	resp := h.Ask(t, ctl.Request{Cmd: "relaunch"})
-	// The test binary runs from no .app bundle, so the app can only say so.
-	if resp.OK || resp.Error != "agentos runs from no .app bundle, so it cannot relaunch" {
-		t.Errorf("relaunch answered %+v", resp)
-	}
-	if len(h.Rec.Relaunched()) != 0 || h.Rec.Quits() != 0 {
-		t.Errorf("relaunched %v, quit %d times", h.Rec.Relaunched(), h.Rec.Quits())
 	}
 }

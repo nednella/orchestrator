@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"reflect"
 	"slices"
 	"testing"
 
@@ -24,9 +23,10 @@ func TestRouterAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	r := New(fakeSessions{}, nil, nil)
-	r.Handle("echo", func(_ context.Context, req ctl.Request) (string, error) { return "got " + req.Args[0], nil })
-	r.Handle("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
+	r := New(fakeSessions{}, nil)
+	r.HandleExternal("echo", func(_ context.Context, req ctl.Request) (string, error) { return "got " + req.Args[0], nil })
+	r.HandleExternal("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
+	r.Handle("inside", func(_ context.Context, req ctl.Request) (string, error) { return "as " + req.Session, nil })
 	r.Listen(dir)
 	defer r.Close()
 
@@ -37,6 +37,8 @@ func TestRouterAnswers(t *testing.T) {
 		{ctl.Request{Cmd: "echo", Args: []string{"x"}}, ctl.Response{OK: true, Out: "got x"}},
 		{ctl.Request{Cmd: "fail"}, ctl.Response{Error: "it failed"}},
 		{ctl.Request{Cmd: "nope"}, ctl.Response{Error: `unknown command "nope"`}},
+		// A command only a tool call reaches is unknown to a client, which could name any thread as its session.
+		{ctl.Request{Cmd: "inside", Session: "p/2"}, ctl.Response{Error: `unknown command "inside"`}},
 	} {
 		got, err := ctl.Call(context.Background(), ctl.SocketPath(dir), tt.req)
 		if err != nil || got != tt.want {
@@ -46,7 +48,7 @@ func TestRouterAnswers(t *testing.T) {
 }
 
 func TestAnswerRunsTheCommandsHandler(t *testing.T) {
-	r := New(fakeSessions{}, nil, nil)
+	r := New(fakeSessions{}, nil)
 	r.Handle("echo", func(_ context.Context, req ctl.Request) (string, error) { return req.Session + " " + req.Args[0], nil })
 	r.Handle("fail", func(context.Context, ctl.Request) (string, error) { return "", errors.New("it failed") })
 	for _, tt := range []struct {
@@ -64,7 +66,7 @@ func TestAnswerRunsTheCommandsHandler(t *testing.T) {
 }
 
 func TestAskers(t *testing.T) {
-	r := New(fakeSessions{running: map[string]bool{"p/1": true}}, nil, nil)
+	r := New(fakeSessions{running: map[string]bool{"p/1": true}}, nil)
 	if id, err := r.AskerSession(ctl.Request{Session: "p/1"}); err != nil || id != "p/1" {
 		t.Errorf("AskerSession = %q, %v", id, err)
 	}
@@ -106,7 +108,7 @@ func TestRouterEntersTheAskersProject(t *testing.T) {
 			r := New(fakeSessions{}, func(name string) error {
 				switched = append(switched, name)
 				return errors.New("no such project")
-			}, nil)
+			})
 			r.Enter(tt.req)
 			if !slices.Equal(switched, tt.want) {
 				t.Errorf("switched to %v, want %v", switched, tt.want)
@@ -115,33 +117,15 @@ func TestRouterEntersTheAskersProject(t *testing.T) {
 	}
 }
 
-func TestRouterViewsAndScopes(t *testing.T) {
+func TestRouterScopesAHandlerToTheCallersProject(t *testing.T) {
 	var switched []string
-	var events []any
-	r := New(fakeSessions{}, func(name string) error { switched = append(switched, name); return nil },
-		func(event string, payload any) {
-			if event != "ui:command" {
-				t.Errorf("event = %q", event)
-			}
-			events = append(events, payload)
-		})
-	req := ctl.Request{Project: "other", Args: []string{"@me", "type:bug"}}
-	if out, err := r.View("filter")(context.Background(), req); err != nil || out != "ok" {
-		t.Errorf("View = %q, %v", out, err)
-	}
-	if out, _ := r.View("queue")(context.Background(), ctl.Request{}); out != "ok" {
-		t.Errorf("View without args = %q", out)
-	}
-	want := []any{UICommand{Name: "filter", Args: []string{"@me", "type:bug"}}, UICommand{Name: "queue", Args: []string{}}}
-	if !reflect.DeepEqual(events, want) {
-		t.Errorf("events = %v, want %v", events, want)
-	}
+	r := New(fakeSessions{}, func(name string) error { switched = append(switched, name); return nil })
 	ran := false
 	scoped := r.Scope(func(context.Context, ctl.Request) (string, error) { ran = true; return "done", nil })
 	if out, err := scoped(context.Background(), ctl.Request{Project: "third"}); err != nil || out != "done" || !ran {
 		t.Errorf("Scope = %q, %v", out, err)
 	}
-	if !slices.Equal(switched, []string{"other", "third"}) {
+	if !slices.Equal(switched, []string{"third"}) {
 		t.Errorf("switched = %v", switched)
 	}
 }

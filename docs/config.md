@@ -1,4 +1,4 @@
-# Config and command line
+# Config
 
 ## Config file
 
@@ -119,7 +119,7 @@ The row shows that choice until the agent's first turn. From then on it shows wh
 
 ### What a session runs
 
-Every thread runs `claude` under `agentos host`, with hooks that call the `agentos` command on PATH. Both must be on PATH: without `agentos` a thread does not start, with the error "The agentos command is not on PATH, so a thread's hooks cannot report its state", and without `claude` it does not start with "claude is not installed: it is not on PATH". While either is missing the app shows a warning that names it, and clears it once it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh`, `agentos` or `claude`, the app takes the PATH of the login shell.
+Every thread runs `claude` under `agentos host`, with hooks that run the app's own binary. `claude` must be on PATH: without it a thread does not start, with the error "claude is not installed: it is not on PATH", and the app shows a warning that names it until it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh` or `claude`, the app takes the PATH of the login shell.
 
 ### Where a thread runs
 
@@ -166,19 +166,9 @@ A thread reaches the app through the tools of its agentos MCP server, not throug
 
 A Read thread runs every tool but `show` and `track` without asking; for those two the owner gets an approval card. The orchestration tools, `delegate`, `threads`, `read`, `send`, `wait` and `stop`, start and follow child threads; each tool's text is in `internal/prompts/tool-<name>.md`.
 
-## Command line
+## No command line
 
-`agentos` with no command opens the app. `agentos --help` lists the commands by group. Every command below except `settle` without a number, `browser help`, `version` and `update` talks to the running app, and exits 1 with "agentos is not running: open the app and try again" when there is none. The project is `AGENTOS_PROJECT` (set in the app's shell), else the asking session's, else the current one; the app switches to it.
-
-| Group | Command | Does |
-|---|---|---|
-| Work | `issue <n...> [--prompt <text>\|-]` | starts a session per issue; an issue with a live session is reported as already running, and one whose thread is asleep has that thread woken and is reported as woken. `--prompt` takes one issue: its text (`-` reads stdin), at most 6 KB, is added to the new or woken thread's system prompt as a handover from the session that asked, in place of the one a woken thread had, and a running session does not get it. From inside a thread that is not Full access, an issue whose action is `access: full` or whose sleeping thread is Full access is refused (`A thread that is not Full access cannot start one that is`); from a shell or a terminal it is allowed |
-| Work | `new [title] [--access read\|supervised\|full] [--prompt <text>\|-]`, `settle <n>`, `open <n\|title>`, `next` | start, put to sleep, show a session, or show the one that needs you most. `--access` sets the new thread's access, `supervised` by default; from inside a thread, `full` is refused unless that thread is a live Full access thread (`A thread that is not Full access cannot start one that is`), and from a shell or a terminal it is allowed. `--prompt` gives its text (`-` reads stdin), at most 6 KB, to the new session, sent unless `session_prompt_send` is `manual`; from a session, the text is framed as that session's handover |
-| Work | `refresh`, `pr [n]`, `cleanup [n]` | reload issues and PRs, show PRs; `cleanup <n>` cleans up after thread n with every check and prints `Removed <what>`, or fails with `Kept: <reason>`; `cleanup` lists what waits: a clean-up that asks you, one the checks kept (`Kept: <reason>`), which the app tries again every hour only while the thread sleeps after the PR of its branch merged or closed, and one that runs |
-| Views | `queue`, `notes`, `evidence`, `chat`, `browser`, `digest`, `stats --open`, `filter [query]` | show that view; `digest --run` starts a run |
-| Projects | `project [name]`, `project add [path]`, `project remove <name>` | list, switch, add (the current folder by default), forget |
-
-`stats [--days N] [--json]` prints the interruption tally. `agentos settle` without a number puts this project's threads to sleep directly through tmux, with the app closed too, and keeps their state files, so the app shows them as sleeping and stops their servers, at once when it runs, else at its next start; `--all` does it for every project and stops the shells. Neither touches a session that ran in a terminal before the host; the command says how many it left. `agentos version` prints the version. `agentos update` installs the latest release over the installed app, then asks a running app to relaunch. Every command typed at a terminal says on stderr when a newer release is out, asking GitHub at most once a day.
+The `agentos` binary is the app. Started with no command it runs the app; the only commands it takes are the hidden `host`, `mcp` and `hook`, which the app and Claude start, and any other command exits with "agentos has no command line". Nothing links it into a folder on PATH, and a thread needs no `agentos` on PATH: its hooks, its host and its tools' server run the app's own binary by its path. Everything else is done in the app, and an agent uses the [tools](#agent-tools). The app answers only the `orchestrate` call on its control socket, as the thread its token names.
 
 ## Environment
 

@@ -1,4 +1,4 @@
-// Package control answers the agentos command line: each command is a handler that a service registers.
+// Package control answers the commands of the agentos tools: each command is a handler that a service registers.
 package control
 
 import (
@@ -22,33 +22,36 @@ type Sessions interface {
 	ThreadOfToken(token string) (string, bool)
 }
 
-// UICommand is what the front end is told to run, as the payload of the ui:command event.
-type UICommand struct {
-	Name string   `json:"name"`
-	Args []string `json:"args"`
-}
-
 // Router sends each command to its handler.
 type Router struct {
 	sessions Sessions
 	switchTo func(name string) error
-	emit     func(event string, payload any)
 	handlers map[string]Handler
+	external map[string]bool
 	server   *ctl.Server
 }
 
-// New routes commands. switchTo makes a project current; emit tells the front end.
-func New(s Sessions, switchTo func(name string) error, emit func(string, any)) *Router {
-	return &Router{sessions: s, switchTo: switchTo, emit: emit, handlers: map[string]Handler{}}
+// New routes commands. switchTo makes a project current.
+func New(s Sessions, switchTo func(name string) error) *Router {
+	return &Router{sessions: s, switchTo: switchTo, handlers: map[string]Handler{}, external: map[string]bool{}}
 }
 
-// Handle registers the handler of a command.
+// Handle registers the handler of a command that only a tool call reaches, through Answer. Such a handler trusts the
+// request's session and project, which the tool call sets from the thread's token, so the socket never answers it:
+// a client there could name any thread.
 func (r *Router) Handle(cmd string, h Handler) { r.handlers[cmd] = h }
+
+// HandleExternal registers the handler of a command the control socket answers. It must take its caller from the
+// request's token and nothing else.
+func (r *Router) HandleExternal(cmd string, h Handler) {
+	r.handlers[cmd] = h
+	r.external[cmd] = true
+}
 
 // Listen starts answering at the control socket in stateDir. Without it agents
 // cannot use the app, which is logged and not fatal.
 func (r *Router) Listen(stateDir string) {
-	srv, err := ctl.Listen(ctl.SocketPath(stateDir), r.Answer)
+	srv, err := ctl.Listen(ctl.SocketPath(stateDir), r.answerExternal)
 	if err != nil {
 		log.Printf("agentos: agents cannot reach the app: %v", err)
 		return
@@ -61,6 +64,14 @@ func (r *Router) Close() {
 	if r.server != nil {
 		r.server.Close()
 	}
+}
+
+// answerExternal is Answer for a client on the control socket, which may run only what HandleExternal registered.
+func (r *Router) answerExternal(ctx context.Context, req ctl.Request) ctl.Response {
+	if !r.external[req.Cmd] {
+		return ctl.Response{Error: fmt.Sprintf("unknown command %q", req.Cmd)}
+	}
+	return r.Answer(ctx, req)
 }
 
 // Answer runs the handler of the request's command and returns what it printed, or why it failed.
@@ -129,22 +140,5 @@ func (r *Router) Scope(h Handler) Handler {
 	return func(ctx context.Context, req ctl.Request) (string, error) {
 		r.Enter(req)
 		return h(ctx, req)
-	}
-}
-
-// UI asks the front end to run a command in the project the request comes from, and answers ok.
-func (r *Router) UI(req ctl.Request, name string, args ...string) string {
-	r.Enter(req)
-	if args == nil {
-		args = []string{}
-	}
-	r.emit("ui:command", UICommand{Name: name, Args: args})
-	return "ok"
-}
-
-// View is the handler of a command that only changes what the front end shows.
-func (r *Router) View(name string) Handler {
-	return func(_ context.Context, req ctl.Request) (string, error) {
-		return r.UI(req, name, req.Args...), nil
 	}
 }

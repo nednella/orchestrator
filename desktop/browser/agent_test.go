@@ -34,7 +34,7 @@ func browserCmd(t *testing.T, h *apptest.Harness, session string, args ...string
 			pos = append(pos, a)
 		}
 	}
-	resp := h.Ask(t, ctl.Request{Cmd: "browser", Session: session, Args: pos, Opts: opts, TimeoutMs: 60_000})
+	resp := h.AskTool(t, ctl.Request{Cmd: "browser", Session: session, Args: pos, Opts: opts, TimeoutMs: 60_000})
 	if !resp.OK {
 		return "", errors.New(resp.Error)
 	}
@@ -123,14 +123,11 @@ func TestBrowserAgentCLI(t *testing.T) {
 				t.Errorf("agentos browser %s succeeded: %q", strings.Join(args, " "), out)
 			}
 		}
-		if _, err := browserCmd(t, h, s.ID, "click", "e1"); err == nil || !strings.Contains(err.Error(), "agentos browser help") {
-			t.Errorf("a removed command's error = %v", err)
+		if _, err := browserCmd(t, h, s.ID, "click", "e1"); err == nil || !strings.Contains(err.Error(), "unknown browser action") {
+			t.Errorf("a removed action's error = %v", err)
 		}
 		if out, err := browserCmd(t, h, "", "open", srv.URL); err == nil || !strings.Contains(err.Error(), "AGENTOS_SESSION") {
 			t.Errorf("without a session: %q, %v", out, err)
-		}
-		if out := mustBrowser(t, h, "", "help"); !strings.Contains(out, "agent-browser") || strings.Contains(out, "list_pages") {
-			t.Errorf("help = %q", out)
 		}
 	})
 
@@ -146,14 +143,12 @@ func TestBrowserAgentCLI(t *testing.T) {
 	})
 }
 
-func TestBrowserWithoutArgumentsShowsTheView(t *testing.T) {
+func TestBrowserNeedsAKnownAction(t *testing.T) {
 	h := newHarness(t)
-	resp := h.Ask(t, ctl.Request{Cmd: "browser"})
-	if got := h.Rec.LastUI(); !resp.OK || resp.Out != "ok" || got.Name != "browser" || len(got.Args) != 0 {
-		t.Errorf("browser = %+v, ui %+v", resp, got)
-	}
-	if help := h.Ask(t, ctl.Request{Cmd: "browser", Args: []string{"help"}}); !help.OK || !strings.Contains(help.Out, "your thread's browser window") {
-		t.Errorf("browser help = %+v", help)
+	for _, args := range [][]string{nil, {"help"}, {"tab", "x"}} {
+		if resp := h.AskTool(t, ctl.Request{Cmd: "browser", Args: args}); resp.OK || !strings.Contains(resp.Error, "open, screenshot or close") {
+			t.Errorf("browser %v = %+v, want a refusal naming the actions", args, resp)
+		}
 	}
 }
 

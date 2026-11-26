@@ -49,7 +49,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     id: 'open-session',
     label: 'Open session',
     group: 'Sessions',
-    uiCommand: 'open',
     run(args) {
       const session = findSession(a.projectSessions, args.join(' '))
       a.select(session.id)
@@ -81,7 +80,6 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     label: 'Next that needs you',
     group: 'Sessions',
     shortcut: { key: 'e' },
-    uiCommand: 'next',
     run() {
       a.nextAttention()
     },

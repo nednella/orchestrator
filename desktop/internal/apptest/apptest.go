@@ -23,7 +23,6 @@ import (
 
 	"github.com/nednella/agentos/desktop/browser"
 	"github.com/nednella/agentos/desktop/chat"
-	"github.com/nednella/agentos/desktop/control"
 	"github.com/nednella/agentos/desktop/digest"
 	"github.com/nednella/agentos/desktop/evidence"
 	"github.com/nednella/agentos/desktop/internal/app"
@@ -195,12 +194,6 @@ func (r *Recorder) Last(name string) any {
 		}
 	}
 	return nil
-}
-
-// LastUI is the latest command the app told the front end to run.
-func (r *Recorder) LastUI() control.UICommand {
-	cmd, _ := r.Last("ui:command").(control.UICommand)
-	return cmd
 }
 
 // lastList is the payload of the latest event of that name, which carries one project's list.
@@ -1479,7 +1472,8 @@ func WithMergeable(prJSON, mergeable string) string {
 	return strings.Replace(prJSON, `"isDraft"`, fmt.Sprintf(`"mergeable":%q,"isDraft"`, mergeable), 1)
 }
 
-// Ask sends a command to the app's control socket, as the agentos command does.
+// Ask sends a command to the app's control socket, as the agentos mcp command does. The socket answers only what a
+// client may run with a token.
 func (h *Harness) Ask(t *testing.T, req ctl.Request) ctl.Response {
 	t.Helper()
 	resp, err := ctl.Call(context.Background(), ctl.SocketPath(h.State), req)
@@ -1487,6 +1481,13 @@ func (h *Harness) Ask(t *testing.T, req ctl.Request) ctl.Response {
 		t.Fatalf("asking %s: %v", req.Cmd, err)
 	}
 	return resp
+}
+
+// AskTool runs a command as a tool call does: the router's handler, with the session and project the request names. A
+// tool call sets both from the thread's token, and the control socket never answers such a command.
+func (h *Harness) AskTool(t *testing.T, req ctl.Request) ctl.Response {
+	t.Helper()
+	return h.App.Answer(context.Background(), req)
 }
 
 func (h *Harness) Evidence(id string) []evidence.Evidence { return h.evidence.Evidence(id) }
@@ -1516,8 +1517,8 @@ type FakeClaude struct {
 	mu      sync.Mutex
 	calls   []DigestCall
 	Do      func(call DigestCall)
-	Err     error
 	Reply   string
+	Err     error
 	AuthErr error
 }
 

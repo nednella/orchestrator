@@ -24,13 +24,11 @@ import { useFullscreen } from './useFullscreen'
 import { useDigestToasts } from './useDigestToasts'
 import { useNetwork } from './useNetwork'
 import { useShortcuts } from './useShortcuts'
-import { useUiCommands } from './useUiCommands'
 
 export function App() {
   const network = useNetwork()
   const confirming = useConfirming()
   useShortcuts(network.online && !confirming)
-  useUiCommands()
   useDigestToasts()
   useFocusedPanel()
   const fullscreen = useFullscreen()

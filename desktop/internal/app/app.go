@@ -30,6 +30,7 @@ import (
 	"github.com/nednella/agentos/desktop/terminal"
 	"github.com/nednella/agentos/desktop/update"
 	"github.com/nednella/agentos/internal/agent"
+	ctl "github.com/nednella/agentos/internal/control"
 	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/session"
 	upd "github.com/nednella/agentos/internal/update"
@@ -142,38 +143,28 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	}
 	proj := projects.NewService(c.Registry, sess, store, iss, runner, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
-	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err }, h.Emit)
+	a.router = control.New(sess, func(name string) error { _, err := proj.SwitchProject(name); return err })
 	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)
 	chats.OnTurnEnd(a.tools.ChildTurnEnded)
 	sess.OnSlept(a.tools.ChildSlept)
 	sess.OnDelete(a.tools.ThreadDeleted)
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}
-	digests, sc, ic := digest.NewCommands(mgr, a.router), sessions.NewCommands(sess, a.router), issues.NewCommands(iss, sessSvc)
+	sc, ic := sessions.NewCommands(sess), issues.NewCommands(iss, sessSvc)
+	// Only a tool call reaches these, as the thread its token names (orchestration.agentRequest sets the session and
+	// the project from it); the socket answers none of them.
 	a.handle(map[string]control.Handler{
-		"digest-add": digests.Add,
-		"digest":     digests.Digest,
-		"track":      sc.Track,
-		"note":       notes.NewCommands(store, a.router, sess, h.Emit).Note,
-		"show":       evidence.NewCommands(proofs, a.router, sess, changes).Show,
-		"browser":    browser.NewCommands(browsers, a.router, a.router, proofs, changes).Browser,
-		"stats":      stats.NewCommands(waits, a.router, a.router).Stats,
-		"project":    projects.NewCommands(proj).Project,
-		"relaunch":   update.NewCommands(a.updates).Relaunch,
-		// Unscoped: a tool call never moves the screen to another project.
-		"orchestrate": a.tools.Orchestrate,
+		"track":   sc.Track,
+		"note":    notes.NewCommands(store, a.router, sess, h.Emit).Note,
+		"show":    evidence.NewCommands(proofs, a.router, sess, changes).Show,
+		"browser": browser.NewCommands(browsers, a.router, proofs, changes).Browser,
 	})
 	a.handleScoped(map[string]control.Handler{
 		"issue":   ic.Issue,
 		"refresh": ic.Refresh,
 		"new":     sc.New,
-		"open":    sc.Open,
-		"settle":  sc.Settle,
-		"pr":      sc.PR,
-		"cleanup": sc.Cleanup,
 	})
-	for _, view := range []string{"queue", "notes", "evidence", "chat", "next", "filter"} {
-		a.router.Handle(view, a.router.View(view))
-	}
+	// Unscoped: a tool call never moves the screen to another project.
+	a.router.HandleExternal("orchestrate", a.tools.Orchestrate)
 	a.services = []any{
 		proj,
 		sessSvc,
@@ -279,6 +270,11 @@ func (a *App) Media() http.Handler { return a.media }
 // Assets serves what the front end fetches besides its own files: the pictures under /media/ and the shells' output
 // under /term/.
 func (a *App) Assets() http.Handler { return a.assets }
+
+// Answer runs a command as a tool call does, which the control socket never answers for a client: for tests.
+func (a *App) Answer(ctx context.Context, req ctl.Request) ctl.Response {
+	return a.router.Answer(ctx, req)
+}
 
 // Tools returns the commands that answer the agentos tools threads call, for tests and wiring.
 func (a *App) Tools() *orchestration.Commands { return a.tools }

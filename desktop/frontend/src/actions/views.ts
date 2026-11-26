@@ -36,7 +36,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     label: 'Stats: what interrupts you',
     group: 'App',
     shortcut: { key: 's', code: 'KeyS', alt: true },
-    uiCommand: 'stats',
     run: layout.toggleStats,
   },
   {
@@ -60,7 +59,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     id: 'show-thread',
     label: 'Show thread',
     group: 'Sessions',
-    uiCommand: 'chat',
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
@@ -71,7 +69,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     id: 'show-browser',
     label: 'Show browser',
     group: 'Sessions',
-    uiCommand: 'browser',
     async run(args) {
       if (!current) throw 'No session selected'
       layout.closeCentre()
@@ -85,7 +82,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     id: 'show-evidence',
     label: 'Show evidence',
     group: 'Sessions',
-    uiCommand: 'evidence',
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
@@ -116,7 +112,6 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     id: 'digest',
     label: 'News',
     group: 'App',
-    uiCommand: 'digest',
     run: layout.toggleDigest,
   },
   {

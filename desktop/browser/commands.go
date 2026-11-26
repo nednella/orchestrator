@@ -7,7 +7,6 @@ import (
 
 	"github.com/nednella/agentos/desktop/evidence"
 	"github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/prompts"
 )
 
 // Asker checks which session a command comes from.
@@ -15,35 +14,26 @@ type Asker interface {
 	AskerSession(req control.Request) (string, error)
 }
 
-// Scene shows things on the screen of the project a command comes from.
-type Scene interface {
-	UI(req control.Request, name string, args ...string) string
-}
-
-// Commands answers agentos browser.
+// Commands answers the browser tool.
 type Commands struct {
 	browsers *Browsers
 	asker    Asker
-	scene    Scene
 	store    *evidence.Store
 	changes  evidence.Changes
 }
 
-func NewCommands(b *Browsers, a Asker, scene Scene, s *evidence.Store, c evidence.Changes) *Commands {
-	return &Commands{browsers: b, asker: a, scene: scene, store: s, changes: c}
+func NewCommands(b *Browsers, a Asker, s *evidence.Store, c evidence.Changes) *Commands {
+	return &Commands{browsers: b, asker: a, store: s, changes: c}
 }
 
-// Browser runs one agentos browser command (open, screenshot, close) for the asking session; without one it shows the browser view.
+// Browser runs one browser action (open, screenshot, close) for the asking session.
 func (c *Commands) Browser(ctx context.Context, req control.Request) (string, error) {
 	if len(req.Args) == 0 {
-		return c.scene.UI(req, "browser"), nil
+		return "", errors.New("browser needs an action: open, screenshot or close")
 	}
 	sub, args := req.Args[0], req.Args[1:]
-	if sub == "help" {
-		return prompts.BrowserHelp(), nil
-	}
 	if sub != "open" && sub != "screenshot" && sub != "close" {
-		return "", fmt.Errorf("unknown browser command %q: run agentos browser help", sub)
+		return "", fmt.Errorf("unknown browser action %q: it is open, screenshot or close", sub)
 	}
 	id, err := c.asker.AskerSession(req)
 	if err != nil {
@@ -58,7 +48,7 @@ func (c *Commands) Browser(ctx context.Context, req control.Request) (string, er
 	}
 	if sub == "open" {
 		if len(args) < 1 {
-			return "", errors.New("usage: agentos browser open <url> [--front]")
+			return "", errors.New("open needs a url")
 		}
 		return c.browsers.AgentOpen(ctx, id, args[0], req.Opts["front"] != "")
 	}

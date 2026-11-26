@@ -13,7 +13,7 @@ func TestNoteCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp := h.Ask(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"check the", "login page"}})
+	resp := h.AskTool(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"check the", "login page"}})
 	if !resp.OK || !strings.Contains(resp.Out, "note saved") {
 		t.Fatalf("response = %+v", resp)
 	}
@@ -23,7 +23,7 @@ func TestNoteCommand(t *testing.T) {
 	if h.Rec.Last("notes") == nil {
 		t.Error("no notes event")
 	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"  "}}); resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"  "}}); resp.OK {
 		t.Error("an empty note was accepted")
 	}
 }

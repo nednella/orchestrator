@@ -385,11 +385,6 @@ func TestNotesLiveInTheDataDir(t *testing.T) {
 	if cfg, _ = app.Load(); cfg.DataDir != filepath.Join(root, "override") {
 		t.Errorf("the override gave %q", cfg.DataDir)
 	}
-
-	t.Setenv("AGENTOS_DATA_DIR", filepath.Join(root, "old"))
-	if _, err := app.Load(); err == nil || !strings.Contains(err.Error(), "AGENTOS_DEV_DATA_DIR") {
-		t.Errorf("the old name gave %v", err)
-	}
 }
 
 // addNote calls the notes service of an app the way the front end does.

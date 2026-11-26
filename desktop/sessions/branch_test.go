@@ -112,16 +112,16 @@ func TestSessionReportsItsBranch(t *testing.T) {
 	s := sessionWithoutIssue(h, t)
 	h.GH.SetPR(prJSON("OPEN", true, "[]", 0, 0))
 
-	if resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID}); resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "track", Session: s.ID}); resp.OK {
 		t.Error("track without a branch was accepted")
 	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "track", Opts: map[string]string{"branch": "my-fix"}}); resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "track", Opts: map[string]string{"branch": "my-fix"}}); resp.OK {
 		t.Error("track outside a session was accepted")
 	}
-	if resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "main"}}); resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "main"}}); resp.OK {
 		t.Error("track of the default branch was accepted")
 	}
-	resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "my-fix"}})
+	resp := h.AskTool(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "my-fix"}})
 	if !resp.OK {
 		t.Fatalf("track: %s", resp.Error)
 	}
@@ -185,7 +185,7 @@ func TestTrackMovesTheThreadsBranch(t *testing.T) {
 	h.GH.SetPRFor("issue-7", "[]")
 	h.GH.SetPRFor("issue-7-fix", numberedPR(20, "OPEN"))
 
-	if resp := h.Ask(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "issue-7-fix"}}); !resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "track", Session: s.ID, Opts: map[string]string{"branch": "issue-7-fix"}}); !resp.OK {
 		t.Fatalf("track: %s", resp.Error)
 	}
 	eventually(t, "the PR of the tracked branch", func() bool { got, _ := h.Session(s.ID); return got.PR != nil && got.PR.Number == 20 })

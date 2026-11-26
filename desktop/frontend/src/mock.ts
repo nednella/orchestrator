@@ -318,14 +318,8 @@ export function createMock(params: URLSearchParams) {
   }
 
   function shellRun(shell: Shell, line: string) {
-    const [name, ...args] = line.trim().split(/\s+/)
+    const [name] = line.trim().split(/\s+/)
     if (!name) return
-    if (name === 'agentos') {
-      const [command = '', ...rest] = args
-      emit('ui:command', { name: command, args: rest })
-      shellWrite(shell, `\r\n\x1b[2mok: agentos ${args.join(' ')}\x1b[0m`)
-      return
-    }
     if (LONG_RUNNING.includes(name)) {
       shell.command = name
       shellWrite(shell, '\r\n')
