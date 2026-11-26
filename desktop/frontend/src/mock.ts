@@ -187,7 +187,7 @@ export function createMock(params: URLSearchParams) {
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
     staleAnswer: params.has('stale'),
-    // lineage gives #454 a delegated child and a fork, for its context card.
+    // lineage gives #454 a delegated child and a fork, for its context card, and a grandchild to checkout tests scratch.
     lineage: params.has('lineage'),
     // childask=question or childask=plan has the child ask that; any other value a tool approval.
     childAsk: params.get('childask'),
@@ -560,6 +560,8 @@ export function createMock(params: URLSearchParams) {
     }
     const notesCheck = seed('Check the notes sync for the same race', 0, 'idle', [['working', 8], ['idle', 3]], data[1], 'read')
     notesCheck.parent = lead.id
+    // With lineage, the finder delegates in turn, for a family three deep.
+    if (flags.lineage) seed('Run the checkout test 50 times', 0, 'working', [['working', 3]], data[0], 'read').parent = finder.id
     const sender = byIssue(444)
     chats.delegations(
       lead.id,

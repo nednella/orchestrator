@@ -67,7 +67,7 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     async run(args) {
       if (!current) throw 'No session selected'
       layout.closeCentre()
-      layout.showView(current.id, 'browser')
+      layout.showPanelView('browser')
       if (args.length === 0) return
       await a.openBrowser(current.id, args.join(' '))
       return `Opened ${args.join(' ')}`
@@ -81,29 +81,27 @@ export const viewActions = ({ a, layout, current }: ActionContext): Action[] => 
     run() {
       if (!current) throw 'No session selected'
       layout.closeCentre()
-      layout.showView(current.id, 'evidence')
+      layout.showPanelView('evidence')
     },
   },
   {
     id: 'view-previous',
-    label: 'Previous thread details tab (PR, evidence, browser, agents)',
+    label: 'Previous right panel tab',
     group: 'Navigate',
     shortcut: { key: '[', code: 'BracketLeft', shift: true, label: '[' },
     run() {
-      if (!current) throw 'No session selected'
-      layout.showPanel('details')
-      a.cycleSessionView(-1)
+      if (layout.panel.tabs.length === 0) throw 'No view is open in the right panel'
+      layout.stepPanelTab(-1)
     },
   },
   {
     id: 'view-next',
-    label: 'Next thread details tab (PR, evidence, browser, agents)',
+    label: 'Next right panel tab',
     group: 'Navigate',
     shortcut: { key: ']', code: 'BracketRight', shift: true, label: ']' },
     run() {
-      if (!current) throw 'No session selected'
-      layout.showPanel('details')
-      a.cycleSessionView(1)
+      if (layout.panel.tabs.length === 0) throw 'No view is open in the right panel'
+      layout.stepPanelTab(1)
     },
   },
   {

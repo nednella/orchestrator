@@ -2,7 +2,6 @@ import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { setOpened } from './chatOpen'
 import { agentList } from './chatTimeline'
 import type { AgentItem, TimelineItem } from './chatTimeline'
-import type { Session } from './types'
 
 // The subagents of each thread whose chat is shown, for its Agents list, and the asks to open one of them in the chat.
 // The chat keeps them here, and the list renders again only when what it shows of one of them changes: a subagent's
@@ -33,19 +32,13 @@ export function useThreadAgents(thread: string): AgentItem[] {
   return useSyncExternalStore(subscribe, () => shown.get(thread) ?? none)
 }
 
-// useAgentsRunning is how many subagents of the thread's chat work now, null while it has none, for the details' tab
-// bar, which renders again only when that changes.
+// useAgentsRunning is how many subagents of the thread's chat work now, null while it has none, for the panel's list of
+// views, which renders again only when that changes.
 export function useAgentsRunning(thread: string): number | null {
   return useSyncExternalStore(subscribe, () => {
     const agents = shown.get(thread)
     return agents ? agents.filter((a) => a.state === 'running').length : null
   })
-}
-
-// agentsTabShown is whether the thread's details show its Agents tab: when its chat has a subagent or it has a child
-// thread, among sessions.
-export function agentsTabShown(thread: string, sessions: Session[]): boolean {
-  return shown.has(thread) || sessions.some((s) => s.parent === thread)
 }
 
 // openAgent opens the subagent's row in the thread's chat and brings it into view.

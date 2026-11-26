@@ -76,7 +76,7 @@ export function NotesView() {
   )
 
   return (
-    <div ref={root} tabIndex={-1} data-section="notes" className="flex h-full min-h-0 flex-col outline-none" onKeyDown={onKeyDown}>
+    <div ref={root} tabIndex={-1} data-section="notes" className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col outline-none" onKeyDown={onKeyDown}>
       <div className="flex flex-none flex-col gap-1.5 px-2 pt-2 pb-1">
         <NoteJot />
         {a.notes.length > 0 && (

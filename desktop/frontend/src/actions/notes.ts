@@ -7,7 +7,7 @@ export const noteActions = ({ a, layout }: ActionContext): Action[] => [
     group: 'Notes',
     uiCommand: 'notes',
     run() {
-      layout.showPanel('notes')
+      layout.showPanelView('notes')
       a.focus('note-jot')
     },
   },

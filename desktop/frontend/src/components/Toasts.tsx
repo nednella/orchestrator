@@ -19,7 +19,7 @@ const ACTION_LABEL: Partial<Record<string, string>> = { replied: 'Open', opened:
 
 export function Toasts() {
   const { toasts, select, dismissToast } = useAgentos('toasts', 'select', 'dismissToast')
-  const { showView } = useLayout()
+  const { showPanelView } = useLayout()
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-12 flex flex-col items-center gap-2"
@@ -44,7 +44,7 @@ export function Toasts() {
                 className="btn"
                 onClick={() => {
                   select(sessionId)
-                  if (toast.view) showView(sessionId, toast.view)
+                  if (toast.view) showPanelView(toast.view, { thread: sessionId })
                   dismissToast(toast.key)
                 }}
               >

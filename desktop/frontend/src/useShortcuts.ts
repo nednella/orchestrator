@@ -29,7 +29,8 @@ export function useShortcuts(enabled: boolean) {
         return
       }
       if (lay.overlay) {
-        lay.closeOverlay('escape')
+        // An Esc held down since it closed something else does not close the panel under it too.
+        if (!e.repeat) lay.closeOverlay('escape')
         return
       }
       if (lay.statsOpen || lay.digestOpen) {

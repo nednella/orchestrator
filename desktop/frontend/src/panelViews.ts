@@ -1,37 +1,65 @@
+import { Bot, CircleDot, GitPullRequestArrow, Globe, Image, Server, StickyNote } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
-import { useAgentos, useAgentosSelector } from './AgentosContext'
+import { useAgentos } from './AgentosContext'
+import { useAgentsRunning, useThreadAgents } from './chatAgents'
+import { AgentsView } from './components/AgentsView'
+import { BrowserView } from './components/BrowserView'
+import { EvidenceView } from './components/EvidenceView'
 import { IssuesView } from './components/IssuesView'
 import { NotesView } from './components/NotesView'
-import { ThreadDetailsView } from './components/ThreadDetailsView'
-import type { Issue, Note, Session } from './types'
+import { PullRequestsView } from './components/PullRequestsView'
+import { ServersView } from './components/ServersView'
+import { PANEL_ORDER } from './panelTabs'
+import type { PanelViewId } from './panelTabs'
+import { descendantsOf } from './threads'
+import type { Session } from './types'
+import { useThreadServers } from './useThreadServers'
 
-export type PanelContext = { session: Session | undefined; notes: Note[]; issues: Issue[] }
+// session is the open thread, none on Home.
+export type PanelViewProps = { session: Session | undefined }
 
-export type PanelView = {
-  id: string
-  label: string
-  count?(ctx: PanelContext): number
-  available(ctx: PanelContext): boolean
-  Component: ComponentType<{ ctx: PanelContext }>
+// thread says the view shows one thread's things: Home lists it, but cannot open it.
+export type PanelView = { id: PanelViewId; label: string; icon: LucideIcon; thread: boolean; Component: ComponentType<PanelViewProps> }
+
+const VIEWS: Partial<Record<PanelViewId, PanelView>> = {
+  agents: { id: 'agents', label: 'Agents', icon: Bot, thread: true, Component: AgentsView },
+  servers: { id: 'servers', label: 'Servers', icon: Server, thread: true, Component: ServersView },
+  pulls: { id: 'pulls', label: 'Pull requests', icon: GitPullRequestArrow, thread: true, Component: PullRequestsView },
+  issues: { id: 'issues', label: 'Issues', icon: CircleDot, thread: false, Component: IssuesView },
+  notes: { id: 'notes', label: 'Notes', icon: StickyNote, thread: false, Component: NotesView },
+  evidence: { id: 'evidence', label: 'Evidence', icon: Image, thread: true, Component: EvidenceView },
+  browser: { id: 'browser', label: 'Browser', icon: Globe, thread: true, Component: BrowserView },
 }
 
-// The right panel's views, in tab order. A new view is one entry here and its component.
-export const PANEL_VIEWS: PanelView[] = [
-  { id: 'notes', label: 'Notes', count: (ctx) => ctx.notes.filter((n) => !n.archived).length, available: () => true, Component: NotesView },
-  { id: 'issues', label: 'Issues', count: (ctx) => ctx.issues.length, available: () => true, Component: IssuesView },
-  { id: 'details', label: 'Details', available: (ctx) => ctx.session !== undefined, Component: ThreadDetailsView },
-]
+export const panelView = (id: PanelViewId): PanelView | undefined => VIEWS[id]
 
-export function usePanelContext(): PanelContext {
-  const { notes, issues } = useAgentos('notes', 'issues')
-  const session = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
-  return { session, notes, issues }
+// The panel's list of views, in its order.
+export const LISTED_VIEWS: PanelView[] = PANEL_ORDER.flatMap((id) => VIEWS[id] ?? [])
+
+// agentsWait says whether the Agents view of s holds a thread that waits on the owner.
+export function agentsWait(s: Session | undefined, sessions: Session[]): boolean {
+  return s !== undefined && descendantsOf(s.id, sessions).some((d) => d.state === 'waiting')
 }
 
-export const shownPanelViews = (ctx: PanelContext) => PANEL_VIEWS.filter((view) => view.available(ctx))
-
-// The view the panel shows: the one picked last in the project while it is available, else a thread's details, else notes.
-export function panelViewFor(picked: string, ctx: PanelContext): PanelView {
-  const shown = shownPanelViews(ctx)
-  return shown.find((view) => view.id === picked) ?? shown.find((view) => view.id === (ctx.session ? 'details' : 'notes')) ?? shown[0]
+// usePanelMeta is the short fact the list shows beside each view, '' for none.
+export function usePanelMeta(s: Session | undefined): Partial<Record<PanelViewId, string>> {
+  const { sessions, issues, notes, browserStates } = useAgentos('sessions', 'issues', 'notes', 'browserStates')
+  const id = s?.id ?? ''
+  const subagents = useThreadAgents(id)
+  const subagentsRunning = useAgentsRunning(id) ?? 0
+  const { servers } = useThreadServers(id, s?.state, false)
+  const family = s ? descendantsOf(s.id, sessions) : []
+  const running = subagentsRunning + family.filter((d) => d.state === 'working').length
+  const agents = subagents.length + family.length
+  const shown = notes.filter((n) => !n.archived).length
+  return {
+    agents: running > 0 ? `${running} running` : agents > 0 ? String(agents) : '',
+    servers: servers.length > 0 ? `${servers.length} running` : '',
+    pulls: s?.pr ? `#${s.pr.number} ${s.pr.state}` : '',
+    issues: issues.length > 0 ? `${issues.length} open` : '',
+    notes: shown > 0 ? String(shown) : '',
+    evidence: s && s.evidence > 0 ? String(s.evidence) : '',
+    browser: s && (browserStates[s.id]?.open ?? s.browser) ? 'Open' : '',
+  }
 }

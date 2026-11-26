@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { agentRows, cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Session, State } from './types.ts'
 
@@ -196,4 +196,39 @@ test('the thread opened after a sleep is the next live top-level thread in sideb
 test('a kept clean-up says kept and why', () => {
   const s = { ...thread('a', 'settled'), cleanup: 'blocked' as const, cleanupReason: 'a shell is open in this worktree' }
   assert.equal(cleanupNote(s), 'Kept: a shell is open in this worktree')
+})
+
+test('agentRows orders a tree', () => {
+  const sessions = [
+    thread('lead', 'working'),
+    thread('old', 'settled', 10, 'lead'),
+    thread('idler', 'idle', 0, 'lead'),
+    thread('worker', 'working', 0, 'lead'),
+    thread('new', 'settled', 20, 'lead'),
+    thread('quiet', 'idle', 0, 'lead'),
+    thread('deep', 'waiting', 0, 'quiet'),
+    thread('asker', 'waiting', 0, 'lead'),
+    thread('done', 'settled', 5, 'worker'),
+    thread('busy', 'working', 0, 'worker'),
+  ]
+  assert.deepEqual(
+    agentRows('lead', sessions).map((r) => `${r.depth} ${r.session.id}`),
+    ['0 quiet', '1 deep', '0 asker', '0 worker', '1 busy', '1 done', '0 idler', '0 new', '0 old'],
+    'attention (a waiting child, or one with a waiting descendant), working, idle, then asleep newest first, each child under its parent',
+  )
+})
+
+test('agentRows leaves out other threads', () => {
+  const sessions = [thread('lead', 'working'), thread('child', 'idle', 0, 'lead'), thread('other', 'working'), thread('cousin', 'working', 0, 'other'), { ...thread('fork', 'idle'), forkOf: 'lead' }]
+  assert.deepEqual(
+    agentRows('lead', sessions).map((r) => r.session.id),
+    ['child'],
+  )
+  assert.deepEqual(agentRows('child', sessions), [])
+  const loop = [thread('a', 'idle', 0, 'b'), thread('b', 'idle', 0, 'a')]
+  assert.deepEqual(
+    agentRows('a', loop).map((r) => r.session.id),
+    ['b'],
+    'a loop in the parent links ends',
+  )
 })

@@ -25,7 +25,7 @@ const subagentsWorking = (n: number) => (n === 0 ? undefined : `${n} ${n === 1 ?
 export function ThreadMenu({ session, selected, at, onClose, onRename, onDelete }: ThreadMenuProps) {
   const a = useAgentos()
   const layout = useLayout()
-  const { rightOpen, showPanel, toggleRight } = layout
+  const { rightOpen, setRightOpen, toggleRight } = layout
   const openInEditor = sessionActions({ a, layout, current: session }).find((x) => x.id === 'open-in-editor')
   const settled = session.state === 'settled'
   const panelShown = selected && rightOpen
@@ -33,7 +33,7 @@ export function ThreadMenu({ session, selected, at, onClose, onRename, onDelete 
   const toggleOwnPanel = () => {
     if (panelShown) return a.report(toggleRight)
     if (!selected) a.select(session.id)
-    showPanel('details')
+    setRightOpen(true)
   }
 
   const cleanUp = () => confirmed(cleanupRequest(session), () => a.cleanupSession(session.id, cleanupForced(session.cleanup)))

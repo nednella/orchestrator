@@ -1,91 +1,50 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { closesPanel, dockedMax, fit, modeFor, nextOverlay, OVERLAY_BELOW, sidebarPushesRightOver } from './panelLayout.ts'
+import { closesPanel, modeFor, nextOverlay, OVERLAY_BELOW, sidebarFit, sidebarMax } from './panelLayout.ts'
+import { panelFit } from './panelTabs.ts'
 
 const ROOT = 16
 
-const prefs = (sidebar: number, right: number | null = null, sidebarOpen = true) => ({ sidebarOpen, sidebar, right })
-
 test('the sidebar keeps the width it was set to at every window width', () => {
-  for (const windowPx of [600, 640, 700, 899, 900, 1100, 1249, 1250, 1512, 2560]) {
-    assert.equal(fit(windowPx, prefs(21), ROOT).widths.sidebar, 21, `${windowPx}px`)
-    assert.equal(fit(windowPx, prefs(21, 20), ROOT).widths.sidebar, 21, `${windowPx}px with the right panel`)
-  }
+  for (const windowPx of [600, 640, 700, 899, 900, 1100, 1249, 1250, 1512, 2560]) assert.equal(sidebarFit(windowPx, 21, ROOT).width, 21, `${windowPx}px`)
 })
 
 test('the sidebar docks only where the thread keeps its room beside it', () => {
-  assert.equal(fit(1512, prefs(18), ROOT).docked.sidebar, true)
-  assert.equal(fit(819, prefs(18), ROOT).docked.sidebar, true)
-  assert.equal(fit(818, prefs(18), ROOT).docked.sidebar, false)
-  assert.equal(fit(700, prefs(18), ROOT).docked.sidebar, false)
-  assert.equal(fit(640, prefs(32), ROOT).docked.sidebar, false)
-  assert.equal(fit(1043, prefs(32), ROOT).docked.sidebar, true)
-  assert.equal(fit(1042, prefs(32), ROOT).docked.sidebar, false)
+  assert.equal(sidebarFit(1512, 18, ROOT).docked, true)
+  assert.equal(sidebarFit(819, 18, ROOT).docked, true)
+  assert.equal(sidebarFit(818, 18, ROOT).docked, false)
+  assert.equal(sidebarFit(700, 18, ROOT).docked, false)
+  assert.equal(sidebarFit(640, 32, ROOT).docked, false)
+  assert.equal(sidebarFit(1043, 32, ROOT).docked, true)
+  assert.equal(sidebarFit(1042, 32, ROOT).docked, false)
 })
 
-test('below the breakpoint nothing docks, whatever the room', () => {
-  assert.deepEqual(fit(OVERLAY_BELOW - 1, prefs(13, 9.5, false), ROOT).docked, { sidebar: false, right: false })
+test('below the breakpoint the sidebar never docks, whatever the room', () => {
+  assert.equal(sidebarFit(OVERLAY_BELOW - 1, 13, ROOT).docked, false)
 })
 
-test('the right panel docks only where it fits at its width beside the thread', () => {
-  assert.deepEqual(fit(1512, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
-  assert.deepEqual(fit(900, prefs(18), ROOT).docked, { sidebar: true, right: false })
-  assert.deepEqual(fit(900, prefs(18, null, false), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
-  assert.equal(fit(1512, prefs(18, 32), ROOT).docked.right, true)
-  assert.equal(fit(1200, prefs(18, 32), ROOT).docked.right, false)
-})
-
-test('the right panel has one width, docked or over the thread', () => {
-  assert.deepEqual(fit(1512, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: true } })
-  assert.deepEqual(fit(900, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: true, right: false } })
-  assert.deepEqual(fit(700, prefs(18), ROOT), { widths: { sidebar: 18, right: 22 }, docked: { sidebar: false, right: false } })
-  assert.equal(fit(1512, prefs(18, 15), ROOT).widths.right, 15)
-  assert.equal(fit(700, prefs(18, 15), ROOT).widths.right, 15)
-})
-
-test('a panel over the thread opens at its full width, capped by the room under the top bar', () => {
-  assert.equal(fit(900, prefs(18), ROOT).widths.right, 22)
-  assert.equal(fit(600, prefs(18), ROOT).widths.right, 22)
-  assert.equal(fit(600, prefs(18, 25), ROOT).widths.right, 25)
-  assert.equal(fit(300, prefs(18), ROOT).widths.right, 300 / ROOT)
-  assert.equal(fit(700, prefs(18), ROOT).widths.sidebar, 18)
-  assert.equal(fit(300, prefs(18), ROOT).widths.sidebar, 300 / ROOT - 3)
+test('a sidebar over the thread is never wider than the window', () => {
+  assert.equal(sidebarFit(700, 18, ROOT).width, 18)
+  assert.equal(sidebarFit(300, 18, ROOT).width, 300 / ROOT - 3)
 })
 
 test('a drag of the docked sidebar stops where it would leave the side of the thread', () => {
   for (const root of [16, 17.6, 19.2]) {
     for (const windowPx of [820, 1000, 1512, 2560]) {
-      const max = dockedMax('sidebar', windowPx, { ...prefs(18), rightOpen: false }, root)
-      assert.equal(fit(windowPx, prefs(max), root).docked.sidebar, true, `${windowPx}px at ${root}`)
-      assert.equal(fit(windowPx, prefs(max + 0.02), root).docked.sidebar, false, `${windowPx}px at ${root}, past the limit`)
+      const max = sidebarMax(windowPx, 0, root)
+      assert.equal(sidebarFit(windowPx, max, root).docked, true, `${windowPx}px at ${root}`)
+      assert.equal(sidebarFit(windowPx, max + 0.02, root).docked, false, `${windowPx}px at ${root}, past the limit`)
     }
   }
-  assert.equal(dockedMax('sidebar', 1512, { ...prefs(18), rightOpen: false }, ROOT), 61.31)
+  assert.equal(sidebarMax(1512, 0, ROOT), 61.31)
 })
 
-test('a drag of the docked sidebar keeps the open docked right panel beside the thread', () => {
-  const open = { ...prefs(18, 22), rightOpen: true }
-  const max = dockedMax('sidebar', 1512, open, ROOT)
-  assert.equal(max, 39.12)
-  assert.deepEqual(fit(1512, prefs(max, 22), ROOT).docked, { sidebar: true, right: true })
-  assert.deepEqual(fit(1512, prefs(max + 0.02, 22), ROOT).docked, { sidebar: true, right: false })
-  assert.equal(dockedMax('sidebar', 1512, { ...prefs(18, 22), rightOpen: false }, ROOT), 61.31)
-})
-
-test('a drag of the docked right panel stops where it would leave the side of the thread', () => {
-  const max = dockedMax('right', 1512, { ...prefs(18, 22), rightOpen: true }, ROOT)
-  assert.equal(max, 43.12)
-  assert.equal(fit(1512, prefs(18, max), ROOT).docked.right, true)
-  assert.equal(fit(1512, prefs(18, max + 0.02), ROOT).docked.right, false)
-  assert.equal(dockedMax('right', 1512, { ...prefs(18, 22, false), rightOpen: true }, ROOT), 64.31)
-})
-
-test('opening the sidebar pushes the right panel over the thread only when it then has no room', () => {
-  assert.equal(sidebarPushesRightOver(1512, prefs(18, 22, false), ROOT), false)
-  assert.equal(sidebarPushesRightOver(1200, prefs(18, 22, false), ROOT), false)
-  assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, false), ROOT), true)
-  assert.equal(sidebarPushesRightOver(1100, prefs(18, 22, true), ROOT), true)
-  assert.equal(sidebarPushesRightOver(700, prefs(18, 22, false), ROOT), false)
+test('a drag of the docked sidebar leaves the open right panel and the chat their room', () => {
+  const max = sidebarMax(1512, 361, ROOT)
+  assert.equal(max, 38.75)
+  const row = 1512 - (3 + max) * ROOT - 3
+  const { width } = panelFit(1512, row, 540)
+  assert.equal(width >= 360 && row - width >= 360, true, `the panel at ${width}px leaves the chat ${row - width}px`)
 })
 
 test('closing an overlay closes its panel, opening a thread only puts it away', () => {

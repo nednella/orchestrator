@@ -2,11 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
-import { agentsTabShown } from './chatAgents'
 import { answeredLate } from './chatQuestions'
-import { nextView } from './detailsTabs'
-import { serversTabShown } from './useThreadServers'
 import { shellsOf } from './shells'
+import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
@@ -20,12 +18,10 @@ export type Toast = {
   text: string
   detail?: string
   sessionId?: string
-  view?: SessionView
+  view?: PanelViewId
   sticky?: boolean
   action?: { label: string; run(): void }
 }
-
-export type SessionView = 'pr' | 'evidence' | 'browser' | 'agents' | 'servers'
 
 export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
@@ -71,7 +67,6 @@ type AgentosState = {
   update: string
   updating: boolean
   patchNotes: Release[]
-  viewOf(id: string | null): SessionView
 }
 
 // The actions keep their identity for the app's whole life, so picking one never renders a component again.
@@ -116,8 +111,6 @@ type AgentosActions = {
   deleteNote(id: string): Promise<void>
   refreshPRs(): Promise<void>
   loadBrowserState(id: string): Promise<void>
-  setSessionView(id: string, view: SessionView): void
-  cycleSessionView(delta: -1 | 1): void
   openBrowser(id: string, url?: string): Promise<void>
   runDigest(): Promise<void>
   digestToNote(itemId: string): Promise<void>
@@ -266,7 +259,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [evidence, setEvidence] = useState<Record<string, Evidence[]>>({})
   const [browserStates, setBrowserStates] = useState<Record<string, BrowserState>>({})
   const [pending, setPending] = useState<Record<string, Pending>>({})
-  const [views, setViews] = useState<Record<string, SessionView>>({})
   const [digest, setDigest] = useState<Digest | null>(null)
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
@@ -304,7 +296,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const detached = useRef(false)
   const notesRef = useRef(notes)
   const browserStatesRef = useRef(browserStates)
-  const viewsRef = useRef(views)
   const issuesRef = useRef<Issue[]>([])
   sessionsRef.current = sessions
   treeRef.current = threadTree
@@ -312,7 +303,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   projectRef.current = project
   notesRef.current = notes
   browserStatesRef.current = browserStates
-  viewsRef.current = views
 
   const selectId = useCallback((id: string | null) => {
     selectedRef.current = id
@@ -692,8 +682,6 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectId, focus, report, enterFrom],
   )
 
-  const viewOf = useCallback((id: string | null) => (id && views[id]) || 'pr', [views])
-
   // An answer the host refused because its approval no longer waits says so, and drops the approval from pending in
   // case the event that would have was missed.
   const answerFailed = useCallback((id: string, request: string, err: unknown): never => {
@@ -836,17 +824,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       refreshIssues: () => loadIssues(true),
       loadBrowserState,
-      setSessionView(id, view) {
-        setViews((map) => ({ ...map, [id]: view }))
-      },
-      cycleSessionView(delta) {
-        const id = selectedRef.current
-        if (!id) return
-        const next = nextView(viewsRef.current[id] ?? 'pr', delta, agentsTabShown(id, sessionsRef.current), serversTabShown(id))
-        setViews((map) => ({ ...map, [id]: next }))
-      },
       async openBrowser(id, url) {
-        setViews((map) => ({ ...map, [id]: 'browser' }))
         const state = browserStatesRef.current[id] ?? (await api.browserState(id))
         if (!state.open) {
           const opened = await api.browserOpen(id, url ?? '')
@@ -1036,10 +1014,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       update,
       updating,
       patchNotes,
-      viewOf,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, updating, patchNotes, viewOf, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, shellId, version, machine, update, updating, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

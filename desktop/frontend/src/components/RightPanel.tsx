@@ -1,46 +1,31 @@
 import { useRef } from 'react'
 import { useAgentosSelector } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
-import { panelViewFor, shownPanelViews, usePanelContext } from '../panelViews'
+import { panelView } from '../panelViews'
 import { useFocusRequest } from '../useFocusRequest'
-import { Icon } from './Icon'
+import { PanelHome } from './PanelHome'
+import { PanelTabStrip } from './PanelTabStrip'
 
+// RightPanel shows the open thread's views, or Home's: the list of views, or the tab picked, which fills the panel.
 export function RightPanel() {
-  const ctx = usePanelContext()
+  const session = useAgentosSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
   const projectKey = useAgentosSelector((a) => a.project?.key)
-  const { widths, setRightOpen, panelView, setPanelView } = useLayout()
-  const view = panelViewFor(panelView, ctx)
-  const panel = useRef<HTMLElement>(null)
+  const { widths, panel } = useLayout()
+  const view = panel.active ? panelView(panel.active) : undefined
+  const root = useRef<HTMLElement>(null)
 
-  useFocusRequest('right', () => (panel.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? panel.current)?.focus())
+  useFocusRequest('right', () => (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [data-panel-view]') ?? root.current)?.focus())
 
   return (
-    <aside ref={panel} data-panel="right" tabIndex={-1} className="panel flex h-full min-h-0 flex-none flex-col overflow-hidden" style={{ width: `${widths.right}rem` }}>
-      <div className="flex h-10 flex-none items-center gap-1 border-b border-line px-2">
-        <div role="tablist" aria-label="Right panel" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-          {shownPanelViews(ctx).map((tab) => {
-            const count = tab.count?.(ctx)
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={tab.id === view.id}
-                className="flex h-7 flex-none items-center gap-1.5 rounded-md px-2.5 text-body font-medium text-soft hover:text-ink aria-selected:bg-hover aria-selected:text-ink"
-                onClick={() => setPanelView(tab.id)}
-              >
-                {tab.label}
-                {count !== undefined && <span className="mono text-small text-dim">{count}</span>}
-              </button>
-            )
-          })}
-        </div>
-        <button className="btn btn-ghost h-7 w-7 flex-none justify-center px-0" title="Close the right panel" aria-label="Close the right panel" onClick={() => setRightOpen(false)}>
-          <Icon name="close" />
-        </button>
-      </div>
-      <div className="relative min-h-0 flex-1">
-        <view.Component key={projectKey} ctx={ctx} />
-      </div>
+    <aside
+      ref={root}
+      data-panel="right"
+      tabIndex={-1}
+      className="panel flex h-full min-h-0 flex-none flex-col overflow-hidden"
+      style={{ width: `${widths.right}rem` }}
+    >
+      <PanelTabStrip session={session} />
+      <div className="@container relative min-h-0 flex-1">{view ? <view.Component key={`${projectKey} ${view.id}`} session={session} /> : <PanelHome session={session} />}</div>
     </aside>
   )
 }

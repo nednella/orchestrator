@@ -21,18 +21,16 @@ function factsOf(session: Session, a: Known, servers: Server[], agents: AgentIte
   }
 }
 
-// useCardFacts gathers what the context card of thread id shows: the thread, its sections, the address of its issue,
-// and a read of its servers again. The servers are read when the card opens and at each turn end, when a thread starts
+// useCardFacts gathers what the context card of thread id shows: the thread, its sections, and a read of its servers
+// again. The servers are read when the card opens and at each turn end, when a thread starts
 // or stops one.
-export function useCardFacts(id: string): { session: Session | undefined; sections: CardSection[]; issueURL: string; refreshServers(): Promise<void> } {
+export function useCardFacts(id: string): { session: Session | undefined; sections: CardSection[]; refreshServers(): Promise<void> } {
   const a = useAgentos('machine', 'sessions', 'issues', 'project', 'settings')
   const session = a.sessions.find((s) => s.id === id)
   const agents = useThreadAgents(id)
   const { servers, refresh } = useThreadServers(id, session?.state, false)
   const sections = session ? cardSections(session, factsOf(session, a, servers, agents)) : []
-  const issue = a.issues.find((i) => i.number === session?.issue)
-  const issueURL = issue?.url ?? (a.project?.repo && session ? `https://github.com/${a.project.repo}/issues/${session.issue}` : '')
-  return { session, sections, issueURL, refreshServers: refresh }
+  return { session, sections, refreshServers: refresh }
 }
 
 // selectedCardHasRows says whether the open thread's card shows anything, for useAgentosSelector. It leaves out the

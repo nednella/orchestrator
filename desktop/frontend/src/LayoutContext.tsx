@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAgentos } from './AgentosContext'
-import type { FocusTarget, SessionView } from './AgentosContext'
+import type { FocusTarget } from './AgentosContext'
 import { devFlags } from './api'
-import { closesPanel, dockedMax, fit, MAX_REM, MIN_REM, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, sidebarPushesRightOver } from './panelLayout'
-import type { Band, FitPrefs, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
+import { closesPanel, modeFor, nextOverlay, RAIL_REM, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarFit, sidebarMax } from './panelLayout'
+import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
+import { closeTab, openTab, panelFit, panelStateOf, panelWidth, stepTab } from './panelTabs'
+import type { PanelState, PanelViewId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
 import type { ThemeName } from './types'
@@ -21,7 +23,8 @@ const PANEL_FOCUS: Record<TogglePanel, FocusTarget> = { sidebar: 'sidebar', shel
 
 const LAYOUT_KEY = 'agentos.layout.v3'
 const SIDEBAR_WIDTH_KEY = 'agentos.sidebarWidth'
-const PANEL_VIEW_KEY = 'agentos.panelView'
+// Each thread's right panel, and Home's under ''.
+const PANEL_KEY = 'agentos.panel.v2'
 const SHELL_ROW_REM = 1.0325
 const SHELL_PAD_REM = 0.5
 export const shellRemForRows = (rows: number) => rows * SHELL_ROW_REM + SHELL_PAD_REM
@@ -47,7 +50,8 @@ export type Layout = {
   // The side panel open over the thread.
   overlay: SidePanel | null
   widths: Record<SidePanel, number>
-  panelView: string
+  // The open thread's right panel, or Home's.
+  panel: PanelState
   statsOpen: boolean
   digestOpen: boolean
   zoom(step: -1 | 0 | 1): void
@@ -58,9 +62,11 @@ export type Layout = {
   setRightOpen(open: boolean): void
   toggleRight(): void
   togglePanel(panel: TogglePanel): void
-  setPanelView(view: string): void
-  showPanel(view: string): void
-  showView(id: string, view: SessionView): void
+  // showPanelView opens the right panel on the view, in the panel of thread, else of the open thread.
+  showPanelView(view: PanelViewId, opts?: { thread?: string }): void
+  showPanelList(): void
+  closePanelTab(view: PanelViewId): void
+  stepPanelTab(delta: -1 | 1): void
   setShellHeight(rem: number, commit: boolean): void
   resetShellHeight(): void
   setSidebarOpen(open: boolean): void
@@ -105,7 +111,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, project, settings, setTextScale, setSessionView, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'setSessionView', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
@@ -123,7 +129,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const [openOverlay, setOpenOverlay] = useState<SidePanel | null>(null)
   const [statsOpen, setStatsOpen] = useState(devFlags.view === 'stats')
   const [digestOpen, setDigestOpen] = useState(devFlags.view === 'digest')
-  const [panelViews, setPanelViews] = useState(() => readStored<Record<string, string>>(PANEL_VIEW_KEY, {}))
+  const [panels, setPanels] = useState(() => readStored<Record<string, unknown>>(PANEL_KEY, {}))
   const zoomToast = useRef<number | null>(null)
   const focusBefore = useRef<Partial<Record<TogglePanel, Element>>>({})
 
@@ -136,14 +142,20 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   }, [theme])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
-  const fitPrefs: FitPrefs = { sidebarOpen: prefs.sidebarOpen, sidebar: sidebarRem ?? SIDEBAR_DEFAULT_REM, right: prefs.right }
-  const { widths: fittedWidths, docked } = fit(width, fitPrefs, 16 * scale)
+  const root = 16 * scale
+  // The right panel's rules are in px at the default text size, as the window would be at that size.
+  const sidebar = sidebarFit(width, sidebarRem ?? SIDEBAR_DEFAULT_REM, root)
+  const sidebarBeside = sidebar.docked && prefs.sidebarOpen ? (RAIL_REM + sidebar.width) * root + 1 : 0
+  const viewport = width / scale
+  const row = (width - sidebarBeside) / scale - 1
+  const right = panelFit(viewport, row, prefs.right === null ? null : prefs.right * 16)
+  const docked = { sidebar: sidebar.docked, right: right.docked }
   const overlay = openOverlay && !docked[openOverlay] ? openOverlay : null
   const sidebarOpen = docked.sidebar ? prefs.sidebarOpen : overlay === 'sidebar'
   const rightOpen = docked.right ? prefs.rightOpen : overlay === 'right'
   const shellOpen = prefs.shellOpen
-  const projectName = project?.name ?? ''
-  const panelView = panelViews[projectName] ?? ''
+  const panelKey = selectedId ?? ''
+  const panel = panelStateOf(panels[panelKey])
 
   const updatePrefs = useCallback(
     (patch: Partial<BandPrefs>) =>
@@ -187,10 +199,9 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const setSidebarOpen = useCallback(
     (open: boolean) => {
       if (!docked.sidebar) return moveOverlay(open ? { open: 'sidebar' } : { close: 'sidebar' })
-      if (open && prefs.rightOpen && sidebarPushesRightOver(width, fitPrefs, 16 * scale)) moveOverlay({ open: 'right' })
       updatePrefs({ sidebarOpen: open })
     },
-    [docked.sidebar, prefs.rightOpen, width, fitPrefs, scale, moveOverlay, updatePrefs],
+    [docked.sidebar, moveOverlay, updatePrefs],
   )
 
   // A panel closed another way (its close button, the other overlay) forgets where the focus was.
@@ -230,22 +241,25 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (project) selectHome(project.key)
   }, [moveOverlay, project, selectHome])
 
-  const setPanelView = useCallback(
-    (view: string) =>
-      setPanelViews((all) => {
-        const next = { ...all, [projectName]: view }
-        writeStored(PANEL_VIEW_KEY, next)
+  // A panel back at its empty state is dropped, so the saved panels hold only the threads that show something.
+  const updatePanel = useCallback(
+    (key: string, change: (st: PanelState) => PanelState) =>
+      setPanels((all) => {
+        const st = change(panelStateOf(all[key]))
+        const { [key]: _, ...rest } = all
+        const next = st.tabs.length === 0 ? rest : { ...rest, [key]: st }
+        writeStored(PANEL_KEY, next)
         return next
       }),
-    [projectName],
+    [],
   )
 
-  const showPanel = useCallback(
-    (view: string) => {
+  const showPanelView = useCallback(
+    (view: PanelViewId, opts: { thread?: string } = {}) => {
       setRightOpen(true)
-      setPanelView(view)
+      updatePanel(opts.thread ?? panelKey, (st) => openTab(st, view))
     },
-    [setRightOpen, setPanelView],
+    [setRightOpen, updatePanel, panelKey],
   )
 
   const focusPanel = useCallback(
@@ -271,8 +285,8 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       shellRem: Math.min(Math.max(prefs.shell ?? SHELL_DEFAULT_REM, SHELL_MIN_REM), (0.6 * height) / (16 * scale)),
       docked,
       overlay,
-      widths: { sidebar: fittedWidths.sidebar, right: fittedWidths.right },
-      panelView,
+      widths: { sidebar: sidebar.width, right: right.width / 16 },
+      panel,
       statsOpen,
       digestOpen,
       zoom(step) {
@@ -287,17 +301,22 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         moveOverlay(why)
         if (overlay === 'right' && closesPanel(why)) updatePrefs({ rightOpen: false })
       },
-      setWidth(panel, rem, commit) {
-        const limit = docked[panel] ? Math.min(MAX_REM, dockedMax(panel, width, { ...fitPrefs, rightOpen: prefs.rightOpen }, 16 * scale)) : MAX_REM
-        const next = Math.max(Math.min(rem, limit), MIN_REM[panel])
-        if (panel === 'sidebar') {
+      setWidth(side, rem, commit) {
+        const limits = panelWidth(viewport, row)
+        if (side === 'sidebar') {
+          const rightPx = docked.right && prefs.rightOpen ? limits.min * scale + 1 : 0
+          const limit = docked.sidebar ? Math.min(SIDEBAR_MAX_REM, sidebarMax(width, rightPx, root)) : SIDEBAR_MAX_REM
+          const next = Math.max(Math.min(rem, limit), SIDEBAR_MIN_REM)
           setSidebarRem(next)
           if (commit) writeStored(SIDEBAR_WIDTH_KEY, next)
-        } else if (commit) updatePrefs({ right: next })
+          return
+        }
+        const next = Math.max(Math.min(rem * 16, limits.max), limits.min) / 16
+        if (commit) updatePrefs({ right: next })
         else setStored((all) => ({ ...all, [band]: { ...fresh(), ...all[band], right: next } }))
       },
-      resetWidth(panel) {
-        if (panel === 'right') return updatePrefs({ right: null })
+      resetWidth(side) {
+        if (side === 'right') return updatePrefs({ right: null })
         setSidebarRem(null)
         writeStored(SIDEBAR_WIDTH_KEY, null)
       },
@@ -319,11 +338,16 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         refocusOnClose(panel)
         setOpen(false)
       },
-      setPanelView,
-      showPanel,
-      showView(id, view) {
-        showPanel('details')
-        setSessionView(id, view)
+      showPanelView,
+      showPanelList() {
+        updatePanel(panelKey, (st) => ({ ...st, active: null }))
+      },
+      closePanelTab(view) {
+        updatePanel(panelKey, (st) => closeTab(st, view))
+      },
+      stepPanelTab(delta) {
+        setRightOpen(true)
+        updatePanel(panelKey, (st) => stepTab(st, delta))
       },
       setShellHeight(rem, commit) {
         const next = Math.max(rem, SHELL_MIN_REM)
@@ -357,7 +381,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       focusPanel,
     }),
-    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, fittedWidths.sidebar, fittedWidths.right, panelView, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, setPanelView, showPanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale, setSessionView],
+    [mode, width, scale, theme, sidebarOpen, rightOpen, shellOpen, prefs, prefs.rightOpen, prefs.shell, docked, overlay, sidebar.width, right.width, panel, panelKey, viewport, row, root, height, statsOpen, digestOpen, band, setSidebarOpen, setShellOpen, setRightOpen, showHome, showPanelView, updatePanel, focusPanel, moveOverlay, refocusOnClose, updatePrefs, focus, report, setTextScale],
   )
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>

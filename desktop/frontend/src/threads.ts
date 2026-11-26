@@ -56,6 +56,26 @@ export function needsOwner(s: Session, sessions: Session[]): Session | undefined
   return nearestWaiting(s, descendantsOf(s.id, sessions))
 }
 
+// agentRows is the thread's descendants as a tree, each child under its parent one level deeper; each level is in the
+// thread list's order: attention, working, idle, then asleep newest first.
+export function agentRows(id: string, sessions: Session[]): { session: Session; depth: number }[] {
+  const children = childrenOf(sessions)
+  const rows: { session: Session; depth: number }[] = []
+  const seen = new Set([id])
+  const walk = (parent: string, depth: number) => {
+    const level = (children.get(parent) ?? []).filter((s) => !seen.has(s.id))
+    level.forEach((s) => seen.add(s.id))
+    const waits = (s: Session) => nearestWaiting(s, descendantsIn(s.id, children)) !== undefined
+    const { working, idle, settled } = splitThreads(level.filter((s) => !waits(s)))
+    for (const s of [...level.filter(waits), ...working, ...idle, ...settled]) {
+      rows.push({ session: s, depth })
+      walk(s.id, depth + 1)
+    }
+  }
+  walk(id, 0)
+  return rows
+}
+
 // ThreadTree is what the sidebar needs of the threads' families, built once per list: the top-level thread of every
 // thread, itself for a top-level one, and for each top-level thread that needs the owner, the thread that waits.
 export type ThreadTree = { top: Map<string, Session>; attention: Map<string, Session> }
