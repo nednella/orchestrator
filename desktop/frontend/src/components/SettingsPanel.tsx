@@ -1,131 +1,53 @@
-import { FolderGit2, GitBranch } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
+import { useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
-import { ACCESSES, ACCESS_NAME, newThreadAccess } from '../access'
-import { useLayout } from '../LayoutContext'
-import { PLACE_LABEL, placeFor } from '../place'
-import type { CleanupMode, DarkTheme, DigestSchedule, Place, ThemeSetting } from '../types'
-import { AccessIcon } from './AccessIcon'
-import { DataDirRow } from './DataDirRow'
-import { Keycap } from './Keycap'
+import { sectionLabel } from '../settingsSections'
+import type { SettingsSectionId } from '../settingsSections'
+import { AboutSettings } from './AboutSettings'
+import { AgentSettings } from './AgentSettings'
+import { AppearanceSettings } from './AppearanceSettings'
+import { BrowserSettings } from './BrowserSettings'
+import { GeneralSettings } from './GeneralSettings'
+import { GitSettings } from './GitSettings'
 import { Overlay } from './Overlay'
-import { SegmentedControl } from './SegmentedControl'
+import { SettingsNav } from './SettingsNav'
 
-const THEMES: { value: ThemeSetting; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
-
-const DARK_THEMES: { value: DarkTheme; label: string }[] = [
-  { value: 'black', label: 'Black' },
-  { value: 'violet', label: 'Violet' },
-]
-
-const MODES: { value: CleanupMode; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'manual', label: 'Manual' },
-]
-
-const SWITCH: { value: 'on' | 'off'; label: string }[] = [
-  { value: 'on', label: 'On' },
-  { value: 'off', label: 'Off' },
-]
-
-const SCHEDULES: { value: DigestSchedule; label: string }[] = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'off', label: 'Off' },
-]
-
-const PLACES: { value: Place; label: string; icon: ReactNode }[] = [
-  { value: 'worktree', label: PLACE_LABEL.worktree, icon: <FolderGit2 size={14} aria-hidden="true" /> },
-  { value: 'project', label: PLACE_LABEL.project, icon: <GitBranch size={14} aria-hidden="true" /> },
-]
-
-const ACCESS_OPTIONS = ACCESSES.map((value) => ({ value, label: ACCESS_NAME[value], icon: <AccessIcon access={value} /> }))
-
-type SettingRowProps = { label: string; hint: string; children: ReactNode }
-
-function SettingRow({ label, hint, children }: SettingRowProps) {
-  return (
-    <div className="flex items-center gap-6 border-b border-line py-4 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-body font-medium">{label}</p>
-        <p className="mt-0.5 text-small text-dim">{hint}</p>
-      </div>
-      {children}
-    </div>
-  )
+const PAGES: Record<SettingsSectionId, () => JSX.Element> = {
+  general: GeneralSettings,
+  appearance: AppearanceSettings,
+  agents: AgentSettings,
+  browser: BrowserSettings,
+  git: GitSettings,
+  about: AboutSettings,
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, setThreadPlace, setThreadAccess, report } = useOrchestrator('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'setThreadPlace', 'setThreadAccess', 'report')
-  const { scale, zoom } = useLayout()
+  const { overlay, setOverlay } = useOrchestrator('overlay', 'setOverlay')
+  const [section, setSection] = useState<SettingsSectionId>('general')
   if (overlay !== 'settings') return null
+  const Page = PAGES[section]
 
   return (
-    <Overlay label="Settings" onClose={() => setOverlay(null)}>
-      <div className="flex flex-none items-center gap-3 border-b border-line px-5 py-3.5">
-        <h2 className="flex-1 text-title font-semibold">Settings</h2>
-        <Keycap>Esc</Keycap>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <h3 className="label pb-1">App</h3>
-        <SettingRow label="Version" hint={version ? `orchestrator ${version}` : 'A development build'}>
-          <button className="btn h-7 flex-none px-2.5" onClick={() => setOverlay('changelog')}>
-            Patch notes
-          </button>
-        </SettingRow>
-        <DataDirRow dir={settings.dataDir} fixed={settings.dataDirFixed} />
-        <SettingRow label="Theme" hint="System follows the macOS appearance.">
-          <SegmentedControl label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />
-        </SettingRow>
-        <SettingRow label="Dark theme" hint="Shown when the theme is dark, or System follows a dark macOS.">
-          <SegmentedControl label="Dark theme" options={DARK_THEMES} value={settings.darkTheme} onChange={(value) => report(() => setThemes(value, settings.lightTheme))} />
-        </SettingRow>
-        <SettingRow label="Text size" hint="Scales the interface and the terminal.">
-          <div role="group" aria-label="Text size" className="flex flex-none items-center gap-1">
-            <button className="btn btn-ghost h-7 w-7 justify-center px-0" aria-label="Smaller text" onClick={() => zoom(-1)}>
-              −
+    <Overlay label="Settings" size="settings" onClose={() => setOverlay(null)}>
+      <div className="flex min-h-0 flex-1">
+        <SettingsNav section={section} onSelect={setSection} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-12 flex-none items-center justify-between border-b border-line ps-5 pe-2">
+            <p className="text-body">
+              <span className="text-dim">Settings</span>
+              <span className="px-1.5 text-dim">/</span>
+              <span className="font-medium">{sectionLabel(section)}</span>
+            </p>
+            <button className="btn btn-ghost size-7 justify-center px-0" aria-label="Close" title="Close (Esc)" onClick={() => setOverlay(null)}>
+              <X size={16} aria-hidden="true" />
             </button>
-            <button className="btn btn-ghost mono h-7 w-14 justify-center px-0" title="Reset text size" aria-label="Reset text size" onClick={() => zoom(0)}>
-              {Math.round(scale * 100)}%
-            </button>
-            <button className="btn btn-ghost h-7 w-7 justify-center px-0" aria-label="Larger text" onClick={() => zoom(1)}>
-              +
-            </button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-4xl px-6 pt-6 pb-12">
+              <Page />
+            </div>
           </div>
-        </SettingRow>
-        <SettingRow label="Keep Mac awake" hint="Stops the Mac idle-sleeping while a session works. A project that sets its own in the config file keeps it.">
-          <SegmentedControl label="Keep Mac awake" options={SWITCH} value={settings.keepAwake ? 'on' : 'off'} onChange={(value) => report(() => setKeepAwake(value === 'on'))} />
-        </SettingRow>
-        <h3 className="label mt-6 pb-1">New threads</h3>
-        <SettingRow label="New threads start in" hint="Where a new thread works.">
-          <SegmentedControl label="New threads start in" options={PLACES} value={placeFor(settings.threadPlace, false)} onChange={(value) => report(() => setThreadPlace(value))} />
-        </SettingRow>
-        <SettingRow label="Default access" hint="A thread can change it in the model menu.">
-          <SegmentedControl label="Default access" options={ACCESS_OPTIONS} value={newThreadAccess(settings.threadAccess)} onChange={(value) => report(() => setThreadAccess(value))} />
-        </SettingRow>
-        {project && (
-          <>
-          <h3 className="label mt-6 pb-1">{project.name}</h3>
-          <SettingRow label="Clean up after a merge" hint="Auto removes the worktree orchestrator made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks.">
-            <SegmentedControl label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />
-          </SettingRow>
-          <SettingRow label="Clean up after a close" hint="Auto cleans up when you close the pull request. Manual asks first.">
-            <SegmentedControl label="Clean up after a close" options={MODES} value={settings.cleanup.close} onChange={(value) => report(() => setCleanup('close', value))} />
-          </SettingRow>
-          <SettingRow label="Send the first prompt" hint="Auto sends what a new task starts with at once. Manual leaves it as a draft in the chat.">
-            <SegmentedControl label="Send the first prompt" options={MODES} value={settings.promptSend} onChange={(value) => report(() => setPromptSend(value))} />
-          </SettingRow>
-          <SettingRow label="Browser enabled" hint="Tells new tasks about the browser and media commands.">
-            <SegmentedControl label="Browser enabled" options={SWITCH} value={settings.browserEnabled ? 'on' : 'off'} onChange={(value) => report(() => setBrowserEnabled(value === 'on'))} />
-          </SettingRow>
-          <SettingRow label="News schedule" hint="Weekly checks for news by itself. Off leaves it to you.">
-            <SegmentedControl label="News schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />
-          </SettingRow>
-          </>
-        )}
+        </div>
       </div>
     </Overlay>
   )
