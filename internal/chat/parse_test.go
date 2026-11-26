@@ -611,3 +611,52 @@ func TestParseClaudesListOfItsTasksKeepsTheOpenTasksRight(t *testing.T) {
 		}
 	}
 }
+
+func TestRateLimitEventParses(t *testing.T) {
+	events := parseFile(t, "usage.jsonl")
+	limit, ok := first(events, KindRateLimit)
+	if !ok {
+		t.Fatalf("no rate_limit event in %+v", events)
+	}
+	var info struct {
+		RateLimitType string  `json:"rateLimitType"`
+		Utilization   float64 `json:"utilization"`
+		ResetsAt      int64   `json:"resetsAt"`
+	}
+	if err := json.Unmarshal(limit.Input, &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.RateLimitType != "seven_day" || info.Utilization != 0.96 || info.ResetsAt != 1796079600 {
+		t.Errorf("rate_limit_info = %+v", info)
+	}
+	if limit.Persisted() {
+		t.Error("a rate_limit event is logged")
+	}
+	reply, ok := first(events, KindReply)
+	if !ok || reply.ID != "usage-2" || reply.Error {
+		t.Fatalf("want get_usage's reply, got %+v", reply)
+	}
+	var answer struct {
+		RateLimits struct {
+			SevenDay struct {
+				Utilization float64 `json:"utilization"`
+			} `json:"seven_day"`
+		} `json:"rate_limits"`
+	}
+	if err := json.Unmarshal(reply.Input, &answer); err != nil || answer.RateLimits.SevenDay.Utilization != 96 {
+		t.Errorf("get_usage answer = %s, %v", reply.Input, err)
+	}
+}
+
+func TestRateLimitEventWithoutInfoGivesNone(t *testing.T) {
+	for _, line := range []string{
+		`{"type":"rate_limit_event"}`,
+		`{"type":"rate_limit_event","rate_limit_info":null}`,
+		`{"type":"rate_limit_event","rate_limit_info":"seven_day"}`,
+	} {
+		events, err := Parse([]byte(line))
+		if err != nil || len(events) != 0 {
+			t.Errorf("%s: %+v, %v", line, events, err)
+		}
+	}
+}

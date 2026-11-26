@@ -21,6 +21,7 @@ type line struct {
 	IsReplay       bool            `json:"isReplay"`
 	Response       json.RawMessage `json:"response"`
 	Errors         []string        `json:"errors"`
+	RateLimitInfo  json.RawMessage `json:"rate_limit_info"`
 	PermissionMode string          `json:"permissionMode"`
 	// ParentToolUseID is the Agent call whose subagent wrote the line, on an assistant, user or stream event.
 	ParentToolUseID string `json:"parent_tool_use_id"`
@@ -90,6 +91,10 @@ func Parse(data []byte) ([]Event, error) {
 		return parseControlResponse(l)
 	case "control_request":
 		return parseControlRequest(l)
+	case "rate_limit_event":
+		if isObject(l.RateLimitInfo) {
+			return []Event{{Kind: KindRateLimit, Input: l.RateLimitInfo}}, nil
+		}
 	case "control_cancel_request":
 		return []Event{{Kind: KindCancel, ID: l.RequestID}}, nil
 	case "result":

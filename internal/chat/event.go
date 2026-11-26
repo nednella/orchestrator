@@ -65,6 +65,9 @@ const (
 	// KindCancel is Claude withdrawing the approval it asked for under ID, as it does at an interrupt: it no longer
 	// waits on an answer.
 	KindCancel Kind = "cancel"
+	// KindRateLimit is Claude telling of a plan limit during a turn: Input is its rate_limit_info, which names the
+	// window, its utilization from 0 to 1 and its reset in unix seconds. It is never logged.
+	KindRateLimit Kind = "rate_limit"
 )
 
 // The ways the host stops Claude itself, which an exit's Stop names.
@@ -126,7 +129,7 @@ type Event struct {
 // so does a thought with no text, as Claude sends when it does not show its thinking: it only ends the live block.
 func (e Event) Persisted() bool {
 	switch e.Kind {
-	case KindDelta, KindThinking:
+	case KindDelta, KindThinking, KindRateLimit:
 		return false
 	case KindThought:
 		return e.Text != ""
