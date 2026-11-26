@@ -93,6 +93,7 @@ func tracker(t *testing.T, th Threads, ask Asker, start Starter) (*Tracker, *clo
 }
 
 func TestParseUsage(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name   string
 		answer string
@@ -128,6 +129,7 @@ func TestParseUsage(t *testing.T) {
 }
 
 func TestRateLimitEventUpdatesAWindow(t *testing.T) {
+	t.Parallel()
 	session := Window{Name: "five_hour", Label: "Session", Left: 80, ResetsAt: 1795705200000}
 	weekly := Window{Name: "seven_day", Label: "Weekly", Left: 60, ResetsAt: 1796079600000}
 	for _, tt := range []struct {
@@ -170,6 +172,7 @@ func TestRateLimitEventUpdatesAWindow(t *testing.T) {
 }
 
 func TestLimitsRefreshAtMostEveryFiveMinutes(t *testing.T) {
+	t.Parallel()
 	a := &asker{answer: weekly96}
 	tr, c, _ := tracker(t, oneLive, a.ask, nil)
 	ctx := context.Background()
@@ -201,6 +204,7 @@ func TestLimitsRefreshAtMostEveryFiveMinutes(t *testing.T) {
 }
 
 func TestAFailedAskWaitsFiveMinutesToo(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name   string
 		answer string
@@ -227,6 +231,7 @@ func TestAFailedAskWaitsFiveMinutesToo(t *testing.T) {
 }
 
 func TestRunAsksAtOnceAndStopsWithItsContext(t *testing.T) {
+	t.Parallel()
 	a := &asker{answer: weekly96}
 	tr, _, _ := tracker(t, oneLive, a.ask, nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -251,6 +256,7 @@ func TestRunAsksAtOnceAndStopsWithItsContext(t *testing.T) {
 }
 
 func TestAReadThatFailsKeepsTheWindows(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name        string
 		err         error
@@ -282,6 +288,7 @@ func TestAReadThatFailsKeepsTheWindows(t *testing.T) {
 }
 
 func TestAGoodReadClearsAnError(t *testing.T) {
+	t.Parallel()
 	a := &asker{answer: weekly96, onceErr: errors.New("refused")}
 	tr, _, _ := tracker(t, oneLive, a.ask, nil)
 	if l, _ := tr.Refresh(context.Background()); l.Error != "refused" {
@@ -293,6 +300,7 @@ func TestAGoodReadClearsAnError(t *testing.T) {
 }
 
 func TestRefreshWaitsOnlyAsLongAsItsContext(t *testing.T) {
+	t.Parallel()
 	tr, _, _ := tracker(t, threads{}, nil, nil)
 	tr.reading <- struct{}{}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -303,6 +311,7 @@ func TestRefreshWaitsOnlyAsLongAsItsContext(t *testing.T) {
 }
 
 func TestLimitsAreNeverNil(t *testing.T) {
+	t.Parallel()
 	tr, _, _ := tracker(t, threads{}, nil, nil)
 	if got := tr.Limits(); got.Windows == nil || len(got.Windows) != 0 {
 		t.Errorf("windows = %#v, want []", got.Windows)
@@ -310,6 +319,7 @@ func TestLimitsAreNeverNil(t *testing.T) {
 }
 
 func TestANullAnswerKeepsTheStreamsWindows(t *testing.T) {
+	t.Parallel()
 	a := &asker{answer: `{"rate_limits":{"five_hour":null,"seven_day":null,"model_scoped":[],"extra_usage":{"is_enabled":false}}}`}
 	tr, _, _ := tracker(t, oneLive, a.ask, nil)
 	tr.Seen("main/abcdefgh", chat.Event{Kind: chat.KindRateLimit, Input: json.RawMessage(`{"rateLimitType":"seven_day","utilization":0.5,"resetsAt":1796079600}`)})
@@ -327,6 +337,7 @@ func TestANullAnswerKeepsTheStreamsWindows(t *testing.T) {
 }
 
 func TestAnOlderHostIsPassedOver(t *testing.T) {
+	t.Parallel()
 	two := threads{{ID: "main/oldhost1", Socket: "/tmp/old.sock", Live: true}, {ID: "main/newhost1", Socket: "/tmp/new.sock", Live: true}}
 	var asked []string
 	ask := func(_ context.Context, socket string) (json.RawMessage, error) {
@@ -360,6 +371,7 @@ func TestAnOlderHostIsPassedOver(t *testing.T) {
 }
 
 func TestLimitsEventsComeInOrder(t *testing.T) {
+	t.Parallel()
 	tr, _, emitted := tracker(t, threads{}, nil, nil)
 	var wg sync.WaitGroup
 	for i := range 50 {

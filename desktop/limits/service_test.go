@@ -33,6 +33,7 @@ func usageRequests(lines []string) (asks int, user bool) {
 }
 
 func TestRefreshAsksALiveThread(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -63,6 +64,7 @@ func TestRefreshAsksALiveThread(t *testing.T) {
 }
 
 func TestARateLimitInATurnReachesTheLimits(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
 	if err != nil {
@@ -85,6 +87,7 @@ func TestARateLimitInATurnReachesTheLimits(t *testing.T) {
 }
 
 func TestRefreshWithNoThreadProbes(t *testing.T) {
+	t.Parallel()
 	h := apptest.New(t)
 	got, err := h.RefreshLimits()
 	if err != nil {

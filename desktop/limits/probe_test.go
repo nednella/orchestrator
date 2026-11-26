@@ -94,6 +94,7 @@ func (f *fakeClaude) seen() (starts, most, waited int, lines []string) {
 const usageReply = `{"type":"control_response","response":{"subtype":"success","request_id":"aos-usage","response":` + weekly96 + `}}`
 
 func TestNoLiveThreadStartsAProbe(t *testing.T) {
+	t.Parallel()
 	f := &fakeClaude{reply: usageReply}
 	tr, _, _ := tracker(t, threads{{ID: "main/settled", Socket: "/tmp/s.sock"}}, nil, f.start)
 	// What a probe left, as one the app was quit during, is gone before the next starts.
@@ -143,6 +144,7 @@ func TestNoLiveThreadStartsAProbe(t *testing.T) {
 }
 
 func TestFreshValuesStartNoProbe(t *testing.T) {
+	t.Parallel()
 	f := &fakeClaude{reply: usageReply}
 	tr, c, _ := tracker(t, threads{}, nil, f.start)
 	for _, step := range []struct {
@@ -167,6 +169,7 @@ func TestFreshValuesStartNoProbe(t *testing.T) {
 }
 
 func TestFailedProbeIsNotCached(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name        string
 		reply       string
@@ -199,6 +202,7 @@ func TestFailedProbeIsNotCached(t *testing.T) {
 }
 
 func TestProbeTimesOut(t *testing.T) {
+	t.Parallel()
 	f := &fakeClaude{}
 	dir := filepath.Join(t.TempDir(), "usage-probe")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -232,6 +236,7 @@ func TestProbeTimesOut(t *testing.T) {
 }
 
 func TestOneProbeAtATime(t *testing.T) {
+	t.Parallel()
 	f := &fakeClaude{reply: usageReply, delay: 100 * time.Millisecond}
 	tr, _, _ := tracker(t, threads{}, nil, f.start)
 	var wg sync.WaitGroup
@@ -249,6 +254,7 @@ func TestOneProbeAtATime(t *testing.T) {
 }
 
 func TestAProbeThatEndsWithoutAnAnswerFails(t *testing.T) {
+	t.Parallel()
 	start := func(ctx context.Context, dir string, argv []string) (io.WriteCloser, io.Reader, func() error, error) {
 		return Exec(os.Environ())(ctx, dir, []string{"sh", "-c", "read line; echo 'not logged in' >&2; exit 1"})
 	}
@@ -259,6 +265,7 @@ func TestAProbeThatEndsWithoutAnAnswerFails(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
+	t.Parallel()
 	env := append(os.Environ(), "ORCHESTRATOR_SESSION=main/abcdefgh")
 	for _, tt := range []struct {
 		name    string
@@ -312,6 +319,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestProbeSaysAClaudeWithoutGetUsage(t *testing.T) {
+	t.Parallel()
 	f := &fakeClaude{reply: `{"type":"control_response","response":{"subtype":"error","request_id":"aos-usage","error":"Unsupported control request subtype: get_usage"}}`}
 	if _, err := probe(context.Background(), f.start, t.TempDir()); !errors.Is(err, host.ErrNoUsage) {
 		t.Errorf("err = %v, want host.ErrNoUsage", err)
@@ -319,6 +327,7 @@ func TestProbeSaysAClaudeWithoutGetUsage(t *testing.T) {
 }
 
 func TestAProbesGrandchildIsGone(t *testing.T) {
+	t.Parallel()
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	// The grandchild leaves the pipes, so nothing waits on it, and runs on after the probe's claude answered and exited.
 	script := `sleep 300 </dev/null >/dev/null 2>&1 & echo $! > ` + pidFile + `
