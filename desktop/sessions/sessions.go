@@ -197,7 +197,6 @@ type Sessions struct {
 // ProjectList is the configured projects.
 type ProjectList interface {
 	List() []project.Project
-	Remove(name string) (bool, error)
 }
 
 // Tally records when a session waits on the user.
@@ -1676,57 +1675,6 @@ func (s *Sessions) SwitchProject(name string) (project.Project, error) {
 	return project.Project{}, fmt.Errorf("no project %q", name)
 }
 
-// Forget removes a configured project and ends its sessions, moving to another one if it was current.
-func (s *Sessions) Forget(name string) (project.Project, error) {
-	if live := s.liveIssueSessions(project.Project{Name: name}.Key()); len(live) > 0 {
-		return project.Project{}, fmt.Errorf("cannot remove %q: it has live issue sessions (%s), which need its branch pattern and clean-up command; end them first", name, strings.Join(live, ", "))
-	}
-	removed, err := s.configured.Remove(name)
-	if err != nil {
-		return project.Project{}, err
-	}
-	s.mu.Lock()
-	current := s.project.Name == name
-	s.mu.Unlock()
-	// The current project can be missing from the config (the folder the app started in); removing
-	// it still means moving away.
-	if !removed && !current {
-		return project.Project{}, fmt.Errorf("%q is not in the config", name)
-	}
-	if err := s.settleProject(project.Project{Name: name}.Key()); err != nil {
-		return project.Project{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.project.Name == name {
-		for _, p := range s.projects() {
-			if p.Key() != s.project.Key() {
-				s.project = p
-				break
-			}
-		}
-	}
-	s.sync()
-	return s.project, nil
-}
-
-// settleProject settles every running session of the project. It takes mu.
-func (s *Sessions) settleProject(key string) error {
-	s.mu.Lock()
-	var ids []string
-	for _, in := range s.info {
-		if in.Name.Project == key {
-			ids = append(ids, in.Name.String())
-		}
-	}
-	s.mu.Unlock()
-	var errs []error
-	for _, id := range ids {
-		errs = append(errs, s.Settle(id))
-	}
-	return errors.Join(errs...)
-}
-
 var errAskerNotLive = errors.New("Only a running thread can start an issue's thread")
 
 var errFullFromThread = errors.New("A thread that is not Full access cannot start one that is")
@@ -1757,19 +1705,6 @@ func (s *Sessions) mayGive(asker string, access session.Access) error {
 		}
 	}
 	return errFullFromThread
-}
-
-// liveIssueSessions names the running sessions of the project that work on an issue. It takes mu.
-func (s *Sessions) liveIssueSessions(key string) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []string
-	for _, in := range s.info {
-		if issue, _ := strconv.Atoi(in.Issue); issue > 0 && in.Name.Project == key {
-			out = append(out, fmt.Sprintf("session %d for #%d", s.nums[in.Name.String()], issue))
-		}
-	}
-	return out
 }
 
 // liveIssueSession is the id of the running thread of the project for the issue, whatever its access, "" when none. A

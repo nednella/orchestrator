@@ -141,7 +141,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	if h.Machine != nil {
 		machine = sync.OnceValue(h.Machine)
 	}
-	proj := projects.NewService(c.Registry, sess, store, iss, runner, c.StateDir, h.PickDir, machine, ctx)
+	proj := projects.NewService(c.Registry, sess, store, iss, c.StateDir, h.PickDir, machine, ctx)
 	sessSvc := sessions.NewService(sess, ctx)
 	a.router = control.New(sess)
 	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)

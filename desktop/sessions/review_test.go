@@ -195,36 +195,6 @@ func TestDeletedThreadStaysGoneAfterALateHook(t *testing.T) {
 	}
 }
 
-func TestRemovingAProjectWithLiveIssueSessionsIsRefused(t *testing.T) {
-	h := newHarness(t)
-	s := issueSession(h, t, 12)
-	if _, err := h.RemoveProject("main"); err == nil || !strings.Contains(err.Error(), "session 1 for #12") {
-		t.Fatalf("RemoveProject = %v, want an error naming the session", err)
-	}
-	if err := h.SettleThread(s.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.RemoveProject("main"); err != nil {
-		t.Errorf("RemoveProject without a live issue session = %v", err)
-	}
-}
-
-func TestRemovingAProjectEndsItsSessions(t *testing.T) {
-	h := newHarness(t)
-	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.RemoveProject("main"); err != nil {
-		t.Fatal(err)
-	}
-	for _, v := range h.Sessions().List() {
-		if v.ID == s.ID && v.State != session.Settled {
-			t.Errorf("session %s survived forgetting its project: %+v", s.ID, v)
-		}
-	}
-}
-
 func TestSessionIsKilledWhenItsIssueCannotBeRecorded(t *testing.T) {
 	h := newHarness(t)
 	fake := newFakeTmux(t)

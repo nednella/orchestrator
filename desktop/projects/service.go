@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/notes"
 	"github.com/nednella/orchestrator/desktop/sessions"
 	"github.com/nednella/orchestrator/internal/project"
@@ -21,7 +20,6 @@ type Sessions interface {
 	Shells() []sessions.Shell
 	CreateBriefed(title, text, brief string) (sessions.Session, error)
 	SwitchProject(name string) (project.Project, error)
-	Forget(name string) (project.Project, error)
 }
 
 // Notes lists a project's notes.
@@ -32,7 +30,6 @@ type Notes interface {
 // Repos names the GitHub repo of a folder.
 type Repos interface {
 	Repo(ctx context.Context, dir string) string
-	FreshRepo(ctx context.Context, dir string) string
 }
 
 // Snapshot is everything the screen needs on load.
@@ -52,15 +49,14 @@ type Service struct {
 	sessions Sessions
 	notes    Notes
 	repos    Repos
-	run      run.Runner
 	stateDir string
 	pickDir  func() (string, error) // "" when the user cancels
 	machine  func() string
 	ctx      func() context.Context
 }
 
-func NewService(r *Registry, s Sessions, n Notes, repos Repos, runner run.Runner, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
-	return &Service{registry: r, sessions: s, notes: n, repos: repos, run: runner, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
+func NewService(r *Registry, s Sessions, n Notes, repos Repos, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
+	return &Service{registry: r, sessions: s, notes: n, repos: repos, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
 }
 
 // Snapshot is everything the screen needs; call it on load.
@@ -121,16 +117,6 @@ func (s *Service) AddProjectDir(dir string) (Snapshot, error) {
 	return s.SwitchProject(p.Name)
 }
 
-// RemoveProject forgets a configured project and stops its sessions.
-func (s *Service) RemoveProject(name string) (Snapshot, error) {
-	p, err := s.sessions.Forget(name)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	s.remember(p)
-	return s.Snapshot(), nil
-}
-
 // SetUpProject writes a basic orchestrator block into the current project's config and starts a Supervised thread that
 // sets up the repository with the user. A project that has queue sections keeps its config: only the session starts.
 func (s *Service) SetUpProject() (sessions.Session, error) {
@@ -144,18 +130,6 @@ func (s *Service) SetUpProject() (sessions.Session, error) {
 		}
 	}
 	return s.sessions.CreateBriefed("orchestrator setup", prompts.SetupStart(), prompts.SetupBrief())
-}
-
-// DismissSetup stops offering to set up the current project.
-func (s *Service) DismissSetup() (Snapshot, error) {
-	key, err := s.configure()
-	if err != nil {
-		return Snapshot{}, err
-	}
-	if err := s.registry.DismissSetup(key); err != nil {
-		return Snapshot{}, err
-	}
-	return s.Snapshot(), nil
 }
 
 // configure is the key of the config's entry for the current project's folder, adding the entry when the folder is

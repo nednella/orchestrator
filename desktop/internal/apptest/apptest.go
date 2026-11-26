@@ -290,26 +290,23 @@ func Eventually(t *testing.T, what string, cond func() bool) {
 // FakeGH answers the gh calls with canned output; any other command runs for real.
 
 type FakeGH struct {
-	mu            sync.Mutex
-	calls         []string
-	Repo          error
-	CreateRepoErr error             // what gh repo create fails with, if set
-	ExistingRepos []string          // the names gh repo view <name> finds; any other name is not found
-	ViewErr       error             // what gh repo view <name> fails with instead, if set
-	Create        string            // what gh issue create prints
-	CreateErr     error             // what gh issue create fails with, if set; it still prints Create
-	Delay         time.Duration     // how long gh issue create takes
-	Releases      string            // the latest release's tag; "" fails the check
-	pr            string            // what gh pr list prints
-	prByHead      map[string]string // what gh pr list --head <branch> prints instead, by branch
-	PRErr         error             // what gh pr list fails with, if set
-	IssuesErr     error             // what gh issue list fails with, if set
-	issues        string            // what gh issue list prints instead of the usual six issues, if set
-	pulls         string            // the body gh api prints for the repo's pull request list
-	etag          string            // its ETag: a request carrying it gets a 304
-	hooks         []*io.PipeWriter
-	hooked        bool                                  // gh webhook forward works
-	before        func(dir, name string, args []string) // runs before each command, in the command's goroutine
+	mu        sync.Mutex
+	calls     []string
+	Repo      error
+	Create    string            // what gh issue create prints
+	CreateErr error             // what gh issue create fails with, if set; it still prints Create
+	Delay     time.Duration     // how long gh issue create takes
+	Releases  string            // the latest release's tag; "" fails the check
+	pr        string            // what gh pr list prints
+	prByHead  map[string]string // what gh pr list --head <branch> prints instead, by branch
+	PRErr     error             // what gh pr list fails with, if set
+	IssuesErr error             // what gh issue list fails with, if set
+	issues    string            // what gh issue list prints instead of the usual six issues, if set
+	pulls     string            // the body gh api prints for the repo's pull request list
+	etag      string            // its ETag: a request carrying it gets a 304
+	hooks     []*io.PipeWriter
+	hooked    bool                                  // gh webhook forward works
+	before    func(dir, name string, args []string) // runs before each command, in the command's goroutine
 }
 
 // SetBefore has before run ahead of each command the app runs, gh or not, so a test can hold one at a point it picks.
@@ -363,16 +360,6 @@ func (f *FakeGH) Run(ctx context.Context, dir, name string, args ...string) ([]b
 			return []byte("[]"), nil
 		}
 		return []byte(f.pr), nil
-	case args[0] == "repo" && args[1] == "create":
-		return nil, f.CreateRepoErr
-	case args[0] == "repo" && args[1] == "view" && len(args) == 3:
-		if f.ViewErr != nil {
-			return nil, f.ViewErr
-		}
-		if slices.Contains(f.ExistingRepos, args[2]) {
-			return []byte("name: me/" + args[2]), nil
-		}
-		return nil, fmt.Errorf("gh repo: exit status 1: GraphQL: Could not resolve to a Repository with the name 'me/%s'. (repository)", args[2])
 	case args[0] == "repo":
 		if f.Repo != nil {
 			return nil, f.Repo
@@ -1226,17 +1213,7 @@ func (h *Harness) AddProject() (projects.Snapshot, error) { return h.projects.Ad
 func (h *Harness) AddProjectDir(dir string) (projects.Snapshot, error) {
 	return h.projects.AddProjectDir(dir)
 }
-func (h *Harness) NewProject(name string) (projects.Snapshot, error) {
-	return h.projects.NewProject(name)
-}
-func (h *Harness) CreateRepo(name string) (projects.Snapshot, error) {
-	return h.projects.CreateRepo(name)
-}
-func (h *Harness) RemoveProject(name string) (projects.Snapshot, error) {
-	return h.projects.RemoveProject(name)
-}
-func (h *Harness) SetUpProject() (sessions.Session, error)  { return h.projects.SetUpProject() }
-func (h *Harness) DismissSetup() (projects.Snapshot, error) { return h.projects.DismissSetup() }
+func (h *Harness) SetUpProject() (sessions.Session, error) { return h.projects.SetUpProject() }
 
 func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessions.Session, error) {
 	return h.sessions.NewThread(title, prompt, model, effort, access, "")
@@ -1310,7 +1287,6 @@ func (h *Harness) RefreshLimits() (limits.Limits, error) { return h.limits.Refre
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
 	return h.chat.ChatSend(id, text, images)
 }
-func (h *Harness) ChatDraft(id, text string) error      { return h.chat.ChatDraft(id, text) }
 func (h *Harness) ChatInterrupt(id string) error        { return h.chat.ChatInterrupt(id) }
 func (h *Harness) ChatSendNow(id, message string) error { return h.chat.ChatSendNow(id, message) }
 func (h *Harness) ChatPending() []chat.Pending          { return h.chat.ChatPending() }

@@ -19,12 +19,8 @@ func TestSetUpProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	snap, err := h.AddProjectDir(dir)
-	if err != nil || !snap.Project.NeedsSetup || snap.Project.SetupDismissed {
+	if err != nil || !snap.Project.NeedsSetup {
 		t.Fatalf("a new project = %+v, %v", snap.Project, err)
-	}
-
-	if snap, err = h.DismissSetup(); err != nil || !snap.Project.SetupDismissed || !snap.Project.NeedsSetup {
-		t.Errorf("after Not now: %+v, %v", snap.Project, err)
 	}
 
 	created, err := h.SetUpProject()
@@ -67,7 +63,6 @@ func TestSetUpLeavesAnotherMachinesProjectAlone(t *testing.T) {
 		act  func(h *apptest.Harness) error
 	}{
 		{"set up", func(h *apptest.Harness) error { _, err := h.SetUpProject(); return err }},
-		{"not now", func(h *apptest.Harness) error { _, err := h.DismissSetup(); return err }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{NoProject: true, AbsentProject: "api"})
@@ -85,11 +80,8 @@ func TestSetUpLeavesAnotherMachinesProjectAlone(t *testing.T) {
 			if here.Name != "api-2" || here.Dir != h.Dir {
 				t.Errorf("the added project = %+v", here)
 			}
-			if tt.name == "set up" && here.NeedsSetup() || tt.name == "not now" && !here.SetupDismissed {
+			if here.NeedsSetup() {
 				t.Errorf("the added project was not edited: %+v", here)
-			}
-			if tt.name == "not now" && !h.Snapshot().Project.SetupDismissed {
-				t.Error("the offer is still shown after Not now")
 			}
 		})
 	}

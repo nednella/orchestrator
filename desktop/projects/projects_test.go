@@ -120,50 +120,6 @@ func TestProjects(t *testing.T) {
 			t.Errorf("unknown last project gave %q, want the first one", cfg.Project.Name)
 		}
 	})
-
-	t.Run("remove", func(t *testing.T) {
-		if _, err := h.SwitchProject("other"); err != nil {
-			t.Fatal(err)
-		}
-		snap, err := h.RemoveProject("other")
-		if err != nil || snap.Project.Name == "other" {
-			t.Fatalf("RemoveProject = %+v, %v", snap.Project, err)
-		}
-		cfg, _ := project.Load(h.Conf)
-		for _, p := range cfg.Projects {
-			if p.Name == "other" {
-				t.Error("the removed project is still in the config")
-			}
-		}
-		for _, p := range snap.Projects {
-			if p.Name == "other" {
-				t.Errorf("the removed project is still listed: %+v", p)
-			}
-		}
-		if _, err := h.RemoveProject("nope"); err == nil {
-			t.Error("removing an unknown project succeeded")
-		}
-	})
-}
-
-func TestRemoveCurrentProjectOutsideTheConfig(t *testing.T) {
-	h := newHarness(t)
-	home := filepath.Join(t.TempDir(), "home")
-	if err := os.Mkdir(home, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("ORCHESTRATOR_DIR", home)
-	h = h.Restart(t)
-	if got := h.Snapshot().Project.Name; got != "home" {
-		t.Fatalf("current project = %q, want the unlisted home", got)
-	}
-	snap, err := h.RemoveProject("home")
-	if err != nil || snap.Project.Name != "main" {
-		t.Errorf("RemoveProject = %+v, %v", snap.Project, err)
-	}
-	if _, err := h.RemoveProject("nope"); err == nil {
-		t.Error("removing an unknown project succeeded")
-	}
 }
 
 func TestRegistryKeepAwake(t *testing.T) {
@@ -197,11 +153,11 @@ func TestRegistryListSkipsMissingFolders(t *testing.T) {
 	if got := r.List(); len(got) != 1 || got[0].Name != "here" {
 		t.Fatalf("List = %+v, want only here", got)
 	}
-	if _, err := r.Remove("here"); err != nil {
+	if _, err := r.Add(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := project.Load(path)
-	if err != nil || len(cfg.Projects) != 1 || cfg.Projects[0].Name != "elsewhere" {
+	if err != nil || len(cfg.Projects) != 3 || cfg.Projects[1].Name != "elsewhere" {
 		t.Errorf("saved config = %+v, %v; want the missing project kept", cfg.Projects, err)
 	}
 }

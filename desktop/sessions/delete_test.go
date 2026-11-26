@@ -193,9 +193,6 @@ func TestDeletedThreadRefusesMessages(t *testing.T) {
 		if _, err := h.ChatSend(s.ID, "again"); err == nil || err.Error() != want {
 			t.Errorf("ChatSend = %v, want %q", err, want)
 		}
-		if err := h.ChatDraft(s.ID, "again"); err == nil || err.Error() != want {
-			t.Errorf("ChatDraft = %v, want %q", err, want)
-		}
 		if _, err := h.WakeThread(s.ID); err == nil || err.Error() != want {
 			t.Errorf("WakeThread = %v, want %q", err, want)
 		}

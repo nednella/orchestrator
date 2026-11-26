@@ -250,14 +250,6 @@ func (r *Registry) SetUp(key string) error {
 	})
 }
 
-// DismissSetup saves that the owner turned down the offer to set the project up.
-func (r *Registry) DismissSetup(key string) error {
-	return r.editProject(key, func(p *project.Project) error {
-		p.SetupDismissed = true
-		return nil
-	})
-}
-
 // Dir is the folder of the project with key, "" when no project has it.
 func (r *Registry) Dir(key string) string { return r.project(key).Dir }
 
@@ -352,25 +344,6 @@ func (r *Registry) Add(dir string) (project.Project, error) {
 		return project.Project{}, err
 	}
 	return added, nil
-}
-
-// Remove forgets a configured project and reports whether there was one.
-func (r *Registry) Remove(name string) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, err := r.reload(); err != nil {
-		return false, err
-	}
-	i := slices.IndexFunc(r.cfg.Projects, func(p project.Project) bool { return p.Name == name })
-	if i < 0 {
-		return false, nil
-	}
-	next := r.cfg
-	next.Projects = slices.Delete(slices.Clone(r.cfg.Projects), i, i+1)
-	if err := r.save(next); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // ReadLast is the name of the project used last, or "".

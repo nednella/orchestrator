@@ -98,15 +98,6 @@ func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
 	return Sent{ID: msg}, v.failed(id, "the message", err)
 }
 
-// ChatDraft leaves text in the thread's composer, unsent. A settled thread is woken for it.
-func (v *Service) ChatDraft(id, text string) error {
-	ch, err := v.awake(id)
-	if err != nil {
-		return err
-	}
-	return v.failed(id, "the draft", host.Draft(v.ctx(), ch.Socket, text))
-}
-
 // ChatInterrupt stops the thread's turn.
 func (v *Service) ChatInterrupt(id string) error {
 	ch, err := v.live(id)
