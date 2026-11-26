@@ -137,10 +137,13 @@ func TestWakeAfterTheAppRestarts(t *testing.T) {
 	eventually(t, "the second turn's end", func() bool { return turnEnds(second, before.ID) == 2 })
 	assertOneChat(t, second, before.ID, "hi", "again")
 
-	rec, err := bus.ReadState(second.State, before.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The follower writes the turn's end to the state file after the host logged it.
+	var rec session.Record
+	eventually(t, "the state file to hold the second turn's end", func() bool {
+		var err error
+		rec, err = bus.ReadState(second.State, before.ID)
+		return err == nil && len(rec.Changes) > 0 && rec.Changes[len(rec.Changes)-1].State == session.Idle && len(rec.Changes) > len(saved.Changes)
+	})
 	if rec.Session != before.ID || rec.Title != "work" || rec.Created != saved.Created || rec.Woke <= rec.Created || rec.Conversation != "fake-session" {
 		t.Errorf("state file = %+v, before the wake %+v", rec, saved)
 	}
