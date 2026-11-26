@@ -261,3 +261,12 @@ func TestThemes(t *testing.T) {
 		t.Error("black was accepted as the light theme")
 	}
 }
+
+func TestSettingsNameTheEditorApp(t *testing.T) {
+	if got := apptest.New(t).Settings().EditorApp; got != "Visual Studio Code" {
+		t.Errorf("unset editor_app = %q, want Visual Studio Code", got)
+	}
+	if got := apptest.NewWith(t, apptest.Options{TopExtra: "editor_app: Zed\n"}).Settings().EditorApp; got != "Zed" {
+		t.Errorf("editor_app: Zed = %q", got)
+	}
+}

@@ -38,6 +38,7 @@ type Store interface {
 	ThreadAccess() session.Access
 	SetThreadAccess(access session.Access) error
 	SetDataDir(dir string) error
+	EditorApp() string
 }
 
 // Current names the project the panel edits.
@@ -60,6 +61,7 @@ type Settings struct {
 	ThreadAccess string          `json:"threadAccess"`   // the access a new thread starts with: read, supervised or full; "" is unset, supervised
 	DataDir      string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
 	DataFixed    bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
+	EditorApp    string          `json:"editorApp"`      // the macOS app that opens a thread's folder
 }
 
 // Service is bound to the front end.
@@ -102,6 +104,7 @@ func (s *Service) Settings() Settings {
 		ThreadAccess: string(s.store.ThreadAccess()),
 		DataDir:      s.dataDir,
 		DataFixed:    s.dataFixed,
+		EditorApp:    s.store.EditorApp(),
 	}
 }
 
