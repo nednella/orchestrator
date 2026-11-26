@@ -65,7 +65,7 @@ export function ModelPicker({ model, effort, defaults, access, accessOff, onMode
             </button>
           ))}
         </div>
-        <div role="radiogroup" aria-label="Effort" className="flex w-40 flex-none flex-col gap-0.5 border-l border-line bg-[var(--bg-segment)] p-1.5 max-sm:w-full max-sm:border-t max-sm:border-l-0" onKeyDown={moveFocus}>
+        <div role="radiogroup" aria-label="Effort" className="flex w-48 flex-none flex-col gap-0.5 border-l border-line bg-[var(--bg-segment)] p-1.5 max-sm:w-full max-sm:border-t max-sm:border-l-0" onKeyDown={moveFocus}>
           <p className={head}>
             Effort
             <span className="ml-auto min-w-0 truncate text-label font-normal text-dim">{shownModel && modelShortName(shownModel)}</span>
@@ -90,7 +90,7 @@ export function ModelPicker({ model, effort, defaults, access, accessOff, onMode
       <div className="flex flex-col gap-1.5 border-t border-line p-2">
         <p className={`${head} h-auto px-0`}>Access</p>
         <SegmentedControl label="Access" variant="track" options={ACCESS_OPTIONS} value={access} disabled={Boolean(accessOff)} onChange={onAccess} />
-        {accessOff && <p className="text-small text-idle">{accessOff}.</p>}
+        <p className="min-h-[1.25em] text-small leading-tight text-idle">{accessOff && `${accessOff}.`}</p>
         <p className="min-h-[2.5em] text-small leading-tight text-soft">{ACCESS_HINT[access]}.</p>
       </div>
     </div>
