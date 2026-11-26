@@ -98,13 +98,14 @@ type Chats struct {
 
 	mu        sync.Mutex
 	ctx       context.Context // Start's, nil until it starts
+	hostWait  time.Duration   // how long a follower waits for its host to listen before it reads the log
 	followers map[string]*follower
 	watched   map[string]bool
 }
 
 // New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
 func New(t Threads, dir string, emit func(string, any)) *Chats {
-	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}, rateLimited: func(string, chatlog.Event) {}}
+	return &Chats{threads: t, emit: emit, commands: newCommandLists(dir), since: time.Now().UnixMilli(), hostWait: hostStartWait, started: make(chan struct{}), followers: map[string]*follower{}, watched: map[string]bool{}, turnEnded: func(string, chatlog.Event) {}, rateLimited: func(string, chatlog.Event) {}}
 }
 
 // OnTurnEnd has fn hear of each turn_end a follower takes, after Threads.Observe and before an AwaitTurn does: the
@@ -356,9 +357,10 @@ type await struct {
 // had hostStartWait to: the host logs its run's start before it listens, so the log then holds the current run's start.
 func (f *follower) run(ctx context.Context) {
 	defer f.end()
-	ready, cancel := context.WithTimeout(ctx, hostStartWait)
-	if err := host.Ready(ready, f.chat.Socket); err != nil {
-		log.Printf("orchestrator: the host of thread %s does not listen; reading its chat log: %v", f.chat.ID, err)
+	ready, cancel := context.WithTimeout(ctx, f.chats.hostWait)
+	listening := host.Ready(ready, f.chat.Socket) == nil
+	if !listening {
+		log.Printf("orchestrator: the host of thread %s does not listen; reading its chat log", f.chat.ID)
 	}
 	cancel()
 	logged, err := chatlog.ReadLog(f.chat.Log, 0)
@@ -428,8 +430,9 @@ func (f *follower) run(ctx context.Context) {
 		}
 		f.reached(*exit)
 	}
-	// A mode Claude reported while the app was closed is followed now, by the same rule as a live one.
-	if mode.text != "" {
+	// A mode Claude reported while the app was closed is followed now, by the same rule as a live one. A host that does
+	// not listen may not have logged its run's start yet, and the mode is then an earlier run's.
+	if listening && mode.text != "" {
 		f.chats.threads.AccessChanged(f.chat.ID, mode.text, mode.planApproved)
 	}
 	f.announce(nil)
