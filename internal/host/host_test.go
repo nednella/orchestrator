@@ -2439,6 +2439,9 @@ func TestHoldRefusesInputUntilTheHostExits(t *testing.T) {
 		}
 	}
 	restarting("send", Send(ctxT(t), h.socket, "keep this"))
+	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "keep this", From: "main/aaaaaaaa"}); !errors.Is(err, ErrRestarting) {
+		t.Errorf("send from a thread: err = %v, want ErrRestarting", err)
+	}
 	restarting("answer", Answer(ctxT(t), h.socket, "r1", true, ""))
 	restarting("mode", SetMode(ctxT(t), h.socket, "plan"))
 	for _, line := range stdinLines(t, h.stdin) {

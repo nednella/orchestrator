@@ -49,6 +49,10 @@ var ErrTooOldForImages = &Refused{Reason: "this session's host is too old for im
 // none, since a message then would deny the approval with its text.
 var ErrApprovalWaits = &Refused{Reason: "this thread waits on an approval"}
 
+// ErrRestarting is what an op returns while the host is held for a restart, as for a change of access: the thread
+// runs again under a new host soon.
+var ErrRestarting = &Refused{Reason: "This thread is restarting"}
+
 // SendMessage gives m to Claude and returns the id the host logged it under. A host from before message ids sends the
 // text and drops the images, so a reply with no id is ErrTooOldForImages when m has images. A host from before From
 // sends the message as the owner's, also while an approval waits.
@@ -258,6 +262,9 @@ func dial(ctx context.Context, socket string, req request, timeout time.Duration
 	}
 	if rep.Approval {
 		return fail(ErrApprovalWaits)
+	}
+	if rep.Restarting {
+		return fail(ErrRestarting)
 	}
 	if !rep.OK {
 		return fail(&Refused{Reason: rep.Error, Unsupported: rep.Unsupported})

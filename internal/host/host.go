@@ -1478,7 +1478,7 @@ func writeReply(conn net.Conn, id string, err error) error {
 // writeAnswer writes rep, or in its place a refusal with err, which says so when Claude did not know a request.
 func writeAnswer(conn net.Conn, rep reply, err error) error {
 	if err != nil {
-		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported), Approval: errors.Is(err, errApprovalWaits)}
+		rep = reply{Error: err.Error(), Unsupported: errors.Is(err, errUnsupported), Approval: errors.Is(err, errApprovalWaits), Restarting: errors.Is(err, errRestarting)}
 	}
 	rep.OK = err == nil
 	return writeJSON(conn, rep)

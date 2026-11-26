@@ -3080,7 +3080,8 @@ func (s *Sessions) deliverWakes() {
 }
 
 // deliverHeld sends the prompts deliverWakes took for the thread, in order, waking it first when it is not live. A
-// message its host refuses while an approval waits goes back to be held, with every prompt after it.
+// message its host refuses while an approval waits, or while it is held for a restart, goes back to be held, with every
+// prompt after it.
 func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []heldPrompt) {
 	refused := false
 	defer func() { s.doneDelivering(id, refused) }()
@@ -3116,7 +3117,7 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 		_, err := s.deliverRanked(name, h.Told)
 		var ranked *outranked
 		switch {
-		case errors.Is(err, host.ErrApprovalWaits):
+		case errors.Is(err, host.ErrApprovalWaits), errors.Is(err, host.ErrRestarting):
 			s.hold(id, now[i:]...)
 			refused = true
 			return
@@ -3130,9 +3131,9 @@ func (s *Sessions) deliverHeld(ctx context.Context, id string, live bool, now []
 
 // holds says whether the live thread id keeps the prompt h held: a command while the thread works or waits on the owner,
 // a message a thread told it while an approval of the thread waits on the owner, whose answer the message would be
-// taken for, and either while SettleIdle puts it to sleep. It needs mu.
+// taken for, and either while SettleIdle puts it to sleep or a change of access restarts it. It needs mu.
 func (s *Sessions) holds(id string, h heldPrompt) bool {
-	if s.idling[id] {
+	if s.idling[id] || s.restarting[id] {
 		return true
 	}
 	if h.command {
@@ -3164,7 +3165,8 @@ type Told struct {
 
 // Tell gives m to the thread id and returns the id its host logged it under, "" while it is held. A settled thread is
 // woken for it. A thread that waits on the owner's answer to an approval holds it until the answer, so it never denies
-// the approval; one with messages held, or being sent, holds it after them. A working thread's host queues it, for the
+// the approval, and one whose host is held for a restart until it runs again; one with messages held, or being sent,
+// holds it after them. A working thread's host queues it, for the
 // turn's next step or, with Steer, at once. A thread that is deleted, or being deleted, or ran in a terminal takes none.
 func (s *Sessions) Tell(id string, m Told) (string, error) {
 	name, err := session.ParseName(id)
@@ -3191,7 +3193,7 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 	s.delivering[id] = true
 	s.mu.Unlock()
 	msg, err := s.deliverRanked(name, m)
-	refused := errors.Is(err, host.ErrApprovalWaits)
+	refused := errors.Is(err, host.ErrApprovalWaits) || errors.Is(err, host.ErrRestarting)
 	if refused {
 		s.hold(id, heldPrompt{Told: m})
 		msg, err = "", nil
@@ -3365,14 +3367,15 @@ func (s *Sessions) hold(id string, hs ...heldPrompt) {
 
 // deliver gives m to the live thread's host and returns the id it logged it under. With Steer, the turn that runs
 // takes it in now; a message that started a turn of its own was not queued, and needs no steer. It is
-// host.ErrApprovalWaits when an approval waits that the hook state did not show yet.
+// host.ErrApprovalWaits when an approval waits that the hook state did not show yet, and host.ErrRestarting while the
+// host is held for a restart.
 func (s *Sessions) deliver(name session.Name, m Told) (string, error) {
 	socket, err := s.readyHost(name)
 	var msg string
 	if err == nil {
 		msg, err = host.SendMessage(s.context(), socket, host.Message{Text: m.Text, From: m.From, Body: m.Body, Result: m.Result})
 	}
-	if errors.Is(err, host.ErrApprovalWaits) {
+	if errors.Is(err, host.ErrApprovalWaits) || errors.Is(err, host.ErrRestarting) {
 		return "", err
 	}
 	if err != nil {

@@ -1,6 +1,7 @@
 package orchestration_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/agentos/internal/host"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
 )
@@ -330,5 +332,32 @@ func TestChildResultWaitsForTheParentsSubagentApproval(t *testing.T) {
 	}
 	apptest.Eventually(t, "the result once the approval is answered", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
 	apptest.Eventually(t, "the child asleep", func() bool { return asleep(t, h, c) })
+	noMoreResults(t, h, parent, c, 1)
+}
+
+func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
+	h := apptest.New(t)
+	parent := newThread(t, h, "Plan the release").ID
+	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
+	ch, err := h.Sessions().ChatOf(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The parent's host is held, as a change of access holds it before it restarts the thread, when the child's turn ends.
+	if idle, err := host.Hold(context.Background(), ch.Socket); err != nil || !idle {
+		t.Fatalf("Hold = %v, %v, want the parent's host held", idle, err)
+	}
+	apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
+	apptest.Eventually(t, "the result held for the parent", func() bool { return h.Sessions().HoldsTold(parent) })
+	if lines := resultLines(t, h, parent, c); len(lines) != 0 {
+		t.Fatalf("the parent read %q through a held host", lines)
+	}
+	if err := h.Sessions().SetAccess(parent, session.Full); err != nil {
+		t.Fatal(err)
+	}
+	apptest.Eventually(t, "the result once the parent runs again", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
+	if mode := permissionMode(t, h, parent); mode != "bypassPermissions" {
+		t.Errorf("the parent runs in %s, want the new access", mode)
+	}
 	noMoreResults(t, h, parent, c, 1)
 }

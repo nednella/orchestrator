@@ -51,6 +51,8 @@ type reply struct {
 	Prefill     string       `json:"prefill,omitempty"` // the rewind op's answer: the text of the message rewound to
 	// Approval is the send op's refusal of a message from a thread while an approval waits, which the message would deny.
 	Approval bool `json:"approval,omitempty"`
+	// Restarting is a refusal while the host is held for a restart, as for a change of access.
+	Restarting bool `json:"restarting,omitempty"`
 }
 
 // FileChanges is what a rewind of the files would change: the files, by absolute path, and the lines it would add and
