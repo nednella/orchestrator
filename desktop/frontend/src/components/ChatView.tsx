@@ -10,7 +10,7 @@ import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdi
 import { relative } from '../chatTools'
 import { askConfirm } from '../confirm'
 import { appendText, fromMarkdown } from '../composerMarkdown'
-import { sideChatReason } from '../sideChat'
+import { sideChatAsked, sideChatReason } from '../sideChat'
 import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Session } from '../types'
@@ -33,12 +33,12 @@ const stopWait = 10_000
 const insetGap = { narrow: 12, wide: 16, from: 640 }
 
 // embedded is a side chat's chat in its tab: the timeline of its own messages and the composer, with no fork from a
-// message and no side chat of its own.
-type ChatViewProps = { session: Session; embedded?: boolean }
+// message and no side chat of its own. onAsked hears whether it was sent a message of its own yet.
+type ChatViewProps = { session: Session; embedded?: boolean; onAsked?(asked: boolean): void }
 
 const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
-export function ChatView({ session, embedded = false }: ChatViewProps) {
+export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) {
   const { project, report, forkSession, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
   const latest = useLatestOrchestrator()
   const { timeline, events, loading, error } = useChat(session.id, session.state, embedded)
@@ -57,6 +57,8 @@ export function ChatView({ session, embedded = false }: ChatViewProps) {
   useEffect(() => {
     if (!embedded && !loading) noteSideChatReason(threadId, sideChatReason(session, events))
   }, [embedded, loading, threadId, session, events])
+  const asked = embedded && sideChatAsked(events)
+  useEffect(() => onAsked?.(asked), [asked, onAsked])
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)

@@ -11,6 +11,7 @@ import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkd
 import { pickCursor, pickListKey } from '../composerPick'
 import { modelAlias } from '../model'
 import { sideChatCommands, sideChatQuestion, sideChatReason } from '../sideChat'
+import { attachedTo, detach, setAttached, useAttached } from '../sideChatStore'
 import type { ChatEvent, Session } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
@@ -24,6 +25,7 @@ import { ComposerModelChip } from './ComposerModelChip'
 import { ComposerPickList } from './ComposerPickList'
 import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
+import { SideChatChip } from './SideChatChip'
 
 // A send that gets no answer in this long lets the composer send again.
 const sendWait = 15_000
@@ -52,10 +54,12 @@ type ThreadComposerProps = {
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
 export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, embedded = false, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
-  const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast')
+  const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast, sideChats } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast', 'sideChats')
   const { id } = session
   const sideChat = useSideChat()
   const sideReason = embedded ? '' : sideChatReason(session, events)
+  const attachedIds = useAttached(id)
+  const attached = embedded ? [] : sideChats.filter((s) => attachedIds.includes(s.id))
   const [current, setCurrent] = useState(() => threadDraft(id))
   const latest = useRef(current)
   const latestReply = useRef(reply)
@@ -126,7 +130,8 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
 
-  // /side and /btw start a side chat with the rest of the message, and the images, as its first message.
+  // /side and /btw start a side chat with the rest of the message, and the images, as its first message. The side chats
+  // added to the message go with it, and come back to the composer if it does not go.
   const send = () => {
     const typed = sendText(latest.current.draft.text)
     const images = pending.images
@@ -137,17 +142,19 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
       return
     }
     const prefix = reply === null ? '' : replyPrefix(reply)
+    const withSideChats = question === null ? attached.map((s) => s.id) : []
     setSending(true)
     const release = setTimeout(() => setSending(false), sendWait)
     const sent = latest.current.draft
     update({ ...latest.current, draft: EMPTY_DRAFT })
     pending.clear()
     onReply(null)
+    if (withSideChats.length > 0) setAttached(id, [])
     report(async () => {
       try {
         if (question !== null) await sideChat.start(id, question === '' ? '' : prefix + question, images)
         else {
-          const { notice } = await api.chatSend(id, prefix + typed, images.map(({ base64, mime }) => ({ base64, mime })))
+          const { notice } = await api.chatSend(id, prefix + typed, images.map(({ base64, mime }) => ({ base64, mime })), withSideChats)
           if (notice) pushToast({ tone: 'info', text: notice })
         }
       } catch (err) {
@@ -155,6 +162,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
         if (typed.trim() !== '') update({ ...latest.current, draft: now.text.trim() === '' ? sent : appendText(now, typed) })
         pending.restore(images)
         if (reply !== null && latestReply.current === null) onReply(reply)
+        if (withSideChats.length > 0) setAttached(id, [...new Set([...withSideChats, ...attachedTo(id)])])
         throw err
       } finally {
         clearTimeout(release)
@@ -208,7 +216,20 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
           </>
         )
       }
-      attachments={pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} attachedTo="message" onRemove={pending.remove} />}
+      attachments={
+        (attached.length > 0 || pending.images.length > 0) && (
+          <div className="flex min-w-0 flex-col gap-2">
+            {attached.length > 0 && (
+              <div className="flex min-w-0 flex-wrap gap-1.5">
+                {attached.map((s) => (
+                  <SideChatChip key={s.id} title={s.title} onOpen={() => sideChat.open(id, s.id)} onRemove={() => detach(id, s.id)} />
+                ))}
+              </div>
+            )}
+            {pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} attachedTo="message" onRemove={pending.remove} />}
+          </div>
+        )
+      }
       left={
         <>
           <button className="composer-chip" title="Attach images" aria-label="Attach images" onMouseDown={(e) => e.preventDefault()} onClick={() => picker.current?.click()}>
