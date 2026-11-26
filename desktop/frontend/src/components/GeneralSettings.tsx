@@ -6,6 +6,7 @@ import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
 import { Switch } from './Switch'
+import { TextField } from './TextField'
 
 const SCHEDULES: { value: DigestSchedule; label: string }[] = [
   { value: 'weekly', label: 'Weekly' },
@@ -13,11 +14,16 @@ const SCHEDULES: { value: DigestSchedule; label: string }[] = [
 ]
 
 export function GeneralSettings() {
-  const { project, settings, setKeepAwake, setDigestSchedule, report } = useOrchestrator('project', 'settings', 'setKeepAwake', 'setDigestSchedule', 'report')
+  const { project, settings, setKeepAwake, setDigestSchedule, setProjectsDir, report } = useOrchestrator('project', 'settings', 'setKeepAwake', 'setDigestSchedule', 'setProjectsDir', 'report')
   return (
     <SettingsPage>
       <SettingsSection title="Storage">
         <DataDirRow dir={settings.dataDir} fixed={settings.dataDirFixed} />
+        <SettingsRow
+          title="Projects folder"
+          description="Where Add project makes a new project, and where its folder browser starts. Empty uses ~/code."
+          control={<TextField label="Projects folder" value={settings.projectsDir} placeholder="~/code" onCommit={(dir) => report(() => setProjectsDir(dir))} />}
+        />
       </SettingsSection>
       <SettingsSection title="System">
         <SettingsRow
