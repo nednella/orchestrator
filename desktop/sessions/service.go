@@ -118,6 +118,9 @@ func (v *Service) Cleanup(id string, force bool) error { return v.s.life.Cleanup
 // Cleanups is the current project's clean-up log, newest first.
 func (v *Service) Cleanups() []Cleanup { return v.s.life.Cleanups(v.s.Current().Key()) }
 
+// PullRequests is the current project's open pull requests, newest update first.
+func (v *Service) PullRequests() RepoPulls { return v.s.PullRequests() }
+
 // Memory is what orchestrator and its agents held at the last sample.
 func (v *Service) Memory() Memory { return v.s.Memory() }
 
