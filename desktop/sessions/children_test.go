@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -899,5 +900,28 @@ func TestDeletePlanNamesTheAsleepDescendants(t *testing.T) {
 
 	if got, want := h.DeletePlan(parent.ID).Children, []string{"Helper", "Checker"}; !slices.Equal(got, want) {
 		t.Errorf("Children = %q, want the asleep ones, nearest first: %q", got, want)
+	}
+}
+
+func TestFamilyDeleteThatFailsAfterTheStopSaysTheThreadIsAsleep(t *testing.T) {
+	// The clean-up command, which runs once the delete has put the parent to sleep, turns the child's state file into a
+	// folder that holds a file, so the child's removal after it fails.
+	broken := filepath.Join(t.TempDir(), "break")
+	h := apptest.NewWith(t, apptest.Options{CleanupCommand: fmt.Sprintf(`f=$(cat %q); rm -f "$f"; mkdir -p "$f/x"; %s`, broken, project.DefaultCleanupCommand)})
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	pushWork(t, parent.Worktree)
+	child := childOf(t, h, parent, "Checker", sessions.WhereFolder)
+	putToSleep(t, h, child.ID)
+	if err := os.WriteFile(broken, []byte(filepath.Join(h.State, "sessions", child.ID+".json")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := h.DeleteThread(parent.ID, true)
+	if want := fmt.Sprintf(". Thread %d is asleep now", parent.N); err == nil || !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("Delete = %v, want an error that ends %q", err, want)
+	}
+	if got, ok := h.Session(parent.ID); !ok || got.State != "settled" {
+		t.Errorf("the parent = %+v, there %v; want it asleep", got, ok)
 	}
 }

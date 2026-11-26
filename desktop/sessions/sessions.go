@@ -789,8 +789,10 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		}
 	}
 	trees := s.familyWorktrees(s.context(), family)
+	// stopped is the thread this Delete has put to sleep, so an error after that says it is asleep now.
+	stopped := ""
 	if worktree {
-		if err := s.removeWorktrees(family, trees); err != nil {
+		if stopped, err = s.removeWorktrees(family, trees); err != nil {
 			return err
 		}
 	}
@@ -798,18 +800,22 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		s.handOverWorktree(d, heir)
 	}
 	for _, d := range family {
-		if err := s.remove(d); err != nil {
-			return err
+		settled, err := s.remove(d)
+		if settled {
+			stopped = d
+		}
+		if err != nil {
+			return s.asleepNow(err, stopped)
 		}
 	}
 	return nil
 }
 
-// remove stops the thread id of a Delete when it runs and removes it with its files.
-func (s *Sessions) remove(id string) error {
+// remove stops the thread id of a Delete when it runs and removes it with its files, and says whether it stopped it.
+func (s *Sessions) remove(id string) (settled bool, err error) {
 	name, err := session.ParseName(id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	s.mu.Lock()
 	rec := s.records[id]
@@ -817,12 +823,9 @@ func (s *Sessions) remove(id string) error {
 		rec = e.rec
 	}
 	s.mu.Unlock()
-	asleep := ""
-	if s.isLive(id) {
-		asleep = id
-	}
+	live := s.isLive(id)
 	if err := s.settleToDelete(name); err != nil {
-		return err
+		return false, err
 	}
 	// Counted here: the count sync starts when the session goes, also at the settle of the clean-up, may run after the
 	// delete and find no thread.
@@ -830,7 +833,7 @@ func (s *Sessions) remove(id string) error {
 		s.countUsage(id, rec.Transcript, rec.AgentModel, true)
 	}
 	if err := s.dropThread(name); err != nil {
-		return s.asleepNow(err, asleep)
+		return live, err
 	}
 
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
@@ -847,7 +850,7 @@ func (s *Sessions) remove(id string) error {
 			log.Printf("agentos: removing %s of deleted thread %s: %v", path, id, err)
 		}
 	}
-	return nil
+	return live, nil
 }
 
 // startDelete marks the thread id and its descendants as being deleted and returns them, the deepest first and id
@@ -1041,41 +1044,40 @@ func (s *Sessions) familyWorktrees(ctx context.Context, family []string) familyT
 // the family works in it refuses the Delete with no check run; one a fork takes over stays for the fork. When the
 // thread runs and works in a worktree that is to go, its own or a descendant's, the Delete puts it to sleep after the
 // checks and runs them again, since its agent may have changed the worktree until it stopped; a refusal then says it is
-// asleep. The family does not count as others in a worktree.
-func (s *Sessions) removeWorktrees(family []string, trees familyTrees) error {
+// asleep. The family does not count as others in a worktree. asleep is the thread it put to sleep, "" when none.
+func (s *Sessions) removeWorktrees(family []string, trees familyTrees) (asleep string, err error) {
 	ctx := s.context()
 	top := family[len(family)-1]
 	switch {
 	case trees.topKept != "":
-		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(top), trees.topKept)
+		return "", fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(top), trees.topKept)
 	case len(trees.kept) > 0:
-		return s.keptBy(trees.kept[0].id, trees.kept[0].reason, "", trees.count())
+		return "", s.keptBy(trees.kept[0].id, trees.kept[0].reason, "", trees.count())
 	}
 	own := trees.own
 	if err := s.checkWorktrees(ctx, family, own, "", trees.count()); err != nil {
-		return err
+		return "", err
 	}
-	asleep := ""
 	if s.isLive(top) && slices.ContainsFunc(own, func(id string) bool { return id == top || s.worksIn(top, s.madeWorktree(id)) }) {
 		name, _ := session.ParseName(top)
 		if err := s.settleToDelete(name); err != nil {
-			return err
+			return "", err
 		}
 		asleep = top
 		if err := s.checkWorktrees(ctx, family, own, asleep, trees.count()); err != nil {
-			return err
+			return asleep, err
 		}
 	}
 	for _, id := range own {
 		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
 		switch {
 		case err != nil:
-			return s.asleepNow(err, asleep)
+			return asleep, s.asleepNow(err, asleep)
 		case reason != "":
-			return s.keptBy(id, reason, asleep, trees.count())
+			return asleep, s.keptBy(id, reason, asleep, trees.count())
 		}
 	}
-	return nil
+	return asleep, nil
 }
 
 // checkWorktrees runs the checks of a clean-up for each thread of own, and refuses the Delete of family and its
