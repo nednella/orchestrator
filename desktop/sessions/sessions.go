@@ -757,7 +757,7 @@ func (s *Sessions) handoverOf(id string) string {
 // with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
 // no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
 // thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
-// first, so none is left without the parent that reaches it; their worktrees go before any thread does. A thread with a
+// first, so none is left without the parent that reaches it; their worktrees go with the thread's, all or none. A thread with a
 // running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
 // until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
 // nor a descendant can be woken or forked, and none starts a child.
@@ -786,10 +786,8 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		}
 	}
 	if worktree {
-		for _, d := range family {
-			if err := s.removeOwnWorktree(d, s.Number(d)); err != nil {
-				return err
-			}
+		if err := s.removeWorktrees(family); err != nil {
+			return err
 		}
 	}
 	for _, d := range family {
@@ -961,30 +959,75 @@ func (s *Sessions) removeState(id string) error {
 	return bus.RemoveState(s.stateDir, id)
 }
 
-// removeOwnWorktree removes the worktree agentos made for the thread id, numbered n, for a Delete that takes it with
-// the thread: by a clean-up with every check, and only when no other thread or shell works in it. A thread with no such
-// worktree has nothing to remove. A refusal says when the clean-up put the thread to sleep before a check kept the
-// worktree.
-func (s *Sessions) removeOwnWorktree(id string, n int) error {
+// removeWorktrees removes the worktrees agentos made for the threads of a Delete, family, the deepest first and the
+// thread last, once every one has passed every check of a clean-up, so a worktree kept refuses the Delete before any
+// goes. A worktree another thread or a shell works in refuses it with no check run. When the thread runs and its own
+// worktree is to go, the Delete puts it to sleep after the checks and runs them again, since its agent may have changed
+// the worktree until it stopped; a refusal then says it is asleep.
+func (s *Sessions) removeWorktrees(family []string) error {
 	ctx := s.context()
-	path, shared := s.ownWorktree(ctx, id)
-	switch {
-	case shared != "":
-		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", n, shared)
-	case path == "":
-		return nil
+	var own []string
+	for _, id := range family {
+		path, shared := s.ownWorktree(ctx, id)
+		switch {
+		case shared != "":
+			return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree", s.Number(id), shared)
+		case path != "":
+			own = append(own, id)
+		}
 	}
-	wasLive := s.isLive(id)
-	_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
-	switch {
-	case err != nil:
+	if err := s.checkWorktrees(ctx, own, ""); err != nil {
 		return err
-	case reason == "":
-		return nil
-	case wasLive && !s.isLive(id):
+	}
+	asleep := ""
+	if top := family[len(family)-1]; slices.Contains(own, top) && s.isLive(top) {
+		name, _ := session.ParseName(top)
+		if err := s.settleToDelete(name); err != nil {
+			return err
+		}
+		asleep = top
+		if err := s.checkWorktrees(ctx, own, asleep); err != nil {
+			return err
+		}
+	}
+	for _, id := range own {
+		_, reason, err := s.life.cleanupNow(ctx, id, false, byDelete)
+		switch {
+		case err != nil:
+			return err
+		case reason != "":
+			return s.keptBy(id, reason, asleep)
+		}
+	}
+	return nil
+}
+
+// checkWorktrees runs the checks of a clean-up for each thread of own, and refuses the Delete with the first worktree
+// one keeps. asleep is the thread the Delete has put to sleep, "" before it has.
+func (s *Sessions) checkWorktrees(ctx context.Context, own []string, asleep string) error {
+	for _, id := range own {
+		reason, err := s.life.checkCleanup(ctx, id)
+		switch {
+		case err != nil:
+			return err
+		case reason != "":
+			return s.keptBy(id, reason, asleep)
+		}
+	}
+	return nil
+}
+
+// keptBy is the refusal of a Delete whose clean-up of the thread id kept its worktree for reason. asleep is the thread
+// the Delete has put to sleep, "" when none.
+func (s *Sessions) keptBy(id, reason, asleep string) error {
+	n := s.Number(id)
+	switch asleep {
+	case "":
+		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+	case id:
 		return fmt.Errorf("Thread %d keeps its worktree: %s. It is asleep now; delete it without the worktree, or clean it up first", n, reason)
 	}
-	return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+	return fmt.Errorf("Thread %d keeps its worktree: %s. Thread %d is asleep now; delete it without the worktree, or clean it up first", n, reason, s.Number(asleep))
 }
 
 // isLive says whether the thread id runs under a host. It takes mu.

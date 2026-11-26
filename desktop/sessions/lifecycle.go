@@ -1094,6 +1094,41 @@ func (l *Lifecycle) cleanupNow(ctx context.Context, id string, force bool, by cl
 	return removed, "", nil
 }
 
+// checkCleanup runs the checks a clean-up of the thread id starts with, and removes nothing. It says why one keeps the
+// worktree, "" when none does, and logs a kept worktree and shows it on the row, as a clean-up that stopped there does.
+func (l *Lifecycle) checkCleanup(ctx context.Context, id string) (string, error) {
+	t, err := l.sessions.target(id)
+	if err != nil {
+		return "", err
+	}
+	l.mu.Lock()
+	tr := l.tracks[id]
+	if tr == nil {
+		tr = &track{}
+		l.tracks[id] = tr
+	}
+	if tr.cleanup == "pending" {
+		l.mu.Unlock()
+		return "", errors.New("clean-up is already running")
+	}
+	var pr *PR
+	if tr.pr != nil {
+		c := *tr.pr
+		pr = &c
+	}
+	l.mu.Unlock()
+	_, reason := l.planFor(ctx, t, pr, false, false)
+	if reason == "" {
+		return "", nil
+	}
+	reason = l.logCleanup(ctx, t, pr, []string{}, reason)
+	l.mu.Lock()
+	tr.cleanup, tr.reason = "blocked", reason
+	l.mu.Unlock()
+	l.sessions.changed()
+	return reason, nil
+}
+
 // logCleanup adds a clean-up to the log and returns its reason, which says when the app closed during it.
 func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []string, reason string) string {
 	if reason != "" && ctx.Err() != nil {

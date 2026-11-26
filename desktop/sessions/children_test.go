@@ -491,3 +491,65 @@ func TestChildKeptAgainForTheSameReasonLogsNothing(t *testing.T) {
 		t.Errorf("events = %+v, want two", events)
 	}
 }
+
+func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
+	// freeChild is a child whose worktree its sleep kept, for a commit origin lacked, and which may go now it is pushed.
+	freeChild := func(t *testing.T, h *apptest.Harness, parent sessions.Session) sessions.Session {
+		t.Helper()
+		c := childOf(t, h, parent, "Pusher", sessions.WhereWorktree)
+		commitIn(t, c.Worktree, "pushed.txt")
+		putToSleep(t, h, c.ID)
+		cleanupOf(t, h, c)
+		gitIn(t, c.Worktree, "push", "-u", "origin", "HEAD")
+		return c
+	}
+
+	t.Run("a child keeps its worktree", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		pushWork(t, parent.Worktree)
+		kept := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+		if err := os.WriteFile(filepath.Join(kept.Worktree, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		putToSleep(t, h, kept.ID)
+		cleanupOf(t, h, kept)
+		free := freeChild(t, h, parent)
+
+		err := h.DeleteThread(parent.ID, true)
+		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of %s has uncommitted changes. Delete it without the worktree, or clean it up first", kept.N, kept.Branch); err == nil || err.Error() != want {
+			t.Errorf("Delete = %v, want %q", err, want)
+		}
+		for _, s := range []sessions.Session{parent, kept, free} {
+			if _, ok := h.Session(s.ID); !ok || !exists(s.Worktree) {
+				t.Errorf("thread %s: row there %v, worktree there %v; want both", s.Title, ok, exists(s.Worktree))
+			}
+		}
+		if !tmuxHas(h, parent.ID) {
+			t.Error("the parent was put to sleep")
+		}
+	})
+
+	t.Run("the parent changes its worktree as it stops", func(t *testing.T) {
+		h := newHarness(t)
+		repoFixture(t, h)
+		parent := issueThread(h, t, 7)
+		pushWork(t, parent.Worktree)
+		free := freeChild(t, h, parent)
+		late := filepath.Join(parent.Worktree, "late.txt")
+		// A fetch once the parent has stopped finds a file its agent wrote as it stopped.
+		gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("if ! tmux -L %s has-session -t =%s 2>/dev/null; then echo late > %s; fi; git-upload-pack", h.Socket, parent.ID, late))
+
+		err := h.DeleteThread(parent.ID, true)
+		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now; delete it without the worktree, or clean it up first", parent.N); err == nil || err.Error() != want {
+			t.Errorf("Delete = %v, want %q", err, want)
+		}
+		if !exists(late) || !exists(free.Worktree) || !exists(parent.Worktree) {
+			t.Errorf("the late file there %v, the child's worktree there %v, the parent's there %v; want all", exists(late), exists(free.Worktree), exists(parent.Worktree))
+		}
+		if got, ok := h.Session(parent.ID); !ok || got.State != "settled" {
+			t.Errorf("the parent = %+v, there %v; want it asleep", got, ok)
+		}
+	})
+}
