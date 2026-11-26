@@ -8,8 +8,7 @@ import { ConfirmRow } from './ConfirmRow'
 type DeleteConfirmProps = { session: Session; onClose(): void }
 
 // DeleteConfirm asks before the thread and its chat go, and names the asleep child threads that go with it. It offers
-// the worktrees agentos made for the thread and its descendants that no other thread or shell works in, unticked; a
-// descendant's cannot stay, so then the box is ticked and fixed.
+// the worktrees agentos made for the thread and its descendants that no other thread or shell works in, unticked.
 export function DeleteConfirm({ session, onClose }: DeleteConfirmProps) {
   const { deleteThread, report } = useAgentos('deleteThread', 'report')
   const [plan, setPlan] = useState<DeletePlan | null>(null)
@@ -19,7 +18,7 @@ export function DeleteConfirm({ session, onClose }: DeleteConfirmProps) {
     let current = true
     api.deletePlan(session.id).then(
       (p) => current && setPlan(p),
-      () => current && setPlan({ worktrees: 0, required: false, children: [] }),
+      () => current && setPlan({ worktrees: 0, children: [] }),
     )
     return () => {
       current = false
@@ -37,11 +36,10 @@ export function DeleteConfirm({ session, onClose }: DeleteConfirmProps) {
           {plan && plan.children.length > 0 && <span>{childrenText(plan.children)}</span>}
           {plan && plan.worktrees > 0 && (
             <label className="flex cursor-pointer items-center gap-2 text-soft">
-              <input type="checkbox" checked={plan.required || ticked} disabled={plan.required} onChange={(e) => setTicked(e.target.checked)} />
+              <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} />
               {worktreesLabel(plan.worktrees)}
             </label>
           )}
-          {plan?.required && <span className="text-soft">A child thread's worktree cannot stay once its thread goes.</span>}
         </span>
       }
       confirmLabel="Delete"

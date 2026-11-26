@@ -757,10 +757,9 @@ func (s *Sessions) handoverOf(id string) string {
 // with every check, and only when no other thread or shell works in it; a worktree that stays refuses the Delete, and
 // no thread goes. Without, the worktree stays on disk as it is, and the record that agentos made it goes with the
 // thread, so no clean-up removes it later. Its asleep descendants go with it, each as it would alone, the deepest
-// first, so none is left without the parent that reaches it. Their worktrees go with the thread's, all or none, and a
-// descendant's worktree cannot stay: once its thread goes, nothing would clean it up. One that a thread outside the
-// family works in stays on disk for it. A thread with a
-// running descendant is refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
+// first, so none is left without the parent that reaches it. With worktree their worktrees go with the thread's, all
+// or none; one that a thread outside the family works in stays on disk for it. A thread with a running descendant is
+// refused, and so is an old terminal session whose pane still runs: the owner ends it there, and
 // until then it keeps its row, so no second thread claims its issue's branch. While the delete runs, neither the thread
 // nor a descendant can be woken or forked, and none starts a child.
 func (s *Sessions) Delete(id string, worktree bool) error {
@@ -786,9 +785,6 @@ func (s *Sessions) Delete(id string, worktree bool) error {
 		if s.life.CleaningUp(d) {
 			return fmt.Errorf("Thread %d is being cleaned up; delete it when that ends", s.Number(d))
 		}
-	}
-	if !worktree && s.DeletePlan(id).Required {
-		return fmt.Errorf("Thread %d has children with worktrees of their own: delete it with the worktrees", s.Number(id))
 	}
 	if worktree {
 		if err := s.removeWorktrees(family); err != nil {
@@ -1003,7 +999,7 @@ func (s *Sessions) removeWorktrees(family []string) error {
 		case err != nil:
 			return err
 		case reason != "":
-			return s.keptBy(id, reason, asleep)
+			return s.keptBy(id, reason, asleep, len(own))
 		}
 	}
 	return nil
@@ -1018,23 +1014,28 @@ func (s *Sessions) checkWorktrees(ctx context.Context, own []string, asleep stri
 		case err != nil:
 			return err
 		case reason != "":
-			return s.keptBy(id, reason, asleep)
+			return s.keptBy(id, reason, asleep, len(own))
 		}
 	}
 	return nil
 }
 
-// keptBy is the refusal of a Delete whose clean-up of the thread id kept its worktree for reason. asleep is the thread
-// the Delete has put to sleep, "" when none.
-func (s *Sessions) keptBy(id, reason, asleep string) error {
+// keptBy is the refusal of a Delete of worktrees worktrees whose clean-up of the thread id kept its worktree for reason.
+// asleep is the thread the Delete has put to sleep, "" when none.
+func (s *Sessions) keptBy(id, reason, asleep string, worktrees int) error {
 	n := s.Number(id)
+	keep := "the worktree"
+	if worktrees > 1 {
+		keep = "the worktrees"
+	}
+	untick := fmt.Sprintf("Untick the box to keep %s, or clean Thread %d up first", keep, n)
 	switch asleep {
 	case "":
-		return fmt.Errorf("Thread %d keeps its worktree: %s. Delete it without the worktree, or clean it up first", n, reason)
+		return fmt.Errorf("Thread %d keeps its worktree: %s. %s", n, reason, untick)
 	case id:
-		return fmt.Errorf("Thread %d keeps its worktree: %s. It is asleep now; delete it without the worktree, or clean it up first", n, reason)
+		return fmt.Errorf("Thread %d keeps its worktree: %s. It is asleep now. %s", n, reason, untick)
 	}
-	return fmt.Errorf("Thread %d keeps its worktree: %s. Thread %d is asleep now; delete it without the worktree, or clean it up first", n, reason, s.Number(asleep))
+	return fmt.Errorf("Thread %d keeps its worktree: %s. Thread %d is asleep now. %s", n, reason, s.Number(asleep), untick)
 }
 
 // isLive says whether the thread id runs under a host. It takes mu.
@@ -1048,7 +1049,6 @@ func (s *Sessions) isLive(id string) bool {
 // DeletePlan is what a Delete of a thread would take with it, for its confirm.
 type DeletePlan struct {
 	Worktrees int      `json:"worktrees"` // the worktrees agentos made for the thread and its descendants that are on disk and that no other thread and no shell works in
-	Required  bool     `json:"required"`  // a descendant has one, which cannot stay once its thread goes, so the Delete takes them or is refused
 	Children  []string `json:"children"`  // the titles of the asleep descendants that go with the thread, nearest first
 }
 
@@ -1065,7 +1065,6 @@ func (s *Sessions) DeletePlan(id string) DeletePlan {
 	for _, d := range append(descendants, id) {
 		if path, shared := s.ownWorktree(ctx, d); path != "" && shared == "" {
 			p.Worktrees++
-			p.Required = p.Required || d != id
 		}
 	}
 	return p

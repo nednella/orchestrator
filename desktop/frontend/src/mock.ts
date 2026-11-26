@@ -838,7 +838,7 @@ export function createMock(params: URLSearchParams) {
   const deletePlan = (s: Session): DeletePlan => {
     const taken = takenWorktrees(s)
     const children = descendants(s.id).filter((x) => x.state === 'settled').map((x) => x.title)
-    return { worktrees: taken.length, required: taken.some((x) => x !== s), children }
+    return { worktrees: taken.length, children }
   }
 
   const merging = sessions.find((s) => s.cleanup === 'pending')
@@ -1019,7 +1019,6 @@ export function createMock(params: URLSearchParams) {
       const family = [...descendants(id).reverse(), s]
       const busy = family.find((x) => x.cleanup === 'pending')
       if (busy) throw `Thread ${busy.n} is being cleaned up; delete it when that ends`
-      if (!worktree && deletePlan(s).required) throw `Thread ${s.n} has children with worktrees of their own: delete it with the worktrees`
       const user = worktree && s.worktree ? worktreeUser(s, family) : undefined
       if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree`
       const taken = worktree ? takenWorktrees(s) : []
@@ -1029,7 +1028,7 @@ export function createMock(params: URLSearchParams) {
         Object.assign(x, { cleanup: 'blocked', cleanupReason: reason })
         logCleanup(x, [], reason)
         publish()
-        throw `Thread ${x.n} keeps its worktree: ${reason}. Delete it without the worktree, or clean it up first`
+        throw `Thread ${x.n} keeps its worktree: ${reason}. Untick the box to keep ${taken.length > 1 ? 'the worktrees' : 'the worktree'}, or clean Thread ${x.n} up first`
       }
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {

@@ -305,7 +305,7 @@ func TestDeleteWithTheWorktreeIsRefusedWhileItHoldsWork(t *testing.T) {
 	chatLog, _ := hostFiles(h, s.ID)
 
 	err := h.DeleteThread(s.ID, true)
-	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. Delete it without the worktree, or clean it up first", s.N); err == nil || err.Error() != want {
+	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. Untick the box to keep the worktree, or clean Thread %d up first", s.N, s.N); err == nil || err.Error() != want {
 		t.Errorf("Delete = %v, want %q", err, want)
 	}
 	if got, ok := h.Session(s.ID); !ok || got.State == "settled" || got.Worktree != wt {
@@ -701,7 +701,7 @@ func TestDeleteKeptAfterItsSettleSaysTheThreadIsAsleep(t *testing.T) {
 	gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("if [ -e %s ]; then echo late > %s; fi; touch %s; git-upload-pack", fetched, late, fetched))
 
 	err := h.DeleteThread(s.ID, true)
-	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now; delete it without the worktree, or clean it up first", s.N); err == nil || err.Error() != want {
+	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now. Untick the box to keep the worktree, or clean Thread %d up first", s.N, s.N); err == nil || err.Error() != want {
 		t.Errorf("Delete = %v, want %q", err, want)
 	}
 	if got, ok := h.Session(s.ID); !ok || got.State != "settled" || got.Cleanup != "blocked" {

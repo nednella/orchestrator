@@ -67,7 +67,6 @@ export type Session = {
 // What a delete of a thread would take with it, as DeletePlan says.
 export type DeletePlan = {
   worktrees: number // the worktrees agentos made for the thread and its descendants that no other thread and no shell works in
-  required: boolean // a descendant has one, which cannot stay once its thread goes, so the delete takes them or is refused
   children: string[] // the titles of the asleep descendants that go with the thread, nearest first
 }
 

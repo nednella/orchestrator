@@ -19,8 +19,7 @@ export function worktreesLabel(worktrees: number): string {
 }
 
 // deletesWorktree says whether confirming takes the worktrees: only ones the thread and its descendants have to
-// themselves, when the owner ticked the box or when a descendant's must go with it. plan is null until the app has said.
+// themselves, and only when the owner ticked the box. plan is null until the app has said.
 export function deletesWorktree(plan: DeletePlan | null, ticked: boolean): boolean {
-  if (!plan || plan.worktrees === 0) return false
-  return plan.required || ticked
+  return ticked && !!plan && plan.worktrees > 0
 }

@@ -143,8 +143,8 @@ func TestDeleteTakesAsleepChildrenWithIt(t *testing.T) {
 		parent := issueThread(h, t, 7)
 		child := childOf(t, h, parent, "Helper", sessions.WhereFolder)
 		putToSleep(t, h, child.ID)
-		if got := h.DeletePlan(parent.ID); got.Worktrees != 1 || got.Required {
-			t.Errorf("DeletePlan = %+v, want one worktree, not required", got)
+		if got := h.DeletePlan(parent.ID); got.Worktrees != 1 {
+			t.Errorf("DeletePlan = %+v, want one worktree", got)
 		}
 		if err := h.DeleteThread(parent.ID, false); err != nil {
 			t.Fatal(err)
@@ -170,7 +170,7 @@ func TestDeleteStopsAtAChildsKeptWorktree(t *testing.T) {
 	cleanupOf(t, h, child)
 
 	err := h.DeleteThread(parent.ID, true)
-	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of %s has uncommitted changes. Delete it without the worktree, or clean it up first", child.N, child.Branch); err == nil || err.Error() != want {
+	if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of %s has uncommitted changes. Untick the box to keep the worktrees, or clean Thread %d up first", child.N, child.Branch, child.N); err == nil || err.Error() != want {
 		t.Errorf("Delete = %v, want %q", err, want)
 	}
 	if got, ok := h.Session(parent.ID); !ok || got.State == "settled" || !tmuxHas(h, parent.ID) || !exists(parent.Worktree) {
@@ -525,7 +525,7 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 		free := freeChild(t, h, parent)
 
 		err := h.DeleteThread(parent.ID, true)
-		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of %s has uncommitted changes. Delete it without the worktree, or clean it up first", kept.N, kept.Branch); err == nil || err.Error() != want {
+		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of %s has uncommitted changes. Untick the box to keep the worktrees, or clean Thread %d up first", kept.N, kept.Branch, kept.N); err == nil || err.Error() != want {
 			t.Errorf("Delete = %v, want %q", err, want)
 		}
 		for _, s := range []sessions.Session{parent, kept, free} {
@@ -549,7 +549,7 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 		gitIn(t, h.Dir, "config", "remote.origin.uploadpack", fmt.Sprintf("if ! tmux -L %s has-session -t =%s 2>/dev/null; then echo late > %s; fi; git-upload-pack", h.Socket, parent.ID, late))
 
 		err := h.DeleteThread(parent.ID, true)
-		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now; delete it without the worktree, or clean it up first", parent.N); err == nil || err.Error() != want {
+		if want := fmt.Sprintf("Thread %d keeps its worktree: the worktree of issue-7 has uncommitted changes. It is asleep now. Untick the box to keep the worktrees, or clean Thread %d up first", parent.N, parent.N); err == nil || err.Error() != want {
 			t.Errorf("Delete = %v, want %q", err, want)
 		}
 		if !exists(late) || !exists(free.Worktree) || !exists(parent.Worktree) {
@@ -561,7 +561,7 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 	})
 }
 
-func TestDeleteOfAFamilyTakesItsChildrensWorktrees(t *testing.T) {
+func TestDeleteWithoutTheWorktreesKeepsEveryFolderOfTheFamily(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
@@ -571,38 +571,40 @@ func TestDeleteOfAFamilyTakesItsChildrensWorktrees(t *testing.T) {
 	if parent.Worktree != "" {
 		t.Fatalf("the parent has a worktree: %+v", parent)
 	}
-	var children []sessions.Session
-	for _, title := range []string{"Builder", "Tester"} {
-		c := childOf(t, h, parent, title, sessions.WhereWorktree)
-		commitIn(t, c.Worktree, "work.txt")
-		putToSleep(t, h, c.ID)
-		cleanupOf(t, h, c)
-		children = append(children, c)
-	}
-	if got := h.DeletePlan(parent.ID); got.Worktrees != 2 || !got.Required {
-		t.Errorf("DeletePlan of the parent = %+v, want two worktrees, required", got)
-	}
-	if got := h.DeletePlan(children[0].ID); got.Worktrees != 1 || got.Required {
-		t.Errorf("DeletePlan of a child = %+v, want one worktree, not required", got)
+	unpushed := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	commitIn(t, unpushed.Worktree, "work.txt")
+	checker := childOf(t, h, unpushed, "Checker", sessions.WhereFolder)
+	putToSleep(t, h, checker.ID)
+	putToSleep(t, h, unpushed.ID)
+	cleanupOf(t, h, unpushed)
+	family := []sessions.Session{parent, unpushed, checker}
+	if got := h.DeletePlan(parent.ID); got.Worktrees != 1 {
+		t.Errorf("DeletePlan of the parent = %+v, want one worktree", got)
 	}
 
-	err = h.DeleteThread(parent.ID, false)
-	if want := fmt.Sprintf("Thread %d has children with worktrees of their own: delete it with the worktrees", parent.N); err == nil || err.Error() != want {
-		t.Errorf("Delete without the worktrees = %v, want %q", err, want)
+	err = h.DeleteThread(parent.ID, true)
+	if want := fmt.Sprintf("Thread %d keeps its worktree: %s has a commit that is not on origin. Untick the box to keep the worktree, or clean Thread %d up first", unpushed.N, unpushed.Branch, unpushed.N); err == nil || err.Error() != want {
+		t.Errorf("Delete with the worktrees = %v, want %q", err, want)
 	}
-	for _, c := range children {
-		if _, ok := h.Session(c.ID); !ok || !exists(c.Worktree) {
-			t.Errorf("child %s: row there %v, worktree there %v", c.Title, ok, exists(c.Worktree))
+	for _, s := range family {
+		if _, ok := h.Session(s.ID); !ok {
+			t.Errorf("thread %s went", s.Title)
 		}
-		gitIn(t, c.Worktree, "push", "-u", "origin", "HEAD")
 	}
-	if err := h.DeleteThread(parent.ID, true); err != nil {
+
+	if err := h.DeleteThread(parent.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range children {
-		if _, ok := h.Session(c.ID); ok || exists(c.Worktree) || !hasBranch(t, h.Dir, c.Branch) {
-			t.Errorf("child %s: row there %v, worktree there %v, branch there %v", c.Title, ok, exists(c.Worktree), hasBranch(t, h.Dir, c.Branch))
+	for _, s := range family {
+		if _, ok := h.Session(s.ID); ok {
+			t.Errorf("thread %s is still there", s.Title)
 		}
+	}
+	if !exists(filepath.Join(unpushed.Worktree, "work.txt")) || !hasBranch(t, h.Dir, unpushed.Branch) {
+		t.Errorf("the child's worktree there %v, branch there %v; want both", exists(unpushed.Worktree), hasBranch(t, h.Dir, unpushed.Branch))
+	}
+	if records := madeRecords(t, h); len(records) != 0 {
+		t.Errorf("records = %+v, want every thread's gone", records)
 	}
 	if !exists(filepath.Join(h.Dir, "README")) {
 		t.Error("the project folder lost its files")

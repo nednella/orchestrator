@@ -15,11 +15,11 @@ test('the box says how many worktrees go', () => {
   assert.equal(worktreesLabel(3), 'Delete 3 worktrees too')
 })
 
-test('the worktrees go only when there are some and the box is ticked or they must', () => {
-  assert.equal(deletesWorktree({ worktrees: 1, required: false, children: [] }, true), true)
-  assert.equal(deletesWorktree({ worktrees: 1, required: false, children: [] }, false), false)
-  assert.equal(deletesWorktree({ worktrees: 2, required: true, children: ['Builder'] }, false), true)
-  assert.equal(deletesWorktree({ worktrees: 0, required: false, children: [] }, true), false)
+test('the worktrees go only when there are some and the box is ticked', () => {
+  assert.equal(deletesWorktree({ worktrees: 1, children: [] }, true), true)
+  assert.equal(deletesWorktree({ worktrees: 1, children: [] }, false), false)
+  assert.equal(deletesWorktree({ worktrees: 2, children: ['Builder'] }, false), false)
+  assert.equal(deletesWorktree({ worktrees: 0, children: [] }, true), false)
   assert.equal(deletesWorktree(null, true), false)
 })
 
