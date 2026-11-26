@@ -459,10 +459,11 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 	top := newThread(t, h, "Plan the release").ID
 	parent := mustDelegate(t, h, top, `{"task":"keep working","title":"Check the build"}`).ID
 	apptest.Eventually(t, "the parent's task taken in", func() bool { return stdinHas(t, h, parent, "keep working") })
-	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
-	// The parent waits on the owner in the middle of its turn, so the result is held for it.
+	// The parent waits on the owner in the middle of its turn, so the result is held for it. It waits before the child
+	// starts: a child that ended first would give its result to a parent that still takes it.
 	h.Observe(t, parent, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
 	apptest.Eventually(t, "the parent waiting", func() bool { return row(t, h, parent).State == session.Waiting })
+	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
 	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
 
 	if stopped, err := stopAs(t, h, top, parent); err != "" || !slices.Contains(stopped, parent) {
