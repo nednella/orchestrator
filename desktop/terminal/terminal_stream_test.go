@@ -89,8 +89,10 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 	if err := h.TermWrite(id, "echo before-reopen\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the command and its output", func() bool { return strings.Count(first.String(), "before-reopen") == 2 })
+	// A redraw of the line, from a resize or the shell's own line editor, can show the text more than twice.
+	eventually(t, "the command and its output", func() bool { return strings.Count(first.String(), "before-reopen") >= 2 })
 	time.Sleep(300 * time.Millisecond)
+	seen := strings.Count(first.String(), "before-reopen")
 	second := openRead(t, h, id, 80, 24)
 	// Soon, so a later redraw for some other reason does not pass for this one.
 	deadline := time.Now().Add(time.Second)
@@ -100,8 +102,8 @@ func TestReopeningRedrawsTheScreen(t *testing.T) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	if n := strings.Count(first.String(), "before-reopen"); n != 2 {
-		t.Errorf("the replaced reader saw before-reopen %d times, want the 2 from before the reopen", n)
+	if n := strings.Count(first.String(), "before-reopen"); n != seen {
+		t.Errorf("the replaced reader saw before-reopen %d times, want the %d from before the reopen", n, seen)
 	}
 }
 
