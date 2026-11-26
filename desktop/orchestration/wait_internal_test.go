@@ -1,7 +1,10 @@
 package orchestration
 
 import (
+	"bufio"
 	"encoding/json"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,5 +50,60 @@ func TestTurnInReadsTheLastTurn(t *testing.T) {
 				t.Errorf("turnIn = %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// loggedFrom is the chat log a host keeps of the recorded Claude output in the file name of internal/chat's testdata, after
+// the owner's message that started it.
+func loggedFrom(t *testing.T, name string) []chatlog.Event {
+	t.Helper()
+	f, err := os.Open("../../internal/chat/testdata/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	events := []chatlog.Event{{Seq: 1, Kind: chatlog.KindUser, ID: "u1", Text: "go"}}
+	var tasks chatlog.Tasks
+	sc := bufio.NewScanner(f)
+	sc.Buffer(nil, 1<<20)
+	for sc.Scan() {
+		parsed, err := chatlog.Parse(sc.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range parsed {
+			if !e.Persisted() {
+				continue
+			}
+			// The host names a task's subagent as it logs it.
+			e = tasks.Named(e)
+			tasks.See(e)
+			e.Seq = int64(len(events) + 1)
+			events = append(events, e)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return events
+}
+
+func TestTurnInWaitsForTheBackgroundSubagents(t *testing.T) {
+	events := loggedFrom(t, "background.jsonl")
+	var atEnds []bool
+	for i, e := range events {
+		switch e.Kind {
+		case chatlog.KindTurnEnd:
+			atEnds = append(atEnds, turnIn(events[:i+1]).ended)
+		case chatlog.KindTaskEnd:
+			if e.Agent == "" && turnIn(events[:i+1]).ended {
+				t.Errorf("done at the end of a task of Claude's own (seq %d), before the turn that tells of it", e.Seq)
+			}
+		}
+	}
+	// The owner's turn ends while the subagent works; the turns for the subagent's end, its second end and the shell's
+	// end each end with no subagent working.
+	if want := []bool{false, true, true, true}; !slices.Equal(atEnds, want) {
+		t.Errorf("ended at each turn_end = %v, want %v", atEnds, want)
 	}
 }

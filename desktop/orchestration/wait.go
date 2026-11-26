@@ -244,7 +244,9 @@ func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
 // turn is how a thread's last turn stands in its chat log.
 type turn struct {
 	newest int64 // the seq of the log's last event
-	// ended says the last turn_end comes after the last user message and no queued message waits to be taken in.
+	// ended says the last turn_end comes after the last user message, no queued message waits to be taken in, no
+	// subagent works in the background and no turn Claude runs to tell of a task's end is due: Claude runs one after
+	// a task of its own ends.
 	ended   bool
 	outcome string // completed, failed or stopped, once ended
 	reason  string // why a failed turn failed, as Claude said
@@ -269,11 +271,14 @@ func turnIn(events []chatlog.Event) turn {
 	var end chatlog.Event
 	var approvals []chatlog.Event
 	var tasks chatlog.Tasks
+	reporting := false
 	queued := map[string]bool{}
 	for _, e := range events {
 		t.newest = e.Seq
 		approvals = chatlog.Waiting(approvals, e, &tasks)
-		tasks.See(e)
+		if task, ok := tasks.See(e); ok && task.ReportedAlone(e) {
+			reporting = true
+		}
 		switch e.Kind {
 		case chatlog.KindUser:
 			user = e.Seq
@@ -285,18 +290,18 @@ func turnIn(events []chatlog.Event) turn {
 		case chatlog.KindInterrupt:
 			interrupt = e.Seq
 		case chatlog.KindTurnEnd:
-			end = e
+			end, reporting = e, false
 		case chatlog.KindStart:
 			// A message queued in an earlier run never reaches this one.
 			clear(queued)
-			t.ran, t.settled = false, false
+			t.ran, t.settled, reporting = false, false, false
 		case chatlog.KindExit:
 			clear(queued)
-			t.ran, t.settled = true, e.Stop == chatlog.StopSettle
+			t.ran, t.settled, reporting = true, e.Stop == chatlog.StopSettle, false
 		}
 	}
 	t.asks = len(approvals) > 0
-	t.ended = end.Seq > user && len(queued) == 0
+	t.ended = end.Seq > user && len(queued) == 0 && tasks.Working() == 0 && !reporting
 	switch {
 	case interrupt > user && interrupt < end.Seq:
 		t.outcome = outcomeStopped
