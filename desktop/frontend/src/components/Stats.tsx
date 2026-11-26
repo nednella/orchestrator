@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Calendar, ChartColumn, Eraser } from 'lucide-react'
-import { api } from '../api'
+import { api, errorMessage } from '../api'
 import { useAgentos } from '../AgentosContext'
 import { useLayout } from '../LayoutContext'
+import { loadView } from '../loadView'
 import { rangeLabel } from '../statsChart'
 import { periodBefore } from '../statsFigures'
 import { readStored, writeStored } from '../storage'
@@ -10,6 +11,7 @@ import type { Ledger } from '../types'
 import { CleanupsList } from './CleanupsList'
 import { StatsSkeleton } from './StatsSkeleton'
 import { MemoryTotal } from './MemoryTotal'
+import { Notice } from './Notice'
 import { SegmentedControl } from './SegmentedControl'
 import { StatsCard } from './StatsCard'
 import { StatsFigures } from './StatsFigures'
@@ -32,7 +34,7 @@ const RANGE_KEY = 'agentos.statsWorkDays'
 const PROJECT_KEY = 'agentos.statsProject'
 
 export function Stats() {
-  const { focusRequest, projects, project: currentProject, report } = useAgentos('focusRequest', 'projects', 'project', 'report')
+  const { focusRequest, projects, project: currentProject } = useAgentos('focusRequest', 'projects', 'project')
   const { closeCentre } = useLayout()
   const [days, setDays] = useState(() => {
     const stored = readStored(RANGE_KEY, 30)
@@ -40,6 +42,8 @@ export function Stats() {
   })
   const [picked, setPicked] = useState(() => readStored(PROJECT_KEY, ''))
   const [ledger, setLedger] = useState<Ledger | null>(null)
+  const [error, setError] = useState('')
+  const [tries, setTries] = useState(0)
   const panel = useRef<HTMLElement>(null)
   const project = projects.some((p) => p.key === picked) ? picked : ''
 
@@ -51,14 +55,15 @@ export function Stats() {
 
   useEffect(() => {
     let current = true
-    report(async () => {
-      const next = await api.ledger(days, project)
-      if (current) setLedger(next)
-    })
+    setError('')
+    api.ledger(days, project).then(
+      (next) => current && setLedger(next),
+      (err) => current && setError(errorMessage(err)),
+    )
     return () => {
       current = false
     }
-  }, [days, project, report])
+  }, [days, project, tries])
 
   const pickRange = (next: string) => {
     setDays(Number(next))
@@ -69,6 +74,7 @@ export function Stats() {
     writeStored(PROJECT_KEY, next)
   }
 
+  const view = loadView(ledger !== null, error)
   const first = ledger?.perDay[0]?.day
   const last = ledger?.perDay.at(-1)?.day
   const period = periodBefore(ledger?.days ?? days)
@@ -104,8 +110,20 @@ export function Stats() {
             <StatsProjectPicker projects={projects} value={project} onChange={pickProject} />
           </span>
         </div>
-        {ledger === null ? (
+        {ledger === null && view === 'loading' ? (
           <StatsSkeleton />
+        ) : ledger === null ? (
+          <Notice
+            title="The stats did not load"
+            hint={
+              <>
+                {error}{' '}
+                <button className="btn btn-ghost" onClick={() => setTries(tries + 1)}>
+                  Retry
+                </button>
+              </>
+            }
+          />
         ) : ledger.since === '' ? (
           <p className="mt-5 text-center text-small text-soft">Nothing recorded yet. Chats, tasks, prompts, worked time and tokens are counted from now on.</p>
         ) : (

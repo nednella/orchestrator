@@ -12,11 +12,12 @@ import { DigestStatusRow } from './DigestStatusRow'
 import { DigestToolCard } from './DigestToolCard'
 import { DigestToolsMenu } from './DigestToolsMenu'
 import { CenteredSpinner } from './CenteredSpinner'
+import { Notice } from './Notice'
 
 const NONE_LEFT: Record<DigestFilter, string> = { all: 'No items', new: 'No new items', saved: 'No saved items' }
 
 export function DigestView() {
-  const { digest, digestSeen, runDigest, markDigestSeen, report, focusRequest, project } = useAgentos('digest', 'digestSeen', 'runDigest', 'markDigestSeen', 'report', 'focusRequest', 'project')
+  const { digest, digestError, reloadDigest, digestSeen, runDigest, markDigestSeen, report, focusRequest, project } = useAgentos('digest', 'digestError', 'reloadDigest', 'digestSeen', 'runDigest', 'markDigestSeen', 'report', 'focusRequest', 'project')
   const loading = !digest
   const panel = useRef<HTMLElement>(null)
   const [filter, setFilter] = useState<DigestFilter>('all')
@@ -47,7 +48,20 @@ export function DigestView() {
     <section ref={panel} data-panel="thread" tabIndex={-1} aria-label="News" className="panel @container h-full min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-(--chat-column) px-4 pt-6 pb-16 @max-[40rem]:pt-4">
         <DigestHeader project={project?.name ?? 'this project'} tools={digest?.tools ?? 0} automatic={(digest?.nextRunAt ?? 0) > 0} button={button} onRun={run} />
-        {loading && <CenteredSpinner />}
+        {loading && digestError && (
+          <Notice
+            title="The news did not load"
+            hint={
+              <>
+                {digestError}{' '}
+                <button className="btn btn-ghost" onClick={reloadDigest}>
+                  Retry
+                </button>
+              </>
+            }
+          />
+        )}
+        {loading && !digestError && <CenteredSpinner />}
         {!loading && digest && (
           <>
             <DigestStatusRow digest={digest} />

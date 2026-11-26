@@ -57,6 +57,8 @@ type AgentosState = {
   // The approval each live thread waits on, by thread id.
   pending: Record<string, Pending>
   digest: Digest | null
+  // Why the digest could not be read; empty while it loads or once it is read.
+  digestError: string
   digestSeen: number
   digestUnseenCount: number
   awake: boolean
@@ -122,6 +124,7 @@ type AgentosActions = {
   loadBrowserState(id: string): Promise<void>
   openBrowser(id: string, url?: string): Promise<void>
   runDigest(): Promise<void>
+  reloadDigest(): void
   digestToNote(itemId: string): Promise<void>
   dismissDigestItem(itemId: string): Promise<void>
   markDigestSeen(): void
@@ -281,6 +284,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [browserStates, setBrowserStates] = useState<Record<string, BrowserState>>({})
   const [pending, setPending] = useState<Record<string, Pending>>({})
   const [digest, setDigest] = useState<Digest | null>(null)
+  const [digestError, setDigestError] = useState('')
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
@@ -452,6 +456,16 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     [selectAmong, forgetGone],
   )
 
+  const loadDigest = useCallback(async (epoch: number) => {
+    setDigestError('')
+    try {
+      const next = await api.digest()
+      if (epoch === projectEpoch.current) setDigest(next)
+    } catch (err) {
+      if (epoch === projectEpoch.current) setDigestError(errorMessage(err))
+    }
+  }, [])
+
   const loadIssues = useCallback(async (refresh: boolean) => {
     const epoch = projectEpoch.current
     setIssuesLoading(true)
@@ -496,10 +510,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         lastCleanupToast.current = list[0]?.at ?? 0
         setCleanups(list)
       })
-      report(async () => {
-        const next = await api.digest()
-        if (epoch === projectEpoch.current) setDigest(next)
-      })
+      void loadDigest(epoch)
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
       setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
       quietly(() => selectAmong(snap.sessions.filter((s) => s.project === snap.project.key), snap.sessions, homeUnlessRemembered))
@@ -510,7 +521,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       forgetGone(snap.sessions, snap.projects)
       report(() => loadIssues(false))
     },
-    [selectAmong, loadIssues, report, selectId, remember, quietly, forgetGone],
+    [selectAmong, loadIssues, loadDigest, report, selectId, remember, quietly, forgetGone],
   )
 
   // Each request takes the next epoch before it awaits, so only the latest one enters its project.
@@ -959,6 +970,9 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
           await api.browserGoto(id, url)
         }
       },
+      reloadDigest() {
+        void loadDigest(projectEpoch.current)
+      },
       async runDigest() {
         await api.runDigest()
       },
@@ -1105,7 +1119,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
   const live = shownIn(sessions, projects)
@@ -1133,6 +1147,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       browserStates,
       pending,
       digest,
+      digestError,
       digestSeen,
       digestUnseenCount,
       awake,
@@ -1151,7 +1166,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       patchNotes,
       ...actions,
     }),
-    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))
