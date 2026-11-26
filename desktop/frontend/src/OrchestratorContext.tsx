@@ -13,11 +13,11 @@ import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
-import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
-  tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'done'
+  tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'done' | 'success' | 'warning'
   text: string
   detail?: string
   sessionId?: string
@@ -26,7 +26,7 @@ export type Toast = {
   action?: { label: string; run(): void }
 }
 
-export type Overlay = 'shortcuts' | 'settings' | 'patch-notes' | 'changelog' | null
+export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'patch-notes' | 'changelog' | null
 export type FocusTarget = 'thread' | 'shell' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
@@ -107,7 +107,11 @@ type OrchestratorActions = {
   renameSession(id: string, title: string): Promise<void>
   startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
   switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
-  addProject(dir?: string): Promise<void>
+  // addProject opens the folder as a project; with create it makes the folder first.
+  addProject(dir: string, create?: boolean): Promise<void>
+  // createProject makes a project from a name, opens it and focuses its composer, and publishes it to GitHub in the
+  // background when asked. It says whether the project was made.
+  createProject(name: string, publish: boolean): Promise<boolean>
   setUpProject(): Promise<void>
   refreshIssues(): Promise<void>
   addNote(text: string, images?: PendingImage[]): Promise<void>
@@ -144,6 +148,7 @@ type OrchestratorActions = {
   setCleanup(event: CleanupEvent, mode: CleanupMode): Promise<void>
   setTextScale(scale: number): Promise<void>
   setKeepAwake(on: boolean): Promise<void>
+  setProjectsDir(dir: string): Promise<void>
   setPromptSend(mode: PromptSend): Promise<void>
   setBrowserEnabled(on: boolean): Promise<void>
   setDigestSchedule(schedule: DigestSchedule): Promise<void>
@@ -285,7 +290,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
-  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '' })
+  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
   const [shells, setShells] = useState<Shell[]>([])
   const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
@@ -411,6 +416,21 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     const timers = toastTimers.current
     return () => timers.forEach((timer) => clearTimeout(timer))
   }, [])
+
+  const publishNewProject = useCallback(
+    async (key: string) => {
+      try {
+        const repo = await api.publishProject(key)
+        pushToast({ tone: 'success', text: 'Published to GitHub', detail: repo })
+        const snap = await api.snapshot()
+        setProjects(snap.projects)
+        if (projectRef.current?.key === key) setProject(snap.projects.find((p) => p.key === key) ?? snap.project)
+      } catch (err) {
+        pushToast({ tone: 'error', text: 'Could not create the GitHub repository', detail: errorMessage(err) })
+      }
+    },
+    [pushToast],
+  )
 
   const report = useCallback(
     (run: () => unknown) => {
@@ -893,8 +913,27 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         if (name === projectRef.current?.name) return
         await enterFrom(api.switchProject(name), homeUnlessRemembered)
       },
-      async addProject(dir) {
-        await enterFrom(dir ? api.addProjectDir(dir) : api.addProject())
+      async addProject(dir, create = false) {
+        await enterFrom(api.addProjectDir(dir, create))
+      },
+      async createProject(name, publish) {
+        let created: NewProject
+        try {
+          created = await api.createProject(name)
+        } catch (err) {
+          pushToast({ tone: 'error', text: 'Could not create the project', detail: errorMessage(err) })
+          return false
+        }
+        pushToast(
+          created.commitError
+            ? { tone: 'warning', text: `Created ${name} without a first commit`, detail: `${created.commitError} The project is in ${created.dir}.` }
+            : { tone: 'success', text: `Created ${name}`, detail: created.dir },
+        )
+        const key = created.snapshot.project.key
+        if (publish) void publishNewProject(key)
+        await enterFrom(Promise.resolve(created.snapshot))
+        focus('composer')
+        return true
       },
       async setUpProject() {
         try {
@@ -1029,6 +1068,9 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       async setTextScale(scale) {
         setSettings(await api.setTextScale(scale))
       },
+      async setProjectsDir(dir) {
+        setSettings(await api.setProjectsDir(dir))
+      },
       async setKeepAwake(on) {
         setSettings(await api.setKeepAwake(on))
       },
@@ -1067,7 +1109,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast, publishNewProject],
   )
 
   const live = shownIn(sessions, projects)

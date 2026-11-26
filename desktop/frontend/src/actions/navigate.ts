@@ -13,9 +13,7 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
   {
     id: 'add-project',
     label: 'Add project…',
-    async run() {
-      await a.addProject()
-    },
+    run: () => a.setOverlay('add-project'),
   },
   {
     id: 'toggle-sidebar',

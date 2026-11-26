@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, LatestPlan, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -20,8 +20,13 @@ type Backend = {
   ForkSession(id: string, at: string): Promise<Session>
   RenameSession(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
-  AddProject(): Promise<Snapshot>
-  AddProjectDir(dir: string): Promise<Snapshot>
+  PickFolder(): Promise<string>
+  AddProjectDir(dir: string, create: boolean): Promise<Snapshot>
+  NewProjectOptions(): Promise<NewProjectOptions>
+  GitHubOwner(): Promise<string>
+  ListFolders(path: string): Promise<FolderListing>
+  CreateProject(name: string): Promise<NewProject>
+  PublishProject(key: string): Promise<string>
   SetUpProject(): Promise<Session>
   AddNote(text: string): Promise<Note>
   UpdateNote(id: string, text: string): Promise<Note>
@@ -105,6 +110,7 @@ type Backend = {
   SetDigestSchedule(schedule: DigestSchedule): Promise<Settings>
   SetThreadPlace(place: Place | ''): Promise<Settings>
   SetThreadAccess(access: Access | ''): Promise<Settings>
+  SetProjectsDir(dir: string): Promise<Settings>
   PickDataDir(): Promise<DataDirChoice>
   SetDataDir(dir: string, withData: boolean): Promise<void>
 }
@@ -126,7 +132,7 @@ declare global {
 
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
-  projects: ['Snapshot', 'SwitchProject', 'AddProject', 'AddProjectDir', 'SetUpProject'],
+  projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
   sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'ForkSession', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatMarkdownFiles', 'ProjectMarkdownFiles', 'ChatLatestPlan'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
@@ -139,7 +145,7 @@ const namespaces = {
   update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
   limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
-  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'PickDataDir', 'SetDataDir'],
+  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
 }
 
 // The Go side has no method for this: the window runtime opens web addresses itself.
@@ -181,8 +187,16 @@ export const api = {
   forkSession: (id: string, at: string) => backend.ForkSession(id, at),
   renameSession: (id: string, title: string) => backend.RenameSession(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
-  addProject: () => backend.AddProject(),
-  addProjectDir: (dir: string) => backend.AddProjectDir(dir),
+  // pickFolder is the native folder picker; '' when the user cancels it.
+  pickFolder: () => backend.PickFolder(),
+  addProjectDir: (dir: string, create = false) => backend.AddProjectDir(dir, create),
+  newProjectOptions: () => backend.NewProjectOptions(),
+  // githubOwner is the login gh is signed in as, '' when it is not.
+  githubOwner: () => backend.GitHubOwner(),
+  listFolders: (path: string) => backend.ListFolders(path),
+  createProject: (name: string) => backend.CreateProject(name),
+  // publishProject makes the private GitHub repository of the project with the key and gives its owner/name.
+  publishProject: (key: string) => backend.PublishProject(key),
   setUpProject: () => backend.SetUpProject(),
   addNote: (text: string) => backend.AddNote(text),
   updateNote: (id: string, text: string) => backend.UpdateNote(id, text),
@@ -262,6 +276,7 @@ export const api = {
   setDigestSchedule: (schedule: DigestSchedule) => backend.SetDigestSchedule(schedule),
   setThreadPlace: (place: Place | '') => backend.SetThreadPlace(place),
   setThreadAccess: (access: Access | '') => backend.SetThreadAccess(access),
+  setProjectsDir: (dir: string) => backend.SetProjectsDir(dir),
   pickDataDir: () => backend.PickDataDir(),
   setDataDir: (dir: string, withData: boolean) => backend.SetDataDir(dir, withData),
   digest: () => backend.Digest(),

@@ -13,6 +13,8 @@ const EDGE: Record<Toast['tone'], string> = {
   info: 'border-l-accent',
   evidence: 'border-l-accent',
   done: 'border-l-finished',
+  success: 'border-l-finished',
+  warning: 'border-l-idle',
 }
 
 const ACTION_LABEL: Partial<Record<string, string>> = { replied: 'Open', opened: 'Open', evidence: 'View' }
@@ -38,7 +40,14 @@ export function Toasts() {
             {tone === 'waiting' && <StateDot state="waiting" />}
             {(tone === 'replied' || tone === 'opened') && <StateDot state="idle" />}
             {tone === 'pr' && <span className="mono text-small font-semibold text-danger">PR</span>}
-            <span className="text-body">{toast.text}</span>
+            {toast.detail ? (
+              <span className="flex min-w-0 max-w-96 flex-col gap-0.5">
+                <span className="text-body font-medium">{toast.text}</span>
+                <span className="text-small break-words text-soft">{toast.detail}</span>
+              </span>
+            ) : (
+              <span className="text-body">{toast.text}</span>
+            )}
             {sessionId && (
               <button
                 className="btn"

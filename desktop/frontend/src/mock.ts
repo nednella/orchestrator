@@ -3,6 +3,7 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
+import { folderName } from './projectPath'
 import type { Access, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
@@ -145,6 +146,8 @@ export function createMock(params: URLSearchParams) {
     patchNotes: params.has('patchnotes'),
     fullDataDir: params.has('fulldata'),
     noModel: params.has('nomodel'),
+    // nogithub is a gh that is not signed in.
+    noGithub: params.has('nogithub'),
     longChat: params.has('longchat'),
     chatCases: params.has('chatcases'),
     staleAnswer: params.has('stale'),
@@ -617,6 +620,72 @@ export function createMock(params: URLSearchParams) {
     return snapshot()
   }
 
+  // A small disk for the folder browser: each folder's subfolders.
+  const HOME = '/Users/me'
+  const PROJECTS_ROOT = `${HOME}/code`
+  const disk = new Map<string, string[]>([
+    ['/', ['Applications', 'Users', 'tmp']],
+    ['/Applications', []],
+    ['/tmp', []],
+    ['/Users', ['me', 'shared']],
+    ['/Users/shared', []],
+    [HOME, ['.config', '.ssh', 'Desktop', 'Documents', 'Downloads', 'code', 'scratch']],
+    [`${HOME}/.config`, []],
+    [`${HOME}/.ssh`, []],
+    [`${HOME}/Desktop`, []],
+    [`${HOME}/Documents`, ['notes-app', 'taxes']],
+    [`${HOME}/Documents/notes-app`, ['src']],
+    [`${HOME}/Documents/notes-app/src`, []],
+    [`${HOME}/Documents/taxes`, []],
+    [`${HOME}/Downloads`, []],
+    [`${HOME}/scratch`, []],
+    [PROJECTS_ROOT, ['acme', 'orchestrator', 'playground', 'storefront-old', 'taken-name']],
+    [`${PROJECTS_ROOT}/acme`, ['storefront']],
+    [`${PROJECTS_ROOT}/acme/storefront`, ['src', 'docs', 'trees']],
+    [`${PROJECTS_ROOT}/acme/storefront/src`, []],
+    [`${PROJECTS_ROOT}/acme/storefront/docs`, []],
+    [`${PROJECTS_ROOT}/acme/storefront/trees`, []],
+    [`${PROJECTS_ROOT}/orchestrator`, ['desktop', 'docs']],
+    [`${PROJECTS_ROOT}/orchestrator/desktop`, []],
+    [`${PROJECTS_ROOT}/orchestrator/docs`, []],
+    [`${PROJECTS_ROOT}/playground`, []],
+    [`${PROJECTS_ROOT}/storefront-old`, []],
+    [`${PROJECTS_ROOT}/taken-name`, []],
+  ])
+  const withSlash = (dir: string) => `${dir.replace(/\/+$/, '')}/`
+
+  // mockFolder is the absolute path the Go side resolves a typed path to.
+  function mockFolder(path: string): string {
+    let abs = path.trim()
+    if (abs === '~' || abs.startsWith('~/')) abs = HOME + abs.slice(1)
+    else if (/^\.{1,2}(\/|$)/.test(abs)) abs = `${mockFolder(current.dir)}/${abs}`
+    const parts: string[] = []
+    for (const part of abs.split('/')) {
+      if (part === '..') parts.pop()
+      else if (part && part !== '.') parts.push(part)
+    }
+    return `/${parts.join('/')}`
+  }
+
+  function makeFolder(dir: string) {
+    for (let at = dir; !disk.has(at); at = at.slice(0, at.lastIndexOf('/')) || '/') {
+      disk.set(at, [])
+      const parent = at.slice(0, at.lastIndexOf('/')) || '/'
+      const names = disk.get(parent) ?? []
+      disk.set(parent, [...names, at.slice(at.lastIndexOf('/') + 1)])
+    }
+  }
+
+  function addMockProject(dir: string): Snapshot {
+    const base = dir.slice(dir.lastIndexOf('/') + 1)
+    let name = base
+    for (let n = 2; data.some((p) => p.name === name); n++) name = `${base}-${n}`
+    data.push({ name, dir, repo: '', notes: [], issues: [], cleanups: [], needsSetup: true })
+    const snap = switchTo(data[data.length - 1])
+    emit('projects', snap.projects)
+    return snap
+  }
+
   function ledgerFor(days: number, project: string): Ledger {
     const dayKey = (ago: number) => new Date(Date.now() - ago * 86_400_000).toISOString().slice(0, 10)
     const scale = days === 0 ? 1 : 0.05 + 0.75 * (days / 365)
@@ -1013,7 +1082,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code' }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code', projectsDir: '' }
 
   // limitsNow are the plan limits as the Go side would read them at the time.
   const limitsNow = (): Limits => {
@@ -1153,21 +1222,48 @@ export function createMock(params: URLSearchParams) {
       if (!next) throw 'No such project'
       return switchTo(next)
     },
-    AddProject: async () => {
-      const name = `picked-folder-${data.length}`
-      data.push({ name, dir: `~/code/${name}`, repo: '', notes: [], issues: [], cleanups: [], needsSetup: true })
-      const snap = switchTo(data[data.length - 1])
-      emit('projects', snap.projects)
-      return snap
+    PickFolder: async () => delay('/Users/me/Documents/notes-app'),
+    AddProjectDir: async (dir: string, create: boolean) => {
+      const path = mockFolder(dir)
+      if (!disk.has(path)) {
+        if (!create) throw `${path} is not a folder`
+        makeFolder(path)
+      }
+      const existing = data.find((p) => mockFolder(p.dir) === path)
+      if (existing) return switchTo(existing)
+      return addMockProject(path)
     },
-    AddProjectDir: async (dir: string) => {
-      if (!/^[~/]/.test(dir) || dir.includes('nope')) throw `Folder does not exist: ${dir}`
-      const name = dir.replace(/\/+$/, '').split('/').pop() || dir
-      if (data.some((p) => p.name === name)) throw `Project ${name} already exists`
-      data.push({ name, dir, repo: '', notes: [], issues: [], cleanups: [], needsSetup: true })
-      const snap = switchTo(data[data.length - 1])
-      emit('projects', snap.projects)
-      return snap
+    NewProjectOptions: async () => delay({ root: PROJECTS_ROOT, nameMax: 200, startFolder: settings.projectsDir ? `${settings.projectsDir.replace(/\/+$/, '')}/` : '~/' }, 120),
+    GitHubOwner: async () => delay(flags.noGithub ? '' : 'me', 400),
+    ListFolders: async (path: string) => {
+      const dir = mockFolder(path)
+      if (dir === '/Users/me/.ssh') throw `Cannot read ${dir}.`
+      const parent = dir.slice(0, dir.lastIndexOf('/')) || '/'
+      const names = [...(disk.get(dir) ?? [])].sort((a, b) => a.localeCompare(b))
+      return delay({ dir: withSlash(dir), parent: dir === '/' ? '' : withSlash(parent), exists: disk.has(dir), entries: names.map((name) => ({ name, path: `${dir === '/' ? '' : dir}/${name}` })) }, 90)
+    },
+    CreateProject: async (name: string) => {
+      const title = name.trim()
+      if (!title) throw 'Enter a project name.'
+      if ([...title].length > 200) throw 'A project name has at most 200 characters.'
+      if (title.toLowerCase().includes('fail')) throw 'Failed to create the project folder.'
+      const base = folderName(title)
+      let dir = `${PROJECTS_ROOT}/${base}`
+      for (let n = 2; disk.has(dir); n++) dir = `${PROJECTS_ROOT}/${base}-${n}`
+      makeFolder(dir)
+      await delay(null, 500)
+      const snapshot = addMockProject(dir)
+      return { snapshot, dir, commitError: title.toLowerCase().includes('nocommit') ? 'Author identity unknown' : '' }
+    },
+    PublishProject: async (key: string) => {
+      const found = data.find((p) => projectView(p).key === key)
+      if (!found) throw 'No such project.'
+      await delay(null, 900)
+      const base = found.dir.slice(found.dir.lastIndexOf('/') + 1)
+      if (base.includes('taken')) throw 'name already exists on this account'
+      found.repo = `me/${base}`
+      emit('projects', data.map(projectView))
+      return found.repo
     },
     SetUpProject: async () => {
       if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], access: actionAccess('Work'), moves: movesFrom('Inbox') }))
@@ -1490,6 +1586,12 @@ export function createMock(params: URLSearchParams) {
     SetThreadPlace: async (threadPlace: Place | '') => {
       if (threadPlace && !['worktree', 'project'].includes(threadPlace)) throw `place must be worktree or project, not "${threadPlace}"`
       settings = { ...settings, threadPlace }
+      return settings
+    },
+    SetProjectsDir: async (dir: string) => {
+      const projectsDir = dir.trim()
+      if (projectsDir && projectsDir !== '~' && !/^(~|)\//.test(projectsDir)) throw `the projects folder must be an absolute path or start with ~, not "${projectsDir}"`
+      settings = { ...settings, projectsDir }
       return settings
     },
     SetThreadAccess: async (threadAccess: Access | '') => {

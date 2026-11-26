@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { CentreBoundary } from './components/CentreBoundary'
+import { AddProjectDialog } from './components/AddProjectDialog'
 import { ConfirmHost } from './components/ConfirmHost'
 import { UsageModal } from './components/UsageModal'
 import { Divider } from './components/Divider'
@@ -61,6 +62,7 @@ export function App() {
             </main>
           </div>
         </div>
+        <AddProjectDialog />
         <ShortcutsSheet />
         <SettingsPanel />
         <PatchNotes />

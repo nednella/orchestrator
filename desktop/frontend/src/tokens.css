@@ -137,6 +137,11 @@
   /* The off track of a switch. */
   --bg-switch-off: color-mix(in srgb, var(--text) 22%, transparent);
 
+  /* The add-project popup: its footer, the line over it and its key caps, as shares of the text colour. */
+  --bg-palette-foot: color-mix(in srgb, var(--text) 2.5%, transparent);
+  --border-palette-foot: color-mix(in srgb, var(--text) 7%, transparent);
+  --bg-palette-key: color-mix(in srgb, var(--text) 8%, transparent);
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 

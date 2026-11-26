@@ -228,7 +228,24 @@ export type Settings = {
   dataDirFixed: boolean
   // editorApp is the macOS app that opens a thread's folder.
   editorApp: string
+  // projectsDir is the folder a new project is made in; '' is unset, ~/code.
+  projectsDir: string
 }
+
+// NewProjectOptions is what the add-project view needs before it shows.
+export type NewProjectOptions = {
+  root: string
+  nameMax: number
+  // startFolder is where the folder browser starts, with a trailing slash.
+  startFolder: string
+}
+
+export type FolderEntry = { name: string; path: string }
+
+// FolderListing is the folders in a folder; dir and parent end in a slash and parent is '' for the root.
+export type FolderListing = { dir: string; parent: string; exists: boolean; entries: FolderEntry[] }
+
+export type NewProject = { snapshot: Snapshot; dir: string; commitError: string }
 
 export type DataDirChoice = {
   dir: string
