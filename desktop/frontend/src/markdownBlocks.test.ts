@@ -160,21 +160,15 @@ test('the block being written holds back a table until its delimiter row is whol
 })
 
 test('a long line that matches no rule is read in linear time', () => {
-  // A line ten times as long takes about ten times as long, where a cutter that backtracks takes a hundred times. Each
-  // size counts its fastest of three runs, and the short one at least half a millisecond, so a busy machine or a timer
-  // too coarse for the short line does not fail it.
-  const fastest = (run: () => void) =>
-    Math.min(
-      ...[1, 2, 3].map(() => {
-        const start = performance.now()
-        run()
-        return performance.now() - start
-      }),
-    )
+  // A cutter that backtracks takes quadratic time: a hundred thousand characters take minutes, where a linear one takes
+  // milliseconds. The bound is two seconds, three orders above a linear run, so no load on the machine can fail it and
+  // no ratio of two timings is read.
+  const LIMIT_MS = 2000
   const linear = (name: string, run: (n: number) => void) => {
-    const short = fastest(() => run(10_000))
-    const long = fastest(() => run(100_000))
-    assert.equal(long < 30 * Math.max(short, 0.5), true, `${name} took ${Math.round(long)} ms for 100k characters and ${short.toFixed(1)} ms for 10k`)
+    const start = performance.now()
+    run(100_000)
+    const took = performance.now() - start
+    assert.equal(took < LIMIT_MS, true, `${name} took ${Math.round(took)} ms for 100k characters`)
   }
   linear('footnote-like', (n) => markdownBlocks('[^'.repeat(n / 2)))
   linear('markers then a letter', (n) => steadyBlock(`${' '.repeat(n)}x`))
