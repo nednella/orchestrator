@@ -503,6 +503,8 @@ func TestDeleteRefusesAShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := filepath.Join(h.State, "data", "main")
+	// The thread's host makes the chats folder as it starts; the shell's delete must find it there to leave it.
+	eventually(t, "the thread's chat log", func() bool { return exists(filepath.Join(project, "chats")) })
 	image := filepath.Join(project, "chat-media", "k3x9q0ab", "0123456789abcdef.png")
 	if err := os.MkdirAll(filepath.Dir(image), 0o700); err != nil {
 		t.Fatal(err)
