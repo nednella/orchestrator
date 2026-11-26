@@ -223,6 +223,9 @@ func TestSecondReaderReplacesTheFirst(t *testing.T) {
 	eventually(t, "the first draw", func() bool { return len(first.Bytes()) > 0 })
 	second := read(t, h, id)
 	eventually(t, "the first reader to end", first.ended)
+	// A second reader gets the screen painted again, and what the shell prints before the paint reaches it is part of
+	// that paint, not a stream of its own that the check below reads: the command waits for the paint.
+	eventually(t, "the repaint", func() bool { return len(second.Bytes()) > 0 })
 	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
 		t.Fatal(err)
 	}
