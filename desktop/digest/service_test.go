@@ -37,6 +37,7 @@ const wailsReply = `[
 ]`
 
 func TestDigestRun(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Env: []string{
 		"ORCHESTRATOR_SESSION=main/9", // a run must not inherit a session
 		"DEPLOY_TOKEN=secret",
@@ -116,6 +117,7 @@ func runDigest(t *testing.T, h *apptest.Harness) digest.Digest {
 }
 
 func TestDigestReadsItemsFromTheReply(t *testing.T) {
+	t.Parallel()
 	item := func(n int) string {
 		return fmt.Sprintf(`{"title":"Item %d","why":"why %d","url":"https://example.com/%d","source":"src"}`, n, n, n)
 	}
@@ -149,6 +151,7 @@ func TestDigestReadsItemsFromTheReply(t *testing.T) {
 }
 
 func TestDigestKeepsOnlyWebLinks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var items []string
 	for url, ok := range map[string]bool{
@@ -170,6 +173,7 @@ func TestDigestKeepsOnlyWebLinks(t *testing.T) {
 }
 
 func TestDigestRefusesABadReply(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct{ name, reply, want string }{
 		{"words", "I found some things but forgot the list.", "did not end in a JSON array"},
 		{"an object", `{"title":"x","url":"https://example.com"}`, "did not end in a JSON array"},
@@ -197,6 +201,7 @@ func TestDigestRefusesABadReply(t *testing.T) {
 }
 
 func TestDigestFailures(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name          string
 		authErr, err  error
@@ -225,6 +230,7 @@ func TestDigestFailures(t *testing.T) {
 }
 
 func TestDigestRunAfterAFailure(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.Claude.Err = context.Canceled
 	if err := h.RunDigest(); err != nil {
@@ -242,6 +248,7 @@ func TestDigestRunAfterAFailure(t *testing.T) {
 }
 
 func TestDigestAutomaticRuns(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{DigestFirst: 50 * time.Millisecond, DigestTick: 50 * time.Millisecond})
 	eventually(t, "the automatic run", func() bool { return len(h.Claude.Calls()) == 1 && !h.Digest().Running })
 	time.Sleep(300 * time.Millisecond)

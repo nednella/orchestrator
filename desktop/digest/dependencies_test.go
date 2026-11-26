@@ -8,6 +8,7 @@ import (
 )
 
 func TestDependencies(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write := func(rel, body string) {
 		t.Helper()

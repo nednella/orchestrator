@@ -22,6 +22,7 @@ func (noNotes) Add(string, string) (notes.Note, error) {
 func (noNotes) List(string) ([]notes.Note, error) { return nil, nil }
 
 func TestRunStartsBeforeItCountsTheTools(t *testing.T) {
+	t.Parallel()
 	events := make(chan Digest, 10)
 	notSignedIn := func(context.Context, string, []string, string, ...string) ([]byte, error) {
 		return nil, errors.New("signed out")
