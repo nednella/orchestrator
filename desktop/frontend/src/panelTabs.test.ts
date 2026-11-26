@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { sidebarBesidePx, sidebarFit } from './panelLayout.ts'
-import { closeTab, EMPTY_PANEL, openTab, panelFit, panelStateOf, panelWidth, stepTab, viewForKey } from './panelTabs.ts'
+import { closeTab, EMPTY_PANEL, openTab, panelFit, panelOnFocus, panelStateOf, panelWidth, stepTab, viewForKey } from './panelTabs.ts'
 import type { PanelState } from './panelTabs.ts'
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({ ...EMPTY_PANEL, ...over })
@@ -60,6 +60,14 @@ test('the open sidebar sends the panel over the chat where the chat would get un
       if (fit.docked) assert.equal(r - fit.width >= 360, true, `${windowPx} px, ${sidebar}rem: the chat keeps ${r - fit.width} px`)
     }
   }
+})
+
+test('a focus in the chat column gives it its room back', () => {
+  const expanded = state({ tabs: ['issues'], active: 'issues', expanded: true })
+  for (const target of ['thread', 'composer', 'shell'] as const) assert.deepEqual(panelOnFocus(expanded, target), { ...expanded, expanded: false }, target)
+  for (const target of ['right', 'sidebar', 'thread-search', 'queue-filter'] as const) assert.equal(panelOnFocus(expanded, target), expanded, target)
+  const restored = state({ tabs: ['issues'], active: 'issues' })
+  assert.equal(panelOnFocus(restored, 'thread'), restored, 'a panel at its own size stays as it is')
 })
 
 test('a window of 980 px or less shows the panel as a sheet', () => {

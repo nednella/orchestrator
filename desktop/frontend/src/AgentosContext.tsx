@@ -146,6 +146,8 @@ type AgentosActions = {
   setComposerAccess(access: Access): void
   setIssueFilter(query: string): void
   focus(target: FocusTarget): void
+  // onFocus calls listener with each focus target asked for, at the ask, until the returned function is called.
+  onFocus(listener: (target: FocusTarget) => void): () => void
   report(run: () => unknown): void
   pushToast(toast: Omit<Toast, 'key'>): number
   dismissToast(key: number): void
@@ -321,7 +323,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     selectId(null)
   }, [selectId])
 
-  const focus = useCallback((target: FocusTarget) => setFocusRequest((r) => ({ target, n: r.n + 1 })), [])
+  const focusListeners = useRef(new Set<(target: FocusTarget) => void>())
+  const focus = useCallback((target: FocusTarget) => {
+    setFocusRequest((r) => ({ target, n: r.n + 1 }))
+    focusListeners.current.forEach((listener) => listener(target))
+  }, [])
 
   const dismissToast = useCallback((key: number) => {
     clearTimeout(toastTimers.current.get(key))
@@ -974,6 +980,10 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (projectRef.current) writeStored(filterKey(projectRef.current.name), query)
       },
       focus,
+      onFocus(listener) {
+        focusListeners.current.add(listener)
+        return () => focusListeners.current.delete(listener)
+      },
       report,
       pushToast,
       dismissToast,

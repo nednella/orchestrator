@@ -30,7 +30,7 @@ type ThreadContextCardProps = { id: string; className: string }
 // and the threads and subagents around it.
 export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const a = useAgentos('select', 'report', 'openInEditor')
-  const { showPanelView } = useLayout()
+  const { showPanelView, focusPanel } = useLayout()
   const { session, sections, refreshServers } = useCardFacts(id)
   const [copied, copyBranch] = useCopied(session?.branch ?? '')
   if (!session || sections.length === 0) return null
@@ -94,7 +94,11 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
       }
       case 'agent': {
         const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE_LABEL[r.agent.state]}</span>
-        return <ContextCardRow icon={<ClaudeMark size={16} />} label={r.agent.description} end={end} onClick={() => openAgent(session.id, r.agent.id)} />
+        const open = () => {
+          openAgent(session.id, r.agent.id)
+          focusPanel('centre')
+        }
+        return <ContextCardRow icon={<ClaudeMark size={16} />} label={r.agent.description} end={end} onClick={open} />
       }
       case 'thread': {
         const RelationIcon = RELATION_ICON[r.relation]

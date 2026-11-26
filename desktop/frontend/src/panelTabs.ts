@@ -1,3 +1,5 @@
+import type { FocusTarget } from './AgentosContext'
+
 export type PanelViewId = 'agents' | 'servers' | 'pulls' | 'issues' | 'notes' | 'files' | 'evidence' | 'browser'
 
 // The letter that opens each view from the panel's list.
@@ -31,6 +33,15 @@ export function stepTab(st: PanelState, delta: -1 | 1): PanelState {
   if (st.tabs.length === 0) return st
   const at = st.active === null ? (delta > 0 ? -1 : 0) : st.tabs.indexOf(st.active)
   return { ...st, active: st.tabs[(at + delta + st.tabs.length) % st.tabs.length] }
+}
+
+// The focus targets in the chat column, which the expanded panel hides.
+const CHAT_COLUMN: FocusTarget[] = ['thread', 'composer', 'shell']
+
+// panelOnFocus gives the chat column its room back when the focus moves into it: the expanded panel goes back to its
+// own size.
+export function panelOnFocus(st: PanelState, target: FocusTarget): PanelState {
+  return st.expanded && CHAT_COLUMN.includes(target) ? { ...st, expanded: false } : st
 }
 
 export function viewForKey(key: string): PanelViewId | null {

@@ -6,7 +6,7 @@ import { devFlags } from './api'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { updatePanel, usePanel } from './panelStore'
-import { closeTab, openTab, panelFit, panelWidth, stepTab } from './panelTabs'
+import { closeTab, openTab, panelFit, panelOnFocus, panelWidth, stepTab } from './panelTabs'
 import type { PanelState, PanelViewId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
@@ -113,7 +113,7 @@ function useSystemAppearance(): Appearance {
 }
 
 export function LayoutProvider({ children }: LayoutProviderProps) {
-  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'report', 'pushToast', 'dismissToast')
+  const { selectedId, project, settings, setTextScale, showHome: selectHome, focus, onFocus, report, pushToast, dismissToast } = useAgentos('selectedId', 'project', 'settings', 'setTextScale', 'showHome', 'focus', 'onFocus', 'report', 'pushToast', 'dismissToast')
   const { w: width, h: height } = useWindowSize()
   const mode = modeFor(width)
   const band: Band = mode === 'narrow' ? 'compact' : mode
@@ -246,6 +246,11 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     if (project) selectHome(project.key)
   }, [moveOverlay, project, selectHome])
 
+  // The focus asked for in the chat column gives it its room back, in the same render, so the focus lands there.
+  const panelKeyRef = useRef(panelKey)
+  panelKeyRef.current = panelKey
+  useEffect(() => onFocus((target) => updatePanel(panelKeyRef.current, (st) => panelOnFocus(st, target))), [onFocus])
+
   const showPanelView = useCallback(
     (view: PanelViewId, opts: { expanded?: boolean; thread?: string } = {}) => {
       setRightOpen(true)
@@ -323,7 +328,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       },
       togglePanel(panel) {
         const setOpen = { sidebar: setSidebarOpen, shell: setShellOpen, right: setRightOpen }[panel]
-        const shown = { sidebar: sidebarOpen, shell: shellOpen, right: rightOpen }[panel]
+        const shown = { sidebar: sidebarOpen, shell: shellOpen && !panelExpanded, right: rightOpen }[panel]
         if (!shown) {
           const active = document.activeElement
           focusBefore.current[panel] = active && active !== document.body ? active : undefined

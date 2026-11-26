@@ -41,7 +41,7 @@ export function useShortcuts(enabled: boolean) {
       const el = document.activeElement
       if (el instanceof HTMLElement && el.matches('input, textarea') && !el.closest('.xterm')) {
         el.blur()
-        agentos.focus('thread')
+        agentos.focus(lay.panelExpanded && el.closest('[data-panel="right"]') ? 'right' : 'thread')
       }
     }
     window.addEventListener('keydown', onKeyDown, true)

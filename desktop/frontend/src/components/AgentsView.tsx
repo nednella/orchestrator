@@ -13,7 +13,7 @@ import { Notice } from './Notice'
 // the threads it delegated to, each under the thread that delegated it.
 export function AgentsView({ session }: PanelViewProps) {
   const { sessions } = useAgentos('sessions')
-  const { closeOverlay } = useLayout()
+  const { focusPanel } = useLayout()
   const agents = useThreadAgents(session?.id ?? '')
   if (!session) return <Notice title="Available in a thread" hint="Open a thread to see its subagents and the threads it delegated to." centered />
   const children = agentRows(session.id, sessions)
@@ -35,7 +35,7 @@ export function AgentsView({ session }: PanelViewProps) {
           className="flex h-8 w-full min-w-0 flex-none items-center gap-2.5 rounded-lg px-2.5 text-left text-body hover:bg-(--bg-row-hover)"
           onClick={() => {
             openAgent(session.id, agent.id)
-            closeOverlay('thread-focused')
+            focusPanel('centre')
           }}
         >
           <span className={`flex flex-none ${agent.state === 'failed' ? 'text-danger' : 'text-soft'}`}>
