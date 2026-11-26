@@ -139,15 +139,6 @@ func (c *Commands) claimLocked(w waitOn, end int64, byWait bool) bool {
 	return true
 }
 
-// unclaim gives back the claim of a message that was dropped before it went, so a wait may take the result.
-func (c *Commands) unclaim(w waitOn, end int64) {
-	c.waitMu.Lock()
-	defer c.waitMu.Unlock()
-	if c.given[w] == (givenBy{end: end}) {
-		delete(c.given, w)
-	}
-}
-
 // givenByWait says whether a wait of the parent's on the child took the result that the seq end ends, or a later one.
 func (c *Commands) givenByWait(w waitOn, end int64) bool {
 	c.waitMu.Lock()

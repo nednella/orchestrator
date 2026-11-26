@@ -42,6 +42,7 @@ type Threads interface {
 	BackgroundChanged(id string, b sessions.Background)
 	AccessChanged(id, mode string, planApproved bool)
 	FlagRefused(flag string)
+	NextTurn(id string)
 	Wake(id string) (sessions.Chat, error)
 	FilesRewind(id string) (dir string, inProject bool, reason string)
 }
@@ -395,6 +396,8 @@ func (f *follower) run(ctx context.Context) {
 	f.mu.Unlock()
 	close(f.read)
 	f.chats.threads.BackgroundChanged(f.chat.ID, f.backgroundNow())
+	// A follower starts for a thread that runs: at the app's start, or once it woke.
+	f.chats.threads.NextTurn(f.chat.ID)
 	if commands != nil {
 		f.chats.commands.keep(f.chat.Project, *commands)
 	}
@@ -468,6 +471,9 @@ func (f *follower) take(e chatlog.Event) {
 		if e.Text != "" {
 			f.chats.threads.FlagRefused(e.Text)
 		}
+		f.chats.threads.NextTurn(f.chat.ID)
+	case chatlog.KindUser:
+		f.chats.threads.NextTurn(f.chat.ID)
 	}
 	if f.chats.isWatched(f.chat.ID) {
 		f.add(e)

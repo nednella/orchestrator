@@ -173,6 +173,7 @@ func (folderThread) TurnEnded(id string, e chatlog.Event)          {}
 func (folderThread) BackgroundChanged(string, sessions.Background) {}
 func (folderThread) AccessChanged(string, string, bool)            {}
 func (folderThread) FlagRefused(string)                            {}
+func (folderThread) NextTurn(string)                               {}
 func (folderThread) Wake(string) (sessions.Chat, error)            { return sessions.Chat{}, nil }
 func (folderThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
 

@@ -31,6 +31,7 @@ func (o oneThread) TurnEnded(string, chatlog.Event)               {}
 func (o oneThread) BackgroundChanged(string, sessions.Background) {}
 func (o oneThread) AccessChanged(string, string, bool)            {}
 func (o oneThread) FlagRefused(string)                            {}
+func (o oneThread) NextTurn(string)                               {}
 func (o oneThread) Wake(string) (sessions.Chat, error)            { return o.chat, nil }
 func (o oneThread) FilesRewind(string) (string, bool, string)     { return "", true, "" }
 

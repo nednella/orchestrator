@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/nednella/agentos/internal/session"
@@ -43,20 +44,28 @@ func TestHeldPromptsWaitForTheirTurn(t *testing.T) {
 func TestDroppedMessageTellsItsSender(t *testing.T) {
 	const id = "main/abcdefgh"
 	for _, tt := range []struct {
-		name string
-		drop func(s *Sessions) int
-		want error
+		name   string
+		drop   func(s *Sessions) int
+		want   error
+		result bool // whether the child's result is kept for the next turn
 	}{
-		{"a stop", func(s *Sessions) int { return s.DropTold(id) }, ErrToldStopped},
-		{"a delete", func(s *Sessions) int { return s.dropTold(id, errToldDeleted) }, errToldDeleted},
+		{"a stop", func(s *Sessions) int { return s.DropTold(id) }, errToldStopped, true},
+		{"a delete", func(s *Sessions) int { return s.dropTold(id, errToldDeleted) }, errToldDeleted, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newSessions(Options{})
-			done := make(chan error, 1)
+			done, resultDone := make(chan error, 1), make(chan error, 1)
 			command := heldPrompt{Told: Told{Text: "/review"}, command: true}
-			s.wakes[id] = []heldPrompt{{Told: Told{From: "main/bbbbbbbb", Text: "Check the tests", Done: done}}, command, {Told: Told{From: "main/cccccccc", Text: "No one asks"}}}
-			if n := tt.drop(s); n != 2 {
-				t.Errorf("dropped %d, want the 2 told messages", n)
+			result := heldPrompt{Told: Told{From: "main/dddddddd", Text: "Task done", Result: true, Done: resultDone}}
+			s.wakes[id] = []heldPrompt{{Told: Told{From: "main/bbbbbbbb", Text: "Check the tests", Done: done}}, command, result, {Told: Told{From: "main/cccccccc", Text: "No one asks"}}}
+			want, held := 3, []heldPrompt{command}
+			if tt.result {
+				kept := result
+				kept.nextTurn = true
+				want, held = 2, []heldPrompt{command, kept}
+			}
+			if n := tt.drop(s); n != want {
+				t.Errorf("dropped %d, want %d", n, want)
 			}
 			select {
 			case err := <-done:
@@ -66,9 +75,42 @@ func TestDroppedMessageTellsItsSender(t *testing.T) {
 			default:
 				t.Error("Done got nothing")
 			}
-			if got := s.wakes[id]; len(got) != 1 || got[0] != command {
-				t.Errorf("held %+v, want only the command", got)
+			if got := s.wakes[id]; !slices.Equal(got, held) {
+				t.Errorf("held %+v, want %+v", got, held)
+			}
+			if tt.result && s.HoldsTold(id) {
+				t.Error("a result kept for the next turn holds the thread's turn open")
 			}
 		})
+	}
+}
+
+func TestResultKeptForTheNextTurnGoesWithIt(t *testing.T) {
+	const id = "main/abcdefgh"
+	s := newSessions(Options{})
+	s.seen[id] = session.Idle
+	s.records[id] = session.Record{State: session.Idle, Event: "Stop"}
+	kept := heldPrompt{Told: Told{From: "main/dddddddd", Text: "Task done", Result: true}, nextTurn: true}
+	s.wakes[id] = []heldPrompt{kept}
+	s.mu.Lock()
+	s.deliverWakes()
+	s.mu.Unlock()
+	if got := s.wakes[id]; !slices.Equal(got, []heldPrompt{kept}) || s.delivering[id] {
+		t.Fatalf("held %+v, delivering %v; want the result kept until the next turn", got, s.delivering[id])
+	}
+	s.mu.Lock()
+	delete(s.seen, id)
+	s.deliverWakes()
+	s.mu.Unlock()
+	if got := s.wakes[id]; !slices.Equal(got, []heldPrompt{kept}) || s.delivering[id] {
+		t.Fatalf("held %+v, delivering %v; want a sleeping thread left asleep", got, s.delivering[id])
+	}
+	s.seen[id] = session.Idle
+	s.mu.Lock()
+	s.delivering[id] = true // the send itself needs a host; its start is what counts here
+	s.mu.Unlock()
+	s.NextTurn(id)
+	if got := s.wakes[id]; len(got) != 1 || got[0].nextTurn {
+		t.Errorf("held %+v, want the result released for the next turn", got)
 	}
 }

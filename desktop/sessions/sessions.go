@@ -3033,10 +3033,17 @@ func holdsPrompts(state session.State) bool {
 
 // heldPrompt waits for its thread to take it. A command, for the thread's PR, waits until the thread neither works nor
 // waits on the owner; a message a thread told it waits only while the thread waits on the owner's answer to an
-// approval, which the message would deny.
+// approval, which the message would deny. nextTurn holds a child's result a stop kept until the thread's next turn or
+// run starts (NextTurn): it starts none itself, and wakes no thread.
 type heldPrompt struct {
 	Told
-	command bool
+	command, nextTurn bool
+}
+
+// toldHeld says whether a message a thread told the thread id is held for it, or being sent, that goes before a new
+// one: a result kept for the next turn does not. It needs mu.
+func (s *Sessions) toldHeld(id string) bool {
+	return s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command && !h.nextTurn })
 }
 
 // dropCommands drops the commands held for the thread and keeps the messages threads told it. It needs mu.
@@ -3060,7 +3067,7 @@ func (s *Sessions) deliverWakes() {
 		_, live := s.seen[id]
 		var now, later []heldPrompt
 		for _, h := range all {
-			if live && s.holds(id, h) {
+			if h.nextTurn || live && s.holds(id, h) {
 				later = append(later, h)
 			} else {
 				now = append(now, h)
@@ -3202,7 +3209,7 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 		return "", err
 	}
 	s.mu.Lock()
-	if s.delivering[id] || s.asks(id) || s.idling[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+	if s.asks(id) || s.idling[id] || s.toldHeld(id) {
 		s.wakes[id] = append(s.wakes[id], heldPrompt{Told: m})
 		s.mu.Unlock()
 		return "", nil
@@ -3305,7 +3312,7 @@ func (s *Sessions) awaitCleanup(id string) {
 func (s *Sessions) HoldsTold(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command })
+	return s.toldHeld(id)
 }
 
 // Reported is the seq of the child's latest turn_end whose result went to its parent, 0 when none did, as its state
@@ -3349,34 +3356,58 @@ func (s *Sessions) SetReported(id string, seq int64) error {
 	return nil
 }
 
+// NextTurn hears that the thread id took a message or started a run: the results a stop kept for its next turn go now.
+// It takes mu.
+func (s *Sessions) NextTurn(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := false
+	for i, h := range s.wakes[id] {
+		if h.nextTurn {
+			s.wakes[id][i].nextTurn, kept = false, true
+		}
+	}
+	if kept {
+		s.deliverWakes()
+	}
+}
+
 // DropTold drops the messages threads told the thread id that are held for it, and says how many: a thread stopped
-// at another thread's ask must not start a new turn for them once its approval ends. It takes mu.
+// at another thread's ask must not start a new turn for them once its approval ends. A child's result is kept for the
+// thread's next turn instead, since nothing would send it again. It takes mu.
 func (s *Sessions) DropTold(id string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.dropTold(id, ErrToldStopped)
+	return s.dropTold(id, errToldStopped)
 }
 
 var (
-	// ErrToldStopped is what a held message's Done gets when its thread was stopped at another thread's ask before it
-	// went: the thread takes nothing more until something else starts its next turn.
-	ErrToldStopped = errors.New("it was stopped")
+	errToldStopped = errors.New("it was stopped")
 	errToldDeleted = errors.New("it was deleted")
 )
 
 // dropTold drops the messages threads told the thread that are held for it, logs it with why, which each one's Done
-// gets, and says how many. It needs mu.
+// gets, and says how many. A stop keeps each child's result, held for the thread's next turn. It needs mu.
 func (s *Sessions) dropTold(id string, why error) int {
 	all := s.wakes[id]
-	kept := slices.DeleteFunc(slices.Clone(all), func(h heldPrompt) bool { return !h.command })
+	var kept []heldPrompt
+	for _, h := range all {
+		switch {
+		case h.command:
+		case h.Result && errors.Is(why, errToldStopped):
+			h.nextTurn = true
+		default:
+			h.gone(why)
+			continue
+		}
+		kept = append(kept, h)
+	}
 	dropped := len(all) - len(kept)
 	if dropped == 0 {
-		return 0
-	}
-	for _, h := range all {
-		if !h.command {
-			h.gone(why)
+		if len(kept) > 0 {
+			s.wakes[id] = kept
 		}
+		return 0
 	}
 	if len(kept) > 0 {
 		s.wakes[id] = kept
@@ -3441,7 +3472,7 @@ func (s *Sessions) SettleIdle(id string) (bool, error) {
 		return false, fmt.Errorf("putting thread %s to sleep: %w", id, err)
 	}
 	s.mu.Lock()
-	if s.idling[id] || s.delivering[id] || slices.ContainsFunc(s.wakes[id], func(h heldPrompt) bool { return !h.command }) {
+	if s.idling[id] || s.toldHeld(id) {
 		s.mu.Unlock()
 		return false, nil
 	}
