@@ -16,8 +16,8 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
 )
 
 const (

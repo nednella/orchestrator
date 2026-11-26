@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/orchestrator/internal/activity"
 )
 
 var onePixelPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")

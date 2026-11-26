@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // useTool calls the orchestrator tool over the control socket as the thread whose token it sends, and reads its answer

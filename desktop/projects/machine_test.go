@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/projects"
+	"github.com/nednella/orchestrator/desktop/projects"
 )
 
 func TestComputerName(t *testing.T) {

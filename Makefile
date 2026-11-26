@@ -1,5 +1,5 @@
 VERSION ?= dev
-LDFLAGS := -X github.com/nednella/agentos/internal/version.Version=$(VERSION:v%=%)
+LDFLAGS := -X github.com/nednella/orchestrator/internal/version.Version=$(VERSION:v%=%)
 
 test:
 	go test ./...

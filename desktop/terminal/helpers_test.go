@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }

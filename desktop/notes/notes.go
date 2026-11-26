@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
 // Note is a line of thought kept for a project, which can become an issue or a session.

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/orchestrator/internal/bus"
 )
 
 func TestBundleOf(t *testing.T) {

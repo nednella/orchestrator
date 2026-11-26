@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // ended is a session that had the conversation abc and has settled.

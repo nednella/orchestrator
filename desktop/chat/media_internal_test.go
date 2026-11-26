@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 func TestAnImageAtTheLimitIsTaken(t *testing.T) {

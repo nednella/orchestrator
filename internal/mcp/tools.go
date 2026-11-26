@@ -3,7 +3,7 @@ package mcp
 import (
 	"encoding/json"
 
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 const (

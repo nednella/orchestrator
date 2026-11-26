@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/bus"
 )
 
 // Bundle is the .app the app runs from, or "" when it runs from none.

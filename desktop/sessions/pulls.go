@@ -8,8 +8,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 // pullsFresh is how long the last list of a project's pull requests answers PullRequests without a new read, and

@@ -12,10 +12,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 // hostStarting is how long a message waits for the host of a thread that is still starting to listen.

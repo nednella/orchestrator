@@ -3,7 +3,7 @@ package update
 import (
 	"context"
 
-	"github.com/nednella/agentos"
+	"github.com/nednella/orchestrator"
 )
 
 // Service is bound to the front end.

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // DefaultPRPoll is how often pull requests are polled when pr_poll_interval is not set.

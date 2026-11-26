@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // fakeAgentBrowser makes b's agent-browser a stand-in that appends each call to the returned log, as

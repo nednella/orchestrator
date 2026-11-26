@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 func TestSetUpProject(t *testing.T) {

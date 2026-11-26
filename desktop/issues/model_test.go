@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // argsOf is the arguments a session's claude was started with, one per line.

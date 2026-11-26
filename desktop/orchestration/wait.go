@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nednella/agentos/desktop/chat"
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/chat"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 const (

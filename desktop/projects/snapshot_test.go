@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/app"
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/projects"
+	"github.com/nednella/orchestrator/desktop/internal/app"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/projects"
 )
 
 func useConfig(t *testing.T, body string) {

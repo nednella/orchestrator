@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // spend is what API calls used and cost, and which sessions made them.

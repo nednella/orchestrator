@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // findAgentBrowser returns the agent-browser that sessions drive their tab with: ORCHESTRATOR_AGENT_BROWSER, else the one

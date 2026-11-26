@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
 const eventsFolder = "events"

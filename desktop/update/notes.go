@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nednella/agentos"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/update"
+	"github.com/nednella/orchestrator"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/update"
 )
 
 const seenFile = "seen-version"

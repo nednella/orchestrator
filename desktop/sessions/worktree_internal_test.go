@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 func systemPrompt(t *testing.T, access session.Access, tree workTree) string {

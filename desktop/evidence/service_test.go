@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	ctl "github.com/nednella/agentos/internal/control"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 var onePixelPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")

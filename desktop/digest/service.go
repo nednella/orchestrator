@@ -1,7 +1,7 @@
 package digest
 
 import (
-	"github.com/nednella/agentos/desktop/notes"
+	"github.com/nednella/orchestrator/desktop/notes"
 )
 
 // Service is bound to the front end.

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/nednella/agentos/internal/agent"
+	"github.com/nednella/orchestrator/internal/agent"
 )
 
 func TestPick(t *testing.T) {

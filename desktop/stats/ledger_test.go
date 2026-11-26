@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 type fakeProjects []project.Project

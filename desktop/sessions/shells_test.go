@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/internal/scoped"
-	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/scoped"
+	"github.com/nednella/orchestrator/desktop/sessions"
 )
 
 // shellIDs are the ids of the current project's shells in the snapshot.

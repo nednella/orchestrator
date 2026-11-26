@@ -3,8 +3,8 @@ package sessions_test
 import (
 	"testing"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestSessionsShowTheMemoryTheirProcessesHold(t *testing.T) {

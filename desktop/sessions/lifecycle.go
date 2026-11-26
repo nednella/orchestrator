@@ -17,16 +17,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/desktop/internal/scoped"
-	"github.com/nednella/agentos/desktop/internal/warn"
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/folder"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/scoped"
+	"github.com/nednella/orchestrator/desktop/internal/warn"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/folder"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 const (

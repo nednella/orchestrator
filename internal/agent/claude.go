@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/nednella/agentos/internal/mcp"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/mcp"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // threadTools are the commands every thread may run without asking, at every access: the ones that file an issue for

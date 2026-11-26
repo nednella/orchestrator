@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // Ledger is what the agents did in one project or across every project, from the event log.

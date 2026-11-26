@@ -7,8 +7,8 @@ import (
 	"slices"
 	"testing"
 
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/project"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 type fakeSessions struct{ running map[string]bool }

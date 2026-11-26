@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 // panePath is the folder the thread's tmux session started in.

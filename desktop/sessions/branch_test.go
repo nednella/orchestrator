@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/bus"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/mcp"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/bus"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/mcp"
 )
 
 func sessionWithoutIssue(h *apptest.Harness, t *testing.T) sessions.Session {

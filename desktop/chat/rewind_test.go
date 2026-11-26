@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // talked sends each text as a turn of its own to the thread, waits for each turn's end and returns the messages' ids.

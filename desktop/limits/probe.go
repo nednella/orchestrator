@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 const (

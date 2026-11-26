@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 const (

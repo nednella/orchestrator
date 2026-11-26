@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 const agentQueue = `    queue_sections:

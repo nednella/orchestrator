@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/mcp"
+	"github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/mcp"
 )
 
 // fakeApp answers commands on a socket in a short temp dir, and points the command at it.

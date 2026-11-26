@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/host"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestSessionLifecycle(t *testing.T) {

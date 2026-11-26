@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/sessions"
 )
 
 var repoName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
 const (

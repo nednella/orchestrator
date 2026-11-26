@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	ctl "github.com/nednella/agentos/internal/control"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 func TestNoteCommand(t *testing.T) {

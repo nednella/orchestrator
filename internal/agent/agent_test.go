@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // headlessFlags are what claude needs to run under orchestrator host.

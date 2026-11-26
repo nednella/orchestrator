@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/update"
-	"github.com/nednella/agentos/internal/version"
+	"github.com/nednella/orchestrator/internal/update"
+	"github.com/nednella/orchestrator/internal/version"
 )
 
 const (

@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/desktop/internal/scoped"
-	"github.com/nednella/agentos/desktop/notes"
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/scoped"
+	"github.com/nednella/orchestrator/desktop/notes"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 // Projects knows the current project.

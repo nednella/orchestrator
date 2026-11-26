@@ -1,4 +1,4 @@
-module github.com/nednella/agentos
+module github.com/nednella/orchestrator
 
 go 1.26.5
 

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/update"
-	internalupdate "github.com/nednella/agentos/internal/update"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/update"
+	internalupdate "github.com/nednella/orchestrator/internal/update"
 )
 
 const changelog = `# Changelog

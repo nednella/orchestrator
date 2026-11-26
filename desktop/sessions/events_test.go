@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/internal/activity"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/internal/activity"
 )
 
 func TestPROpenedThenMergedAcrossARestartCountsOnce(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 // Command is one slash command, as Claude lists them when it starts.

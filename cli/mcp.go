@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/mcp"
-	"github.com/nednella/agentos/internal/version"
+	"github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/mcp"
+	"github.com/nednella/orchestrator/internal/version"
 )
 
 const (

@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/nednella/agentos/desktop/internal/media"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/desktop/internal/media"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 // maxImages is how many images one message takes.

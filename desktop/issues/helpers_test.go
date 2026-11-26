@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }

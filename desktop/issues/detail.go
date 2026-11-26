@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 // IssueDetail is what the issue view adds to a row: the body and the comments.

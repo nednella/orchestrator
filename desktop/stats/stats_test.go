@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestStatsSummary(t *testing.T) {

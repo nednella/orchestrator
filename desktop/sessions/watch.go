@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 const (

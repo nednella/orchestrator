@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/update"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/update"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }

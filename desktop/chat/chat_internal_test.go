@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	chatlog "github.com/nednella/agentos/internal/chat"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 func TestToolSummaryMatchesPending(t *testing.T) {

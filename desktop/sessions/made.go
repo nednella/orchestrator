@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/folder"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/folder"
 )
 
 // markerFile, in a worktree's own git folder, holds the id of the thread orchestrator made the worktree

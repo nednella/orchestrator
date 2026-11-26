@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
 )
 
 type fixedProjects []project.Project

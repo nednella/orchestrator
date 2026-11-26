@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/nednella/agentos/desktop/evidence"
-	"github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/evidence"
+	"github.com/nednella/orchestrator/internal/control"
 )
 
 // Asker checks which session a command comes from.

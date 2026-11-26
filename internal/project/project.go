@@ -13,8 +13,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // DefaultWorktreeCommand makes a worktree on a new branch cut from the base.

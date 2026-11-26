@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // newTestTmux starts nothing: it only points at a private socket, which the

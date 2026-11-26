@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"unicode/utf8"
 
-	"github.com/nednella/agentos/desktop/internal/media"
-	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/internal/media"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 const maxTextCard = 64 << 10

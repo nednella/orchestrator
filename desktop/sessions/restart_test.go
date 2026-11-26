@@ -3,8 +3,8 @@ package sessions_test
 import (
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestUntaggedTmuxSessionIsIgnored(t *testing.T) {

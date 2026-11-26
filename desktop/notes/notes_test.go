@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/app"
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/notes"
-	"github.com/nednella/agentos/desktop/stats"
-	"github.com/nednella/agentos/internal/activity"
-	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/orchestrator/desktop/internal/app"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/notes"
+	"github.com/nednella/orchestrator/desktop/stats"
+	"github.com/nednella/orchestrator/internal/activity"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 func TestNotes(t *testing.T) {

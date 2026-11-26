@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/internal/util"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 const (

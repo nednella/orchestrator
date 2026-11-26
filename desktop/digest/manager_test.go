@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/notes"
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/desktop/notes"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 type oneProject struct{ p project.Project }

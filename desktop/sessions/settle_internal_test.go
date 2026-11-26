@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
 )
 
 func TestSettleClosesNoTerminal(t *testing.T) {

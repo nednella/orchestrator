@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/media"
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/media"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // Evidence is one thing a session shows the owner: a picture or a text card.

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // delegateInput is what a call of delegate asks for, as the tool's schema has it.

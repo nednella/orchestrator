@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/limits"
-	"github.com/nednella/agentos/internal/host"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/limits"
+	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }

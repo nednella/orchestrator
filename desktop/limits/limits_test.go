@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 // threads are the sessions with the live ones given.

@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/desktop/stats"
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/stats"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func claudeArgs(t *testing.T, h *apptest.Harness, id string) []string {

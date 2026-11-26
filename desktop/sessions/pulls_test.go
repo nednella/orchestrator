@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 const pollNever = "    pr_watch_method: poll\n    pr_poll_interval: 1h\n"

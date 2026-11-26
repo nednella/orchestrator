@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/desktop/notes"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/version"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/notes"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/version"
 )
 
 // Sessions is what the projects need of the session list, which also knows the current project.

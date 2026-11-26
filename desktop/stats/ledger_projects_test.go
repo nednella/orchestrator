@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 // A config shared between two Macs lists projects that only one of them has. The data folder can be

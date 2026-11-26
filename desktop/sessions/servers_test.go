@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/bus"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/mcp"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/bus"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/mcp"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // freePort is a port in 18000–18999 that nothing listens on now.

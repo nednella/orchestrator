@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // Opened starts a wait for a session that now needs the user: the reason comes from its record.

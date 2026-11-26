@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/run"
 )
 
 // ComputerName is this Mac's name as its owner set it in System Settings, else its host name.

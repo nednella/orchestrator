@@ -9,11 +9,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/host"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 type sendInput struct {

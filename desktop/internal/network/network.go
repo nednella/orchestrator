@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nednella/agentos/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/run"
 )
 
 // Status is the payload of the network event.

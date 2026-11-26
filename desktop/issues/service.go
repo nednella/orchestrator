@@ -3,8 +3,8 @@ package issues
 import (
 	"context"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 // Service is bound to the front end.

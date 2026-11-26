@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/internal/scoped"
-	"github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/internal/scoped"
+	"github.com/nednella/orchestrator/internal/control"
 )
 
 // Asker says which project an agent command is about.

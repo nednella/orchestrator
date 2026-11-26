@@ -11,14 +11,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/projects"
-	"github.com/nednella/agentos/desktop/stats"
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
+	"github.com/nednella/orchestrator/desktop/projects"
+	"github.com/nednella/orchestrator/desktop/stats"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
 )
 
 const defaultTmuxSocket = "orchestrator"

@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // reader reads one session's transcripts, one read at a time.

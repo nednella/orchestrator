@@ -3,7 +3,7 @@ package browser
 import (
 	"context"
 
-	"github.com/nednella/agentos/desktop/evidence"
+	"github.com/nednella/orchestrator/desktop/evidence"
 )
 
 // Service is bound to the front end.

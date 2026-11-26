@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 // PRs polls the pull requests of the sessions.

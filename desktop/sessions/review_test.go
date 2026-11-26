@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/internal/warn"
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/warn"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // fakeTmux puts a tmux on PATH that fails the calls a test asks it to and passes the rest to the real one,

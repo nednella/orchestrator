@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 // fileThread is one ended thread, number 7, that works in its folder and keeps its chat log at log.

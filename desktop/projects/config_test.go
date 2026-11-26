@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/internal/warn"
-	"github.com/nednella/agentos/desktop/issues"
-	"github.com/nednella/agentos/desktop/projects"
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/warn"
+	"github.com/nednella/orchestrator/desktop/issues"
+	"github.com/nednella/orchestrator/desktop/projects"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 func writeConfig(t *testing.T, path, text string) {

@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/term"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/term"
 )
 
 func prJSON(state string, draft bool, rollup string, comments, reviews int) string {

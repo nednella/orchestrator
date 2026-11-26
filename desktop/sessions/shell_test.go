@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/internal/bus"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/internal/bus"
 )
 
 // shellHarness starts an app whose shell is a plain sh run from an empty home, so no profile of the user runs.

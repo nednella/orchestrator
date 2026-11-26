@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/run"
 )
 
 const (

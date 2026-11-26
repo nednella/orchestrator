@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 // fakeClaude is a Starter that acts as Claude in stream-json: it answers a get_usage line with reply, after delay, once

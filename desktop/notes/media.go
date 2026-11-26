@@ -11,8 +11,8 @@ import (
 	"path"
 	"slices"
 
-	"github.com/nednella/agentos/desktop/internal/media"
-	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/orchestrator/desktop/internal/media"
+	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
 func (s *Notes) mediaPath(url string) string { return media.File(s.dir, media.NotesFolder, url) }

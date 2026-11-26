@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	ctl "github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
 // browserCmd runs an orchestrator browser command the way the cli sends it: flags become options.

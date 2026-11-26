@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 const editorTimeout = 10 * time.Second

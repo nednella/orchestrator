@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/digest"
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/digest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 func envValue(env []string, key string) string {

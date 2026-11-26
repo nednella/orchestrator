@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/host"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 const (

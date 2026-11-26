@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/activity"
-	"github.com/nednella/agentos/internal/bus"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/activity"
+	"github.com/nednella/orchestrator/internal/bus"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func issueSession(h *apptest.Harness, t *testing.T, issue int) sessions.Session {

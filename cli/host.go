@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nednella/agentos/internal/host"
+	"github.com/nednella/orchestrator/internal/host"
 )
 
 // newHostCmd is what each thread's tmux pane runs: it starts the agent headless, keeps the chat log and

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/internal/warn"
-	"github.com/nednella/agentos/desktop/issues"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/warn"
+	"github.com/nednella/orchestrator/desktop/issues"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // noSessions is a session list with nothing in it, for tests that only read issues.

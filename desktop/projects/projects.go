@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/agentos/internal/atomicfile"
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/atomicfile"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // NewRegistry keeps cfg, read from path, and saves it to path whenever a project is added or removed.

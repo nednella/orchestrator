@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 const fakeInit = `{"type":"system","subtype":"init","cwd":"/tmp/rec","session_id":"fake-session","model":"claude-haiku-5-5","permissionMode":"default"}`

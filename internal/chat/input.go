@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 type textBlock struct {

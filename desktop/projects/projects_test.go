@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/app"
-	"github.com/nednella/agentos/desktop/projects"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/desktop/internal/app"
+	"github.com/nednella/orchestrator/desktop/projects"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 func TestProjects(t *testing.T) {

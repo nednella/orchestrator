@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
 )
 
 func stateOf(h *apptest.Harness, id string) string {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/internal/control"
+	"github.com/nednella/orchestrator/internal/control"
 )
 
 func TestDefaultPathsShareNothingWithAgentos(t *testing.T) {

@@ -3,7 +3,7 @@ package project
 import (
 	"cmp"
 
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 // NeedsSetup says whether the project lacks the queue sections that setting it up writes.

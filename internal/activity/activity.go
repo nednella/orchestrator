@@ -1,7 +1,7 @@
 // Package activity is what the app records of what it does, one event at a time.
 package activity
 
-import "github.com/nednella/agentos/internal/usage"
+import "github.com/nednella/orchestrator/internal/usage"
 
 // The kinds of event.
 const (

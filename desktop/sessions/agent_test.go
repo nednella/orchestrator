@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	"github.com/nednella/agentos/internal/mcp"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/internal/mcp"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // mcpServerOf is the command and the environment the thread's MCP config starts the orchestrator tools' server with.

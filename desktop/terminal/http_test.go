@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/terminal"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/terminal"
 )
 
 // reading is one GET /term/<id> on the app's assets, read as the window reads it.

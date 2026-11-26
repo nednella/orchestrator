@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 func assistantLine(id string, at time.Time, input, output int64) string {

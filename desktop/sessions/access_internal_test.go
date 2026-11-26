@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // A delegation holds childMu from its check of the parent's access to the child's start, so a change of access waits

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/prompts"
-	"github.com/nednella/agentos/internal/session"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/prompts"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // Commands answers the tools that work on threads.

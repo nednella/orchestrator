@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestTmuxTagsCarryTheNewName(t *testing.T) {

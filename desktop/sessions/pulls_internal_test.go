@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/orchestrator/internal/project"
 )
 
 type listGH struct {

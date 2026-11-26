@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 const (

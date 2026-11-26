@@ -3,7 +3,7 @@ package sessions
 import (
 	"path/filepath"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // ShowRoots are the folders a thread may file evidence from: its own folder, its project's folder and its own temp

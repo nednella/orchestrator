@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/desktop/chat"
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/sessions"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/chat"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // oneThread is a single live thread under a host at socket, with an empty chat log.

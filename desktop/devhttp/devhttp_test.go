@@ -16,10 +16,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/app"
-	"github.com/nednella/agentos/desktop/internal/apptest"
-	"github.com/nednella/agentos/desktop/projects"
-	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/internal/app"
+	"github.com/nednella/orchestrator/desktop/internal/apptest"
+	"github.com/nednella/orchestrator/desktop/projects"
+	"github.com/nednella/orchestrator/desktop/sessions"
 )
 
 func TestCallRunsABoundMethod(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/bus"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestTimelineAndWorkOutliveTheApp(t *testing.T) {

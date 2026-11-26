@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/mcp"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/mcp"
 )
 
 func TestAgentRequestMakesTheCommandsRequest(t *testing.T) {

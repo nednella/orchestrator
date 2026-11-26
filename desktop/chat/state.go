@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/session"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // turn is what stateEvent keeps of the events of a run before the one it reads: the tools called and not yet answered,

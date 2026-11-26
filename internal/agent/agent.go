@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/agentos/internal/session"
-	"github.com/nednella/agentos/internal/usage"
+	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/usage"
 )
 
 // Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.

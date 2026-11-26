@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/nednella/agentos/internal/project"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // Service is bound to the front end.

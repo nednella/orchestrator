@@ -25,11 +25,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nednella/agentos/internal/agent"
-	"github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/folder"
-	"github.com/nednella/agentos/internal/mcp"
-	"github.com/nednella/agentos/internal/prompts"
+	"github.com/nednella/orchestrator/internal/agent"
+	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/folder"
+	"github.com/nednella/orchestrator/internal/mcp"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 type Config struct {

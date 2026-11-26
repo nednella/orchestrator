@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 func TestHeldPromptsWaitForTheirTurn(t *testing.T) {

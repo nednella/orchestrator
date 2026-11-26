@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/agentos/internal/agent"
-	chatlog "github.com/nednella/agentos/internal/chat"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/internal/agent"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // configDir is the folder the recorded run's transcript paths start with.

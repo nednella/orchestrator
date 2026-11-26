@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/session"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // allProjects is the project the threads tool takes for every project's threads.

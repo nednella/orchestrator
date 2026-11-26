@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	chatlog "github.com/nednella/agentos/internal/chat"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 )
 
 func commandsAt(at int64, names ...string) chatlog.Event {

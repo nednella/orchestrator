@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/nednella/agentos/desktop/chat"
-	"github.com/nednella/agentos/desktop/control"
-	"github.com/nednella/agentos/desktop/sessions"
-	ctl "github.com/nednella/agentos/internal/control"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/chat"
+	"github.com/nednella/orchestrator/desktop/control"
+	"github.com/nednella/orchestrator/desktop/sessions"
+	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // Threads is what the tools use of the threads.

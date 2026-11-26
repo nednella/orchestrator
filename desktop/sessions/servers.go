@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/agentos/desktop/internal/run"
-	"github.com/nednella/agentos/internal/procs"
-	"github.com/nednella/agentos/internal/session"
+	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/internal/procs"
+	"github.com/nednella/orchestrator/internal/session"
 )
 
 // hostDial is how long the sweep waits for a thread's host to answer before it counts the host as gone.
