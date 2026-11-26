@@ -62,3 +62,28 @@ func TestLoadConfigRejectsABrokenFile(t *testing.T) {
 		t.Error("a project without a folder was accepted")
 	}
 }
+
+func TestLoadConfigRunsHooksWithTheAppsOwnBinary(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "agentos"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("AGENTOS_DIR", t.TempDir())
+	useConfig(t, "projects: []\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if real, err := filepath.EvalSymlinks(own); err == nil {
+		own = real
+	}
+	if cfg.Binary != own || cfg.Agents.Exe != own {
+		t.Errorf("binary = %q, registry runs %q, want the app's own %q and not %q", cfg.Binary, cfg.Agents.Exe, own, filepath.Join(bin, "agentos"))
+	}
+}

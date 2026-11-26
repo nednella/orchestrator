@@ -15,7 +15,7 @@ const shellPathBudget = 3 * time.Second
 // started from Finder gets a minimal one.
 func fixPath() error {
 	missing := false
-	for _, tool := range []string{"tmux", "gh", "agentos", "claude"} {
+	for _, tool := range []string{"tmux", "gh", "claude"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			missing = true
 		}

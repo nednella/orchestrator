@@ -359,7 +359,7 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	if err := os.WriteFile(older, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// The harness puts the built command first on PATH; the app reads PATH when it starts, so start it again.
+	// An agentos earlier on PATH is no one's: the app starts again with it there and still runs its own binary.
 	t.Setenv("PATH", filepath.Dir(older)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	first.App.Stop()
 	h := first.Restart(t)
@@ -374,8 +374,9 @@ func TestTheHostIsTheAppsOwnBinary(t *testing.T) {
 	if got, want := strings.TrimSpace(string(out)), apptest.CLIPath(t)+" host "; !strings.HasPrefix(got, want) {
 		t.Errorf("pane runs %s\nwant it to start with %s", got, want)
 	}
-	if args := strings.Join(claudeArgs(t, h, s.ID), " "); !strings.Contains(args, older+"' hook Stop") {
-		t.Errorf("the hooks do not call the agentos on PATH: %q", args)
+	args := strings.Join(claudeArgs(t, h, s.ID), " ")
+	if !strings.Contains(args, apptest.CLIPath(t)+"' hook Stop") || strings.Contains(args, older) {
+		t.Errorf("the hooks do not run the app's own binary: %q", args)
 	}
 }
 

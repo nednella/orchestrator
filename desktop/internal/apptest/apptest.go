@@ -583,7 +583,6 @@ type Options struct {
 	NoBranch        bool          // leave out the project's `session_branch_fallback`, so the default `issue-{n}` applies
 	CleanupCommand  string        // the project's session_cleanup_command; none by default
 	WorktreeCommand string        // the project's session_worktree_command; the default by default
-	NoAgentos       bool          // leave every folder that holds an agentos command off PATH, as an app that cannot find it
 	TopExtra        string        // yaml lines added at the top of the config
 	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick      time.Duration
@@ -689,9 +688,6 @@ func NewWith(t *testing.T, o Options) *Harness {
 		start += rejecting(o.ClaudeRejects)
 	}
 	h.claudeDir = agentOnPath(t, "claude", start, fakeClaudeTurns)
-	if o.NoAgentos {
-		t.Setenv("PATH", PathWithout("agentos"))
-	}
 	h.App = h.build(t)
 	first, tick := o.DigestFirst, o.DigestTick
 	if first == 0 {
@@ -732,6 +728,7 @@ func (h *Harness) build(t *testing.T) *app.App {
 		t.Fatal(err)
 	}
 	cfg.Binary = CLIPath(t) // the test binary runs the app but has no host command
+	cfg.Agents.Exe = cfg.Binary
 	a := app.New(cfg, app.Host{Emit: h.Rec.Emit, Clipboard: h.Rec.Clip, PickDir: h.Rec.Picker, Quit: h.Rec.Quit, Awake: h.Rec.Awake}, h.GH.Run, h.GH.Stream, h.Claude.RunEnv)
 	for _, svc := range a.Services() {
 		switch s := svc.(type) {
@@ -1135,7 +1132,7 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+filepath.Dir(CLIPath(t))+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return dir
 }
 

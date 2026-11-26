@@ -133,10 +133,3 @@ func TestAppWarnsWhileClaudeIsNotInstalled(t *testing.T) {
 		return len(w) > 0 && w[len(w)-1] == warn.Warning{Source: "agent"}
 	})
 }
-
-func TestAppWarnsWithoutTheAgentosCommand(t *testing.T) {
-	h := apptest.NewWith(t, apptest.Options{NoAgentos: true})
-	eventually(t, "a warning naming the agentos command", func() bool {
-		return slices.Contains(h.Rec.Warnings(), warn.Warning{Source: "agent", Message: "The agentos command is not on PATH, so a thread's hooks cannot report its state"})
-	})
-}

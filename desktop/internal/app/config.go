@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -36,7 +34,7 @@ type Config struct {
 	DataDirFixed bool   // AGENTOS_DEV_DATA_DIR sets the data folder, so the settings cannot change it
 	Tmux         *term.Tmux
 	Agents       agent.Registry
-	Binary       string // this app's own binary: hosted agents run under its host command, not under whatever agentos PATH finds
+	Binary       string // this app's own binary: hosted agents run under its host command and their hooks run it
 }
 
 // Load reads the config file and the environment. The project is the one holding AGENTOS_DIR
@@ -62,10 +60,6 @@ func Load() (Config, error) {
 	}
 	dataDir := cmp.Or(cfg.DataDir, filepath.Join(home, ".local", "share", "agentos"))
 	localDir := filepath.Join(home, ".local", "share", "agentos")
-	// A check still setting the old name would otherwise write to the real data folder.
-	if os.Getenv("AGENTOS_DATA_DIR") != "" {
-		return Config{}, errors.New("AGENTOS_DATA_DIR is now AGENTOS_DEV_DATA_DIR: rename it")
-	}
 	override := os.Getenv("AGENTOS_DEV_DATA_DIR")
 	if override != "" {
 		dataDir, localDir = override, override
@@ -106,7 +100,7 @@ func Load() (Config, error) {
 	if real, err := filepath.EvalSymlinks(binary); err == nil {
 		binary = real
 	}
-	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agents(slices.Compact([]string{dataDir, localDir})), Binary: binary}, nil
+	return Config{Registry: projects.NewRegistry(path, cfg), Project: current, StateDir: stateDir, Machine: machine, DataDir: dataDir, LocalDir: localDir, DataDirFixed: override != "", Tmux: tmux, Agents: agents(binary, slices.Compact([]string{dataDir, localDir})), Binary: binary}, nil
 }
 
 // ConfigPath is the config file: AGENTOS_CONFIG, else the one in home's config folder.
@@ -131,12 +125,8 @@ func machineID(stateDir string) (string, error) {
 	return id, nil
 }
 
-// agents is the registry the sessions get their provider from. Without the agentos command on PATH the agent's hooks
-// could not call back, so no thread starts until it is found.
-func agents(dirs []string) agent.Registry {
-	exe, err := exec.LookPath("agentos")
-	if err != nil {
-		log.Printf("agentos: the agentos command is not on PATH, so no thread can start until it is: %v", err)
-	}
-	return agent.Registry{Exe: exe, Dirs: dirs}
+// agents is the registry the sessions get their provider from. The agent's hooks run the app's own binary, never a
+// command found on PATH.
+func agents(binary string, dirs []string) agent.Registry {
+	return agent.Registry{Exe: binary, Dirs: dirs}
 }

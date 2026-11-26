@@ -229,7 +229,7 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 // followConfig picks up hand edits to the config file while the app runs, and warns while no thread can start: claude
-// is not installed, or the agentos command is not on PATH.
+// is not installed.
 func (a *App) followConfig(ctx context.Context) {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()

@@ -292,28 +292,22 @@ func TestRegistryProvider(t *testing.T) {
 	}
 }
 
-func TestRegistryWithoutAgentosRefuses(t *testing.T) {
+func TestRegistryWithoutABinaryRefuses(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	p, err := Registry{Dirs: []string{"/d"}}.Provider()
-	if p != nil || err == nil || err.Error() != "The agentos command is not on PATH, so a thread's hooks cannot report its state" {
+	if p != nil || err == nil || err.Error() != "The app's own binary is unknown, so a thread's hooks cannot report its state" {
 		t.Errorf("Provider() = %#v, %v", p, err)
 	}
 }
 
-func TestRegistryFindsAgentosInstalledLater(t *testing.T) {
+func TestRegistryDoesNotLookTheCommandUpOnPath(t *testing.T) {
 	bin := t.TempDir()
-	t.Setenv("PATH", bin)
-	r := Registry{Dirs: []string{"/d"}}
-	if _, err := r.Provider(); err == nil {
-		t.Fatal("a provider without agentos")
-	}
-	exe := filepath.Join(bin, "agentos")
-	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "agentos"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.Provider()
-	if want := (Claude{Exe: exe, ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); err != nil || !reflect.DeepEqual(got, want) {
-		t.Errorf("Provider() = %#v, %v, want %#v", got, err, want)
+	t.Setenv("PATH", bin)
+	if p, err := (Registry{}).Provider(); err == nil {
+		t.Errorf("Provider() = %#v, want a refusal: an agentos on PATH is not the app's binary", p)
 	}
 }
 
