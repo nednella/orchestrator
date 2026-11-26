@@ -294,6 +294,9 @@ func TestDeleteTakesAChildWorktreeOnItsParentsUnpushedWork(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
 	commitIn(t, h.Dir, "parent.txt")
+	if _, err := h.SetThreadPlace("project"); err != nil {
+		t.Fatal(err)
+	}
 	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)
@@ -832,6 +835,9 @@ func TestFamilyDeleteRemovesNoWorktreeUnlessEveryOneMayGo(t *testing.T) {
 func TestDeleteWithoutTheWorktreesKeepsEveryFolderOfTheFamily(t *testing.T) {
 	h := newHarness(t)
 	repoFixture(t, h)
+	if _, err := h.SetThreadPlace("project"); err != nil {
+		t.Fatal(err)
+	}
 	parent, err := h.Sessions().Create("Look around", "", false, 0, session.Read)
 	if err != nil {
 		t.Fatal(err)
