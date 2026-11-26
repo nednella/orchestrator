@@ -83,7 +83,7 @@ func (c Claude) Command(l Launch) []string {
 	}{hooks, permissions{c.Dirs}})
 	argv := append([]string{"claude", "--settings", string(settings)}, headless...)
 	if l.Model != "" {
-		argv = append(argv, "--model", l.Model)
+		argv = append(argv, "--model", planSafeModel(l.Model, l.Access))
 	}
 	if l.Effort != "" {
 		argv = append(argv, "--effort", l.Effort)
@@ -111,6 +111,19 @@ func (c Claude) Command(l Launch) []string {
 		argv = append(argv, "--append-system-prompt", l.Prompt)
 	}
 	return argv
+}
+
+// claudeHaiku is the id the "haiku" alias stands for.
+const claudeHaiku = "claude-haiku-5-5"
+
+// planSafeModel is the model argument that keeps the model in plan mode. Claude Code answers in plan mode with Sonnet
+// for the alias "haiku", as it does for "opusplan", and shows haiku in its init line all the same; the full id has no
+// such switch.
+func planSafeModel(model string, a session.Access) string {
+	if a == session.Read && strings.EqualFold(strings.TrimSpace(model), "haiku") {
+		return claudeHaiku
+	}
+	return model
 }
 
 // PermissionMode is claude's mode for the access. A level it does not know is Supervised, never more.

@@ -78,6 +78,8 @@ func TestClaudeLaunch(t *testing.T) {
 		{"effort", Launch{Effort: "high"}, append([]string{"--effort", "high"}, supervised...)},
 		{"both", Launch{Model: "sonnet", Effort: "medium"}, append([]string{"--model", "sonnet", "--effort", "medium"}, supervised...)},
 		{"resume", Launch{Resume: "abc"}, append([]string{"--resume", "abc"}, supervised...)},
+		{"read haiku is the full id", Launch{Model: "haiku", Access: session.Read}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "plan", "--allowedTools", tools}},
+		{"haiku outside plan mode stays the alias", Launch{Model: "haiku"}, append([]string{"--model", "haiku"}, supervised...)},
 		{"read", Launch{Access: session.Read}, []string{"--permission-mode", "plan", "--allowedTools", tools}},
 		{"browser", Launch{Browser: true}, []string{"--permission-mode", "default", "--allowedTools", tools + ",Bash(agent-browser:*)"}},
 		{"prompt", Launch{Prompt: "where you run"}, append(slices.Clone(supervised), "--append-system-prompt", "where you run")},

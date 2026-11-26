@@ -160,14 +160,18 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 	tests := []struct {
 		name, title, prompt, model, effort, access string
 		wantTitle                                  string
+		wantModel                                  string
 	}{
-		{"supervised", "", "Fix the cart\nwith detail", "opus", "high", "supervised", "Fix the cart"},
-		{"read", "", "What is this?", "haiku", "", "read", "What is this?"},
-		{"long first line", "", long, "", "low", "", strings.Repeat("é", 60)},
-		{"given title", "mine", "do it", "", "", "full", "mine"},
-		{"empty", "", "", "", "", "read", "agent"},
+		{"supervised", "", "Fix the cart\nwith detail", "opus", "high", "supervised", "Fix the cart", ""},
+		{"read", "", "What is this?", "haiku", "", "read", "What is this?", "claude-haiku-5-5"},
+		{"long first line", "", long, "", "low", "", strings.Repeat("é", 60), ""},
+		{"given title", "mine", "do it", "", "", "full", "mine", ""},
+		{"empty", "", "", "", "", "read", "agent", ""},
 	}
 	for _, tt := range tests {
+		if tt.wantModel == "" {
+			tt.wantModel = tt.model
+		}
 		s, err := h.NewThread(tt.title, tt.prompt, tt.model, tt.effort, tt.access)
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
@@ -182,8 +186,8 @@ func TestThreadFromAPromptGetsItsTitleModelAndEffort(t *testing.T) {
 			}
 			return ""
 		}
-		if flag("--model") != tt.model || flag("--effort") != tt.effort {
-			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, flag("--model"), flag("--effort"), tt.model, tt.effort)
+		if flag("--model") != tt.wantModel || flag("--effort") != tt.effort {
+			t.Errorf("%s: claude got --model %q --effort %q, want %q %q", tt.name, flag("--model"), flag("--effort"), tt.wantModel, tt.effort)
 		}
 		if tt.prompt != "" {
 			text, _ := json.Marshal(tt.prompt)
