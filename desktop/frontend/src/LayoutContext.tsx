@@ -131,7 +131,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
   const root = 16 * scale
   // The right panel's rules are in px at the default text size, as the window would be at that size.
-  const sidebar = sidebarFit(width, sidebarRem ?? SIDEBAR_DEFAULT_REM, root)
+  const sidebar = sidebarFit(width, Math.max(sidebarRem ?? SIDEBAR_DEFAULT_REM, SIDEBAR_MIN_REM), root)
   const viewport = width / scale
   const rowBeside = (sidebarOpen: boolean) => (width - sidebarBesidePx(sidebar, sidebarOpen, root)) / scale - 1
   const row = rowBeside(prefs.sidebarOpen)

@@ -9,7 +9,8 @@ const MEDIUM_BELOW = 1250
 
 export const RAIL_REM = 3
 export const SIDEBAR_DEFAULT_REM = 18
-export const SIDEBAR_MIN_REM = 13
+// Wide enough for the whole title strip and the bottom bar: six buttons, the update button and their gaps, 264 px.
+export const SIDEBAR_MIN_REM = 16.5
 export const SIDEBAR_MAX_REM = 32
 // The thread keeps at least this width beside the docked sidebar; a sidebar with no room for it opens over the thread.
 export const THREAD_MIN_REM = 30
