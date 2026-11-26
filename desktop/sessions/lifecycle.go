@@ -165,6 +165,8 @@ type Lifecycle struct {
 	etags    map[string]string   // by project key: the ETag of the last pull request list
 	watchers map[string]*watcher // by project key
 	logins   map[string]string   // by project folder: the gh user's login
+	// polled closes once Run's first poll has read every thread's PR: until then no track says a clean-up is due.
+	polled chan struct{}
 
 	sweepEvery time.Duration
 
@@ -180,7 +182,7 @@ func newLifecycle(runner run.Runner, stream run.Streamer, dataDir, stateDir stri
 	return &Lifecycle{
 		run: runner, stream: stream, dataDir: dataDir, stateDir: stateDir, sessions: s, activity: activity, emit: emit, warn: warn.New(emit), repos: noRepos{},
 		tracks: map[string]*track{}, gone: map[string]bool{}, files: map[string]*prsFile{}, etags: map[string]string{}, watchers: map[string]*watcher{}, logins: map[string]string{},
-		sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
+		polled: make(chan struct{}), sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
 	}
 }
 
@@ -354,6 +356,7 @@ func (l *Lifecycle) Run(ctx context.Context) {
 		sweep = t.C
 	}
 	l.Poll(ctx)
+	close(l.polled)
 	for {
 		select {
 		case <-ctx.Done():
@@ -1446,9 +1449,15 @@ func (l *Lifecycle) CleaningUp(id string) bool {
 }
 
 // cleanupDue says whether the thread's PR merged or closed and its clean-up has not finished: it waits to run or for
-// the owner's word, runs or was blocked. It takes mu.
-func (l *Lifecycle) cleanupDue(id string) bool {
+// the owner's word, runs or was blocked. It waits for Run's first poll, as the tracks are empty before it, or for ctx
+// to end. It takes mu.
+func (l *Lifecycle) cleanupDue(ctx context.Context, id string) bool {
 	if l == nil {
+		return false
+	}
+	select {
+	case <-l.polled:
+	case <-ctx.Done():
 		return false
 	}
 	l.mu.Lock()

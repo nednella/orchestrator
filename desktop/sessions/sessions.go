@@ -3265,12 +3265,12 @@ func (s *Sessions) Tell(id string, m Told) (string, error) {
 }
 
 // asleepForCleanup says whether the thread sleeps with a clean-up due or running: a child's result does not wake it,
-// and waits for its next wake. It takes mu.
+// and waits for its next wake. It waits for the first look at the PRs after a start. It takes mu.
 func (s *Sessions) asleepForCleanup(id string) bool {
 	s.mu.Lock()
 	_, settled := s.ended[id]
 	s.mu.Unlock()
-	return settled && s.life.cleanupDue(id)
+	return settled && s.life.cleanupDue(s.context(), id)
 }
 
 // outranked is the rank rule's refusal: a thread with access may not message a thread with more.
