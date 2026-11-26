@@ -104,17 +104,18 @@ func (t target) predates(pr *PR) bool {
 
 // track is what is known about the pull request and clean-up of one session.
 type track struct {
-	branch    string // the branch the PR was looked up on
-	worktree  string
-	pr        *PR
-	git       *BranchStatus
-	attention string
-	cleanup   string
-	reason    string
-	autoTried bool
-	opened    bool // the PR is new to the app; the user hears of it once the session is idle
-	reading   bool // a read of the git status runs
-	again     bool // another read was asked for during that one
+	branch     string // the branch the PR was looked up on
+	worktree   string
+	pr         *PR
+	git        *BranchStatus
+	attention  string
+	cleanup    string
+	reason     string
+	autoTried  bool
+	keptAsleep string // why the latest clean-up at the child's sleep kept its worktree, so the same reason is not logged again
+	opened     bool   // the PR is new to the app; the user hears of it once the session is idle
+	reading    bool   // a read of the git status runs
+	again      bool   // another read was asked for during that one
 }
 
 // ack is how much of a PR the user has seen.
@@ -1117,9 +1118,10 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 
 // childAsleep removes the worktree agentos made for the child thread id, which went to sleep, when that loses nothing:
 // planFor's checks pass, with a thread asleep in it counting too. A worktree with no commit since the one it started at
-// has only its changes to lose, so origin is not asked. Its branch stays, and so does the thread, whose wake puts the worktree back. Anything else keeps the
-// worktree for the clean-up after its pull request, and the log says why. A child in its parent's folder, or in one
-// agentos did not make for it, has nothing to remove. A Delete of the child takes its worktree only when asked.
+// has only its changes to lose, so origin is not asked. Its branch stays, and so does the thread, whose wake puts the
+// worktree back. Anything else keeps the worktree for the clean-up after its pull request, and the log says why, unless
+// it said so for the child's last sleep. A child in its parent's folder, or in one agentos did not make for it, has
+// nothing to remove. A Delete of the child takes its worktree only when asked.
 func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	t, err := l.sessions.target(id)
 	if err != nil || !t.ended || !t.made {
@@ -1149,7 +1151,13 @@ func (l *Lifecycle) childAsleep(ctx context.Context, id string) {
 	if reason == "" {
 		removed, reason = l.removeWorktree(ctx, t, &plan)
 	}
-	l.logCleanup(ctx, t, nil, removed, reason)
+	l.mu.Lock()
+	again := reason != "" && reason == tr.keptAsleep && len(removed) == 0 && ctx.Err() == nil
+	tr.keptAsleep = reason
+	l.mu.Unlock()
+	if !again {
+		l.logCleanup(ctx, t, nil, removed, reason)
+	}
 }
 
 // startChildCleanup marks the clean-up of the asleep child id as running and returns its track and the clean-up state

@@ -12,6 +12,7 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/activity"
 	"github.com/nednella/agentos/internal/project"
 )
 
@@ -444,5 +445,49 @@ func TestWakeWaitsForAChildsSleepCleanup(t *testing.T) {
 	}
 	if !exists(wt) {
 		t.Error("the wake did not put the worktree back")
+	}
+}
+
+func TestChildKeptAgainForTheSameReasonLogsNothing(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	child := childOf(t, h, parent, "Builder", sessions.WhereWorktree)
+	if err := os.WriteFile(filepath.Join(child.Worktree, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Each clean-up reads the worktree's changes once it has marked itself running; a wake waits for it to end.
+	checked := make(chan struct{}, 8)
+	h.GH.SetBefore(func(dir, name string, args []string) {
+		if name == "git" && slices.Contains(args, "--porcelain") && slices.Contains(args, child.Worktree) {
+			checked <- struct{}{}
+		}
+	})
+	t.Cleanup(func() { h.GH.SetBefore(nil) })
+	sleepAndWake := func() {
+		t.Helper()
+		putToSleep(t, h, child.ID)
+		<-checked
+		eventually(t, "the clean-up's end", func() bool { got, _ := h.Session(child.ID); return got.Cleanup != "pending" })
+		if _, err := h.WakeThread(child.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sleepAndWake()
+	sleepAndWake()
+	if log, events := h.Cleanups(), h.Events(t, activity.Cleanup); len(log) != 1 || len(events) != 1 {
+		t.Errorf("after a second sleep kept for the same reason: log %+v, events %+v; want one of each", log, events)
+	}
+
+	gitIn(t, child.Worktree, "add", "notes.txt")
+	gitIn(t, child.Worktree, "commit", "-m", "notes")
+	putToSleep(t, h, child.ID)
+	eventually(t, "the clean-up kept for the new reason", func() bool { return len(h.Cleanups()) == 2 })
+	if want := child.Branch + " has a commit that is not on origin"; h.Cleanups()[0].Reason != want {
+		t.Errorf("the newest entry = %+v, want %q", h.Cleanups()[0], want)
+	}
+	if events := h.Events(t, activity.Cleanup); len(events) != 2 {
+		t.Errorf("events = %+v, want two", events)
 	}
 }
