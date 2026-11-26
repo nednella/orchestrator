@@ -1219,7 +1219,7 @@ func (l *Lifecycle) shellOf(ctx context.Context, id string) string {
 	defer cancel()
 	shells, err := s.tmux.ShellPaths(ctx)
 	if err != nil {
-		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+		return shellsUnlisted(err)
 	}
 	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id }) {
 		return "a shell of this thread is open"
@@ -1387,7 +1387,7 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads .
 	defer cancel()
 	shells, err := l.sessions.tmux.ShellPaths(ctx)
 	if err != nil {
-		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+		return shellsUnlisted(err)
 	}
 	unknown := false
 	for _, sh := range shells {
@@ -1403,6 +1403,11 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string, threads .
 		return "a shell whose folder is unknown is open"
 	}
 	return ""
+}
+
+// shellsUnlisted is why a shell may keep a worktree or its files when tmux could not list the open shells.
+func shellsUnlisted(err error) string {
+	return fmt.Sprintf("tmux could not list the open shells: %v", err)
 }
 
 // removeWorktree removes the worktree agentos made for the thread with the project's session_cleanup_command, and

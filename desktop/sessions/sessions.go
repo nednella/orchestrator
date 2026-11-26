@@ -4544,7 +4544,7 @@ func (s *Sessions) busyShellOf(ctx context.Context, id string) string {
 	defer cancel()
 	_, shells, err := s.tmux.ListAll(ctx)
 	if err != nil {
-		return fmt.Sprintf("tmux could not list the open shells: %v", err)
+		return shellsUnlisted(err)
 	}
 	if slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Thread == id && shellBusy(sh) }) {
 		return "a shell of this thread runs a command"
