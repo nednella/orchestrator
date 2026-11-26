@@ -9,7 +9,7 @@ import { serversTabShown } from './useThreadServers'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
-import { firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
+import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, Pending, Project, Release, Session, PromptSend, Settings, Snapshot, ThemeSetting, Warning, ProjectList, ThreadStart } from './types'
 
@@ -764,11 +764,16 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
         if (next) selectId(next.id)
         else detach()
       },
+      // The delete takes the thread's asleep descendants too. The sessions event may come before the call returns, so
+      // the rows go from the latest list, never from one read before the await.
       async deleteThread(id, worktree) {
-        await api.deleteThread(id, worktree)
-        forgetThreadDraft(id)
         const owner = sessionsRef.current.find((s) => s.id === id)?.project
-        if (owner) applySessions(owner, sessionsRef.current.filter((s) => s.project === owner && s.id !== id))
+        const gone = new Set([id, ...descendantsOf(id, sessionsRef.current).map((s) => s.id)])
+        await api.deleteThread(id, worktree)
+        gone.forEach(forgetThreadDraft)
+        setSessions((prev) => prev.filter((s) => !gone.has(s.id)))
+        const left = sessionsRef.current.filter((s) => !gone.has(s.id))
+        if (owner === projectRef.current?.key) selectAmong(left.filter((s) => s.project === owner), left)
       },
       async wakeThread(id) {
         return addSession(await api.wakeThread(id))
@@ -996,7 +1001,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, inSidebarOrder, detach, addSession, applySessions, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
+    [selectId, selectSession, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, createRepo, loadIssues, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast],
   )
 
   const value = useMemo<Agentos>(
