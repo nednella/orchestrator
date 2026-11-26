@@ -66,7 +66,7 @@ export type Layout = {
   toggleDigest(): void
   openDigest(): void
   closeCentre(): void
-  returnToTerminal(): void
+  focusChat(): void
   focusPanel(panel: Panel): void
 }
 
@@ -364,7 +364,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
         setStatsOpen(false)
         setDigestOpen(false)
       },
-      returnToTerminal() {
+      focusChat() {
         focus('thread')
       },
       focusPanel,

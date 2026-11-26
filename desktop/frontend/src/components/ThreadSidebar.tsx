@@ -14,7 +14,7 @@ export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
   const { projectSessions, threadTree, selectedId, select, focus, setComposerMode } = useAgentos('projectSessions', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
-  const { widths, returnToTerminal, showHome, focusPanel } = useLayout()
+  const { widths, focusChat, showHome, focusPanel } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
@@ -43,7 +43,7 @@ export function ThreadSidebar() {
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault()
-      returnToTerminal()
+      focusChat()
       return
     }
     const id = nav.cursorKey
@@ -66,7 +66,7 @@ export function ThreadSidebar() {
       e.stopPropagation()
       setQuery('')
       e.currentTarget.blur()
-      returnToTerminal()
+      focusChat()
       return
     }
     if (e.key !== 'Enter') return

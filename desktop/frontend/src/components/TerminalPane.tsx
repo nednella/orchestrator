@@ -9,7 +9,7 @@ const DIVIDER = { none: undefined, active: '1px solid var(--border)', idle: '1px
 // TerminalPane shows the shell's terminal; the terminal stays alive when the pane goes, so it comes back as it was.
 export function TerminalPane({ id, divider, onActivate }: TerminalPaneProps) {
   const host = useRef<HTMLDivElement>(null)
-  const { returnToTerminal: focusChat } = useLayout()
+  const { focusChat } = useLayout()
 
   useEffect(() => {
     const session = termSession(id)
