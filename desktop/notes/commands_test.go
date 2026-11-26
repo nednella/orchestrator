@@ -8,6 +8,7 @@ import (
 )
 
 func TestNoteCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	s, err := h.NewSession("asker", "")
 	if err != nil {

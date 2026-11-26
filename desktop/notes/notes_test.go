@@ -22,6 +22,7 @@ import (
 )
 
 func TestNotes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	blank, err := h.AddNote("  ") // a note that waits for its pictures
 	if err != nil || blank.Text != "" {
@@ -91,6 +92,7 @@ func TestNotes(t *testing.T) {
 }
 
 func TestNoteToIssue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.Create = "Creating issue in acme/widgets\n\nhttps://github.com/acme/widgets/issues/55\n"
 	if _, err := h.Issues(false); err != nil {
@@ -142,6 +144,7 @@ func TestNoteToIssue(t *testing.T) {
 }
 
 func TestNoteToIssueWithoutRepo(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.Repo = errors.New("not a repo")
 	n, _ := h.AddNote("x")
@@ -151,6 +154,7 @@ func TestNoteToIssueWithoutRepo(t *testing.T) {
 }
 
 func TestNoteToSession(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	n, _ := h.AddNote("remember this")
 	s, err := h.NoteToSession(n.ID)
@@ -168,6 +172,7 @@ func TestNoteToSession(t *testing.T) {
 }
 
 func TestNoteToSessionKeepsLineBreaksUnsent(t *testing.T) {
+	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	n, _ := h.AddNote("first line\nsecond line")
 	s, err := h.NoteToSession(n.ID)
@@ -185,6 +190,7 @@ func TestNoteToSessionKeepsLineBreaksUnsent(t *testing.T) {
 }
 
 func TestNoteOrderAndFlags(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	old, _ := h.AddNote("old")
 	time.Sleep(3 * time.Millisecond)
@@ -227,6 +233,7 @@ func TestNoteOrderAndFlags(t *testing.T) {
 var onePixelPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
 
 func TestNoteImages(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	n, _ := h.AddNote("with picture")
 	b64 := base64.StdEncoding.EncodeToString(onePixelPNG)
@@ -331,6 +338,7 @@ func TestNoteImages(t *testing.T) {
 }
 
 func TestMediaServedInHTTPMode(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	n, _ := h.AddNote("x")
 	n, err := h.AddNoteImage(n.ID, base64.StdEncoding.EncodeToString(onePixelPNG), "image/png")
@@ -346,6 +354,7 @@ func TestMediaServedInHTTPMode(t *testing.T) {
 	}
 }
 
+// Not parallel: it sets the process environment.
 func TestNotesLiveInTheDataDir(t *testing.T) {
 	root := t.TempDir()
 	synced := filepath.Join(root, "cloud", "orchestrator")
@@ -398,6 +407,7 @@ func addNote(a *app.App, text string) (notes.Note, error) {
 }
 
 func TestNoteToIssueFilesOneIssueUnderConcurrentCalls(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.GH.Create = "https://github.com/acme/widgets/issues/61\n"
 	h.GH.Delay = 300 * time.Millisecond
@@ -435,6 +445,7 @@ func TestNoteToIssueFilesOneIssueUnderConcurrentCalls(t *testing.T) {
 }
 
 func TestNoteWithoutTextCannotBecomeAnIssue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, err := h.Issues(false); err != nil {
 		t.Fatal(err)
