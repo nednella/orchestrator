@@ -107,8 +107,8 @@ type Registry struct {
 }
 
 // Provider is claude.
-func (r Registry) Provider() (Provider, error) {
-	return Claude{ConfigDir: claudeConfigDir(), Dirs: r.Dirs}, nil
+func (r Registry) Provider() Provider {
+	return Claude{ConfigDir: claudeConfigDir(), Dirs: r.Dirs}
 }
 
 // claudeConfigDir is where claude keeps the user's settings, "" when there is no home.

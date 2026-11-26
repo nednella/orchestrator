@@ -22,11 +22,6 @@ func TestNext(t *testing.T) {
 		{"post tool answers a prompt", Waiting, Event{Name: "PostToolUse"}, Working},
 		{"permission prompt", Working, Event{Name: "Notification", NotificationType: "permission_prompt"}, Waiting},
 		{"notification without type", Working, Event{Name: "Notification", Message: "Claude needs your permission to use Bash"}, Waiting},
-		{"idle reminder stops a working session", Working, Event{Name: "Notification", NotificationType: "idle_prompt"}, Idle},
-		{"idle reminder by message stops a working session", Working, Event{Name: "Notification", Message: "Claude is waiting for your input"}, Idle},
-		{"idle reminder leaves waiting alone", Waiting, Event{Name: "Notification", NotificationType: "idle_prompt"}, Waiting},
-		{"idle reminder leaves idle alone", Idle, Event{Name: "Notification", NotificationType: "idle_prompt"}, Idle},
-		{"idle reminder leaves settled alone", Settled, Event{Name: "Notification", NotificationType: "idle_prompt"}, Settled},
 		{"stop", Working, Event{Name: "Stop"}, Idle},
 		{"stop while waiting", Waiting, Event{Name: "Stop"}, Idle},
 		{"stop with a question", Working, Event{Name: "Stop", Asks: true}, Waiting},
@@ -43,14 +38,6 @@ func TestNext(t *testing.T) {
 	}
 }
 
-func TestSessionEndHookSettles(t *testing.T) {
-	for _, cur := range []State{Idle, Working, Waiting} {
-		if got := Next(cur, Event{Name: "SessionEnd"}); got != Settled {
-			t.Errorf("Next(%s, SessionEnd) = %s, want settled", cur, got)
-		}
-	}
-}
-
 func TestApply(t *testing.T) {
 	t0 := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 	t1 := t0.Add(time.Minute)
@@ -63,9 +50,6 @@ func TestApply(t *testing.T) {
 		want Record
 	}{
 		{"first event", Record{}, Event{Name: "PreToolUse", Detail: "Bash ls"}, Record{Session: "p/1", State: Working, Event: "PreToolUse", At: t1, Detail: "Bash ls"}},
-		{"idle reminder ends a working turn", Record{Session: "p/1", State: Working, Event: "PreToolUse", At: t0, Tool: "Bash"}, Event{Name: "Notification", NotificationType: "idle_prompt"}, Record{Session: "p/1", State: Idle, Event: "Notification", At: t1, Notify: "idle_prompt", Tool: "Bash"}},
-		{"idle reminder leaves a waiting record alone", Record{Session: "p/1", State: Waiting, Event: "Notification", At: t0}, Event{Name: "Notification", NotificationType: "idle_prompt"}, Record{Session: "p/1", State: Waiting, Event: "Notification", At: t0}},
-		{"idle reminder keeps the record", stop, Event{Name: "Notification", NotificationType: "idle_prompt", Detail: "waiting"}, stop},
 		{"permission prompt", stop, Event{Name: "Notification", NotificationType: "permission_prompt", Detail: "needs Bash"}, Record{Session: "p/1", State: Waiting, Event: "Notification", At: t1, Detail: "needs Bash", Notify: "permission_prompt"}},
 		{"prompt keeps the last tool", Record{Session: "p/1", State: Working, Event: "PreToolUse", Tool: "Bash", Command: "yarn test"}, Event{Name: "Notification", NotificationType: "permission_prompt"}, Record{Session: "p/1", State: Waiting, Event: "Notification", At: t1, Notify: "permission_prompt", Tool: "Bash", Command: "yarn test"}},
 		{"new prompt forgets the tool", Record{Session: "p/1", State: Working, Event: "PreToolUse", Tool: "Bash", Command: "yarn test"}, Event{Name: "UserPromptSubmit"}, Record{Session: "p/1", State: Working, Event: "UserPromptSubmit", At: t1}},
@@ -74,7 +58,6 @@ func TestApply(t *testing.T) {
 		{"conversation kept when the event has none", Record{Session: "p/1", State: Idle, Event: "Stop", At: t0, Conversation: "a"}, Event{Name: "UserPromptSubmit"}, Record{Session: "p/1", State: Working, Event: "UserPromptSubmit", At: t1, Conversation: "a"}},
 		{"transcript kept when the event has none", Record{Session: "p/1", State: Idle, Event: "Stop", At: t0, Transcript: "/t/a.jsonl"}, Event{Name: "UserPromptSubmit"}, Record{Session: "p/1", State: Working, Event: "UserPromptSubmit", At: t1, Transcript: "/t/a.jsonl"}},
 		{"cwd kept when the event has none", Record{Session: "p/1", State: Idle, Event: "Stop", At: t0, Cwd: "/a"}, Event{Name: "UserPromptSubmit"}, Record{Session: "p/1", State: Working, Event: "UserPromptSubmit", At: t1, Cwd: "/a"}},
-		{"reminder with no record", Record{}, Event{Name: "Notification", NotificationType: "idle_prompt", Detail: "x"}, Record{Session: "p/1", State: Idle, Event: "Notification", At: t1}},
 		{"identity kept", Record{Session: "p/1", State: Idle, Event: "Stop", At: t0, Identity: chat}, Event{Name: "UserPromptSubmit"}, Record{Session: "p/1", State: Working, Event: "UserPromptSubmit", At: t1, Identity: chat}},
 		{"identity kept on a record with no state", Record{Session: "p/1", At: t0, Identity: chat}, Event{Name: "SessionStart"}, Record{Session: "p/1", State: Idle, Event: "SessionStart", At: t1, Identity: chat}},
 	}
@@ -145,7 +128,6 @@ func TestApplyChanges(t *testing.T) {
 	rec = Apply("p/1", rec, Event{Name: "PreToolUse"}, at(2))
 	rec = Apply("p/1", rec, Event{Name: "Notification", NotificationType: "permission_prompt"}, at(3))
 	rec = Apply("p/1", rec, Event{Name: "Stop"}, at(4))
-	rec = Apply("p/1", rec, Event{Name: "Notification", NotificationType: "idle_prompt"}, at(5))
 	want := []Change{{Idle, ms(0)}, {Working, ms(1)}, {Waiting, ms(3)}, {Idle, ms(4)}}
 	if !reflect.DeepEqual(rec.Changes, want) {
 		t.Errorf("changes = %+v, want a change only when the state changes: %+v", rec.Changes, want)

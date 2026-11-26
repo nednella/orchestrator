@@ -2,7 +2,6 @@ package session
 
 import (
 	"cmp"
-	"strings"
 	"time"
 )
 
@@ -46,41 +45,15 @@ func Next(cur State, ev Event) State {
 	case "UserPromptSubmit", "PreToolUse", "PostToolUse":
 		return Working
 	case "Notification":
-		if isIdleReminder(ev) {
-			// A turn that ended in an error fires no Stop, so the reminder is what stops it showing as working.
-			if cur == Working {
-				return Idle
-			}
-			return cur
-		}
 		return Waiting
-	case "SessionEnd":
-		return Settled
 	}
 	return cur
 }
 
-// isIdleReminder spots the "waiting for your input" nudge Claude sends a while
-// after a turn ends.
-func isIdleReminder(ev Event) bool {
-	if ev.NotificationType != "" {
-		return ev.NotificationType == "idle_prompt"
-	}
-	return strings.Contains(strings.ToLower(ev.Message), "waiting for your input")
-}
-
 // Apply builds the record ev leaves on top of the previous record.
-// An idle reminder leaves the previous record alone unless the session was
-// working: then it is the sign that the turn is over.
 func Apply(name string, prev Record, ev Event, now time.Time) Record {
 	if prev.State == "" {
 		prev = Record{Session: name, State: Idle, Event: ev.Name, At: now, Identity: prev.Identity, Observed: prev.Observed}
-		if isIdleReminder(ev) {
-			prev.Changes = []Change{{State: Idle, At: now.UnixMilli()}}
-			return prev
-		}
-	} else if isIdleReminder(ev) && prev.State != Working {
-		return prev
 	}
 	if ev.Name == Init {
 		prev.At, prev.Cwd = now, cmp.Or(ev.Cwd, prev.Cwd)

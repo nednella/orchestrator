@@ -25,7 +25,6 @@ func TestWaitsAreRecorded(t *testing.T) {
 	})
 	time.Sleep(20 * time.Millisecond)
 	h.Observe(t, s.ID, "PreToolUse", `{"tool_name":"Edit","tool_input":{"file_path":"a.ts"}}`)
-	h.Observe(t, s.ID, "Notification", `{"message":"waiting for your input","notification_type":"idle_prompt"}`)
 	h.Observe(t, s.ID, "Notification", `{"message":"Claude needs your permission to use Edit","notification_type":"permission_prompt"}`)
 	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
 	h.Observe(t, s.ID, "Notification", `{"message":"pick one","notification_type":"elicitation_dialog"}`)

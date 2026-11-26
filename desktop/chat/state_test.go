@@ -105,7 +105,7 @@ func TestStateFollowsTheStream(t *testing.T) {
 		{192, chatlog.KindApproval, session.Waiting, "waiting at the permission of the call to be interrupted"},
 		{197, chatlog.KindToolResult, session.Working, "working at the interrupted call's result"},
 		{199, chatlog.KindTurnEnd, session.Idle, "idle at an interrupted turn, which has no Stop"},
-		{0, chatlog.KindExit, session.Settled, "asleep at the exit"},
+		{0, chatlog.KindExit, session.Idle, "idle at the exit: the row sleeps once tmux has lost the session"},
 	}
 	var rec session.Record
 	type point struct {

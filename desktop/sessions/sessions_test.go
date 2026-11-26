@@ -810,35 +810,21 @@ func TestWorkBesideTheTurnKeepsAThreadWorking(t *testing.T) {
 	}
 }
 
-func TestIdleReminders(t *testing.T) {
+func TestAFinishedTurnIsNoInterruption(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.NewSession("r", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	state := func() string { got, _ := h.Session(s.ID); return string(got.State) }
-	waits := func() int { st, _ := h.Stats(7, ""); return st.Total }
 
 	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"go"}`)
 	eventually(t, "working", func() bool { return state() == "working" })
-	replied := h.Rec.CountAttention("replied")
-	h.Observe(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
-	eventually(t, "a turn killed by an error to stop showing as working", func() bool { return state() == "idle" })
-	if h.Rec.CountAttention("replied") != replied || waits() != 0 {
-		t.Errorf("an idle reminder raised attention (%d) or opened a wait (%d)", h.Rec.CountAttention("replied")-replied, waits())
-	}
-
 	h.Observe(t, s.ID, "Notification", `{"message":"needs permission","notification_type":"permission_prompt"}`)
 	eventually(t, "waiting", func() bool { return state() == "waiting" })
-	h.Observe(t, s.ID, "Notification", `{"message":"Claude is waiting for your input","notification_type":"idle_prompt"}`)
-	time.Sleep(300 * time.Millisecond)
-	if state() != "waiting" {
-		t.Errorf("an idle reminder changed a waiting session to %s", state())
-	}
-
 	h.Observe(t, s.ID, "PostToolUse", `{"tool_name":"Edit"}`)
 	eventually(t, "working again", func() bool { return state() == "working" })
-	replied = h.Rec.CountAttention("replied")
+	replied := h.Rec.CountAttention("replied")
 	h.Observe(t, s.ID, "Stop", `{"last_assistant_message":"I fixed the test."}`)
 	eventually(t, "the reply", func() bool { return h.Rec.CountAttention("replied") > replied })
 	if st, _ := h.Stats(7, ""); st.Total != 1 || st.ByCause[0].Kind != "permission" {

@@ -33,6 +33,7 @@ type reader struct {
 // after the latest usage the event log holds for the session, so a restart reads again what was not recorded, and
 // counts nothing twice. A woken thread's count goes on under its one id from its first start.
 func (s *Sessions) countUsage(id, transcript, model string, record bool) {
+	s.usageReads.Add(1)
 	s.mu.Lock()
 	in, ok := s.infoOf(id)
 	if !ok {

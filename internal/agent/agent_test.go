@@ -252,9 +252,9 @@ func TestCheckInstalled(t *testing.T) {
 }
 
 func TestRegistryProvider(t *testing.T) {
-	got, err := Registry{Dirs: []string{"/d"}}.Provider()
-	if want := (Claude{ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); err != nil || !reflect.DeepEqual(got, want) {
-		t.Errorf("Provider() = %#v, %v, want %#v", got, err, want)
+	got := Registry{Dirs: []string{"/d"}}.Provider()
+	if want := (Claude{ConfigDir: claudeConfigDir(), Dirs: []string{"/d"}}); !reflect.DeepEqual(got, want) {
+		t.Errorf("Provider() = %#v, want %#v", got, want)
 	}
 }
 

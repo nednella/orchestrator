@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nednella/agentos/desktop/internal/media"
@@ -180,6 +181,7 @@ type Sessions struct {
 	found      []string                // the threads a Refresh took in as asleep, for slept to hear of once it ends
 	readers    map[string]*reader      // each session's transcript reader
 	spent      map[string]usage.Tokens // what each session's agent used
+	usageReads atomic.Int64            // how many times countUsage ran, which a test counts
 	held       map[string]int64        // the memory each live session held at the last sample
 	delivering map[string]bool         // the threads whose held prompts, or a message told to them, are being sent now
 	idling     map[string]bool         // the threads SettleIdle puts to sleep now: what they are told waits until they sleep
@@ -1232,18 +1234,18 @@ func (s *Sessions) madeWorktree(id string) string {
 
 // take folds a record read from the state file in, unless the app holds a later one. It needs mu.
 func (s *Sessions) take(rec session.Record) {
-	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
-		return
-	}
-	s.set(rec)
-}
-
-// set makes rec the record of its session, which is neither asleep nor deleted. It needs mu.
-func (s *Sessions) set(rec session.Record) {
 	if _, ended := s.ended[rec.Session]; ended || s.deleted[rec.Session] {
 		return
 	}
+	if prev, ok := s.records[rec.Session]; ok && !rec.At.After(prev.At) {
+		return
+	}
 	s.records[rec.Session] = rec
+	s.follow(rec)
+}
+
+// follow does what a record that is the thread's latest calls for: the branch, the PR and the usage. It needs mu.
+func (s *Sessions) follow(rec session.Record) {
 	s.followBranch(rec)
 	// Each event moves the row's cost. The event log gets a turn's usage once the turn is over, and the
 	// first refresh's usage at once: it catches up on turns while the app was closed.
@@ -1251,7 +1253,7 @@ func (s *Sessions) set(rec session.Record) {
 		if endsTurn(rec.Event) {
 			time.AfterFunc(stopSettle, func() { s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, true) })
 		} else {
-			go s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, rec.Event == "SessionEnd" || !s.loaded)
+			go s.countUsage(rec.Session, rec.Transcript, rec.AgentModel, !s.loaded)
 		}
 	}
 }
@@ -1872,10 +1874,7 @@ func titleFromPrompt(prompt string) string {
 // CreateThread starts a thread in the current project as Create does, with the owner's first message sent through the
 // same path and the owner's model, effort and access. A blank title is the first line of the prompt.
 func (s *Sessions) CreateThread(title string, o StartOptions) (Session, error) {
-	p, err := s.Provider()
-	if err != nil {
-		return Session{}, err
-	}
+	p := s.Provider()
 	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
 		return Session{}, err
 	}
@@ -1916,10 +1915,7 @@ const (
 // own, and its access.
 func (s *Sessions) CreateIssue(title, text string, issue int, action project.Action, labels []string, handover string, o StartOptions) (view Session, did IssueStart, err error) {
 	proj := s.Current()
-	p, err := s.Provider()
-	if err != nil {
-		return Session{}, Kept, err
-	}
+	p := s.Provider()
 	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
 		return Session{}, Kept, err
 	}
@@ -2040,10 +2036,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 		return fmt.Errorf("Thread %d is being cleaned up; wake it when that ends", n)
 	}
 
-	p, err := s.Provider()
-	if err != nil {
-		return err
-	}
+	p := s.Provider()
 	if err := agent.CheckInstalled(p); err != nil {
 		return err
 	}
@@ -2136,10 +2129,8 @@ func (s *Sessions) CreateChild(ctx context.Context, o ChildOptions) (Session, er
 // and its parent's title. It holds childMu, so two delegations at once cannot both pass the limits, and the parent's
 // access cannot change between the check and the start.
 func (s *Sessions) startChild(ctx context.Context, o ChildOptions) (Session, string, error) {
-	p, err := s.Provider()
-	if err != nil {
-		return Session{}, "", err
-	}
+	p := s.Provider()
+	var err error
 	if err := p.ValidModel(o.Model.Model, o.Model.Effort); err != nil {
 		return Session{}, "", err
 	}
@@ -2379,7 +2370,7 @@ func (s *Sessions) titleOf(id string) string {
 }
 
 // Provider is the provider every session starts with.
-func (s *Sessions) Provider() (agent.Provider, error) { return s.agents.Provider() }
+func (s *Sessions) Provider() agent.Provider { return s.agents.Provider() }
 
 // createForIssue starts a thread for the issue, in place or where placeFor says, unless the project has a live one for
 // it, which it names, or a settled one, which it wakes with the handover and gives text to, and names.
@@ -2447,10 +2438,8 @@ func (s *Sessions) createIn(proj project.Project, title, text string, send bool,
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
-	p, err := s.Provider()
-	if err != nil {
-		return Session{}, err
-	}
+	p := s.Provider()
+	var err error
 	if err := agent.CheckInstalled(p); err != nil {
 		return Session{}, err
 	}
@@ -2499,10 +2488,7 @@ func (s *Sessions) DefaultModel(model string) project.Model {
 	if proj.Dir == "" {
 		return project.Model{}
 	}
-	p, err := s.Provider()
-	if err != nil {
-		return project.Model{}
-	}
+	p := s.Provider()
 	return fill(p, proj.Dir, project.Model{Model: model})
 }
 
@@ -4101,11 +4087,14 @@ func (s *Sessions) Observe(id string, evs ...session.Event) {
 		}
 	}
 	if changed {
+		// A catch-up on many events looks at the branch and reads the usage once, for the last of them.
+		s.follow(s.records[id])
 		s.sync()
 	}
 }
 
-// observe takes in one change of the thread's state. It says whether the thread's record changed. It needs mu.
+// observe takes in one change of the thread's state, apart from what follows from the record. It says whether the
+// thread's record changed. It needs mu.
 func (s *Sessions) observe(id string, ev session.Event) bool {
 	if _, ended := s.ended[id]; ended || s.deleted[id] {
 		return false
@@ -4157,16 +4146,13 @@ func (s *Sessions) observe(id string, ev session.Event) bool {
 	if ev.Name == "UserPromptSubmit" {
 		s.record(id, activity.Event{At: rec.At.UnixMilli(), Kind: activity.Prompt})
 	}
-	s.set(rec)
+	s.records[id] = rec
 	return true
 }
 
 // TranscriptPath is the file the agent writes the conversation to, for an agent started in the folder origin.
 func (s *Sessions) TranscriptPath(origin, conversation string) string {
-	p, err := s.Provider()
-	if err != nil {
-		return ""
-	}
+	p := s.Provider()
 	return p.Transcript(origin, conversation)
 }
 

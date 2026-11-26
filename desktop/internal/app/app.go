@@ -230,11 +230,7 @@ func (a *App) followConfig(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		p, err := a.sessions.Provider()
-		if err == nil {
-			err = agent.CheckInstalled(p)
-		}
-		if err != nil {
+		if err := agent.CheckInstalled(a.sessions.Provider()); err != nil {
 			a.warn.Report("agent", err.Error())
 		} else {
 			a.warn.Clear("agent")

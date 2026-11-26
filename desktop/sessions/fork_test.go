@@ -11,16 +11,29 @@ import (
 
 	"github.com/nednella/agentos/desktop/internal/apptest"
 	"github.com/nednella/agentos/desktop/sessions"
+	"github.com/nednella/agentos/internal/agent"
 	"github.com/nednella/agentos/internal/chat"
 	"github.com/nednella/agentos/internal/project"
 	"github.com/nednella/agentos/internal/prompts"
 	"github.com/nednella/agentos/internal/session"
 )
 
-// withConversation tells the app, as Claude's hook does, that the thread's conversation is abc.
+// withConversation tells the app, as Claude's hook did, that the thread's conversation is abc, and gives the
+// conversation the stand-in claude's next init names a transcript, as Claude writes it at its first prompt.
 func withConversation(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
 	h.Observe(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, writtenTranscript(t)))
+	if ch, err := h.Sessions().ChatOf(id); err == nil {
+		if folder, err := filepath.EvalSymlinks(ch.Dir); err == nil {
+			standIn := agent.Claude{ConfigDir: os.Getenv("CLAUDE_CONFIG_DIR")}.Transcript(folder, "fake-session")
+			if err := os.MkdirAll(filepath.Dir(standIn), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(standIn, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	eventually(t, "the thread's conversation", func() bool { got, _ := h.Session(id); return got.State == "idle" })
 }
 

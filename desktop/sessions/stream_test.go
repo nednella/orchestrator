@@ -131,3 +131,90 @@ func TestRestartObservesNoEventTwice(t *testing.T) {
 		t.Errorf("state = %s, want idle", got)
 	}
 }
+
+// afterStart waits until the thread's follower has taken in its start, and gives a time after it.
+func afterStart(t *testing.T, h *apptest.Harness, id string) time.Time {
+	t.Helper()
+	eventually(t, "the thread's start taken in", func() bool {
+		rec, err := bus.ReadState(h.State, id)
+		return err == nil && rec.Observed > 0
+	})
+	time.Sleep(50 * time.Millisecond)
+	return time.Now()
+}
+
+// observe gives the thread the events as its follower does.
+func observe(h *apptest.Harness, id string, evs ...session.Event) { h.Sessions().Observe(id, evs...) }
+
+func TestAnEventOlderThanTheRecordChangesNothing(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := afterStart(t, h, s.ID)
+	observe(h, s.ID, session.Event{Name: "UserPromptSubmit", Seq: 100, At: at})
+	observe(h, s.ID, session.Event{Name: "Stop", Seq: 101, At: at.Add(10 * time.Millisecond)})
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+
+	// A tool call the log dates before the turn's end comes late: it must not make the thread work again.
+	observe(h, s.ID, session.Event{Name: "PreToolUse", Seq: 102, At: at.Add(5 * time.Millisecond), Tool: "Bash"})
+	rec, err := bus.ReadState(h.State, s.ID)
+	if err != nil || rec.Event != "Stop" || rec.State != session.Idle || rec.Observed != 101 || stateOf(h, s.ID) != "idle" {
+		t.Errorf("record = %+v, %v, row %s; want the Stop's, idle, and the seq 101", rec, err, stateOf(h, s.ID))
+	}
+	// One at the same time as the latest is taken in.
+	observe(h, s.ID, session.Event{Name: "UserPromptSubmit", Seq: 103, At: at.Add(10 * time.Millisecond)})
+	if got := stateOf(h, s.ID); got != "working" {
+		t.Errorf("state = %s after an event at the record's time, want working", got)
+	}
+}
+
+func TestAnEventWithNoSeqIsTakenInAndTakesNoneBack(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := afterStart(t, h, s.ID)
+	observe(h, s.ID, session.Event{Name: "UserPromptSubmit", Seq: 100, At: at})
+	observe(h, s.ID, session.Event{Name: "Stop", Seq: 101, At: at.Add(10 * time.Millisecond)})
+	eventually(t, "idle", func() bool { return stateOf(h, s.ID) == "idle" })
+
+	time.Sleep(50 * time.Millisecond) // an event with no time is dated now, which must come after the Stop
+	observe(h, s.ID, session.Event{Name: "PreToolUse", Tool: "Edit"})
+	eventually(t, "working at an event with no seq and no time", func() bool { return stateOf(h, s.ID) == "working" })
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Observed != 101 || rec.Tool != "Edit" {
+		t.Errorf("record = %+v, %v; want the seq 101 kept and the tool", rec, err)
+	}
+	// An event the record holds already, by its seq, changes nothing.
+	observe(h, s.ID, session.Event{Name: "Notification", NotificationType: "permission_prompt", Seq: 101, At: time.Now()})
+	if got := stateOf(h, s.ID); got != "working" {
+		t.Errorf("state = %s after an event the record holds, want working", got)
+	}
+}
+
+func TestABatchOfEventsReadsUsageOnce(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.Sessions().Create("work", "", false, 0, session.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transcript := writtenTranscript(t)
+	at := afterStart(t, h, s.ID)
+	batch := []session.Event{{Name: "UserPromptSubmit", Seq: 200, At: at}, {Name: session.Init, Seq: 201, At: at, Conversation: "c1", Transcript: transcript}}
+	for i := range 6 {
+		batch = append(batch, session.Event{Name: "PreToolUse", Seq: int64(202 + 2*i), At: at.Add(time.Duration(i) * time.Millisecond), Tool: "Bash"},
+			session.Event{Name: "PostToolUse", Seq: int64(203 + 2*i), At: at.Add(time.Duration(i) * time.Millisecond), Tool: "Bash"})
+	}
+	before := h.Sessions().UsageReads()
+	observe(h, s.ID, batch...)
+	eventually(t, "the usage read", func() bool { return h.Sessions().UsageReads() > before })
+	time.Sleep(300 * time.Millisecond)
+	if got := h.Sessions().UsageReads() - before; got != 1 {
+		t.Errorf("%d events read the usage %d times, want once", len(batch), got)
+	}
+	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Observed != int64(213) || rec.Transcript != transcript {
+		t.Errorf("record = %+v, %v; want every event of the batch taken in", rec, err)
+	}
+}
