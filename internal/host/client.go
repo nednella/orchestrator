@@ -33,8 +33,8 @@ type Refused struct {
 func (r *Refused) Error() string { return r.Reason }
 
 // Message is what the user sends: text and the paths of images to go before it. From is the thread that sends it, ""
-// for the owner or the app. Body is a thread's bare words, which Text frames for Claude, and Result marks a child's
-// result; the log keeps both beside the text.
+// for the owner or the app. Body is the bare words that Text frames for Claude, a thread's or the owner's with side
+// chats attached, and Result marks a child's result; the log keeps both beside the text.
 type Message struct {
 	Text   string
 	Files  []string

@@ -184,9 +184,11 @@ func (folderThread) FlagRefused(string)                             {}
 func (folderThread) NextTurn(string)                                {}
 func (folderThread) Wake(string) (sessions.Chat, error)             { return sessions.Chat{}, nil }
 func (folderThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
+func (folderThread) Title(string) string                            { return "" }
 func (folderThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
 func (folderThread) DeleteSideChat(string, bool) error              { return nil }
 func (folderThread) NameSideChat(string, string) error              { return nil }
+func (folderThread) SideChatsOf(string) []string                    { return nil }
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()

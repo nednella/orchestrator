@@ -277,3 +277,54 @@ func TestParentsEndDeletesItsSideChats(t *testing.T) {
 		}
 	})
 }
+
+func TestAttachedSideChatGoesWithTheMessage(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	parent := talkedThread(t, h)
+	side, err := h.SideChatStart(parent.ID, "Is the cache safe?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the side chat's answer", func() bool {
+		got, _ := h.Session(side.ID)
+		return got.State == "idle" && got.Title == "Is the cache safe?"
+	})
+	eventually(t, "the answer in the side chat's log", func() bool {
+		chatLog, _ := hostFiles(h, side.ID)
+		events, _ := chat.ReadLog(chatLog, 0)
+		return slices.ContainsFunc(events, func(e chat.Event) bool { return e.Kind == chat.KindTurnEnd && e.Seq > 6 })
+	})
+
+	if _, err := h.ChatSendWith(parent.ID, "Go on with that in mind", side.ID); err != nil {
+		t.Fatal(err)
+	}
+	var sent string
+	eventually(t, "the message reaches the parent", func() bool {
+		for _, line := range h.Stdin(t, parent.ID) {
+			if strings.Contains(line, "Go on with that in mind") {
+				sent = line
+				return true
+			}
+		}
+		return false
+	})
+	for _, want := range []string{`side chat \"Is the cache safe?\"`, `Question:\nIs the cache safe?`, `Answer:\ndone`} {
+		if !strings.Contains(sent, want) {
+			t.Errorf("the parent got %s, without %q", sent, want)
+		}
+	}
+	chatLog, _ := hostFiles(h, parent.ID)
+	events, err := chat.ReadLog(chatLog, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.IndexFunc(events, func(e chat.Event) bool { return e.Kind == chat.KindUser && e.Body == "Go on with that in mind" }); i < 0 {
+		t.Errorf("the parent's chat keeps no message with the bare words: %q", kindsAndTexts(events))
+	}
+
+	other := talkedThread(t, h)
+	if _, err := h.ChatSendWith(other.ID, "Use this", side.ID); err == nil {
+		t.Error("another thread's side chat went with a message")
+	}
+}

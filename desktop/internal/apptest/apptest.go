@@ -1393,7 +1393,12 @@ func (h *Harness) Limits() limits.Limits                 { return h.limits.Limit
 func (h *Harness) RefreshLimits() (limits.Limits, error) { return h.limits.RefreshLimits() }
 
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
-	return h.chat.ChatSend(id, text, images)
+	return h.chat.ChatSend(id, text, images, nil)
+}
+
+// ChatSendWith is ChatSend with side chats of the thread attached.
+func (h *Harness) ChatSendWith(id, text string, sideChats ...string) (chat.Sent, error) {
+	return h.chat.ChatSend(id, text, nil, sideChats)
 }
 
 func (h *Harness) SideChatStart(parent, text string, images ...chat.Image) (sessions.Session, error) {

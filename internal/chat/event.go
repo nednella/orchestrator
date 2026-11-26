@@ -119,8 +119,8 @@ type Event struct {
 	// From is the thread that sent a user or queued message, or that asked for an interrupt; "" for the owner or the
 	// app.
 	From string `json:"from,omitempty"`
-	// Body is the bare words of a user or queued message from a thread, which Text frames for Claude, and Result marks
-	// one that is a child's result.
+	// Body is the bare words of a user or queued message that Text frames for Claude, one from a thread or one that
+	// carries side chats, and Result marks one that is a child's result.
 	Body   string `json:"body,omitempty"`
 	Result bool   `json:"result,omitempty"`
 	// Cwd, Origin and Model are an init's: the folder Claude works in, the folder it started in, which names its

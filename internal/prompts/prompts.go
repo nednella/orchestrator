@@ -3,6 +3,7 @@
 package prompts
 
 import (
+	"cmp"
 	_ "embed"
 	"strconv"
 	"strings"
@@ -51,6 +52,12 @@ var (
 	childNoReply string
 	//go:embed handover.md
 	handover string
+	//go:embed side-chat.md
+	sideChat string
+	//go:embed side-chat-turn.md
+	sideChatTurn string
+	//go:embed side-chat-no-answer.md
+	sideChatNoAnswer string
 	//go:embed denied.md
 	denied string
 	//go:embed denied-no-reason.md
@@ -149,6 +156,20 @@ func ChildDone(title, id, outcome, result string, later, cut bool) string {
 // end the quotes it stands in.
 func quotable(title string) string {
 	return strings.ReplaceAll(strings.Join(strings.Fields(title), " "), `"`, "'")
+}
+
+// SideChatTurn is one question of a side chat and the answer to it, "" while it has none.
+type SideChatTurn struct{ Question, Answer string }
+
+// SideChat is the block a message carries when the owner attaches the side chat called title to it: its questions and
+// answers in order.
+func SideChat(title string, turns []SideChatTurn) string {
+	exchange := make([]string, len(turns))
+	for i, t := range turns {
+		answer := cmp.Or(t.Answer, body(sideChatNoAnswer))
+		exchange[i] = strings.NewReplacer("{question}", t.Question, "{answer}", answer).Replace(body(sideChatTurn))
+	}
+	return strings.NewReplacer("{title}", quotable(title), "{exchange}", strings.Join(exchange, "\n\n")).Replace(body(sideChat))
 }
 
 // Handover ends the system prompt of a thread that another thread asked for, with the context that thread gave.

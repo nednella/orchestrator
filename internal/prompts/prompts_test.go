@@ -35,6 +35,7 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"child done", ChildDone("{title}", "{id}", "{outcome}", "{result}", false, false), "ffb409488534b8efa4f2ff1cc348fe9b1f2931242082a4f95e37ad445865429a"},
 		{"child later", ChildDone("{title}", "{id}", "{outcome}", "{result}", true, false), "15bd641bbdaa4ae24ad04deb33cbcbaa0936ca7725666162af5c019af5793711"},
 		{"child cut", ChildDone("{title}", "{id}", "{outcome}", "", false, true), "684e2c488b02e6f98320414d950ec8b4372071ef27ab02910981c87da4dbb976"},
+		{"side chat", SideChat("{title}", []SideChatTurn{{"{question}", "{answer}"}, {"{question}", ""}}), "52b509a9a53ccf709f363c434c0b9aee3b493aa8932cd4546e562ec02448284f"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,6 +62,15 @@ func TestForkNamesItsSource(t *testing.T) {
 	got := Fork("Fix the login")
 	if !strings.Contains(got, `fork of the thread "Fix the login"`) || strings.Contains(got, "{title}") || !strings.Contains(got, "never call `track`") {
 		t.Errorf("Fork = %q", got)
+	}
+}
+
+func TestSideChatHoldsEachQuestionAndAnswer(t *testing.T) {
+	got := SideChat("Ask \"why\"\nnow", []SideChatTurn{{"Why {answer}?", "Because."}, {"And then?", ""}})
+	for _, want := range []string{`side chat "Ask 'why' now"`, "Question:\nWhy {answer}?\n\nAnswer:\nBecause.", "Question:\nAnd then?\n\nAnswer:\n(no answer yet)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("SideChat = %q, without %q", got, want)
+		}
 	}
 }
 

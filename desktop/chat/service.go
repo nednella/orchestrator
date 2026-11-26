@@ -1,11 +1,13 @@
 package chat
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/sessions"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 // hostStarting is how long a message waits for the host of a thread that is still starting to listen.
@@ -73,13 +76,19 @@ type Sent struct {
 
 // ChatSend gives the message, its images saved in the thread's media folder, to Claude: as the user's at once when the
 // thread is idle, as queued while a turn runs, and as the reason to deny each approval that waits. A settled thread is
-// woken for it. A side chat's first message names it.
-func (v *Service) ChatSend(id, text string, images []Image) (Sent, error) {
-	return v.send(id, text, images, hostStarting)
+// woken for it. Each of sideChats, side chats of the thread, goes with the message as one block of its questions and
+// answers, which Claude reads after the message's words; the chat shows the words alone. A side chat's first message
+// names it.
+func (v *Service) ChatSend(id, text string, images []Image, sideChats []string) (Sent, error) {
+	return v.send(id, text, images, sideChats, hostStarting)
 }
 
 // send is ChatSend with wait as the longest the message waits for the thread's host to listen.
-func (v *Service) send(id, text string, images []Image, wait time.Duration) (Sent, error) {
+func (v *Service) send(id, text string, images []Image, sideChats []string, wait time.Duration) (Sent, error) {
+	attached, err := v.sideChatsText(id, sideChats)
+	if err != nil {
+		return Sent{}, err
+	}
 	ch, err := v.awake(id)
 	if err != nil {
 		return Sent{}, err
@@ -92,9 +101,13 @@ func (v *Service) send(id, text string, images []Image, wait time.Duration) (Sen
 	ready, cancel := context.WithTimeout(ctx, wait)
 	err = host.Ready(ready, ch.Socket)
 	cancel()
+	m := host.Message{Text: text, Files: files}
+	if attached != "" {
+		m.Text, m.Body = strings.Join(slices.DeleteFunc([]string{text, attached}, func(s string) bool { return s == "" }), "\n\n"), text
+	}
 	var msg string
 	if err == nil {
-		msg, err = host.SendMessage(ctx, ch.Socket, host.Message{Text: text, Files: files})
+		msg, err = host.SendMessage(ctx, ch.Socket, m)
 	}
 	if errors.Is(err, host.ErrTooOldForImages) {
 		return Sent{Notice: "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."}, nil
@@ -116,7 +129,7 @@ func (v *Service) SideChatStart(parent, text string, images []Image) (sessions.S
 	if err != nil || strings.TrimSpace(text) == "" && len(images) == 0 {
 		return side, err
 	}
-	if _, err := v.send(side.ID, text, images, sideChatReady); err != nil {
+	if _, err := v.send(side.ID, text, images, nil, sideChatReady); err != nil {
 		if err := v.c.threads.DeleteSideChat(side.ID, false); err != nil {
 			log.Printf("orchestrator: removing side chat %s, which did not take its first message: %v", side.ID, err)
 		}
@@ -127,6 +140,57 @@ func (v *Service) SideChatStart(parent, text string, images []Image) (sessions.S
 
 // sideChatReady is how long a new side chat's first message waits for its host to listen.
 const sideChatReady = 10 * time.Second
+
+// sideChatsText is the block of the side chats ids of the thread id that a message carries, "" for none. An id that is
+// not a side chat of the thread refuses the message.
+func (v *Service) sideChatsText(id string, ids []string) (string, error) {
+	mine := v.c.threads.SideChatsOf(id)
+	var blocks []string
+	for _, side := range ids {
+		if !slices.Contains(mine, side) {
+			return "", fmt.Errorf("%s is not a side chat of this thread", side)
+		}
+		ch, err := v.c.threads.ChatOf(side)
+		if err != nil {
+			return "", err
+		}
+		events, err := chatlog.ReadLog(ch.Log, 0)
+		if err != nil {
+			log.Printf("orchestrator: reading the chat log of %s: %v", side, err)
+			return "", errors.New("Could not read the side chat")
+		}
+		blocks = append(blocks, prompts.SideChat(v.c.threads.Title(side), sideChatTurns(events)))
+	}
+	return strings.Join(blocks, "\n\n"), nil
+}
+
+// sideChatTurns are the questions asked in a side chat and its answers: what came after its host first started, since
+// the chat it was forked with is its parent's. An answer is the side chat's own replies to the question, joined.
+func sideChatTurns(events []chatlog.Event) []prompts.SideChatTurn {
+	started := slices.IndexFunc(events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindStart })
+	if started < 0 {
+		return nil
+	}
+	var turns []prompts.SideChatTurn
+	var answer []string
+	end := func() {
+		if len(turns) > 0 {
+			turns[len(turns)-1].Answer = strings.Join(answer, "\n\n")
+		}
+		answer = nil
+	}
+	for _, e := range events[started:] {
+		switch {
+		case e.Kind == chatlog.KindUser && e.Parent == "":
+			end()
+			turns = append(turns, prompts.SideChatTurn{Question: cmp.Or(e.Body, strings.TrimPrefix(e.Text, sessions.AppPrompt))})
+		case e.Kind == chatlog.KindMessage && e.Agent == "" && len(turns) > 0 && strings.TrimSpace(e.Text) != "":
+			answer = append(answer, e.Text)
+		}
+	}
+	end()
+	return turns
+}
 
 // ChatInterrupt stops the thread's turn.
 func (v *Service) ChatInterrupt(id string) error {

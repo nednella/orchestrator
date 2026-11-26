@@ -36,9 +36,11 @@ func (o oneThread) FlagRefused(string)                             {}
 func (o oneThread) NextTurn(string)                                {}
 func (o oneThread) Wake(string) (sessions.Chat, error)             { return o.chat, nil }
 func (o oneThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
+func (o oneThread) Title(string) string                            { return "" }
 func (o oneThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
 func (o oneThread) DeleteSideChat(string, bool) error              { return nil }
 func (o oneThread) NameSideChat(string, string) error              { return nil }
+func (o oneThread) SideChatsOf(string) []string                    { return nil }
 
 // noProject knows no project.
 func noProject(string) string { return "" }
@@ -345,7 +347,7 @@ func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 
 	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
-	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}})
+	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}}, nil)
 	if want := "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."; err != nil || sent.Notice != want {
 		t.Errorf("ChatSend = %+v, %v; want the notice %q", sent, err, want)
 	}

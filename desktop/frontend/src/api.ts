@@ -57,7 +57,7 @@ type Backend = {
   ChatHistory(id: string, after: number): Promise<ChatEvent[]>
   ChatWatch(id: string): Promise<void>
   ChatUnwatch(id: string): Promise<void>
-  ChatSend(id: string, text: string, images: ChatImage[]): Promise<ChatSent>
+  ChatSend(id: string, text: string, images: ChatImage[], sideChats: string[]): Promise<ChatSent>
   ChatInterrupt(id: string): Promise<void>
   ChatSendNow(id: string, message: string): Promise<void>
   ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
@@ -234,7 +234,7 @@ export const api = {
   chatHistory: (id: string, after = 0) => backend.ChatHistory(id, after),
   chatWatch: (id: string) => backend.ChatWatch(id),
   chatUnwatch: (id: string) => backend.ChatUnwatch(id),
-  chatSend: (id: string, text: string, images: ChatImage[] = []) => backend.ChatSend(id, text, images),
+  chatSend: (id: string, text: string, images: ChatImage[] = [], sideChats: string[] = []) => backend.ChatSend(id, text, images, sideChats),
   // The mock keeps the images it was sent in memory and has its own address for each.
   chatMediaURL: (thread: string, path: string) => mock?.mediaURL(path) ?? chatMediaURL(thread, path),
   chatInterrupt: (id: string) => backend.ChatInterrupt(id),
