@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
+import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
 import { agentsTabShown } from './chatAgents'
 import { answeredLate } from './chatQuestions'
@@ -143,6 +144,9 @@ type AgentosActions = {
   setPromptSend(mode: PromptSend): Promise<void>
   setBrowserEnabled(on: boolean): Promise<void>
   setDigestSchedule(schedule: DigestSchedule): Promise<void>
+  // setThreadAccess also gives the Home composer the new default.
+  setThreadPlace(place: Place): Promise<void>
+  setThreadAccess(access: Access): Promise<void>
   setComposerMode(mode: ComposerMode): void
   setComposerAccess(access: Access): void
   setIssueFilter(query: string): void
@@ -266,7 +270,7 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
-  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '', dataDirFixed: true })
+  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true })
   const [shellIds, setShellIds] = useState<string[]>([])
   const [pickedShell, setPickedShell] = useState('')
   const shellId = shellIds.includes(pickedShell) ? pickedShell : (shellIds[0] ?? '')
@@ -489,7 +493,11 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
     report(() => enterFrom(api.snapshot()))
     report(async () => setAwake(await api.awake()))
     report(async () => setMemory(await api.memory()))
-    report(async () => setSettings(await api.settings()))
+    report(async () => {
+      const loaded = await api.settings()
+      setSettings(loaded)
+      setComposerAccess(newThreadAccess(loaded.threadAccess))
+    })
     report(async () => {
       const notes = await api.patchNotes()
       if (notes.length === 0) return
@@ -964,6 +972,14 @@ export function AgentosProvider({ children }: AgentosProviderProps) {
       },
       async setDigestSchedule(schedule) {
         setSettings(await api.setDigestSchedule(schedule))
+      },
+      async setThreadPlace(place) {
+        setSettings(await api.setThreadPlace(place))
+      },
+      async setThreadAccess(access) {
+        const saved = await api.setThreadAccess(access)
+        setSettings(saved)
+        setComposerAccess(newThreadAccess(saved.threadAccess))
       },
       setComposerMode(mode) {
         setComposerModeState(mode)

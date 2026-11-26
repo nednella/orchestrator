@@ -991,7 +991,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', dataDir: '~/.local/share/agentos', dataDirFixed: false }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/agentos', dataDirFixed: false }
 
   const issueRefreshes = { count: 0 }
   Object.assign(window, { issueRefreshes })
@@ -1467,6 +1467,16 @@ export function createMock(params: URLSearchParams) {
     },
     SetDigestSchedule: async (digestSchedule: DigestSchedule) => {
       settings = { ...settings, digestSchedule }
+      return settings
+    },
+    SetThreadPlace: async (threadPlace: Place | '') => {
+      if (threadPlace && !['worktree', 'project'].includes(threadPlace)) throw `place must be worktree or project, not "${threadPlace}"`
+      settings = { ...settings, threadPlace }
+      return settings
+    },
+    SetThreadAccess: async (threadAccess: Access | '') => {
+      if (threadAccess && !['read', 'supervised', 'full'].includes(threadAccess)) throw `access must be read, supervised or full, not "${threadAccess}"`
+      settings = { ...settings, threadAccess }
       return settings
     },
     PickDataDir: async () => delay({ dir: '~/Library/Mobile Documents/com~apple~CloudDocs/agentos', empty: !flags.fullDataDir }),

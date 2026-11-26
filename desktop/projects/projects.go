@@ -13,6 +13,7 @@ import (
 
 	"github.com/nednella/agentos/internal/atomicfile"
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // NewRegistry keeps cfg, read from path, and saves it to path whenever a project is added or removed.
@@ -135,6 +136,36 @@ func (r *Registry) TextScale() float64 {
 func (r *Registry) SetTextScale(scale float64) error {
 	return r.edit(func(c *project.Config) error {
 		c.TextScale = scale
+		return nil
+	})
+}
+
+// ThreadPlace is where a new thread with no issue starts, "" when it is not set.
+func (r *Registry) ThreadPlace() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.ThreadPlace
+}
+
+// SetThreadPlace saves where a new thread with no issue starts; "" unsets it.
+func (r *Registry) SetThreadPlace(place string) error {
+	return r.edit(func(c *project.Config) error {
+		c.ThreadPlace = place
+		return nil
+	})
+}
+
+// ThreadAccess is the access a new thread starts with, "" when it is not set.
+func (r *Registry) ThreadAccess() session.Access {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.ThreadAccess
+}
+
+// SetThreadAccess saves the access a new thread starts with; "" unsets it.
+func (r *Registry) SetThreadAccess(access session.Access) error {
+	return r.edit(func(c *project.Config) error {
+		c.ThreadAccess = access
 		return nil
 	})
 }

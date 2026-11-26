@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nednella/agentos/internal/atomicfile"
+	"github.com/nednella/agentos/internal/session"
 )
 
 // DefaultWorktreeCommand makes a worktree on a new branch cut from the base.
@@ -60,14 +61,27 @@ func (p Project) Present() bool {
 
 // Config is the optional ~/.config/agentos/config.yaml.
 type Config struct {
-	DataDir    string    `yaml:"data_dir,omitempty"`        // where notes, stats and digests live; may sit in a synced folder
-	KeepAwake  *bool     `yaml:"keep_mac_awake,omitempty"`  // hold off idle sleep while a session works; on unless false
-	Theme      string    `yaml:"app_theme,omitempty"`       // light or dark; unset follows the system
-	ThemeDark  string    `yaml:"app_theme_dark,omitempty"`  // the dark theme: black (default) or violet
-	ThemeLight string    `yaml:"app_theme_light,omitempty"` // the light theme: light (default)
-	TextScale  float64   `yaml:"app_text_scale,omitempty"`  // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
-	EditorApp  string    `yaml:"editor_app,omitempty"`      // the macOS app that opens a thread's folder; unset is DefaultEditorApp
-	Projects   []Project `yaml:"projects"`
+	DataDir      string         `yaml:"data_dir,omitempty"`          // where notes, stats and digests live; may sit in a synced folder
+	KeepAwake    *bool          `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a session works; on unless false
+	Theme        string         `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
+	ThemeDark    string         `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default) or violet
+	ThemeLight   string         `yaml:"app_theme_light,omitempty"`   // the light theme: light (default)
+	TextScale    float64        `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
+	EditorApp    string         `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
+	ThreadPlace  string         `yaml:"new_thread_place,omitempty"`  // where a new thread with no issue starts: worktree or project; unset is worktree
+	ThreadAccess session.Access `yaml:"new_thread_access,omitempty"` // the access a new thread starts with: read, supervised or full; unset is supervised
+	Projects     []Project      `yaml:"projects"`
+}
+
+// ThreadPlaces are the values of Config.ThreadPlace: a new worktree, or the project folder on its current branch.
+var ThreadPlaces = []string{"worktree", "project"}
+
+// CheckThreadPlace rejects a place that is not one of ThreadPlaces or "", which is unset.
+func CheckThreadPlace(place string) error {
+	if place != "" && !slices.Contains(ThreadPlaces, place) {
+		return fmt.Errorf("place must be %s, not %q", strings.Join(ThreadPlaces, " or "), place)
+	}
+	return nil
 }
 
 // DefaultEditorApp is the editor that opens a thread's folder when the config names none.
@@ -154,6 +168,12 @@ func Load(path string) (Config, error) {
 		if err := CheckTextScale(cfg.TextScale); err != nil {
 			return Config{}, fmt.Errorf("%s: app_text_scale: %w", path, err)
 		}
+	}
+	if err := CheckThreadPlace(cfg.ThreadPlace); err != nil {
+		return Config{}, fmt.Errorf("%s: new_thread_place: %w", path, err)
+	}
+	if _, err := session.ParseAccess(string(cfg.ThreadAccess)); err != nil {
+		return Config{}, fmt.Errorf("%s: new_thread_access: %w", path, err)
 	}
 	for i, p := range cfg.Projects {
 		if p.Name == "" || p.Dir == "" {
@@ -246,6 +266,8 @@ func encode(path string, c Config) ([]byte, error) {
 	syncScalar(root, "app_theme_light", c.ThemeLight, nil)
 	syncScalar(root, "app_text_scale", formatScale(c.TextScale), nil)
 	syncScalar(root, "editor_app", c.EditorApp, nil)
+	syncScalar(root, "new_thread_place", c.ThreadPlace, nil)
+	syncScalar(root, "new_thread_access", string(c.ThreadAccess), nil)
 	syncScalar(root, "keep_mac_awake", formatBool(c.KeepAwake), nil)
 	if err := syncProjects(root, c.Projects); err != nil {
 		return nil, err

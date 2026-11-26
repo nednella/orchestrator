@@ -1354,6 +1354,14 @@ func (h *Harness) SetDigestSchedule(schedule string) (settings.Settings, error) 
 	return h.settings.SetDigestSchedule(schedule)
 }
 
+func (h *Harness) SetThreadPlace(place string) (settings.Settings, error) {
+	return h.settings.SetThreadPlace(place)
+}
+
+func (h *Harness) SetThreadAccess(access string) (settings.Settings, error) {
+	return h.settings.SetThreadAccess(access)
+}
+
 func (h *Harness) PickDataDir() (settings.DataDirChoice, error) { return h.settings.PickDataDir() }
 
 func (h *Harness) SetDataDir(dir string, withData bool) error {

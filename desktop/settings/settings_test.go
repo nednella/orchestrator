@@ -194,6 +194,55 @@ func TestDigestSchedule(t *testing.T) {
 	}
 }
 
+func TestThreadPlaceAndAccessAreSaved(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{TopExtra: "# mine\n"})
+	if got := h.Settings(); got.ThreadPlace != "" || got.ThreadAccess != "" {
+		t.Fatalf("defaults = %q, %q, want both unset", got.ThreadPlace, got.ThreadAccess)
+	}
+	if got, err := h.SetThreadPlace("project"); err != nil || got.ThreadPlace != "project" {
+		t.Fatalf("SetThreadPlace(project) = %+v, %v", got, err)
+	}
+	if got, err := h.SetThreadAccess("read"); err != nil || got.ThreadAccess != "read" || got.ThreadPlace != "project" {
+		t.Fatalf("SetThreadAccess(read) = %+v, %v", got, err)
+	}
+	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# mine") || !strings.Contains(string(data), "new_thread_place: project") || !strings.Contains(string(data), "new_thread_access: read") {
+		t.Errorf("config lost its comment or a value:\n%s", data)
+	}
+	if got := h.Restart(t).Settings(); got.ThreadPlace != "project" || got.ThreadAccess != "read" {
+		t.Errorf("after restart = %q, %q", got.ThreadPlace, got.ThreadAccess)
+	}
+
+	if _, err := h.SetThreadPlace(""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := h.SetThreadAccess(""); err != nil || got.ThreadPlace != "" || got.ThreadAccess != "" {
+		t.Fatalf("unset = %+v, %v", got, err)
+	}
+	if data, _ := os.ReadFile(h.Conf); strings.Contains(string(data), "new_thread") {
+		t.Errorf("unset left a key in the file:\n%s", data)
+	}
+}
+
+func TestUnknownThreadPlaceIsRefused(t *testing.T) {
+	h := apptest.New(t)
+	if _, err := h.SetThreadPlace("worktree"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"branch", "Project", " worktree"} {
+		if _, err := h.SetThreadPlace(bad); err == nil {
+			t.Errorf("SetThreadPlace(%q) was accepted", bad)
+		}
+	}
+	for _, bad := range []string{"write", "Full", "bypassPermissions"} {
+		if _, err := h.SetThreadAccess(bad); err == nil {
+			t.Errorf("SetThreadAccess(%q) was accepted", bad)
+		}
+	}
+	if got := h.Settings(); got.ThreadPlace != "worktree" || got.ThreadAccess != "" {
+		t.Errorf("a refused value changed the settings to %q, %q", got.ThreadPlace, got.ThreadAccess)
+	}
+}
+
 func TestThemes(t *testing.T) {
 	h := apptest.New(t)
 	if got := h.Settings(); got.DarkTheme != "black" || got.LightTheme != "light" {

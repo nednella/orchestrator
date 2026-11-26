@@ -1,7 +1,11 @@
+import { FolderGit2, GitBranch } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useAgentos } from '../AgentosContext'
+import { ACCESSES, ACCESS_NAME, newThreadAccess } from '../access'
 import { useLayout } from '../LayoutContext'
-import type { CleanupMode, DarkTheme, DigestSchedule, ThemeSetting } from '../types'
+import { PLACE_LABEL, placeFor } from '../place'
+import type { CleanupMode, DarkTheme, DigestSchedule, Place, ThemeSetting } from '../types'
+import { AccessIcon } from './AccessIcon'
 import { DataDirRow } from './DataDirRow'
 import { Keycap } from './Keycap'
 import { Overlay } from './Overlay'
@@ -33,6 +37,13 @@ const SCHEDULES: { value: DigestSchedule; label: string }[] = [
   { value: 'off', label: 'Off' },
 ]
 
+const PLACES: { value: Place; label: string; icon: ReactNode }[] = [
+  { value: 'worktree', label: PLACE_LABEL.worktree, icon: <FolderGit2 size={14} aria-hidden="true" /> },
+  { value: 'project', label: PLACE_LABEL.project, icon: <GitBranch size={14} aria-hidden="true" /> },
+]
+
+const ACCESS_OPTIONS = ACCESSES.map((value) => ({ value, label: ACCESS_NAME[value], icon: <AccessIcon access={value} /> }))
+
 type SettingRowProps = { label: string; hint: string; children: ReactNode }
 
 function SettingRow({ label, hint, children }: SettingRowProps) {
@@ -48,7 +59,7 @@ function SettingRow({ label, hint, children }: SettingRowProps) {
 }
 
 export function SettingsPanel() {
-  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'report')
+  const { overlay, setOverlay, version, project, settings, setTheme, setThemes, setKeepAwake, setCleanup, setPromptSend, setBrowserEnabled, setDigestSchedule, setThreadPlace, setThreadAccess, report } = useAgentos('overlay', 'setOverlay', 'version', 'project', 'settings', 'setTheme', 'setThemes', 'setKeepAwake', 'setCleanup', 'setPromptSend', 'setBrowserEnabled', 'setDigestSchedule', 'setThreadPlace', 'setThreadAccess', 'report')
   const { scale, zoom } = useLayout()
   if (overlay !== 'settings') return null
 
@@ -87,6 +98,13 @@ export function SettingsPanel() {
         </SettingRow>
         <SettingRow label="Keep Mac awake" hint="Stops the Mac idle-sleeping while a session works. A project that sets its own in the config file keeps it.">
           <SegmentedControl label="Keep Mac awake" options={SWITCH} value={settings.keepAwake ? 'on' : 'off'} onChange={(value) => report(() => setKeepAwake(value === 'on'))} />
+        </SettingRow>
+        <h3 className="label mt-6 pb-1">New threads</h3>
+        <SettingRow label="New threads start in" hint="Where a new thread works.">
+          <SegmentedControl label="New threads start in" options={PLACES} value={placeFor(settings.threadPlace, false)} onChange={(value) => report(() => setThreadPlace(value))} />
+        </SettingRow>
+        <SettingRow label="Default access" hint="A thread can change it in the model menu.">
+          <SegmentedControl label="Default access" options={ACCESS_OPTIONS} value={newThreadAccess(settings.threadAccess)} onChange={(value) => report(() => setThreadAccess(value))} />
         </SettingRow>
         {project && (
           <>

@@ -413,6 +413,38 @@ func TestThemeKeysValidate(t *testing.T) {
 	}
 }
 
+func TestConfigReadsNewThreadDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	load := func(yaml string) (Config, error) {
+		if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	cfg, err := load("projects: []\n")
+	if err != nil || cfg.ThreadPlace != "" || cfg.ThreadAccess != "" {
+		t.Errorf("unset = %q, %q, %v", cfg.ThreadPlace, cfg.ThreadAccess, err)
+	}
+	cfg, err = load("new_thread_place: project # mine\nnew_thread_access: full\nprojects: []\n")
+	if err != nil || cfg.ThreadPlace != "project" || cfg.ThreadAccess != "full" {
+		t.Fatalf("set = %q, %q, %v", cfg.ThreadPlace, cfg.ThreadAccess, err)
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "new_thread_place: project # mine") || !strings.Contains(string(data), "new_thread_access: full") {
+		t.Errorf("saved config lost a key:\n%s", data)
+	}
+
+	if _, err := load("new_thread_place: elsewhere\n"); err == nil || !strings.Contains(err.Error(), "new_thread_place") {
+		t.Errorf("elsewhere: err = %v, want one naming new_thread_place", err)
+	}
+	if _, err := load("new_thread_access: root\n"); err == nil || !strings.Contains(err.Error(), "new_thread_access") {
+		t.Errorf("root: err = %v, want one naming new_thread_access", err)
+	}
+}
+
 func TestWorktreeCommandDefault(t *testing.T) {
 	for _, tt := range []struct{ name, set, want string }{
 		{"unset", "", DefaultWorktreeCommand},

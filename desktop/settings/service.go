@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nednella/agentos/internal/project"
+	"github.com/nednella/agentos/internal/session"
 )
 
 const (
@@ -32,6 +33,10 @@ type Store interface {
 	SetBrowserEnabled(projectKey string, on bool) error
 	DigestSchedule(projectKey string) string
 	SetDigestSchedule(projectKey, schedule string) error
+	ThreadPlace() string
+	SetThreadPlace(place string) error
+	ThreadAccess() session.Access
+	SetThreadAccess(access session.Access) error
 	SetDataDir(dir string) error
 }
 
@@ -42,17 +47,19 @@ type Current interface {
 
 // Settings is what the settings panel shows.
 type Settings struct {
-	Theme      string          `json:"theme"`          // system, light or dark
-	DarkTheme  string          `json:"darkTheme"`      // the named theme of the dark appearance: black or violet
-	LightTheme string          `json:"lightTheme"`     // the named theme of the light appearance: light
-	TextScale  float64         `json:"textScale"`      // a multiple of the default text size
-	KeepAwake  bool            `json:"keepAwake"`      // hold off idle sleep while a session works, for projects that do not say otherwise
-	Cleanup    project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
-	Prompt     string          `json:"promptSend"`     // the current project's: auto or manual
-	Browser    bool            `json:"browserEnabled"` // the current project's sessions get the browser and evidence commands
-	Digest     string          `json:"digestSchedule"` // the current project's: weekly or off
-	DataDir    string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
-	DataFixed  bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
+	Theme        string          `json:"theme"`          // system, light or dark
+	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black or violet
+	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light
+	TextScale    float64         `json:"textScale"`      // a multiple of the default text size
+	KeepAwake    bool            `json:"keepAwake"`      // hold off idle sleep while a session works, for projects that do not say otherwise
+	Cleanup      project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
+	Prompt       string          `json:"promptSend"`     // the current project's: auto or manual
+	Browser      bool            `json:"browserEnabled"` // the current project's sessions get the browser and evidence commands
+	Digest       string          `json:"digestSchedule"` // the current project's: weekly or off
+	ThreadPlace  string          `json:"threadPlace"`    // where a new thread with no issue starts: worktree or project; "" is unset, a worktree
+	ThreadAccess string          `json:"threadAccess"`   // the access a new thread starts with: read, supervised or full; "" is unset, supervised
+	DataDir      string          `json:"dataDir"`        // the folder the running app keeps notes, evidence, stats, activity and digests in
+	DataFixed    bool            `json:"dataDirFixed"`   // AGENTOS_DEV_DATA_DIR sets the folder, so it cannot change here
 }
 
 // Service is bound to the front end.
@@ -82,17 +89,19 @@ func (s *Service) Settings() Settings {
 	key := s.project.Current().Key()
 	dark, light := s.store.Themes()
 	return Settings{
-		Theme:      theme,
-		DarkTheme:  dark,
-		LightTheme: light,
-		TextScale:  scale,
-		KeepAwake:  s.store.KeepsAwake(),
-		Cleanup:    s.store.Cleanup(key),
-		Prompt:     s.store.PromptSend(key),
-		Browser:    s.store.BrowserEnabled(key),
-		Digest:     s.store.DigestSchedule(key),
-		DataDir:    s.dataDir,
-		DataFixed:  s.dataFixed,
+		Theme:        theme,
+		DarkTheme:    dark,
+		LightTheme:   light,
+		TextScale:    scale,
+		KeepAwake:    s.store.KeepsAwake(),
+		Cleanup:      s.store.Cleanup(key),
+		Prompt:       s.store.PromptSend(key),
+		Browser:      s.store.BrowserEnabled(key),
+		Digest:       s.store.DigestSchedule(key),
+		ThreadPlace:  s.store.ThreadPlace(),
+		ThreadAccess: string(s.store.ThreadAccess()),
+		DataDir:      s.dataDir,
+		DataFixed:    s.dataFixed,
 	}
 }
 
@@ -152,6 +161,22 @@ func (s *Service) SetBrowserEnabled(on bool) (Settings, error) {
 // SetDigestSchedule saves how the current project runs its digest: "weekly" or "off".
 func (s *Service) SetDigestSchedule(schedule string) (Settings, error) {
 	return s.saved(s.store.SetDigestSchedule(s.project.Current().Key(), schedule))
+}
+
+// SetThreadPlace saves where a new thread with no issue starts: "worktree" or "project"; "" unsets it.
+func (s *Service) SetThreadPlace(place string) (Settings, error) {
+	if err := project.CheckThreadPlace(place); err != nil {
+		return Settings{}, err
+	}
+	return s.saved(s.store.SetThreadPlace(place))
+}
+
+// SetThreadAccess saves the access a new thread starts with: "read", "supervised" or "full"; "" unsets it.
+func (s *Service) SetThreadAccess(access string) (Settings, error) {
+	if _, err := session.ParseAccess(access); err != nil {
+		return Settings{}, err
+	}
+	return s.saved(s.store.SetThreadAccess(session.Access(access)))
 }
 
 func (s *Service) saved(err error) (Settings, error) {

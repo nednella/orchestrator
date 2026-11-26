@@ -98,6 +98,8 @@ type Backend = {
   SetPromptSend(mode: PromptSend): Promise<Settings>
   SetBrowserEnabled(on: boolean): Promise<Settings>
   SetDigestSchedule(schedule: DigestSchedule): Promise<Settings>
+  SetThreadPlace(place: Place | ''): Promise<Settings>
+  SetThreadAccess(access: Access | ''): Promise<Settings>
   PickDataDir(): Promise<DataDirChoice>
   SetDataDir(dir: string, withData: boolean): Promise<void>
 }
@@ -131,7 +133,7 @@ const namespaces = {
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
   update: ['Update', 'PatchNotes', 'Changelog'],
   awake: ['Awake'],
-  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'PickDataDir', 'SetDataDir'],
+  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'PickDataDir', 'SetDataDir'],
 }
 
 // The Go side has no method for this: the window runtime opens web addresses itself.
@@ -249,6 +251,8 @@ export const api = {
   setPromptSend: (mode: PromptSend) => backend.SetPromptSend(mode),
   setBrowserEnabled: (on: boolean) => backend.SetBrowserEnabled(on),
   setDigestSchedule: (schedule: DigestSchedule) => backend.SetDigestSchedule(schedule),
+  setThreadPlace: (place: Place | '') => backend.SetThreadPlace(place),
+  setThreadAccess: (access: Access | '') => backend.SetThreadAccess(access),
   pickDataDir: () => backend.PickDataDir(),
   setDataDir: (dir: string, withData: boolean) => backend.SetDataDir(dir, withData),
   digest: () => backend.Digest(),

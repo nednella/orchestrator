@@ -188,6 +188,10 @@ export type Settings = {
   promptSend: PromptSend
   browserEnabled: boolean
   digestSchedule: DigestSchedule
+  // threadPlace is where a new thread with no issue starts and threadAccess the access it starts with; '' is unset,
+  // a worktree and Supervised.
+  threadPlace: Place | ''
+  threadAccess: Access | ''
   dataDir: string
   dataDirFixed: boolean
 }

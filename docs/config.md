@@ -12,6 +12,8 @@ app_theme_dark: black          # the theme the dark appearance shows: black (the
 app_theme_light: light         # the theme the light appearance shows: light (the default)
 app_text_scale: 1.2            # text size as a multiple of the default, 0.48 to 2.08; unset is 1. The settings panel writes it
 editor_app: Visual Studio Code # the macOS app that "Open in VS Code" opens a thread's folder with, through open -a; unset is Visual Studio Code
+new_thread_place: worktree     # where a thread you start from the composer with no issue runs: worktree (a new worktree, the default) or project (the project folder, on the branch checked out there); see Where a thread runs. The settings panel writes it
+new_thread_access: supervised  # the access the composer starts a new thread with: read, supervised (the default) or full; a thread can change it in the model menu. The settings panel writes it
 projects:
   - name: storefront
     directory: /Users/me/code/storefront
