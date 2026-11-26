@@ -403,6 +403,8 @@ func TestWaitOnAnAncestorIsRefused(t *testing.T) {
 			}
 		})
 	}
+	// The top thread runs no turn, so its wait answers at once with how the grandchild stands.
+	apptest.Eventually(t, "the grandchild's turn to end", func() bool { return turnEnded(t, h, g) })
 	if a := waitOn(t, h, top, g, 30*time.Second); !a.Done || a.Text != "done" {
 		t.Errorf("a wait on a grandchild answered %+v, want it done", a)
 	}

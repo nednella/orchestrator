@@ -361,7 +361,7 @@ func TestDelegateDeeperThanTheLimitIsRefused(t *testing.T) {
 	top := newThread(t, h, "top")
 	ids := []string{top.ID}
 	for _, title := range []string{"child", "grandchild", "great-grandchild"} {
-		c := mustDelegate(t, h, ids[len(ids)-1], `{"task":"go deeper","title":"`+title+`","where":"folder"}`)
+		c := mustDelegate(t, h, ids[len(ids)-1], `{"task":"go deeper, keep working","title":"`+title+`","where":"folder"}`)
 		ids = append(ids, c.ID)
 	}
 	deepest := ids[len(ids)-1]

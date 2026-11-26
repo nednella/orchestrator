@@ -454,8 +454,10 @@ func newTree(t *testing.T, h *apptest.Harness) tree {
 	var tr tree
 	tr.top = threadWith(t, h, "Plan the release", session.Read).ID
 	tr.child = mustDelegate(t, h, tr.top, `{"task":"check the docs"}`).ID
-	tr.sibling = mustDelegate(t, h, tr.top, `{"task":"check the tests"}`).ID
+	// The child delegates before anything else is made: it goes to sleep once its result went to its parent, and its
+	// token is then no one's.
 	tr.grandchild = mustDelegate(t, h, tr.child, `{"task":"check the links"}`).ID
+	tr.sibling = mustDelegate(t, h, tr.top, `{"task":"check the tests"}`).ID
 	quiet(t, h, tr.grandchild, tr.child, tr.sibling)
 	return tr
 }
