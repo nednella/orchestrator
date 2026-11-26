@@ -287,6 +287,7 @@ func busyAgain(t *testing.T, h *apptest.Harness, id string) {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the next turn that works", func() bool { return countIn(h.Stdin(t, id), `"text":"work"`) > turns })
+	runs(t, h, id)
 }
 
 func TestAWaitIsKeptUntilItEnds(t *testing.T) {

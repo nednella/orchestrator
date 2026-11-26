@@ -81,6 +81,17 @@ func working(t *testing.T, h *apptest.Harness, id string) {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the turn that works", func() bool { return stdinHas(t, h, id, `"text":"work"`) })
+	runs(t, h, id)
+}
+
+// runs waits until the app counts the thread among the live ones: a message to a thread that slept reaches its new host
+// before the app has taken the thread in again.
+func runs(t *testing.T, h *apptest.Harness, id string) {
+	t.Helper()
+	apptest.Eventually(t, "the thread to run", func() bool {
+		ch, err := h.Sessions().ChatOf(id)
+		return err == nil && ch.Live
+	})
 }
 
 func countIn(lines []string, part string) int {
