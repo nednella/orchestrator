@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { readStored, writeStored } from '../storage'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import { EvidenceCard } from './EvidenceCard'
 import { EvidenceCompare } from './EvidenceCompare'
 import { EvidenceViewer } from './EvidenceViewer'
 import { Icon } from './Icon'
 
-type EvidenceTabProps = { session: Session }
+type EvidenceTabProps = { thread: Thread }
 
 const ORDER_KEY = 'orchestrator.evidenceNewest'
 
-export function EvidenceTab({ session }: EvidenceTabProps) {
+export function EvidenceTab({ thread }: EvidenceTabProps) {
   const { evidence } = useOrchestrator('evidence')
   const [newestFirst, setNewestFirst] = useState(() => readStored(ORDER_KEY, false))
   const [comparing, setComparing] = useState(false)
@@ -20,9 +20,9 @@ export function EvidenceTab({ session }: EvidenceTabProps) {
   const [showCompare, setShowCompare] = useState(false)
 
   const items = useMemo(() => {
-    const list = [...(evidence[session.id] ?? [])].sort((a, b) => a.at - b.at)
+    const list = [...(evidence[thread.id] ?? [])].sort((a, b) => a.at - b.at)
     return newestFirst ? list.reverse() : list
-  }, [evidence, session.id, newestFirst])
+  }, [evidence, thread.id, newestFirst])
   const images = items.filter((i) => i.kind === 'image')
   const [left, right] = picked.map((id) => items.find((i) => i.id === id))
 
@@ -34,7 +34,7 @@ export function EvidenceTab({ session }: EvidenceTabProps) {
         <div className="flex max-w-sm flex-col items-center gap-2 text-center">
           <Icon name="image" size={28} />
           <h3 className="text-title font-semibold">Nothing to show yet</h3>
-          <p className="text-soft">Screenshots, before and after pairs and short notes from this session appear here. The agent files them with its <code className="mono text-small">show</code> tool.</p>
+          <p className="text-soft">Screenshots, before and after pairs and short notes from this thread appear here. The agent files them with its <code className="mono text-small">show</code> tool.</p>
           <p className="text-small text-dim">You can capture the browser yourself from its toolbar.</p>
         </div>
       </div>
@@ -85,7 +85,7 @@ export function EvidenceTab({ session }: EvidenceTabProps) {
           />
         ))}
       </div>
-      {viewing && <EvidenceViewer sessionId={session.id} items={images} startId={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <EvidenceViewer threadId={thread.id} items={images} startId={viewing} onClose={() => setViewing(null)} />}
       {showCompare && left && right && <EvidenceCompare left={left} right={right} onClose={() => setShowCompare(false)} />}
     </div>
   )

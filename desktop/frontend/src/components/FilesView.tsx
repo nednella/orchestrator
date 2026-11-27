@@ -24,18 +24,18 @@ const reason = (err: unknown) => (err instanceof Error ? err.message : String(er
 
 // FilesView is the files of the thread's folder, its worktree else the project's, or of the project's on Home: the open
 // file on the left and the tree of the folder on the right, which fills the view while no file is open.
-export function FilesView({ session }: PanelViewProps) {
+export function FilesView({ thread }: PanelViewProps) {
   const { settings, report } = useOrchestrator('settings', 'report')
   const project = useOrchestratorSelector((a) => a.project)
-  const thread = session?.id
+  const threadId = thread?.id
   const projectKey = project?.key ?? ''
-  const key = filesKey(thread, projectKey)
-  const folder = session?.worktree || project?.dir || ''
+  const key = filesKey(threadId, projectKey)
+  const folder = thread?.worktree || project?.dir || ''
   const picked = useSyncExternalStore(onPicked, () => pickedFile(key))
   const path = picked === null ? null : relativeTo(folder, picked)
-  const [listing, actions] = useFileListing(thread, projectKey, session?.state)
+  const [listing, actions] = useFileListing(threadId, projectKey, thread?.state)
   const entries = useMemo(() => (listing.status === 'ready' ? withFolders(listing.entries) : []), [listing])
-  const file = useOpenFile(key, thread, projectKey, path, session?.state)
+  const file = useOpenFile(key, threadId, projectKey, path, thread?.state)
   const [treeOpen, setTreeOpen] = useState(() => readStored(FILES_TREE_KEY, true))
   const [treeWidth, setTreeWidth] = useState(() => readStored(FILES_TREE_WIDTH_KEY, TREE_WIDTH.default))
   const [rendered, setRendered] = useState(() => readStored(FILES_RENDERED_KEY, false))
@@ -58,7 +58,7 @@ export function FilesView({ session }: PanelViewProps) {
   const text = content?.kind === 'text' ? content : null
   const canRender = text !== null && text.text !== '' && !text.truncated && isMarkdownPath(path ?? '')
   const showsLines = text !== null && text.text !== '' && !(canRender && rendered)
-  const openInEditor = (target: string) => report(() => (thread ? api.openInEditor(thread, target) : api.openProjectInEditor(projectKey, target)))
+  const openInEditor = (target: string) => report(() => (threadId ? api.openInEditor(threadId, target) : api.openProjectInEditor(projectKey, target)))
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f' || e.shiftKey || e.altKey) return

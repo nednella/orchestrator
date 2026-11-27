@@ -12,19 +12,19 @@ import { ChildMenu } from './ChildMenu'
 import { StateDot } from './StateDot'
 
 // id is the child's thread, '' while the call that starts it runs; title is what the call named it, for a child the
-// sessions list does not hold. result is the child's result, for the card that shows it.
+// threads list does not hold. result is the child's result, for the card that shows it.
 type ChatChildCardProps = { id: string; title: string; result?: string }
 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
-// ChatChildCard is a child thread in its parent's chat, live from the sessions list, so a change of the child renders
+// ChatChildCard is a child thread in its parent's chat, live from the threads list, so a change of the child renders
 // this card and nothing else of the chat. A click on the card, but not in its result, opens the child; the card's line
 // is the button that does it from the keyboard, so nothing interactive nests in another. Its actions are in its
 // right-click menu.
 export const ChatChildCard = memo(function ChatChildCard({ id, title, result }: ChatChildCardProps) {
   const a = useOrchestrator('select')
-  const child = useOrchestratorSelector((s) => (id ? s.sessions.find((x) => x.id === id) : undefined))
-  const parentProject = useOrchestratorSelector((s) => s.sessions.find((x) => x.id === child?.parent)?.project ?? '')
+  const child = useOrchestratorSelector((s) => (id ? s.threads.find((x) => x.id === id) : undefined))
+  const parentProject = useOrchestratorSelector((s) => s.threads.find((x) => x.id === child?.parent)?.project ?? '')
   const facts = childFacts(child, title)
   const projectName = useOrchestratorSelector((s) => s.projects.find((p) => p.key === facts.project)?.name ?? facts.project)
   const [menuAt, setMenuAt] = useState<Point | null>(null)

@@ -4,7 +4,7 @@ type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
 // What the mock knows of a thread: whether it has settled, its worktree, '' for a thread in the project folder, a way
 // to move its row's state as hooks would, a way to wake it when it has settled, and ways to follow the permission mode
-// its Claude reports and the subagents it runs in the background, as the sessions do.
+// its Claude reports and the subagents it runs in the background, as the threads service does.
 export type MockThread = { n: number; settled: boolean; worktree: string; filesReason(): string; setState(state: State): void; wake(): void; followMode(mode: string): void; setSubagents(n: number): void }
 
 type Draft = Omit<ChatEvent, 'seq' | 'at'> & { at?: number }
@@ -357,7 +357,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
 
   // subagents runs a turn that starts two subagents in the background, as Claude does by default: the turn ends once
   // both are launched, each then works and ends on its own, and Claude reports both in a turn of its own, with no
-  // message of the owner's. The row works until that turn ends, as the sessions show it. With ask, the subagents' Bash
+  // message of the owner's. The row works until that turn ends, as the threads service shows it. With ask, the subagents' Bash
   // call waits on the owner's approval.
   function subagents(id: string, ask: boolean) {
     const t = thread(id)
@@ -586,7 +586,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     turns.forEach((e) => append(id, e))
   }
 
-  // fork copies the thread's log up to the reply block at into the fork's, as the sessions do: drafts, queued messages
+  // fork copies the thread's log up to the reply block at into the fork's, as the threads service does: drafts, queued messages
   // and the host's starts left out, and the turn ended at that block. It throws, and copies nothing, when the log has no such block
   // or the block is from before the last compaction.
   function fork(from: string, to: string, at: string) {
@@ -602,7 +602,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
   }
 
   // latestReply is the uuid of the last block of the thread's latest reply that a turn's end follows, where a side chat
-  // forks it, as the sessions find it: a rewind takes its message back, and it throws when there is none or it is from
+  // forks it, as the threads service finds it: a rewind takes its message back, and it throws when there is none or it is from
   // before the last compaction.
   function latestReply(id: string): string {
     const log = logOf(id)

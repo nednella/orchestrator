@@ -10,13 +10,13 @@ import { FIT, ZOOM_STEP, ZoomableImage, zoomTo, type ImageView } from './Zoomabl
 const DELETE_EVIDENCE = { title: 'Delete this media?', confirm: 'Delete', tone: 'danger' } as const
 
 type EvidenceViewerProps = {
-  sessionId: string
+  threadId: string
   items: Evidence[]
   startId: string
   onClose(): void
 }
 
-export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceViewerProps) {
+export function EvidenceViewer({ threadId, items, startId, onClose }: EvidenceViewerProps) {
   const { report } = useOrchestrator('report')
   const root = useRef<HTMLDivElement>(null)
   const [id, setId] = useState(startId)
@@ -42,7 +42,7 @@ export function EvidenceViewer({ sessionId, items, startId, onClose }: EvidenceV
     const next = items[at + 1] ?? items[at - 1]
     setView(FIT)
     if (next) setId(next.id)
-    return api.deleteEvidence(sessionId, item.id)
+    return api.deleteEvidence(threadId, item.id)
   }
 
   return (

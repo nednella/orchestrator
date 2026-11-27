@@ -53,7 +53,7 @@ export function ThreadsSettings() {
         {project && (
           <SettingsRow
             title="Send the first prompt"
-            description={`Auto sends what a new task starts with at once. Manual leaves it as a draft in the chat. Applies to ${project.name}.`}
+            description={`Auto sends what a new thread starts with at once. Manual leaves it as a draft in the chat. Applies to ${project.name}.`}
             control={<SelectMenu label="Send the first prompt" options={PROMPT_SEND} value={settings.promptSend} onChange={(value) => report(() => setPromptSend(value))} />}
           />
         )}

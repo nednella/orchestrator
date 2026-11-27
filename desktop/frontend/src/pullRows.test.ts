@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { pullRows, pullsShown } from './pullRows.ts'
-import type { RepoPull, Session } from './types.ts'
+import type { RepoPull, Thread } from './types.ts'
 
 const pull = (number: number, thread: string): RepoPull => ({ number, title: `PR ${number}`, draft: false, branch: `b${number}`, url: '', author: 'amy', createdAt: number, updatedAt: number, labels: [], asked: [], thread })
-const thread = { id: 'p/aaaaaaaa' } as Session
+const thread = { id: 'p/aaaaaaaa' } as Thread
 
 test("the thread's PR comes first", () => {
   const pulls = [pull(3, ''), pull(2, 'p/aaaaaaaa'), pull(1, 'p/bbbbbbbb')]

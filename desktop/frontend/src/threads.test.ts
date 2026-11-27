@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { cleanupNote, currentTask, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { cleanupNote, threadGoal, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
-import type { PR, Session, State } from './types.ts'
+import type { PR, Thread, State } from './types.ts'
 
-function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session {
+function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread {
   return {
     id,
     project: 'shop',
@@ -79,7 +79,7 @@ function pullRequest(state: PR['state'], checks: PR['checks']): PR {
 }
 
 test('a thread with a PR shows the PR, toned by its checks', () => {
-  const tone = (state: PR['state'], checks: PR['checks']) => currentTask({ ...thread('t', 'idle'), issue: 444, pr: pullRequest(state, checks) })
+  const tone = (state: PR['state'], checks: PR['checks']) => threadGoal({ ...thread('t', 'idle'), issue: 444, pr: pullRequest(state, checks) })
   assert.deepEqual(tone('open', 'pending'), { kind: 'pr', number: 91, tone: 'pending' })
   assert.deepEqual(tone('draft', 'none'), { kind: 'pr', number: 91, tone: 'pending' })
   assert.deepEqual(tone('open', 'passing'), { kind: 'pr', number: 91, tone: 'passing' })
@@ -89,11 +89,11 @@ test('a thread with a PR shows the PR, toned by its checks', () => {
 })
 
 test('a thread with an issue and no PR shows the issue', () => {
-  assert.deepEqual(currentTask({ ...thread('t', 'working'), issue: 389 }), { kind: 'issue', number: 389 })
+  assert.deepEqual(threadGoal({ ...thread('t', 'working'), issue: 389 }), { kind: 'issue', number: 389 })
 })
 
-test('a thread with no issue and no PR shows no task', () => {
-  assert.equal(currentTask(thread('t', 'idle')), null)
+test('a thread with no issue and no PR shows no goal', () => {
+  assert.equal(threadGoal(thread('t', 'idle')), null)
 })
 
 test('the time since the last event is compact', () => {
@@ -119,86 +119,86 @@ test('a thread is gone when its project\'s new list leaves it out', () => {
 })
 
 test('children are not in the sidebar', () => {
-  const sessions = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child')]
+  const threads = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child')]
   assert.deepEqual(
-    sidebarThreads(sessions, 'shop').map((s) => s.id),
+    sidebarThreads(threads, 'shop').map((s) => s.id),
     ['lead'],
   )
-  const byId = new Map(sessions.map((s) => [s.id, s]))
-  assert.equal(isTopLevel(sessions[0], byId), true)
-  assert.equal(isTopLevel(sessions[1], byId), false)
+  const byId = new Map(threads.map((s) => [s.id, s]))
+  assert.equal(isTopLevel(threads[0], byId), true)
+  assert.equal(isTopLevel(threads[1], byId), false)
 })
 
 test('the sidebar selects the root of an open child', () => {
-  const sessions = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child'), thread('other', 'idle')]
-  const top = threadTreeOf(sessions).top
+  const threads = [thread('lead', 'working'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'idle', 0, 'child'), thread('other', 'idle')]
+  const top = threadTreeOf(threads).top
   assert.equal(top.get('grandchild')?.id, 'lead')
   assert.equal(top.get('child')?.id, 'lead')
   assert.equal(top.get('other')?.id, 'other')
 })
 
 test('a lost child shows', () => {
-  const sessions = [thread('lead', 'idle'), thread('orphan', 'working', 0, 'deleted-lead')]
-  assert.equal(isTopLevel(sessions[1], new Map(sessions.map((s) => [s.id, s]))), true)
+  const threads = [thread('lead', 'idle'), thread('orphan', 'working', 0, 'deleted-lead')]
+  assert.equal(isTopLevel(threads[1], new Map(threads.map((s) => [s.id, s]))), true)
   assert.deepEqual(
-    sortThreads(sessions).map((s) => s.id),
+    sortThreads(threads).map((s) => s.id),
     ['orphan', 'lead'],
   )
 })
 
 test('a waiting grandchild puts its top thread in attention', () => {
-  const sessions = [thread('busy', 'working'), thread('lead', 'idle'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'waiting', 0, 'child')]
+  const threads = [thread('busy', 'working'), thread('lead', 'idle'), thread('child', 'working', 0, 'lead'), thread('grandchild', 'waiting', 0, 'child')]
   assert.deepEqual(
-    sortThreads(sessions).map((s) => s.id),
+    sortThreads(threads).map((s) => s.id),
     ['lead', 'busy'],
   )
-  assert.equal(threadTreeOf(sessions).attention.get('lead')?.id, 'grandchild')
-  assert.equal(needsOwner(sessions[1], sessions)?.id, 'grandchild')
+  assert.equal(threadTreeOf(threads).attention.get('lead')?.id, 'grandchild')
+  assert.equal(needsOwner(threads[1], threads)?.id, 'grandchild')
   assert.deepEqual(
-    descendantsOf('lead', sessions).map((s) => s.id),
+    descendantsOf('lead', threads).map((s) => s.id),
     ['child', 'grandchild'],
   )
 })
 
 test('needsOwner prefers the thread itself', () => {
-  const sessions = [thread('lead', 'waiting'), thread('child', 'waiting', 0, 'lead')]
-  assert.equal(needsOwner(sessions[0], sessions)?.id, 'lead')
+  const threads = [thread('lead', 'waiting'), thread('child', 'waiting', 0, 'lead')]
+  assert.equal(needsOwner(threads[0], threads)?.id, 'lead')
   assert.equal(needsOwner(thread('alone', 'idle'), [thread('alone', 'idle')]), undefined)
 })
 
 test('needsOwner takes the nearest waiting descendant', () => {
-  const sessions = [thread('lead', 'working'), thread('a', 'working', 0, 'lead'), thread('deep', 'waiting', 0, 'a'), thread('b', 'waiting', 0, 'lead')]
-  assert.equal(needsOwner(sessions[0], sessions)?.id, 'b')
+  const threads = [thread('lead', 'working'), thread('a', 'working', 0, 'lead'), thread('deep', 'waiting', 0, 'a'), thread('b', 'waiting', 0, 'lead')]
+  assert.equal(needsOwner(threads[0], threads)?.id, 'b')
 })
 
 test('rail counts a child in its parent\'s project', () => {
-  const sessions = [thread('lead', 'working'), { ...thread('child', 'waiting', 0, 'lead'), project: 'blog' }, { ...thread('own', 'waiting'), project: 'blog' }]
-  assert.deepEqual(waitingByProject(sessions), new Map([['shop', 1], ['blog', 1]]))
+  const threads = [thread('lead', 'working'), { ...thread('child', 'waiting', 0, 'lead'), project: 'blog' }, { ...thread('own', 'waiting'), project: 'blog' }]
+  assert.deepEqual(waitingByProject(threads), new Map([['shop', 1], ['blog', 1]]))
   assert.deepEqual(
-    sidebarThreads(sessions, 'blog').map((s) => s.id),
+    sidebarThreads(threads, 'blog').map((s) => s.id),
     ['own'],
   )
 })
 
 test('the next thread that needs the owner is the top thread of a waiting child', () => {
   const projects = [{ key: 'shop' }, { key: 'blog' }] as Project[]
-  const sessions = [thread('replied', 'idle'), thread('lead', 'working'), thread('child', 'waiting', 0, 'lead'), { ...thread('asks', 'waiting'), project: 'blog' }, thread('asleep', 'settled')]
+  const threads = [thread('replied', 'idle'), thread('lead', 'working'), thread('child', 'waiting', 0, 'lead'), { ...thread('asks', 'waiting'), project: 'blog' }, thread('asleep', 'settled')]
   assert.deepEqual(
-    urgentThreads(projects, sessions).map((s) => s.id),
+    urgentThreads(projects, threads).map((s) => s.id),
     ['lead', 'asks', 'replied'],
   )
 })
 
 test('the first thread opened is top-level, a lost child too', () => {
-  const sessions = [thread('child', 'working', 0, 'lead'), thread('lead', 'idle')]
-  assert.equal(firstThread(sessions, threadTreeOf(sessions))?.id, 'lead')
+  const threads = [thread('child', 'working', 0, 'lead'), thread('lead', 'idle')]
+  assert.equal(firstThread(threads, threadTreeOf(threads))?.id, 'lead')
   const lost = [thread('orphan', 'working', 0, 'deleted-lead'), thread('lead', 'idle')]
   assert.equal(firstThread(lost, threadTreeOf(lost))?.id, 'orphan')
 })
 
 test('the thread opened after a sleep is the next live top-level thread in sidebar order', () => {
-  const sessions = [thread('child', 'working', 0, 'lead'), thread('asleep', 'settled'), thread('lead', 'idle'), thread('busy', 'working'), thread('leaving', 'working')]
-  assert.equal(nextThread(sessions, 'shop', 'leaving')?.id, 'busy')
+  const threads = [thread('child', 'working', 0, 'lead'), thread('asleep', 'settled'), thread('lead', 'idle'), thread('busy', 'working'), thread('leaving', 'working')]
+  assert.equal(nextThread(threads, 'shop', 'leaving')?.id, 'busy')
   assert.equal(nextThread([thread('leaving', 'idle'), thread('child', 'idle', 0, 'leaving')], 'shop', 'leaving'), undefined)
 })
 

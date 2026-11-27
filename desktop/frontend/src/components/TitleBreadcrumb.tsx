@@ -5,8 +5,8 @@ import { ThreadBreadcrumb } from './ThreadBreadcrumb'
 
 export function TitleBreadcrumb() {
   const { project, projects, showHome, select } = useOrchestrator('project', 'projects', 'showHome', 'select')
-  const thread = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
-  const parent = useOrchestratorSelector((a) => (thread?.parent ? a.sessions.find((s) => s.id === thread.parent) : undefined))
+  const thread = useOrchestratorSelector((a) => a.threads.find((s) => s.id === a.selectedId))
+  const parent = useOrchestratorSelector((a) => (thread?.parent ? a.threads.find((s) => s.id === thread.parent) : undefined))
   const viewed = useOrchestratorSelector((a) => viewedAgent(a.viewHistory, thread?.id ?? ''))
   const agent = useThreadAgents(thread?.id ?? '').find((a) => a.id === viewed)
 

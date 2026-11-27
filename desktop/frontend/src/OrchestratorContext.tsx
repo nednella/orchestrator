@@ -14,14 +14,14 @@ import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
-import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
+import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
   key: number
   tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'done' | 'success' | 'warning'
   text: string
   detail?: string
-  sessionId?: string
+  threadId?: string
   view?: PanelViewId
   sticky?: boolean
   action?: { label: string; run(): void }
@@ -38,10 +38,10 @@ type OrchestratorState = {
   project: Project | null
   projects: Project[]
   // The threads of every project, without the side chats, which show only in their threads' right panels.
-  sessions: Session[]
-  sideChats: Session[]
-  projectSessions: Session[]
-  // Each thread's top-level thread and what each top-level thread needs the owner for, built once per sessions change.
+  threads: Thread[]
+  sideChats: Thread[]
+  projectThreads: Thread[]
+  // Each thread's top-level thread and what each top-level thread needs the owner for, built once per threads change.
   threadTree: ThreadTree
   selectedId: string | null
   // The views the owner went through, for Back and Forward; the one shown now may be a subagent's view of the selected
@@ -91,28 +91,28 @@ type OrchestratorActions = {
   goBack(): void
   goForward(): void
   detach(): void
-  stepSession(delta: number): void
+  stepThread(delta: number): void
   // place '' leaves it to new_thread_place.
-  newThread(start: ThreadStart, access: Access, place: Place | ''): Promise<Session>
+  newThread(start: ThreadStart, access: Access, place: Place | ''): Promise<Thread>
   settleThread(id: string): Promise<void>
   // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree orchestrator made
   // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays.
   deleteThread(id: string, worktree: boolean): Promise<void>
-  wakeThread(id: string): Promise<Session>
-  // setAccess gives the thread the access between turns; the row shows it once the sessions say so.
+  wakeThread(id: string): Promise<Thread>
+  // setAccess gives the thread the access between turns; the row shows it once the threads list says so.
   setAccess(id: string, access: Access): Promise<void>
   // openInEditor opens the folder the thread works in, its worktree or else the project folder, in the editor app.
   openInEditor(id: string): Promise<void>
-  // forkSession starts a thread that continues the thread's conversation up to its reply at, with draft in the new
+  // forkThread starts a thread that continues the thread's conversation up to its reply at, with draft in the new
   // thread's composer, and selects it.
-  forkSession(id: string, at: string, draft?: string): Promise<Session>
+  forkThread(id: string, at: string, draft?: string): Promise<Thread>
   // startSideChat starts a side chat of the thread, a fork of it at its latest finished reply, with text and images as
   // its first message when there are any. One start runs at a time.
-  startSideChat(parent: string, text: string, images: PendingImage[]): Promise<Session>
+  startSideChat(parent: string, text: string, images: PendingImage[]): Promise<Thread>
   // deleteSideChat deletes the side chat; with unused, only when nobody sent it a message.
   deleteSideChat(id: string, unused: boolean): Promise<void>
-  renameSession(id: string, title: string): Promise<void>
-  startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Session>
+  renameThread(id: string, title: string): Promise<void>
+  startIssue(number: number, action?: string, background?: boolean, start?: ThreadStart): Promise<Thread>
   switchProject(name: string, homeUnlessRemembered?: boolean): Promise<void>
   // addProject opens the folder as a project; with create it makes the folder first.
   addProject(dir: string, create?: boolean): Promise<void>
@@ -137,13 +137,13 @@ type OrchestratorActions = {
   dismissDigestItem(itemId: string): Promise<void>
   markDigestSeen(): void
   ackPR(id: string): Promise<void>
-  openPR(session: Session): Promise<void>
+  openPR(thread: Thread): Promise<void>
   typeInto(id: string, text: string): Promise<void>
   answer(id: string, request: string, allow: boolean, reason?: string): Promise<void>
   answerQuestion(id: string, request: string, input: string): Promise<void>
-  cleanupSession(id: string, force: boolean): Promise<void>
+  cleanupThread(id: string, force: boolean): Promise<void>
   noteToIssue(id: string): Promise<void>
-  noteToSession(id: string): Promise<void>
+  noteToThread(id: string): Promise<void>
   nextAttention(): void
   setComposerDraft(draft: ComposerDraft, project?: string): void
   threadDraft(id: string): ThreadDraft
@@ -258,8 +258,8 @@ function forgetThread(id: string) {
 // viewOf is the view that shows the thread, or with none the project's home.
 const viewOf = (id: string | null, project: string): View => (id ? { kind: 'thread', id } : { kind: 'home', project })
 
-// shownIn is whether Back or Forward can show the view now: its project and its thread are among projects and sessions.
-const shownIn = (sessions: Session[], projects: Project[]) => (view: View) => projects.some((p) => p.key === projectOf(view)) && (view.kind === 'home' || sessions.some((s) => s.id === threadOf(view)))
+// shownIn is whether Back or Forward can show the view now: its project and its thread are among projects and threads.
+const shownIn = (threads: Thread[], projects: Project[]) => (view: View) => projects.some((p) => p.key === projectOf(view)) && (view.kind === 'home' || threads.some((s) => s.id === threadOf(view)))
 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -279,8 +279,8 @@ type OrchestratorProviderProps = { children: ReactNode }
 export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [sideChats, setSideChats] = useState<Session[]>([])
+  const [threads, setThreads] = useState<Thread[]>([])
+  const [sideChats, setSideChats] = useState<Thread[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [viewHistory, setViewHistory] = useState(NO_HISTORY)
   const [rawIssues, setRawIssues] = useState<Issue[]>([])
@@ -309,8 +309,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [composerAccess, setComposerAccess] = useState<Access>('supervised')
   const [focusRequest, setFocusRequest] = useState<Orchestrator['focusRequest']>({ target: 'thread', n: 0 })
 
-  const threadTree = useMemo(() => threadTreeOf(sessions), [sessions])
-  const sessionsRef = useRef(sessions)
+  const threadTree = useMemo(() => threadTreeOf(threads), [threads])
+  const threadsRef = useRef(threads)
   const sideChatsRef = useRef(sideChats)
   const sideStarting = useRef(false)
   const treeRef = useRef(threadTree)
@@ -335,7 +335,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const notesRef = useRef(notes)
   const browserStatesRef = useRef(browserStates)
   const issuesRef = useRef<Issue[]>([])
-  sessionsRef.current = sessions
+  threadsRef.current = threads
   sideChatsRef.current = sideChats
   treeRef.current = threadTree
   projectsRef.current = projects
@@ -361,11 +361,11 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   )
 
   // forgetGone drops from history the views whose project, or whose thread in a project whose threads are read, is not
-  // among projects and sessions.
+  // among projects and threads.
   const forgetGone = useCallback(
-    (sessions: Session[], projects: Project[]) => {
-      const threads = new Map([...threadsRead.current].map((key) => [key, new Set(sessions.filter((s) => s.project === key).map((s) => s.id))]))
-      const known: Known = { projects: projectsRead.current ? new Set(projects.map((p) => p.key)) : null, threads }
+    (threads: Thread[], projects: Project[]) => {
+      const read = new Map([...threadsRead.current].map((key) => [key, new Set(threads.filter((s) => s.project === key).map((s) => s.id))]))
+      const known: Known = { projects: projectsRead.current ? new Set(projects.map((p) => p.key)) : null, threads: read }
       moveHistory(prune(historyRef.current, (view) => !goneFrom(known, view)))
     },
     [moveHistory],
@@ -455,8 +455,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   )
 
   const selectAmong = useCallback(
-    // all is every project's sessions with list in them, from which a thread's family is read.
-    (list: Session[], all: Session[], homeUnlessRemembered = false) => {
+    // all is every project's threads with list in them, from which a thread's family is read.
+    (list: Thread[], all: Thread[], homeUnlessRemembered = false) => {
       const current = selectedRef.current
       if (detached.current || (current && list.some((s) => s.id === current))) return
       const remembered = list.find((s) => s.id === lastSelected.current.get(projectRef.current?.name ?? ''))
@@ -470,20 +470,20 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     [selectId],
   )
 
-  const applySideChats = useCallback((projectKey: string | null, items: Session[]) => {
+  const applySideChats = useCallback((projectKey: string | null, items: Thread[]) => {
     const before = sideChatsRef.current
-    const kept = (s: Session) => projectKey !== null && s.project !== projectKey
+    const kept = (s: Thread) => projectKey !== null && s.project !== projectKey
     before.filter((s) => !kept(s) && !items.some((x) => x.id === s.id)).forEach((s) => forgetThread(s.id))
     setSideChats((prev) => keepUnchanged(prev, [...prev.filter(kept), ...items], (s) => s.id))
   }, [])
 
-  const applySessions = useCallback(
-    (projectKey: string, rows: Session[]) => {
+  const applyThreads = useCallback(
+    (projectKey: string, rows: Thread[]) => {
       const { threads: items, sideChats } = splitSideChats(rows)
       applySideChats(projectKey, sideChats)
-      goneThreads(sessionsRef.current, projectKey, items).forEach(forgetThread)
-      setSessions((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
-      const all = [...sessionsRef.current.filter((s) => s.project !== projectKey), ...items]
+      goneThreads(threadsRef.current, projectKey, items).forEach(forgetThread)
+      setThreads((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
+      const all = [...threadsRef.current.filter((s) => s.project !== projectKey), ...items]
       if (projectKey === projectRef.current?.key) selectAmong(items, all)
       threadsRead.current.add(projectKey)
       forgetGone(all, projectsRef.current)
@@ -549,7 +549,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       })
       void loadDigest(epoch)
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
-      setSessions((prev) => keepUnchanged(prev, snap.threads, (s) => s.id))
+      setThreads((prev) => keepUnchanged(prev, snap.threads, (s) => s.id))
       quietly(() => selectAmong(snap.threads.filter((s) => s.project === snap.project.key), snap.threads, homeUnlessRemembered))
       if (record) remember(viewOf(selectedRef.current, snap.project.key))
       // The snapshot holds the threads of every project.
@@ -600,7 +600,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       if (payload.project === projectRef.current?.key) handler(payload.items)
     }
 
-  useEffect(() => on('threads', ({ project: key, items }) => applySessions(key, items)), [applySessions])
+  useEffect(() => on('threads', ({ project: key, items }) => applyThreads(key, items)), [applyThreads])
   useEffect(
     () =>
       on(
@@ -687,7 +687,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       on('projects', (list) => {
         setProjects((prev) => keepUnchanged(prev, list, (p) => p.name))
         projectsRead.current = true
-        forgetGone(sessionsRef.current, list)
+        forgetGone(threadsRef.current, list)
         setProject((p) => {
           const next = list.find((x) => x.name === p?.name)
           return next && !sameJSON(next, p) ? next : p
@@ -700,25 +700,25 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     () =>
       on('attention', ({ id, state }) => {
         if (id === selectedRef.current && state !== 'opened') return
-        const session = sessionsRef.current.find((s) => s.id === id)
-        if (!session) return
-        const describe = (current: Session) => {
+        const thread = threadsRef.current.find((s) => s.id === id)
+        if (!thread) return
+        const describe = (current: Thread) => {
           if (state === 'waiting') return 'needs you'
           if (state === 'replied') return 'replied'
           if (state === 'opened') return current.pr ? `opened PR #${current.pr.number}` : 'opened a PR'
           if (state === 'evidence') return 'has something to show'
           return current.prAttention === 'checks' ? 'has failing checks' : 'has new review comments'
         }
-        // The sessions event that carries prAttention lands in the same tick as this one.
+        // The threads event that carries prAttention lands in the same tick as this one.
         setTimeout(() => {
-          const current = sessionsRef.current.find((s) => s.id === id) ?? session
+          const current = threadsRef.current.find((s) => s.id === id) ?? thread
           // A child that waits is answered from its top-level thread's row, so the toast names that thread and opens it.
           const top = treeRef.current.top.get(id)
           if (state === 'waiting' && top && top.id !== id) {
-            pushToast({ tone: state, text: `${top.title} · ${current.title} needs you`, sessionId: top.id })
+            pushToast({ tone: state, text: `${top.title} · ${current.title} needs you`, threadId: top.id })
             return
           }
-          pushToast({ tone: state, text: `${current.title} ${describe(current)}`, sessionId: id, view: state === 'evidence' ? 'media' : undefined })
+          pushToast({ tone: state, text: `${current.title} ${describe(current)}`, threadId: id, view: state === 'evidence' ? 'media' : undefined })
         }, 50)
       }),
     [pushToast],
@@ -755,17 +755,17 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     if (projectRef.current) writeStored(digestKey(projectRef.current.name), now)
   }, [])
 
-  const projectSessions = useMemo(() => sessions.filter((s) => s.project === project?.key), [sessions, project?.key])
+  const projectThreads = useMemo(() => threads.filter((s) => s.project === project?.key), [threads, project?.key])
 
   const issues = useMemo(() => {
-    const next = rawIssues.map((issue) => ({ ...issue, sessionId: projectSessions.find((s) => !s.forkOf && s.issue === issue.number)?.id ?? '' }))
+    const next = rawIssues.map((issue) => ({ ...issue, threadId: projectThreads.find((s) => !s.forkOf && s.issue === issue.number)?.id ?? '' }))
     issuesRef.current = keepUnchanged(issuesRef.current, next, (issue) => issue.number)
     return issuesRef.current
-  }, [rawIssues, projectSessions])
+  }, [rawIssues, projectThreads])
 
-  const addSession = useCallback(
-    (created: Session, background = false) => {
-      setSessions((list) => (list.some((s) => s.id === created.id) ? list.map((s) => (s.id === created.id ? created : s)) : [...list, created]))
+  const addThread = useCallback(
+    (created: Thread, background = false) => {
+      setThreads((list) => (list.some((s) => s.id === created.id) ? list.map((s) => (s.id === created.id ? created : s)) : [...list, created]))
       if (!background && created.project === projectRef.current?.key) {
         selectId(created.id)
         focus('thread')
@@ -776,12 +776,12 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   )
 
   const inSidebarOrder = useCallback(() => {
-    return sidebarThreads(sessionsRef.current, projectRef.current?.key, treeRef.current)
+    return sidebarThreads(threadsRef.current, projectRef.current?.key, treeRef.current)
   }, [])
 
-  const selectSession = useCallback(
+  const selectThread = useCallback(
     (id: string) => {
-      const target = sessionsRef.current.find((s) => s.id === id)
+      const target = threadsRef.current.find((s) => s.id === id)
       if (!target) {
         pushToast({ tone: 'info', text: 'That thread is gone' })
         return
@@ -795,7 +795,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       report(async () => {
         await enterFrom(api.switchProject(owner.name), false, false)
         if (projectRef.current?.key !== owner.key) return
-        if (!sessionsRef.current.some((s) => s.id === id)) return remember(viewOf(selectedRef.current, owner.key))
+        if (!threadsRef.current.some((s) => s.id === id)) return remember(viewOf(selectedRef.current, owner.key))
         selectId(id)
         focus('thread')
       })
@@ -809,7 +809,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const goThrough = useCallback(
     (step: (h: History) => History) => {
       const from = historyRef.current
-      const to = stepTo(from, step, shownIn(sessionsRef.current, projectsRef.current))
+      const to = stepTo(from, step, shownIn(threadsRef.current, projectsRef.current))
       if (to === from) return
       const view = current(to)!
       const owner = projectsRef.current.find((p) => p.key === projectOf(view))!
@@ -852,7 +852,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
 
   const actions = useMemo<OrchestratorActions>(
     () => ({
-      select: selectSession,
+      select: selectThread,
       showHome(projectKey) {
         const owner = projectsRef.current.find((p) => p.key === projectKey)
         if (!owner) return
@@ -876,37 +876,37 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       goBack: () => goThrough(back),
       goForward: () => goThrough(forward),
       detach,
-      stepSession(delta) {
+      stepThread(delta) {
         const list = inSidebarOrder()
         if (list.length === 0) return
         const selected = treeRef.current.top.get(selectedRef.current ?? '')
         const at = list.findIndex((s) => s.id === selected?.id)
-        selectSession(list[(at + delta + list.length) % list.length].id)
+        selectThread(list[(at + delta + list.length) % list.length].id)
       },
       async newThread({ prompt, model, effort, fast }, access, place) {
-        return addSession(await api.newThread('', prompt, model, effort, fast, access, place))
+        return addThread(await api.newThread('', prompt, model, effort, fast, access, place))
       },
       async settleThread(id) {
         await api.settleThread(id)
         if (selectedRef.current !== id) return
-        const next = nextThread(sessionsRef.current, projectRef.current?.key, id, treeRef.current)
+        const next = nextThread(threadsRef.current, projectRef.current?.key, id, treeRef.current)
         if (next) selectId(next.id)
         else detach()
       },
-      // The delete takes the thread's asleep descendants too. The sessions event may come before the call returns, so
+      // The delete takes the thread's asleep descendants too. The threads event may come before the call returns, so
       // the rows go from the latest list, never from one read before the await.
       async deleteThread(id, worktree) {
-        const owner = sessionsRef.current.find((s) => s.id === id)?.project
-        const gone = new Set([id, ...descendantsOf(id, sessionsRef.current).map((s) => s.id)])
+        const owner = threadsRef.current.find((s) => s.id === id)?.project
+        const gone = new Set([id, ...descendantsOf(id, threadsRef.current).map((s) => s.id)])
         await api.deleteThread(id, worktree)
         gone.forEach(forgetThread)
-        setSessions((prev) => prev.filter((s) => !gone.has(s.id)))
-        const left = sessionsRef.current.filter((s) => !gone.has(s.id))
+        setThreads((prev) => prev.filter((s) => !gone.has(s.id)))
+        const left = threadsRef.current.filter((s) => !gone.has(s.id))
         if (owner === projectRef.current?.key) selectAmong(left.filter((s) => s.project === owner), left)
         forgetGone(left, projectsRef.current)
       },
       async wakeThread(id) {
-        return addSession(await api.wakeThread(id))
+        return addThread(await api.wakeThread(id))
       },
       async setAccess(id, access) {
         await api.setAccess(id, access)
@@ -914,10 +914,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       async openInEditor(id) {
         await api.openInEditor(id, '')
       },
-      async forkSession(id, at, draft = '') {
-        const fork = await api.forkSession(id, at)
+      async forkThread(id, at, draft = '') {
+        const fork = await api.forkThread(id, at)
         if (draft.trim()) writeStored(threadDraftKey(fork.id), saveDraft(draftOf(fromMarkdown(draft))))
-        return addSession(fork)
+        return addThread(fork)
       },
       async startSideChat(parent, text, images) {
         if (sideStarting.current) throw 'Another side chat is still starting. Try again in a moment.'
@@ -936,14 +936,14 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         forgetThread(id)
         setSideChats((list) => list.filter((s) => s.id !== id))
       },
-      async renameSession(id, title) {
+      async renameThread(id, title) {
         const trimmed = title.trim()
         if (!trimmed) throw 'A title cannot be empty'
-        await api.renameSession(id, trimmed)
-        setSessions((list) => list.map((s) => (s.id === id ? { ...s, title: trimmed } : s)))
+        await api.renameThread(id, trimmed)
+        setThreads((list) => list.map((s) => (s.id === id ? { ...s, title: trimmed } : s)))
       },
       async startIssue(number, action = '', background = false, start) {
-        return addSession(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort, start?.fast), background)
+        return addThread(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort, start?.fast), background)
       },
       async switchProject(name, homeUnlessRemembered) {
         if (name === projectRef.current?.name) return
@@ -973,7 +973,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       },
       async setUpProject() {
         try {
-          addSession(await api.setUpProject())
+          addThread(await api.setUpProject())
         } finally {
           const snap = await api.snapshot()
           setProject(snap.project)
@@ -1041,10 +1041,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       async ackPR(id) {
         await api.ackPR(id)
       },
-      async openPR(session) {
-        if (!session.pr) throw 'This session has no pull request yet'
-        await api.openURL(session.pr.url)
-        if (session.prAttention) await api.ackPR(session.id)
+      async openPR(thread) {
+        if (!thread.pr) throw 'This thread has no pull request yet'
+        await api.openURL(thread.pr.url)
+        if (thread.prAttention) await api.ackPR(thread.id)
       },
       async typeInto(id, text) {
         await api.typeInto(id, text)
@@ -1055,7 +1055,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       async answerQuestion(id, request, input) {
         await api.chatAnswerInput(id, request, input).catch((err) => answerFailed(id, request, err))
       },
-      async cleanupSession(id, force) {
+      async cleanupThread(id, force) {
         await api.cleanup(id, force)
       },
       async deleteNote(id) {
@@ -1066,15 +1066,15 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         await api.noteToIssue(id)
         setNotes((list) => list.filter((n) => n.id !== id))
       },
-      async noteToSession(id) {
-        addSession(await api.noteToSession(id))
+      async noteToThread(id) {
+        addThread(await api.noteToThread(id))
       },
       nextAttention() {
-        const urgent = urgentThreads(projectsRef.current, sessionsRef.current, treeRef.current)
+        const urgent = urgentThreads(projectsRef.current, threadsRef.current, treeRef.current)
         if (urgent.length === 0) throw 'Nothing needs you right now'
         const selected = treeRef.current.top.get(selectedRef.current ?? '')
         const at = urgent.findIndex((s) => s.id === selected?.id)
-        selectSession(urgent[(at + 1) % urgent.length].id)
+        selectThread(urgent[(at + 1) % urgent.length].id)
       },
       setComposerDraft(draft, project = projectRef.current?.name) {
         if (!project) return
@@ -1145,10 +1145,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       pushToast,
       dismissToast,
     }),
-    [selectId, selectSession, remember, moveHistory, goThrough, inSidebarOrder, detach, addSession, selectAmong, enterProject, enterFrom, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast, publishNewProject],
+    [selectId, selectThread, remember, moveHistory, goThrough, inSidebarOrder, detach, addThread, selectAmong, enterProject, enterFrom, loadIssues, loadDigest, loadBrowserState, markDigestSeen, answerFailed, focus, report, pushToast, dismissToast, publishNewProject],
   )
 
-  const live = shownIn(sessions, projects)
+  const live = shownIn(threads, projects)
   const canGoBack = stepTo(viewHistory, back, live) !== viewHistory
   const canGoForward = stepTo(viewHistory, forward, live) !== viewHistory
 
@@ -1156,9 +1156,9 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     () => ({
       project,
       projects,
-      sessions,
+      threads,
       sideChats,
-      projectSessions,
+      projectThreads,
       threadTree,
       selectedId,
       viewHistory,
@@ -1192,7 +1192,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       startNotes,
       ...actions,
     }),
-    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, machine, update, startNotes, actions],
+    [project, projects, threads, sideChats, projectThreads, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, machine, update, startNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

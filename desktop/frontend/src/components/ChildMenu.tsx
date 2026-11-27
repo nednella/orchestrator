@@ -1,11 +1,11 @@
 import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { confirmDelete } from '../confirm'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
 
-type ChildMenuProps = { child: Session; at: Point; onClose(): void }
+type ChildMenuProps = { child: Thread; at: Point; onClose(): void }
 
 // ChildMenu is the right-click menu of a delegated child, wherever its row shows.
 export function ChildMenu({ child, at, onClose }: ChildMenuProps) {
@@ -23,7 +23,7 @@ export function ChildMenu({ child, at, onClose }: ChildMenuProps) {
         working && { label: 'Stop', run: () => a.report(() => api.chatInterrupt(child.id)) },
         asleep && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(child.id)) },
         !asleep && { label: 'Sleep', danger: true, separated: true, run: () => a.report(() => a.settleThread(child.id)) },
-        { label: 'Delete', danger: true, run: () => a.report(() => confirmDelete(child, () => latest().sessions, a.deleteThread)) },
+        { label: 'Delete', danger: true, run: () => a.report(() => confirmDelete(child, () => latest().threads, a.deleteThread)) },
       ]}
     />
   )

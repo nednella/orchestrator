@@ -61,7 +61,7 @@ export type FileListing = { entries: FileEntry[]; truncated: boolean }
 // base64 in data. A binary file has neither.
 export type FileContent = { kind: 'text' | 'image' | 'binary'; text: string; size: number; truncated: boolean; mime: string; data: string }
 
-export type Session = {
+export type Thread = {
   id: string
   project: string
   n: number
@@ -191,7 +191,7 @@ export type Shell = { id: string; folder: string; command: string; busy: boolean
 export type Snapshot = {
   project: Project
   projects: Project[]
-  threads: Session[]
+  threads: Thread[]
   notes: Note[]
   shells: Shell[]
   machine: string
@@ -521,7 +521,7 @@ export type EventMap = {
   // A thread's own events; its id holds a slash, which keeps 'chat:pending' out of the pattern.
   [k: `chat:${string}/${string}`]: ChatUpdate
   'chat:pending': { id: string; pending: Pending | null }
-  threads: ProjectList<Session>
+  threads: ProjectList<Thread>
   shells: ProjectList<Shell>
   projects: Project[]
   notes: ProjectList<Note>

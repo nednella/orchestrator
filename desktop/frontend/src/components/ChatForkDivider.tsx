@@ -8,7 +8,7 @@ const PILL = 'flex items-center gap-1 rounded-full border border-(--border-fork-
 
 export const ChatForkDivider = memo(function ChatForkDivider({ thread, label, hint }: ChatForkDividerProps) {
   const { select } = useOrchestrator('select')
-  const there = useOrchestratorSelector((a) => a.sessions.some((s) => s.id === thread))
+  const there = useOrchestratorSelector((a) => a.threads.some((s) => s.id === thread))
   return (
     <div className="flex items-center gap-2 py-2 text-label text-dim">
       <span className="h-px flex-1 bg-(--border-fork-divider)" />

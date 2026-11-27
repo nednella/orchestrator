@@ -21,7 +21,7 @@ export function matchShortcut(e: KeyboardEvent, shortcut: Shortcut): boolean {
 
 export const LIST_KEYS: { keys: string; summary: string }[] = [
   { keys: 'W / S or ↑ / ↓', summary: 'Move the row cursor in a focused list' },
-  { keys: 'Enter', summary: 'Act on the row: issues opens the issue, sessions opens, notes edits' },
+  { keys: 'Enter', summary: 'Act on the row: issues opens the issue, threads opens, notes edits' },
   { keys: 'Menu key or Shift F10', summary: 'Open the menu of a thread card' },
   { keys: 'A / D or ← / →', summary: 'Fold or unfold the Sleeping threads' },
   { keys: 'Space', summary: 'Fold or unfold the section under the cursor' },

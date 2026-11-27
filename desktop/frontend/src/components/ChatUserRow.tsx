@@ -63,8 +63,8 @@ export const ChatUserRow = memo(function ChatUserRow({ thread, id, uuid, text, f
 
 type SenderProps = { id: string }
 
-// Sender heads a message another thread sent, by that thread's title while the sessions list holds it.
+// Sender heads a message another thread sent, by that thread's title while the threads list holds it.
 function Sender({ id }: SenderProps) {
-  const title = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === id)?.title ?? id)
+  const title = useOrchestratorSelector((a) => a.threads.find((s) => s.id === id)?.title ?? id)
   return <p className="max-w-[80%] truncate pr-1 text-small text-dim">From {title}</p>
 }

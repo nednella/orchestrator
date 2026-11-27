@@ -5,7 +5,7 @@ import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { EFFORTS, effortsOf, supportsFast } from './model'
 import { folderName } from './projectPath'
-import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
+import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -143,7 +143,7 @@ export function createMock(params: URLSearchParams) {
   const handlers = new Map<string, Set<Handler>>()
   // The reader of each open terminal's output, as GET /term/<id> has one.
   const termReaders = new Map<string, { onData: (bytes: Uint8Array) => void; onEnd: () => void }>()
-  const sessions: Session[] = []
+  const threads: Thread[] = []
   const data: ProjectData[] = [
     { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, threadTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, threadTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, threadTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
     { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), cleanups: [], needsSetup: true },
@@ -166,7 +166,7 @@ export function createMock(params: URLSearchParams) {
 
   const tenthGB = 2 ** 30 / 10 // the app rounds figures up to this
 
-  function view(s: Session): Session {
+  function view(s: Thread): Thread {
     return {
       id: s.id,
       project: s.project,
@@ -207,19 +207,19 @@ export function createMock(params: URLSearchParams) {
   function memory(): Memory {
     const app = 2 * tenthGB
     const browsers = 11 * tenthGB
-    const live = sessions.filter((s) => s.state !== 'settled').reduce((sum, s) => sum + s.memory, 0)
+    const live = threads.filter((s) => s.state !== 'settled').reduce((sum, s) => sum + s.memory, 0)
     return { app, browsers, threads: live, total: app + browsers + live, machine: 16 * 2 ** 30 }
   }
 
-  function sessionsOf(project: string): Session[] {
-    return sessions
+  function threadsOf(project: string): Thread[] {
+    return threads
       .filter((s) => s.project === project)
       .map(view)
       .sort((a, b) => order[a.state] - order[b.state] || b.lastEventAt - a.lastEventAt)
   }
 
   function projectView(p: ProjectData): Project {
-    const own = sessions.filter((s) => s.project === p.name && !s.side)
+    const own = threads.filter((s) => s.project === p.name && !s.side)
     return {
       key: p.name,
       name: p.name,
@@ -244,7 +244,7 @@ export function createMock(params: URLSearchParams) {
   function currentIssues(): Issue[] {
     return current.issues.map((issue) => ({
       ...issue,
-      threadId: sessions.find((s) => s.project === current.name && !s.forkOf && s.issue === issue.number)?.id ?? '',
+      threadId: threads.find((s) => s.project === current.name && !s.forkOf && s.issue === issue.number)?.id ?? '',
     }))
   }
 
@@ -284,8 +284,8 @@ export function createMock(params: URLSearchParams) {
 
   // startShell starts a shell of the project, in the thread's worktree, or with thread '' in the project's folder.
   function startShell(thread: string): Shell {
-    if (thread && sessions.find((x) => x.id === thread)?.cleanup === 'pending') throw `Thread ${find(thread).n} is being cleaned up; open a shell when that ends`
-    const dir = sessions.find((x) => x.id === thread)?.worktree || current.dir
+    if (thread && threads.find((x) => x.id === thread)?.cleanup === 'pending') throw `Thread ${find(thread).n} is being cleaned up; open a shell when that ends`
+    const dir = threads.find((x) => x.id === thread)?.worktree || current.dir
     const taken = shellsOf(current.name).map((x) => x.id)
     let n = 1
     while (taken.includes(shellName(current.name, n))) n++
@@ -299,7 +299,7 @@ export function createMock(params: URLSearchParams) {
     return {
       project: projectView(current),
       projects: data.map(projectView),
-      threads: data.flatMap((p) => sessionsOf(p.name)),
+      threads: data.flatMap((p) => threadsOf(p.name)),
       notes: currentNotes(),
       shells: shellsOf(current.name).map(shellView),
       machine: 'Studio MacBook Pro',
@@ -307,13 +307,13 @@ export function createMock(params: URLSearchParams) {
   }
 
   function publish() {
-    data.forEach((p) => emit('threads', { project: p.name, items: sessionsOf(p.name) }))
+    data.forEach((p) => emit('threads', { project: p.name, items: threadsOf(p.name) }))
     emit('projects', data.map(projectView))
   }
 
-  function find(id: string): Session {
-    const found = sessions.find((s) => s.id === id)
-    if (!found) throw 'No such session'
+  function find(id: string): Thread {
+    const found = threads.find((s) => s.id === id)
+    if (!found) throw `No thread ${id}`
     return found
   }
 
@@ -339,8 +339,8 @@ export function createMock(params: URLSearchParams) {
     createdAt = Date.now(),
     owner = current,
     access: Access = 'supervised',
-  ): Session {
-    const s: Session = {
+  ): Thread {
+    const s: Thread = {
       id: `${owner.name}/${Math.random().toString(36).slice(2, 10)}`,
       n: nextN++,
       title,
@@ -373,7 +373,7 @@ export function createMock(params: URLSearchParams) {
       subagents: 0,
       project: owner.name,
     }
-    sessions.push(s)
+    threads.push(s)
     return s
   }
 
@@ -398,7 +398,7 @@ export function createMock(params: URLSearchParams) {
     }
   }, (key) => data.some((p) => p.name === key), slow)
 
-  // Whether a side chat is starting: the sessions start one at a time.
+  // Whether a side chat is starting: the threads service starts them one at a time.
   let sideStarting = false
 
   // sendTo sends the message as the chat service does: each of sideChats, side chats of the thread, goes with it as a
@@ -406,12 +406,12 @@ export function createMock(params: URLSearchParams) {
   // names it.
   async function sendTo(id: string, text: string, images: ChatImage[], sideChats: string[]) {
     const blocks = sideChats.map((side) => {
-      const s = sessions.find((x) => x.id === side)
+      const s = threads.find((x) => x.id === side)
       if (!s || deleted.has(side) || !s.side || s.forkOf !== id) throw `${side} is not a side chat of this thread`
       return chats.sideChatBlock(s.title, side)
     })
     const sent = blocks.length > 0 ? await chats.backend.ChatSend(id, [text, ...blocks].filter(Boolean).join('\n\n'), images, text) : await chats.backend.ChatSend(id, text, images)
-    const s = sessions.find((x) => x.id === id)
+    const s = threads.find((x) => x.id === id)
     const title = titleFromPrompt(text)
     if (s?.side && s.title === 'Side chat' && title) {
       s.title = title
@@ -420,16 +420,16 @@ export function createMock(params: URLSearchParams) {
     return sent
   }
 
-  // followMode records the access Claude's permission mode gives, as the sessions do.
-  function followMode(s: Session, mode: string) {
+  // followMode records the access Claude's permission mode gives, as the threads service does.
+  function followMode(s: Thread, mode: string) {
     const access = accessOfMode[mode]
     if (!access || access === s.access) return
     s.access = access
     publish()
   }
 
-  // wake starts a settled thread again under its id, as the sessions do.
-  function wake(s: Session) {
+  // wake starts a settled thread again under its id, as the threads service does.
+  function wake(s: Thread) {
     if (s.state !== 'settled') throw `Thread ${s.id} is not asleep`
     s.wokeAt = Date.now()
     setState(s, 'idle')
@@ -458,7 +458,7 @@ export function createMock(params: URLSearchParams) {
     seed('spike: websocket retry', 0, 'settled', [['working', 140], ['idle', 110], ['settled', 95]])
     seed('#389 webhook retries', 389, 'working', [['working', 58], ['idle', 40], ['working', 9]])
     seed('retry banner experiment', 0, 'settled', [['working', 400], ['idle', 380], ['settled', 300]])
-    const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
+    const byIssue = (n: number) => threads.find((x) => x.issue === n && x.project === 'storefront')!
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     servers.set(byIssue(454).id, [
       { port: 5173, pid: 48211, command: 'node /Users/sam/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173', started: Date.now() - 4 * 60_000 },
@@ -484,8 +484,8 @@ export function createMock(params: URLSearchParams) {
     Object.assign(byIssue(412), { pr: pr(441, 'merged', 'passing', { title: 'Sweep unused locale keys' }), git: git({ uncommitted: 3 }), cleanup: 'blocked', cleanupReason: 'the worktree of issue-412 has uncommitted changes' })
     Object.assign(byIssue(437), { pr: pr(445, 'merged', 'passing', { title: 'Show the coupon strip' }), git: git({ notInMain: 1, ahead: 2 }), cleanup: 'pending' })
     Object.assign(byIssue(430), { pr: pr(447, 'closed', 'failing', { title: 'Fix the thumbnail ratio', failedChecks: ['unit-tests'] }), git: git(), cleanup: 'ask' })
-    Object.assign(sessions.find((x) => x.title === 'checkout tests scratch')!, { branch: 'scratch-checkout', git: git({ unpushed: 2, ahead: 2 }) })
-    Object.assign(sessions.find((x) => x.title === 'retry banner experiment')!, {
+    Object.assign(threads.find((x) => x.title === 'checkout tests scratch')!, { branch: 'scratch-checkout', git: git({ unpushed: 2, ahead: 2 }) })
+    Object.assign(threads.find((x) => x.title === 'retry banner experiment')!, {
       branch: 'experiment/websocket-retry-banner-with-backoff',
       pr: pr(438, 'merged', 'passing', { title: 'Show a retry banner' }),
       git: git({ uncommitted: 2 }),
@@ -497,13 +497,13 @@ export function createMock(params: URLSearchParams) {
     const ratio = byIssue(430)
     Object.assign(seed('Measure the thumbnail sizes', 0, 'settled', [['working', 55], ['settled', 40]]), { parent: ratio.id, branch: 'measure-the-thumbnail-sizes', worktree: '~/code/acme/storefront/trees/measure-the-thumbnail-sizes' })
     Object.assign(seed('Check the image CDN headers', 0, 'settled', [['working', 50], ['settled', 42]], data[0], 'read'), { parent: ratio.id, branch: '', worktree: '' })
-    seed('#12 session memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
+    seed('#12 thread memory', 12, 'waiting', [['working', 30], ['waiting', 7]], data[1])
     seed('notes sync spike', 0, 'working', [['working', 11]], data[1])
     seed('Why does checkout call the cart API twice?', 0, 'waiting', [['working', 6], ['waiting', 2]], data[0], 'read')
     seed('Where do we set the cache headers?', 0, 'idle', [['working', 30], ['idle', 24]], data[0], 'read')
     // A thread that delegated two tasks: one child in its own project, one in another. With childask, the first
     // waits on a tool approval, and the app hears of it.
-    const lead = sessions.find((x) => x.title === 'checkout tests scratch')!
+    const lead = threads.find((x) => x.title === 'checkout tests scratch')!
     const finder = seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read')
     finder.parent = lead.id
     if (flags.childAsk !== null) {
@@ -536,8 +536,8 @@ export function createMock(params: URLSearchParams) {
     if (flags.chatCases) seed('Plan the checkout split', 0, 'waiting', [['working', 4], ['waiting', 1]], data[0], 'read')
     byIssue(444).detail = 'Claude needs your permission to use Bash: npm install'
     const brokenChat = byIssue(326)
-    const questionChat = sessions.find((x) => x.title === 'Why does checkout call the cart API twice?')!
-    const planChat = sessions.find((x) => x.title === 'Plan the checkout split')
+    const questionChat = threads.find((x) => x.title === 'Why does checkout call the cart API twice?')!
+    const planChat = threads.find((x) => x.title === 'Plan the checkout split')
     if (flags.chatCases) chats.breakLog(brokenChat.id)
     chats.seed(byIssue(444).id, flags.longChat ? 500 : 0)
     if (flags.lineage) {
@@ -565,20 +565,20 @@ export function createMock(params: URLSearchParams) {
 
   if (flags.toast) {
     setTimeout(() => {
-      const target = sessions[2]
+      const target = threads[2]
       if (target) emit('attention', { id: target.id, state: 'replied' })
     }, 1500)
     setTimeout(() => {
-      const target = sessions.find((s) => s.pr?.state === 'draft')
+      const target = threads.find((s) => s.pr?.state === 'draft')
       if (target) emit('attention', { id: target.id, state: 'opened' })
     }, 2500)
   }
 
-  function owner(s: Session): ProjectData {
+  function owner(s: Thread): ProjectData {
     return data.find((p) => p.name === s.project) ?? current
   }
 
-  function setState(s: Session, state: State) {
+  function setState(s: Thread, state: State) {
     const at = Date.now()
     s.state = state
     s.detail = pick(details[state])
@@ -603,7 +603,7 @@ export function createMock(params: URLSearchParams) {
   const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
 
   // The thread gets its first message through its chat, as the app gives it to the host.
-  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Session, 'branch' | 'worktree'> | null = null, fast = false): Session {
+  function startThreadFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Thread, 'branch' | 'worktree'> | null = null, fast = false): Thread {
     const s = create(title, issue, 'idle', [], Date.now(), current, access)
     if (where) Object.assign(s, where)
     s.action = action
@@ -759,9 +759,9 @@ export function createMock(params: URLSearchParams) {
     const work: WorkRow[] = [
       ...older,
       { project: 'orchestrator', issue: 320, thread: '', title: '#320 Token usage and estimated cost per issue', threads: 2, tokens: 18_400_000, cost: 9.12, lastAt: hoursAgo(0.2) },
-      { project: 'orchestrator', issue: 316, thread: '', title: '#316 Switch task and chat shortcuts', threads: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
+      { project: 'orchestrator', issue: 316, thread: '', title: '#316 Switch thread and chat shortcuts', threads: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
       { project: 'storefront', issue: 0, thread: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', threads: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
-      { project: 'orchestrator', issue: 309, thread: '', title: '#309 Empty states for session groups', threads: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
+      { project: 'orchestrator', issue: 309, thread: '', title: '#309 Empty states for thread groups', threads: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
     const usage = { totals: usageRow('', '', 1, totals.threads), tasks: usageRow('', '', 0.92, totals.threads), byModel, pricesAsOf: '2026-10-06' }
     const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
@@ -774,14 +774,14 @@ export function createMock(params: URLSearchParams) {
     return { days, since: dayKey(120), totals, projects, previous, perDay, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
-  function logCleanup(s: Session, removed: string[], reason: string) {
+  function logCleanup(s: Thread, removed: string[], reason: string) {
     const target = owner(s)
     target.cleanups.unshift({ at: Date.now(), threadTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
     if (target === current) emit('cleanups', { project: target.name, items: [...target.cleanups] })
   }
 
   // keptFor is why an unforced clean-up keeps the thread's worktree, for the reasons the mock can see, in the app's order.
-  function keptFor(s: Session): string {
+  function keptFor(s: Thread): string {
     if (!s.worktree) return ''
     const g = s.git
     if (g && g.uncommitted > 0) return `the worktree of ${s.branch} has uncommitted changes`
@@ -793,7 +793,7 @@ export function createMock(params: URLSearchParams) {
 
   // finishCleanup acts as the app's clean-up: the worktree, browser window and temp folder go, and the thread settles
   // and keeps its row and branch, with no PR left on it.
-  function finishCleanup(s: Session) {
+  function finishCleanup(s: Thread) {
     const removed = [...(s.worktree ? [`worktree ${s.worktree}`] : []), 'thread put to sleep', ...(s.browser ? ['browser window'] : []), 'temp folder']
     logCleanup(s, removed, '')
     if (s.state !== 'settled') chats.end(s.id, 'settle')
@@ -804,8 +804,8 @@ export function createMock(params: URLSearchParams) {
   }
 
   // runningDescendant is a child of the thread, or a child of an asleep one, that runs, as a delete refuses.
-  const runningDescendant = (id: string): Session | undefined => {
-    for (const child of sessions.filter((x) => x.parent === id)) {
+  const runningDescendant = (id: string): Thread | undefined => {
+    for (const child of threads.filter((x) => x.parent === id)) {
       const running = child.state === 'settled' ? runningDescendant(child.id) : child
       if (running) return running
     }
@@ -814,36 +814,36 @@ export function createMock(params: URLSearchParams) {
 
   // worktreeUser is another thread that works in the thread's worktree, as far as the mock can tell: a fork of it, or a
   // child in its folder. The threads of a delete's family do not count.
-  const worktreeUser = (s: Session, family: Session[]) =>
-    sessions.find((x) => x.id !== s.id && !x.side && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
+  const worktreeUser = (s: Thread, family: Thread[]) =>
+    threads.find((x) => x.id !== s.id && !x.side && !family.includes(x) && (x.forkOf === s.id || (x.parent === s.id && x.worktree === '')))
 
-  // dropSideChats deletes the side chats of the thread s, as the sessions do when it is deleted, put to sleep or cleaned
+  // dropSideChats deletes the side chats of the thread s, as the threads service does when it is deleted, put to sleep or cleaned
   // up: they serve only it while it runs.
-  function dropSideChats(s: Session) {
-    for (const side of sessions.filter((x) => x.side && x.forkOf === s.id)) removeSideChat(side)
+  function dropSideChats(s: Thread) {
+    for (const side of threads.filter((x) => x.side && x.forkOf === s.id)) removeSideChat(side)
   }
 
-  function removeSideChat(side: Session) {
+  function removeSideChat(side: Thread) {
     if (side.state !== 'settled') chats.end(side.id, 'settle')
     deleted.add(side.id)
     servers.delete(side.id)
-    sessions.splice(sessions.indexOf(side), 1)
+    threads.splice(threads.indexOf(side), 1)
     publish()
   }
 
-  // filesReason says why Edit from here cannot put the thread's files back, as the sessions do: a fork works in a
+  // filesReason says why Edit from here cannot put the thread's files back, as the threads service does: a fork works in a
   // worktree orchestrator did not make for it, and another thread may work in the thread's own.
-  const filesReason = (s: Session) => {
+  const filesReason = (s: Thread) => {
     if (s.forkOf) return 'Files are rewound only in a worktree orchestrator made for this thread'
     const user = worktreeUser(s, [])
     return user ? `Thread ${user.title} also works in this worktree` : ''
   }
 
   // descendants are the thread's children, their children and so on, nearest first.
-  const descendants = (id: string): Session[] => {
-    const out: Session[] = []
+  const descendants = (id: string): Thread[] => {
+    const out: Thread[] = []
     for (let next = [id]; next.length > 0; ) {
-      const children = sessions.filter((x) => next.includes(x.parent))
+      const children = threads.filter((x) => next.includes(x.parent))
       out.push(...children)
       next = children.map((x) => x.id)
     }
@@ -851,21 +851,21 @@ export function createMock(params: URLSearchParams) {
   }
 
   // takenWorktrees are the threads of the thread s's family whose worktrees a delete of s may take, the deepest first.
-  const takenWorktrees = (s: Session) => {
+  const takenWorktrees = (s: Thread) => {
     const family = [...descendants(s.id).reverse(), s]
     return family.filter((x) => x.worktree && !worktreeUser(x, family))
   }
 
-  const deletePlan = (s: Session): DeletePlan => {
+  const deletePlan = (s: Thread): DeletePlan => {
     const taken = takenWorktrees(s)
     const children = descendants(s.id).filter((x) => x.state === 'settled').map((x) => x.title)
     return { worktrees: taken.length, children }
   }
 
-  const merging = sessions.find((s) => s.cleanup === 'pending')
+  const merging = threads.find((s) => s.cleanup === 'pending')
   if (merging) setTimeout(() => finishCleanup(merging), flags.done ? 1500 : 9000)
 
-  const failing = sessions.find((s) => s.issue === 389)
+  const failing = threads.find((s) => s.issue === 389)
   if (failing) {
     setTimeout(() => {
       failing.pr = pr(455, 'open', 'failing', { title: 'Retry webhooks with backoff', failedChecks: ['unit-tests'] })
@@ -901,7 +901,7 @@ export function createMock(params: URLSearchParams) {
 
   function navigate(id: string, url: string) {
     const page = pages.get(id)
-    if (!page) throw 'This session has no browser open'
+    if (!page) throw 'This thread has no browser open'
     page.url = url
     page.title = pageTitle(url)
     page.loading = true
@@ -914,11 +914,11 @@ export function createMock(params: URLSearchParams) {
 
   function capture(id: string): string {
     const page = pages.get(id)
-    if (!page) throw 'This session has no browser open'
+    if (!page) throw 'This thread has no browser open'
     return renderPage(page, shotCanvas)
   }
 
-  function addEvidence(s: Session, item: Omit<Evidence, 'id' | 'at'>, at = Date.now()): Evidence {
+  function addEvidence(s: Thread, item: Omit<Evidence, 'id' | 'at'>, at = Date.now()): Evidence {
     const entry: Evidence = { ...item, id: `ev-${++evidenceSeq}`, at }
     const items = [...(evidence.get(s.id) ?? []), entry]
     evidence.set(s.id, items)
@@ -929,7 +929,7 @@ export function createMock(params: URLSearchParams) {
     return entry
   }
 
-  function openPage(s: Session, url: string): PageModel {
+  function openPage(s: Thread, url: string): PageModel {
     const page = newPage(url)
     pages.set(s.id, page)
     s.browser = true
@@ -938,7 +938,7 @@ export function createMock(params: URLSearchParams) {
     return page
   }
 
-  const driven = sessions.find((s) => s.issue === 454)
+  const driven = threads.find((s) => s.issue === 454)
   if (driven) {
     const page = openPage(driven, 'https://shop.acme.test/products')
     const steps: (() => void)[] = [
@@ -969,7 +969,7 @@ export function createMock(params: URLSearchParams) {
     page.submitted = ''
     addEvidence(driven, { kind: 'text', url: '', text: 'tsc --noEmit: 0 errors\nvitest: 214 passed, 0 failed\nThe gallery now loads on the client only.', caption: 'Checks before the PR', source: 'agent' }, Date.now() - 20 * minute)
   }
-  const second = sessions.find((s) => s.issue === 326)
+  const second = threads.find((s) => s.issue === 326)
   if (second) addEvidence(second, { kind: 'text', url: '', text: 'Totals are summed in cents and formatted once. Rounding each line drifted by a cent on large carts.', caption: 'Why cents', source: 'agent' }, Date.now() - 30 * minute)
 
   const seedDigest = (): DigestItem[] => {
@@ -1149,11 +1149,11 @@ export function createMock(params: URLSearchParams) {
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
       const name = title.trim() || titleFromPrompt(prompt) || 'agent'
       const acc = access || 'supervised'
-      if ((place || settings.threadPlace || 'worktree') === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc, null, fast)
-      const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
-      return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` }, fast)
+      if ((place || settings.threadPlace || 'worktree') === 'project') return startThreadFor(name, 0, prompt, '', model, effort, acc, null, fast)
+      const branch = freeBranch(branchFromTitle(name), (b) => threads.some((x) => x.branch === b))
+      return startThreadFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` }, fast)
     },
-    // DeleteThread acts as the sessions do: with worktree, the thread's own worktree goes first through a clean-up
+    // DeleteThread acts as the threads service does: with worktree, the thread's own worktree goes first through a clean-up
     // with the checks, and one they keep refuses the delete; the thread, its chat and its row then go.
     DeleteThread: async (id: string, worktree: boolean) => {
       if (deleted.has(id)) throw `Thread ${id} was deleted`
@@ -1181,14 +1181,14 @@ export function createMock(params: URLSearchParams) {
         if (x.state !== 'settled') chats.end(x.id, 'settle')
         deleted.add(x.id)
         servers.delete(x.id)
-        sessions.splice(sessions.indexOf(x), 1)
+        threads.splice(threads.indexOf(x), 1)
       }
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
     },
     DeletePlan: async (id: string) => deletePlan(find(id)),
     PullRequests: async (): Promise<RepoPulls> => {
-      const tracked = sessions
+      const tracked = threads
         .filter((x) => x.project === current.name && x.pr && (x.pr.state === 'open' || x.pr.state === 'draft'))
         .map((x): RepoPull => ({ number: x.pr!.number, title: x.pr!.title, draft: x.pr!.state === 'draft', branch: x.branch, url: x.pr!.url, author: 'nednella', createdAt: x.pr!.updatedAt - 2 * day, updatedAt: x.pr!.updatedAt, labels: [], asked: [], thread: x.id }))
       const others: RepoPull[] = [
@@ -1220,14 +1220,14 @@ export function createMock(params: URLSearchParams) {
       try {
         chats.fork(from.id, s.id, at)
       } catch (err) {
-        sessions.splice(sessions.indexOf(s), 1)
+        threads.splice(threads.indexOf(s), 1)
         throw err
       }
       chats.start(s.id)
       publish()
       return view(s)
     },
-    // SideChatStart acts as the sessions do: a fork of the thread at its latest finished reply, in its folder with its
+    // SideChatStart acts as the threads service does: a fork of the thread at its latest finished reply, in its folder with its
     // model, effort and access, titled "Side chat" until its first message names it. A first message that does not go
     // deletes it.
     SideChatStart: async (parent: string, text: string, images: ChatImage[]) => {
@@ -1259,7 +1259,7 @@ export function createMock(params: URLSearchParams) {
     },
     // SideChatDelete deletes the side chat; with unused, only when nobody sent it a message.
     SideChatDelete: async (id: string, unused: boolean) => {
-      const s = sessions.find((x) => x.id === id)
+      const s = threads.find((x) => x.id === id)
       if (!s || deleted.has(id) || !s.side) throw `No side chat ${id}`
       if (unused && chats.sideChatAsked(id)) return
       removeSideChat(s)
@@ -1273,7 +1273,7 @@ export function createMock(params: URLSearchParams) {
       setState(s, 'settled')
       emit('issues', { project: current.name, items: currentIssues() })
     },
-    // SetAccess acts as the sessions do: a settled thread wakes with it, Read and Supervised change as Claude runs, and
+    // SetAccess acts as the threads service does: a settled thread wakes with it, Read and Supervised change as Claude runs, and
     // a change to or from Full starts the thread again. The thread's chat, not its row, says whether a turn is open: a
     // thread waiting on a reply that asks has none.
     SetAccess: async (id: string, access: Access) => {
@@ -1289,7 +1289,7 @@ export function createMock(params: URLSearchParams) {
       s.access = access
       publish()
     },
-    // SetFast and SetEffort act as the sessions do: the thread's row shows the change, and a settled thread starts with
+    // SetFast and SetEffort act as the threads service does: the thread's row shows the change, and a settled thread starts with
     // it at its next wake. Claude refuses ultracode on a model that has none.
     SetFast: async (id: string, on: boolean) => {
       const s = find(id)
@@ -1360,7 +1360,7 @@ export function createMock(params: URLSearchParams) {
       if (current.needsSetup) current.issues = current.issues.map((issue) => ({ ...issue, section: 'Inbox', actions: ['Work'], access: actionAccess('Work'), moves: movesFrom('Inbox') }))
       current.needsSetup = false
       emit('projects', data.map(projectView))
-      return startSessionFor('orchestrator setup', 0, 'Set up this project for orchestrator with me.')
+      return startThreadFor('orchestrator setup', 0, 'Set up this project for orchestrator with me.')
     },
     AddNote: async (text: string) => {
       const now = Date.now()
@@ -1434,7 +1434,7 @@ export function createMock(params: URLSearchParams) {
     },
     NoteToThread: async (id: string) => {
       const note = noteById(id)
-      return startSessionFor(note.text.split('\n')[0], 0, note.text)
+      return startThreadFor(note.text.split('\n')[0], 0, note.text)
     },
     Issues: async (refresh: boolean) => {
       if (refresh) issueRefreshes.count++
@@ -1443,7 +1443,7 @@ export function createMock(params: URLSearchParams) {
     StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string, fast: boolean) => {
       const issue = current.issues.find((i) => i.number === number)
       if (!issue) throw 'No such issue'
-      const mine = sessions.filter((s) => s.project === current.name && !s.forkOf && s.issue === number)
+      const mine = threads.filter((s) => s.project === current.name && !s.forkOf && s.issue === number)
       const live = mine.find((s) => s.state !== 'settled')
       if (live) return view(live)
       if (action && !issue.actions.includes(action)) throw `issue #${number} has no action "${action}"`
@@ -1456,9 +1456,9 @@ export function createMock(params: URLSearchParams) {
         return view(settled)
       }
       const short = issue.title.split(' ').slice(0, 3).join(' ')
-      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, actionAccess(name), null, fast)
+      const thread = startThreadFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, actionAccess(name), null, fast)
       emit('issues', { project: current.name, items: currentIssues() })
-      return session
+      return thread
     },
     MoveIssue: async (number: number, section: string) => {
       const issue = current.issues.find((i) => i.number === number)

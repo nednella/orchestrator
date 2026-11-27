@@ -11,7 +11,7 @@ type ChatChildApprovalsProps = { parent: string }
 export function ChatChildApprovals({ parent }: ChatChildApprovalsProps) {
   // One string of ids, so the list renders again only when who waits changes.
   const waiting = useOrchestratorSelector((a) =>
-    descendantsOf(parent, a.sessions)
+    descendantsOf(parent, a.threads)
       .filter((d) => a.pending[d.id])
       .map((d) => d.id)
       .join(' '),
@@ -33,7 +33,7 @@ type ChildApprovalProps = { id: string }
 // what it lets run: it opens the descendant, whose own chat has the full card. A question's picks are kept by the request, as the pending names no tool call.
 function ChildApproval({ id }: ChildApprovalProps) {
   const { select } = useOrchestrator('select')
-  const child = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === id))
+  const child = useOrchestratorSelector((a) => a.threads.find((s) => s.id === id))
   const pending = useOrchestratorSelector((a) => a.pending[id])
   const projectDir = useOrchestratorSelector((a) => a.projects.find((p) => p.key === child?.project)?.dir ?? '')
   if (!pending || !child) return null

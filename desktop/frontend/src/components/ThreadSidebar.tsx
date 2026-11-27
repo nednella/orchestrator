@@ -13,7 +13,7 @@ import { ThreadRow } from './ThreadRow'
 export type MenuRequest = { id: string; n: number }
 
 export function ThreadSidebar() {
-  const { projectSessions, threadTree, selectedId, select, focus, setComposerMode } = useOrchestrator('projectSessions', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
+  const { projectThreads, threadTree, selectedId, select, focus, setComposerMode } = useOrchestrator('projectThreads', 'threadTree', 'selectedId', 'select', 'focus', 'setComposerMode')
   const { widths, focusChat, showHome, focusPanel } = useLayout()
   const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
@@ -26,7 +26,7 @@ export function ThreadSidebar() {
 
   // A selected child is not in the list, so its top-level thread's row keeps the owner's place.
   const selectedRow = threadTree.top.get(selectedId ?? '')?.id
-  const threads = useMemo(() => sortThreads(projectSessions.filter((s) => matchesThread(s, query)), threadTree), [projectSessions, threadTree, query])
+  const threads = useMemo(() => sortThreads(projectThreads.filter((s) => matchesThread(s, query)), threadTree), [projectThreads, threadTree, query])
 
   const nav = useListNav(
     threads.map((s) => s.id),
@@ -107,7 +107,7 @@ export function ThreadSidebar() {
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-1">
         {threads.map((s) => (
-          <ThreadRow key={s.id} session={s} needs={threadTree.attention.get(s.id)} selected={s.id === selectedRow} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
+          <ThreadRow key={s.id} thread={s} needs={threadTree.attention.get(s.id)} selected={s.id === selectedRow} cursor={nav.cursorKey === s.id} menuRequest={menuRequest?.id === s.id ? menuRequest.n : 0} />
         ))}
         {threads.length === 0 && <p className="px-4 py-4 text-small text-dim">{query.trim() ? 'No thread matches.' : 'No threads'}</p>}
       </div>

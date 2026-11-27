@@ -8,13 +8,13 @@ import { PANEL_GROUPS, panelView } from '../panelViews'
 import type { PanelRow } from '../panelViews'
 import { sideChatReason } from '../sideChat'
 import { useSideChatReason } from '../sideChatStore'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import { showTerminal } from '../terminalSurface'
 import { isTyping } from '../useListNav'
 import { useSideChat } from '../useSideChat'
 import { PanelHomeRow } from './PanelHomeRow'
 
-type PanelHomeProps = { session: Session | undefined }
+type PanelHomeProps = { thread: Thread | undefined }
 
 const POPUP = '[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]'
 
@@ -41,20 +41,20 @@ const BACK = ['ArrowUp', 'ArrowLeft']
 
 // PanelHome is the right panel's list of surfaces to open. A view of one thread's things cannot open on Home, and a
 // side chat starts only from a thread that can fork.
-export function PanelHome({ session }: PanelHomeProps) {
+export function PanelHome({ thread }: PanelHomeProps) {
   const layout = useLayout()
   const orchestrator = useOrchestrator('project', 'selectedId', 'shells', 'report', 'digestUnseenCount')
   const sideChat = useSideChat()
-  const chatReason = useSideChatReason(session?.id ?? '')
-  const sideReason = sideChatReason(session) || chatReason
+  const chatReason = useSideChatReason(thread?.id ?? '')
+  const sideReason = sideChatReason(thread) || chatReason
   const reasonShut = (row: PanelRow) => {
     if (row.target === 'sideChat') return sideReason || null
     if (row.target === 'terminal' && !orchestrator.project) return 'Terminals are available from a project.'
-    return session === undefined && panelView(row.target)?.thread ? 'Available from a thread.' : null
+    return thread === undefined && panelView(row.target)?.thread ? 'Available from a thread.' : null
   }
   // A new terminal for the Terminal row, as it makes its tab with each press.
   const open = (target: PanelRowTarget) => {
-    if (target === 'sideChat') return session && orchestrator.report(() => sideChat.start(session.id))
+    if (target === 'sideChat') return thread && orchestrator.report(() => sideChat.start(thread.id))
     if (target === 'terminal') return orchestrator.report(() => showTerminal(orchestrator, layout, true))
     layout.showPanelView(target)
   }

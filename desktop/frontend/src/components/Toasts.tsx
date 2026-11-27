@@ -30,7 +30,7 @@ export function Toasts() {
     >
       {toasts.map((toast) => {
         if (toast.tone === 'done') return <DoneToast key={toast.key} toast={toast} dismiss={() => dismissToast(toast.key)} />
-        const { sessionId } = toast
+        const { threadId } = toast
         const { tone } = toast
         return (
           <div
@@ -48,12 +48,12 @@ export function Toasts() {
             ) : (
               <span className="text-body">{toast.text}</span>
             )}
-            {sessionId && (
+            {threadId && (
               <button
                 className="btn"
                 onClick={() => {
-                  select(sessionId)
-                  if (toast.view) showPanelView(toast.view, { thread: sessionId })
+                  select(threadId)
+                  if (toast.view) showPanelView(toast.view, { thread: threadId })
                   dismissToast(toast.key)
                 }}
               >

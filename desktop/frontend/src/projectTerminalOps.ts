@@ -1,7 +1,7 @@
 import { api } from './api'
 import { askConfirm } from './confirm'
 import { changeTerms, savedTerms, shellClosed, shellStarted, startedShells } from './projectTerminals'
-import { termSession } from './terminal/session'
+import { shellTerminal } from './terminal/shellTerminal'
 import { activeShell, addGroup, closePane, MAX_PANES, reconcile, select, selectGroup, shownGroup, split, terminalLabel, terminalNumber } from './terminalGroups'
 import type { ProjectTerms, SplitDir } from './terminalGroups'
 import type { Shell } from './types'
@@ -34,7 +34,7 @@ export async function startTerminal(project: string, thread: string, shells: She
     const placed = beside ? split(t, id, placement) : t
     return placed === t ? addGroup(t, id) : placed
   })
-  termSession(id).focus()
+  shellTerminal(id).focus()
   return id
 }
 
@@ -87,7 +87,7 @@ export function activateTerminal(id: string) {
 
 export function selectTerminal(id: string) {
   activateTerminal(id)
-  termSession(id).focus()
+  shellTerminal(id).focus()
 }
 
 export function selectTab(group: string) {
@@ -97,7 +97,7 @@ export function selectTab(group: string) {
 // focusTerminal gives the keys to the shown group's active terminal.
 export function focusTerminal(terms: ProjectTerms) {
   const id = activeShell(terms)
-  if (id) termSession(id).focus()
+  if (id) shellTerminal(id).focus()
 }
 
 // labelOf is the name of the terminal: the process running in it, else its number.

@@ -1,15 +1,15 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 
-type BrowserRecentCapturesProps = { session: Session }
+type BrowserRecentCapturesProps = { thread: Thread }
 
 const SHOWN = 3
 
-export function BrowserRecentCaptures({ session }: BrowserRecentCapturesProps) {
+export function BrowserRecentCaptures({ thread }: BrowserRecentCapturesProps) {
   const { evidence } = useOrchestrator('evidence')
   const { showPanelView } = useLayout()
-  const recent = (evidence[session.id] ?? [])
+  const recent = (evidence[thread.id] ?? [])
     .filter((item) => item.kind === 'image')
     .sort((a, b) => b.at - a.at)
     .slice(0, SHOWN)

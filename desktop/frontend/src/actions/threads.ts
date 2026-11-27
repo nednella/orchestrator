@@ -1,13 +1,13 @@
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import type { Action, ActionContext } from './types'
 
 export const OPEN_IN_EDITOR_LABEL = 'Open in VS Code'
 
-const describe = (s: Session) => `${s.n} ${s.title}`
+const describe = (s: Thread) => `${s.n} ${s.title}`
 
-export const sessionActions = ({ a, layout, current }: ActionContext): Action[] => [
+export const threadActions = ({ a, layout, current }: ActionContext): Action[] => [
   {
-    id: 'new-session',
+    id: 'new-thread',
     label: 'New thread',
     shortcut: { key: 'm' },
     run() {
@@ -29,8 +29,8 @@ export const sessionActions = ({ a, layout, current }: ActionContext): Action[] 
     },
   },
   {
-    id: 'detach-session',
-    label: current ? `Detach session ${describe(current)}` : 'Detach session',
+    id: 'detach-thread',
+    label: current ? `Detach thread ${describe(current)}` : 'Detach thread',
     shortcut: { key: 'w' },
     run() {
       if (!current) return

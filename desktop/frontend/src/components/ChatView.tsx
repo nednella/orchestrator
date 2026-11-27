@@ -13,7 +13,7 @@ import { appendText, fromMarkdown } from '../composerMarkdown'
 import { sideChatAsked, sideChatReason } from '../sideChat'
 import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
-import type { FilesRewind, Session } from '../types'
+import type { FilesRewind, Thread } from '../types'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
 import { ChatChildApprovals } from './ChatChildApprovals'
@@ -34,18 +34,18 @@ const insetGap = { narrow: 12, wide: 16, from: 640 }
 
 // embedded is a side chat's chat in its tab: the timeline of its own messages and the composer, with no fork from a
 // message and no side chat of its own. onAsked hears whether it was sent a message of its own yet.
-type ChatViewProps = { session: Session; embedded?: boolean; onAsked?(asked: boolean): void }
+type ChatViewProps = { thread: Thread; embedded?: boolean; onAsked?(asked: boolean): void }
 
 const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions: 0, deletions: 0 }
 
-export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) {
-  const { project, report, forkSession, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkSession', 'threadDraft', 'setThreadDraft')
+export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
+  const { project, report, forkThread, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkThread', 'threadDraft', 'setThreadDraft')
   const latest = useLatestOrchestrator()
-  const { timeline, events, loading, error } = useChat(session.id, session.state, embedded)
+  const { timeline, events, loading, error } = useChat(thread.id, thread.state, embedded)
   const empty = timeline.items.length === 0
-  const forks = useOrchestratorSelector((s) => forksKey(session.id, s.sessions))
-  const { id: threadId, forkOf, forkAt, parent } = session
-  const parentTitle = useOrchestratorSelector((s) => (parent ? s.sessions.find((x) => x.id === parent)?.title : undefined))
+  const forks = useOrchestratorSelector((s) => forksKey(thread.id, s.threads))
+  const { id: threadId, forkOf, forkAt, parent } = thread
+  const parentTitle = useOrchestratorSelector((s) => (parent ? s.threads.find((x) => x.id === parent)?.title : undefined))
   const shown = useMemo(() => {
     if (embedded) return timeline.items
     const items = forkDividers({ id: threadId, forkOf, forkAt }, JSON.parse(forks), timeline.items)
@@ -55,8 +55,8 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
 
   // The right panel's Side chat row says why this thread cannot start one, which only its chat tells.
   useEffect(() => {
-    if (!embedded && !loading) noteSideChatReason(threadId, sideChatReason(session, events))
-  }, [embedded, loading, threadId, session, events])
+    if (!embedded && !loading) noteSideChatReason(threadId, sideChatReason(thread, events))
+  }, [embedded, loading, threadId, thread, events])
   const asked = embedded && sideChatAsked(events)
   useEffect(() => onAsked?.(asked), [asked, onAsked])
   const lastEnd = lastTurnEnd(events)
@@ -128,14 +128,14 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
   // The promise settles once the fork is made or has failed, which the toast reports.
   const fork = useCallback(
     (at: string, draft: string) => {
-      const forked = forkSession(session.id, at, draft)
+      const forked = forkThread(thread.id, at, draft)
       report(() => forked)
       return forked.then(
         () => undefined,
         () => undefined,
       )
     },
-    [session.id, report, forkSession],
+    [thread.id, report, forkThread],
   )
 
   // Why Edit from here is off for the app's run, read again after each edit.
@@ -148,7 +148,7 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
   const items = useRef(timeline.items)
   items.current = timeline.items
   const editing = useRef(false)
-  const { id: thread, worktree } = session
+  const { worktree } = thread
   // Edit from here asks first, and with the files box ticked shows the dry run's files and asks again. The message's
   // text then goes in the composer, after a blank line when it holds a draft.
   const editFrom = useCallback(
@@ -157,33 +157,33 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
       editing.current = true
       report(async () => {
         try {
-          const offer = worktree ? await api.rewindFilesOffer(thread).catch((err): FilesRewind => ({ ...noFiles, offered: true, reason: errorMessage(err) })) : null
+          const offer = worktree ? await api.rewindFilesOffer(threadId).catch((err): FilesRewind => ({ ...noFiles, offered: true, reason: errorMessage(err) })) : null
           const asked = await askConfirm(editRequest(laterMessages(items.current, uuid), offer))
           if (!asked.ok) return
           let files = false
           if (asked.checked) {
-            const preview = await api.rewindPreview(thread, uuid)
+            const preview = await api.rewindPreview(threadId, uuid)
             if (preview.reason) throw new Error(preview.reason)
             files = preview.files.length > 0
             if (files && !(await askConfirm(undoRequest(preview, preview.files.map((f) => relative(f, worktree))))).ok) return
           }
-          const text = await api.rewindTo(thread, uuid, files)
+          const text = await api.rewindTo(threadId, uuid, files)
           // A view closed while the rewind ran has no composer: the text goes into the thread's saved draft.
           if (draft.current) draft.current.append(text)
-          else setThreadDraft(thread, appendText(threadDraft(thread).draft, text))
+          else setThreadDraft(threadId, appendText(threadDraft(threadId).draft, text))
         } finally {
           editing.current = false
           readRewindOff()
         }
       })
     },
-    [thread, worktree, report, readRewindOff, threadDraft, setThreadDraft],
+    [threadId, worktree, report, readRewindOff, threadDraft, setThreadDraft],
   )
-  const folder = session.worktree || project?.dir || ''
+  const folder = thread.worktree || project?.dir || ''
   const edit: ChatEdit = { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom }
 
-  const stop = () => stopWith(() => api.chatInterrupt(session.id))
-  const sendNow = (message: string) => stopWith(() => api.chatSendNow(session.id, message))
+  const stop = () => stopWith(() => api.chatInterrupt(thread.id))
+  const sendNow = (message: string) => stopWith(() => api.chatSendNow(thread.id, message))
 
   // Esc never sends what is typed in the composer: it stays there.
   const escape = (picker: boolean): EscapeAction => {
@@ -207,7 +207,7 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
       {empty && (loading || !error) && <div className="flex-1" />}
       {!empty && (
         <ChatTimeline
-          id={session.id}
+          id={thread.id}
           items={shown}
           folder={folder}
           inset={inset}
@@ -229,8 +229,8 @@ export function ChatView({ session, embedded = false, onAsked }: ChatViewProps) 
                 <ChatNotice text={error} error />
               </div>
             )}
-            {!embedded && <ChatChildApprovals parent={session.id} />}
-            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} session={session} timeline={timeline} events={events} embedded={embedded} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+            {!embedded && <ChatChildApprovals parent={thread.id} />}
+            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} thread={thread} timeline={timeline} events={events} embedded={embedded} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
       </div>

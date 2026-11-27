@@ -1,17 +1,17 @@
-import type { BrowserState, Session } from '../types'
+import type { BrowserState, Thread } from '../types'
 import { BrowserConsoleList } from './BrowserConsoleList'
 import { BrowserRecentCaptures } from './BrowserRecentCaptures'
 import { BrowserStatusHeader } from './BrowserStatusHeader'
 
-type BrowserStatusProps = { session: Session; state: BrowserState }
+type BrowserStatusProps = { thread: Thread; state: BrowserState }
 
-export function BrowserStatus({ session, state }: BrowserStatusProps) {
+export function BrowserStatus({ thread, state }: BrowserStatusProps) {
   return (
     <div className="absolute inset-0 flex flex-col">
-      <BrowserStatusHeader id={session.id} state={state} />
+      <BrowserStatusHeader id={thread.id} state={state} />
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
         <BrowserConsoleList lines={state.console} />
-        <BrowserRecentCaptures session={session} />
+        <BrowserRecentCaptures thread={thread} />
       </div>
     </div>
   )

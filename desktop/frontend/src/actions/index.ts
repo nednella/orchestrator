@@ -5,7 +5,7 @@ import type { Layout } from '../LayoutContext'
 import { modelActions } from './models'
 import { navigateActions } from './navigate'
 import { queueActions } from './queue'
-import { sessionActions } from './sessions'
+import { threadActions } from './threads'
 import { shellActions } from './shell'
 import type { Action } from './types'
 import { viewActions } from './views'
@@ -18,9 +18,9 @@ export function useActions(): Action[] {
 }
 
 export function actionsFor(a: Orchestrator, layout: Layout): Action[] {
-  const context = { a, layout, current: a.sessions.find((s) => s.id === a.selectedId) }
+  const context = { a, layout, current: a.threads.find((s) => s.id === a.selectedId) }
   return [
-    ...sessionActions(context),
+    ...threadActions(context),
     ...navigateActions(context),
     ...queueActions(context),
     ...modelActions(),

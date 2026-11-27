@@ -1,5 +1,5 @@
 import type { AgentItem } from './chatTimeline'
-import type { PR, Server, Session } from './types'
+import type { PR, Server, Thread } from './types'
 
 export const CARD_WIDTH = 280
 export const CARD_GAP = 12
@@ -20,10 +20,10 @@ export type CardFacts = {
   issueTitle: string
   servers: Server[]
   agents: AgentItem[]
-  children: Session[]
-  parent: Session | null
-  forks: Session[]
-  sideChats: Session[]
+  children: Thread[]
+  parent: Thread | null
+  forks: Thread[]
+  sideChats: Thread[]
 }
 
 export type CardRow =
@@ -33,9 +33,9 @@ export type CardRow =
   | { kind: 'pr'; key: string; pr: PR }
   | { kind: 'issue'; key: string; number: number; title: string }
   | { kind: 'server'; key: string; server: Server }
-  | { kind: 'thread'; key: string; relation: 'parent' | 'child' | 'fork'; thread: Session }
+  | { kind: 'thread'; key: string; relation: 'parent' | 'child' | 'fork'; thread: Thread }
   | { kind: 'agent'; key: string; agent: AgentItem }
-  | { kind: 'sideChat'; key: string; thread: Session }
+  | { kind: 'sideChat'; key: string; thread: Thread }
 
 export type CardSection = { key: 'workspace' | 'git' | 'servers' | 'lineage' | 'sideChats'; heading: string; rows: CardRow[] }
 
@@ -43,7 +43,7 @@ const present = <T>(row: T | false): row is T => row !== false
 
 // cardSections are the card's sections in order, each with only the rows that have data, and only the sections that
 // have a row: a fact the app does not know yet shows nothing.
-export function cardSections(s: Session, f: CardFacts): CardSection[] {
+export function cardSections(s: Thread, f: CardFacts): CardSection[] {
   const workspace: (CardRow | false)[] = [
     (f.machine !== '' || f.folder !== '') && { kind: 'workspace', key: 'workspace', machine: f.machine, folder: f.folder, worktree: s.worktree },
     f.folder !== '' && { kind: 'editor', key: 'editor', editor: f.editor },
@@ -53,7 +53,7 @@ export function cardSections(s: Session, f: CardFacts): CardSection[] {
     s.pr !== null && { kind: 'pr', key: 'pr', pr: s.pr },
     s.issue > 0 && { kind: 'issue', key: 'issue', number: s.issue, title: f.issueTitle },
   ]
-  const thread = (relation: 'parent' | 'child' | 'fork', t: Session): CardRow => ({ kind: 'thread', key: `${relation}-${t.id}`, relation, thread: t })
+  const thread = (relation: 'parent' | 'child' | 'fork', t: Thread): CardRow => ({ kind: 'thread', key: `${relation}-${t.id}`, relation, thread: t })
   const lineage: CardRow[] = [
     ...(f.parent ? [thread('parent', f.parent)] : []),
     ...f.children.map((c) => thread('child', c)),
@@ -70,14 +70,14 @@ export function cardSections(s: Session, f: CardFacts): CardSection[] {
   return sections.filter((section) => section.rows.length > 0)
 }
 
-// cardLineage is the threads around s among sessions: the thread that delegated it, else the one it was forked from,
+// cardLineage is the threads around s among threads: the thread that delegated it, else the one it was forked from,
 // then its delegated children and the threads forked from it.
-export function cardLineage(s: Session, sessions: Session[]): Pick<CardFacts, 'parent' | 'children' | 'forks'> {
+export function cardLineage(s: Thread, threads: Thread[]): Pick<CardFacts, 'parent' | 'children' | 'forks'> {
   const from = s.parent || s.forkOf
   return {
-    parent: (from && sessions.find((x) => x.id === from)) || null,
-    children: sessions.filter((x) => x.parent === s.id),
-    forks: sessions.filter((x) => x.forkOf === s.id),
+    parent: (from && threads.find((x) => x.id === from)) || null,
+    children: threads.filter((x) => x.parent === s.id),
+    forks: threads.filter((x) => x.forkOf === s.id),
   }
 }
 
@@ -96,7 +96,7 @@ export function lineageLabel(f: CardFacts): string {
 }
 
 // sideChatsHeading heads the thread's side chats: how many of them work now, if any.
-export function sideChatsHeading(sideChats: Session[]): string {
+export function sideChatsHeading(sideChats: Thread[]): string {
   const running = sideChats.filter((s) => s.state === 'working').length
   return running > 0 ? `Side chats · ${running} running` : 'Side chats'
 }

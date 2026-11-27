@@ -2,11 +2,11 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
-  NewThread(title: string, prompt: string, model: string, effort: string, fast: boolean, access: Access, place: Place | ''): Promise<Session>
+  NewThread(title: string, prompt: string, model: string, effort: string, fast: boolean, access: Access, place: Place | ''): Promise<Thread>
   SettleThread(id: string): Promise<void>
   DeleteThread(id: string, worktree: boolean): Promise<void>
   DeletePlan(id: string): Promise<DeletePlan>
@@ -15,13 +15,13 @@ type Backend = {
   Viewer(): Promise<string>
   StopServer(id: string, pid: number): Promise<void>
   OpenServer(port: number): Promise<void>
-  WakeThread(id: string): Promise<Session>
+  WakeThread(id: string): Promise<Thread>
   SetAccess(id: string, access: Access): Promise<void>
   SetFast(id: string, on: boolean): Promise<void>
   SetEffort(id: string, effort: string): Promise<void>
   OpenInEditor(id: string, path: string): Promise<void>
   OpenProjectInEditor(project: string, path: string): Promise<void>
-  ForkThread(id: string, at: string): Promise<Session>
+  ForkThread(id: string, at: string): Promise<Thread>
   SideChatDelete(id: string, unused: boolean): Promise<void>
   RenameThread(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
@@ -32,7 +32,7 @@ type Backend = {
   ListFolders(path: string): Promise<FolderListing>
   CreateProject(name: string): Promise<NewProject>
   PublishProject(key: string): Promise<string>
-  SetUpProject(): Promise<Session>
+  SetUpProject(): Promise<Thread>
   AddNote(text: string): Promise<Note>
   UpdateNote(id: string, text: string): Promise<Note>
   SetNotePinned(id: string, pinned: boolean): Promise<Note>
@@ -41,9 +41,9 @@ type Backend = {
   RemoveNoteImage(id: string, url: string): Promise<Note>
   DeleteNote(id: string): Promise<void>
   NoteToIssue(id: string): Promise<void>
-  NoteToThread(id: string): Promise<Session>
+  NoteToThread(id: string): Promise<Thread>
   Issues(refresh: boolean): Promise<Issue[]>
-  StartIssue(number: number, action: string, prompt: string, model: string, effort: string, fast: boolean): Promise<Session>
+  StartIssue(number: number, action: string, prompt: string, model: string, effort: string, fast: boolean): Promise<Thread>
   MoveIssue(number: number, section: string): Promise<void>
   UndoMove(number: number): Promise<void>
   IssueDetail(number: number): Promise<IssueDetail>
@@ -62,7 +62,7 @@ type Backend = {
   ChatWatch(id: string): Promise<void>
   ChatUnwatch(id: string): Promise<void>
   ChatSend(id: string, text: string, images: ChatImage[], sideChats: string[]): Promise<ChatSent>
-  SideChatStart(parent: string, text: string, images: ChatImage[]): Promise<Session>
+  SideChatStart(parent: string, text: string, images: ChatImage[]): Promise<Thread>
   ChatInterrupt(id: string): Promise<void>
   ChatSendNow(id: string, message: string): Promise<void>
   ChatAnswer(id: string, request: string, allow: boolean, message: string): Promise<void>
@@ -195,10 +195,10 @@ export const api = {
   // A path opens that markdown file in the thread's folder, '' the folder itself.
   openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
   openProjectInEditor: (project: string, path: string) => backend.OpenProjectInEditor(project, path),
-  forkSession: (id: string, at: string) => backend.ForkThread(id, at),
+  forkThread: (id: string, at: string) => backend.ForkThread(id, at),
   // With unused the side chat goes only when nobody sent it a message, as when its tab closes.
   sideChatDelete: (id: string, unused = false) => backend.SideChatDelete(id, unused),
-  renameSession: (id: string, title: string) => backend.RenameThread(id, title),
+  renameThread: (id: string, title: string) => backend.RenameThread(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
   // pickFolder is the native folder picker; '' when the user cancels it.
   pickFolder: () => backend.PickFolder(),
@@ -219,7 +219,7 @@ export const api = {
   removeNoteImage: (id: string, url: string) => backend.RemoveNoteImage(id, url),
   deleteNote: (id: string) => backend.DeleteNote(id),
   noteToIssue: (id: string) => backend.NoteToIssue(id),
-  noteToSession: (id: string) => backend.NoteToThread(id),
+  noteToThread: (id: string) => backend.NoteToThread(id),
   issues: (refresh: boolean) => backend.Issues(refresh),
   startIssue: (number: number, action: string, prompt = '', model = '', effort = '', fast = false) => backend.StartIssue(number, action, prompt, model, effort, fast),
   moveIssue: (number: number, section: string) => backend.MoveIssue(number, section),
@@ -230,7 +230,7 @@ export const api = {
   termOpen: (id: string, cols: number, rows: number) => backend.TermOpen(id, cols, rows),
   // A shell's output is no event: it comes as raw bytes on a stream of its own, readable once termOpen returns.
   termStream: (id: string, onData: (bytes: Uint8Array) => void, onEnd: () => void) => (mock ? mock.termStream(id, onData, onEnd) : openTermStream(id, onData, onEnd)),
-  // A terminal can close (project switch, session end) while keys or a resize
+  // A terminal can close (project switch, thread end) while keys or a resize
   // are still in flight; that is not an error worth surfacing.
   termWrite: (id: string, data: string) => backend.TermWrite(id, data).catch(() => {}),
   termResize: (id: string, cols: number, rows: number) => backend.TermResize(id, cols, rows).catch(() => {}),

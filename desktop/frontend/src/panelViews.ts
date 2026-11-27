@@ -11,10 +11,10 @@ import { PullRequestsView } from './components/PullRequestsView'
 import { TerminalView } from './components/TerminalView'
 import { PANEL_KEYS, SIDE_CHAT_KEY } from './panelTabs'
 import type { PanelRowTarget, PanelViewId } from './panelTabs'
-import type { Session } from './types'
+import type { Thread } from './types'
 
-// session is the open thread, none on Home.
-export type PanelViewProps = { session: Session | undefined }
+// thread is the open thread, none on Home.
+export type PanelViewProps = { thread: Thread | undefined }
 
 // thread says the view shows one thread's things: Home lists it, but cannot open it.
 export type PanelView = { id: PanelViewId; label: string; icon: LucideIcon; thread: boolean; Component: ComponentType<PanelViewProps> }

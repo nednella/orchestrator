@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { childFacts } from './childCards.ts'
-import type { Session } from './types.ts'
+import type { Thread } from './types.ts'
 
-const session = (over: Partial<Session>): Session => ({
+const thread = (over: Partial<Thread>): Thread => ({
   id: 'shop/abcd2345',
   project: 'shop',
   n: 7,
@@ -41,15 +41,15 @@ const session = (over: Partial<Session>): Session => ({
 })
 
 test("facts follow the child's row", () => {
-  assert.deepEqual(childFacts(session({}), 'Asked title'), { title: 'Flaky test', project: 'shop', access: 'read', where: 'Folder', state: 'working' })
-  assert.deepEqual(childFacts(session({ title: 'Renamed', state: 'idle', access: 'full', branch: 'flaky-test', worktree: '/code/shop/trees/flaky-test', project: 'api' }), 'Asked title'), {
+  assert.deepEqual(childFacts(thread({}), 'Asked title'), { title: 'Flaky test', project: 'shop', access: 'read', where: 'Folder', state: 'working' })
+  assert.deepEqual(childFacts(thread({ title: 'Renamed', state: 'idle', access: 'full', branch: 'flaky-test', worktree: '/code/shop/trees/flaky-test', project: 'api' }), 'Asked title'), {
     title: 'Renamed',
     project: 'api',
     access: 'full',
     where: 'flaky-test',
     state: 'idle',
   })
-  assert.equal(childFacts(session({ branch: '', worktree: '/code/shop/trees/flaky-test' }), '').where, 'flaky-test', 'a worktree with no branch yet is named by its folder')
+  assert.equal(childFacts(thread({ branch: '', worktree: '/code/shop/trees/flaky-test' }), '').where, 'flaky-test', 'a worktree with no branch yet is named by its folder')
 })
 
 test('a gone child keeps its title', () => {

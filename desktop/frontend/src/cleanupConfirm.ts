@@ -1,17 +1,17 @@
 import type { ConfirmRequest } from './confirmQueue'
-import type { Session } from './types'
+import type { Thread } from './types'
 
-type CleanupTarget = Pick<Session, 'cleanup' | 'cleanupReason' | 'worktree' | 'branch'>
+type CleanupTarget = Pick<Thread, 'cleanup' | 'cleanupReason' | 'worktree' | 'branch'>
 
 // cleanupForced says whether confirming the clean-up forces it. Only one the checks kept, with a reason, is forced:
 // confirming an ask runs every check, so a worktree that still holds work stays.
-export function cleanupForced(cleanup: Session['cleanup']): boolean {
+export function cleanupForced(cleanup: Thread['cleanup']): boolean {
   return cleanup === 'blocked'
 }
 
 // cleanupNowShown says whether the thread menu offers Clean up now, a clean-up with every check: for every kept one,
 // whatever kept it, and for a thread whose worktree orchestrator made when no clean-up runs or asks.
-export function cleanupNowShown({ cleanup, worktree }: Pick<Session, 'cleanup' | 'worktree'>): boolean {
+export function cleanupNowShown({ cleanup, worktree }: Pick<Thread, 'cleanup' | 'worktree'>): boolean {
   return cleanup === 'blocked' || (cleanup === '' && worktree !== '')
 }
 

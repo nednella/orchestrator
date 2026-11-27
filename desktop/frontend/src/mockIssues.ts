@@ -34,7 +34,7 @@ const storefrontSeeds: Seed[] = [
 ]
 
 const orchestratorSeeds: Seed[] = [
-  [12, 'ready', 'feature', 'Persist the last selected session per project', 'nednella', []],
+  [12, 'ready', 'feature', 'Persist the last selected thread per project', 'nednella', []],
   [11, 'ready', 'bug', 'Terminal loses focus after a rename', 'nednella', []],
   [9, 'plan', 'feature', 'Notes sync between machines', 'nednella', []],
   [7, 'inbox', 'chore', 'Bundle only the latin font subsets', 'dev-bot', []],
@@ -126,8 +126,8 @@ const bodies: Record<number, string> = {
   ]),
   12: html([
     '<h2 dir="auto">Description</h2>',
-    '<p dir="auto">Coming back to a project should land on the session I left, not the first one in the list.</p>',
-    '<blockquote><p dir="auto">The app already remembers the last project; do the same per project for the session.</p></blockquote>',
+    '<p dir="auto">Coming back to a project should land on the thread I left, not the first one in the list.</p>',
+    '<blockquote><p dir="auto">The app already remembers the last project; do the same per project for the thread.</p></blockquote>',
   ]),
 }
 

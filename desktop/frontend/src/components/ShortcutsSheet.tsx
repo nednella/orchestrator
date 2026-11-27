@@ -11,7 +11,7 @@ type Row = { id: string; label: string; keys?: string }
 type Group = { title: string; ids: string[]; extra?: Row[] }
 
 const GROUPS: Group[] = [
-  { title: 'Sessions', ids: ['new-session', 'new-chat', 'next-attention', 'previous-session', 'next-session', 'detach-session'] },
+  { title: 'Threads', ids: ['new-thread', 'new-chat', 'next-attention', 'previous-thread', 'next-thread', 'detach-thread'] },
   { title: 'Navigate', ids: ['toggle-sidebar', 'toggle-right', 'search-threads', 'shortcuts'] },
   { title: 'Queue', ids: ['refresh-issues'], extra: [{ id: 'alt-click', label: 'Start without leaving the queue', keys: '⌥ click' }] },
   { title: 'Views', ids: ['digest', 'view-previous', 'view-next', 'zoom-in', 'zoom-out', 'zoom-reset'] },
@@ -28,7 +28,7 @@ const GROUPS: Group[] = [
   { title: 'In a list', ids: [], extra: LIST_KEYS.map((k) => ({ id: k.keys, label: k.summary, keys: k.keys })) },
 ]
 
-const LEFT = ['Sessions', 'Queue', 'In a list']
+const LEFT = ['Threads', 'Queue', 'In a list']
 const RIGHT = ['Navigate', 'Views', 'Terminal']
 const listed = new Set(GROUPS.flatMap((g) => g.ids))
 

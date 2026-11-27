@@ -72,8 +72,8 @@ function PullDetail({ pull, onBack }: PullDetailProps) {
 const known = new Map<string, RepoPull[]>()
 
 // PullRequestsView is the open thread's pull request and the repository's other open ones.
-export function PullRequestsView({ session }: PanelViewProps) {
-  const { projectSessions } = useOrchestrator('projectSessions')
+export function PullRequestsView({ thread }: PanelViewProps) {
+  const { projectThreads } = useOrchestrator('projectThreads')
   const project = useOrchestratorSelector((a) => a.project?.name)
   const repo = useOrchestratorSelector((a) => a.project?.repo ?? '')
   const key = project ?? ''
@@ -113,32 +113,32 @@ export function PullRequestsView({ session }: PanelViewProps) {
 
   const open = pulls?.find((p) => p.number === detail)
   if (open) {
-    const thread = projectSessions.find((s) => s.id === open.thread)
+    const pullThread = projectThreads.find((s) => s.id === open.thread)
     const back = () => setDetail(null)
-    if (!thread) return <PullDetail pull={open} onBack={back} />
+    if (!pullThread) return <PullDetail pull={open} onBack={back} />
     return (
       <div className="flex h-full min-h-0 flex-col">
         <header className="flex-none border-b border-line px-3 py-2">
           <BackButton onBack={back} />
         </header>
         <div className="min-h-0 flex-1">
-          <PRTab key={thread.id} session={thread} />
+          <PRTab key={pullThread.id} thread={pullThread} />
         </div>
       </div>
     )
   }
 
-  const { mine, rest } = pullRows(list.shown, session?.pr ? session : null)
-  const titleOf = (p: RepoPull) => projectSessions.find((s) => s.id === p.thread)?.title
+  const { mine, rest } = pullRows(list.shown, thread?.pr ? thread : null)
+  const titleOf = (p: RepoPull) => projectThreads.find((s) => s.id === p.thread)?.title
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ListBar {...list.bar} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {session?.pr && (
+        {thread?.pr && (
           <section aria-label="This thread" className="flex-none border-b border-line">
             <h3 className="px-4 pt-3 text-label font-medium text-dim">This thread</h3>
-            <PRTab key={session.id} session={session} />
+            <PRTab key={thread.id} thread={thread} />
           </section>
         )}
         <section aria-label="Open" className="flex min-h-0 flex-col pb-2">

@@ -33,9 +33,9 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const a = useOrchestrator('select', 'report', 'openInEditor', 'openAgent')
   const { showPanelView, focusPanel } = useLayout()
   const sideChat = useSideChat()
-  const { session, sections, refreshServers } = useCardFacts(id)
-  const [copied, copyBranch] = useCopied(session?.branch ?? '')
-  if (!session || sections.length === 0) return null
+  const { thread, sections, refreshServers } = useCardFacts(id)
+  const [copied, copyBranch] = useCopied(thread?.branch ?? '')
+  if (!thread || sections.length === 0) return null
   const show = (view: PanelViewId) => {
     closeCardPopover()
     showPanelView(view)
@@ -50,7 +50,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
       case 'workspace':
         return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} tip={r.folder} />
       case 'editor':
-        return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={editorLabel(r.editor)} onClick={() => a.report(() => a.openInEditor(session.id))} />
+        return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={editorLabel(r.editor)} onClick={() => a.report(() => a.openInEditor(thread.id))} />
       case 'branch': {
         const { head, tail } = splitBranch(r.branch)
         const label = (
@@ -93,13 +93,13 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
         )
       case 'server': {
         const { port, pid, command } = r.server
-        const stop = { label: `Stop the server on port ${port}`, run: () => a.report(() => api.stopServer(session.id, pid).then(refreshServers)) }
+        const stop = { label: `Stop the server on port ${port}`, run: () => a.report(() => api.stopServer(thread.id, pid).then(refreshServers)) }
         return <ContextCardRow icon={<Globe size={16} aria-hidden="true" />} label={`localhost:${port}`} meta={<ServerMeta server={r.server} />} title={command} onClick={() => a.report(() => api.openServer(port))} stop={stop} />
       }
       case 'agent': {
         const end = <span className={r.agent.state === 'failed' ? 'text-danger' : undefined}>{AGENT_STATE_LABEL[r.agent.state]}</span>
         const open = () => {
-          a.openAgent(session.id, r.agent.id)
+          a.openAgent(thread.id, r.agent.id)
           focusPanel('centre')
         }
         return <ContextCardRow icon={<ClaudeMark size={16} />} label={r.agent.description} end={end} onClick={open} />
@@ -112,7 +112,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
       case 'sideChat': {
         const open = () => {
           closeCardPopover()
-          sideChat.open(session.id, r.thread.id)
+          sideChat.open(thread.id, r.thread.id)
         }
         return <ContextCardRow icon={<MessagesSquare size={16} aria-hidden="true" />} dot={r.thread.state} label={r.thread.title} end={STATE_LABEL[r.thread.state]} title="Open side chat" onClick={open} />
       }

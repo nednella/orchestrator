@@ -2,7 +2,7 @@ import { useLayout } from './LayoutContext'
 import { useLatestOrchestrator, useOrchestrator } from './OrchestratorContext'
 import type { PendingImage } from './OrchestratorContext'
 import { sideChatTab } from './panelTabs'
-import type { Session } from './types'
+import type { Thread } from './types'
 
 // useSideChat starts, opens and closes side chats as tabs of their threads' right panels.
 export function useSideChat() {
@@ -13,7 +13,7 @@ export function useSideChat() {
   return {
     // start starts a side chat of the thread parent, with text and images as its first message when there are any, and
     // opens its tab.
-    async start(parent: string, text = '', images: PendingImage[] = []): Promise<Session> {
+    async start(parent: string, text = '', images: PendingImage[] = []): Promise<Thread> {
       const side = await startSideChat(parent, text, images)
       open(parent, side.id)
       return side

@@ -1,6 +1,6 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
-import type { PR, Session } from '../types'
+import type { PR, Thread } from '../types'
 import { BranchBar } from './BranchBar'
 import { Chip } from './Chip'
 import { Icon } from './Icon'
@@ -8,7 +8,7 @@ import { PRTiles } from './PRTiles'
 import { Ref } from './Ref'
 import { WorkChips } from './WorkChips'
 
-type PRTabProps = { session: Session }
+type PRTabProps = { thread: Thread }
 
 const PILL: Record<
   PR['state'],
@@ -23,7 +23,7 @@ const PILL: Record<
   closed: { icon: 'git-pull-request-closed', label: 'Closed' },
 }
 
-function isReady({ pr, git }: Session): boolean {
+function isReady({ pr, git }: Thread): boolean {
   const live = pr?.state === 'draft' || pr?.state === 'open'
   const passing = pr?.checks === 'passing' || pr?.checks === 'none'
   return live && passing && !pr.conflicting && pr.newComments === 0 && git?.unpushed === 0 && git.uncommitted === 0
@@ -34,12 +34,12 @@ const PR_ACTION = {
   checks: { label: 'Fix failing checks', sentence: (n: number) => `Fix the failing checks on PR #${n}.` },
 }
 
-export function PRTab({ session }: PRTabProps) {
+export function PRTab({ thread }: PRTabProps) {
   const { report, focus, select, typeInto, ackPR, openPR } = useOrchestrator('report', 'focus', 'select', 'typeInto', 'ackPR', 'openPR')
   const { closeOverlay } = useLayout()
-  const { pr, git } = session
+  const { pr, git } = thread
   const live = pr?.state === 'draft' || pr?.state === 'open'
-  const action = pr && session.prAttention ? PR_ACTION[session.prAttention] : null
+  const action = pr && thread.prAttention ? PR_ACTION[thread.prAttention] : null
 
   if (!pr && !git) {
     return (
@@ -67,7 +67,7 @@ export function PRTab({ session }: PRTabProps) {
             <button
               className="text-left text-title font-semibold text-ink hover:underline"
               title={`Open #${pr.number} on GitHub`}
-              onClick={() => report(() => openPR(session))}
+              onClick={() => report(() => openPR(thread))}
             >
               {pr.title}
             </button>
@@ -81,7 +81,7 @@ export function PRTab({ session }: PRTabProps) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-label text-dim">
           {git && (
             <span className="inline-flex min-w-0 items-center gap-1">
-              <Ref>{git.base}</Ref>←<Ref>{session.branch}</Ref>
+              <Ref>{git.base}</Ref>←<Ref>{thread.branch}</Ref>
             </span>
           )}
           {git && (
@@ -96,12 +96,12 @@ export function PRTab({ session }: PRTabProps) {
               Conflicts
             </Chip>
           )}
-          {isReady(session) && (
+          {isReady(thread) && (
             <Chip tone="ok" icon="check-circle-fill" title="Ready to merge. This is not an approval.">
               ready
             </Chip>
           )}
-          <WorkChips session={session} />
+          <WorkChips thread={thread} />
         </div>
       </div>
       {pr && <PRTiles pr={pr} />}
@@ -116,10 +116,10 @@ export function PRTab({ session }: PRTabProps) {
             className="btn btn-accent"
             onClick={() => {
               report(async () => {
-                await typeInto(session.id, action.sentence(pr.number))
-                await ackPR(session.id)
+                await typeInto(thread.id, action.sentence(pr.number))
+                await ackPR(thread.id)
               })
-              select(session.id)
+              select(thread.id)
               closeOverlay('thread-focused')
               focus('composer')
             }}

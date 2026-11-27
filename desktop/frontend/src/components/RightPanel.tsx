@@ -15,7 +15,7 @@ const drag = { '--wails-draggable': 'drag' } as CSSProperties
 // RightPanel shows the open thread's views, or Home's: the list of views, or the tab picked, which fills the panel.
 // Expanded, it takes the chat's room as well. Docked, its first row is the top bar's, with the window buttons, over one line.
 export function RightPanel() {
-  const session = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const thread = useOrchestratorSelector((a) => a.threads.find((s) => s.id === a.selectedId))
   const projectKey = useOrchestratorSelector((a) => a.project?.key)
   const { widths, panel, panelExpanded, docked } = useLayout()
   const sideChat = sideChatOf(panel.active)
@@ -40,7 +40,7 @@ export function RightPanel() {
       )}
       <PanelTabStrip />
       <div className="@container relative min-h-0 flex-1">
-        {sideChat !== null && session ? <SideChatPane key={sideChat} id={sideChat} /> : view ? <view.Component key={`${projectKey} ${view.id}`} session={session} /> : <PanelHome session={session} />}
+        {sideChat !== null && thread ? <SideChatPane key={sideChat} id={sideChat} /> : view ? <view.Component key={`${projectKey} ${view.id}`} thread={thread} /> : <PanelHome thread={thread} />}
       </div>
     </aside>
   )

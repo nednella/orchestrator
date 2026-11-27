@@ -3,7 +3,7 @@ import { api } from './api'
 import { check, current, enqueue, queuedWith, settle } from './confirmQueue'
 import type { ConfirmQueue, ConfirmRequest } from './confirmQueue'
 import { deleteRequest } from './deleteThread'
-import type { DeletePlan, Session } from './types'
+import type { DeletePlan, Thread } from './types'
 
 export type ConfirmAnswer = { ok: boolean; checked: boolean }
 
@@ -105,11 +105,11 @@ export async function confirmed(ask: Ask, run: (checked: boolean) => unknown): P
 }
 
 // confirmDelete asks before the thread goes, with what goes with it, and deletes it on yes; one confirm per thread.
-// sessions is the latest list, read when the confirm shows, so it says whether the delete stops the thread. When the
+// threads is the latest list, read when the confirm shows, so it says whether the delete stops the thread. When the
 // app cannot say what goes with it, the confirm offers no worktree.
-export async function confirmDelete(session: Session, sessions: () => Session[], remove: (id: string, worktree: boolean) => Promise<void>): Promise<void> {
-  const key = `delete:${session.id}`
+export async function confirmDelete(thread: Thread, threads: () => Thread[], remove: (id: string, worktree: boolean) => Promise<void>): Promise<void> {
+  const key = `delete:${thread.id}`
   if (asked(key)) return
-  const plan = await api.deletePlan(session.id).catch((): DeletePlan => ({ worktrees: 0, children: [] }))
-  await confirmed(() => ({ ...deleteRequest(sessions().find((s) => s.id === session.id) ?? session, plan), key }), (worktree) => remove(session.id, worktree))
+  const plan = await api.deletePlan(thread.id).catch((): DeletePlan => ({ worktrees: 0, children: [] }))
+  await confirmed(() => ({ ...deleteRequest(threads().find((s) => s.id === thread.id) ?? thread, plan), key }), (worktree) => remove(thread.id, worktree))
 }

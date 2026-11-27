@@ -12,7 +12,7 @@ import { ThreadContextCard } from './ThreadContextCard'
 const clearOfCard = { '--card-room': `${CARD_ROOM}px` } as CSSProperties
 
 export function Viewport() {
-  const selected = useOrchestratorSelector((a) => a.sessions.find((s) => s.id === a.selectedId))
+  const selected = useOrchestratorSelector((a) => a.threads.find((s) => s.id === a.selectedId))
   const panel = useRef<HTMLElement>(null)
   const card = useContextCard()
   useCardPlacement(panel, selected !== undefined)
@@ -36,7 +36,7 @@ export function Viewport() {
     <section ref={panel} data-panel="thread" data-state={selected.state} tabIndex={-1} className="relative h-full min-h-0 min-w-0 overflow-hidden bg-app">
       {/* The chat's scroller spans the whole width, so its scroll bar stays at the edge; its rows keep clear of the card. */}
       <div className="h-full" style={cardInline ? clearOfCard : undefined}>
-        {agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} session={selected} />}
+        {agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} thread={selected} />}
       </div>
       {cardInline && <ThreadContextCard id={selected.id} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
     </section>

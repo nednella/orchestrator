@@ -89,8 +89,8 @@ export function useChat(id: string, state: State, side = false): { timeline: Tim
     inTurn(id, () => api.chatWatch(id))
       .catch((err) => {
         // A settled thread cannot be watched, and its history is all there is.
-        const { sessions, sideChats } = latest()
-        if (gone || (sessions.find((s) => s.id === id) ?? sideChats.find((s) => s.id === id))?.state === 'settled') return
+        const { threads, sideChats } = latest()
+        if (gone || (threads.find((s) => s.id === id) ?? sideChats.find((s) => s.id === id))?.state === 'settled') return
         setView((v) => ({ ...v, error: errorMessage(err) }))
       })
       .then(() => feed.load())

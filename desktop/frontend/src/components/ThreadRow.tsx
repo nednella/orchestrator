@@ -6,8 +6,8 @@ import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
 import { clickCloses } from '../threadClick'
-import { currentTask } from '../threads'
-import type { Session } from '../types'
+import { threadGoal } from '../threads'
+import type { Thread } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ClaudeMark } from './ClaudeMark'
 import { CleanupMark } from './CleanupMark'
@@ -18,32 +18,32 @@ import { StateIcon } from './StateIcon'
 import { ThreadAnswer } from './ThreadAnswer'
 import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
-import { ThreadTask } from './ThreadTask'
+import { ThreadGoal } from './ThreadGoal'
 import { useHoverCard } from './useHoverCard'
 
 // needs is the thread the owner must answer for this one: itself, or the descendant of it that waits. selected marks
 // the row of the open thread, or of the open thread's top-level thread. menuRequest changes when the list asks this
 // row, from the keyboard, to open its menu.
-type ThreadRowProps = { session: Session; needs: Session | undefined; selected: boolean; cursor: boolean; menuRequest: number }
+type ThreadRowProps = { thread: Thread; needs: Thread | undefined; selected: boolean; cursor: boolean; menuRequest: number }
 
 const isMenuKey = (e: KeyboardEvent) => e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
 
-function ThreadRowView({ session, needs, selected, cursor, menuRequest }: ThreadRowProps) {
-  const a = useOrchestrator('select', 'showHome', 'focus', 'renameSession', 'wakeThread', 'deleteThread', 'report')
+function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadRowProps) {
+  const a = useOrchestrator('select', 'showHome', 'focus', 'renameThread', 'wakeThread', 'deleteThread', 'report')
   const latest = useLatestOrchestrator()
   const row = useRef<HTMLDivElement>(null)
   const [menuAt, setMenuAt] = useState<Point | null>(null)
   const [renaming, setRenaming] = useState(false)
-  const asker = needs ?? session
+  const asker = needs ?? thread
   const pending = useOrchestratorSelector((s) => s.pending[asker.id])
-  const open = useOrchestratorSelector((s) => s.selectedId === session.id)
+  const open = useOrchestratorSelector((s) => s.selectedId === thread.id)
   // A tool approval names what Allow would let run, from the approval itself, since the hooks' detail can lag behind.
   const asking = pending?.kind === 'tool' ? approvalLine(pending) : asker.detail
   const card = useHoverCard(600)
   const cardId = useId()
   const { show: showCard, close: closeCard } = card
-  const settled = session.state === 'settled'
-  const branch = splitBranch(session.branch)
+  const settled = thread.state === 'settled'
+  const branch = splitBranch(thread.branch)
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -72,14 +72,14 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
     }
   }, [cursor, showCard, closeCard])
 
-  const askDelete = () => a.report(() => confirmDelete(session, () => latest().sessions, a.deleteThread))
-  const line2 = settled || session.branch !== '' || currentTask(session) !== null || session.cleanup === 'blocked' || session.cleanup === 'ask'
+  const askDelete = () => a.report(() => confirmDelete(thread, () => latest().threads, a.deleteThread))
+  const line2 = settled || thread.branch !== '' || threadGoal(thread) !== null || thread.cleanup === 'blocked' || thread.cleanup === 'ask'
 
   return (
     <div
       ref={row}
       className="row row-inset thread-row group flex-col"
-      data-state={needs ? 'waiting' : session.state}
+      data-state={needs ? 'waiting' : thread.state}
       data-selected={selected}
       data-cursor={cursor}
       data-menu-open={menuAt !== null}
@@ -99,17 +99,17 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
     >
       <div className="thread-card">
         <span className="thread-dim flex h-[1.375rem] items-center">
-          <StateIcon state={needs ? 'waiting' : session.state} />
+          <StateIcon state={needs ? 'waiting' : thread.state} />
         </span>
         {renaming ? (
           <div className="col-span-2 flex min-w-0">
             <InlineInput
-              initial={session.title}
+              initial={thread.title}
               blur="submit"
               className="h-7 w-full"
               onSubmit={(title) => {
                 setRenaming(false)
-                a.report(() => a.renameSession(session.id, title))
+                a.report(() => a.renameThread(thread.id, title))
               }}
               onCancel={() => setRenaming(false)}
             />
@@ -125,34 +125,34 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 if (open) {
-                  if (clickCloses(open, e.detail)) a.showHome(session.project)
+                  if (clickCloses(open, e.detail)) a.showHome(thread.project)
                   return
                 }
-                a.select(session.id)
+                a.select(thread.id)
                 a.focus('thread')
               }}
             >
-              {session.title}
+              {thread.title}
             </button>
             <span className="col-start-3 flex items-center justify-self-end gap-2">
               <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
-                <LastActive at={session.lastEventAt} />
+                <LastActive at={thread.lastEventAt} />
               </span>
               {selected && (
                 <span className="thread-actions relative z-[1] items-center justify-self-end">
-                  <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(session.project)}>
+                  <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(thread.project)}>
                     <Icon name="x" size={14} />
                   </button>
                 </span>
               )}
-              {session.state === 'working' && <span className="thread-working"><ClaudeMark size={14} /></span>}
+              {thread.state === 'working' && <span className="thread-working"><ClaudeMark size={14} /></span>}
             </span>
           </>
         )}
         {line2 && (
           <div className="col-span-2 col-start-2 flex min-w-0 items-center gap-2 text-label">
             <span className="thread-dim flex min-w-0 flex-1 items-center gap-1.5 text-soft">
-              {session.branch && (
+              {thread.branch && (
                 <>
                   <GitBranch size={12} className="flex-none text-dim" aria-hidden="true" />
                   <span className="flex min-w-0">
@@ -164,8 +164,8 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
             </span>
             {settled ? (
               <span className="relative z-[1] flex flex-none items-center gap-1.5">
-                <CleanupMark session={session} />
-                <button className="btn h-[1.375rem] px-2 text-label" title="Start this thread again" onClick={() => a.report(() => a.wakeThread(session.id))}>
+                <CleanupMark thread={thread} />
+                <button className="btn h-[1.375rem] px-2 text-label" title="Start this thread again" onClick={() => a.report(() => a.wakeThread(thread.id))}>
                   Wake
                 </button>
                 <button className="btn h-[1.375rem] px-2 text-label" title="Remove this thread and its chat" onClick={askDelete}>
@@ -174,23 +174,23 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
               </span>
             ) : (
               <span className="flex flex-none items-center gap-1.5">
-                <CleanupMark session={session} />
-                <ThreadTask session={session} />
+                <CleanupMark thread={thread} />
+                <ThreadGoal thread={thread} />
               </span>
             )}
           </div>
         )}
         {needs && (asking || pending) && (
           <div className="thread-question col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5">
-            {needs !== session && <p className="truncate font-medium text-ink">{needs.title}</p>}
+            {needs !== thread && <p className="truncate font-medium text-ink">{needs.title}</p>}
             {asking && <p className="truncate">{asking}</p>}
-            {pending && <ThreadAnswer key={pending.request} session={needs} pending={pending} />}
+            {pending && <ThreadAnswer key={pending.request} thread={needs} pending={pending} />}
           </div>
         )}
       </div>
       {menuAt && (
         <ThreadMenu
-          session={session}
+          thread={thread}
           selected={open}
           at={menuAt}
           onClose={() => setMenuAt(null)}
@@ -198,7 +198,7 @@ function ThreadRowView({ session, needs, selected, cursor, menuRequest }: Thread
           onDelete={askDelete}
         />
       )}
-      {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} session={session} anchor={card.anchor} />}
+      {card.anchor && !menuAt && !renaming && <ThreadCard id={cardId} thread={thread} anchor={card.anchor} />}
     </div>
   )
 }

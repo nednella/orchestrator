@@ -26,11 +26,11 @@ const DEVICE_REPORT = /^(\x1b\[[?>]?[\d;]*c|\x1bP[^\x1b]*\x1b\\|\x1b\]\d+;[^\x07
 const inBrowser = servedOverHTTP(location.protocol)
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 
-// A remount of one id must not let the old session's close land after the new session's open.
+// A remount of one id must not let the old terminal's close land after the new terminal's open.
 const generations = new Map<string, number>()
 
-// Every live terminal by shell id. A session outlives its pane, so showing it again needs no attach.
-export const sessions = new Map<string, TermSession>()
+// Every live terminal by shell id. A terminal outlives its pane, so showing it again needs no attach.
+export const terminals = new Map<string, ShellTerminal>()
 
 type Look = { theme: ITheme; fontSize: number; blink: boolean; key: string }
 
@@ -47,7 +47,7 @@ let lookWatch: MutationObserver | null = null
 
 const relook = () => {
   look = readLook()
-  sessions.forEach((s) => s.restyle())
+  terminals.forEach((s) => s.restyle())
 }
 
 // The terminals follow the app's theme and text size live, both set on the root element, and the system's reduced
@@ -71,7 +71,7 @@ function stopWatchingLook() {
 
 let webglBroken = false
 
-export class TermSession {
+export class ShellTerminal {
   // onLeave runs on a double Esc, which hands the keys back to the chat.
   onLeave = () => {}
   private readonly term: Terminal
@@ -177,8 +177,8 @@ export class TermSession {
     window.clearTimeout(this.settle)
     if (attached) this.closeLater()
     this.term.dispose()
-    sessions.delete(this.id)
-    if (sessions.size === 0) stopWatchingLook()
+    terminals.delete(this.id)
+    if (terminals.size === 0) stopWatchingLook()
   }
 
   focus() {
@@ -199,7 +199,7 @@ export class TermSession {
     }
   }
 
-  // Deferred a tick: a new session of this id bumps the generation and keeps the attach open.
+  // Deferred a tick: a new terminal of this id bumps the generation and keeps the attach open.
   private closeLater() {
     window.setTimeout(() => {
       if (generations.get(this.id) !== this.generation) return
@@ -343,17 +343,17 @@ export class TermSession {
   }
 }
 
-// termSession is the shell's terminal, made the first time it is asked for.
-export function termSession(id: string): TermSession {
-  let session = sessions.get(id)
-  if (!session) {
-    session = new TermSession(id)
-    sessions.set(id, session)
+// shellTerminal is the shell's terminal, made the first time it is asked for.
+export function shellTerminal(id: string): ShellTerminal {
+  let terminal = terminals.get(id)
+  if (!terminal) {
+    terminal = new ShellTerminal(id)
+    terminals.set(id, terminal)
   }
-  return session
+  return terminal
 }
 
-// keepSessions disposes every terminal whose shell is not in keep; the shells themselves run on in tmux.
-export function keepSessions(keep: Set<string>) {
-  for (const [id, session] of sessions) if (!keep.has(id)) session.dispose()
+// keepTerminals disposes every terminal whose shell is not in keep; the shells themselves run on in tmux.
+export function keepTerminals(keep: Set<string>) {
+  for (const [id, terminal] of terminals) if (!keep.has(id)) terminal.dispose()
 }

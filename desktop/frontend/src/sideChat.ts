@@ -1,5 +1,5 @@
 import type { Command } from './chatTimeline'
-import type { ChatEvent, Session, State } from './types'
+import type { ChatEvent, Thread, State } from './types'
 
 export const SIDE_CHAT_TITLE = 'Side chat'
 
@@ -29,7 +29,7 @@ export function ownStart(events: ChatEvent[]): number {
 // sideChatAsked says whether the side chat was sent a message of its own.
 export const sideChatAsked = (events: ChatEvent[]): boolean => events.slice(ownStart(events)).some((e) => e.kind === 'user' && !e.parent)
 
-// forkableReply says whether a side chat can fork the chat now, as the sessions find the place: a reply of the
+// forkableReply says whether a side chat can fork the chat now, as the threads service finds the place: a reply of the
 // thread's own that a turn's end follows, not taken back by a rewind, and from after the last compaction.
 function forkableReply(events: ChatEvent[]): 'yes' | 'none' | 'compacted' {
   let ended = false
@@ -46,8 +46,8 @@ function forkableReply(events: ChatEvent[]): 'yes' | 'none' | 'compacted' {
 }
 
 // sideChatReason is why the thread cannot start a side chat, '' when it can as far as the app knows. events is its
-// chat once loaded, undefined before: the sessions refuse what the app cannot tell.
-export function sideChatReason(s: Session | undefined, events?: ChatEvent[]): string {
+// chat once loaded, undefined before: the threads service refuses what the app cannot tell.
+export function sideChatReason(s: Thread | undefined, events?: ChatEvent[]): string {
   if (!s) return 'Available from a thread.'
   if (s.side) return 'Side chats cannot start side chats.'
   if (s.parent) return 'Subagent threads cannot start side chats.'

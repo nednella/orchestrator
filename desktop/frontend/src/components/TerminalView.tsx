@@ -47,7 +47,7 @@ export function TerminalView() {
   if (!group) {
     return (
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-small text-dim">
-        No terminal sessions for this project yet.
+        No terminals for this project yet.
         <button className="btn h-6 gap-2 bg-transparent px-2 text-label" onClick={() => start('tab')}>
           New terminal
           <Keycap>{formatShortcut(NEW_TERMINAL_KEY)}</Keycap>

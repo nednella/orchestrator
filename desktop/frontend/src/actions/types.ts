@@ -1,6 +1,6 @@
 import type { Orchestrator } from '../OrchestratorContext'
 import type { Layout } from '../LayoutContext'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 
 export type Shortcut = {
   key: string
@@ -21,4 +21,4 @@ export type Action = {
   run(): void | Promise<void>
 }
 
-export type ActionContext = { a: Orchestrator; layout: Layout; current: Session | undefined }
+export type ActionContext = { a: Orchestrator; layout: Layout; current: Thread | undefined }

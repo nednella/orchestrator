@@ -27,8 +27,8 @@ function tileLabels(projects: Project[]): string[] {
 }
 
 export function ProjectRail() {
-  const { projects, sessions, threadTree } = useOrchestrator('projects', 'sessions', 'threadTree')
-  const waiting = useMemo(() => waitingByProject(sessions, threadTree), [sessions, threadTree])
+  const { projects, threads, threadTree } = useOrchestrator('projects', 'threads', 'threadTree')
+  const waiting = useMemo(() => waitingByProject(threads, threadTree), [threads, threadTree])
   const labels = tileLabels(projects)
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {

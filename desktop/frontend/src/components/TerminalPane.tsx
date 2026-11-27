@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLayout } from '../LayoutContext'
-import { termSession } from '../terminal/session'
+import { shellTerminal } from '../terminal/shellTerminal'
 
 type TerminalPaneProps = { id: string; divider: 'none' | 'active' | 'idle'; edge: 'left' | 'top'; onActivate(): void }
 
@@ -13,13 +13,13 @@ export function TerminalPane({ id, divider, edge, onActivate }: TerminalPaneProp
   const { focusChat } = useLayout()
 
   useEffect(() => {
-    const session = termSession(id)
-    session.mount(host.current!)
-    return () => session.unmount()
+    const terminal = shellTerminal(id)
+    terminal.mount(host.current!)
+    return () => terminal.unmount()
   }, [id])
 
   useEffect(() => {
-    termSession(id).onLeave = focusChat
+    shellTerminal(id).onLeave = focusChat
   }, [id, focusChat])
 
   return (

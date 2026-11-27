@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { readStored, writeStored } from './storage'
-import { keepSessions } from './terminal/session'
+import { keepTerminals } from './terminal/shellTerminal'
 import { prune, TERMINALS_KEY, withShells } from './terminalGroups'
 import type { ProjectTerms } from './terminalGroups'
 import { START_GRACE_MS, stillStarted } from './startedShells'
@@ -87,6 +87,6 @@ export function shellsChanged(key: string, shells: Shell[]) {
     const { [key]: _, ...rest } = terms
     if (JSON.stringify(pruned) !== JSON.stringify(saved)) save(pruned.groups.length > 0 ? { ...rest, [key]: pruned } : rest)
   }
-  keepSessions(keep)
+  keepTerminals(keep)
   changed()
 }

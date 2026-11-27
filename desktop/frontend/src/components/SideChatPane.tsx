@@ -67,7 +67,7 @@ export function SideChatPane({ id }: SideChatPaneProps) {
       </div>
       {side ? (
         <div className="relative min-h-0 flex-1">
-          <ChatView session={side} embedded onAsked={setAsked} />
+          <ChatView thread={side} embedded onAsked={setAsked} />
         </div>
       ) : (
         <p className="p-3 text-small text-soft">This side chat was deleted.</p>

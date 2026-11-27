@@ -11,7 +11,7 @@ import { TypeMark } from './TypeMark'
 type IssueRowProps = { issue: Issue; drag: IssueDrag; onRead(): void }
 
 export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
-  const session = useOrchestratorSelector((a) => a.projectSessions.find((s) => s.id === issue.threadId))
+  const thread = useOrchestratorSelector((a) => a.projectThreads.find((s) => s.id === issue.threadId))
   const [menuOpen, setMenuOpen] = useState(false)
   const labelled = (key: string) => issue.labels.find((l) => l.startsWith(`${key}:`))?.slice(key.length + 1) ?? ''
 
@@ -36,14 +36,14 @@ export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
       <button data-nav className="flex min-w-0 items-baseline gap-2 text-left" title="Read the issue" onClick={onRead}>
         <span className="mono w-9 flex-none text-small text-dim">{issue.number}</span>
         <span className="min-w-0 flex-1 truncate text-body">{issue.title}</span>
-        {session?.pr && <PRMark pr={session.pr} />}
+        {thread?.pr && <PRMark pr={thread.pr} />}
       </button>
       <div className="flex min-w-0 items-center gap-2.5 pl-11 text-small text-dim empty:hidden">
         {issue.type && <TypeMark type={issue.type} named />}
         <ModelTag model={labelled('model')} effort={labelled('effort')} problem={issue.ignored.join('\n')} className="min-w-0 truncate" />
-        {session && <IssueThread session={session} />}
+        {thread && <IssueThread thread={thread} />}
       </div>
-      {!session && (
+      {!thread && (
         <div className="issue-actions pt-1 pl-11">
           <IssueWorkflow issue={issue} onMenu={setMenuOpen} />
         </div>

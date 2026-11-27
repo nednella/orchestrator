@@ -22,7 +22,7 @@ const FOLD_LINES = 10
 const AUTOSAVE_MS = 700
 
 export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenImage }: NoteCardProps) {
-  const a = useOrchestrator('report', 'updateNote', 'setNotePinned', 'setNoteArchived', 'addNoteImage', 'removeNoteImage', 'deleteNote', 'noteToIssue', 'noteToSession')
+  const a = useOrchestrator('report', 'updateNote', 'setNotePinned', 'setNoteArchived', 'addNoteImage', 'removeNoteImage', 'deleteNote', 'noteToIssue', 'noteToThread')
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
   const body = useRef<HTMLDivElement>(null)
@@ -152,7 +152,7 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           <Ago at={note.createdAt} />
         </span>
         <span className="reveal">
-          <button className="btn btn-primary h-6 px-2" title="Start a thread from this note" onClick={() => a.report(() => a.noteToSession(note.id))}>
+          <button className="btn btn-primary h-6 px-2" title="Start a thread from this note" onClick={() => a.report(() => a.noteToThread(note.id))}>
             <Icon name="play" size={10} />
             Start thread
           </button>

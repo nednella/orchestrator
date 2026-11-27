@@ -14,7 +14,7 @@ import { fastCommand, fastCommands, fastModeNote } from '../fastMode'
 import { modelAlias, modelName, supportsFast } from '../model'
 import { sideChatCommands, sideChatQuestion, sideChatReason } from '../sideChat'
 import { attachedTo, detach, setAttached, useAttached } from '../sideChatStore'
-import type { ChatEvent, Session } from '../types'
+import type { ChatEvent, Thread } from '../types'
 import { useFocusRequest } from '../useFocusRequest'
 import { usePendingImages } from '../usePendingImages'
 import { usePromptHistory } from '../usePromptHistory'
@@ -43,7 +43,7 @@ type ThreadComposerProps = {
   draftRef: Ref<ThreadComposerDraft>
   reply: string | null
   onReply(text: string | null): void
-  session: Session
+  thread: Thread
   timeline: Timeline
   events: ChatEvent[]
   embedded?: boolean
@@ -55,11 +55,11 @@ type ThreadComposerProps = {
 
 const SEND_LABEL: Record<ComposerAction, string> = { send: 'Send', queue: 'Queue', deny: 'Deny and send', stop: 'Stop' }
 
-export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, session, timeline, events, embedded = false, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
+export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thread, timeline, events, embedded = false, stopping, onStop, onSendNow, onEscape }: ThreadComposerProps) {
   const { threadDraft, setThreadDraft, setDraftsSeen, setAccess, report, pushToast, sideChats } = useOrchestrator('threadDraft', 'setThreadDraft', 'setDraftsSeen', 'setAccess', 'report', 'pushToast', 'sideChats')
-  const { id } = session
+  const { id } = thread
   const sideChat = useSideChat()
-  const sideReason = embedded ? '' : sideChatReason(session, events)
+  const sideReason = embedded ? '' : sideChatReason(thread, events)
   const attachedIds = useAttached(id)
   const attached = embedded ? [] : sideChats.filter((s) => attachedIds.includes(s.id))
   const [current, setCurrent] = useState(() => threadDraft(id))
@@ -131,7 +131,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
 
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
-  const fastNote = fastModeNote(events, session.fast && supportsFast(session.model))
+  const fastNote = fastModeNote(events, thread.fast && supportsFast(thread.model))
 
   // fast is the mode as the app sets it, so /fast reads it from the row.
   const setFast = (on: boolean) => report(() => api.setFast(id, on))
@@ -139,8 +139,8 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   // /fast sets fast mode through the app and goes to no one else: Claude refuses to turn it on for a host like this one.
   const sendFast = (on: boolean) => {
     update({ ...latest.current, draft: EMPTY_DRAFT })
-    if (on && !supportsFast(session.model)) {
-      pushToast({ tone: 'info', text: 'Fast mode not turned on', detail: `${modelName(session.model) || 'This model'} has no fast mode.` })
+    if (on && !supportsFast(thread.model)) {
+      pushToast({ tone: 'info', text: 'Fast mode not turned on', detail: `${modelName(thread.model) || 'This model'} has no fast mode.` })
       return
     }
     report(async () => {
@@ -155,7 +155,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     const typed = sendText(latest.current.draft.text)
     const images = pending.images
     if (sending || (typed.trim() === '' && images.length === 0)) return
-    const fastTo = images.length === 0 ? fastCommand(typed, session.fast) : null
+    const fastTo = images.length === 0 ? fastCommand(typed, thread.fast) : null
     if (fastTo !== null) {
       sendFast(fastTo)
       return
@@ -280,10 +280,10 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
       }
       right={
         <ComposerModelChip
-          model={session.model && modelAlias(session.model)}
-          effort={session.effort}
-          fast={session.fast}
-          access={session.access}
+          model={thread.model && modelAlias(thread.model)}
+          effort={thread.effort}
+          fast={thread.fast}
+          access={thread.access}
           accessOff={accessDisabled(timeline.turnOpen, timeline.pending !== null, timeline.agentsRunning)}
           onEffort={(effort) => report(() => api.setEffort(id, effort))}
           onFast={setFast}

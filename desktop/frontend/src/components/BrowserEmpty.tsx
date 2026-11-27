@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 
-type BrowserEmptyProps = { session: Session; error: string }
+type BrowserEmptyProps = { thread: Thread; error: string }
 
-export function BrowserEmpty({ session, error }: BrowserEmptyProps) {
+export function BrowserEmpty({ thread, error }: BrowserEmptyProps) {
   const { openBrowser, report } = useOrchestrator('openBrowser', 'report')
   const [url, setUrl] = useState('')
 
@@ -14,7 +14,7 @@ export function BrowserEmpty({ session, error }: BrowserEmptyProps) {
         className="flex w-full max-w-md flex-col gap-3 text-center"
         onSubmit={(e) => {
           e.preventDefault()
-          report(() => openBrowser(session.id, url.trim()))
+          report(() => openBrowser(thread.id, url.trim()))
         }}
       >
         <h3 className="text-title font-semibold">No page open</h3>

@@ -40,15 +40,15 @@ export const navigateActions = ({ a, layout }: ActionContext): Action[] => [
     run: () => a.goForward(),
   },
   {
-    id: 'previous-session',
-    label: 'Previous session',
+    id: 'previous-thread',
+    label: 'Previous thread',
     shortcut: { key: '[' },
-    run: () => a.stepSession(-1),
+    run: () => a.stepThread(-1),
   },
   {
-    id: 'next-session',
-    label: 'Next session',
+    id: 'next-thread',
+    label: 'Next thread',
     shortcut: { key: ']' },
-    run: () => a.stepSession(1),
+    run: () => a.stepThread(1),
   },
 ]

@@ -12,7 +12,7 @@ export function BrowserSettings() {
       <SettingsSection title="Agent access">
         <SettingsRow
           title="Agent browser access"
-          description="Allow agents in this project to use the browser and the media commands. Applies when a task next starts."
+          description="Allow agents in this project to use the browser and the media commands. Applies when a thread next starts."
           control={<Switch label="Agent browser access" checked={settings.browserEnabled} onChange={(on) => report(() => setBrowserEnabled(on))} />}
           onReset={settings.browserEnabled !== SETTING_DEFAULTS.browserEnabled ? () => report(() => setBrowserEnabled(SETTING_DEFAULTS.browserEnabled)) : undefined}
         />

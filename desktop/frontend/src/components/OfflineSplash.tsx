@@ -16,7 +16,7 @@ export function OfflineSplash({ retrying, onRetry }: OfflineSplashProps) {
           <span>offline</span>
           <span className="offline-cursor" />
         </div>
-        <p className="max-w-[46ch] text-soft">No network. Your sessions keep running on this Mac and pick up again when it comes back.</p>
+        <p className="max-w-[46ch] text-soft">No network. Your threads keep running on this Mac and pick up again when it comes back.</p>
         <div className="flex h-[1.875rem] items-center">
           {retrying ? (
             <Spinner size={16} />

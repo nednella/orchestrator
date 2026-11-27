@@ -16,13 +16,13 @@ const dateOf = (at: number) => new Date(at).toLocaleString()
 type IssueReaderProps = { number: number; onBack(): void }
 
 export function IssueReader({ number, onBack }: IssueReaderProps) {
-  const { issues, projectSessions: sessions, report } = useOrchestrator('issues', 'projectSessions', 'report')
+  const { issues, projectThreads: threads, report } = useOrchestrator('issues', 'projectThreads', 'report')
   const body = useRef<HTMLDivElement>(null)
   const [detail, setDetail] = useState<IssueDetail | null>(null)
   const [error, setError] = useState('')
   const loading = !detail && !error
   const issue = issues.find((i) => i.number === number)
-  const session = sessions.find((s) => s.id === issue?.threadId)
+  const thread = threads.find((s) => s.id === issue?.threadId)
 
   useEffect(() => {
     api.issueDetail(number).then(setDetail, (err) => setError(errorMessage(err)))
@@ -71,7 +71,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
         )}
         {issue && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5 text-small">
-            {session ? <IssueThread session={session} /> : <IssueWorkflow issue={issue} />}
+            {thread ? <IssueThread thread={thread} /> : <IssueWorkflow issue={issue} />}
           </div>
         )}
       </header>

@@ -3,22 +3,22 @@ import { createPortal } from 'react-dom'
 import { useOrchestrator } from '../OrchestratorContext'
 import { EFFORTS, modelName } from '../model'
 import { threadCardLines } from '../threadCard'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import { ThreadCardLine } from './ThreadCardLine'
 
 // anchor is the row's box: the card sits beside the sidebar, or below or above the row when the window is too narrow.
-type ThreadCardProps = { id: string; session: Session; anchor: DOMRect }
+type ThreadCardProps = { id: string; thread: Thread; anchor: DOMRect }
 
 const GAP = 12
 const MARGIN = 8
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
-export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
+export function ThreadCard({ id, thread, anchor }: ThreadCardProps) {
   const { machine, issues } = useOrchestrator('machine', 'issues')
   const card = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
-  const lines = threadCardLines(session, machine, issues.find((i) => i.number === session.issue)?.title ?? '')
+  const lines = threadCardLines(thread, machine, issues.find((i) => i.number === thread.issue)?.title ?? '')
 
   useLayoutEffect(() => {
     const el = card.current
@@ -42,7 +42,7 @@ export function ThreadCard({ id, session, anchor }: ThreadCardProps) {
       className="popup pointer-events-none flex w-[17.5rem] max-w-[calc(100vw-1rem)] flex-col gap-2 px-3 py-2.5"
       style={place ?? { left: anchor.right, top: anchor.top, opacity: 0 }}
     >
-      <p className="text-body font-semibold break-words text-ink">{session.title}</p>
+      <p className="text-body font-semibold break-words text-ink">{thread.title}</p>
       <div className="flex flex-col gap-1.5 text-small text-soft">
         {lines.map((line) => (
           <ThreadCardLine key={line.key} icon={line.icon} iconColor={line.color}>

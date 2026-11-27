@@ -6,7 +6,7 @@ import { COLUMN_KEY, storedColumn } from '../chatColumn'
 import { sameSteps } from '../chatTimeline'
 import type { AgentItem, AgentState, WorkStep } from '../chatTimeline'
 import { readStored } from '../storage'
-import type { Session } from '../types'
+import type { Thread } from '../types'
 import { useChat } from '../useChat'
 import { useFollowEnd } from '../useFollowEnd'
 import { ChatLineageDivider } from './ChatLineageDivider'
@@ -16,7 +16,7 @@ import { ChatUserText } from './ChatUserText'
 import { CenteredSpinner } from './CenteredSpinner'
 import { SubagentBar } from './SubagentBar'
 
-type SubagentViewProps = { parent: Session; agent: string }
+type SubagentViewProps = { parent: Thread; agent: string }
 
 // SubagentView shows a subagent Claude started in the parent's chat, read only: what it was asked, what it did and
 // what it reported. It follows the parent's chat, which holds every event of the subagent.
