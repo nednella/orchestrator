@@ -161,6 +161,7 @@ type Threads struct {
 	newPlace   func() string
 	info       []term.Info             // the live threads under a host, and those that are still starting
 	setups     map[string]*setupRun    // under mu, the set-up command of each thread that runs one or whose command failed
+	hidden     map[string]bool         // under mu, the threads a delete takes off the list before it has run
 	starting   map[string]*starting    // under mu, the threads whose start runs or failed, until their agent runs and has its first message
 	shells     []term.Shell            // every project's shells
 	sentShells map[string][]Shell      // by project key, the shells last sent
@@ -292,6 +293,7 @@ func newThreads(o Options) *Threads {
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{}, shellStart: map[thread.Name]time.Time{},
 		records:    map[string]thread.Record{},
 		starting:   map[string]*starting{},
+		hidden:     map[string]bool{},
 		setups:     map[string]*setupRun{},
 		cwds:       map[string]string{},
 		seen:       map[string]thread.State{},
@@ -772,22 +774,68 @@ func (s *Threads) handoverOf(id string) string {
 // none. A descendant's worktree that a thread outside the family works in stays on disk, and goes over to that thread,
 // so a Delete of it can take the worktree later. A thread with a running descendant is refused. While the delete runs,
 // neither the thread nor a descendant can be woken or forked, and none starts a child.
+//
+// Delete returns as soon as the delete is allowed to start: the rows of the thread and its descendants leave the list
+// at once, and the checks, the stop, the clean-up and the removal of the files run after, on a goroutine of their
+// own. A check that keeps a worktree, or any other refusal, brings the rows back that are left and tells the front end
+// with the delete:refused event, with the text DeleteAndWait gives. A delete the app did not finish, because it quit
+// first, leaves the thread as it was, asleep when the delete had put it to sleep, and showing again.
 func (s *Threads) Delete(id string, worktree bool) error {
+	family, done, err := s.beginDelete(id)
+	if err != nil || done {
+		return err
+	}
+	go func() {
+		if err := s.finishDelete(id, family, worktree); err != nil {
+			s.emit("delete:refused", map[string]string{"id": id, "error": err.Error()})
+		}
+	}()
+	return nil
+}
+
+// DeleteAndWait is Delete that returns once the thread is gone, with the refusal when it is not.
+func (s *Threads) DeleteAndWait(id string, worktree bool) error {
+	family, done, err := s.beginDelete(id)
+	if err != nil || done {
+		return err
+	}
+	return s.finishDelete(id, family, worktree)
+}
+
+// beginDelete takes the thread and its family into the delete and takes their rows off the list. done says that a start
+// that had not run its agent was stopped, which was the whole delete.
+func (s *Threads) beginDelete(id string) (family []string, done bool, err error) {
 	name, err := thread.ParseName(id)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 	if name.IsShell() {
-		return errNotThread
+		return nil, false, errNotThread
 	}
 	if s.abortStart(id) {
-		return nil
+		return nil, true, nil
 	}
-	family, err := s.startDelete(id)
-	if err != nil {
-		return err
+	if family, err = s.startDelete(id); err != nil {
+		return nil, false, err
 	}
+	s.mu.Lock()
+	for _, d := range family {
+		s.hidden[d] = true
+	}
+	s.sync()
+	s.mu.Unlock()
+	return family, false, nil
+}
+
+// finishDelete is the rest of a delete: what the checks and the stops and the removal need. It puts the rows that are
+// left back when it fails.
+func (s *Threads) finishDelete(id string, family []string, worktree bool) (err error) {
 	defer s.endDelete(family)
+	defer func() {
+		if err != nil {
+			s.unhide(family)
+		}
+	}()
 	trees := s.familyWorktrees(s.context(), family)
 	// stopped is the thread this Delete has put to sleep, so an error after that says it is asleep now.
 	stopped := ""
@@ -884,7 +932,18 @@ func (s *Threads) endDelete(family []string) {
 	defer s.mu.Unlock()
 	for _, d := range family {
 		delete(s.deleting, d)
+		delete(s.hidden, d)
 	}
+}
+
+// unhide puts the rows of a delete that failed back on the list, those that are left. It takes mu.
+func (s *Threads) unhide(family []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range family {
+		delete(s.hidden, d)
+	}
+	s.sync()
 }
 
 // markDeleting is startDelete's checks and marks, under mu.
@@ -1573,6 +1632,9 @@ func (s *Threads) list() []Thread {
 	var rail []thread.Thread
 	byName := map[thread.Name]term.Info{}
 	for _, in := range s.info {
+		if s.hidden[in.Name.String()] {
+			continue
+		}
 		byName[in.Name] = in
 		ss := thread.Thread{Name: in.Name, N: s.nums[in.Name.String()], State: s.shownState(in.Name.String())}
 		if rec, ok := s.records[in.Name.String()]; ok {
@@ -1581,6 +1643,9 @@ func (s *Threads) list() []Thread {
 		rail = append(rail, ss)
 	}
 	for _, e := range s.ended {
+		if s.hidden[e.info.Name.String()] {
+			continue
+		}
 		byName[e.info.Name] = e.info
 		rail = append(rail, thread.Thread{Name: e.info.Name, N: s.nums[e.info.Name.String()], State: thread.Settled, At: e.at})
 	}

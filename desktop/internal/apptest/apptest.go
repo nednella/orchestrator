@@ -1437,7 +1437,14 @@ func (h *Harness) AckPR(id string) error                         { return h.thre
 func (h *Harness) Cleanup(id string, force bool) error           { return h.threads.Cleanup(id, force) }
 func (h *Harness) Cleanups() []threads.Cleanup                   { return h.threads.Cleanups() }
 
+// DeleteThread deletes the thread and waits for the delete to end, so a test finds the thread gone or the refusal.
 func (h *Harness) DeleteThread(id string, worktree bool) error {
+	return h.Threads().DeleteAndWait(id, worktree)
+}
+
+// DeleteThreadAsApp is the app's DeleteThread, which returns once the delete has started: the thread's row is off the
+// list and its checks, stop and removal are still to come.
+func (h *Harness) DeleteThreadAsApp(id string, worktree bool) error {
 	return h.threads.DeleteThread(id, worktree)
 }
 

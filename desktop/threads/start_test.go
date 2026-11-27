@@ -184,7 +184,7 @@ func TestFailedStartIsDeleted(t *testing.T) {
 		row, _ := h.Thread(s.ID)
 		return row.Start == threads.StartFailed
 	})
-	if err := h.Threads().Delete(s.ID, true); err != nil {
+	if err := h.Threads().DeleteAndWait(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if rows := h.Threads().List(); len(rows) != 0 {
@@ -203,7 +203,7 @@ func TestDeleteStopsAStartThatRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.Threads().Delete(s.ID, true); err != nil {
+	if err := h.Threads().DeleteAndWait(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if rows := h.Threads().List(); len(rows) != 0 {

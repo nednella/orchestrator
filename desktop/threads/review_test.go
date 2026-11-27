@@ -40,7 +40,9 @@ case " $* " in
     if [ -e %[1]s/fail-cut-list ]; then out=$(%[2]s "$@"); rc=$?; printf '%%s\n' "$out" | awk -F'\t' -v id="$(cat %[1]s/fail-cut-list)" 'BEGIN{OFS="\t"} $1==id {print $1,$2,$3,$4,$5,$6,""; next} {print}'; exit $rc; fi ;;
   *"@orchestrator-issue"*) if [ -e %[1]s/fail-issue ]; then echo "no space for the option" >&2; exit 1; fi ;;
   *"@orchestrator-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
-  *" kill-session "*) if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi ;;
+  *" kill-session "*)
+    if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi
+    if [ -e %[1]s/fail-slow-kill ]; then sleep "$(cat %[1]s/fail-slow-kill)"; fi ;;
 esac
 exec %[2]s "$@"
 `, dir, real)
@@ -49,6 +51,14 @@ exec %[2]s "$@"
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return fakeTmux{dir}
+}
+
+// slowKill makes every kill-session wait the seconds before it kills, as a host that is slow to stop does.
+func (f fakeTmux) slowKill(t *testing.T, seconds string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(f.dir, "fail-slow-kill"), []byte(seconds), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // fail makes the named call ("new", "list", "issue", "access" or "kill") fail; "slow-new" makes a thread's new-session wait a second and "new-shell" fails the new-session of a shell, or work again. "slow-list" makes list-sessions

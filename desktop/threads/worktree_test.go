@@ -289,7 +289,7 @@ func TestDeleteStopsASetupCommandThatRuns(t *testing.T) {
 		return row.Setup == threads.SetupRunning && row.SetupShell != ""
 	})
 	row, _ := h.Thread(s.ID)
-	if err := h.Threads().Delete(s.ID, true); err != nil {
+	if err := h.Threads().DeleteAndWait(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if rows := h.Threads().List(); len(rows) != 0 {
@@ -1010,7 +1010,7 @@ func TestNameOfAClosedSetupTerminalIsNotTheSetupOfThatThreadAnyMore(t *testing.T
 	if got, _ := h.Thread(s.ID); got.Setup != "" {
 		t.Errorf("the owner's shell was taken for the set-up: %+v", got)
 	}
-	if err := h.Threads().Delete(s.ID, true); err != nil {
+	if err := h.Threads().DeleteAndWait(s.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if shells := h.Threads().Shells(); len(shells) != 1 || shells[0].ID != own {
@@ -1033,7 +1033,7 @@ func TestOnlyARunningSetupIsExemptAndNotFromTheRewindCheck(t *testing.T) {
 	if _, _, reason := h.Threads().FilesRewind(s.ID); reason != runningReason {
 		t.Errorf("rewind reason = %q, want %q: a running set-up may write the files", reason, runningReason)
 	}
-	if err := h.Threads().Delete(s.ID, true); err != nil {
+	if err := h.Threads().DeleteAndWait(s.ID, true); err != nil {
 		t.Errorf("a delete with a set-up that runs = %v, want it to stop the set-up and go on", err)
 	}
 }
