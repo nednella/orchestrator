@@ -1,6 +1,7 @@
 package threads_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,8 +11,6 @@ import (
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
 )
-
-const addWorktree = "git worktree add -b {branch} {worktree} {base}"
 
 // listedStarting is the latest threads event's row of the thread, when it says the thread starts.
 func listedStarting(h *apptest.Harness, id string) bool {
@@ -33,10 +32,21 @@ func mentions(lines []string, text string) int {
 	return n
 }
 
-func TestNewThreadIsListedBeforeItsWorktreeIsMade(t *testing.T) {
+func TestNewThreadStartsWithoutWaitingForTheNetwork(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 3 && " + addWorktree})
-	repoFixture(t, h)
+	h := apptest.New(t)
+	origin := repoFixture(t, h)
+	slowOrigin(t, h, origin, 3*time.Second)
+	old := gitIn(t, h.Dir, "rev-parse", "origin/main")
+	// Another clone pushes a newer commit, which only a fetch brings in.
+	clone := filepath.Join(t.TempDir(), "clone")
+	gitIn(t, filepath.Dir(clone), "clone", origin, clone)
+	if err := os.WriteFile(filepath.Join(clone, "news"), []byte("news\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, clone, "add", "news")
+	gitIn(t, clone, "commit", "-m", "news")
+	gitIn(t, clone, "push", "origin", "main")
 
 	began := time.Now()
 	s, err := h.NewThreadLater("Fix login", "make it faster")
@@ -44,7 +54,7 @@ func TestNewThreadIsListedBeforeItsWorktreeIsMade(t *testing.T) {
 		t.Fatal(err)
 	}
 	if took := time.Since(began); took > time.Second {
-		t.Errorf("the call took %v, which the worktree command holds up", took)
+		t.Errorf("the call took %v", took)
 	}
 	if s.Start != threads.Starting || s.State != "working" || s.FirstMessage != "make it faster" || s.Title != "Fix login" {
 		t.Errorf("the row = %+v, want it starting with the first message", s)
@@ -52,28 +62,44 @@ func TestNewThreadIsListedBeforeItsWorktreeIsMade(t *testing.T) {
 	if !listedStarting(h, s.ID) {
 		t.Errorf("the threads event does not list %s as starting: %+v", s.ID, h.Rec.LastThreads())
 	}
-	if exists(filepath.Join(h.Dir, "trees", "fix-login")) {
-		t.Error("the worktree was made before the call returned")
-	}
-	if got, err := h.NewThreadLater("Fix login", "again"); err != nil || got.ID == s.ID {
-		t.Errorf("a second start = %+v, %v", got, err)
-	}
-
 	eventually(t, "the thread to start", func() bool {
 		row, _ := h.Thread(s.ID)
 		return row.Start == ""
 	})
+	if took := time.Since(began); took > 2500*time.Millisecond {
+		t.Errorf("the thread took %v to start, which the 3 s fetch holds up", took)
+	}
 	row, _ := h.Thread(s.ID)
-	if row.Worktree == "" || !exists(row.Worktree) || row.FirstMessage != "" || row.State == "waiting" {
+	if row.Worktree == "" || !exists(row.Worktree) || row.FirstMessage != "" || row.State == "waiting" || row.Branch != "fix-login" {
 		t.Errorf("the started row = %+v", row)
+	}
+	if head := gitIn(t, row.Worktree, "rev-parse", "HEAD"); head != old {
+		t.Errorf("the worktree starts at %s, want the local copy of origin/main, %s", head, old)
 	}
 	eventually(t, "the first message on the agent's stdin", func() bool { return mentions(userLines(t, h, s.ID), "make it faster") >= 1 })
 	time.Sleep(300 * time.Millisecond)
 	if n := mentions(userLines(t, h, s.ID), "make it faster"); n != 1 {
 		t.Errorf("the first message reached the agent %d times, want once", n)
 	}
-	if row.Branch != "fix-login" {
-		t.Errorf("branch = %q", row.Branch)
+	eventually(t, "the fetch after the start", func() bool { return gitIn(t, h.Dir, "rev-parse", "origin/main") != old })
+}
+
+func TestSlowSetupCommandDoesNotHoldTheAgent(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 30"})
+	repoFixture(t, h)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to start", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	eventually(t, "the first message", func() bool { return mentions(userLines(t, h, s.ID), "make it faster") == 1 })
+	row, _ := h.Thread(s.ID)
+	if row.Setup != threads.SetupRunning || row.SetupShell == "" {
+		t.Errorf("the row = %+v, want the set-up still running", row)
 	}
 }
 
@@ -104,11 +130,12 @@ func TestSlowAgentShowsAsStartingThenGetsTheFirstMessageOnce(t *testing.T) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestFailedStartShowsOnTheThreadAndRetries(t *testing.T) {
-	t.Parallel()
-	marker := filepath.Join(t.TempDir(), "failed-once")
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "if [ -e " + marker + " ]; then " + addWorktree + "; else touch " + marker + "; echo no room on the disk >&2; exit 3; fi"})
+	h := newHarness(t)
 	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "new", true)
 
 	s, err := h.NewThreadLater("Tidy up", "clean the tests")
 	if err != nil {
@@ -119,17 +146,15 @@ func TestFailedStartShowsOnTheThreadAndRetries(t *testing.T) {
 		return row.Start == threads.StartFailed
 	})
 	row, _ := h.Thread(s.ID)
-	if !strings.Contains(row.StartError, "no room on the disk") || row.FirstMessage != "clean the tests" || row.State != "waiting" || row.Detail != row.StartError {
+	if !strings.Contains(row.StartError, "no room for a session") || row.FirstMessage != "clean the tests" || row.State != "waiting" || row.Detail != row.StartError {
 		t.Errorf("the failed row = %+v", row)
 	}
 	if exists(filepath.Join(h.Dir, "trees", "tidy-up")) || len(userLines(t, h, s.ID)) != 0 {
 		t.Error("the failed start left a worktree or reached the agent")
 	}
+	tmux.fail(t, "new", false)
 	if err := h.RetryThreadStart(s.ID); err != nil {
 		t.Fatal(err)
-	}
-	if err := h.RetryThreadStart(s.ID); err == nil {
-		t.Error("a retry of a start that runs was taken")
 	}
 	eventually(t, "the retry to start the thread", func() bool {
 		row, _ := h.Thread(s.ID)
@@ -145,10 +170,11 @@ func TestFailedStartShowsOnTheThreadAndRetries(t *testing.T) {
 	}
 }
 
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestFailedStartIsDeleted(t *testing.T) {
-	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "exit 3"})
+	h := newHarness(t)
 	repoFixture(t, h)
+	newFakeTmux(t).fail(t, "new", true)
 	s, err := h.NewThreadLater("Doomed", "never mind")
 	if err != nil {
 		t.Fatal(err)
@@ -170,9 +196,9 @@ func TestFailedStartIsDeleted(t *testing.T) {
 
 func TestDeleteStopsAStartThatRuns(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 3 && " + addWorktree})
-	repoFixture(t, h)
-	s, err := h.NewThreadLater("Changed my mind", "oops")
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 3*time.Second)
+	s, err := h.StartIssueLater(7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,15 +212,15 @@ func TestDeleteStopsAStartThatRuns(t *testing.T) {
 	if rows := h.Threads().List(); len(rows) != 0 {
 		t.Errorf("the start went on after the delete: %+v", rows)
 	}
-	if exists(filepath.Join(h.Dir, "trees", "changed-my-mind")) {
+	if exists(filepath.Join(h.Dir, "trees", "issue-7")) {
 		t.Error("the worktree of a deleted start is there")
 	}
 }
 
 func TestIssueThreadIsNotStartedTwiceWhileItStarts(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
-	repoFixture(t, h)
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
 
 	first, err := h.StartIssueLater(7)
 	if err != nil {
@@ -220,9 +246,9 @@ func TestIssueThreadIsNotStartedTwiceWhileItStarts(t *testing.T) {
 
 func TestRenameWhileTheThreadStarts(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
-	repoFixture(t, h)
-	s, err := h.NewThreadLater("First name", "hello")
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
+	s, err := h.StartIssueLater(7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,9 +270,9 @@ func TestRenameWhileTheThreadStarts(t *testing.T) {
 
 func TestListedStartLeavesNoStateFileUntilItsAgentRuns(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
-	repoFixture(t, h)
-	s, err := h.NewThreadLater("Fix login", "hello")
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
+	s, err := h.StartIssueLater(7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,16 +286,16 @@ func TestListedStartLeavesNoStateFileUntilItsAgentRuns(t *testing.T) {
 	})
 	row, _ := h.Thread(s.ID)
 	rec, _ := bus.ReadState(h.State, s.ID)
-	if rec.Branch != "fix-login" || rec.Path != row.Worktree || rec.Title != "Fix login" {
+	if rec.Branch != "issue-7" || rec.Path != row.Worktree || !strings.HasPrefix(rec.Title, "#7") {
 		t.Errorf("the saved identity = %+v, want the branch and folder of %+v", rec.Identity, row)
 	}
 }
 
 func TestThreadThatStartsCannotBeSlept(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
-	repoFixture(t, h)
-	s, err := h.NewThreadLater("Fix login", "hello")
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
+	s, err := h.StartIssueLater(7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,9 +342,9 @@ func TestRetryKeepsTheBranchTheFirstTryPicked(t *testing.T) {
 
 func TestMessageSentWhileTheThreadStartsGoesAfterTheFirstOne(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
-	repoFixture(t, h)
-	s, err := h.NewThreadLater("Fix login", "first words")
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
+	s, err := h.StartIssueLater(7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +356,7 @@ func TestMessageSentWhileTheThreadStartsGoesAfterTheFirstOne(t *testing.T) {
 	}
 	eventually(t, "both messages", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
 	users := userLines(t, h, s.ID)
-	if !strings.Contains(users[0], "first words") || !strings.Contains(users[1], "second words") || len(users) != 2 {
+	if !strings.Contains(users[0], "/ship 7") || !strings.Contains(users[1], "second words") || len(users) != 2 {
 		t.Errorf("messages = %v", users)
 	}
 	eventually(t, "the start to end", func() bool {

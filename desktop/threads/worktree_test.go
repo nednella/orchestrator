@@ -213,66 +213,93 @@ func TestThreadBranchIsNamedFromItsTitle(t *testing.T) {
 	}
 }
 
-func TestWorktreeCommandGetsItsPlaceholders(t *testing.T) {
+func TestWorktreeCommandRunsInTheNewWorktreeWithItsPlaceholders(t *testing.T) {
 	t.Parallel()
 	got := filepath.Join(t.TempDir(), "placeholders")
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "printf '%s\\n' {branch} {worktree} {dir} {base} > " + got + " && git worktree add -b {branch} {worktree} {base}"})
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "printf '%s\\n' {branch} {worktree} {dir} {base} \"$(pwd -P)\" > " + got})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	tree := realDir(t, filepath.Join(h.Dir, "trees", "tidy-up"))
+	eventually(t, "the command to run", func() bool { return exists(got) })
 	data, err := os.ReadFile(got)
-	if want := strings.Join([]string{"tidy-up", filepath.Join(h.Dir, "trees", "tidy-up"), h.Dir, "origin/main"}, "\n") + "\n"; err != nil || string(data) != want {
+	if want := strings.Join([]string{"tidy-up", filepath.Join(h.Dir, "trees", "tidy-up"), h.Dir, "origin/main", tree}, "\n") + "\n"; err != nil || string(data) != want {
 		t.Errorf("the command got %q, %v; want %q", data, err, want)
 	}
-	if want := realDir(t, filepath.Join(h.Dir, "trees", "tidy-up")); s.Worktree != want {
-		t.Errorf("worktree %q, want %s", s.Worktree, want)
+	if s.Worktree != tree {
+		t.Errorf("worktree %q, want %s", s.Worktree, tree)
 	}
+	eventually(t, "the set-up to end well", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == ""
+	})
 }
 
-func TestWorktreeMadeElsewhereByTheCommandIsRecorded(t *testing.T) {
+func TestFailedSetupCommandKeepsItsTerminalAndStopsNothing(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "git worktree add -b {branch} {dir}/elsewhere {base}"})
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "echo no room on the disk >&2; exit 3"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := realDir(t, filepath.Join(h.Dir, "elsewhere"))
-	if got := realDir(t, panePath(t, h, s.ID)); got != dir {
-		t.Errorf("the thread runs in %s, want %s", got, dir)
+	eventually(t, "the set-up to fail", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == threads.SetupFailed
+	})
+	row, _ := h.Thread(s.ID)
+	if row.SetupExit != 3 || row.Start != "" || row.State == "settled" || row.Worktree == "" {
+		t.Errorf("the row = %+v, want the thread running with the set-up failed with code 3", row)
 	}
-	if records := madeRecords(t, h); len(records) != 1 || records[0].Path != dir || records[0].Branch != "tidy-up" {
-		t.Errorf("records = %+v", records)
-	}
-	if s.Worktree != dir || exists(filepath.Join(h.Dir, "trees", "tidy-up")) {
-		t.Errorf("worktree %q; trees/tidy-up exists: %v", s.Worktree, exists(filepath.Join(h.Dir, "trees", "tidy-up")))
+	if !slices.ContainsFunc(h.Threads().Shells(), func(sh threads.Shell) bool { return sh.ID == row.SetupShell }) {
+		t.Errorf("the terminal %q of the set-up is not open: %+v", row.SetupShell, h.Threads().Shells())
 	}
 }
 
-func TestFailedWorktreeCommandStartsNoThread(t *testing.T) {
+func TestSetupCommandThatEndsWellLeavesNoLine(t *testing.T) {
 	t.Parallel()
-	for _, tt := range []struct{ command, says string }{
-		{"echo no room on the disk >&2; exit 3", "worktree_command failed for tidy-up: sh -c: exit status 3: no room on the disk"},
-		{"echo all done", "worktree_command made no worktree for tidy-up: all done"},
-	} {
-		t.Run(tt.command, func(t *testing.T) {
-			h := apptest.NewWith(t, apptest.Options{WorktreeCommand: tt.command})
-			repoFixture(t, h)
-			if _, err := h.NewThreadIn("Tidy up", "", "supervised", ""); err == nil || err.Error() != tt.says {
-				t.Errorf("start = %v, want %q", err, tt.says)
-			}
-			if out, _ := exec.Command("tmux", "-L", h.Socket, "list-sessions").CombinedOutput(); strings.Contains(string(out), "main/") {
-				t.Errorf("a thread runs:\n%s", out)
-			}
-			if records := madeRecords(t, h); len(records) != 0 {
-				t.Errorf("records = %+v", records)
-			}
-			if rows := h.Threads().List(); len(rows) != 1 || rows[0].Start != threads.StartFailed || rows[0].StartError != tt.says {
-				t.Errorf("rows = %+v, want the one thread that failed to start", rows)
-			}
-		})
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "echo all done"})
+	repoFixture(t, h)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the set-up to end", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == ""
+	})
+	h.Threads().Refresh()
+	if shells := h.Threads().Shells(); len(shells) != 0 {
+		t.Errorf("shells = %+v", shells)
+	}
+}
+
+func TestDeleteStopsASetupCommandThatRuns(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 60"})
+	repoFixture(t, h)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the set-up to run", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == threads.SetupRunning && row.SetupShell != ""
+	})
+	row, _ := h.Thread(s.ID)
+	if err := h.Threads().Delete(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if rows := h.Threads().List(); len(rows) != 0 {
+		t.Errorf("rows = %+v", rows)
+	}
+	if shells := h.Threads().Shells(); len(shells) != 0 {
+		t.Errorf("the set-up terminal %s is still open: %+v", row.SetupShell, shells)
+	}
+	if exists(row.Worktree) {
+		t.Errorf("the worktree %s is still there", row.Worktree)
 	}
 }
 

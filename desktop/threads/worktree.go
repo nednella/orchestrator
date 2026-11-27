@@ -18,7 +18,6 @@ import (
 	"github.com/nednella/orchestrator/internal/folder"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/thread"
-	"github.com/nednella/orchestrator/internal/util"
 )
 
 // Place is where a new thread runs.
@@ -107,7 +106,7 @@ type workPlace struct {
 // one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is made by
 // the project's worktree_command from base, a commit, or with no base from the default branch on origin,
 // fetched first, and the worktree is the one git then lists on the branch, wherever the command put it.
-func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string) (workPlace, error) {
+func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string, fresh bool) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return workPlace{dir: proj.Dir}, nil
@@ -139,23 +138,15 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 	if err := l.excludeTrees(ctx, proj, strings.TrimSpace(string(top))); err != nil {
 		return workPlace{}, err
 	}
-	branchFound, err := l.addWorktree(ctx, proj, dir, branch)
+	// A branch picked from the title is new, so origin is not asked for it: that would cost a round trip that always fails.
+	branchFound, err := l.addWorktree(ctx, proj, dir, branch, !fresh)
 	if err != nil {
 		return workPlace{}, err
 	}
 	if !branchFound {
-		out, err := l.projectCommand(ctx, proj, proj.MakeWorktree(), "{branch}", util.ShellQuote(branch), "{worktree}", util.ShellQuote(dir), "{base}", util.ShellQuote(base))
-		if err != nil {
-			return workPlace{}, fmt.Errorf("worktree_command failed for %s: %w", branch, err)
+		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
+			return workPlace{}, fmt.Errorf("making the worktree of %s: %w", branch, err)
 		}
-		if trees, err = l.worktrees(ctx, proj.Dir); err != nil {
-			return workPlace{}, fmt.Errorf("listing the worktrees: %w", err)
-		}
-		made, ok := trees.byBranch[branch]
-		if !ok {
-			return workPlace{}, fmt.Errorf("worktree_command made no worktree for %s: %s", branch, cmp.Or(util.FirstLine(strings.TrimSpace(string(out))), "it printed nothing"))
-		}
-		dir = made
 	}
 	w := Made{Path: dir, Branch: branch, Base: base, BaseOid: baseOid, Thread: name.String(), Created: time.Now().UnixMilli()}
 	if err := l.threads.made.Add(proj.Key(), w); err != nil {
@@ -176,11 +167,11 @@ func staleCheckout(branch, dir string) error {
 
 // addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
 // clone has no copy. When neither has the branch it adds nothing and says branchFound false.
-func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string) (branchFound bool, err error) {
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool) (branchFound bool, err error) {
 	args := []string{"worktree", "add", "--quiet", dir, branch}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
-	case l.onOrigin(ctx, proj.Dir, branch):
+	case askOrigin && l.onOrigin(ctx, proj.Dir, branch), !askOrigin && l.hasRef(ctx, proj.Dir, "refs/remotes/origin/"+branch):
 		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/" + branch}
 	default:
 		return false, nil
@@ -224,7 +215,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	if err := l.dropEntry(ctx, proj.Dir, trees, w.Path); err != nil {
 		return err
 	}
-	branchFound, err := l.addWorktree(ctx, proj, w.Path, w.Branch)
+	branchFound, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true)
 	if err != nil {
 		return err
 	}
@@ -260,15 +251,21 @@ func (l *Lifecycle) dropEntry(ctx context.Context, dir string, trees worktrees, 
 // has no copy, and the commit it is at.
 func (l *Lifecycle) base(ctx context.Context, dir string) (ref, oid string, err error) {
 	branch := l.mainBranch(ctx, dir)
-	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
-		log.Printf("orchestrator: fetching %s for a new worktree, which starts from the copy of it there is: %v", branch, err)
-	}
 	for _, ref := range []string{"origin/" + branch, branch} {
 		if out, err := l.git(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
 			return ref, strings.TrimSpace(string(out)), nil
 		}
 	}
 	return "", "", fmt.Errorf("%s has no commit to start a worktree from", branch)
+}
+
+// fetchBase brings origin's copy of the default branch up to date, which the next new branch starts from. A fetch that
+// fails is only logged.
+func (l *Lifecycle) fetchBase(ctx context.Context, dir string) {
+	branch := l.mainBranch(ctx, dir)
+	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
+		log.Printf("orchestrator: fetching %s after a new worktree was made from the copy of it there was: %v", branch, err)
+	}
 }
 
 // startOf is what a new branch starts from, and the commit it is at: base when it is set, else what l.base gives.

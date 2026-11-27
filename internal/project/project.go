@@ -18,14 +18,8 @@ import (
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
-// DefaultWorktreeCommand makes a worktree on a new branch cut from the base.
-const DefaultWorktreeCommand = "git worktree add -b {branch} {worktree} {base}"
-
 // DefaultCleanupCommand removes a worktree and leaves its branch.
 const DefaultCleanupCommand = "git worktree remove {force} {worktree}"
-
-// MakeWorktree is the command that makes the worktree of an issue thread.
-func (p Project) MakeWorktree() string { return cmp.Or(p.WorktreeCommand, DefaultWorktreeCommand) }
 
 // RemoveWorktree is the command that removes the worktree orchestrator made.
 func (p Project) RemoveWorktree() string { return cmp.Or(p.CleanupCommand, DefaultCleanupCommand) }
@@ -39,7 +33,7 @@ type Project struct {
 	Send            string    `yaml:"prompt_send,omitempty"`         // auto (the default) sends what a thread starts with at once; manual waits for Enter
 	Branch          string    `yaml:"issue_branch,omitempty"`        // branch of an issue's work when the thread reports none; {n} is the number
 	CleanupCommand  string    `yaml:"cleanup_command,omitempty"`     // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
-	WorktreeCommand string    `yaml:"worktree_command,omitempty"`    // shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir} and {base}
+	WorktreeCommand string    `yaml:"worktree_command,omitempty"`    // shell command that sets up a new worktree, run in a terminal in it while the agent already works; {branch}, {worktree}, {dir} and {base}
 	CleanupMode     Cleanup   `yaml:"cleanup_mode,omitempty"`        // whether the app cleans up by itself, per event
 	URL             string    `yaml:"browser_start_url,omitempty"`   // the page a thread's browser opens first
 	Browser         *bool     `yaml:"browser_enabled,omitempty"`     // give threads the browser and evidence commands; on unless false

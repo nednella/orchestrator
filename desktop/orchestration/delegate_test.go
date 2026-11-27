@@ -605,7 +605,7 @@ func TestDelegateToAnUnknownProjectNamesTheProjects(t *testing.T) {
 	}
 }
 
-func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
+func TestCrossProjectWorktreeStartsAtTheLocalCopyOfTheDefaultBranch(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	repoFixture(t, h)
@@ -636,6 +636,7 @@ func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
 	gitIn(t, pusher, "commit", "--allow-empty", "-m", "newer on origin")
 	gitIn(t, pusher, "push", "origin", "main")
 	originMain := gitIn(t, pusher, "rev-parse", "HEAD")
+	behind := gitIn(t, dir, "rev-parse", "origin/main")
 	_, key := otherProject(t, h, dir)
 
 	c := mustDelegate(t, h, parent.ID, `{"task":"write the docs","title":"Write the login docs","where":"worktree","project":"`+key+`"}`)
@@ -643,9 +644,12 @@ func TestCrossProjectWorktreeStartsAtTheDefaultBranch(t *testing.T) {
 	if c.Branch != "write-the-login-docs" || c.Project != key || realDir(t, c.Dir) != tree || panePath(t, h, c.ID) != tree {
 		t.Errorf("delegate answered %+v; want branch write-the-login-docs in %s", c, tree)
 	}
-	if got := gitIn(t, tree, "rev-parse", "HEAD"); got != originMain || got == localHead || got == parentHead {
-		t.Errorf("the child's worktree is at %s, want origin's main %s (the clone's own HEAD is %s, the parent's %s)", got, originMain, localHead, parentHead)
+	// A new worktree starts at once from the clone's own copy of origin's main; the fetch that brings it up to date
+	// follows in the background.
+	if got := gitIn(t, tree, "rev-parse", "HEAD"); got != behind || got == localHead || got == parentHead {
+		t.Errorf("the child's worktree is at %s, want the clone's copy of origin's main %s (the clone's own HEAD is %s, the parent's %s)", got, behind, localHead, parentHead)
 	}
+	apptest.Eventually(t, "the fetch of origin's main", func() bool { return gitIn(t, dir, "rev-parse", "origin/main") == originMain })
 	if r := row(t, h, c.ID); r.Project != key || r.Branch != "write-the-login-docs" || r.Worktree != tree || r.Parent != parent.ID {
 		t.Errorf("the child's row: project %q, branch %q, worktree %q, parent %q", r.Project, r.Branch, r.Worktree, r.Parent)
 	}

@@ -518,19 +518,6 @@ func TestConfigReadsNewThreadDefaults(t *testing.T) {
 	}
 }
 
-func TestWorktreeCommandDefault(t *testing.T) {
-	for _, tt := range []struct{ name, set, want string }{
-		{"unset", "", DefaultWorktreeCommand},
-		{"set", "git worktree add {worktree} {branch}", "git worktree add {worktree} {branch}"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := (Project{WorktreeCommand: tt.set}).MakeWorktree(); got != tt.want {
-				t.Errorf("MakeWorktree() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestCleanupCommandDefault(t *testing.T) {
 	for _, tt := range []struct{ name, set, want string }{
 		{"unset", "", DefaultCleanupCommand},

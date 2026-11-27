@@ -50,11 +50,12 @@ type starting struct {
 	app             context.Context // the app's, which the first message and the watchers outlive a retry on
 
 	// progress
-	work      workPlace
-	branch    string // the branch a no-issue start picked
-	placed    bool
-	restore   func()
-	delivered bool
+	work         workPlace
+	branch       string // the branch a no-issue start picked
+	placed       bool
+	setupStarted bool
+	restore      func()
+	delivered    bool
 
 	// shown, under mu
 	info     term.Info
@@ -196,6 +197,7 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 			return err
 		}
 	}
+	s.startSetup(st)
 	s.mu.Lock()
 	launched := st.launched
 	s.mu.Unlock()
@@ -292,8 +294,12 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 			branch, base = st.branch, st.o.Base
 		}
 		var err error
-		if work, err = s.life.makeWorktree(ctx, st.proj, st.name, branch, base); err != nil {
+		if work, err = s.life.makeWorktree(ctx, st.proj, st.name, branch, base, st.issue == 0); err != nil {
 			return err
+		}
+		if work.made {
+			// The next thread starts from fresher code; a fetch that fails costs this one nothing.
+			go s.life.fetchBase(st.app, st.proj.Dir)
 		}
 	}
 	if st.fork.at != "" {
@@ -325,6 +331,8 @@ func (s *Threads) setPlace(st *starting, work workPlace) {
 // unplace takes back what place made, for a start that failed before its agent ran.
 func (s *Threads) unplace(st *starting) {
 	ctx := context.WithoutCancel(st.app)
+	s.stopSetup(st.name.String())
+	st.setupStarted = false
 	st.restore()
 	st.restore = func() {}
 	s.life.undoWorktree(ctx, st.proj, st.name, st.work)

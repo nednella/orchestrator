@@ -105,6 +105,9 @@ type Thread struct {
 	Start        StartState `json:"start"`        // "" once the thread runs; else how far its start has got, while its row is shown as working or waiting
 	StartError   string     `json:"startError"`   // why the start failed, "" unless Start is failed
 	FirstMessage string     `json:"firstMessage"` // the message the thread starts with, shown as sent while it starts; "" when none
+	Setup        SetupState `json:"setup"`        // the thread's set-up command: "running", or "failed" when it exited with a code other than 0; "" when it did not run or ended well
+	SetupExit    int        `json:"setupExit"`    // the exit code of a failed set-up command
+	SetupShell   string     `json:"setupShell"`   // the terminal the set-up command runs in, which stays open for a failed one
 	StartQueue   []string   `json:"startQueue"`   // what the owner sent while it started, which the agent gets after the first message; [] when none
 }
 
@@ -154,6 +157,7 @@ type Threads struct {
 	editorApp  func() string
 	newPlace   func() string
 	info       []term.Info             // the live threads under a host, and those that are still starting
+	setups     map[string]*setupRun    // under mu, the set-up command of each thread that runs one or whose command failed
 	starting   map[string]*starting    // under mu, the threads whose start runs or failed, until their agent runs and has its first message
 	shells     []term.Shell            // every project's shells
 	sentShells map[string][]Shell      // by project key, the shells last sent
@@ -285,6 +289,7 @@ func newThreads(o Options) *Threads {
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{}, shellStart: map[thread.Name]time.Time{},
 		records:    map[string]thread.Record{},
 		starting:   map[string]*starting{},
+		setups:     map[string]*setupRun{},
 		cwds:       map[string]string{},
 		seen:       map[string]thread.State{},
 		history:    map[string][]thread.Change{},
@@ -816,6 +821,7 @@ func (s *Threads) remove(id string) (settled bool, err error) {
 	}
 	s.mu.Unlock()
 	live := s.isLive(id)
+	s.stopSetup(id)
 	if err := s.settleToDelete(name); err != nil {
 		return false, err
 	}
@@ -969,6 +975,7 @@ func (s *Threads) forgetDeleted(name thread.Name) {
 	delete(s.deleting, id)
 	delete(s.ended, id)
 	delete(s.starting, id)
+	delete(s.setups, id)
 	delete(s.history, id)
 	delete(s.known, id)
 	delete(s.nums, id)
@@ -1601,6 +1608,9 @@ func (s *Threads) list() []Thread {
 		}
 		view.Memory = s.held[id]
 		view.Subagents = s.background[id].Subagents
+		if run := s.setups[id]; run != nil {
+			view.Setup, view.SetupExit, view.SetupShell = run.status, run.code, run.shell.String()
+		}
 		if st := s.starting[id]; st != nil {
 			view.Start, view.StartError, view.FirstMessage = st.status, st.failure, st.shownText()
 			view.StartQueue = append([]string{}, st.queue...)
@@ -4467,7 +4477,7 @@ func (s *Threads) shellsInTree(ctx context.Context, key, worktree string) (workt
 		case sh.Path == "":
 			in.unknown = in.unknown || sh.Name.Project == key
 		case folder.Inside(sh.Path, worktree):
-			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) {
+			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) && !s.isSetupShell(sh.Name) {
 				in.busy = append(in.busy, sh.Name)
 			} else {
 				in.idle = append(in.idle, sh.Name)
@@ -4638,6 +4648,12 @@ func (s *Threads) NewShell(thread string) (string, error) {
 
 // startShell starts a shell of the project proj in dir. It needs shellMu.
 func (s *Threads) startShell(proj project.Project, dir string) (string, error) {
+	return s.startShellRunning(proj, dir, "shell", []string{s.loginShell(), "-l"})
+}
+
+// startShellRunning starts a shell of the project proj in dir, which runs argv in place of a login shell. It needs
+// shellMu.
+func (s *Threads) startShellRunning(proj project.Project, dir, title string, argv []string) (string, error) {
 	s.mu.Lock()
 	ctx := s.ctx
 	var used []int
@@ -4651,7 +4667,7 @@ func (s *Threads) startShell(proj project.Project, dir string) (string, error) {
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	env := []string{"ORCHESTRATOR_PROJECT=" + proj.Key()}
-	if err := s.tmux.NewSession(tctx, name, "shell", dir, env, []string{s.loginShell(), "-l"}, startCols, startRows); err != nil {
+	if err := s.tmux.NewSession(tctx, name, title, dir, env, argv, startCols, startRows); err != nil {
 		return "", err
 	}
 	s.mu.Lock()

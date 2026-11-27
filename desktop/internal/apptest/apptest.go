@@ -594,7 +594,7 @@ type Options struct {
 	Queue           string        // the project's queue_sections block, in place of the usual one
 	NoBranch        bool          // leave out the project's `issue_branch`, so the default `issue-{n}` applies
 	CleanupCommand  string        // the project's cleanup_command; none by default
-	WorktreeCommand string        // the project's worktree_command; the default by default
+	WorktreeCommand string        // the project's worktree_command, the set-up of a new worktree; none by default
 	TopExtra        string        // yaml lines added at the top of the config
 	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick      time.Duration
