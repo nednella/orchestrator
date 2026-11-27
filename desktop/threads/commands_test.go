@@ -38,7 +38,7 @@ func TestThreadCommands(t *testing.T) {
 	fourth := numbered(4)
 	eventually(t, "the handover in the new thread", func() bool {
 		pane := sentTo(t, h, fourth.ID)
-		return strings.Contains(pane, "APPLICATION_PROMPT: Another session asked for this task") && strings.Contains(pane, "what the side thread found")
+		return strings.Contains(pane, "APPLICATION_PROMPT: Another thread asked for this work") && strings.Contains(pane, "what the side thread found")
 	})
 	if fourth.Access != thread.Supervised {
 		t.Errorf("new without access started %+v", fourth)
@@ -54,7 +54,7 @@ func TestThreadCommands(t *testing.T) {
 	}
 	eventually(t, "the handover in the new Read thread", func() bool {
 		pane := sentTo(t, h, fifth.ID)
-		return strings.Contains(pane, "APPLICATION_PROMPT: Another session asked") && strings.Contains(pane, "what the thread should look at")
+		return strings.Contains(pane, "APPLICATION_PROMPT: Another thread asked") && strings.Contains(pane, "what the thread should look at")
 	})
 	if resp := h.AskTool(t, asBase(ctl.Request{Cmd: "new", Args: []string{"bad"}, Opts: map[string]string{"access": "write"}})); resp.OK {
 		t.Errorf("new with access write = %+v", resp)

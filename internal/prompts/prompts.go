@@ -26,7 +26,7 @@ var (
 	setupConflict string
 	//go:embed start-issue-branch.md
 	startIssueBranch string
-	//go:embed session.md
+	//go:embed base.md
 	base string
 	//go:embed thread.md
 	thread string
@@ -214,10 +214,10 @@ func Tool(name string) string {
 	return ""
 }
 
-// SetupBrief is added to the system prompt of the base that sets up a project's repository.
+// SetupBrief is added to the system prompt of the thread that sets up a project's repository.
 func SetupBrief() string { return body(setupBrief) }
 
-// SetupStart is what the base that sets up a project's repository starts with.
+// SetupStart is what the thread that sets up a project's repository starts with.
 func SetupStart() string { return body(setupStart) }
 
 // SetupReview is the pr_review_command that setting up a project writes; {n} is the PR number.
@@ -229,7 +229,7 @@ func SetupChecks() string { return body(setupChecks) }
 // SetupConflict is the pr_conflict_command that setting up a project writes; {n} is the PR number.
 func SetupConflict() string { return body(setupConflict) }
 
-// StartIssue is what a base for an issue is started with when the project defines no action for it.
+// StartIssue is what a thread for an issue is started with when the project defines no action for it.
 // {n} is the issue number, {title} its title and {branch} the branch orchestrator makes for it.
 func StartIssue() string { return body(startIssueBranch) }
 
