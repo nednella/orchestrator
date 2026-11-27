@@ -1,4 +1,5 @@
 import { useOrchestrator } from '../OrchestratorContext'
+import { themeHalves } from '../themes'
 import type { ThemeSetting } from '../types'
 import { ThemeWireframe } from './ThemeWireframe'
 
@@ -10,13 +11,14 @@ const TILES: { value: ThemeSetting; label: string; aria: string }[] = [
 
 export function ColorSchemeTiles() {
   const { settings, setTheme, report } = useOrchestrator('settings', 'setTheme', 'report')
+  const { light, dark } = themeHalves(settings)
   const panes = {
     system: [
-      { theme: settings.lightTheme, clip: 'left' as const },
-      { theme: settings.darkTheme, clip: 'right' as const },
+      { theme: light, clip: 'left' as const },
+      { theme: dark, clip: 'right' as const },
     ],
-    light: [{ theme: settings.lightTheme }],
-    dark: [{ theme: settings.darkTheme }],
+    light: [{ theme: light }],
+    dark: [{ theme: dark }],
   }
   return (
     <div role="group" aria-label="Appearance mode" className="grid w-full grid-cols-3 gap-3">

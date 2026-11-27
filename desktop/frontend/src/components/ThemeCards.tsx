@@ -1,17 +1,22 @@
 import { useOrchestrator } from '../OrchestratorContext'
-import type { DarkTheme } from '../types'
+import { pickedModes, THEME_CARDS, themeHalves, withCard } from '../themes'
 import { ThemeCard } from './ThemeCard'
-
-const DARK_THEMES: { value: DarkTheme; label: string }[] = [
-  { value: 'black', label: 'Black' },
-]
 
 export function ThemeCards() {
   const { settings, setThemes, report } = useOrchestrator('settings', 'setThemes', 'report')
+  const halves = themeHalves(settings)
   return (
-    <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-2">
-      {DARK_THEMES.map(({ value, label }) => (
-        <ThemeCard key={value} theme={value} label={label} active={settings.darkTheme === value} onUse={() => report(() => setThemes(value, settings.lightTheme))} />
+    <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-2">
+      {THEME_CARDS.map((card) => (
+        <ThemeCard
+          key={card.id}
+          card={card}
+          picked={pickedModes(card, halves)}
+          onUse={(mode) => {
+            const { dark, light } = withCard(card, halves, mode)
+            report(() => setThemes(dark, light))
+          }}
+        />
       ))}
     </div>
   )

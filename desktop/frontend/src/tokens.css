@@ -17,6 +17,11 @@
   --shadow-composer: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   --shadow-popup: 0 10px 30px rgba(0, 0, 0, 0.5);
   --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  /* A theme's preview disc, the same in every theme: the white or black its canvas leans to, and its edge. */
+  --preview-light-base: oklch(1 0 0);
+  --preview-dark-base: oklch(0.141 0.005 285.8);
+  --shadow-preview-light: inset 0 0 0 1px oklch(0 0 0 / 0.1), 0 1px 2px oklch(0 0 0 / 0.08);
+  --shadow-preview-dark: inset 0 0 0 1px oklch(1 0 0 / 0.14), 0 1px 2px oklch(0 0 0 / 0.18);
   --border-composer: rgba(255, 255, 255, 0.05);
   /* What the thread shows through: the surface at 80%, blurred behind it. */
   --bg-app-glass: color-mix(in srgb, var(--bg-app) 80%, transparent);

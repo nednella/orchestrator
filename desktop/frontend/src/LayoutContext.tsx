@@ -9,9 +9,10 @@ import { closeTab, openTab, panelFit, panelOnFocus, panelWidth, stepTab } from '
 import type { PanelState, PanelTabId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
+import { themeHalves } from './themes'
+import type { Appearance } from './themes'
 import type { ThemeName } from './types'
 
-type Appearance = 'dark' | 'light'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 export type Panel = 'sidebar' | 'centre' | 'right'
 export { RAIL_REM, type SidePanel } from './panelLayout'
@@ -102,7 +103,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const scale = snapScale(settings.textScale)
   const systemAppearance = useSystemAppearance()
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
-  const theme = appearance === 'dark' ? settings.darkTheme : settings.lightTheme
+  const theme = themeHalves(settings)[appearance]
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   // Sidebar widths were saved per band before: until a width is saved on its own, the band the window opens in gives
   // the width the owner set. A saved null is a reset to the default.
