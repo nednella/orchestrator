@@ -25,9 +25,8 @@ func TestTimelineAndWorkOutliveTheApp(t *testing.T) {
 	}
 
 	second := h.Restart(t)
-	row, _ := second.Thread(s.ID)
-	if !reflect.DeepEqual(row.History, changes) {
-		t.Errorf("history = %+v, want the one the hooks kept: %+v", row.History, changes)
+	if got := second.Threads().History(s.ID); !reflect.DeepEqual(got, changes) {
+		t.Errorf("history = %+v, want the one the hooks kept: %+v", got, changes)
 	}
 	eventually(t, "the work done while the app was closed", func() bool {
 		led, err := second.Ledger(30, "")

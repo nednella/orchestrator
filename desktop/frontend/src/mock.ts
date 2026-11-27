@@ -5,7 +5,7 @@ import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { EFFORTS, effortsOf, supportsFast } from './model'
 import { folderName } from './projectPath'
-import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
+import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -181,7 +181,6 @@ export function createMock(params: URLSearchParams) {
       model: s.model,
       effort: s.effort,
       fast: s.fast,
-      history: s.history.map((h) => ({ ...h })),
       branch: s.branch,
       worktree: s.worktree,
       pr: s.pr ? { ...s.pr, failedChecks: [...s.pr.failedChecks] } : null,
@@ -335,7 +334,7 @@ export function createMock(params: URLSearchParams) {
     title: string,
     issue: number,
     initial: State,
-    history: HistoryEntry[] = [],
+    lastEventAt = 0,
     createdAt = Date.now(),
     owner = current,
     access: Access = 'supervised',
@@ -346,13 +345,12 @@ export function createMock(params: URLSearchParams) {
       title,
       state: initial,
       detail: pick(details[initial]),
-      lastEventAt: history.at(-1)?.at ?? 0,
+      lastEventAt,
       createdAt,
       wokeAt: createdAt,
       issue,
       ...modelFor(owner, issue),
       fast: false,
-      history,
       branch: issue ? `issue-${issue}` : '',
       worktree: issue ? `${owner.dir}/trees/issue-${issue}` : '',
       pr: null,
@@ -438,8 +436,8 @@ export function createMock(params: URLSearchParams) {
 
   function seed(title: string, issue: number, state: State, trail: [State, number][], owner = data[0], access: Access = 'supervised') {
     const now = Date.now()
-    const history = trail.map(([st, minutesAgo]) => ({ state: st, at: now - minutesAgo * minute }))
-    const s = create(title, issue, state, history, history[0] ? history[0].at - minute : now, owner, access)
+    const ats = trail.map(([, minutesAgo]) => now - minutesAgo * minute)
+    const s = create(title, issue, state, ats.at(-1) ?? 0, ats[0] ? ats[0] - minute : now, owner, access)
     s.state = state
     return s
   }
@@ -583,7 +581,6 @@ export function createMock(params: URLSearchParams) {
     s.state = state
     s.detail = pick(details[state])
     s.lastEventAt = at
-    s.history = [...s.history, { state, at }].slice(-200)
     publish()
     if ((state === 'waiting' || state === 'idle') && !s.side) {
       if (s.project === current.name) emit('attention', { id: s.id, state: state === 'idle' ? 'replied' : 'waiting' })
@@ -604,7 +601,7 @@ export function createMock(params: URLSearchParams) {
 
   // The thread gets its first message through its chat, as the app gives it to the host.
   function startThreadFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Thread, 'branch' | 'worktree'> | null = null, fast = false): Thread {
-    const s = create(title, issue, 'idle', [], Date.now(), current, access)
+    const s = create(title, issue, 'idle', 0, Date.now(), current, access)
     if (where) Object.assign(s, where)
     s.action = action
     if (model) s.model = model
@@ -1214,7 +1211,7 @@ export function createMock(params: URLSearchParams) {
     },
     ForkThread: async (id: string, at: string) => {
       const from = find(id)
-      const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.access)
+      const s = create(`${from.title} (fork)`, from.issue, 'idle', 0, Date.now(), current, from.access)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
       Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, forkAt: at, worktree: '' })
       try {
@@ -1240,7 +1237,7 @@ export function createMock(params: URLSearchParams) {
       const at = chats.latestReply(parent)
       sideStarting = true
       try {
-        const s = create('Side chat', 0, 'idle', [], Date.now(), data.find((p) => p.name === from.project) ?? current, from.access)
+        const s = create('Side chat', 0, 'idle', 0, Date.now(), data.find((p) => p.name === from.project) ?? current, from.access)
         Object.assign(s, { model: from.model, effort: from.effort, action: '', forkOf: from.id, forkAt: at, branch: '', worktree: '', side: true })
         chats.fork(from.id, s.id, at)
         chats.start(s.id)

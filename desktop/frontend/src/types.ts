@@ -3,8 +3,6 @@ export type State = 'waiting' | 'working' | 'idle' | 'settled'
 // Access is what a thread may do without asking the owner.
 export type Access = 'read' | 'supervised' | 'full'
 
-export type HistoryEntry = { state: State; at: number }
-
 export type PR = {
   number: number
   url: string
@@ -75,7 +73,6 @@ export type Thread = {
   model: string
   effort: string
   fast: boolean
-  history: HistoryEntry[]
   branch: string
   worktree: string
   pr: PR | null

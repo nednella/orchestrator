@@ -39,7 +39,7 @@ func TestThreadLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	snap := h.Snapshot()
-	if len(snap.Threads) != 2 || snap.Project.Dir != h.Dir || snap.Threads[0].History == nil {
+	if len(snap.Threads) != 2 || snap.Project.Dir != h.Dir {
 		t.Fatalf("snapshot = %+v", snap)
 	}
 	if first.N != 1 || second.N != 2 || first.State != "idle" || first.CreatedAt == 0 {
@@ -54,7 +54,7 @@ func TestThreadLifecycle(t *testing.T) {
 			return len(s) == 2 && s[0].ID == second.ID && s[0].State == "waiting"
 		})
 		s := h.Rec.LastThreads()
-		if s[0].Detail != "Claude needs your permission" || len(s[0].History) != 2 || s[0].LastEventAt == 0 {
+		if s[0].Detail != "Claude needs your permission" || len(h.Threads().History(second.ID)) != 2 || s[0].LastEventAt == 0 {
 			t.Errorf("waiting thread = %+v", s[0])
 		}
 		eventually(t, "attention event", func() bool { return h.Rec.Count("attention") == before+1 })

@@ -20,7 +20,6 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     model: '',
     effort: '',
     fast: false,
-    history: [],
     branch: '',
     worktree: '',
     pr: null,

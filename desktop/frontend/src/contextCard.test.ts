@@ -19,7 +19,6 @@ const thread = (over: Partial<Thread> = {}): Thread => ({
   model: '',
   effort: '',
   fast: false,
-  history: [],
   branch: '',
   worktree: '',
   pr: null,

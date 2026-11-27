@@ -66,28 +66,27 @@ var (
 
 // Thread is one agent as the front end sees it.
 type Thread struct {
-	ID          string          `json:"id"`
-	Project     string          `json:"project"` // the key of the project the thread belongs to
-	N           int             `json:"n"`
-	Title       string          `json:"title"`
-	State       thread.State    `json:"state"`
-	Detail      string          `json:"detail"`
-	LastEventAt int64           `json:"lastEventAt"`
-	CreatedAt   int64           `json:"createdAt"` // when the thread first started
-	WokeAt      int64           `json:"wokeAt"`    // when it last started: its first start, or its latest wake
-	Issue       int             `json:"issue"`
-	Access      thread.Access   `json:"access"`
-	Action      string          `json:"action"` // the queue action the thread was started with, "" when none
-	ForkOf      string          `json:"forkOf"` // the thread this one was forked from, "" when none
-	ForkAt      string          `json:"forkAt"` // the uuid of the reply the fork's chat was cut at, "" when none
-	Side        bool            `json:"side"`   // a side chat of the thread ForkOf names: it shows only in that thread's panel
-	Parent      string          `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
-	Model       string          `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
-	Effort      string          `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
-	Fast        bool            `json:"fast"`   // the agent runs in its faster mode
-	History     []thread.Change `json:"history"`
-	Evidence    int             `json:"evidence"`
-	Browser     bool            `json:"browser"`
+	ID          string        `json:"id"`
+	Project     string        `json:"project"` // the key of the project the thread belongs to
+	N           int           `json:"n"`
+	Title       string        `json:"title"`
+	State       thread.State  `json:"state"`
+	Detail      string        `json:"detail"`
+	LastEventAt int64         `json:"lastEventAt"`
+	CreatedAt   int64         `json:"createdAt"` // when the thread first started
+	WokeAt      int64         `json:"wokeAt"`    // when it last started: its first start, or its latest wake
+	Issue       int           `json:"issue"`
+	Access      thread.Access `json:"access"`
+	Action      string        `json:"action"` // the queue action the thread was started with, "" when none
+	ForkOf      string        `json:"forkOf"` // the thread this one was forked from, "" when none
+	ForkAt      string        `json:"forkAt"` // the uuid of the reply the fork's chat was cut at, "" when none
+	Side        bool          `json:"side"`   // a side chat of the thread ForkOf names: it shows only in that thread's panel
+	Parent      string        `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
+	Model       string        `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
+	Effort      string        `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
+	Fast        bool          `json:"fast"`   // the agent runs in its faster mode
+	Evidence    int           `json:"evidence"`
+	Browser     bool          `json:"browser"`
 
 	Branch        string        `json:"branch"`
 	Worktree      string        `json:"worktree"`
@@ -1588,8 +1587,7 @@ func (s *Threads) list() []Thread {
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
 			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
-			ForkAt:  s.forkAtOf(id),
-			History: s.history[id], // shared, not copied: a change in a history is never written over
+			ForkAt: s.forkAtOf(id),
 		}
 		if !ss.At.IsZero() {
 			view.LastEventAt = ss.At.UnixMilli()
@@ -1608,9 +1606,6 @@ func (s *Threads) list() []Thread {
 		}
 		view.Memory = s.held[id]
 		view.Subagents = s.background[id].Subagents
-		if view.History == nil {
-			view.History = []thread.Change{}
-		}
 		out = append(out, view)
 	}
 	return out
