@@ -1,11 +1,10 @@
-import { Icon } from './Icon'
-import type { IconName } from './Icon'
+import type { LucideIcon } from 'lucide-react'
 
 export const titleBarButton = 'btn btn-ghost h-[32px] w-[32px] flex-none justify-center px-0'
 
-type TitleBarButtonProps = { label: string; icon: IconName; pressed?: boolean; onClick(): void }
+type TitleBarButtonProps = { label: string; icon: LucideIcon; pressed?: boolean; onClick(): void }
 
-export function TitleBarButton({ label, icon, pressed, onClick }: TitleBarButtonProps) {
+export function TitleBarButton({ label, icon: Icon, pressed, onClick }: TitleBarButtonProps) {
   return (
     <button
       className={titleBarButton}
@@ -15,7 +14,7 @@ export function TitleBarButton({ label, icon, pressed, onClick }: TitleBarButton
       aria-pressed={pressed}
       onClick={onClick}
     >
-      <Icon name={icon} fixed />
+      <Icon size={14} aria-hidden="true" />
     </button>
   )
 }

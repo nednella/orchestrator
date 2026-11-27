@@ -1,7 +1,6 @@
-import { CircleAlert, CircleCheck, GitPullRequest, Info, TriangleAlert, WifiOff } from 'lucide-react'
+import { CircleAlert, CircleCheck, GitPullRequest, Info, TriangleAlert, WifiOff, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Toast } from '../toastPile'
-import { Icon } from './Icon'
 import { Spinner } from './Spinner'
 import { StateDot } from './StateDot'
 
@@ -50,7 +49,7 @@ export function ToastCard({ toast, depth, onDismiss, onJump }: ToastCardProps) {
         </button>
       )}
       <button className="toast-x btn btn-ghost h-7 w-7 flex-none justify-center rounded-full px-0" aria-label="Dismiss" onClick={() => onDismiss(toast.key)}>
-        <Icon name="close" size={12} />
+        <X size={12} aria-hidden="true" />
       </button>
     </div>
   )

@@ -1,3 +1,4 @@
+import { PanelLeft, PanelRight } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, withShortcut } from '../actions'
@@ -17,10 +18,10 @@ export function WindowButtons() {
 
   return (
     <div className="flex flex-none items-center gap-0.5" style={noDrag}>
-      <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon="panel-left" pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run()} />
+      <TitleBarButton label={named(sidebarOpen ? 'Hide left sidebar' : 'Show left sidebar', 'toggle-sidebar')} icon={PanelLeft} pressed={sidebarOpen} onClick={() => find('toggle-sidebar').run()} />
       <TitleBarButton
         label={named(rightOpen ? 'Hide right panel' : 'Show right panel', 'toggle-right')}
-        icon="panel-right"
+        icon={PanelRight}
         pressed={rightOpen}
         onClick={() => report(() => find('toggle-right').run())}
       />

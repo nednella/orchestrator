@@ -1,5 +1,7 @@
+import { ChevronLeft, ExternalLink } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { PR_ICON } from '../prState'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import type { PanelViewProps } from '../panelViews'
 import { usePullListBar } from '../usePullListBar'
@@ -7,7 +9,6 @@ import { pullRows, pullsShown } from '../pullRows'
 import type { PullsRead } from '../pullRows'
 import type { RepoPull } from '../types'
 import { Ago } from './Ago'
-import { Icon } from './Icon'
 import { ListBar } from './ListBar'
 import { CenteredSpinner } from './CenteredSpinner'
 import { Notice } from './Notice'
@@ -16,11 +17,12 @@ import { PRTab } from './PRTab'
 type PullRowProps = { pull: RepoPull; threadTitle: string | undefined; onOpen(): void }
 
 function PullRow({ pull, threadTitle, onOpen }: PullRowProps) {
+  const PrIcon = PR_ICON[pull.draft ? 'draft' : 'open']
   const meta = [pull.draft ? 'draft' : '', pull.branch, threadTitle ?? 'no thread'].filter(Boolean).join(' · ')
   return (
     <button className="flex w-full min-w-0 items-start gap-2 px-4 py-2 text-left hover:bg-hover" onClick={onOpen}>
       <span className="mt-0.5 flex-none" style={{ color: `var(--pr-${pull.draft ? 'draft' : 'open'})` }}>
-        <Icon name={pull.draft ? 'git-pull-request-draft' : 'git-pull-request'} size={14} />
+        <PrIcon size={14} aria-hidden="true" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body">
@@ -35,7 +37,7 @@ function PullRow({ pull, threadTitle, onOpen }: PullRowProps) {
 function BackButton({ onBack }: { onBack(): void }) {
   return (
     <button className="btn btn-ghost -ml-1.5 h-6 w-fit gap-1 px-1.5" title="Back to the pull requests" onClick={onBack}>
-      <Icon name="chevron-left" size={12} />
+      <ChevronLeft size={12} aria-hidden="true" />
       Pull requests
     </button>
   )
@@ -60,7 +62,7 @@ function PullDetail({ pull, onBack }: PullDetailProps) {
       </header>
       <div className="px-4 py-3">
         <button className="btn" onClick={() => report(() => api.openURL(pull.url))}>
-          <Icon name="external" size={12} />
+          <ExternalLink size={12} aria-hidden="true" />
           Open on GitHub
         </button>
       </div>

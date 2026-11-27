@@ -1,12 +1,11 @@
+import type { LucideIcon } from 'lucide-react'
 import { useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, formatShortcut } from '../actions'
 import { useLayout } from '../LayoutContext'
-import { Icon } from './Icon'
-import type { IconName } from './Icon'
 
-type RailButtonProps = { id: string; label: string; icon: IconName }
+type RailButtonProps = { id: string; label: string; icon: LucideIcon }
 
-export function RailButton({ id, label, icon }: RailButtonProps) {
+export function RailButton({ id, label, icon: Icon }: RailButtonProps) {
   const layout = useLayout()
   const latestOrchestrator = useLatestOrchestrator()
   const action = actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!
@@ -18,7 +17,7 @@ export function RailButton({ id, label, icon }: RailButtonProps) {
       data-rail-item
       onClick={() => action.run()}
     >
-      <Icon name={icon} />
+      <Icon size={14} aria-hidden="true" />
     </button>
   )
 }

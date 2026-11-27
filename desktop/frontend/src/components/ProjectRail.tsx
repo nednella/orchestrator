@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -47,7 +48,7 @@ export function ProjectRail() {
       {projects.map((p, i) => (
         <ProjectTile key={p.key} project={p} label={labels[i]} waiting={waiting.get(p.key) ?? 0} />
       ))}
-      <RailButton id="add-project" label="Add project…" icon="plus" />
+      <RailButton id="add-project" label="Add project…" icon={Plus} />
     </nav>
   )
 }
