@@ -1,7 +1,7 @@
 import { firstLine } from './chatTimeline.ts'
-import type { IconName } from './components/Icon'
 
-export type ToolSummary = { icon: IconName; title: string; detail: string }
+export type ToolIconName = 'terminal' | 'file' | 'compose' | 'search' | 'external' | 'agent' | 'check' | 'model' | 'more'
+export type ToolSummary = { icon: ToolIconName; title: string; detail: string }
 export type DiffLine = { sign: '+' | '−' | ' '; text: string }
 
 export const resultLimit = 20

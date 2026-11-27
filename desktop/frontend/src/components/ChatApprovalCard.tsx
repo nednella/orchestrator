@@ -5,7 +5,7 @@ import { useAnswering } from '../useAnswering'
 import { ChatAllowDeny } from './ChatAllowDeny'
 import { ChatNotice } from './ChatNotice'
 import { ChatToolInput } from './ChatToolInput'
-import { Icon } from './Icon'
+import { ToolIcon } from './ToolIcon'
 
 type ChatApprovalCardProps = { thread: string; request: string; tool: string; input: unknown; expired: boolean; folder: string }
 
@@ -25,7 +25,7 @@ function WaitingApproval({ thread, request, tool, input, folder }: WaitingApprov
     <div className="chat-card" data-waiting="true">
       <div className="flex min-w-0 items-center gap-2 text-small">
         <span className="flex flex-none text-dim">
-          <Icon name={icon} size={12} />
+          <ToolIcon name={icon} size={12} />
         </span>
         <span className="flex-none font-medium text-ink">{title}</span>
         {detail && <span className="mono min-w-0 truncate text-dim">{detail}</span>}

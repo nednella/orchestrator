@@ -1,3 +1,4 @@
+import { FileText, SquareTerminal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 import { errorMessage } from './api'
@@ -6,7 +7,6 @@ import type { Command } from './chatTimeline'
 import { doubledSpace } from './composerPick'
 import type { ComposerInput } from './components/ComposerEditor'
 import type { PickRow } from './components/ComposerPickList'
-import { Icon } from './components/Icon'
 
 // PickList is the pick list open in a prompt composer: what it lists and what picking a row does.
 type PickList = { label: string; rows: PickRow[]; empty: string; pick(index: number): void }
@@ -27,11 +27,11 @@ type PromptPicksOptions = {
   onPicked(): void
 }
 
-const commandRow = (c: Command): PickRow => ({ key: c.name, icon: <Icon name="terminal" size={14} />, name: `/${c.name}`, description: c.description, badge: c.argumentHint })
+const commandRow = (c: Command): PickRow => ({ key: c.name, icon: <SquareTerminal size={14} aria-hidden="true" />, name: `/${c.name}`, description: c.description, badge: c.argumentHint })
 
 const fileRow = (path: string): PickRow => {
   const slash = path.lastIndexOf('/')
-  return { key: path, icon: <Icon name="file" size={14} />, name: path.slice(slash + 1), description: path.slice(0, slash + 1) }
+  return { key: path, icon: <FileText size={14} aria-hidden="true" />, name: path.slice(slash + 1), description: path.slice(0, slash + 1) }
 }
 
 // usePromptPicks is the / command list while the caret is in a message's first word that starts with /, and the @ file
