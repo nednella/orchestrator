@@ -50,12 +50,12 @@ type starting struct {
 	app             context.Context // the app's, which the first message and the watchers outlive a retry on
 
 	// progress
-	work         workPlace
-	branch       string // the branch a no-issue start picked
-	placed       bool
-	setupStarted bool
-	restore      func()
-	delivered    bool
+	work       workPlace
+	branch     string // the branch a no-issue start picked
+	placed     bool
+	setupTried bool // the set-up command was looked at in this try: a retry looks again
+	restore    func()
+	delivered  bool
 
 	// shown, under mu
 	info     term.Info
@@ -66,7 +66,6 @@ type starting struct {
 	aborted  bool
 	cancel   context.CancelFunc
 	done     chan struct{}
-	keepTree bool           // a delete without the box stops the start and leaves the worktree it made
 	step     string         // the step that runs, for the row
 	queue    []host.Message // what the owner sent while it started, oldest first
 }
@@ -187,9 +186,12 @@ func startFailure(err error) string {
 // errNotDelivered is the error of a first message the agent did not take.
 var errNotDelivered = errors.New("the agent did not take the first message in time")
 
-// execute does each step of a start that has not been done yet, so a retry goes on where the start stopped. A step
-// that fails leaves nothing behind that a retry would trip on.
+// execute does each step of a start that has not been done yet, so a retry goes on where the start stopped. A start
+// that is listed keeps its worktree when a step fails, for the retry; one that is not has no retry, so its worktree goes.
 func (s *Threads) execute(ctx context.Context, st *starting) error {
+	if st.placed && st.o.Later && st.work.made && gone(st.work.dir) {
+		st.work, st.placed = workPlace{}, false
+	}
 	if !st.placed {
 		if st.o.Place == InWorktree {
 			s.setStep(st, "Setting up the worktree")
@@ -204,7 +206,9 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 	if !launched {
 		s.setStep(st, "Starting Claude")
 		if err := s.boot(ctx, st); err != nil {
-			s.unplace(st)
+			if !st.o.Later {
+				s.unplace(st)
+			}
 			return err
 		}
 	}
@@ -351,28 +355,12 @@ func (s *Threads) setPlace(st *starting, work workPlace) {
 	}
 }
 
-// unplace takes back what place made, for a start that failed before its agent ran.
+// unplace takes back what place made, for a start that is not listed and failed before its agent ran.
 func (s *Threads) unplace(st *starting) {
-	ctx := context.WithoutCancel(st.app)
-	s.stopSetup(st.name.String())
-	st.setupStarted = false
 	st.restore()
 	st.restore = func() {}
-	s.mu.Lock()
-	keep := st.keepTree
-	s.mu.Unlock()
-	if !keep {
-		s.life.undoWorktree(ctx, st.proj, st.name, st.work)
-	}
+	s.life.undoWorktree(context.WithoutCancel(st.app), st.proj, st.name, st.work)
 	st.work, st.placed = workPlace{}, false
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if st.o.Later {
-		st.info = st.placeholder()
-		if i := slices.IndexFunc(s.info, func(in term.Info) bool { return in.Name == st.name }); i >= 0 && !st.launched {
-			s.info[i] = st.info
-		}
-	}
 }
 
 // boot starts the agent under its host in tmux and adds the thread to the list as it runs. It needs createMu for a
@@ -445,6 +433,7 @@ func (s *Threads) RetryStart(id string) error {
 		return fmt.Errorf("Thread %s has no failed start to retry", id)
 	}
 	st.status, st.failure, st.running = Starting, "", true
+	st.setupTried = false
 	st.done = make(chan struct{})
 	var run context.Context
 	run, st.cancel = context.WithCancel(st.app)
@@ -454,18 +443,18 @@ func (s *Threads) RetryStart(id string) error {
 }
 
 // abortStart stops a start of the thread id that is listed, for a delete of it, and says whether it took the thread
-// away. A thread whose agent already runs is left to the delete of a running thread, and its start goes on, as a failed
-// one if the delete stopped it, until that delete is done.
-func (s *Threads) abortStart(id string, worktree bool) bool {
+// away. With worktree, the worktree the start made goes first, by the checks of a clean-up, and one that stays refuses
+// the delete; the thread is then listed as a stopped start. Without, the worktree stays on disk and only its record goes.
+// A thread whose agent already runs is left to the delete of a running thread, and its start goes on, as a failed one if
+// the delete stopped it, until that delete is done.
+func (s *Threads) abortStart(id string, worktree bool) (bool, error) {
 	s.mu.Lock()
 	st := s.starting[id]
 	if st == nil {
 		s.mu.Unlock()
-		return false
+		return false, nil
 	}
 	st.aborted = true
-	// Without the box the worktree the start made stays, as a thread's does, and only the record of it goes.
-	st.keepTree = !worktree
 	running, cancel, done := st.running, st.cancel, st.done
 	s.mu.Unlock()
 	if running {
@@ -482,8 +471,24 @@ func (s *Threads) abortStart(id string, worktree bool) bool {
 		}
 		s.mu.Unlock()
 		s.createMu.Unlock()
-		return false
+		return false, nil
 	}
+	s.mu.Unlock()
+	if worktree && st.work.made {
+		s.stopSetup(id)
+		if reason := s.life.dropStartWorktree(s.context(), id); reason != "" {
+			s.mu.Lock()
+			st.aborted = false
+			if st.status == Starting {
+				st.status, st.failure = StartFailed, "The start was stopped"
+			}
+			s.sync()
+			s.mu.Unlock()
+			s.createMu.Unlock()
+			return false, fmt.Errorf("Thread %d keeps its worktree: %s. Untick the box to keep the worktree", s.Number(id), reason)
+		}
+	}
+	s.mu.Lock()
 	s.info = slices.DeleteFunc(s.info, func(in term.Info) bool { return in.Name == st.name })
 	if err := bus.RemoveState(s.stateDir, id); err != nil {
 		log.Printf("orchestrator: removing the state of thread %s, which did not start: %v", id, err)
@@ -503,7 +508,7 @@ func (s *Threads) abortStart(id string, worktree bool) bool {
 			log.Printf("orchestrator: removing %s of thread %s, which did not start: %v", path, id, err)
 		}
 	}
-	return true
+	return true, nil
 }
 
 // startingError is why a thread whose start has not ended cannot be put to sleep or given another access, nil when it

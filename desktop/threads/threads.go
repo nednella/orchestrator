@@ -849,7 +849,9 @@ func (s *Threads) beginDelete(id string, worktree bool) (family []string, done b
 	if name.IsShell() {
 		return nil, false, errNotThread
 	}
-	if s.abortStart(id, worktree) {
+	if took, err := s.abortStart(id, worktree); err != nil {
+		return nil, false, err
+	} else if took {
 		return nil, true, nil
 	}
 	if family, err = s.startDelete(id); err != nil {

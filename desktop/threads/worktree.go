@@ -18,6 +18,7 @@ import (
 	"github.com/nednella/orchestrator/internal/folder"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/thread"
+	"github.com/nednella/orchestrator/internal/util"
 )
 
 // Place is where a new thread runs.
@@ -124,6 +125,10 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 	if dir, ok := trees.byBranch[branch]; ok {
 		if _, err := os.Stat(dir); err != nil {
 			return workPlace{}, staleCheckout(branch, dir)
+		}
+		// The worktree an earlier try of this thread's start made is the thread's own: a retry never makes a second.
+		if own := folder.Canonical(dir); l.ours(ctx, proj.Key(), own, name.String()) {
+			return workPlace{dir: own, branch: branch, made: true}, nil
 		}
 		return workPlace{dir: dir, branch: branch}, nil
 	}
@@ -343,18 +348,40 @@ func (l *Lifecycle) undoWorktree(ctx context.Context, proj project.Project, name
 	l.removeUnstarted(ctx, proj, w.dir)
 }
 
-// removeUnstarted removes a worktree orchestrator just made for a thread that did not start, and records it gone.
-func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, dir string) {
+// removeUnstarted removes a worktree orchestrator just made for a thread that did not start, and records it gone. git
+// refuses one with changes, and it stays.
+func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, dir string) error {
 	// A start stopped halfway has a cancelled ctx, and its worktree must go all the same.
 	ctx = context.WithoutCancel(ctx)
 	if _, err := l.git(ctx, proj.Dir, "worktree", "remove", dir); err != nil {
 		log.Printf("orchestrator: removing the worktree %s of a thread that did not start: %v", dir, err)
-		return
+		return err
 	}
 	if _, ok := l.threads.made.At(proj.Key(), dir); !ok {
-		return
+		return nil
 	}
 	if err := l.threads.made.Removed(proj.Key(), dir, time.Now()); err != nil {
 		log.Printf("orchestrator: recording the worktree %s removed: %v", dir, err)
 	}
+	return nil
+}
+
+// dropStartWorktree removes the worktree the start of the thread id made, when the checks of a clean-up pass and no other
+// thread or running terminal is in it, and says why it stays, "" when it went or there was none. The branch stays.
+func (l *Lifecycle) dropStartWorktree(ctx context.Context, id string) string {
+	t, err := l.threads.target(id)
+	if err != nil || !t.made {
+		return ""
+	}
+	plan, reason := l.planFor(ctx, t, nil, false, l.unchanged(ctx, t))
+	if reason != "" || !plan.made {
+		return reason
+	}
+	if reason := l.threads.closeShellsIn(ctx, t.proj.Key(), plan.worktree, false); reason != "" {
+		return reason
+	}
+	if err := l.removeUnstarted(ctx, t.proj, plan.worktree); err != nil {
+		return "git could not remove it: " + util.FirstLine(err.Error())
+	}
+	return ""
 }

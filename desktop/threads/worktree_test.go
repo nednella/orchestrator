@@ -303,9 +303,10 @@ func TestDeleteStopsASetupCommandThatRuns(t *testing.T) {
 	}
 }
 
-// Not parallel: it puts a fake tmux on the process PATH.
-func TestFailedStartRemovesOnlyTheWorktreeItMade(t *testing.T) {
-	h := newHarness(t)
+// failedStartInAProjectWithAHumanTree starts a thread whose agent cannot start, in a project that has a worktree of the
+// owner's, and returns the failed row and that worktree.
+func failedStartInAProjectWithAHumanTree(t *testing.T, h *apptest.Harness) (threads.Thread, string) {
+	t.Helper()
 	repoFixture(t, h)
 	human := filepath.Join(h.Dir, "trees", "human")
 	gitIn(t, h.Dir, "worktree", "add", "-b", "human", human)
@@ -313,16 +314,15 @@ func TestFailedStartRemovesOnlyTheWorktreeItMade(t *testing.T) {
 		t.Fatal(err)
 	}
 	newFakeTmux(t).fail(t, "new", true)
-
-	if _, err := h.NewThreadIn("Doomed", "", "supervised", ""); err == nil || !strings.Contains(err.Error(), "no room for a session") {
+	s, err := h.NewThreadIn("Doomed", "", "supervised", "")
+	if err == nil || !strings.Contains(err.Error(), "no room for a session") {
 		t.Fatalf("start = %v", err)
 	}
-	if exists(filepath.Join(h.Dir, "trees", "doomed")) {
-		t.Error("the worktree of the thread that did not start is still there")
-	}
-	if _, listed := worktreesOf(t, h.Dir)["doomed"]; listed {
-		t.Error("git still lists the worktree of the thread that did not start")
-	}
+	return s, human
+}
+
+func humanTreeIsUntouched(t *testing.T, h *apptest.Harness, human string) {
+	t.Helper()
 	if data, err := os.ReadFile(filepath.Join(human, "notes.txt")); err != nil || string(data) != "mine\n" {
 		t.Errorf("the human's worktree lost its file: %q, %v", data, err)
 	}
@@ -332,9 +332,62 @@ func TestFailedStartRemovesOnlyTheWorktreeItMade(t *testing.T) {
 	if !exists(filepath.Join(h.Dir, "README")) || !exists(filepath.Join(h.Dir, ".git")) {
 		t.Error("the project folder lost its files")
 	}
-	if records := madeRecords(t, h); len(records) != 1 || records[0].Branch != "doomed" || records[0].Removed == 0 {
-		t.Errorf("records = %+v", records)
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestFailedStartKeepsItsWorktreeRecordedAndDeleteWithTheBoxRemovesOnlyThat(t *testing.T) {
+	h := newHarness(t)
+	s, human := failedStartInAProjectWithAHumanTree(t, h)
+	tree := filepath.Join(h.Dir, "trees", "doomed")
+	if !exists(tree) || worktreesOf(t, h.Dir)["doomed"] == "" {
+		t.Error("the worktree of the failed start is gone, which a retry needs")
 	}
+	if records := madeRecords(t, h); len(records) != 1 || records[0].Branch != "doomed" || records[0].Removed != 0 || s.Worktree == "" {
+		t.Errorf("records = %+v, row worktree %q, want one live record", records, s.Worktree)
+	}
+	if err := h.Threads().Delete(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(tree) {
+		t.Error("the worktree of the deleted start is still there")
+	}
+	if _, listed := worktreesOf(t, h.Dir)["doomed"]; listed {
+		t.Error("git still lists the worktree of the deleted start")
+	}
+	if records := madeRecords(t, h); len(records) != 0 {
+		t.Errorf("records = %+v, want none once the thread is gone", records)
+	}
+	humanTreeIsUntouched(t, h, human)
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestDeleteWithTheBoxRefusesAFailedStartWhoseWorktreeHasChanges(t *testing.T) {
+	h := newHarness(t)
+	s, human := failedStartInAProjectWithAHumanTree(t, h)
+	tree := filepath.Join(h.Dir, "trees", "doomed")
+	if err := os.WriteFile(filepath.Join(tree, "work.txt"), []byte("work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := h.Threads().Delete(s.ID, true)
+	if err == nil || !strings.Contains(err.Error(), "keeps its worktree") {
+		t.Fatalf("delete = %v, want a refusal that names the worktree", err)
+	}
+	if row, ok := h.Thread(s.ID); !ok || row.Start != threads.StartFailed {
+		t.Errorf("the row after a refused delete = %+v, %v; want the failed start still listed", row, ok)
+	}
+	if !exists(filepath.Join(tree, "work.txt")) {
+		t.Error("the refused delete took the worktree's file")
+	}
+	if err := h.Threads().Delete(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(tree, "work.txt")) {
+		t.Error("the delete without the box took the worktree")
+	}
+	if records := madeRecords(t, h); len(records) != 0 {
+		t.Errorf("records = %+v, want none once the thread is gone", records)
+	}
+	humanTreeIsUntouched(t, h, human)
 }
 
 func TestExistingBranchIsCheckedOutNotReset(t *testing.T) {

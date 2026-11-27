@@ -150,8 +150,9 @@ func TestFailedStartShowsOnTheThreadAndRetries(t *testing.T) {
 	if !strings.Contains(row.StartError, "no room for a session") || row.FirstMessage != "clean the tests" || row.State != "waiting" || row.Detail != row.StartError {
 		t.Errorf("the failed row = %+v", row)
 	}
-	if exists(filepath.Join(h.Dir, "trees", "tidy-up")) || len(userLines(t, h, s.ID)) != 0 {
-		t.Error("the failed start left a worktree or reached the agent")
+	tree := filepath.Join(h.Dir, "trees", "tidy-up")
+	if row.Worktree == "" || !exists(tree) || len(userLines(t, h, s.ID)) != 0 {
+		t.Errorf("the failed start has the worktree %q, which should stay for the retry, and reached the agent: %v", row.Worktree, userLines(t, h, s.ID))
 	}
 	tmux.fail(t, "new", false)
 	if err := h.RetryThreadStart(s.ID); err != nil {
@@ -162,7 +163,7 @@ func TestFailedStartShowsOnTheThreadAndRetries(t *testing.T) {
 		return row.Start == ""
 	})
 	row, _ = h.Thread(s.ID)
-	if row.Branch != "tidy-up" || row.Worktree == "" || row.StartError != "" {
+	if row.Branch != "tidy-up" || row.Worktree == "" || row.StartError != "" || !strings.HasSuffix(row.Worktree, filepath.Join("trees", "tidy-up")) {
 		t.Errorf("the retried row = %+v", row)
 	}
 	eventually(t, "the first message", func() bool { return mentions(userLines(t, h, s.ID), "clean the tests") == 1 })
@@ -325,9 +326,6 @@ func TestRetryKeepsTheBranchTheFirstTryPicked(t *testing.T) {
 		row, _ := h.Thread(s.ID)
 		return row.Start == threads.StartFailed
 	})
-	if exists(filepath.Join(h.Dir, "trees", "tidy-up")) {
-		t.Error("the worktree of the failed start is still there")
-	}
 	tmux.fail(t, "new", false)
 	if err := h.RetryThreadStart(s.ID); err != nil {
 		t.Fatal(err)
@@ -338,6 +336,51 @@ func TestRetryKeepsTheBranchTheFirstTryPicked(t *testing.T) {
 	})
 	if row, _ := h.Thread(s.ID); row.Branch != "tidy-up" {
 		t.Errorf("branch after the retry = %q, want tidy-up", row.Branch)
+	}
+	if got := gitIn(t, h.Dir, "branch", "--list", "tidy-up*"); strings.Contains(got, "tidy-up-2") {
+		t.Errorf("the retry made a second branch: %s", got)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestRetryReusesTheWorktreeTheFailedStartMade(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "touch ran-setup"})
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "new", true)
+	s, err := h.NewThreadLater("Tidy up", "clean")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the start to fail", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == threads.StartFailed
+	})
+	failed, _ := h.Thread(s.ID)
+	tree := filepath.Join(h.Dir, "trees", "tidy-up")
+	// Work the owner did in it between the failure and the retry: git would not remove it, and it must still be the
+	// thread's own worktree, with the set-up command to run.
+	if err := os.WriteFile(filepath.Join(tree, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tmux.fail(t, "new", false)
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	row, _ := h.Thread(s.ID)
+	if row.Worktree != failed.Worktree || row.Branch != "tidy-up" {
+		t.Errorf("the retried row = %+v, want the worktree %s of the failed one", row, failed.Worktree)
+	}
+	if n := strings.Count(gitIn(t, h.Dir, "worktree", "list"), "\n") + 1; n != 2 {
+		t.Errorf("git lists %d worktrees, want the project's and the thread's: %s", n, gitIn(t, h.Dir, "worktree", "list"))
+	}
+	eventually(t, "the set-up command", func() bool { return exists(filepath.Join(tree, "ran-setup")) })
+	if !exists(filepath.Join(tree, "notes.txt")) {
+		t.Error("the owner's file is gone")
 	}
 }
 

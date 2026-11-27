@@ -39,22 +39,26 @@ const (
 )
 
 // startSetup runs the project's setup_command, the set-up of a worktree, in a terminal in the thread's worktree. The
-// agent does not wait for it. It runs once, for a worktree orchestrator made. A command that cannot start shows as a
-// failed set-up.
+// agent does not wait for it. It runs for a worktree orchestrator made, once in each try of a start: a retry runs it
+// again unless it ended with 0 or still runs. A command that cannot start shows as a failed set-up.
 func (s *Threads) startSetup(st *starting) {
 	command := strings.TrimSpace(st.proj.SetupCommand)
-	if command == "" || !st.work.made || st.setupStarted {
+	if command == "" || !st.work.made || st.setupTried {
 		return
 	}
-	st.setupStarted = true
+	st.setupTried = true
 	id := st.name.String()
+	exit := filepath.Join(s.tmpDir(st.name), "setup-exit")
+	if s.setupDone(id, exit) {
+		return
+	}
+	s.stopSetup(id)
 	base := ""
 	if w, ok := s.made.Of(st.proj.Key(), id); ok {
 		base = w.Base
 	}
 	command = strings.NewReplacer("{dir}", util.ShellQuote(st.proj.Dir), "{branch}", util.ShellQuote(st.work.branch), "{worktree}", util.ShellQuote(st.work.dir), "{base}", util.ShellQuote(base)).Replace(command)
 	tmp := s.tmpDir(st.name)
-	exit := filepath.Join(tmp, "setup-exit")
 	if err := os.MkdirAll(tmp, 0o700); err != nil {
 		s.setupDidNotStart(id, err)
 		return
@@ -77,6 +81,21 @@ func (s *Threads) startSetup(st *starting) {
 	s.sync()
 	s.mu.Unlock()
 	go s.watchSetup(ctx, id, run, exit)
+}
+
+// setupDone says whether the thread's set-up command needs no new run: it ended with 0, or its terminal, which tmux
+// tagged with the thread, still runs it.
+func (s *Threads) setupDone(id, exit string) bool {
+	if data, err := os.ReadFile(exit); err == nil {
+		code, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		return err == nil && code == 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if run := s.setups[id]; run != nil && run.status == SetupRunning {
+		return true
+	}
+	return slices.ContainsFunc(s.shells, func(sh term.Shell) bool { return sh.Setup == id })
 }
 
 // setupDidNotStart shows a set-up command that could not start as a failed one, with why.
