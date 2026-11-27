@@ -1,10 +1,10 @@
+import { ChevronLeft, ExternalLink } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from '../api'
 import { useOrchestrator } from '../OrchestratorContext'
 import { isTyping } from '../useListNav'
 import type { IssueDetail } from '../types'
 import { Ago } from './Ago'
-import { Icon } from './Icon'
 import { IssueBody } from './IssueBody'
 import { IssueThread } from './IssueThread'
 import { IssueWorkflow } from './IssueWorkflow'
@@ -43,17 +43,17 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
       <header className="flex flex-none flex-col gap-2 border-b border-line px-3 pt-2 pb-3">
         <div className="flex items-center">
           <button className="btn btn-ghost -ml-1.5 h-6 gap-1 px-1.5" title="Back to the issues (Esc)" onClick={onBack}>
-            <Icon name="chevron-left" size={12} />
+            <ChevronLeft size={14} aria-hidden="true" />
             Issues
           </button>
           {issue && (
             <button className="btn btn-ghost ml-auto h-6 w-6 justify-center px-0" title="Open on GitHub" aria-label="Open on GitHub" onClick={() => report(() => api.openURL(issue.url))}>
-              <Icon name="external" size={12} />
+              <ExternalLink size={14} aria-hidden="true" />
             </button>
           )}
         </div>
         <h2 className="text-title font-semibold break-words">
-          <span className="mono mr-1.5 text-soft">#{number}</span>
+          <span className="mr-1.5 text-soft">#{number}</span>
           {issue?.title ?? 'Not in the open issues'}
         </h2>
         {issue && (
@@ -63,7 +63,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
               {issue.author ? `${issue.author} opened this` : 'Opened'} <Ago at={issue.createdAt} />
             </span>
             {issue.labels.map((label) => (
-              <span key={label} className="mono rounded-sm border border-line-strong px-1.5 text-label text-soft">
+              <span key={label} className="rounded-full border border-(--border-rule) bg-(--bg-card) px-2 text-label text-soft">
                 {label}
               </span>
             ))}
@@ -83,10 +83,10 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
             {error && <p className="text-small text-danger">{error}</p>}
             {detail && (detail.bodyHTML ? <IssueBody html={detail.bodyHTML} /> : <p className="text-small text-dim">No description.</p>)}
             {detail && detail.comments.length > 0 && (
-              <section className="flex flex-col gap-4 border-t border-line pt-4">
-                <h3 className="label">{detail.comments.length === 1 ? '1 comment' : `${detail.comments.length} comments`}</h3>
+              <section className="flex flex-col gap-3 border-t border-line pt-4">
+                <h3 className="text-small font-medium text-soft">{detail.comments.length === 1 ? '1 comment' : `${detail.comments.length} comments`}</h3>
                 {detail.comments.map((comment) => (
-                  <article key={comment.createdAt} className="flex flex-col gap-1.5">
+                  <article key={comment.createdAt} className="flex flex-col gap-2 rounded-xl border border-(--border-rule) bg-(--bg-card) px-3 py-2.5">
                     <div className="flex items-baseline gap-2 text-small">
                       <span className="font-medium">{comment.author}</span>
                       <span className="text-dim" title={dateOf(comment.createdAt)}>
