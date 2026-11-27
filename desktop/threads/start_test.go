@@ -813,12 +813,12 @@ func TestIssueStartFallsBackToANewBranchFromTheLocalMainWhenOriginIsOutOfReach(t
 			gitIn(t, h.Dir, "remote", "set-url", "origin", url)
 			s, err := h.StartIssueWith(7, "")
 			if err != nil {
-				t.Fatalf("the start = %v, want it to go on from the local main", err)
+				t.Fatalf("the start = %v, want it to go on from main as last fetched", err)
 			}
 			if s.Branch != "issue-7" || s.Worktree == "" || gitIn(t, s.Worktree, "rev-parse", "HEAD") != head {
 				t.Errorf("the row = %+v, want the new branch issue-7 at the local main %s", s, head)
 			}
-			want := []string{"Could not reach origin; started from the local main"}
+			want := []string{"Could not reach origin; started from main as last fetched"}
 			if got := notesOf(t, h, s.ID); !slices.Equal(got, want) {
 				t.Errorf("notes in the chat = %q, want %q", got, want)
 			}

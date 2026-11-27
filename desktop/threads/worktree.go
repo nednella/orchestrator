@@ -187,7 +187,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 	}
 	note := ""
 	if unreachable {
-		note = fmt.Sprintf("Could not reach origin; started from the local %s", l.mainBranch(ctx, proj.Dir))
+		note = fmt.Sprintf("Could not reach origin; started from %s as last fetched", l.mainBranch(ctx, proj.Dir))
 	}
 	if !branchFound {
 		if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
