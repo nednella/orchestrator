@@ -225,7 +225,7 @@ func TestSetupCommandRunsInTheNewWorktreeWithItsPlaceholders(t *testing.T) {
 	tree := realDir(t, filepath.Join(h.Dir, "trees", "tidy-up"))
 	eventually(t, "the command to run", func() bool { return exists(got) })
 	data, err := os.ReadFile(got)
-	if want := strings.Join([]string{"tidy-up", filepath.Join(h.Dir, "trees", "tidy-up"), h.Dir, "origin/main", tree}, "\n") + "\n"; err != nil || string(data) != want {
+	if want := strings.Join([]string{"tidy-up", tree, h.Dir, "origin/main", tree}, "\n") + "\n"; err != nil || string(data) != want {
 		t.Errorf("the command got %q, %v; want %q", data, err, want)
 	}
 	if s.Worktree != tree {

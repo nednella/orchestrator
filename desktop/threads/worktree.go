@@ -148,6 +148,8 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 			return workPlace{}, fmt.Errorf("making the worktree of %s: %w", branch, err)
 		}
 	}
+	// As git lists it, with every link resolved: the folder a thread is known by, wherever the project sits.
+	dir = folder.Canonical(dir)
 	w := Made{Path: dir, Branch: branch, Base: base, BaseOid: baseOid, Thread: name.String(), Created: time.Now().UnixMilli()}
 	if err := l.threads.made.Add(proj.Key(), w); err != nil {
 		l.removeUnstarted(ctx, proj, dir)
