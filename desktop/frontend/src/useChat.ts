@@ -4,24 +4,15 @@ import { api, chatEvent, errorMessage, on } from './api'
 import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import { watchAgain } from './chatLive'
 import type { ChatState } from './chatEvents'
+import { keepChat as keep, keptChat as kept } from './chatKept'
 import { liveTimeline, loggedTimeline } from './chatTimeline'
 import { ownStart } from './sideChat'
 import type { Timeline } from './chatTimeline'
 import type { ChatEvent, State } from './types'
 
-const keptThreads = 20
-const kept = new Map<string, ChatState>()
-
-function keep(id: string, state: ChatState) {
-  kept.delete(id)
-  kept.set(id, state)
-  const oldest = kept.keys().next().value
-  if (kept.size > keptThreads && oldest !== undefined) kept.delete(oldest)
-}
-
 // The text streamed while a thread was not watched is lost, so a kept thread starts again with none.
 function startOf(id: string): View {
-  const state = kept.get(id)
+  const state = kept(id)
   return { id, state: state ? { ...state, live: {}, thinking: {} } : EMPTY_CHAT, loading: !state, error: '' }
 }
 

@@ -62,6 +62,11 @@ export type FilesPick = { path: string | null; folder: string | null; place: Fil
 const picked = new Map<string, FilesPick>()
 const listeners = new Set<() => void>()
 
+// forgetPick drops the pick of the Files view of a thread that is gone.
+export function forgetPick(key: string) {
+  if (picked.delete(key)) listeners.forEach((listener) => listener())
+}
+
 export const filesKey = (thread: string | undefined, project: string) => thread ?? `project:${project}`
 
 // pickFile opens the file at path in the Files view of key, at place when it has one; null closes the file open there.

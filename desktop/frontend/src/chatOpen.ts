@@ -3,6 +3,11 @@
 const keptThreads = 20
 const opened = new Map<string, Set<string>>()
 
+// forgetOpened drops what is kept of a thread that is gone.
+export function forgetOpened(thread: string) {
+  opened.delete(thread)
+}
+
 export function isOpened(thread: string, key: string): boolean {
   return opened.get(thread)?.has(key) ?? false
 }

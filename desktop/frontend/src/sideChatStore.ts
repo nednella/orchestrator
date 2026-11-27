@@ -16,6 +16,12 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener)
 }
 
+// forgetSideChatState drops what is kept of a thread that is gone.
+export function forgetSideChatState(thread: string) {
+  const had = attached.delete(thread) || reasons.delete(thread)
+  if (had) changed()
+}
+
 // attachedTo are the side chats added to the thread's next message, oldest first.
 export const attachedTo = (thread: string): string[] => attached.get(thread) ?? none
 

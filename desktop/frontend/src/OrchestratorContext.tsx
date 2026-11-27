@@ -2,7 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { ReactNode } from 'react'
 import { newThreadAccess } from './access'
 import { ISSUES_DISABLED, api, devFlags, errorMessage, on } from './api'
-import { answeredLate } from './chatQuestions'
+import { forgetChat } from './chatKept'
+import { forgetOpened } from './chatOpen'
+import { answeredLate, forgetPicks } from './chatQuestions'
+import { forgetScroll } from './chatScroll'
+import { forgetPick } from './filesView'
+import { forgetSideChatState } from './sideChatStore'
 import { back, current, forward, goneAgent, goneFrom, NO_HISTORY, projectOf, prune, push, stepTo, threadOf } from './navHistory'
 import type { History, Known, View } from './navHistory'
 import { forgetPanel } from './panelStore'
@@ -233,11 +238,18 @@ const composerModeKey = (project: string) => `orchestrator.composerMode.${projec
 const threadDraftKey = (id: string) => `orchestrator.thread.draft.${id}`
 const draftSeenKey = (id: string) => `orchestrator.thread.draftSeen.${id}`
 
-// forgetThread drops what the app keeps of a thread that is gone: its draft, and its right panel.
+// forgetThread drops what the app keeps of a thread that is gone: its draft, its right panel, its chat as it was kept,
+// the folds and picks the reader made in it, where it was scrolled and what it attached or showed.
 function forgetThread(id: string) {
   removeStored(threadDraftKey(id))
   removeStored(draftSeenKey(id))
   forgetPanel(id)
+  forgetSideChatState(id)
+  forgetChat(id)
+  forgetOpened(id)
+  forgetPicks(id)
+  forgetPick(id)
+  forgetScroll(id)
 }
 
 // viewOf is the view that shows the thread, or with none the project's home.

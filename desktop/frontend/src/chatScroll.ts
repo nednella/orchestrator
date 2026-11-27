@@ -33,6 +33,11 @@ export type KeptScroll = { top: number; measured: VirtualItem[] }
 const keptThreads = 20
 const kept = new Map<string, KeptScroll>()
 
+// forgetScroll drops the place kept for a thread that is gone.
+export function forgetScroll(id: string) {
+  kept.delete(id)
+}
+
 // keepScroll keeps where a thread's chat was left. null is the bottom, where every thread opens.
 export function keepScroll(id: string, at: KeptScroll | null) {
   kept.delete(id)

@@ -76,6 +76,11 @@ export function pickedAnswer(question: Question, { labels, other }: Pick): strin
 const keptQuestions = 20
 const picked = new Map<string, Pick[]>()
 
+// forgetPicks drops the picks kept for the questions of a thread that is gone.
+export function forgetPicks(thread: string) {
+  for (const key of [...picked.keys()]) if (key.startsWith(`${thread} `)) picked.delete(key)
+}
+
 export const keptPicks = (thread: string, call: string): Pick[] | undefined => picked.get(`${thread} ${call}`)
 
 // keepPicks marks the question as the newest one touched, and drops the oldest past the limit.
