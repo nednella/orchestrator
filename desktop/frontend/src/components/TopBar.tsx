@@ -1,5 +1,8 @@
+import { useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { useLayout } from '../LayoutContext'
+import { useElementWidth } from '../useElementWidth'
+import { MemoryTotal } from './MemoryTotal'
 import { ThreadCardToggle } from './ThreadCardToggle'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
 import { WindowButtons } from './WindowButtons'
@@ -7,20 +10,26 @@ import { WindowButtons } from './WindowButtons'
 const drag = { '--wails-draggable': 'drag' } as CSSProperties
 const noDrag = { '--wails-draggable': 'no-drag' } as CSSProperties
 
+// Below this width the bar leaves the memory total out, to keep its room for the thread's title.
+const MEMORY_MIN = 640
+
 // TopBar is the row over the thread. Beside the right panel the panel's column has the window buttons, so the bar ends
 // at the thread's edge with the thread details button.
 export function TopBar() {
   const { docked, sidebarOpen, rightOpen } = useLayout()
+  const bar = useRef<HTMLElement>(null)
+  const width = useElementWidth(bar)
   const besidePanel = docked.right && rightOpen
   // With no sidebar beside it the bar starts after the window buttons.
   const left = sidebarOpen && docked.sidebar ? '0px' : 'calc(var(--title-inset) - 0.75rem)'
 
   return (
-    <header className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: besidePanel ? '0.75rem' : 'var(--corner-pad)' }}>
+    <header ref={bar} className="relative flex flex-none items-center" style={{ ...drag, height: 'var(--topbar-h)', paddingLeft: left, paddingRight: besidePanel ? '0.75rem' : 'var(--corner-pad)' }}>
       <div className="flex min-w-0 flex-1 items-center px-3">
         <TitleBreadcrumb />
       </div>
       <div className="flex flex-none items-center gap-0.5" style={noDrag}>
+        {width >= MEMORY_MIN && <MemoryTotal />}
         <ThreadCardToggle />
         {!besidePanel && <WindowButtons />}
       </div>
