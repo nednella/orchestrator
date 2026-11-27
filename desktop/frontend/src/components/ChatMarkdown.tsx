@@ -5,7 +5,7 @@ import type { Components, UrlTransform } from 'react-markdown'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { createChipScope } from '../chipScope'
-import { codeLanguage, lastLine, markdownProps, settled, textCache } from '../chatMarkdown'
+import { codeLanguage, lastLine, markdownProps, settled, textCache, WEB_LINK } from '../chatMarkdown'
 import { ChatChips, InsideLink, WritingLine } from '../fileChips'
 import { codeRef, linkRef } from '../filePaths'
 import { filesKey, imageTarget, linkTarget, pickFile, planPath } from '../filesView'
@@ -80,8 +80,6 @@ const components: Components = {
     return <ChatCodeBlock language={codeLanguage(className)} code={textOf(children).replace(/\n$/, '')} />
   },
 }
-
-const WEB_LINK = /^(https?:|mailto:)/i
 
 // A link to a file keeps its address, for the Files view or a chip to open; any other address goes as the chat's rules say.
 const urlTransform: UrlTransform = (url, key, node) => (key === 'href' && (planPath(url) !== null || linkRef(url) !== null) ? url : (markdownProps.urlTransform?.(url, key, node) ?? ''))

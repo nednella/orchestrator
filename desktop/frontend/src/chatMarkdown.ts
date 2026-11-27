@@ -1,7 +1,7 @@
 import remarkGfm from 'remark-gfm'
 import type { Options } from 'react-markdown'
 
-const WEB_LINK = /^(https?:|mailto:)/i
+export const WEB_LINK = /^(https?:|mailto:)/i
 
 export const markdownProps: Options = {
   remarkPlugins: [remarkGfm],
