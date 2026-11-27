@@ -1,38 +1,23 @@
-import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
-import type { DarkTheme, ThemeSetting } from '../types'
-import { SelectMenu } from './SelectMenu'
+import { ColorSchemeTiles } from './ColorSchemeTiles'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
+import { ThemeCards } from './ThemeCards'
 
-const THEMES: { value: ThemeSetting; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
-
-const DARK_THEMES: { value: DarkTheme; label: string }[] = [
-  { value: 'black', label: 'Black' },
-  { value: 'violet', label: 'Violet' },
-]
+const heading = 'flex min-h-7 items-center px-4 text-title font-semibold'
 
 export function AppearanceSettings() {
-  const { settings, setTheme, setThemes, report } = useOrchestrator('settings', 'setTheme', 'setThemes', 'report')
   const { scale, zoom } = useLayout()
   return (
     <SettingsPage>
-      <SettingsSection title="Colors">
-        <SettingsRow
-          title="Theme"
-          description="System follows the macOS appearance."
-          control={<SelectMenu label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />}
-        />
-        <SettingsRow
-          title="Dark theme"
-          description="Shown when the theme is dark, or System follows a dark macOS."
-          control={<SelectMenu label="Dark theme" options={DARK_THEMES} value={settings.darkTheme} onChange={(value) => report(() => setThemes(value, settings.lightTheme))} />}
-        />
+      <SettingsSection title="Colors & themes" plain>
+        <div className="space-y-3">
+          <h3 className={heading}>Color scheme</h3>
+          <ColorSchemeTiles />
+          <h3 className={`${heading} min-h-8 pt-5`}>Themes</h3>
+          <ThemeCards />
+        </div>
       </SettingsSection>
       <SettingsSection title="Interface">
         <SettingsRow

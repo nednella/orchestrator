@@ -1,5 +1,6 @@
 :root,
-:root[data-theme='black'] {
+:root[data-theme='black'],
+[data-preview='black'] {
   color-scheme: dark;
 
   --bg-app: #000;
@@ -203,7 +204,8 @@
   --z-splash: 60;
 }
 
-:root[data-theme='violet'] {
+:root[data-theme='violet'],
+[data-preview='violet'] {
   --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   --bg-app: #0d0f13;
   --bg-surface: #13161c;
@@ -235,7 +237,8 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
 }
 
-:root[data-theme='light'] {
+:root[data-theme='light'],
+[data-preview='light'] {
   --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   color-scheme: light;
 
