@@ -997,6 +997,15 @@ func quitWithAStartThatWasMakingItsWorktree(t *testing.T, making bool) (*apptest
 	t.Helper()
 	h := apptest.New(t)
 	repoFixture(t, h)
+	// The repository ignores .env itself, so the file is no untracked change that keeps the tree.
+	exclude, err := os.OpenFile(filepath.Join(h.Dir, ".git", "info", "exclude"), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := exclude.WriteString(".env\n"); err != nil {
+		t.Fatal(err)
+	}
+	exclude.Close()
 	tree := filepath.Join(h.Dir, "trees", "fix-login")
 	gitIn(t, h.Dir, "worktree", "add", "-b", "fix-login", tree)
 	if err := os.WriteFile(filepath.Join(tree, ".env"), []byte("secret\n"), 0o600); err != nil {
