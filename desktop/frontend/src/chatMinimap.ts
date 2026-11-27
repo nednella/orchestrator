@@ -1,3 +1,4 @@
+import { firstLine } from './chatTimeline.ts'
 import type { TimelineItem } from './chatTimeline'
 
 // A strip is one mark on the chat's minimap: a message of the owner's, or an error. index is its item's place in the
@@ -25,8 +26,6 @@ export function plainText(markdown: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
-
-const firstLine = (text: string) => text.split('\n').find((line) => line.trim() !== '')?.trim() ?? ''
 
 // minimapStrips gives a strip for each message of the owner's and each error, in the chat's order.
 export function minimapStrips(items: TimelineItem[]): MinimapStrip[] {

@@ -1,3 +1,4 @@
+import { firstLine } from './chatTimeline.ts'
 import type { IconName } from './components/Icon'
 
 export type ToolSummary = { icon: IconName; title: string; detail: string }
@@ -11,7 +12,6 @@ type Input = Record<string, unknown>
 const asInput = (input: unknown): Input => (input && typeof input === 'object' ? (input as Input) : {})
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const lines = (s: string): string[] => (s === '' ? [] : s.split('\n'))
-const firstLine = (s: string): string => s.split('\n').find((l) => l.trim() !== '')?.trim() ?? ''
 
 // relative is path inside folder, or path itself when it is not inside.
 export function relative(path: string, folder: string): string {
