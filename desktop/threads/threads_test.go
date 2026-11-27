@@ -58,9 +58,10 @@ func TestThreadLifecycle(t *testing.T) {
 			t.Errorf("waiting thread = %+v", s[0])
 		}
 		eventually(t, "attention event", func() bool { return h.Rec.Count("attention") == before+1 })
-		name, payload := h.Rec.LastEvent()
-		if got, _ := json.Marshal(payload); name != "attention" || string(got) != fmt.Sprintf(`{"id":%q,"state":"waiting"}`, second.ID) {
-			t.Errorf("last event = %s %s", name, got)
+		// The latest attention event, not the latest event: the threads change for other reasons too, such as a memory
+		// sample or a read of a branch, which may send the list again after it.
+		if got, _ := json.Marshal(h.Rec.Last("attention")); string(got) != fmt.Sprintf(`{"id":%q,"state":"waiting"}`, second.ID) {
+			t.Errorf("last attention event = %s", got)
 		}
 
 		h.Observe(t, first.ID, "UserPromptSubmit", `{"prompt":"go"}`)
