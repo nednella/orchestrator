@@ -354,6 +354,7 @@ func (s *Threads) Start(ctx context.Context) error {
 	s.ctx = ctx
 	s.mu.Unlock()
 	s.Refresh()
+	s.restoreStarts()
 	go s.sweepServers()
 	go func() {
 		tick := time.NewTicker(s.pollEvery)
@@ -1090,6 +1091,7 @@ func (s *Threads) forgetDeleted(name thread.Name) {
 	delete(s.deleting, id)
 	delete(s.ended, id)
 	delete(s.starting, id)
+	s.dropStartRecord(name)
 	delete(s.setups, id)
 	delete(s.history, id)
 	delete(s.known, id)
@@ -1468,6 +1470,7 @@ func (s *Threads) followBranch(rec thread.Record, turnEnded, toolDone bool) {
 // sync updates history and attention from what is known, and tells the front
 // end if the list changed. It needs mu.
 func (s *Threads) sync() {
+	s.keepStarts()
 	var attention [][2]string // thread id and the attention state
 	live := map[string]bool{}
 	for _, in := range s.info {

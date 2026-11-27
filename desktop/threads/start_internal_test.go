@@ -4,10 +4,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/folder"
 	"github.com/nednella/orchestrator/internal/host"
+	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -108,5 +111,30 @@ func TestHostTookNeedsANewMessageSinceTheTry(t *testing.T) {
 	}
 	if st.sending = ""; s.hostTook(st, sendingHeld, m) {
 		t.Error("a message was found for a try that sent nothing")
+	}
+}
+
+func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	wt := madeTree(t, l, dir, "feature", "p/aaaaaaaa")
+	proj := project.Project{Name: "p", Dir: dir}
+	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "feature", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.dir != folder.Canonical(wt) || got.branch != "feature" || !got.made {
+		t.Errorf("worktree = %+v, want %s as the thread's own, made by orchestrator", got, wt)
+	}
+	if n := len(strings.Split(strings.TrimSpace(gitT(t, dir, "worktree", "list")), "\n")); n != 2 {
+		t.Errorf("git lists %d worktrees, want 2", n)
+	}
+	// Another thread's start is not told the worktree is its own to remove.
+	other, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "feature", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.made {
+		t.Errorf("worktree for another thread = %+v, want it unrecorded", other)
 	}
 }

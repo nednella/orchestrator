@@ -1,6 +1,7 @@
 package threads_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // listedStarting is the latest threads event's row of the thread, when it says the thread starts.
@@ -501,5 +503,106 @@ func TestSetupCommandThatCannotStartShowsAsFailed(t *testing.T) {
 	row, _ := h.Thread(s.ID)
 	if !strings.Contains(row.SetupProblem, "no room for a shell") || row.SetupShell != "" || row.Start != "" || row.State == "settled" {
 		t.Errorf("the row = %+v, want the thread running and the set-up failed with why", row)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestQuitDuringTheStartBringsTheThreadBackAsAFailedStart(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "touch ran-setup"})
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "slow-new", true)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "and the signup form"); err != nil {
+		t.Fatal(err)
+	}
+	var placed threads.Thread
+	eventually(t, "the start to reach the agent", func() bool {
+		placed, _ = h.Thread(s.ID)
+		return placed.Worktree != "" && placed.Detail == "Starting Claude"
+	})
+	h.BeginQuit()
+	h.App.Stop()
+	tmux.fail(t, "slow-new", false)
+
+	second := h.Restart(t)
+	row, ok := second.Thread(s.ID)
+	if !ok || row.Start != threads.StartFailed || row.StartError != "The app quit while the thread started" || row.State != "waiting" {
+		t.Fatalf("the row after the restart = %+v, %v; want a failed start", row, ok)
+	}
+	if row.FirstMessage != "make it faster" || len(row.StartQueue) != 1 || row.StartQueue[0] != "and the signup form" || row.Title != "Fix login" || row.N != s.N || row.Worktree != placed.Worktree || row.Branch != "fix-login" {
+		t.Errorf("the row after the restart = %+v, want the messages, the number and the worktree of %+v", row, placed)
+	}
+	if tmuxHas(second, s.ID) {
+		t.Error("a session of the thread runs")
+	}
+	if err := second.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := second.Thread(s.ID)
+		return row.Start == ""
+	})
+	eventually(t, "both messages", func() bool { return len(userLines(t, second, s.ID)) >= 2 })
+	users := userLines(t, second, s.ID)
+	if len(users) != 2 || !strings.Contains(users[0], "make it faster") || !strings.Contains(users[1], "and the signup form") {
+		t.Errorf("messages = %v", users)
+	}
+	row, _ = second.Thread(s.ID)
+	if row.Worktree != placed.Worktree || strings.Count(gitIn(t, h.Dir, "worktree", "list"), "\n") != 1 {
+		t.Errorf("the retried row = %+v, want the worktree %s and no second one: %s", row, placed.Worktree, gitIn(t, h.Dir, "worktree", "list"))
+	}
+	eventually(t, "the set-up command", func() bool { return exists(filepath.Join(placed.Worktree, "ran-setup")) })
+	if left, _ := filepath.Glob(filepath.Join(second.State, "data", "main", "starts", "*")); len(left) != 0 {
+		t.Errorf("the saved start is still there: %v", left)
+	}
+}
+
+func TestRestartOfAnAgentThatNeverGotItsFirstMessageOffersTheRetry(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The record a quit left when the agent ran and had not taken the first message.
+	token := strings.TrimPrefix(s.ID, "main/")
+	saved := fmt.Sprintf(`{"name":%q,"number":%d,"rawTitle":"work","title":"work","text":"first words","send":true,"model":{},"access":"supervised","place":"project","created":%d,"placed":true,"launched":true,"delivered":false,"queue":[{"Text":"second words"}],"status":"starting"}`, s.ID, s.N, s.CreatedAt)
+	dir := filepath.Join(h.State, "data", "main", "starts")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, token+".json"), []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.BeginQuit()
+	h.App.Stop()
+
+	second := h.Restart(t)
+	eventually(t, "the thread to be listed as a failed start", func() bool {
+		row, _ := second.Thread(s.ID)
+		return row.Start == threads.StartFailed
+	})
+	row, _ := second.Thread(s.ID)
+	if row.FirstMessage != "first words" || len(row.StartQueue) != 1 || row.StartError != "The app quit while the thread started" || row.State != "waiting" {
+		t.Errorf("the row = %+v", row)
+	}
+	if err := second.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "both messages", func() bool { return len(userLines(t, second, s.ID)) >= 2 })
+	eventually(t, "the start to end", func() bool {
+		row, _ := second.Thread(s.ID)
+		return row.Start == "" && len(row.StartQueue) == 0
+	})
+	users := userLines(t, second, s.ID)
+	if len(users) != 2 || !strings.Contains(users[0], "first words") || !strings.Contains(users[1], "second words") {
+		t.Errorf("messages = %v", users)
+	}
+	if _, err := os.Stat(filepath.Join(dir, token+".json")); err == nil {
+		t.Error("the saved start is still there")
 	}
 }

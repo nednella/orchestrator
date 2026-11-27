@@ -57,6 +57,7 @@ type starting struct {
 	setupTried bool // the set-up command was looked at in this try: a retry looks again
 	restore    func()
 	delivered  bool
+	saved      []byte // what the start's record on disk holds
 	sending    string // what a try handed to the host and has no reply for: sendingFirst or sendingHeld, else ""
 	sentBefore int    // how many such messages the host's chat log held then
 
@@ -158,7 +159,8 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 		switch {
 		case err != nil:
 			st.running = false
-			if !st.aborted {
+			// A start the app's quit stopped is saved as it was, and listed as failed when the app starts again.
+			if !st.aborted && st.app.Err() == nil {
 				log.Printf("orchestrator: thread %s did not start: %v", st.name, err)
 				st.status, st.failure = StartFailed, startFailure(err)
 				s.sync()
@@ -170,6 +172,7 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 		default:
 			st.running = false
 			delete(s.starting, st.name.String())
+			s.dropStartRecord(st.name)
 			s.sync()
 		}
 		s.mu.Unlock()
@@ -199,7 +202,7 @@ var errNotDelivered = errors.New("the agent did not take the first message in ti
 // that is listed keeps its worktree when a step fails, for the retry; one that is not has no retry, so its worktree goes.
 func (s *Threads) execute(ctx context.Context, st *starting) error {
 	if st.placed && st.o.Later && st.work.made && gone(st.work.dir) {
-		st.work, st.placed = workPlace{}, false
+		s.progress(st, func() { st.work, st.placed = workPlace{}, false })
 	}
 	if !st.placed {
 		if st.o.Place == InWorktree {
@@ -334,6 +337,7 @@ func (s *Threads) progress(st *starting, change func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	change()
+	s.sync()
 }
 
 // hostHolds is how many messages like m the thread's chat log, which its host keeps, holds as the user's or queued.
@@ -368,7 +372,8 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 		if st.issue == 0 {
 			// A retry keeps the branch the first try picked, which a worktree that was undone leaves behind.
 			if st.branch == "" {
-				st.branch = s.life.freeBranch(ctx, st.proj.Dir, branchFromTitle(st.rawTitle))
+				branch := s.life.freeBranch(ctx, st.proj.Dir, branchFromTitle(st.rawTitle))
+				s.progress(st, func() { st.branch = branch })
 			}
 			branch, base = st.branch, st.o.Base
 		}
@@ -389,7 +394,7 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 		}
 		st.restore = restore
 	}
-	st.work, st.placed = work, true
+	s.progress(st, func() { st.work, st.placed = work, true })
 	s.setPlace(st, work)
 	return nil
 }
@@ -412,7 +417,7 @@ func (s *Threads) unplace(st *starting) {
 	st.restore()
 	st.restore = func() {}
 	s.life.undoWorktree(context.WithoutCancel(st.app), st.proj, st.name, st.work)
-	st.work, st.placed = workPlace{}, false
+	s.progress(st, func() { st.work, st.placed = workPlace{}, false })
 }
 
 // boot starts the agent under its host in tmux and adds the thread to the list as it runs. It needs createMu for a
