@@ -948,3 +948,12 @@ test('no Thinking row after an interrupt', () => {
   const next = buildTimeline(log(...running, { kind: 'interrupt' }, turnEnd(true), user('u2', 'Go on')), {})
   assert.equal(next.items.at(-1)?.kind, 'thinking', 'the next turn has it again')
 })
+
+test('a note the app wrote before the agent ran shows as a quiet notice above the first message', () => {
+  const events = log({ kind: 'note', text: 'Could not reach origin; started from the local main' }, { kind: 'start' }, user('u1', 'Fix it'))
+  const t = buildTimeline(events, {})
+  assert.deepEqual(kinds(t.items).slice(0, 2), ['notice', 'user'])
+  const [notice] = only(t.items, 'notice')
+  assert.equal(notice.text, 'Could not reach origin; started from the local main')
+  assert.equal(notice.error, false)
+})

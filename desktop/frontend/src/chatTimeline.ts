@@ -320,6 +320,10 @@ export function loggedTimeline(events: ChatEvent[]): LoggedTimeline {
         if (!e.agent || running) open(e).approvals.push(...left)
         return
       }
+      // A note the app wrote before the agent ran, as that origin could not be reached.
+      case 'note':
+        items.push(noticeOf(e, e.text ?? '', false))
+        return
       case 'queued':
         if (e.id) queued.set(e.id, { id: e.id, text: shownText(e), files: e.files ?? [] })
         return
