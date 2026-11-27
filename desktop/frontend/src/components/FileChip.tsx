@@ -96,8 +96,8 @@ function FileChipButton({ thread, scope, chip, fileRef }: FileChipButtonProps) {
         }}
         {...tipHandlers}
       >
-        <Icon size={13} className="flex-none" aria-hidden="true" />
-        <span className="min-w-0 truncate">
+        <Icon className="file-chip-icon" aria-hidden="true" />
+        <span className="file-chip-label">
           {name}
           {placeLabel(fileRef)}
         </span>
