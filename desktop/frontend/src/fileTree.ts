@@ -8,9 +8,6 @@ export const isMarkdownPath = (path: string) => MARKDOWN.test(path)
 // treePath is how the tree names an entry: a folder ends in a slash.
 export const treePath = (e: FileEntry) => (e.dir ? `${e.path}/` : e.path)
 
-// folderOf is the entry of a tree path that names a folder, '' for a file.
-export const folderOf = (treePath: string) => (treePath.endsWith('/') ? treePath.slice(0, -1) : '')
-
 // ancestorsOf is the tree paths of the folders a path is in, outermost first.
 export function ancestorsOf(path: string): string[] {
   const parts = path.replace(/\/$/, '').split('/')
