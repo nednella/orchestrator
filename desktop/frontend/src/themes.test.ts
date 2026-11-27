@@ -53,3 +53,10 @@ test('every theme in the library has its colours in tokens.css', () => {
   const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
   for (const { previews } of THEME_CARDS) for (const { theme } of previews) assert.equal(css.includes(`[data-preview='${theme}']`), true, theme)
 })
+
+test('every theme block defines the chat look tokens', () => {
+  const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
+  const blocks = css.split(/^(?=:root[,\[])/m).filter((b) => b.includes('color-scheme:'))
+  assert.equal(blocks.length, 10)
+  for (const block of blocks) for (const token of ['--link', '--chip-ink', '--code-bg', '--bg-user-message']) assert.equal(new RegExp(`^\\s*${token}:`, 'm').test(block), true, `${block.split('{')[0].trim()} ${token}`)
+})

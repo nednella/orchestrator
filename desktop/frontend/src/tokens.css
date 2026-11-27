@@ -67,6 +67,10 @@
   --bg-thread-question: rgba(255, 255, 255, 0.04);
   --agent-claude: #e0875f;
   --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #51a2ff;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: #d97757;
   --provider-claude: var(--claude-mark);
   --provider-other: var(--text-soft);
@@ -260,6 +264,10 @@
   --agent-claude: #c15f3c;
   --vscode-mark: #007acc;
   --bg-user-message: color-mix(in srgb, #e4e4e7 55%, #f4f4f5);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #1447e6;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
 
   --bg-card: var(--bg-surface);
   --bg-tile: var(--bg-raised);
@@ -361,6 +369,10 @@
   --bg-thread-question: oklch(0.92 0.036 262 / 0.05);
   --agent-claude: oklch(0.709 0.122 44.5);
   --bg-user-message: oklch(0.285 0.034 262);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #51a2ff;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.67 0.16 245.2);
   --side-chat-asks: oklch(0.7 0.15 255);
@@ -456,6 +468,10 @@
   --bg-thread-question: oklch(0.92 0.014 58 / 0.05);
   --agent-claude: oklch(0.709 0.122 44.5);
   --bg-user-message: oklch(0.3 0.014 58);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #51a2ff;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.67 0.16 245.2);
   --side-chat-asks: oklch(0.72 0.13 250);
@@ -553,6 +569,10 @@
   --bg-thread-question: oklch(0.3 0.02 60 / 0.04);
   --agent-claude: oklch(0.597 0.135 39.9);
   --bg-user-message: oklch(0.925 0.013 85);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #1447e6;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.567 0.155 248.5);
   --bg-card: var(--bg-surface);
@@ -653,6 +673,10 @@
   --bg-thread-question: oklch(0.3 0.02 262 / 0.04);
   --agent-claude: oklch(0.597 0.135 39.9);
   --bg-user-message: oklch(0.925 0.019200000000000002 262);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #1447e6;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.567 0.155 248.5);
   --bg-card: var(--bg-surface);
@@ -753,6 +777,10 @@
   --bg-thread-question: oklch(0.3 0.02 55 / 0.04);
   --agent-claude: oklch(0.597 0.135 39.9);
   --bg-user-message: oklch(0.915 0.022400000000000003 62);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #1447e6;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.567 0.155 248.5);
   --bg-card: var(--bg-surface);
@@ -851,6 +879,10 @@
   --bg-thread-question: oklch(0.92 0.02 82 / 0.05);
   --agent-claude: oklch(0.709 0.122 44.5);
   --bg-user-message: oklch(0.31 0.01 82);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #51a2ff;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.67 0.16 245.2);
   --side-chat-asks: oklch(0.7 0.15 255);
@@ -948,6 +980,10 @@
   --bg-thread-question: oklch(0.3 0.02 295 / 0.04);
   --agent-claude: oklch(0.597 0.135 39.9);
   --bg-user-message: oklch(0.945 0.012 298);
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #1447e6;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.567 0.155 248.5);
   --bg-card: var(--bg-surface);
@@ -1047,6 +1083,10 @@
   --bg-thread-question: oklch(0.92 0.0048 295 / 0.05);
   --agent-claude: oklch(0.709 0.122 44.5);
   --bg-user-message: color-mix(in srgb, var(--accent) 16%, var(--bg-surface));
+  /* Links and file chips in a chat, a blue that reads at 4.5:1 or more on the chat in every theme, and the fenced code's surface. */
+  --link: #51a2ff;
+  --chip-ink: var(--link);
+  --code-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-app));
   --claude-mark: oklch(0.672 0.131 38.8);
   --vscode-mark: oklch(0.67 0.16 245.2);
   --side-chat-asks: oklch(0.7 0.15 255);
