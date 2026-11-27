@@ -1,11 +1,13 @@
+import { ArrowUpDown, Columns2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { readStored, writeStored } from '../storage'
 import type { Thread } from '../types'
+import { ChatActionButton } from './ChatActionButton'
 import { EvidenceCard } from './EvidenceCard'
 import { EvidenceCompare } from './EvidenceCompare'
 import { EvidenceViewer } from './EvidenceViewer'
-import { Icon } from './Icon'
+import { Notice } from './Notice'
 
 type EvidenceTabProps = { thread: Thread }
 
@@ -30,48 +32,52 @@ export function EvidenceTab({ thread }: EvidenceTabProps) {
 
   if (items.length === 0) {
     return (
-      <div className="absolute inset-0 grid place-items-center p-6">
-        <div className="flex max-w-sm flex-col items-center gap-2 text-center">
-          <Icon name="image" size={28} />
-          <h3 className="text-title font-semibold">Nothing to show yet</h3>
-          <p className="text-soft">Screenshots, before and after pairs and short notes from this thread appear here. The agent files them with its <code className="mono text-small">show</code> tool.</p>
-          <p className="text-small text-dim">You can capture the browser yourself from its toolbar.</p>
-        </div>
+      <div className="absolute inset-0 flex flex-col">
+        <Notice
+          centered
+          title="Nothing to show yet"
+          hint={
+            <>
+              Screenshots, before and after pairs and short notes from this thread appear here. The agent files them with its <code className="mono">show</code> tool. You can also capture the browser yourself from its toolbar.
+            </>
+          }
+        />
       </div>
     )
   }
 
   return (
     <div className="absolute inset-0 flex flex-col">
-      <div className="flex flex-none flex-wrap items-center gap-2 border-b border-line bg-app px-3 py-2">
-        <span className="mono text-small text-dim">{items.length} items</span>
+      <div className="flex min-h-11 flex-none flex-wrap items-center gap-x-1 gap-y-1 border-b border-(--border-rule) px-3 py-1.5">
+        <span className="text-small text-soft tabular-nums">{comparing ? 'Pick two images' : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</span>
         <span className="ml-auto" />
         {comparing && (
-          <button className="btn btn-accent" disabled={picked.length !== 2} onClick={() => setShowCompare(true)}>
+          <button className="btn btn-primary h-7 rounded-full" disabled={picked.length !== 2} onClick={() => setShowCompare(true)}>
             Compare {picked.length} of 2
           </button>
         )}
-        <button
-          className="btn"
-          aria-pressed={comparing}
+        <ChatActionButton
+          label={comparing ? 'Stop comparing' : 'Compare two images'}
+          pressed={comparing}
           disabled={images.length < 2}
-          title="Pick two images to see them side by side"
           onClick={() => {
             setComparing(!comparing)
             setPicked([])
           }}
         >
-          <Icon name="compare" /> {comparing ? 'Done' : 'Compare'}
-        </button>
-        <button
-          className="btn"
+          <Columns2 size={14} aria-hidden="true" />
+          {comparing ? 'Done' : 'Compare'}
+        </ChatActionButton>
+        <ChatActionButton
+          label={newestFirst ? 'Show the oldest first' : 'Show the newest first'}
           onClick={() => {
             writeStored(ORDER_KEY, !newestFirst)
             setNewestFirst(!newestFirst)
           }}
         >
+          <ArrowUpDown size={14} aria-hidden="true" />
           {newestFirst ? 'Newest first' : 'Oldest first'}
-        </button>
+        </ChatActionButton>
       </div>
       <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-3 overflow-y-auto p-3">
         {items.map((item) => (

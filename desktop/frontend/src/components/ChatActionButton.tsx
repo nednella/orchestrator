@@ -6,9 +6,10 @@ export const revealOnHover = 'opacity-0 transition-opacity duration-200 group-ho
 
 // label names a button that shows only an icon. A muted button's icon and text turn from soft to ink on hover; any
 // other changes only its background. A busy button pulses until what it started is done.
-type ChatActionButtonProps = { label?: string; muted?: boolean; disabled?: boolean; busy?: boolean; onClick(): void; children: ReactNode }
+// A pressed button, one that switches a mode on, keeps the hover background.
+type ChatActionButtonProps = { label?: string; muted?: boolean; disabled?: boolean; busy?: boolean; pressed?: boolean; onClick(): void; children: ReactNode }
 
-export function ChatActionButton({ label, muted = false, disabled = false, busy = false, onClick, children }: ChatActionButtonProps) {
+export function ChatActionButton({ label, muted = false, disabled = false, busy = false, pressed, onClick, children }: ChatActionButtonProps) {
   return (
     <button
       type="button"
@@ -16,8 +17,9 @@ export function ChatActionButton({ label, muted = false, disabled = false, busy 
       aria-label={label}
       disabled={disabled}
       aria-busy={busy || undefined}
+      aria-pressed={pressed}
       onClick={onClick}
-      className={`inline-flex h-7 flex-none items-center justify-center gap-1 rounded-lg border border-transparent px-[7px] text-small text-soft transition-[background-color,color,scale] duration-150 ease-in-out enabled:hover:bg-[var(--bg-ghost-hover)] enabled:active:scale-[0.97] disabled:opacity-64 sm:h-6 ${muted ? 'enabled:hover:text-ink' : ''} ${busy ? 'motion-safe:animate-pulse' : ''}`}
+      className={`inline-flex h-7 flex-none items-center justify-center gap-1 rounded-lg border border-transparent px-[7px] text-small text-soft transition-[background-color,color,scale] duration-150 ease-in-out enabled:hover:bg-[var(--bg-ghost-hover)] enabled:active:scale-[0.97] disabled:opacity-64 sm:h-6 ${muted ? 'enabled:hover:text-ink' : ''} ${busy ? 'motion-safe:animate-pulse' : ''} ${pressed ? 'bg-(--bg-segment-on) text-ink' : ''}`}
     >
       {children}
     </button>
