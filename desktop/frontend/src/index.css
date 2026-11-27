@@ -107,9 +107,7 @@
 
   .label {
     font-size: var(--fs-label);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-weight: 500;
     color: var(--text-dim);
   }
 
