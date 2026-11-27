@@ -1,6 +1,6 @@
+import { Brush, TriangleAlert } from 'lucide-react'
 import { cleanupNote } from '../threads'
 import type { Thread } from '../types'
-import { Icon } from './Icon'
 
 type CleanupMarkProps = { thread: Thread }
 
@@ -10,7 +10,7 @@ export function CleanupMark({ thread }: CleanupMarkProps) {
   const note = cleanupNote(thread)
   return (
     <span role="img" aria-label={note} title={note} className={`relative flex flex-none ${blocked ? 'text-danger' : 'text-soft'}`}>
-      <Icon name={blocked ? 'alert' : 'broom'} size={12} />
+      {blocked ? <TriangleAlert size={12} aria-hidden="true" /> : <Brush size={12} aria-hidden="true" />}
     </span>
   )
 }

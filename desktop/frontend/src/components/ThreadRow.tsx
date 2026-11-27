@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { GitBranch } from 'lucide-react'
+import { GitBranch, X } from 'lucide-react'
 import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
@@ -12,7 +12,6 @@ import type { Thread } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ClaudeMark } from './ClaudeMark'
 import { CleanupMark } from './CleanupMark'
-import { Icon } from './Icon'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
 import { StateIcon } from './StateIcon'
@@ -142,7 +141,7 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
               {selected && (
                 <span className="thread-actions relative z-[1] items-center justify-self-end">
                   <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(thread.project)}>
-                    <Icon name="x" size={14} />
+                    <X size={14} aria-hidden="true" />
                   </button>
                 </span>
               )}

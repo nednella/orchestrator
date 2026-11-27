@@ -1,3 +1,4 @@
+import { Search, SquarePen } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -6,7 +7,6 @@ import { matchesThread, sortThreads } from '../threads'
 import { useFocusRequest } from '../useFocusRequest'
 import { useListNav } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
-import { Icon } from './Icon'
 import { ThreadRow } from './ThreadRow'
 
 // A request, from the keyboard, that the row of thread id opens its menu; n counts the requests.
@@ -90,7 +90,7 @@ export function ThreadSidebar() {
     >
       <div className="flex flex-none items-center gap-1.5 px-1.5 pt-2 pb-2.5">
         <label className="thread-search flex h-[1.875rem] min-w-0 flex-1 cursor-text items-center gap-2 rounded-lg px-2.5 text-dim">
-          <Icon name="search" />
+          <Search size={14} aria-hidden="true" />
           <input
             ref={search}
             value={query}
@@ -102,7 +102,7 @@ export function ThreadSidebar() {
           />
         </label>
         <button className="btn btn-ghost h-[1.875rem] w-[1.875rem] justify-center border-line px-0 hover:text-ink" title="New thread" aria-label="New thread" onClick={newThread}>
-          <Icon name="compose" />
+          <SquarePen size={14} aria-hidden="true" />
         </button>
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pb-1">

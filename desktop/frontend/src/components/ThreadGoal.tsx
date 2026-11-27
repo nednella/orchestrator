@@ -1,7 +1,7 @@
+import { GitPullRequest } from 'lucide-react'
 import { threadGoal } from '../threads'
 import type { GoalTone } from '../threads'
 import type { Thread } from '../types'
-import { Icon } from './Icon'
 
 type ThreadGoalProps = { thread: Thread }
 
@@ -20,7 +20,7 @@ export function ThreadGoal({ thread }: ThreadGoalProps) {
   const { pr } = thread
   return (
     <span className="flex flex-none items-center gap-1 tabular-nums" style={{ color: TONE[goal.tone] }} title={pr ? `PR #${pr.number}, ${pr.state}, checks ${pr.checks}` : undefined}>
-      <Icon name="pull-request" size={12} />
+      <GitPullRequest size={12} aria-hidden="true" />
       {goal.number}
     </span>
   )
