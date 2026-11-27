@@ -1,3 +1,4 @@
+import { Ellipsis, Play } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -5,7 +6,6 @@ import { api } from '../api'
 import type { Issue } from '../types'
 import type { Point } from '../useFloatingAt'
 import { ContextMenu } from './ContextMenu'
-import { Icon } from './Icon'
 
 type IssueWorkflowProps = { issue: Issue; onMenu?(open: boolean): void }
 
@@ -31,7 +31,7 @@ export function IssueWorkflow({ issue, onMenu }: IssueWorkflowProps) {
     <div className="flex flex-wrap items-center gap-1.5">
       {first && (
         <button className="btn btn-primary h-6 px-2" title={`${first}: start a thread for #${issue.number} (hold ⌥ to stay here)`} onClick={(e) => start(first, e)}>
-          <Icon name="play" size={10} />
+          <Play size={12} fill="currentColor" aria-hidden="true" />
           {first}
         </button>
       )}
@@ -58,7 +58,7 @@ export function IssueWorkflow({ issue, onMenu }: IssueWorkflowProps) {
           showMenu({ x: box.left, y: box.bottom + 4 })
         }}
       >
-        <Icon name="more" />
+        <Ellipsis size={14} aria-hidden="true" />
       </button>
       {menuAt && (
         <ContextMenu

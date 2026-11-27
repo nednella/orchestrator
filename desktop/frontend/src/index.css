@@ -658,16 +658,20 @@
     background: var(--bg-hover);
   }
 
-  .thread-row {
+  .thread-row,
+  .issue-row {
     border-radius: 0.75rem;
   }
 
-  .thread-row::before {
+  .thread-row::before,
+  .issue-row::before {
     display: none;
   }
 
   .thread-row:hover,
-  .thread-row[data-menu-open='true'] {
+  .thread-row[data-menu-open='true'],
+  .issue-row:hover,
+  .issue-row[data-menu-open='true'] {
     background: var(--bg-raised);
   }
 

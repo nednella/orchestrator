@@ -17,7 +17,7 @@ export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
 
   return (
     <div
-      className="row row-inset group flex-col gap-0.5 rounded-lg px-2 py-1.5"
+      className="row row-inset issue-row group flex-col gap-1 px-3 py-2"
       data-issue={issue.number}
       data-menu-open={menuOpen}
       draggable={issue.moves.length > 0}
@@ -33,18 +33,19 @@ export function IssueRow({ issue, drag, onRead }: IssueRowProps) {
         if (e.currentTarget.contains(target) && !target.closest('button')) onRead()
       }}
     >
-      <button data-nav className="flex min-w-0 items-baseline gap-2 text-left" title="Read the issue" onClick={onRead}>
-        <span className="mono w-9 flex-none text-small text-dim">{issue.number}</span>
-        <span className="min-w-0 flex-1 truncate text-body">{issue.title}</span>
+      <button data-nav className="flex min-w-0 items-center gap-2 text-left" title="Read the issue" onClick={onRead}>
+        <span className="min-w-0 flex-1 truncate text-body">
+          <span className="text-soft">#{issue.number}</span> {issue.title}
+        </span>
         {thread?.pr && <PRMark pr={thread.pr} />}
       </button>
-      <div className="flex min-w-0 items-center gap-2.5 pl-11 text-small text-dim empty:hidden">
+      <div className="flex min-w-0 items-center gap-3 text-small text-dim empty:hidden">
         {issue.type && <TypeMark type={issue.type} named />}
         <ModelTag model={labelled('model')} effort={labelled('effort')} problem={issue.ignored.join('\n')} className="min-w-0 truncate" />
         {thread && <IssueThread thread={thread} />}
       </div>
       {!thread && (
-        <div className="issue-actions pt-1 pl-11">
+        <div className="issue-actions pt-1">
           <IssueWorkflow issue={issue} onMenu={setMenuOpen} />
         </div>
       )}
