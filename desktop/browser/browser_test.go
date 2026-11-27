@@ -165,6 +165,15 @@ func TestDroppedConnectionIsRemade(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := b.tab("p/1").proc
+	// Open returns once the navigation is accepted, so the page may still be loading and have no title yet.
+	for loaded := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if got, err := b.Eval(ctx, "p/1", "document.readyState + ' ' + document.title"); err == nil && got == `"complete [] Kept"` {
+			break
+		}
+		if time.Now().After(loaded) {
+			t.Fatal("the page did not finish loading")
+		}
+	}
 	dropped := p.conn()
 	dropped.close()
 	deadline := time.Now().Add(10 * time.Second)
