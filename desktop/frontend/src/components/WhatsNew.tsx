@@ -40,7 +40,7 @@ function WhatsNewDialog({ opened, onClose }: WhatsNewDialogProps) {
         <span className="flex-1" />
         <Keycap>Esc</Keycap>
       </div>
-      <div className="h-[min(26rem,60vh)] min-h-0 overflow-y-auto px-5 py-3">
+      <div className={`min-h-0 overflow-y-auto px-5 py-3 ${error ? '' : 'h-[min(26rem,60vh)]'}`}>
         {error && <p className="text-body text-dim">{error}</p>}
         {release?.sections.map((section) => (
           <section key={section.title} className="pb-4">
