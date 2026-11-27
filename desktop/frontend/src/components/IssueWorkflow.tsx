@@ -24,7 +24,7 @@ export function IssueWorkflow({ issue, onMenu }: IssueWorkflowProps) {
   }
   const copyLink = async () => {
     await navigator.clipboard.writeText(issue.url)
-    pushToast({ tone: 'info', text: `Copied the link to #${issue.number}` })
+    pushToast({ tone: 'success', text: `Copied link to #${issue.number}` })
   }
 
   return (

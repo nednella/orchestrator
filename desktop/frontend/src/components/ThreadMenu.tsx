@@ -41,7 +41,7 @@ export function ThreadMenu({ thread, selected, at, onClose, onRename, onDelete }
 
   const copyBranch = async () => {
     await navigator.clipboard.writeText(thread.branch)
-    a.pushToast({ tone: 'info', text: `Copied ${thread.branch}` })
+    a.pushToast({ tone: 'success', text: 'Copied branch name', detail: thread.branch })
   }
 
   return (

@@ -139,12 +139,12 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
   const sendFast = (on: boolean) => {
     update({ ...latest.current, draft: EMPTY_DRAFT })
     if (on && !supportsFast(thread.model)) {
-      pushToast({ tone: 'info', text: 'Fast mode not turned on', detail: `${modelName(thread.model) || 'This model'} has no fast mode.` })
+      pushToast({ tone: 'warning', text: 'Fast mode not turned on', detail: `${modelName(thread.model) || 'This model'} has no fast mode.` })
       return
     }
     report(async () => {
       await api.setFast(id, on)
-      pushToast({ tone: 'info', text: on ? 'Fast mode on' : 'Fast mode off' })
+      pushToast({ tone: 'success', text: on ? 'Fast mode on' : 'Fast mode off' })
     })
   }
 
@@ -161,7 +161,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
     }
     const question = embedded ? null : sideChatQuestion(typed)
     if (question !== null && sideReason) {
-      pushToast({ tone: 'info', text: 'Side chat not started', detail: sideReason })
+      pushToast({ tone: 'warning', text: 'Side chat not started', detail: sideReason })
       return
     }
     const prefix = reply === null ? '' : replyPrefix(reply)
@@ -178,7 +178,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
         if (question !== null) await sideChat.start(id, question === '' ? '' : prefix + question, images)
         else {
           const { notice } = await api.chatSend(id, prefix + typed, images.map(({ base64, mime }) => ({ base64, mime })), withSideChats)
-          if (notice) pushToast({ tone: 'info', text: notice })
+          if (notice) pushToast({ tone: 'warning', text: notice })
         }
       } catch (err) {
         const now = latest.current.draft

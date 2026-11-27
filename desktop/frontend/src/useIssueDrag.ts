@@ -44,7 +44,7 @@ export function useIssueDrag(issues: Issue[]): IssueDrag {
   async function move(issue: Issue, section: string) {
     await relocate(issue.number, section, () => api.moveIssue(issue.number, section))
     const key = pushToast({
-      tone: 'info',
+      tone: 'success',
       text: `#${issue.number} moved to ${section}`,
       action: {
         label: 'Undo',

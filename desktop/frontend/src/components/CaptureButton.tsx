@@ -22,7 +22,7 @@ export function CaptureButton({ id }: CaptureButtonProps) {
           setCapturing(false)
           report(async () => {
             await api.browserScreenshot(id, caption.trim())
-            pushToast({ tone: 'info', text: 'Captured to Media' })
+            pushToast({ tone: 'success', text: 'Captured to Media' })
           })
         }}
         onCancel={() => setCapturing(false)}
