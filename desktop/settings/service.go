@@ -79,10 +79,11 @@ type Service struct {
 	dataFixed bool
 	pickDir   func() (string, error) // "" when the user cancels
 	relaunch  func() error
+	dockIcon  func(theme string) // nil when there is no dock
 }
 
-func NewService(store Store, project Current, dataDir string, dataFixed bool, pickDir func() (string, error), relaunch func() error) *Service {
-	return &Service{store: store, project: project, dataDir: dataDir, dataFixed: dataFixed, pickDir: pickDir, relaunch: relaunch}
+func NewService(store Store, project Current, dataDir string, dataFixed bool, pickDir func() (string, error), relaunch func() error, dockIcon func(theme string)) *Service {
+	return &Service{store: store, project: project, dataDir: dataDir, dataFixed: dataFixed, pickDir: pickDir, relaunch: relaunch, dockIcon: dockIcon}
 }
 
 // Settings are the current settings.
@@ -150,6 +151,13 @@ func (s *Service) SetAccents(dark, light string) (Settings, error) {
 		return Settings{}, fmt.Errorf("light %w", err)
 	}
 	return s.saved(s.store.SetAccents(dark, light))
+}
+
+// ShowDockIcon shows the icon of the named theme the window shows, such as midnight, in the dock.
+func (s *Service) ShowDockIcon(theme string) {
+	if s.dockIcon != nil {
+		s.dockIcon(theme)
+	}
 }
 
 // SetCleanup saves how the current project cleans up after an event, "merge" or "close": "auto" or "manual".

@@ -44,6 +44,7 @@ type Host struct {
 	Quit      func()                          // closes the app, as the user would
 	Awake     func() (stop func(), err error) // holds off idle sleep until stop is called
 	Machine   func() string                   // this Mac's name, read once; nil leaves it empty
+	DockIcon  func(theme string)              // shows the theme's icon in the dock; nil leaves the bundle's
 }
 
 const defaultConfigTick = 2 * time.Second
@@ -181,7 +182,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		stats.NewService(stats.NewBooks(events, c.Registry)),
 		update.NewService(a.updates, ctx),
 		limits.NewService(a.limits, ctx),
-		settings.NewService(c.Registry, sess, c.DataDir, c.DataDirFixed, h.PickDir, a.updates.Relaunch),
+		settings.NewService(c.Registry, sess, c.DataDir, c.DataDirFixed, h.PickDir, a.updates.Relaunch, h.DockIcon),
 	}
 	return a
 }

@@ -82,8 +82,9 @@ func launch() error {
 				runtime.Quit(*c)
 			}
 		},
-		Awake:   awake.Caffeinate,
-		Machine: computerName,
+		Awake:    awake.Caffeinate,
+		Machine:  computerName,
+		DockIcon: dockIcon(setDockIcon),
 	}, run.Exec, run.Stream, run.ExecEnv)
 	quitOnSignal(a)
 
