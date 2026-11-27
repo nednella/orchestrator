@@ -99,7 +99,8 @@ func (l *Lifecycle) worktreeDir(proj project.Project, branch string) string {
 // workPlace is where a thread runs: its folder, and the branch it works on there, "" in the project folder.
 type workPlace struct {
 	dir, branch string
-	made        bool // orchestrator made the worktree for the thread and recorded it
+	made        bool   // orchestrator made the worktree for the thread and recorded it
+	note        string // what the owner should know of how it was made, "" when nothing
 }
 
 // makeWorktree gives the thread its worktree on branch. A project that is not a git repository runs the thread in its
@@ -144,9 +145,13 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	// A branch picked from the title is new, so origin is not asked for it: that would cost a round trip that always fails.
-	branchFound, err := l.addWorktree(ctx, proj, dir, branch, !fresh)
+	branchFound, unreachable, err := l.addWorktree(ctx, proj, dir, branch, !fresh)
 	if err != nil {
 		return workPlace{}, err
+	}
+	note := ""
+	if unreachable {
+		note = fmt.Sprintf("Could not reach origin; started from the local %s", l.mainBranch(ctx, proj.Dir))
 	}
 	if !branchFound {
 		if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
@@ -165,7 +170,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		l.removeUnstarted(ctx, proj, dir)
 		return workPlace{}, err
 	}
-	return workPlace{dir: dir, branch: branch, made: true}, nil
+	return workPlace{dir: dir, branch: branch, made: true, note: note}, nil
 }
 
 // staleCheckout is the error for a branch that git lists as checked out in dir, a folder that is gone.
@@ -174,21 +179,28 @@ func staleCheckout(branch, dir string) error {
 }
 
 // addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
-// clone has no copy. When neither has the branch it adds nothing and says branchFound false.
-func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool) (branchFound bool, err error) {
+// clone has no copy. When neither has the branch it adds nothing and says branchFound false, and unreachable when that
+// is because origin could not be asked.
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool) (branchFound, unreachable bool, err error) {
 	args := []string{"worktree", "add", "--quiet", dir, branch}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
-	case askOrigin && l.onOrigin(ctx, proj.Dir, branch), !askOrigin && l.hasRef(ctx, proj.Dir, "refs/remotes/origin/"+branch):
+	case !askOrigin && l.hasRef(ctx, proj.Dir, "refs/remotes/origin/"+branch):
+		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/" + branch}
+	case askOrigin:
+		onOrigin, unreachable := l.onOrigin(ctx, proj.Dir, branch)
+		if !onOrigin {
+			return false, unreachable, nil
+		}
 		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/" + branch}
 	default:
-		return false, nil
+		return false, false, nil
 	}
 	// Once git has begun to make the worktree it ends, so a stop of the start finds it whole, with its record.
 	if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, args...); err != nil {
-		return true, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
+		return true, false, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 	}
-	return true, nil
+	return true, false, nil
 }
 
 // restore puts back the worktree orchestrator made for the thread, at the same path on the same branch, when it is gone, so
@@ -224,7 +236,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	if err := l.dropEntry(ctx, proj.Dir, trees, w.Path); err != nil {
 		return err
 	}
-	branchFound, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true)
+	branchFound, _, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true)
 	if err != nil {
 		return err
 	}
@@ -290,16 +302,23 @@ func (l *Lifecycle) startOf(ctx context.Context, dir, base string) (ref, oid str
 }
 
 // onOrigin says whether origin has branch, fetching it when this clone has no copy yet: it may have been pushed from
-// another clone. A fetch that fails means origin has no such branch.
-func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) bool {
+// another clone. A fetch that says origin has no such branch, or a project with no origin, means it has none; any other
+// failure, as offline or a refused login, is origin not reached, and unreachable says so.
+func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) (found, unreachable bool) {
 	ref := "refs/remotes/origin/" + branch
 	if l.hasRef(ctx, dir, ref) {
-		return true
+		return true, false
 	}
 	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
-		return false
+		return false, ctx.Err() == nil && !strings.Contains(err.Error(), "couldn't find remote ref") && l.hasOrigin(ctx, dir)
 	}
-	return l.hasRef(ctx, dir, ref)
+	return l.hasRef(ctx, dir, ref), false
+}
+
+// hasOrigin says whether the repository has a remote called origin.
+func (l *Lifecycle) hasOrigin(ctx context.Context, dir string) bool {
+	_, err := l.git(ctx, dir, "remote", "get-url", "origin")
+	return err == nil
 }
 
 // excludeTrees keeps the folder of the worktrees orchestrator makes out of the owner's git status, so `git add -A` never

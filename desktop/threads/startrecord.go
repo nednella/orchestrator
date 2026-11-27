@@ -47,6 +47,8 @@ type startRecord struct {
 	Made     bool           `json:"made"`
 	Placed   bool           `json:"placed"`
 	Launched bool           `json:"launched"`
+	Note     string         `json:"note"`
+	Noted    bool           `json:"noted"`
 	Done     bool           `json:"delivered"`
 	Sending  string         `json:"sending"`
 	Before   int            `json:"sentBefore"`
@@ -69,7 +71,7 @@ func (s *Threads) keepStarts() {
 			Name: id, Number: s.nums[id], RawTitle: st.rawTitle, Title: st.title, Text: st.text, Send: st.send, Issue: st.issue,
 			Brief: st.brief, Handover: st.handover, Action: st.action, Model: st.model, Access: st.o.Access, Place: st.o.Place,
 			Base: st.o.Base, Parent: st.o.Parent, Created: st.created.UnixMilli(), Branch: st.branch,
-			WorkDir: st.work.dir, WorkRef: st.work.branch, Made: st.work.made, Placed: st.placed, Launched: st.launched,
+			WorkDir: st.work.dir, WorkRef: st.work.branch, Made: st.work.made, Placed: st.placed, Launched: st.launched, Note: st.note, Noted: st.noted,
 			Done: st.delivered, Sending: st.sending, Before: st.sentBefore, Queue: st.queue, Status: st.status, Failure: st.failure,
 		})
 		if err != nil || bytes.Equal(data, st.saved) {
@@ -141,7 +143,7 @@ func (s *Threads) restoreStart(proj project.Project, name thread.Name) bool {
 		proj: proj, name: name, rawTitle: rec.RawTitle, title: rec.Title, text: rec.Text, send: rec.Send, issue: rec.Issue,
 		brief: rec.Brief, handover: rec.Handover, action: rec.Action, o: StartOptions{Model: rec.Model, Access: rec.Access, Place: rec.Place, Base: rec.Base, Parent: rec.Parent, Later: true},
 		p: s.Provider(), model: rec.Model, created: time.UnixMilli(rec.Created), app: s.ctx, restore: func() {},
-		branch: rec.Branch, work: workPlace{dir: rec.WorkDir, branch: rec.WorkRef, made: rec.Made}, placed: rec.Placed, launched: live,
+		branch: rec.Branch, work: workPlace{dir: rec.WorkDir, branch: rec.WorkRef, made: rec.Made}, placed: rec.Placed, launched: live, note: rec.Note, noted: rec.Noted,
 		delivered: rec.Done, sending: rec.Sending, sentBefore: rec.Before, queue: rec.Queue, status: rec.Status, failure: rec.Failure,
 		saved: data,
 	}

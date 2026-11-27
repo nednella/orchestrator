@@ -55,7 +55,9 @@ type starting struct {
 	work       workPlace
 	branch     string // the branch a no-issue start picked
 	placed     bool
-	setupTried bool // the set-up command was looked at in this try: a retry looks again
+	note       string // what the owner should know of how the worktree was made, which goes into the chat before the agent starts
+	noted      bool   // the note is in the chat
+	setupTried bool   // the set-up command was looked at in this try: a retry looks again
 	restore    func()
 	delivered  bool
 	saved      []byte // what the start's record on disk holds
@@ -433,7 +435,12 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 		}
 		st.restore = restore
 	}
-	s.progress(st, func() { st.work, st.placed = work, true })
+	s.progress(st, func() {
+		st.work, st.placed = work, true
+		if work.note != "" {
+			st.note = work.note
+		}
+	})
 	s.setPlace(st, work)
 	return nil
 }
@@ -468,6 +475,12 @@ func (s *Threads) boot(ctx context.Context, st *starting) error {
 	}
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
+	if st.note != "" && !st.noted {
+		if err := s.writeNote(st.name, st.note); err != nil {
+			log.Printf("orchestrator: telling the chat of thread %s: %v", st.name, err)
+		}
+		s.progress(st, func() { st.noted = true })
+	}
 	title := s.titleOfStart(st)
 	if err := s.launch(tctx, st.p, st.name, title, st.proj, st.work.dir, st.work.branch, st.issue, st.model, st.fork.conversation, st.brief, st.handover, st.o.Access, st.action, st.fork, st.o.Parent); err != nil {
 		// A stop may have cut tmux off after it made the session.
@@ -489,6 +502,17 @@ func (s *Threads) boot(ctx context.Context, st *starting) error {
 		}
 	}
 	return nil
+}
+
+// writeNote puts a note into the thread's chat log, before its host runs: the chat shows it as a notice.
+func (s *Threads) writeNote(name thread.Name, text string) error {
+	chatLog, err := chat.OpenLog(s.chatLogPath(name))
+	if err != nil {
+		return err
+	}
+	defer chatLog.Close()
+	_, err = chatLog.Append(chat.Event{At: time.Now().UnixMilli(), Kind: chat.KindNote, Text: text})
+	return err
 }
 
 func (s *Threads) titleOfStart(st *starting) string {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
+	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -782,4 +784,65 @@ func TestCancelStopsTheSetupCommandAndRetryRunsItAgain(t *testing.T) {
 func readFile(path string) string {
 	data, _ := os.ReadFile(path)
 	return string(data)
+}
+
+func notesOf(t *testing.T, h *apptest.Harness, id string) []string {
+	t.Helper()
+	chatLog, _ := hostFiles(h, id)
+	events, err := chatlog.ReadLog(chatLog, 0, chatlog.KindNote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var notes []string
+	for _, e := range events {
+		notes = append(notes, e.Text)
+	}
+	return notes
+}
+
+func TestIssueStartFallsBackToANewBranchFromTheLocalMainWhenOriginIsOutOfReach(t *testing.T) {
+	t.Parallel()
+	for name, url := range map[string]string{
+		"a remote that cannot be reached":    "file:///nowhere/at/all.git",
+		"a host that refuses the connection": "ssh://localhost:1/refused.git",
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := apptest.New(t)
+			repoFixture(t, h)
+			head := gitIn(t, h.Dir, "rev-parse", "main")
+			gitIn(t, h.Dir, "remote", "set-url", "origin", url)
+			s, err := h.StartIssueWith(7, "")
+			if err != nil {
+				t.Fatalf("the start = %v, want it to go on from the local main", err)
+			}
+			if s.Branch != "issue-7" || s.Worktree == "" || gitIn(t, s.Worktree, "rev-parse", "HEAD") != head {
+				t.Errorf("the row = %+v, want the new branch issue-7 at the local main %s", s, head)
+			}
+			want := []string{"Could not reach origin; started from the local main"}
+			if got := notesOf(t, h, s.ID); !slices.Equal(got, want) {
+				t.Errorf("notes in the chat = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestIssueStartAsksOriginWithoutANoteWhenItHasNoSuchBranchOrThereIsNoOrigin(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	repoFixture(t, h)
+	s, err := h.StartIssueWith(7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := notesOf(t, h, s.ID); len(got) != 0 || s.Branch != "issue-7" {
+		t.Errorf("origin has no issue-7: notes = %q, branch = %q; want a new branch and no note", got, s.Branch)
+	}
+	gitIn(t, h.Dir, "remote", "remove", "origin")
+	other, err := h.StartIssueWith(8, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := notesOf(t, h, other.ID); len(got) != 0 || other.Branch != "issue-8" {
+		t.Errorf("no origin: notes = %q, branch = %q; want a new branch and no note", got, other.Branch)
+	}
 }

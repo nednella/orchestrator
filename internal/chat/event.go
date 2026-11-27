@@ -65,6 +65,8 @@ const (
 	// KindCancel is Claude withdrawing the approval it asked for under ID, as it does at an interrupt: it no longer
 	// waits on an answer.
 	KindCancel Kind = "cancel"
+	// KindNote is a note the app wrote into the chat, in Text, before the host's first run: the chat shows it as a notice.
+	KindNote Kind = "note"
 	// KindRateLimit is Claude telling of a plan limit during a turn: Input is its rate_limit_info, which names the
 	// window, its utilization from 0 to 1 and its reset in unix seconds. It is never logged.
 	KindRateLimit Kind = "rate_limit"
