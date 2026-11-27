@@ -77,7 +77,7 @@ export function ZoomableImage({ src, alt, view, onView, onDismiss }: ZoomableIma
         src={src}
         alt={alt}
         draggable={false}
-        className="block max-h-full max-w-full select-none rounded-md border border-line-strong object-contain"
+        className="block max-h-full max-w-full select-none rounded-lg border border-(--border-rule) object-contain"
         style={{ transform: `translate(${shown.x}px, ${shown.y}px) scale(${shown.scale})` }}
       />
     </div>

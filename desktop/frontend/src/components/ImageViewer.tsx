@@ -1,11 +1,19 @@
-import { Icon } from './Icon'
+import { X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { ChatActionButton } from './ChatActionButton'
+import { ViewerBar } from './ViewerBar'
 
 type ImageViewerProps = { url: string; alt?: string; onClose(): void }
 
 export function ImageViewer({ url, alt = 'Note attachment', onClose }: ImageViewerProps) {
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => root.current?.focus(), [])
+
   return (
     <div
-      className="fade-in fixed inset-0 grid place-items-center p-6"
+      ref={root}
+      tabIndex={-1}
+      className="fade-in fixed inset-0 grid place-items-center p-6 outline-none"
       style={{ zIndex: 'var(--z-overlay)', background: 'var(--bg-overlay-strong)' }}
       role="dialog"
       aria-label="Image"
@@ -18,10 +26,14 @@ export function ImageViewer({ url, alt = 'Note attachment', onClose }: ImageView
       }}
     >
       <div className="relative max-h-full max-w-full">
-        <img src={url} alt={alt} className="block max-h-[85vh] max-w-full rounded-md border border-line-strong object-contain" />
-        <button className="btn absolute top-2 right-2 h-8 w-8 justify-center px-0" autoFocus aria-label="Close image" onClick={onClose}>
-          <Icon name="close" />
-        </button>
+        <img src={url} alt={alt} className="block max-h-[85vh] max-w-full rounded-lg border border-(--border-rule) object-contain" />
+        <div className="absolute top-2 right-2">
+          <ViewerBar>
+            <ChatActionButton label="Close image" onClick={onClose}>
+              <X size={14} aria-hidden="true" />
+            </ChatActionButton>
+          </ViewerBar>
+        </div>
       </div>
     </div>
   )
