@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -69,60 +68,6 @@ func TestNewer(t *testing.T) {
 			t.Errorf("Newer(%q, %q) = %v", tt.current, tt.latest, got)
 		}
 	}
-}
-
-// fakeDownloads answers curl from files on disk and runs ditto for real.
-func fakeDownloads(t *testing.T, files map[string]string) Runner {
-	t.Helper()
-	return func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "ditto" {
-			return exec.CommandContext(ctx, name, args...).Output()
-		}
-		if name != "curl" {
-			return nil, fmt.Errorf("unexpected %s", name)
-		}
-		url := args[len(args)-1]
-		src, ok := files[url]
-		if !ok {
-			return nil, fmt.Errorf("curl: (22) 404 for %s", url)
-		}
-		data, err := os.ReadFile(src)
-		if err != nil {
-			return nil, err
-		}
-		for i, a := range args {
-			if a == "-o" {
-				return nil, os.WriteFile(args[i+1], data, 0o600)
-			}
-		}
-		return data, nil
-	}
-}
-
-// releaseZip makes a zip of a bundle whose binary prints version, and its sha256 file.
-func releaseZip(t *testing.T, dir, version string) (zip, sum string) {
-	t.Helper()
-	app := filepath.Join(dir, bundle)
-	if err := os.MkdirAll(filepath.Join(app, "Contents", "MacOS"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(app, "Contents", "MacOS", "orchestrator"), []byte("#!/bin/sh\necho "+version+"\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	zip = filepath.Join(dir, Asset)
-	if out, err := exec.Command("ditto", "-c", "-k", "--keepParent", app, zip).CombinedOutput(); err != nil {
-		t.Fatalf("ditto: %v: %s", err, out)
-	}
-	data, err := os.ReadFile(zip)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := sha256.Sum256(data)
-	sum = zip + ".sha256"
-	if err := os.WriteFile(sum, []byte(hex.EncodeToString(h[:])+"  "+Asset+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return zip, sum
 }
 
 // fakeRelease answers curl for one release whose zip holds body, and unpacks the zip as ditto would into a bundle
