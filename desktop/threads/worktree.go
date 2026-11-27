@@ -78,16 +78,40 @@ func branchFromTitle(title string) string {
 
 // freeBranch is name, or name with -2, -3… after it, the first that no local or origin branch has. A ref under it,
 // such as `<name>/x`, takes the name too: git could not make a branch beside it.
-func (l *Lifecycle) freeBranch(ctx context.Context, dir, name string) string {
-	taken := func(branch string) bool {
+// A folder that is no repository has no branch to take, so it gets name; any other failure is an error, never a free name.
+func (l *Lifecycle) freeBranch(ctx context.Context, dir, name string) (string, error) {
+	taken := func(branch string) (bool, error) {
 		out, err := l.git(ctx, dir, "for-each-ref", "--format=%(refname)", "refs/heads/"+branch, "refs/remotes/origin/"+branch)
-		return err == nil && strings.TrimSpace(string(out)) != ""
+		return err == nil && strings.TrimSpace(string(out)) != "", err
 	}
 	branch := name
-	for n := 2; taken(branch); n++ {
+	for n := 2; ; n++ {
+		used, err := taken(branch)
+		switch {
+		case ctx.Err() != nil:
+			return "", ctx.Err()
+		case err != nil && !inRepository(dir):
+			return name, nil
+		case err != nil:
+			return "", fmt.Errorf("looking for a free branch: %w", err)
+		case !used:
+			return branch, nil
+		}
 		branch = fmt.Sprintf("%s-%d", name, n)
 	}
-	return branch
+}
+
+// inRepository says whether dir or a folder above it holds a .git, which is how git finds the repository. It is how a
+// folder that is no repository is told from a repository git could not read, whatever language git speaks.
+func inRepository(dir string) bool {
+	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return true
+		}
+		if filepath.Dir(d) == d {
+			return false
+		}
+	}
 }
 
 // worktreeDir is the folder orchestrator makes the worktree of branch in, `<project>/trees/<branch>`; a `/` in the branch
@@ -110,7 +134,12 @@ type workPlace struct {
 // fresh branch is one the thread's title named, which origin is not asked for.
 func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string, fresh bool) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
-	if err != nil {
+	switch {
+	case ctx.Err() != nil:
+		return workPlace{}, ctx.Err()
+	case err != nil && inRepository(proj.Dir):
+		return workPlace{}, fmt.Errorf("reading the repository: %w", err)
+	case err != nil:
 		return workPlace{dir: proj.Dir}, nil
 	}
 	if _, err := l.git(ctx, proj.Dir, "check-ref-format", "--branch", branch); err != nil {

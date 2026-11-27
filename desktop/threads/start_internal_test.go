@@ -1,6 +1,8 @@
 package threads
 
 import (
+	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -213,5 +215,47 @@ func TestSetupCommandRunsAgainOnARetryUnlessItEndedWithZeroOrStillRuns(t *testin
 				t.Errorf("setupDone = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStopBeforeGitAnswersNeverRunsTheStartInTheProjectFolder(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	gitT(t, dir, "branch", "fix-login")
+	proj := project.Project{Name: "p", Dir: dir}
+	stopped, stop := context.WithCancel(t.Context())
+	stop()
+	got, err := l.makeWorktree(stopped, proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login-2", "", true)
+	if !errors.Is(err, context.Canceled) || got.dir != "" {
+		t.Errorf("makeWorktree = %+v, %v; want the stop as the error and no folder", got, err)
+	}
+	if branch, err := l.freeBranch(stopped, dir, "fix-login"); !errors.Is(err, context.Canceled) || branch != "" {
+		t.Errorf("freeBranch = %q, %v; want the stop as the error, not the name of a branch that exists", branch, err)
+	}
+	if branch, err := l.freeBranch(t.Context(), dir, "fix-login"); err != nil || branch != "fix-login-2" {
+		t.Errorf("freeBranch = %q, %v; want fix-login-2", branch, err)
+	}
+}
+
+func TestOnlyAFolderThatIsNoRepositoryRunsTheStartInItself(t *testing.T) {
+	t.Parallel()
+	l, _, _ := madeRepo(t)
+	plain := t.TempDir()
+	proj := project.Project{Name: "p", Dir: plain}
+	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true)
+	if err != nil || got.dir != plain || got.made {
+		t.Errorf("makeWorktree = %+v, %v; want the project folder, as no repository", got, err)
+	}
+	if branch, err := l.freeBranch(t.Context(), plain, "fix-login"); err != nil || branch != "fix-login" {
+		t.Errorf("freeBranch = %q, %v; want the name", branch, err)
+	}
+	// A repository git cannot read is no reason to run in its folder.
+	broken := t.TempDir()
+	if err := os.Mkdir(filepath.Join(broken, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, err = l.makeWorktree(t.Context(), project.Project{Name: "p", Dir: broken}, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true)
+	if err == nil || got.dir != "" {
+		t.Errorf("makeWorktree in a broken repository = %+v, %v; want an error", got, err)
 	}
 }

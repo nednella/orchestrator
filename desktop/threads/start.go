@@ -413,7 +413,10 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 		if st.issue == 0 {
 			// A retry keeps the branch the first try picked, which a worktree that was undone leaves behind.
 			if st.branch == "" {
-				branch := s.life.freeBranch(ctx, st.proj.Dir, branchFromTitle(st.rawTitle))
+				branch, err := s.life.freeBranch(ctx, st.proj.Dir, branchFromTitle(st.rawTitle))
+				if err != nil {
+					return err
+				}
 				s.progress(st, func() { st.branch = branch })
 			}
 			branch, base = st.branch, st.o.Base
