@@ -441,3 +441,22 @@ func TestMessageHeldWithNoFirstMessageWaitsForTheHost(t *testing.T) {
 		return row.Start == "" && len(row.StartQueue) == 0
 	})
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestSetupCommandThatCannotStartShowsAsFailed(t *testing.T) {
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "true"})
+	repoFixture(t, h)
+	newFakeTmux(t).fail(t, "new-shell", true)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the set-up to show as failed", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == threads.SetupFailed
+	})
+	row, _ := h.Thread(s.ID)
+	if !strings.Contains(row.SetupProblem, "no room for a shell") || row.SetupShell != "" || row.Start != "" || row.State == "settled" {
+		t.Errorf("the row = %+v, want the thread running and the set-up failed with why", row)
+	}
+}

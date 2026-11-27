@@ -66,7 +66,7 @@ type starting struct {
 	aborted  bool
 	cancel   context.CancelFunc
 	done     chan struct{}
-	step     string   // the step that runs, for the row
+	step     string         // the step that runs, for the row
 	queue    []host.Message // what the owner sent while it started, oldest first
 }
 
