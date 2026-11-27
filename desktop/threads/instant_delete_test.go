@@ -197,3 +197,31 @@ func TestStartOfTheIssueWaitsForTheDeleteOfItsThread(t *testing.T) {
 		t.Errorf("rows = %+v, want only the new thread", rows)
 	}
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestDeleteOfAStartWithoutTheBoxLeavesItsWorktree(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	newFakeTmux(t).fail(t, "slow-new", true)
+	s, err := h.NewThreadLater("Changed my mind", "oops")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The worktree is made and the agent is on its way.
+	eventually(t, "the agent to be starting", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Detail == "Starting Claude" && exists(filepath.Join(h.Dir, "trees", "changed-my-mind"))
+	})
+	if err := h.DeleteThread(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(h.Dir, "trees", "changed-my-mind")) {
+		t.Errorf("the worktree is gone, though the box was not ticked; trees: %v", worktreesOf(t, h.Dir))
+	}
+	if rows := h.Threads().List(); len(rows) != 0 || hasState(t, h, s.ID) {
+		t.Errorf("rows = %+v, state file there %v", rows, hasState(t, h, s.ID))
+	}
+	if records := madeRecords(t, h); len(records) != 0 {
+		t.Errorf("records = %+v, want the worktree no longer the thread's", records)
+	}
+}

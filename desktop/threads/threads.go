@@ -810,7 +810,7 @@ func (s *Threads) handoverOf(id string) string {
 // with the delete:refused event, with the text DeleteAndWait gives. A delete the app did not finish, because it quit
 // first, leaves the thread as it was, asleep when the delete had put it to sleep, and showing again.
 func (s *Threads) Delete(id string, worktree bool) error {
-	family, done, err := s.beginDelete(id)
+	family, done, err := s.beginDelete(id, worktree)
 	if err != nil {
 		return err
 	}
@@ -832,7 +832,7 @@ func (s *Threads) Delete(id string, worktree bool) error {
 
 // DeleteAndWait is Delete that returns once the thread is gone, with the refusal when it is not.
 func (s *Threads) DeleteAndWait(id string, worktree bool) error {
-	family, done, err := s.beginDelete(id)
+	family, done, err := s.beginDelete(id, worktree)
 	if err != nil || done {
 		return err
 	}
@@ -841,7 +841,7 @@ func (s *Threads) DeleteAndWait(id string, worktree bool) error {
 
 // beginDelete takes the thread and its family into the delete and takes their rows off the list. done says that a start
 // that had not run its agent was stopped, which was the whole delete.
-func (s *Threads) beginDelete(id string) (family []string, done bool, err error) {
+func (s *Threads) beginDelete(id string, worktree bool) (family []string, done bool, err error) {
 	name, err := thread.ParseName(id)
 	if err != nil {
 		return nil, false, err
@@ -849,7 +849,7 @@ func (s *Threads) beginDelete(id string) (family []string, done bool, err error)
 	if name.IsShell() {
 		return nil, false, errNotThread
 	}
-	if s.abortStart(id) {
+	if s.abortStart(id, worktree) {
 		return nil, true, nil
 	}
 	if family, err = s.startDelete(id); err != nil {

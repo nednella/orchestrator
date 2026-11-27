@@ -66,6 +66,7 @@ type starting struct {
 	aborted  bool
 	cancel   context.CancelFunc
 	done     chan struct{}
+	keepTree bool           // a delete without the box stops the start and leaves the worktree it made
 	step     string         // the step that runs, for the row
 	queue    []host.Message // what the owner sent while it started, oldest first
 }
@@ -357,7 +358,12 @@ func (s *Threads) unplace(st *starting) {
 	st.setupStarted = false
 	st.restore()
 	st.restore = func() {}
-	s.life.undoWorktree(ctx, st.proj, st.name, st.work)
+	s.mu.Lock()
+	keep := st.keepTree
+	s.mu.Unlock()
+	if !keep {
+		s.life.undoWorktree(ctx, st.proj, st.name, st.work)
+	}
 	st.work, st.placed = workPlace{}, false
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -450,7 +456,7 @@ func (s *Threads) RetryStart(id string) error {
 // abortStart stops a start of the thread id that is listed, for a delete of it, and says whether it took the thread
 // away. A thread whose agent already runs is left to the delete of a running thread, and its start goes on, as a failed
 // one if the delete stopped it, until that delete is done.
-func (s *Threads) abortStart(id string) bool {
+func (s *Threads) abortStart(id string, worktree bool) bool {
 	s.mu.Lock()
 	st := s.starting[id]
 	if st == nil {
@@ -458,6 +464,8 @@ func (s *Threads) abortStart(id string) bool {
 		return false
 	}
 	st.aborted = true
+	// Without the box the worktree the start made stays, as a thread's does, and only the record of it goes.
+	st.keepTree = !worktree
 	running, cancel, done := st.running, st.cancel, st.done
 	s.mu.Unlock()
 	if running {
