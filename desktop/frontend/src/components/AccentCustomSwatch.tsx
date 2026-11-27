@@ -1,44 +1,97 @@
-import { Pipette } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { applyAccent } from '../accent'
+import { hexToHsv, hsvToHex } from '../accentWheel'
+import type { Hsv } from '../accentWheel'
 import type { Appearance } from '../themes'
+import type { ThemeName } from '../types'
+import { useColorScheme } from '../useColorScheme'
+import { AccentWheelPopover } from './AccentWheelPopover'
 
-// custom is the custom accent in use, '' while none is; start is where the color picker opens without one.
-type AccentCustomSwatchProps = { mode: Appearance; custom: string; start: string; onPick(accent: string): void }
+// saved is the accent in the config, custom the part of it that is a custom color ('' while it is not one), and start
+// the color the wheel opens on without one.
+type AccentCustomSwatchProps = { mode: Appearance; theme: ThemeName; saved: string; custom: string; start: string; onPick(accent: string): void }
 
-// AccentCustomSwatch opens the system's color picker through a color input laid over the disc, and shows the custom
-// accent while one is in use.
-export function AccentCustomSwatch({ mode, custom, start, onPick }: AccentCustomSwatchProps) {
-  const input = useRef<HTMLInputElement>(null)
+// AccentCustomSwatch is the choice of any color: a disc of every hue, or the custom color once there is one. It opens
+// the wheel, which shows its color on the page as it moves; only the color kept is picked.
+export function AccentCustomSwatch({ mode, theme, saved, custom, start, onPick }: AccentCustomSwatchProps) {
+  const button = useRef<HTMLButtonElement>(null)
+  const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const [color, setColor] = useState<Hsv>(() => hexToHsv(custom || start))
+  const scheme = useColorScheme()
   const picked = custom !== ''
+  const open = anchor !== null
+  const shown = scheme === mode
 
-  // The picker sends an input event for each color it passes through and a change for the one it settles on; only
-  // that one is saved.
-  useEffect(() => {
-    const el = input.current
-    if (!el) return
-    const save = () => onPick(el.value)
-    el.addEventListener('change', save)
-    return () => el.removeEventListener('change', save)
-  }, [onPick])
+  const onPage = (accent: string) => {
+    if (shown) applyAccent(document.documentElement.style, accent)
+  }
 
+  const close = (refocus: boolean) => {
+    setAnchor(null)
+    if (refocus) button.current?.focus()
+  }
+
+  const keep = () => {
+    const hex = hsvToHex(color)
+    close(true)
+    if (hex !== saved) onPick(hex)
+  }
+
+  const revert = () => {
+    onPage(saved)
+    close(true)
+  }
+
+  // A page that goes while the wheel is open leaves the accent it was showing as it was saved.
+  const showing = useRef(false)
   useEffect(() => {
-    if (input.current) input.current.value = custom || start
-  }, [custom, start])
+    showing.current = open && shown
+  }, [open, shown])
+  useEffect(
+    () => () => {
+      if (showing.current) applyAccent(document.documentElement.style, saved)
+    },
+    [saved],
+  )
 
   return (
-    <span
-      title="Custom"
-      className={`relative flex size-8 shrink-0 transform-gpu items-center justify-center rounded-full p-1 transition-transform has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-ink/60 has-[input:focus-visible]:outline-solid ${picked ? '' : 'hover:scale-110'}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`flex size-full items-center justify-center rounded-full ${picked ? '' : 'bg-(--bg-raised) text-soft'}`}
-        style={{ backgroundColor: picked ? custom : undefined, boxShadow: `var(--shadow-preview-${mode})` }}
+    <>
+      <button
+        ref={button}
+        type="button"
+        title="Custom"
+        aria-label={`Custom accent for ${mode} mode`}
+        aria-pressed={picked}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full p-1 outline-none focus-visible:outline-2 focus-visible:outline-ink/60 focus-visible:outline-solid"
+        onClick={() => {
+          if (open) return keep()
+          setColor(hexToHsv(custom || start))
+          setAnchor(button.current?.getBoundingClientRect() ?? null)
+        }}
       >
-        {!picked && <Pipette size={12} />}
-      </span>
-      {picked && <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-(--accent) ring-inset" />}
-      <input ref={input} type="color" aria-label={`Custom accent for ${mode} mode`} defaultValue={custom || start} className="absolute inset-0 size-full cursor-pointer rounded-full opacity-0" />
-    </span>
+        <span
+          aria-hidden="true"
+          className="block size-full rounded-full"
+          style={{ backgroundColor: picked ? custom : undefined, backgroundImage: picked ? undefined : 'var(--accent-wheel-hues)', boxShadow: `var(--shadow-preview-${mode})` }}
+        />
+        {picked && <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-ink ring-inset" />}
+      </button>
+      {anchor && (
+        <AccentWheelPopover
+          anchor={anchor}
+          trigger={button}
+          theme={theme}
+          color={color}
+          onChange={(next) => {
+            setColor(next)
+            onPage(hsvToHex(next))
+          }}
+          onKeep={keep}
+          onRevert={revert}
+        />
+      )}
+    </>
   )
 }

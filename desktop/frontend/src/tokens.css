@@ -645,4 +645,8 @@
   /* The text on an accent the owner picked: black on a light one, white on a dark one. */
   --text-on-light-accent: #000;
   --text-on-dark-accent: #fff;
+  /* The accent wheel: every hue round the circle, white at its centre, and black laid over it as the brightness falls. */
+  --accent-wheel-hues: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  --accent-wheel-white: #fff;
+  --accent-wheel-black: #000;
 }
