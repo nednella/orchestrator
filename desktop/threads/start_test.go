@@ -364,3 +364,24 @@ func TestMessageSentWhileTheThreadStartsGoesAfterTheFirstOne(t *testing.T) {
 		return row.Start == "" && len(row.StartQueue) == 0
 	})
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestSetupCommandStartsAfterTheAgent(t *testing.T) {
+	seen := filepath.Join(t.TempDir(), "sessions")
+	// The command lists the tmux sessions that exist when it starts.
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "tmux -L {socket} list-sessions -F '#{session_name}' > " + seen})
+	repoFixture(t, h)
+	newFakeTmux(t).fail(t, "slow-new", true)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data []byte
+	eventually(t, "the command to list the sessions", func() bool {
+		data, _ = os.ReadFile(seen)
+		return len(data) > 0
+	})
+	if !strings.Contains(string(data), s.ID) {
+		t.Errorf("the sessions when the set-up started = %q, want the thread's own, %s", data, s.ID)
+	}
+}

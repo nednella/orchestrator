@@ -197,7 +197,6 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 			return err
 		}
 	}
-	s.startSetup(st)
 	s.mu.Lock()
 	launched := st.launched
 	s.mu.Unlock()
@@ -208,6 +207,9 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 			return err
 		}
 	}
+	// After the agent: tmux ends its server when its last session ends, and a set-up that ends at once, alone in it,
+	// would take the server away from the agent's own start.
+	s.startSetup(st)
 	if st.work.branch != "" {
 		s.life.ensureWatchers(st.app)
 	}

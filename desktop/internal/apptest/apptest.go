@@ -593,7 +593,7 @@ type Options struct {
 	ProjectExtra   string        // yaml lines added under the project "main"
 	Queue          string        // the project's queue_sections block, in place of the usual one
 	NoBranch       bool          // leave out the project's `issue_branch`, so the default `issue-{n}` applies
-	CleanupCommand string        // the project's cleanup_command; none by default
+	CleanupCommand string        // the project's cleanup_command; none by default; {socket} is the harness's tmux socket
 	SetupCommand   string        // the project's setup_command, the set-up of a new worktree; none by default
 	TopExtra       string        // yaml lines added at the top of the config
 	DigestFirst    time.Duration // wait before the first automatic digest check; an hour by default
@@ -672,12 +672,13 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if o.NoBranch {
 		branch = ""
 	}
+	socket := fmt.Sprintf("orctest-%d-%d", os.Getpid(), harnesses.Add(1))
 	cleanup := ""
 	if o.CleanupCommand != "" {
 		cleanup = fmt.Sprintf("    cleanup_command: %q\n", o.CleanupCommand)
 	}
 	if o.SetupCommand != "" {
-		cleanup += fmt.Sprintf("    setup_command: %q\n", o.SetupCommand)
+		cleanup += fmt.Sprintf("    setup_command: %q\n", strings.ReplaceAll(o.SetupCommand, "{socket}", socket))
 	}
 	top := o.TopExtra
 	if o.DataDirConfig {
@@ -693,7 +694,6 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	socket := fmt.Sprintf("orctest-%d-%d", os.Getpid(), harnesses.Add(1))
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases, Notes: o.Notes, NotesErr: o.NotesErr}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	start := standInEnv
 	if o.ClaudeRejects != "" {
