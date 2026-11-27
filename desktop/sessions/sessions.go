@@ -84,6 +84,7 @@ type Session struct {
 	Parent      string           `json:"parent"` // the thread that delegated to this one, "" for a thread the owner started
 	Model       string           `json:"model"`  // the model the agent runs: the start choice until its first turn, then what it used last; "" when unknown
 	Effort      string           `json:"effort"` // the effort the agent runs, kept like Model; "" when unknown
+	Fast        bool             `json:"fast"`   // the agent runs in its faster mode
 	History     []session.Change `json:"history"`
 	Evidence    int              `json:"evidence"`
 	Browser     bool             `json:"browser"`
@@ -475,7 +476,7 @@ func (e *endedSession) record() session.Record {
 
 // identityOf is what the session was started as, with its tmux session's start as both its first and latest start.
 func identityOf(in term.Info) session.Identity {
-	id := session.Identity{Title: in.Title, Access: in.Access, Action: in.Action, Model: in.Model, Effort: in.Effort, Path: in.Path, Fork: in.Fork, Side: in.Side, Branch: in.Branch, Parent: in.Parent}
+	id := session.Identity{Title: in.Title, Access: in.Access, Action: in.Action, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Path: in.Path, Fork: in.Fork, Side: in.Side, Branch: in.Branch, Parent: in.Parent}
 	id.Issue, _ = strconv.Atoi(in.Issue)
 	if !in.Created.IsZero() {
 		id.Created = in.Created.UnixMilli()
@@ -562,7 +563,7 @@ func (s *Sessions) adoptEnded(name string, rec session.Record) {
 		return
 	}
 	stale := rec.SettledAt == 0 || rec.State != session.Settled
-	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Access: session.StoredAccess(string(rec.Access)), Action: rec.Action, Fork: rec.Fork, Side: rec.Side, Branch: rec.Branch, Parent: rec.Parent}
+	info := term.Info{Name: n, Title: rec.Title, Path: rec.Path, Model: rec.Model, Effort: rec.Effort, Fast: rec.Fast, Access: session.StoredAccess(string(rec.Access)), Action: rec.Action, Fork: rec.Fork, Side: rec.Side, Branch: rec.Branch, Parent: rec.Parent}
 	if rec.Issue > 0 {
 		info.Issue = strconv.Itoa(rec.Issue)
 	}
@@ -1573,7 +1574,7 @@ func (s *Sessions) list() []Session {
 		view := Session{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt:  s.forkAtOf(id),
 			History: s.history[id], // shared, not copied: a change in a history is never written over
 		}
@@ -1880,7 +1881,7 @@ func (s *Sessions) CreateIssue(proj project.Project, title, text string, issue i
 		return Session{}, Kept, err
 	}
 	model, _ := project.Pick(action, labels, p.ValidModel)
-	model = project.Model{Model: cmp.Or(o.Model.Model, model.Model), Effort: cmp.Or(o.Model.Effort, model.Effort)}
+	model = project.Model{Model: cmp.Or(o.Model.Model, model.Model), Effort: cmp.Or(o.Model.Effort, model.Effort), Fast: o.Model.Fast}
 	text = FromApp(text)
 	if extra := strings.TrimSpace(o.Prompt); extra != "" {
 		text = strings.TrimSpace(text + " " + extra)
@@ -2007,7 +2008,7 @@ func (s *Sessions) startAgain(name session.Name, handover string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return fmt.Errorf("%s is gone, so this thread cannot start there", dir)
 	}
-	model := fill(p, proj.Dir, project.Model{Model: in.Model, Effort: in.Effort})
+	model := fill(p, proj.Dir, modelOf(in))
 	in.Created, in.Model, in.Effort = time.Now(), model.Model, model.Effort
 	s.mu.Lock()
 	rec, before := s.woken(id, in), e.record()
@@ -2515,7 +2516,7 @@ func (s *Sessions) Fork(id, at string) (Session, error) {
 		return Session{}, fmt.Errorf("%s is gone, so this thread cannot be forked there", in.Path)
 	}
 	issue, _ := strconv.Atoi(in.Issue)
-	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", project.Model{Model: in.Model, Effort: in.Effort}
+	title, model := cmp.Or(in.Title, defaultTitle)+" (fork)", modelOf(in)
 	fork := forkStart{of: id, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: at, events: events[:cut+1]}
 	return s.createIn(proj, title, "", false, issue, "", s.handoverOf(id), "", fork, StartOptions{Model: model, Access: in.Access, Place: InProject, dir: in.Path})
 }
@@ -2574,6 +2575,11 @@ func (s *Sessions) copyEvents(chatLog *chat.Log, events []chat.Event, from, to s
 	}
 	_, err := chatLog.Append(chat.Event{Kind: chat.KindTurnEnd, At: events[len(events)-1].At})
 	return err
+}
+
+// modelOf is the model, effort and fast mode a session runs with.
+func modelOf(in term.Info) project.Model {
+	return project.Model{Model: in.Model, Effort: in.Effort, Fast: in.Fast}
 }
 
 // fill sets what model leaves unset from the agent's own settings, skipping a value the agent would not accept.
@@ -2774,7 +2780,7 @@ func (s *Sessions) register(name session.Name, title string, work workPlace, iss
 		}
 		s.records[rec.Session] = rec
 	}
-	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Access: access, Action: action, Fork: fork.of, Side: fork.side, Parent: parent, Created: created}
+	in := term.Info{Name: name, Title: title, Path: work.dir, Branch: work.branch, Model: model.Model, Effort: model.Effort, Fast: model.Fast, Access: access, Action: action, Fork: fork.of, Side: fork.side, Parent: parent, Created: created}
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
@@ -2839,7 +2845,7 @@ func (s *Sessions) start(ctx context.Context, name session.Name, title, dir, bra
 		}
 	}
 	if model != (project.Model{}) {
-		return tag(s.tmux.SetModel(ctx, name, model.Model, model.Effort))
+		return tag(s.tmux.SetModel(ctx, name, model.Model, model.Effort, model.Fast))
 	}
 	return nil
 }
@@ -3975,7 +3981,7 @@ func (s *Sessions) handedTarget(in term.Info) (target, bool) {
 		return target{}, false
 	}
 	_, woke := s.startsOf(id, in)
-	return target{id: id, title: cmp.Or(in.Title, defaultTitle), branch: w.Branch, dir: w.Path, proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke, made: true}, true
+	return target{id: id, title: cmp.Or(in.Title, defaultTitle), branch: w.Branch, dir: w.Path, proj: proj, model: modelOf(in), woke: woke, made: true}, true
 }
 
 // targetOf finds the session's project in projs. Only a thread with a branch has a target: a fork and a thread started
@@ -3988,7 +3994,7 @@ func (s *Sessions) targetOf(in term.Info, projs []project.Project) (target, bool
 	issue, _ := strconv.Atoi(in.Issue)
 	id := in.Name.String()
 	_, woke := s.startsOf(id, in)
-	t := target{id: id, title: cmp.Or(in.Title, defaultTitle), issue: issue, branch: in.Branch, dir: cmp.Or(in.Path, proj.Dir), proj: proj, model: project.Model{Model: in.Model, Effort: in.Effort}, woke: woke}
+	t := target{id: id, title: cmp.Or(in.Title, defaultTitle), issue: issue, branch: in.Branch, dir: cmp.Or(in.Path, proj.Dir), proj: proj, model: modelOf(in), woke: woke}
 	if w, ok := s.made.Of(proj.Key(), id); ok && w.Removed == 0 && w.Branch == in.Branch {
 		t.dir, t.made = w.Path, true
 	}
@@ -4696,7 +4702,7 @@ type workTree struct{ branch, dir string }
 // of its parent, the thread it works for. A thread for an issue learns the issue's number. A task started by another
 // session gets that session's handover last.
 func launchFor(model project.Model, conversation, brief, handover string, access session.Access, browser bool, fork forkStart, tree workTree, parent string, issue int) agent.Launch {
-	l := agent.Launch{Model: model.Model, Effort: model.Effort, Resume: conversation, Access: access}
+	l := agent.Launch{Model: model.Model, Effort: model.Effort, Fast: model.Fast, Resume: conversation, Access: access}
 	if brief != "" {
 		l.Prompt = brief
 		return l

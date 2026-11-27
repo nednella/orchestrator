@@ -73,6 +73,10 @@ func (s *Sessions) countUsage(id, transcript, model string, record bool) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "orchestrator: reading the usage of %s: %v\n", id, err)
 	}
+	// Claude writes ultracode into its transcript as the xhigh it runs at.
+	if cur.Effort == "xhigh" && in.Effort == agent.Ultracode {
+		cur.Effort = in.Effort
+	}
 	if live && cur.Model != "" && (in.Model != cur.Model || in.Effort != cur.Effort) {
 		in.Model, in.Effort = cur.Model, cur.Effort
 		s.ran(ctx, in)
@@ -144,7 +148,7 @@ func (s *Sessions) saveUsageMark(name session.Name, m usage.Mark) {
 func (s *Sessions) ran(ctx context.Context, in term.Info) {
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
-	if err := s.tmux.SetModel(ctx, in.Name, in.Model, in.Effort); err != nil {
+	if err := s.tmux.SetModel(ctx, in.Name, in.Model, in.Effort, in.Fast); err != nil {
 		fmt.Fprintf(os.Stderr, "orchestrator: %v\n", err)
 	}
 	s.mu.Lock()

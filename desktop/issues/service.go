@@ -26,10 +26,11 @@ func (s *Service) Issues(refresh bool) ([]Issue, error) {
 }
 
 // StartIssue opens a session for the issue and gives it the command of the action with that name, the section's
-// default for "", followed by the prompt. A model or effort that is not empty wins over the action's and the labels'.
+// default for "", followed by the prompt. A model or effort that is not empty wins over the action's and the labels',
+// and fast runs the agent in its faster mode.
 // An issue that has a live session gets it back, and neither the prompt nor the model reaches it.
-func (s *Service) StartIssue(number int, action, prompt, model, effort string) (sessions.Session, error) {
-	v, _, err := s.issues.Start(s.ctx(), s.issues.sessions.Current(), number, action, "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}})
+func (s *Service) StartIssue(number int, action, prompt, model, effort string, fast bool) (sessions.Session, error) {
+	v, _, err := s.issues.Start(s.ctx(), s.issues.sessions.Current(), number, action, "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}})
 	return v, err
 }
 

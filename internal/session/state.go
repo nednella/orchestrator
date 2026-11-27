@@ -48,6 +48,7 @@ type Identity struct {
 	Action  string `json:"action,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`
+	Fast    bool   `json:"fast,omitempty"` // the agent runs in its faster mode
 	Path    string `json:"path,omitempty"`
 	Fork    string `json:"fork,omitempty"`    // the session a fork was forked from
 	ForkAt  string `json:"forkAt,omitempty"`  // the uuid of the reply the fork's chat was cut at

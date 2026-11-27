@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/session"
 )
 
@@ -76,7 +75,7 @@ func (s *Sessions) StartSideChat(parent string) (Session, error) {
 		return Session{}, fmt.Errorf("%s is gone, so a side chat cannot start there", in.Path)
 	}
 	fork := forkStart{of: parent, title: cmp.Or(in.Title, defaultTitle), conversation: conversation, at: events[cut].UUID, events: events[:cut+1], side: true}
-	model := project.Model{Model: in.Model, Effort: in.Effort}
+	model := modelOf(in)
 	return s.createIn(proj, sideChatTitle, "", false, 0, "", s.handoverOf(parent), "", fork, StartOptions{Model: model, Access: in.Access, Place: InProject, dir: in.Path})
 }
 

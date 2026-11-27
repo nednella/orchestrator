@@ -19,11 +19,11 @@ func NewService(s *Sessions, ctx func() context.Context) *Service { return &Serv
 
 // NewThread starts a thread in the current project with the access given, read, supervised or full, and sends it the
 // prompt once it is ready. A blank title is the first line of the prompt. A model or effort that is not empty is
-// passed to the agent; a blank access is supervised. place is worktree, a worktree orchestrator makes on a branch named
+// passed to the agent, and fast runs it in its faster mode; a blank access is supervised. place is worktree, a worktree orchestrator makes on a branch named
 // from the title, or project, the project folder; blank is a worktree for a thread that writes and the project folder
 // for a read one.
-func (v *Service) NewThread(title, prompt, model, effort, access, place string) (Session, error) {
-	return v.s.CreateThread(title, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort}, Access: session.Access(access), Place: Place(place)})
+func (v *Service) NewThread(title, prompt, model, effort string, fast bool, access, place string) (Session, error) {
+	return v.s.CreateThread(title, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}, Access: session.Access(access), Place: Place(place)})
 }
 
 // ModelChoice is a model and an effort; "" where nothing sets one.

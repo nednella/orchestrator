@@ -8,13 +8,15 @@ import (
 )
 
 // Model is the model and effort level a session's agent runs at. An empty field means unset, which leaves the choice to the agent.
+// Fast runs the agent in its faster mode; only the owner picks it, so no config sets it.
 type Model struct {
 	Model  string `yaml:"model,omitempty"`
 	Effort string `yaml:"effort,omitempty"`
+	Fast   bool   `yaml:"-"`
 }
 
 func (m Model) over(base Model) Model {
-	return Model{Model: cmp.Or(m.Model, base.Model), Effort: cmp.Or(m.Effort, base.Effort)}
+	return Model{Model: cmp.Or(m.Model, base.Model), Effort: cmp.Or(m.Effort, base.Effort), Fast: m.Fast || base.Fast}
 }
 
 // Pick chooses the model and effort for a session. From weakest to strongest: the action's, then the issue's

@@ -1340,12 +1340,17 @@ func (h *Harness) PublishProject(key string) (string, error) { return h.projects
 func (h *Harness) SetUpProject() (sessions.Session, error)   { return h.projects.SetUpProject() }
 
 func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, access, "")
+	return h.sessions.NewThread(title, prompt, model, effort, false, access, "")
+}
+
+// NewThreadFast starts a Supervised thread with the model and effort given and fast mode as given.
+func (h *Harness) NewThreadFast(title, model, effort string, fast bool) (sessions.Session, error) {
+	return h.sessions.NewThread(title, "", model, effort, fast, "supervised", "")
 }
 
 // NewThreadIn starts a thread with the access given in the place given: worktree, project, or "" for the default.
 func (h *Harness) NewThreadIn(title, prompt, access, place string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, "", "", access, place)
+	return h.sessions.NewThread(title, prompt, "", "", false, access, place)
 }
 
 func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
@@ -1354,12 +1359,12 @@ func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
 
 // NewSession starts a Supervised thread.
 func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, "", "", "supervised", "")
+	return h.sessions.NewThread(title, prompt, "", "", false, "supervised", "")
 }
 
 // NewSessionWith starts a Supervised thread with the model and effort given.
 func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, "supervised", "")
+	return h.sessions.NewThread(title, prompt, model, effort, false, "supervised", "")
 }
 func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error) { return h.sessions.ShellNew(id) }
 func (h *Harness) ShellClose(id string) error                     { return h.sessions.ShellClose(id) }
@@ -1454,13 +1459,13 @@ func (h *Harness) TermClose(id string) { h.terminal.TermClose(id) }
 
 func (h *Harness) Issues(refresh bool) ([]issues.Issue, error) { return h.issues.Issues(refresh) }
 func (h *Harness) StartIssue(number int) (sessions.Session, error) {
-	return h.issues.StartIssue(number, "", "", "", "")
+	return h.issues.StartIssue(number, "", "", "", "", false)
 }
 func (h *Harness) StartIssueWith(number int, action string) (sessions.Session, error) {
-	return h.issues.StartIssue(number, action, "", "", "")
+	return h.issues.StartIssue(number, action, "", "", "", false)
 }
 func (h *Harness) StartIssueOwn(number int, action, prompt, model, effort string) (sessions.Session, error) {
-	return h.issues.StartIssue(number, action, prompt, model, effort)
+	return h.issues.StartIssue(number, action, prompt, model, effort, false)
 }
 func (h *Harness) MoveIssue(number int, section string) error {
 	return h.issues.MoveIssue(number, section)

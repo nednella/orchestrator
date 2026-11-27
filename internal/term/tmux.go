@@ -21,6 +21,7 @@ const (
 	issueOption  = "@orchestrator-issue"
 	modelOption  = "@orchestrator-model"
 	effortOption = "@orchestrator-effort"
+	fastOption   = "@orchestrator-fast"
 	accessOption = "@orchestrator-access"
 	actionOption = "@orchestrator-action"
 	forkOption   = "@orchestrator-fork"
@@ -80,6 +81,7 @@ type Info struct {
 	Issue   string // the GitHub issue number the session was started for, or ""
 	Model   string // the model the agent runs: the start choice until its first turn, then what it used last, or ""
 	Effort  string // the effort the agent runs, kept like Model, or ""
+	Fast    bool   // the agent runs in its faster mode
 	Access  session.Access
 	Action  string // the queue action the session was started with, or ""
 	Fork    string // the session a fork was forked from, or ""
@@ -142,9 +144,9 @@ func (t *Tmux) cleanEnv() []string {
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
-	const fields = 15
+	const fields = 16
 	// The process name comes last, so a tab in it stays in its own field.
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+sideOption+"}\t#{pane_current_command}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+sideOption+"}\t#{"+fastOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -165,14 +167,14 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 		}
 		if name.IsShell() {
 			pid, _ := strconv.Atoi(f[10])
-			shells = append(shells, Shell{Name: name, Folder: f[2], Command: f[14], PID: pid})
+			shells = append(shells, Shell{Name: name, Folder: f[2], Command: f[15], PID: pid})
 			continue
 		}
 		// Every thread of this build has an access tag; a session with none is not one of its threads.
 		if f[6] == "" {
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: session.StoredAccess(f[6]), Action: f[7], Fork: f[8], Branch: f[11], Parent: f[12], Side: f[13] == "1"}
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: session.StoredAccess(f[6]), Action: f[7], Fork: f[8], Branch: f[11], Parent: f[12], Side: f[13] == "1", Fast: f[14] == "1"}
 		if secs, err := strconv.ParseInt(f[9], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
@@ -363,12 +365,16 @@ func (t *Tmux) SetAction(ctx context.Context, name session.Name, action string) 
 	return nil
 }
 
-// SetModel records the model and effort a session's agent runs.
-func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort string) error {
+// SetModel records the model and effort a session's agent runs, and whether it runs fast.
+func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort string, fast bool) error {
 	if err := plain(model, effort); err != nil {
 		return fmt.Errorf("recording the model of session %s: %w", name, err)
 	}
-	if _, err := t.run(ctx, "set-option", "-t", target(name), modelOption, model, ";", "set-option", "-t", target(name), effortOption, effort); err != nil {
+	flag := ""
+	if fast {
+		flag = "1"
+	}
+	if _, err := t.run(ctx, "set-option", "-t", target(name), modelOption, model, ";", "set-option", "-t", target(name), effortOption, effort, ";", "set-option", "-t", target(name), fastOption, flag); err != nil {
 		return fmt.Errorf("recording the model of session %s: %w", name, err)
 	}
 	return nil
