@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
-import { Icon } from './Icon'
+import { Camera } from 'lucide-react'
+import { ChatActionButton } from './ChatActionButton'
 import { InlineInput } from './InlineInput'
 
 type CaptureButtonProps = { id: string }
@@ -13,7 +14,8 @@ export function CaptureButton({ id }: CaptureButtonProps) {
   if (capturing) {
     return (
       <InlineInput
-        placeholder="Caption (optional), Enter to capture"
+        placeholder="Caption (optional)"
+        action="Capture"
         blur="cancel"
         className="w-64 max-w-full"
         onSubmit={(caption) => {
@@ -28,9 +30,9 @@ export function CaptureButton({ id }: CaptureButtonProps) {
     )
   }
   return (
-    <button className="btn" title="Capture the page to Media" onClick={() => setCapturing(true)}>
-      <Icon name="camera" />
+    <ChatActionButton label="Capture the page to Media" onClick={() => setCapturing(true)}>
+      <Camera size={14} aria-hidden="true" />
       <span className="hidden sm:inline">Capture</span>
-    </button>
+    </ChatActionButton>
   )
 }

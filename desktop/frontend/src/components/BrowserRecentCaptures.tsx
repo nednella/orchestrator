@@ -16,7 +16,7 @@ export function BrowserRecentCaptures({ thread }: BrowserRecentCapturesProps) {
 
   return (
     <section>
-      <h4 className="label pb-2">Recent captures</h4>
+      <h4 className="pb-2 text-small font-medium text-soft">Recent captures</h4>
       {recent.length === 0 ? (
         <p className="text-small text-dim">No captures yet</p>
       ) : (
@@ -24,7 +24,7 @@ export function BrowserRecentCaptures({ thread }: BrowserRecentCapturesProps) {
           {recent.map((item) => (
             <li key={item.id} className="min-w-0">
               <button
-                className="block aspect-[16/10] w-full overflow-hidden rounded-md border border-line bg-term"
+                className="block aspect-[16/10] w-full overflow-hidden rounded-lg border border-(--border-rule) bg-term"
                 title={item.caption || 'Open in Media'}
                 onClick={() => showPanelView('media')}
               >
