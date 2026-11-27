@@ -846,3 +846,68 @@ func TestIssueStartAsksOriginWithoutANoteWhenItHasNoSuchBranchOrThereIsNoOrigin(
 		t.Errorf("no origin: notes = %q, branch = %q; want a new branch and no note", got, other.Branch)
 	}
 }
+
+func TestTwoStartsOfTheSameTitleAtOnceGetDifferentBranches(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	repoFixture(t, h)
+	const n = 3
+	ids := make(chan string, n)
+	for range n {
+		go func() {
+			s, err := h.NewThreadLater("Fix login", "make it faster")
+			if err != nil {
+				t.Error(err)
+				ids <- ""
+				return
+			}
+			ids <- s.ID
+		}()
+	}
+	branches, trees := map[string]bool{}, map[string]bool{}
+	for range n {
+		id := <-ids
+		if id == "" {
+			continue
+		}
+		eventually(t, "the thread to start", func() bool {
+			row, _ := h.Thread(id)
+			return row.Start == ""
+		})
+		row, _ := h.Thread(id)
+		branches[row.Branch], trees[row.Worktree] = true, true
+		if !exists(row.Worktree) {
+			t.Errorf("the worktree %s of %s is not there", row.Worktree, id)
+		}
+	}
+	for _, want := range []string{"fix-login", "fix-login-2", "fix-login-3"} {
+		if !branches[want] {
+			t.Errorf("branches = %v, want %s among three different ones", branches, want)
+		}
+	}
+	if len(trees) != n {
+		t.Errorf("worktrees = %v, want %d different ones", trees, n)
+	}
+}
+
+func TestStartInAProjectThatIsNoRepositoryRunsInTheProjectFolder(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread to start", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	row, _ := h.Thread(s.ID)
+	ch, err := h.Threads().ChatOf(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Worktree != "" || row.Branch != "" || exists(filepath.Join(h.Dir, "trees")) || realDir(t, ch.Dir) != realDir(t, h.Dir) {
+		t.Errorf("the row = %+v, folder %q; want the project folder %q, no worktree and no branch", row, ch.Dir, h.Dir)
+	}
+	eventually(t, "the first message", func() bool { return mentions(userLines(t, h, s.ID), "make it faster") == 1 })
+}
