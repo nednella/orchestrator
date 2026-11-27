@@ -2,6 +2,7 @@ import { useOrchestrator } from '../OrchestratorContext'
 import type { Orchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import type { Layout } from '../LayoutContext'
+import { modelActions } from './models'
 import { navigateActions } from './navigate'
 import { queueActions } from './queue'
 import { sessionActions } from './sessions'
@@ -22,6 +23,7 @@ export function actionsFor(a: Orchestrator, layout: Layout): Action[] {
     ...sessionActions(context),
     ...navigateActions(context),
     ...queueActions(context),
+    ...modelActions(),
     ...viewActions(context),
     ...shellActions(context),
   ]
