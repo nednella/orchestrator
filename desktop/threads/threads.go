@@ -1223,6 +1223,12 @@ func (s *Threads) removeWorktrees(family []string, trees familyTrees) (asleep st
 				asleep = top
 			}
 		}
+		// A stopped thread's Claude must have ended before the worktree is checked again and removed: it may write to it
+		// until its host has logged its exit.
+		for _, d := range stop {
+			name, _ := thread.ParseName(d)
+			s.awaitHostExit(name)
+		}
 		if err := s.checkWorktrees(ctx, family, own, asleep, trees.count()); err != nil {
 			return asleep, err
 		}
