@@ -165,7 +165,7 @@ func TestLedgerUsage(t *testing.T) {
 	use("alpha", "alpha/aaaaaaaa", 3, 7, "claude-opus-5-5", "high", "#7 first", 100, 2_000_000)
 	use("alpha", "alpha/bbbbbbbb", 1, 7, "claude-opus-5-5", "high", "#7 resumed", 200, 1_000_000)
 	use("alpha", "alpha/bbbbbbbb", 1, 7, "claude-haiku-5-5", "high", "#7 resumed", 50, 10_000)
-	use("alpha", "alpha/cccccccc", 0, 0, "claude-sonnet-5-5", "", "Plain task", 30, 500_000)
+	use("alpha", "alpha/cccccccc", 0, 0, "claude-sonnet-5-5", "", "Plain thread", 30, 500_000)
 	use("beta", "beta/dddddddd", 0, 7, "claude-opus-5-5", "medium", "#7 beta's own", 1, 1)
 	use("alpha", "alpha/eeeeeeee", 40, 9, "claude-opus-5-5", "high", "#9 old", 1000, 9_000_000)
 
@@ -191,7 +191,7 @@ func TestLedgerUsage(t *testing.T) {
 	for _, w := range led.Work {
 		work = append(work, fmt.Sprintf("%s#%d%s:%s:%d:%d", w.Project, w.Issue, w.Thread, w.Title, w.Threads, w.Tokens))
 	}
-	if want := []string{"Alpha#0alpha/cccccccc:Plain task:1:40", "Beta#7:#7 beta's own:1:11", "Alpha#7:#7 resumed:2:380"}; !slices.Equal(work, want) {
+	if want := []string{"Alpha#0alpha/cccccccc:Plain thread:1:40", "Beta#7:#7 beta's own:1:11", "Alpha#7:#7 resumed:2:380"}; !slices.Equal(work, want) {
 		t.Errorf("work = %v, want %v", work, want)
 	}
 }

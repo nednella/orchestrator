@@ -178,10 +178,10 @@ func TestThreadThatSettledWhileTheAppWasClosedWakesAsItself(t *testing.T) {
 		start func(h *apptest.Harness) (threads.Thread, error)
 	}{
 		{"read", func(h *apptest.Harness) (threads.Thread, error) { return h.NewThread("ask", "", "", "", "read") }},
-		{"issue task", func(h *apptest.Harness) (threads.Thread, error) {
+		{"issue thread", func(h *apptest.Harness) (threads.Thread, error) {
 			return h.Threads().Create(h.Threads().Current(), "#12 work", "", false, 12, thread.Supervised)
 		}},
-		{"renamed task", func(h *apptest.Harness) (threads.Thread, error) {
+		{"renamed thread", func(h *apptest.Harness) (threads.Thread, error) {
 			s, err := h.StartThread("work", "")
 			if err != nil {
 				return s, err

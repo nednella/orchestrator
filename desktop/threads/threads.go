@@ -4699,7 +4699,7 @@ type workTree struct{ branch, dir string }
 
 // launchFor is what the thread's agent starts with. The agent learns where it runs and the commands that reach the
 // app, and about the browser when it has one; a thread with a brief learns only the brief. A child learns the title
-// of its parent, the thread it works for. A thread for an issue learns the issue's number. A task started by another
+// of its parent, the thread it works for. A thread for an issue learns the issue's number. A thread started by another
 // thread gets that thread's handover last.
 func launchFor(model project.Model, conversation, brief, handover string, access thread.Access, browser bool, fork forkStart, tree workTree, parent string, issue int) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Fast: model.Fast, Resume: conversation, Access: access}

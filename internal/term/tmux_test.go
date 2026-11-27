@@ -445,7 +445,7 @@ func TestWithEnvReplacesTheProcessEnvironment(t *testing.T) {
 	}
 }
 
-func TestCleanEnvDropsInheritedSession(t *testing.T) {
+func TestCleanEnvDropsInheritedThread(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-1/default,1,0")
 	t.Setenv("ORCHESTRATOR_THREAD", "other/abc")
 	t.Setenv("ORCHESTRATOR_CONTROL", "/other/control.sock")
