@@ -6,8 +6,8 @@ type Seed = [number, Lane, Issue['type'], string, string, string[], string[]?]
 const day = 86_400_000
 
 const storefrontSeeds: Seed[] = [
-  [454, 'ready', 'refactor', 'Split the product page into server and client parts', 'nednella', ['ned']],
-  [444, 'ready', 'refactor', 'Restructure the checkout route and providers', 'nednella', ['ned']],
+  [454, 'ready', 'refactor', 'Split the product page into server and client parts', 'nednella', ['sam']],
+  [444, 'ready', 'refactor', 'Restructure the checkout route and providers', 'nednella', ['sam']],
   [326, 'ready', 'bug', 'Cart total is a cent off on large orders', 'alex-r', [], ['model:haiku']],
   [412, 'ready', 'chore', 'Sweep the locale keys for the account pages', 'sam-p', ['sam-p']],
   [389, 'ready', 'feature', 'Payment webhook retries with backoff', 'nednella', [], ['effort:hgih']],

@@ -95,8 +95,8 @@ test("a shell's number ends its id, and the first has none", () => {
 })
 
 test("a folder is shown by its last part", () => {
-  assert.equal(folderName('/Users/ned/code/widgets'), 'widgets')
-  assert.equal(folderName('/Users/ned/code/widgets/'), 'widgets')
+  assert.equal(folderName('/Users/sam/code/widgets'), 'widgets')
+  assert.equal(folderName('/Users/sam/code/widgets/'), 'widgets')
   assert.equal(folderName('/'), '/')
 })
 

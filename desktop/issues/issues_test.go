@@ -66,7 +66,7 @@ func TestIssues(t *testing.T) {
 		t.Errorf("issues = %v, want %v", placed, want)
 	}
 	first := got[0]
-	if first.Author != "ned" || !slices.Equal(first.Assignees, []string{"ned", "amy"}) || !slices.Equal(first.Labels, []string{"ready", "type:bug"}) ||
+	if first.Author != "sam" || !slices.Equal(first.Assignees, []string{"sam", "amy"}) || !slices.Equal(first.Labels, []string{"ready", "type:bug"}) ||
 		first.CreatedAt != time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC).UnixMilli() || first.UpdatedAt <= first.CreatedAt {
 		t.Errorf("issue 7 = %+v", first)
 	}

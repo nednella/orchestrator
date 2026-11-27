@@ -22,7 +22,7 @@ func TestComputerName(t *testing.T) {
 		err  error
 		want string
 	}{
-		{"the name scutil gives", "Ned’s MacBook Pro\n", nil, "Ned’s MacBook Pro"},
+		{"the name scutil gives", "Sam’s MacBook Pro\n", nil, "Sam’s MacBook Pro"},
 		{"the host name when scutil fails", "", errors.New("scutil: not found"), host},
 		{"the host name when no name is set", "  \n", nil, host},
 	} {

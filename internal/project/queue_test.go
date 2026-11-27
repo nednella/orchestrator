@@ -139,7 +139,7 @@ func TestIssueBranchDefault(t *testing.T) {
 	}{
 		{"unset", "", "issue-7"},
 		{"a pattern", "feat/{n}", "feat/7"},
-		{"a fixed name", "ned/{n}-fix", "ned/7-fix"},
+		{"a fixed name", "sam/{n}-fix", "sam/7-fix"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := (Project{Branch: tt.branch}).BranchFor(7); got != tt.want {

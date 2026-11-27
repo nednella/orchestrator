@@ -461,7 +461,7 @@ export function createMock(params: URLSearchParams) {
     const byIssue = (n: number) => sessions.find((x) => x.issue === n && x.project === 'storefront')!
     Object.assign(byIssue(454), { pr: pr(457, 'draft', 'pending', { title: 'Split the product page into sections' }), git: git({ unpushed: 2, uncommitted: 4, ahead: 3 }) })
     servers.set(byIssue(454).id, [
-      { port: 5173, pid: 48211, command: 'node /Users/ned/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173', started: Date.now() - 4 * 60_000 },
+      { port: 5173, pid: 48211, command: 'node /Users/sam/code/acme/storefront/trees/issue-454/node_modules/.bin/vite --port 5173', started: Date.now() - 4 * 60_000 },
       { port: 8787, pid: 48230, command: 'node server/api.js --watch', started: Date.now() - 72 * 60_000 },
     ])
     if (flags.lineage) {

@@ -8,20 +8,20 @@ test('a relative markdown link is a file', () => {
   assert.equal(planPath('../notes.MD'), '../notes.MD')
   assert.equal(planPath('docs/plan.md#steps'), 'docs/plan.md', 'without its fragment')
   assert.equal(planPath('docs/my%20plan.md'), 'docs/my plan.md', 'decoded')
-  assert.equal(planPath('/Users/ned/trees/issue-7/plan.md'), '/Users/ned/trees/issue-7/plan.md')
+  assert.equal(planPath('/Users/sam/trees/issue-7/plan.md'), '/Users/sam/trees/issue-7/plan.md')
   assert.equal(planPath('docs/main.go'), null, 'not markdown')
   assert.equal(planPath('#steps'), null)
   assert.equal(planPath(''), null)
 })
 
 test('web links are not', () => {
-  for (const href of ['https://example.com/README.md', 'http://example.com/a.md', 'mailto:ned@example.com', '//example.com/a.md', 'javascript:alert(1)//.md', 'vscode://file/a.md', 'data:text/html,a.md']) {
+  for (const href of ['https://example.com/README.md', 'http://example.com/a.md', 'mailto:sam@example.com', '//example.com/a.md', 'javascript:alert(1)//.md', 'vscode://file/a.md', 'data:text/html,a.md']) {
     assert.equal(planPath(href), null, href)
   }
 })
 
 test('a file URL is decoded', () => {
-  assert.equal(planPath('file:///Users/ned/trees/my%20tree/plan.md'), '/Users/ned/trees/my tree/plan.md')
+  assert.equal(planPath('file:///Users/sam/trees/my%20tree/plan.md'), '/Users/sam/trees/my tree/plan.md')
   assert.equal(planPath('file://localhost/tmp/plan.md'), '/tmp/plan.md')
   assert.equal(planPath('file://server/share/plan.md'), null, 'another machine')
   assert.equal(planPath('file:///tmp/plan.txt'), null)
