@@ -1315,6 +1315,7 @@ func (h *Harness) RestoreClaude(t *testing.T) {
 
 // Main runs a package's tests and removes the command they built.
 func Main(m *testing.M) int {
+	defer gittest.Isolate()()
 	code := m.Run()
 	if cliDir != "" {
 		os.RemoveAll(cliDir)

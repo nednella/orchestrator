@@ -20,12 +20,43 @@ var parent = slices.Concat(environ.GitRepo, []string{"GIT_CEILING_DIRECTORIES"})
 // Env is the process's environment without what a parent git set to point git at its repo.
 func Env() []string { return environ.Without(os.Environ(), parent...) }
 
+// noConfig is what keeps the owner's git config out of git: no global or system config file, and no config folder, whose
+// git/ignore file git reads by itself, so an ignore rule of the owner's never hides a file from a test.
+func noConfig() []string {
+	return []string{"GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "XDG_CONFIG_HOME=" + filepath.Join(os.TempDir(), "gittest-no-config")}
+}
+
 // Command is git with args in dir, in Env, with no global or system config.
 func Command(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = environ.With(Env(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull)
+	cmd.Env = environ.With(Env(), noConfig()...)
 	return cmd
+}
+
+// Isolate takes the owner's git config out of every git this process runs, the app's own included, and returns what puts
+// it back. A package's TestMain calls it, so no test depends on what the machine it runs on has set.
+func Isolate() (restore func()) {
+	type saved struct {
+		key, value string
+		set        bool
+	}
+	var was []saved
+	for _, kv := range noConfig() {
+		key, value, _ := strings.Cut(kv, "=")
+		old, set := os.LookupEnv(key)
+		was = append(was, saved{key, old, set})
+		os.Setenv(key, value)
+	}
+	return func() {
+		for _, s := range was {
+			if s.set {
+				os.Setenv(s.key, s.value)
+			} else {
+				os.Unsetenv(s.key)
+			}
+		}
+	}
 }
 
 // Run runs Command as the user t, with main as the first branch and commits unsigned, and returns what git printed,
