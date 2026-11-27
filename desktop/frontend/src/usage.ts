@@ -1,19 +1,18 @@
 import type { Limits } from './types'
 
-export type LimitTone = 'plain' | 'warning' | 'danger'
-
 // LimitRow is a plan window as the Usage modal shows it: the whole percent left and how long until it resets, '' when
 // Claude does not say or the time has passed.
-export type LimitRow = { label: string; left: number; resetsIn: string; tone: LimitTone }
+export type LimitRow = { label: string; left: number; resetsIn: string }
 
-// usageRows are the limits' windows at now, unix ms, in the order Go gives them. A window with 20% or less left warns,
-// one with 10% or less is in danger; the tone follows the percent shown.
+// usageRows are the limits' windows at now, unix ms, in the order Go gives them.
 export function usageRows(l: Limits, now: number): LimitRow[] {
-  return l.windows.map((w) => {
-    const left = Math.round(Math.min(100, Math.max(0, w.left)))
-    const tone: LimitTone = left <= 10 ? 'danger' : left <= 20 ? 'warning' : 'plain'
-    return { label: w.label, left, resetsIn: w.resetsAt > 0 ? resetsIn(w.resetsAt - now) : '', tone }
-  })
+  return l.windows.map((w) => ({ label: w.label, left: Math.round(Math.min(100, Math.max(0, w.left))), resetsIn: w.resetsAt > 0 ? resetsIn(w.resetsAt - now) : '' }))
+}
+
+// providerColor is the colour token of a provider's mark and bars; a provider with no brand colour of its own gets the
+// neutral one.
+export function providerColor(provider: string): string {
+  return provider === 'claude' ? 'var(--provider-claude)' : 'var(--provider-other)'
 }
 
 // resetsIn is a span of ms in its two largest units, dropping a zero second one: "45m", "2h 5m", "3d 4h", "2d". A span

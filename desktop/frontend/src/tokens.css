@@ -60,6 +60,8 @@
   --agent-claude: #e0875f;
   --bg-user-message: color-mix(in srgb, var(--bg-surface) 92%, #fff);
   --claude-mark: #d97757;
+  --provider-claude: var(--claude-mark);
+  --provider-other: var(--text-soft);
   --vscode-mark: #1f9cf0;
 
   --bg-card: var(--bg-raised);

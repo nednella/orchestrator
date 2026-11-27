@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Limits } from './types.ts'
-import { resetsIn, usageRows } from './usage.ts'
+import { providerColor, resetsIn, usageRows } from './usage.ts'
 
 const now = Date.UTC(2026, 10, 26, 12, 0)
 const limits = (windows: Limits['windows']): Limits => ({ provider: 'claude', providerLabel: 'Claude', windows, at: now, unsupported: false, error: '' })
@@ -14,10 +14,10 @@ test('percent left from get_usage', () => {
     { name: 'spend', label: 'Monthly spend', left: 70, resetsAt: 0 },
   ]), now)
   assert.deepEqual(rows, [
-    { label: 'Session', left: 75, resetsIn: '3h', tone: 'plain' },
-    { label: 'Weekly', left: 60, resetsIn: '4d 11h', tone: 'plain' },
-    { label: 'Weekly · Fable', left: 100, resetsIn: '4d 11h', tone: 'plain' },
-    { label: 'Monthly spend', left: 70, resetsIn: '', tone: 'plain' },
+    { label: 'Session', left: 75, resetsIn: '3h' },
+    { label: 'Weekly', left: 60, resetsIn: '4d 11h' },
+    { label: 'Weekly · Fable', left: 100, resetsIn: '4d 11h' },
+    { label: 'Monthly spend', left: 70, resetsIn: '' },
   ])
 })
 
@@ -27,7 +27,7 @@ test('stream utilization is scaled', () => {
   assert.equal(row.left, 4)
   assert.equal(row.resetsIn, '45m')
   const [over] = usageRows(limits([{ name: 'five_hour', label: 'Session', left: -3, resetsAt: now - 1 }]), now)
-  assert.deepEqual(over, { label: 'Session', left: 0, resetsIn: '', tone: 'danger' })
+  assert.deepEqual(over, { label: 'Session', left: 0, resetsIn: '' })
 })
 
 test('resets in', () => {
@@ -45,7 +45,7 @@ test('resets in', () => {
   for (const [ms, want] of cases) assert.equal(resetsIn(ms), want, `${ms} ms`)
 })
 
-test('warning and danger tones', () => {
-  const tones = [100, 21, 20.4, 20, 11, 10.4, 10, 0].map((left) => usageRows(limits([{ name: 'seven_day', label: 'Weekly', left, resetsAt: 0 }]), now)[0].tone)
-  assert.deepEqual(tones, ['plain', 'plain', 'warning', 'warning', 'warning', 'danger', 'danger', 'danger'])
+test('provider colours', () => {
+  assert.equal(providerColor('claude'), 'var(--provider-claude)')
+  assert.equal(providerColor('other'), 'var(--provider-other)')
 })
