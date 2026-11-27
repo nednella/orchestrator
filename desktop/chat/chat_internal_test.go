@@ -98,6 +98,7 @@ func (m modeThread) StartSideChat(string) (threads.Thread, error) { return threa
 func (m modeThread) DeleteSideChat(string, bool) error            { return nil }
 func (m modeThread) NameSideChat(string, string) error            { return nil }
 func (m modeThread) SideChatsOf(string) []string                  { return nil }
+func (m modeThread) QueueDuringStart(string, string) bool         { return false }
 
 func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 	t.Parallel()

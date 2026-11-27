@@ -53,6 +53,7 @@ type Threads interface {
 	DeleteSideChat(id string, unused bool) error
 	NameSideChat(id, text string) error
 	SideChatsOf(id string) []string
+	QueueDuringStart(id, text string) bool
 }
 
 // Pending is the approval a thread waits on: the oldest one Claude asked for that has no answer yet.

@@ -105,6 +105,7 @@ type Thread struct {
 	Start        StartState `json:"start"`        // "" once the thread runs; else how far its start has got, while its row is shown as working or waiting
 	StartError   string     `json:"startError"`   // why the start failed, "" unless Start is failed
 	FirstMessage string     `json:"firstMessage"` // the message the thread starts with, shown as sent while it starts; "" when none
+	StartQueue   []string   `json:"startQueue"`   // what the owner sent while it started, which the agent gets after the first message; [] when none
 }
 
 // Project is a project as the front end sees it.
@@ -1582,7 +1583,7 @@ func (s *Threads) list() []Thread {
 		created, _ := s.startsOf(id, in)
 		view := Thread{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
-			State: ss.State, Detail: ss.Detail,
+			State: ss.State, Detail: ss.Detail, StartQueue: []string{},
 			CreatedAt: created.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt: s.forkAtOf(id),
 		}
@@ -1602,7 +1603,8 @@ func (s *Threads) list() []Thread {
 		view.Subagents = s.background[id].Subagents
 		if st := s.starting[id]; st != nil {
 			view.Start, view.StartError, view.FirstMessage = st.status, st.failure, st.shownText()
-			view.Detail = cmp.Or(st.failure, "Starting")
+			view.StartQueue = append([]string{}, st.queue...)
+			view.Detail = cmp.Or(st.failure, st.step, "Starting")
 		}
 		out = append(out, view)
 	}

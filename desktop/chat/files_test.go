@@ -189,6 +189,7 @@ func (folderThread) StartSideChat(string) (threads.Thread, error) { return threa
 func (folderThread) DeleteSideChat(string, bool) error            { return nil }
 func (folderThread) NameSideChat(string, string) error            { return nil }
 func (folderThread) SideChatsOf(string) []string                  { return nil }
+func (folderThread) QueueDuringStart(string, string) bool         { return false }
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()

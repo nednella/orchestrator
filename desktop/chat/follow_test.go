@@ -41,6 +41,7 @@ func (o oneThread) StartSideChat(string) (threads.Thread, error) { return thread
 func (o oneThread) DeleteSideChat(string, bool) error            { return nil }
 func (o oneThread) NameSideChat(string, string) error            { return nil }
 func (o oneThread) SideChatsOf(string) []string                  { return nil }
+func (o oneThread) QueueDuringStart(string, string) bool         { return false }
 
 // noProject knows no project.
 func noProject(string) string { return "" }

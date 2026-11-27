@@ -89,6 +89,10 @@ func (v *Service) send(id, text string, images []Image, sideChats []string, wait
 	if err != nil {
 		return Sent{}, err
 	}
+	// A thread whose agent has not started holds the message, which goes after its first one.
+	if len(images) == 0 && attached == "" && v.c.threads.QueueDuringStart(id, text) {
+		return Sent{}, nil
+	}
 	ch, err := v.awake(id)
 	if err != nil {
 		return Sent{}, err

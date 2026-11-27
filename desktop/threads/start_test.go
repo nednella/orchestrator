@@ -313,3 +313,28 @@ func TestRetryKeepsTheBranchTheFirstTryPicked(t *testing.T) {
 		t.Errorf("branch after the retry = %q, want tidy-up", row.Branch)
 	}
 }
+
+func TestMessageSentWhileTheThreadStartsGoesAfterTheFirstOne(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 2 && " + addWorktree})
+	repoFixture(t, h)
+	s, err := h.NewThreadLater("Fix login", "first words")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "second words"); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ := h.Thread(s.ID); len(row.StartQueue) != 1 || row.StartQueue[0] != "second words" || row.Detail != "Setting up the worktree" {
+		t.Errorf("the row = %+v, want one message queued and the step", row)
+	}
+	eventually(t, "both messages", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
+	users := userLines(t, h, s.ID)
+	if !strings.Contains(users[0], "first words") || !strings.Contains(users[1], "second words") || len(users) != 2 {
+		t.Errorf("messages = %v", users)
+	}
+	eventually(t, "the start to end", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == "" && len(row.StartQueue) == 0
+	})
+}

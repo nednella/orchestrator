@@ -65,6 +65,8 @@ type starting struct {
 	aborted  bool
 	cancel   context.CancelFunc
 	done     chan struct{}
+	step     string   // the step that runs, for the row
+	queue    []string // what the owner sent while it started, oldest first
 }
 
 // shownText is the first message as the thread shows it while it starts: what the owner sent, and nothing when it is
@@ -123,6 +125,10 @@ func (s *Threads) startLater(st *starting) Thread {
 	defer s.mu.Unlock()
 	st.info = st.placeholder()
 	st.status, st.running = Starting, true
+	st.step = "Starting Claude"
+	if st.o.Place == InWorktree {
+		st.step = "Setting up the worktree"
+	}
 	st.done = make(chan struct{})
 	var run context.Context
 	run, st.cancel = context.WithCancel(st.app)
@@ -142,20 +148,29 @@ func (s *Threads) startLater(st *starting) Thread {
 // runStart runs the steps of a start that is listed, and tells the thread's row how it went.
 func (s *Threads) runStart(ctx context.Context, st *starting) {
 	defer close(st.done)
-	err := s.execute(ctx, st)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	st.running = false
-	if err != nil {
-		if !st.aborted {
-			log.Printf("orchestrator: thread %s did not start: %v", st.name, err)
-			st.status, st.failure = StartFailed, startFailure(err)
+	for {
+		err := s.execute(ctx, st)
+		s.mu.Lock()
+		switch {
+		case err != nil:
+			st.running = false
+			if !st.aborted {
+				log.Printf("orchestrator: thread %s did not start: %v", st.name, err)
+				st.status, st.failure = StartFailed, startFailure(err)
+				s.sync()
+			}
+		case len(st.queue) > 0:
+			// A message that came after the last delivery.
+			s.mu.Unlock()
+			continue
+		default:
+			st.running = false
+			delete(s.starting, st.name.String())
 			s.sync()
 		}
+		s.mu.Unlock()
 		return
 	}
-	delete(s.starting, st.name.String())
-	s.sync()
 }
 
 // startFailure is why a start failed, in a sentence for the thread's row: the host's own reason when it refused, else
@@ -174,6 +189,9 @@ var errNotDelivered = errors.New("the agent did not take the first message in ti
 // that fails leaves nothing behind that a retry would trip on.
 func (s *Threads) execute(ctx context.Context, st *starting) error {
 	if !st.placed {
+		if st.o.Place == InWorktree {
+			s.setStep(st, "Setting up the worktree")
+		}
 		if err := s.place(ctx, st); err != nil {
 			return err
 		}
@@ -182,6 +200,7 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 	launched := st.launched
 	s.mu.Unlock()
 	if !launched {
+		s.setStep(st, "Starting Claude")
 		if err := s.boot(ctx, st); err != nil {
 			s.unplace(st)
 			return err
@@ -190,22 +209,71 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 	if st.work.branch != "" {
 		s.life.ensureWatchers(st.app)
 	}
-	if st.text == "" || st.delivered {
-		return nil
-	}
-	if !st.o.Later {
-		go s.giveHost(st.app, st.name, st.text, st.send)
-		return nil
-	}
-	if err := toHost(ctx, s.hostSocket(st.name), st.text, st.send, hostWait); err != nil {
-		log.Printf("orchestrator: thread %s did not get its first prompt: %v", st.name, err)
-		if refused := (*host.Refused)(nil); errors.As(err, &refused) {
-			return err
+	if st.text != "" && !st.delivered {
+		if !st.o.Later {
+			go s.giveHost(st.app, st.name, st.text, st.send)
+			return nil
 		}
-		return errNotDelivered
+		if err := toHost(ctx, s.hostSocket(st.name), st.text, st.send, hostWait); err != nil {
+			log.Printf("orchestrator: thread %s did not get its first prompt: %v", st.name, err)
+			if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+				return err
+			}
+			return errNotDelivered
+		}
+		st.delivered = true
 	}
-	st.delivered = true
-	return nil
+	return s.deliverQueued(ctx, st)
+}
+
+// setStep tells the thread's row which step of its start runs.
+func (s *Threads) setStep(st *starting, step string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !st.o.Later {
+		return
+	}
+	st.step = step
+	s.sync()
+}
+
+// QueueDuringStart holds a message the owner sends to a thread whose start has not ended, to go to the agent after its
+// first message, and says whether it did. The row shows it as queued.
+func (s *Threads) QueueDuringStart(id, text string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.starting[id]
+	if st == nil {
+		return false
+	}
+	st.queue = append(st.queue, text)
+	s.sync()
+	return true
+}
+
+// deliverQueued gives the agent the messages that came while it started, in order, until none is left. A message that
+// is not taken stays at the head of the queue for a retry.
+func (s *Threads) deliverQueued(ctx context.Context, st *starting) error {
+	for {
+		s.mu.Lock()
+		if len(st.queue) == 0 {
+			s.mu.Unlock()
+			return nil
+		}
+		next := st.queue[0]
+		s.mu.Unlock()
+		if _, err := host.SendMessage(ctx, s.hostSocket(st.name), host.Message{Text: next}); err != nil {
+			log.Printf("orchestrator: thread %s did not get a message sent while it started: %v", st.name, err)
+			if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+				return err
+			}
+			return errNotDelivered
+		}
+		s.mu.Lock()
+		st.queue = st.queue[1:]
+		s.sync()
+		s.mu.Unlock()
+	}
 }
 
 // place finds or makes the folder the thread runs in, and the chat a fork starts with. One place at a time, so two
