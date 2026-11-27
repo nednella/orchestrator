@@ -1389,8 +1389,11 @@ func (h *Harness) RewindTo(id, message string, files bool) (string, error) {
 }
 func (h *Harness) RewindOff() string { return h.chat.RewindOff() }
 
-func (h *Harness) Limits() limits.Limits                 { return h.limits.Limits() }
-func (h *Harness) RefreshLimits() (limits.Limits, error) { return h.limits.RefreshLimits() }
+func (h *Harness) Limits() limits.Limits { return h.limits.Limits()[0] }
+func (h *Harness) RefreshLimits() (limits.Limits, error) {
+	all, err := h.limits.RefreshLimits()
+	return all[0], err
+}
 
 func (h *Harness) ChatSend(id, text string, images ...chat.Image) (chat.Sent, error) {
 	return h.chat.ChatSend(id, text, images, nil)

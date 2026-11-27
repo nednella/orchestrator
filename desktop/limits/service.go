@@ -13,15 +13,15 @@ type Service struct {
 
 func NewService(t *Tracker, ctx func() context.Context) *Service { return &Service{t: t, ctx: ctx} }
 
-// Limits are the plan limits as last read.
-func (s *Service) Limits() Limits { return s.t.Limits() }
+// Limits are the plan limits of each provider as last read; Claude is the only one so far.
+func (s *Service) Limits() []Limits { return []Limits{s.t.Limits()} }
 
 // RefreshLimits reads the plan limits now, as the owner asked: from a live thread, else by a probe when the values are
 // over 5 minutes old. A read that fails is the answer's error, not the call's.
-func (s *Service) RefreshLimits() (Limits, error) {
+func (s *Service) RefreshLimits() ([]Limits, error) {
 	l, err := s.t.Refresh(s.ctx())
 	if err != nil {
-		return l, errors.New("The app is stopping")
+		return []Limits{l}, errors.New("The app is stopping")
 	}
-	return l, nil
+	return []Limits{l}, nil
 }

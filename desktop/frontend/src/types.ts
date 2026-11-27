@@ -330,10 +330,12 @@ export type LimitWindow = {
   resetsAt: number
 }
 
-// Limits are the plan limits as last read (desktop/limits.Limits). at is when a value last came, unix ms, 0 before any;
-// unsupported says that Claude Code does not report its plan usage, so the windows are what its turns told of; error is
-// why the latest read failed, '' when it did not.
+// Limits are one provider's plan limits as last read (desktop/limits.Limits); provider is its id, providerLabel its
+// name. at is when a value last came, unix ms, 0 before any; unsupported says that Claude Code does not report its plan
+// usage, so the windows are what its turns told of; error is why the latest read failed, '' when it did not.
 export type Limits = {
+  provider: string
+  providerLabel: string
   windows: LimitWindow[]
   at: number
   unsupported: boolean

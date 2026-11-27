@@ -155,8 +155,10 @@ export function createMock(params: URLSearchParams) {
     lineage: params.has('lineage'),
     // childask=question or childask=plan has the child ask that; any other value a tool approval.
     childAsk: params.get('childask'),
-    // limits=unsupported is a Claude Code without get_usage, limits=failed a probe that did not answer, limits=none nothing read yet.
+    // limits=unsupported is a Claude Code without get_usage, limits=failed a probe that did not answer, limits=none nothing read yet, limits=near windows almost used up.
     limits: params.get('limits'),
+    // providers=2 adds a made-up second provider to the usage.
+    secondProvider: params.get('providers') === '2',
   }
   const handlers = new Map<string, Set<Handler>>()
   // The reader of each open terminal's output, as GET /term/<id> has one.
@@ -1115,20 +1117,42 @@ export function createMock(params: URLSearchParams) {
 
   let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code', projectsDir: '' }
 
-  // limitsNow are the plan limits as the Go side would read them at the time.
-  const limitsNow = (): Limits => {
+  // limitsNow are the plan limits of each provider as the Go side would read them at the time.
+  const limitsNow = (): Limits[] => {
     const at = Date.now()
     const hours = (h: number) => at + h * 3_600_000
+    const claude = (rest: Omit<Limits, 'provider' | 'providerLabel'>): Limits => ({ provider: 'claude', providerLabel: 'Claude', ...rest })
     const weekly = { name: 'seven_day', label: 'Weekly', left: 18, resetsAt: hours(3 * 24 + 4) }
-    if (flags.limits === 'unsupported') return { windows: [weekly], at, unsupported: true, error: '' }
-    if (flags.limits === 'none') return { windows: [], at: 0, unsupported: false, error: '' }
-    if (flags.limits === 'failed') return { windows: [], at: 0, unsupported: false, error: 'the usage probe did not answer: context deadline exceeded' }
-    return {
-      windows: [{ name: 'five_hour', label: 'Session', left: 62, resetsAt: hours(2) + 5 * 60_000 }, weekly, { name: 'model:Fable', label: 'Weekly · Fable', left: 9, resetsAt: hours(3 * 24 + 4) }],
-      at,
-      unsupported: false,
-      error: '',
+    if (flags.limits === 'unsupported') return [claude({ windows: [weekly], at, unsupported: true, error: '' })]
+    if (flags.limits === 'none') return [claude({ windows: [], at: 0, unsupported: false, error: '' })]
+    if (flags.limits === 'failed') return [claude({ windows: [], at: 0, unsupported: false, error: 'the usage probe did not answer: context deadline exceeded' })]
+    const near = flags.limits === 'near'
+    const all = [
+      claude({
+        windows: [
+          { name: 'five_hour', label: 'Session', left: near ? 6 : 62, resetsAt: hours(2) + 5 * 60_000 },
+          near ? { ...weekly, left: 3 } : weekly,
+          { name: 'model:Fable', label: 'Weekly · Fable', left: near ? 0 : 9, resetsAt: hours(3 * 24 + 4) },
+        ],
+        at,
+        unsupported: false,
+        error: '',
+      }),
+    ]
+    if (flags.secondProvider) {
+      all.push({
+        provider: 'other',
+        providerLabel: 'Other agent',
+        windows: [
+          { name: 'daily', label: 'Daily', left: 41, resetsAt: hours(7) },
+          { name: 'monthly', label: 'Monthly', left: 77, resetsAt: hours(19 * 24) },
+        ],
+        at,
+        unsupported: false,
+        error: '',
+      })
     }
+    return all
   }
   let limits = limitsNow()
 
@@ -1685,7 +1709,7 @@ export function createMock(params: URLSearchParams) {
     Limits: async () => limits,
     RefreshLimits: async () => {
       limits = await delay(limitsNow(), 900)
-      emit('limits', limits)
+      limits.forEach((l) => emit('limits', l))
       return limits
     },
     OpenURL: async (url: string) => {

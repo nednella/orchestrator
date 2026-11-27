@@ -100,8 +100,8 @@ type Backend = {
   InstallUpdate(): Promise<void>
   PatchNotes(): Promise<Release[]>
   Changelog(): Promise<Release[]>
-  Limits(): Promise<Limits>
-  RefreshLimits(): Promise<Limits>
+  Limits(): Promise<Limits[]>
+  RefreshLimits(): Promise<Limits[]>
   Awake(): Promise<boolean>
   Settings(): Promise<Settings>
   SetTheme(theme: ThemeSetting): Promise<Settings>

@@ -318,6 +318,14 @@ func TestLimitsAreNeverNil(t *testing.T) {
 	}
 }
 
+func TestLimitsNameTheirProvider(t *testing.T) {
+	t.Parallel()
+	tr, _, _ := tracker(t, threads{}, nil, nil)
+	if got := tr.Limits(); got.Provider != "claude" || got.ProviderLabel != "Claude" {
+		t.Errorf("provider = %q, %q, want claude, Claude", got.Provider, got.ProviderLabel)
+	}
+}
+
 func TestANullAnswerKeepsTheStreamsWindows(t *testing.T) {
 	t.Parallel()
 	a := &asker{answer: `{"rate_limits":{"five_hour":null,"seven_day":null,"model_scoped":[],"extra_usage":{"is_enabled":false}}}`}

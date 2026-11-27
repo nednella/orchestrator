@@ -36,14 +36,16 @@ type Window struct {
 	ResetsAt int64   `json:"resetsAt"`
 }
 
-// Limits are the plan limits as last read. At is when a value last came, in unix milliseconds, 0 before any.
+// Limits are one provider's plan limits as last read: Provider is its id and ProviderLabel its name for the owner. At is when a value last came, in unix milliseconds, 0 before any.
 // Unsupported says that Claude Code does not answer get_usage, so the windows are only what turns told of; Error is
 // why the latest read failed, "" when it did not.
 type Limits struct {
-	Windows     []Window `json:"windows"`
-	At          int64    `json:"at"`
-	Unsupported bool     `json:"unsupported"`
-	Error       string   `json:"error"`
+	Provider      string   `json:"provider"`
+	ProviderLabel string   `json:"providerLabel"`
+	Windows       []Window `json:"windows"`
+	At            int64    `json:"at"`
+	Unsupported   bool     `json:"unsupported"`
+	Error         string   `json:"error"`
 }
 
 // Threads are the sessions; a live one's host is asked for the usage.
@@ -227,6 +229,7 @@ func (t *Tracker) Limits() Limits {
 // limitsLocked needs mu. The windows come session, weekly, each model's weekly by name, then spend.
 func (t *Tracker) limitsLocked() Limits {
 	l := t.limits
+	l.Provider, l.ProviderLabel = "claude", "Claude"
 	l.Windows = make([]Window, 0, len(t.windows))
 	for _, w := range t.windows {
 		l.Windows = append(l.Windows, w)

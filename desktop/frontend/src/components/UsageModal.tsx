@@ -4,9 +4,8 @@ import { useOrchestrator } from '../OrchestratorContext'
 import { keepFocusIn } from '../focusTrap'
 import { dollars, tokenCount } from '../spend'
 import { closeUsage, useUsageOpen } from '../usageOpen'
-import { usageRows } from '../usage'
 import { useUsage } from '../useUsage'
-import { UsageLimitCard } from './UsageLimitCard'
+import { ProviderLimits } from './ProviderLimits'
 
 const ICON_BUTTON = 'inline-flex h-[28px] w-[28px] items-center justify-center rounded-[8px] text-soft hover:bg-hover hover:text-ink disabled:opacity-60'
 
@@ -17,13 +16,12 @@ export function UsageModal() {
 
 function Usage() {
   const { focus } = useOrchestrator('focus')
-  const { limits, today, reading, error, refresh } = useUsage()
+  const { providers, today, reading, failure, refresh } = useUsage()
   const dialog = useRef<HTMLDivElement>(null)
   const close = useRef<HTMLButtonElement>(null)
   const [now, setNow] = useState(Date.now)
   const focusRef = useRef(focus)
   focusRef.current = focus
-  const rows = limits ? usageRows(limits, now) : []
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 30_000)
@@ -64,23 +62,15 @@ function Usage() {
             </div>
           </div>
           <div className="mt-2 flex flex-col gap-5">
-            <section className="flex flex-col gap-2" aria-label="Plan limits">
-              <h3 className="text-small font-medium text-soft">Plan limits</h3>
-              {rows.length > 0 && (
-                <ul className="flex flex-col gap-2">
-                  {rows.map((row) => (
-                    <UsageLimitCard key={row.label} row={row} />
-                  ))}
-                </ul>
-              )}
-              {limits?.unsupported && <p className="text-small text-dim">This Claude Code does not report plan limits. The windows show what its latest turn said.</p>}
-              {error && (
-                <p className="text-small text-danger" title={error}>
-                  Could not read plan limits.
-                </p>
-              )}
-              {rows.length === 0 && !error && <p className="text-small text-dim">{reading || !limits ? 'Reading plan limits…' : 'No plan limits yet. Refresh to read them.'}</p>}
-            </section>
+            {providers?.map((limits) => (
+              <ProviderLimits key={limits.provider} limits={limits} now={now} />
+            ))}
+            {failure && (
+              <p className="text-small text-danger" title={failure}>
+                Could not read plan limits.
+              </p>
+            )}
+            {!providers?.length && !failure && <p className="text-small text-dim">Reading plan limits…</p>}
             <section className="flex flex-col gap-1" aria-label="Today">
               <h3 className="text-small font-medium text-soft">Today</h3>
               <p className="min-h-[1.5em] text-body text-ink">{today && `${dollars(today.cost)} · ${tokenCount(today.tokens)} tokens`}</p>

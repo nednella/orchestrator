@@ -4,7 +4,7 @@ import type { Limits } from './types.ts'
 import { resetsIn, usageRows } from './usage.ts'
 
 const now = Date.UTC(2026, 10, 26, 12, 0)
-const limits = (windows: Limits['windows']): Limits => ({ windows, at: now, unsupported: false, error: '' })
+const limits = (windows: Limits['windows']): Limits => ({ provider: 'claude', providerLabel: 'Claude', windows, at: now, unsupported: false, error: '' })
 
 test('percent left from get_usage', () => {
   const rows = usageRows(limits([
