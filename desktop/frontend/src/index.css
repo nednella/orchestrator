@@ -211,11 +211,6 @@
     background: color-mix(in srgb, var(--accent) 88%, var(--text));
   }
 
-  .btn-danger {
-    border-color: var(--danger);
-    color: var(--danger);
-  }
-
   /* A setting's text field and select trigger: a 28px box that rings inside when it has the focus. */
   .setting-field {
     border: 1px solid var(--border-strong);
@@ -229,22 +224,6 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: var(--shadow-pill), inset 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
-  }
-
-  .btn-split {
-    display: inline-flex;
-    flex: none;
-  }
-
-  .btn-split > .btn:first-child {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  .btn-split > .btn + .btn {
-    margin-left: -1px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
   }
 
   .field {
@@ -793,11 +772,6 @@
     opacity: 0.4;
   }
 
-  .row-pick:hover,
-  .row-pick[data-selected='true'] {
-    background: var(--bg-hover);
-  }
-
   .row::before {
     content: '';
     position: absolute;
@@ -874,11 +848,6 @@
     outline: none;
   }
 
-  [data-panel][data-focused] > .panel-head,
-  [data-panel][data-focused] .panel-head {
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
-  }
-
   .thread-search {
     border: 1px solid transparent;
     background: var(--bg-raised);
@@ -897,15 +866,6 @@
     color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 2px;
-  }
-
-  .headline {
-    color: var(--text);
-    text-underline-offset: 3px;
-  }
-  .headline:hover {
-    color: var(--accent);
-    text-decoration: underline;
   }
 
   .markdown {
