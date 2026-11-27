@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { previewFrame, previewWidth } from '../questionPreview'
+import { previewDialogFrameStyle, previewFrame, previewWidth } from '../questionPreview'
 import { ChatActionButton } from './ChatActionButton'
 import { ViewerBar } from './ViewerBar'
 
@@ -27,7 +27,7 @@ export function QuestionHtmlDialog({ html, tokens, onClose }: QuestionHtmlDialog
       }}
     >
       <div className="relative h-full max-h-[85vh] w-full" style={{ maxWidth: previewWidth }}>
-        <iframe title="Preview" {...previewFrame(html, tokens)} className="block h-full w-full rounded-lg border border-(--border-rule)" style={{ background: 'var(--bg-app)' }} />
+        <iframe title="Preview" {...previewFrame(html, tokens)} className="block h-full w-full rounded-lg border border-(--border-rule)" style={previewDialogFrameStyle} />
         <div className="absolute top-2 right-2">
           <ViewerBar>
             <ChatActionButton label="Close preview" onClick={onClose}>

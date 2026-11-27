@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { imagePath, isWidePreview, previewCSP, previewDocument, previewFrame, previewParts, previewTokens } from './questionPreview.ts'
+import { imagePath, isWidePreview, previewCSP, previewDialogFrameStyle, previewDocument, previewFrame, previewParts, previewTokens } from './questionPreview.ts'
 
 test('plain text is a code block, markdown is markdown', () => {
   assert.deepEqual(previewParts('+------+\n| Cart |\n+------+'), [{ kind: 'code', text: '+------+\n| Cart |\n+------+' }])
@@ -48,6 +48,8 @@ test('the page of an html block carries the policy first and the theme tokens, a
   assert.equal(srcDoc.endsWith('<h1 style="color:var(--accent)">Hi</h1>'), true)
   assert.equal(previewDocument('', {}), `<meta http-equiv="Content-Security-Policy" content="${previewCSP}"><style>:root{}</style>`)
 })
+
+test('the full-size frame has no pointer events', () => assert.equal(previewDialogFrameStyle.pointerEvents, 'none'))
 
 test('the prompt names every token a page may use', () => {
   const prompt = readFileSync(new URL('../../../internal/prompts/base.md', import.meta.url), 'utf8')

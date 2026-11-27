@@ -90,6 +90,9 @@ export function previewDocument(html: string, values: Record<string, string>): s
 // empty sandbox, which allows nothing, and the page.
 export const previewFrame = (html: string, values: Record<string, string>) => ({ sandbox: previewSandbox, srcDoc: previewDocument(html, values), referrerPolicy: 'no-referrer' as const })
 
+// The full-size frame gets no pointer events, so that a click on a link in the page cannot navigate the frame.
+export const previewDialogFrameStyle = { pointerEvents: 'none', background: 'var(--bg-app)' } as const
+
 // previewWidth is the width a page is laid out at, and previewHeight the height of its tile before it opens.
 export const previewWidth = 800
 export const previewHeight = 480
