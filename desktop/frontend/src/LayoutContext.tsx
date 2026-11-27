@@ -7,7 +7,7 @@ import type { FocusTarget } from './OrchestratorContext'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
 import type { Band, LayoutMode, OverlayEvent, SidePanel } from './panelLayout'
 import { updatePanel, usePanel } from './panelStore'
-import { closeTab, openTab, panelFit, panelOnFocus, panelWidth, stepTab } from './panelTabs'
+import { closeTab, openTab, panelFit, panelOnFocus, panelShows, panelWidth, stepTab } from './panelTabs'
 import type { PanelState, PanelTabId } from './panelTabs'
 import { readStored, writeStored } from './storage'
 import { snapScale, zoomedScale } from './textScale'
@@ -56,6 +56,8 @@ export type Layout = {
   // showPanelView opens the right panel on the view or side chat, in the panel of thread, else of the open thread;
   // expanded sets the panel's size too, except on a sheet, which has one size.
   showPanelView(view: PanelTabId, opts?: { expanded?: boolean; thread?: string }): void
+  // togglePanelView closes the panel when it shows the view, as its own close button does, else shows the view.
+  togglePanelView(view: PanelTabId, opts?: { expanded?: boolean }): void
   togglePanelExpanded(): void
   showPanelList(): void
   closePanelTab(view: PanelTabId): void
@@ -255,6 +257,20 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
     [focus, moveOverlay, setSidebarOpen],
   )
 
+  const togglePanel = (panel: TogglePanel) => {
+    const setOpen = { sidebar: setSidebarOpen, right: setRightOpen }[panel]
+    const shown = { sidebar: sidebarOpen, right: rightOpen }[panel]
+    if (!shown) {
+      const active = document.activeElement
+      focusBefore.current[panel] = active && active !== document.body ? active : undefined
+      setOpen(true)
+      focus(PANEL_FOCUS[panel])
+      return
+    }
+    refocusOnClose(panel)
+    setOpen(false)
+  }
+
   const value = useMemo<Layout>(
     () => ({
       mode,
@@ -303,20 +319,12 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
       toggleRight() {
         setRightOpen(!rightOpen)
       },
-      togglePanel(panel) {
-        const setOpen = { sidebar: setSidebarOpen, right: setRightOpen }[panel]
-        const shown = { sidebar: sidebarOpen, right: rightOpen }[panel]
-        if (!shown) {
-          const active = document.activeElement
-          focusBefore.current[panel] = active && active !== document.body ? active : undefined
-          setOpen(true)
-          focus(PANEL_FOCUS[panel])
-          return
-        }
-        refocusOnClose(panel)
-        setOpen(false)
-      },
+      togglePanel,
       showPanelView,
+      togglePanelView(view, opts) {
+        if (panelShows(rightOpen, panel, view)) return togglePanel('right')
+        showPanelView(view, opts)
+      },
       togglePanelExpanded() {
         if (!docked.right) return
         if (!rightOpen) setRightOpen(true)

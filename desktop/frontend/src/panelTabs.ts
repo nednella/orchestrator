@@ -31,6 +31,9 @@ export type PanelState = { tabs: PanelTabId[]; active: PanelTabId | null; expand
 
 export const EMPTY_PANEL: PanelState = { tabs: [], active: null, expanded: false }
 
+// panelShows tells whether the panel is open on the view.
+export const panelShows = (rightOpen: boolean, st: PanelState, view: PanelTabId): boolean => rightOpen && st.active === view
+
 export function openTab(st: PanelState, view: PanelTabId): PanelState {
   if (view === 'terminal') return { ...st, active: view }
   return { ...st, tabs: st.tabs.includes(view) ? st.tabs : [...st.tabs, view], active: view }

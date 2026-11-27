@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { sidebarBesidePx, sidebarFit } from './panelLayout.ts'
-import { closeTab, EMPTY_PANEL, openTab, panelFit, panelOnFocus, panelStateOf, panelWidth, sideChatOf, sideChatTab, stepTab, targetForKey } from './panelTabs.ts'
+import { closeTab, EMPTY_PANEL, openTab, panelFit, panelShows, panelOnFocus, panelStateOf, panelWidth, sideChatOf, sideChatTab, stepTab, targetForKey } from './panelTabs.ts'
 import type { PanelState } from './panelTabs.ts'
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({ ...EMPTY_PANEL, ...over })
@@ -129,4 +129,12 @@ test('stepping from the terminal tabs goes to the first or the last view', () =>
   const st = state({ tabs: ['notes', 'files', 'issues'], active: 'terminal' })
   assert.equal(stepTab(st, 1).active, 'notes')
   assert.equal(stepTab(st, -1).active, 'issues')
+})
+
+test('the panel shows a view only while it is open on it', () => {
+  const st = state({ tabs: ['issues', 'pulls'], active: 'issues' })
+  assert.equal(panelShows(true, st, 'issues'), true)
+  assert.equal(panelShows(true, st, 'pulls'), false, 'another view')
+  assert.equal(panelShows(false, st, 'issues'), false, 'a closed panel')
+  assert.equal(panelShows(true, EMPTY_PANEL, 'issues'), false, 'the list')
 })

@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useOrchestrator, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor } from '../actions'
+import { panelShows } from '../panelTabs'
 import { barLayout } from '../bottomBar'
 import type { BarButtonId } from '../bottomBar'
 import { useLayout } from '../LayoutContext'
@@ -44,11 +45,11 @@ export function SidebarBottomBar() {
   const runAction = (id: string) => report(() => actionsFor(latestOrchestrator(), layout).find((a) => a.id === id)!.run())
   const open: Record<BarButtonId, () => void> = {
     settings: () => runAction('settings'),
-    pulls: () => report(() => layout.showPanelView('pulls', { expanded: true })),
-    issues: () => report(() => layout.showPanelView('issues', { expanded: true })),
+    pulls: () => report(() => layout.togglePanelView('pulls', { expanded: true })),
+    issues: () => report(() => layout.togglePanelView('issues', { expanded: true })),
     usage: openUsage,
   }
-  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen }
+  const pressed: Partial<Record<BarButtonId, boolean>> = { usage: usageOpen, pulls: panelShows(layout.rightOpen, layout.panel, 'pulls'), issues: panelShows(layout.rightOpen, layout.panel, 'issues') }
   const { shown, more } = barLayout(width)
 
   // Its contents never widen the sidebar: the bar takes the thread list's width, and what does not fit goes to More.
