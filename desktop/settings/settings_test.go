@@ -248,11 +248,14 @@ func TestThemes(t *testing.T) {
 	if got := h.Settings(); got.DarkTheme != "black" || got.LightTheme != "light" {
 		t.Fatalf("default themes = %q, %q", got.DarkTheme, got.LightTheme)
 	}
-	if got, err := h.SetThemes("violet", "light"); err != nil || got.DarkTheme != "violet" {
-		t.Fatalf("SetThemes(violet) = %+v, %v", got, err)
+	if got, err := h.SetThemes("black", "light"); err != nil || got.DarkTheme != "black" {
+		t.Fatalf("SetThemes(black) = %+v, %v", got, err)
 	}
-	if got := h.Restart(t).Settings().DarkTheme; got != "violet" {
+	if got := h.Restart(t).Settings().DarkTheme; got != "black" {
 		t.Errorf("dark theme after restart = %q", got)
+	}
+	if _, err := h.SetThemes("violet", "light"); err == nil {
+		t.Error("the removed violet theme was accepted")
 	}
 	if _, err := h.SetThemes("pink", "light"); err == nil {
 		t.Error("an unknown dark theme was accepted")

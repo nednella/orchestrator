@@ -202,7 +202,7 @@ export type UpdateState = { status: UpdateStatus; version: string; percent: numb
 
 export type ThemeSetting = 'system' | 'light' | 'dark'
 
-export type DarkTheme = 'black' | 'violet'
+export type DarkTheme = 'black'
 
 export type LightTheme = 'light'
 

@@ -65,7 +65,7 @@ type Config struct {
 	ProjectsDir  string         `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
 	KeepAwake    *bool          `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a session works; on unless false
 	Theme        string         `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
-	ThemeDark    string         `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default) or violet
+	ThemeDark    string         `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default)
 	ThemeLight   string         `yaml:"app_theme_light,omitempty"`   // the light theme: light (default)
 	TextScale    float64        `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
 	EditorApp    string         `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
@@ -102,7 +102,7 @@ var Themes = []string{"light", "dark"}
 
 // DarkThemes and LightThemes are the named themes each appearance can show; the first is the default.
 var (
-	DarkThemes  = []string{"black", "violet"}
+	DarkThemes  = []string{"black"}
 	LightThemes = []string{"light"}
 )
 
@@ -167,6 +167,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Theme != "" && !slices.Contains(Themes, cfg.Theme) {
 		return Config{}, fmt.Errorf("%s: app_theme must be %s, not %q", path, strings.Join(Themes, " or "), cfg.Theme)
+	}
+	if cfg.ThemeDark == "violet" {
+		cfg.ThemeDark = "" // a theme the app no longer has: the default shows
 	}
 	if cfg.ThemeDark != "" && !slices.Contains(DarkThemes, cfg.ThemeDark) {
 		return Config{}, fmt.Errorf("%s: app_theme_dark must be %s, not %q", path, strings.Join(DarkThemes, " or "), cfg.ThemeDark)

@@ -9,7 +9,7 @@ data_dir: ~/Library/Mobile Documents/com~apple~CloudDocs/orchestrator   # option
 projects_dir: ~/code           # the folder a new project is made in, and where the folder browser of Add project starts; default ~/code (the browser starts in ~/ while unset). The settings panel writes it
 keep_mac_awake: true           # stop the Mac idle-sleeping while a session works; a project may set its own. The settings panel writes it
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
-app_theme_dark: black          # the theme the dark appearance shows: black (the default) or violet. The settings panel writes it
+app_theme_dark: black          # the theme the dark appearance shows: black (the default); a saved violet, a theme the app no longer has, shows black. The settings panel writes it
 app_theme_light: light         # the theme the light appearance shows: light (the default)
 app_text_scale: 1.2            # text size as a multiple of the default, 0.48 to 2.08; unset is 1. The settings panel writes it
 editor_app: Visual Studio Code # the macOS app that "Open in VS Code" opens a thread's folder with, through open -a; unset is Visual Studio Code
