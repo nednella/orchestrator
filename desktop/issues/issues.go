@@ -59,6 +59,7 @@ type Issues struct {
 
 	warn *warn.Warnings
 
+	emitMu     sync.Mutex // one issues event is made and sent at a time, so the last one sent is the newest
 	mu         sync.Mutex
 	repos      map[string]string
 	repoFailed map[string]time.Time // when gh last failed to name a folder's repo for a reason that may pass
@@ -278,6 +279,10 @@ func (i *Issues) WithThreads(list []Issue) []Issue {
 func (i *Issues) Emit() { i.emitFor(i.threads.Current()) }
 
 func (i *Issues) emitFor(proj project.Project) {
+	// Each change of the threads sends one on a goroutine of its own, which reads the threads when it runs: without the
+	// lock an older one could be sent after a newer one, and the window would keep the thread of an issue that ended.
+	i.emitMu.Lock()
+	defer i.emitMu.Unlock()
 	if list, ok := i.Cached(proj.Dir); ok {
 		i.emit("issues", scoped.Of(proj.Key(), i.WithThreads(list)))
 	}
