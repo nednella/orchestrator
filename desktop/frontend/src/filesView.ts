@@ -1,3 +1,5 @@
+import { relativeTo } from './fileTree.ts'
+
 // Where the Files view keeps whether it shows a markdown file rendered, how it wraps lines, whether its tree shows and
 // how wide.
 export const FILES_RENDERED_KEY = 'orchestrator.filesRendered'
@@ -54,7 +56,7 @@ export type FilePlace = { line: number; col?: number; endLine?: number }
 
 // FilesPick is what a Files view was asked to show: a file, with the place in it to scroll to, or a folder of its tree.
 // A new pick is a new object, so that a view shows even the one it showed before.
-export type FilesPick = { path: string | null; folder: string | null; place: FilePlace | null }
+export type FilesPick = { path: string | null; folder: string | null; place: FilePlace | null; outside: boolean }
 
 // The pick each Files view was asked for, by its thread's id or by filesKey for Home, while the app runs.
 const picked = new Map<string, FilesPick>()
@@ -63,19 +65,24 @@ const listeners = new Set<() => void>()
 export const filesKey = (thread: string | undefined, project: string) => thread ?? `project:${project}`
 
 // pickFile opens the file at path in the Files view of key, at place when it has one; null closes the file open there.
-export function pickFile(key: string, path: string | null, place?: FilePlace) {
+// An outside file is an absolute path that is not in the thread's folder, which the view shows read only as it is.
+export function pickFile(key: string, path: string | null, place?: FilePlace, outside = false) {
   if (path === null) picked.delete(key)
-  else picked.set(key, { path, folder: null, place: place ?? null })
+  else picked.set(key, { path, folder: null, place: place ?? null, outside })
   listeners.forEach((listener) => listener())
 }
 
 // pickFolder closes the file open in the Files view of key and shows the folder in its tree.
 export function pickFolder(key: string, folder: string) {
-  picked.set(key, { path: null, folder, place: null })
+  picked.set(key, { path: null, folder, place: null, outside: false })
   listeners.forEach((listener) => listener())
 }
 
 export const pickedFile = (key: string): string | null => picked.get(key)?.path ?? null
+
+// pickedPath is the path the Files view reads for a pick of a thread whose folder it knows as folder: an outside file's
+// own path, else the path from the folder.
+export const pickedPath = (folder: string, pick: Pick<FilesPick, 'path' | 'outside'>): string | null => (pick.path === null ? null : pick.outside ? pick.path : relativeTo(folder, pick.path))
 
 export const pickOf = (key: string): FilesPick | null => picked.get(key) ?? null
 

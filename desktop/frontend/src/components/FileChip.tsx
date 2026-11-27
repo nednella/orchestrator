@@ -56,7 +56,7 @@ function FileChipButton({ thread, scope, chip, fileRef }: FileChipButtonProps) {
 
   const openInFiles = () => {
     if (chip.dir) pickFolder(key, target)
-    else pickFile(key, target, place)
+    else pickFile(key, target, place, !chip.inside)
     showPanelView('files', { thread })
   }
   const openInEditor = () => report(() => api.openFileInEditor(thread, chip.abs, fileRef.line))

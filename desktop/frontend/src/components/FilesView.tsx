@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
-import { isMarkdownPath, relativeTo, withFolders } from '../fileTree'
-import { FILES_RENDERED_KEY, FILES_TREE_KEY, FILES_TREE_WIDTH_KEY, FILES_WRAP_KEY, filesKey, onPicked, pickFile, pickOf } from '../filesView'
+import { isMarkdownPath, withFolders } from '../fileTree'
+import { FILES_RENDERED_KEY, FILES_TREE_KEY, FILES_TREE_WIDTH_KEY, FILES_WRAP_KEY, filesKey, onPicked, pickedPath, pickFile, pickOf } from '../filesView'
 import type { PanelViewProps } from '../panelViews'
 import { readStored, writeStored } from '../storage'
 import { useElementWidth } from '../useElementWidth'
@@ -33,13 +33,13 @@ export function FilesView({ thread }: PanelViewProps) {
   const key = filesKey(threadId, projectKey)
   const folder = thread?.worktree || project?.dir || ''
   const pick = useSyncExternalStore(onPicked, () => pickOf(key))
-  const path = pick?.path == null ? null : relativeTo(folder, pick.path)
-  // A path that is still absolute is a file outside the thread's folder, which the view shows read only.
-  const outside = path !== null && path.startsWith('/')
+  const path = pick === null ? null : pickedPath(folder, pick)
+  // A file outside the thread's folder is shown read only.
+  const outside = path !== null && pick?.outside === true
   const place = pick?.place ?? null
   const [listing, actions] = useFileListing(threadId, projectKey, thread?.state)
   const entries = useMemo(() => (listing.status === 'ready' ? withFolders(listing.entries) : []), [listing])
-  const file = useOpenFile(key, threadId, projectKey, path, thread?.state)
+  const file = useOpenFile(key, threadId, projectKey, path, thread?.state, outside)
   const [treeOpen, setTreeOpen] = useState(() => readStored(FILES_TREE_KEY, true))
   const [treeWidth, setTreeWidth] = useState(() => readStored(FILES_TREE_WIDTH_KEY, TREE_WIDTH.default))
   const [rendered, setRendered] = useState(() => readStored(FILES_RENDERED_KEY, false))
@@ -71,7 +71,7 @@ export function FilesView({ thread }: PanelViewProps) {
   const showsLines = text !== null && text.text !== '' && !(canRender && showRendered)
   const openInEditor = (target: string) =>
     report(() => {
-      if (threadId && target.startsWith('/')) return api.openFileInEditor(threadId, target, place?.line)
+      if (threadId && outside) return api.openFileInEditor(threadId, target, place?.line)
       return threadId ? api.openInEditor(threadId, target) : api.openProjectInEditor(projectKey, target)
     })
 

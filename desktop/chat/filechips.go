@@ -13,7 +13,7 @@ const maxChips = 500
 
 // FileChip says what is at a path the chat names. Path is the path as asked. Exists is false when nothing is there or
 // it is neither a regular file nor a folder. Abs is the path made absolute: ~ and a relative path resolved from the
-// thread's folder. Inside says the path is in the thread's folder, symlinks resolved, and Rel is then its path from
+// thread's folder; for a path outside that folder it is the real path, symlinks resolved, which ChatReadOutside reads. Inside says the path is in the thread's folder, symlinks resolved, and Rel is then its path from
 // that folder with / between names, "" for the folder itself. Size is the size of a file.
 type FileChip struct {
 	Path   string `json:"path"`
@@ -68,6 +68,9 @@ func chipAt(dir, realDir, path string) FileChip {
 				chip.Rel = filepath.ToSlash(rel)
 			}
 		}
+	}
+	if !chip.Inside {
+		chip.Abs = real
 	}
 	return chip
 }

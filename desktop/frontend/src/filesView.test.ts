@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { imageTarget, linkTarget, onPicked, pickedFile, pickFile, pickFolder, pickOf, planPath } from './filesView.ts'
+import { imageTarget, linkTarget, onPicked, pickedFile, pickFile, pickedPath, pickFolder, pickOf, planPath } from './filesView.ts'
 
 test('a relative markdown link is a file', () => {
   assert.equal(planPath('docs/plan.md'), 'docs/plan.md')
@@ -65,7 +65,7 @@ test('a picked file opens in its own view, and null closes it there only', () =>
 
 test('a pick keeps the place in the file and a folder pick closes the file', () => {
   pickFile('thread-p', 'src/a.ts', { line: 4, endLine: 9 })
-  assert.deepEqual(pickOf('thread-p'), { path: 'src/a.ts', folder: null, place: { line: 4, endLine: 9 } })
+  assert.deepEqual(pickOf('thread-p'), { path: 'src/a.ts', folder: null, place: { line: 4, endLine: 9 }, outside: false })
   pickFile('thread-p', 'src/a.ts')
   assert.equal(pickOf('thread-p')?.place, null)
   const before = pickOf('thread-p')
@@ -74,10 +74,21 @@ test('a pick keeps the place in the file and a folder pick closes the file', () 
   let heard = 0
   const off = onPicked(() => heard++)
   pickFolder('thread-p', 'src')
-  assert.deepEqual(pickOf('thread-p'), { path: null, folder: 'src', place: null })
+  assert.deepEqual(pickOf('thread-p'), { path: null, folder: 'src', place: null, outside: false })
   assert.equal(pickedFile('thread-p'), null)
   assert.equal(heard, 1)
   off()
   pickFile('thread-p', null)
   assert.equal(pickOf('thread-p'), null)
+})
+
+test('an outside file keeps its path, which a folder of the same name must not turn into a path inside', () => {
+  pickFile('thread-o', '/repo/src/a.ts', undefined, true)
+  const pick = pickOf('thread-o')
+  assert.equal(pick?.outside, true)
+  assert.equal(pickedPath('/repo', pick!), '/repo/src/a.ts')
+  pickFile('thread-o', '/repo/src/a.ts')
+  assert.equal(pickedPath('/repo', pickOf('thread-o')!), 'src/a.ts', 'a link that is no chip is read from the folder as before')
+  assert.equal(pickedPath('/repo', { path: null, outside: false }), null)
+  pickFile('thread-o', null)
 })

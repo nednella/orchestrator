@@ -20,6 +20,10 @@ func TestFileChipsSayWhatIsAtEachPath(t *testing.T) {
 	if err := syscall.Mkfifo(filepath.Join(dir, "pipe"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	realElsewhere, err := filepath.EvalSymlinks(elsewhere)
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := readService(t, dir, dir)
 	got, err := svc.ChatFileChips("main/abcdefgh", []string{
 		"src/a.go", "./docs/../src/a.go", filepath.Join(dir, "docs/plan.md"), "docs", ".", "alias.go",
@@ -37,9 +41,9 @@ func TestFileChipsSayWhatIsAtEachPath(t *testing.T) {
 		{Path: "alias.go", Exists: true, Size: 9, Abs: filepath.Join(dir, "alias.go"), Inside: true, Rel: "src/a.go"},
 		{Path: "missing.go", Abs: filepath.Join(dir, "missing.go")},
 		{Path: "src/a.go/x", Abs: filepath.Join(dir, "src/a.go/x")},
-		{Path: filepath.Join(elsewhere, "page.html"), Exists: true, Size: 9, Abs: filepath.Join(elsewhere, "page.html")},
-		{Path: elsewhere, Exists: true, Dir: true, Abs: elsewhere},
-		{Path: "leak.html", Exists: true, Size: 9, Abs: filepath.Join(dir, "leak.html")},
+		{Path: filepath.Join(elsewhere, "page.html"), Exists: true, Size: 9, Abs: filepath.Join(realElsewhere, "page.html")},
+		{Path: elsewhere, Exists: true, Dir: true, Abs: realElsewhere},
+		{Path: "leak.html", Exists: true, Size: 9, Abs: filepath.Join(realElsewhere, "page.html")},
 		{Path: "pipe", Abs: filepath.Join(dir, "pipe")},
 		{Path: ""},
 		{Path: "../x", Abs: filepath.Join(parent, "x")},
