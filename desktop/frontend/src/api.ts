@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, ThemeName, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -110,6 +110,7 @@ type Backend = {
   SetTheme(theme: ThemeSetting): Promise<Settings>
   SetThemes(dark: DarkTheme, light: LightTheme): Promise<Settings>
   SetAccents(dark: string, light: string): Promise<Settings>
+  ShowDockIcon(theme: ThemeName): Promise<void>
   SetCleanup(event: CleanupEvent, mode: CleanupMode): Promise<Settings>
   SetTextScale(scale: number): Promise<Settings>
   SetKeepAwake(on: boolean): Promise<Settings>
@@ -153,7 +154,7 @@ const namespaces = {
   update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'NewReleaseNotes', 'ReleaseNotes'],
   limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
-  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetAccents', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
+  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetAccents', 'ShowDockIcon', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
 }
 
 // The Go side has no method for this: the window runtime opens web addresses itself.
@@ -287,6 +288,7 @@ export const api = {
   setTheme: (theme: ThemeSetting) => backend.SetTheme(theme),
   setThemes: (dark: DarkTheme, light: LightTheme) => backend.SetThemes(dark, light),
   setAccents: (dark: string, light: string) => backend.SetAccents(dark, light),
+  showDockIcon: (theme: ThemeName) => backend.ShowDockIcon(theme),
   setCleanup: (event: CleanupEvent, mode: CleanupMode) => backend.SetCleanup(event, mode),
   setTextScale: (scale: number) => backend.SetTextScale(scale),
   setKeepAwake: (on: boolean) => backend.SetKeepAwake(on),

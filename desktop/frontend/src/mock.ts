@@ -1643,6 +1643,7 @@ export function createMock(params: URLSearchParams) {
       settings = { ...settings, darkAccent, lightAccent }
       return settings
     },
+    ShowDockIcon: async () => {},
     SetCleanup: async (event: CleanupEvent, mode: CleanupMode) => {
       settings = { ...settings, cleanup: { ...settings.cleanup, [event]: mode } }
       return settings

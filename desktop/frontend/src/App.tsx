@@ -21,6 +21,7 @@ import { useLayout } from './LayoutContext'
 import { useFocusedPanel } from './useFocusedPanel'
 import { useFullscreen } from './useFullscreen'
 import { useDigestToasts } from './useDigestToasts'
+import { useDockIcon } from './useDockIcon'
 import { useNetwork } from './useNetwork'
 import { useShortcuts } from './useShortcuts'
 
@@ -30,6 +31,7 @@ export function App() {
   useShortcuts(network.online && !confirming)
   useDigestToasts()
   useFocusedPanel()
+  useDockIcon()
   const fullscreen = useFullscreen()
   const { selectedId } = useOrchestrator('selectedId')
   const { mode, docked, sidebarOpen, rightOpen, overlay, panelExpanded } = useLayout()
