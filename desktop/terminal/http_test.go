@@ -210,10 +210,13 @@ func TestStreamNeedsTheAppHeader(t *testing.T) {
 	if out.ended() {
 		t.Fatal("a refused GET ended the reader")
 	}
-	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
+	// The first bytes come before tmux paints the screen, and output that comes while a paint waits is drawn in that
+	// paint, each line ended by an erase, not a line break: the output is looked for anywhere in the stream. The typed
+	// command does not hold "42xy", so only the output matches.
+	if err := h.TermWrite(id, "echo $((40+2))xy\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the echo on the reader", func() bool { return strings.Contains(out.String(), "\r\n42\r\n") })
+	eventually(t, "the echo on the reader", func() bool { return strings.Contains(out.String(), "42xy") })
 }
 
 func TestSecondReaderReplacesTheFirst(t *testing.T) {

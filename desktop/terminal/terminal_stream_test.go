@@ -15,19 +15,21 @@ func TestTerminalStream(t *testing.T) {
 	out := openRead(t, h, id, 100, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
 
-	if err := h.TermWrite(id, "echo $((40+2))\n"); err != nil {
+	// Output that comes while tmux's paint of the screen waits is drawn in that paint, each line ended by an erase, not a
+	// line break: each output is looked for anywhere in the stream, in a form the typed command does not hold.
+	if err := h.TermWrite(id, "echo $((40+2))xy\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "echo result", func() bool { return strings.Contains(out.String(), "\r\n42\r\n") })
+	eventually(t, "echo result", func() bool { return strings.Contains(out.String(), "42xy") })
 
 	if err := h.TermResize(id, 77, 20); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)
-	if err := h.TermWrite(id, "stty size\n"); err != nil {
+	if err := h.TermWrite(id, "stty size | tr ' ' x\n"); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "resized pty", func() bool { return strings.Contains(out.String(), "\r\n20 77\r\n") })
+	eventually(t, "resized pty", func() bool { return strings.Contains(out.String(), "20x77") })
 
 	h.TermClose(id)
 	if err := h.TermWrite(id, "x"); err == nil {
@@ -158,7 +160,8 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	// Wide, so the path in the shell's answer, which has random digits in it, never wraps.
 	out := openRead(t, h, id, 300, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
-	if err := h.TermWrite(id, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_THREAD-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
+	// The answer is looked for anywhere in the stream, as in TestTerminalStream; the | after the folder ends it.
+	if err := h.TermWrite(id, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_THREAD-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)|\"\n"); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(h.Dir)
@@ -166,7 +169,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the shell's environment", func() bool {
-		return strings.Contains(out.String(), "\r\nmain|unset|unset|"+want+"\r\n")
+		return strings.Contains(out.String(), "main|unset|unset|"+want+"|")
 	})
 	h.TermClose(id)
 }
