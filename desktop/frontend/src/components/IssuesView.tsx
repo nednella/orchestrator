@@ -1,14 +1,15 @@
 import { useCallback, useRef, useState } from 'react'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
-import { filterIssues, isFiltering } from '../issueFilter'
 import { useIssueReadRequest } from '../issueReadRequest'
 import { useFocusRequest } from '../useFocusRequest'
+import { useIssueListBar } from '../useIssueListBar'
 import { useRefreshQueueOnShow } from '../useRefreshQueueOnShow'
 import { IssueList } from './IssueList'
 import { IssueReader } from './IssueReader'
 import { Notice } from './Notice'
-import { QueueSearch } from './QueueSearch'
+import { ListBar } from './ListBar'
+import { ProviderLine } from './ProviderLine'
 
 // IssuesView is the queue's list, and an issue read in its place, or beside it where the panel is 720 px wide or more.
 export function IssuesView() {
@@ -29,6 +30,7 @@ export function IssuesView() {
     setReading(null)
   }
   useIssueReadRequest(setReading)
+  const { bar, shown, filtering } = useIssueListBar(issues)
 
   if (projectName !== undefined && !repo) {
     return <Notice title="No repo linked" hint={`${projectName} has no GitHub repo, so it has no issues.`} centered />
@@ -41,9 +43,6 @@ export function IssuesView() {
     )
     return <Notice title="Issues are disabled" hint={<>{link} has issues disabled, enable them to use the queue feature</>} centered />
   }
-  const filtering = isFiltering(issueFilter)
-  const shown = filtering ? filterIssues(issues, issueFilter) : issues
-
   const back = () => {
     const number = reading
     setReading(null)
@@ -53,7 +52,8 @@ export function IssuesView() {
   return (
     <div ref={root} className="flex h-full min-h-0">
       <div className={`min-h-0 min-w-0 flex-1 flex-col ${reading === null ? 'flex' : 'hidden @min-[720px]:flex'}`}>
-        <QueueSearch shown={filtering ? shown.length : null} />
+        <ListBar {...bar} />
+        <ProviderLine />
         <IssueList shown={shown} filtering={filtering} onRead={setReading} />
       </div>
       {reading !== null && (

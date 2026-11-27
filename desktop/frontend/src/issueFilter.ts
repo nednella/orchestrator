@@ -9,7 +9,7 @@ export type ParsedQuery = { words: Word[]; tokens: Token[] }
 export const TYPES: IssueType[] = ['bug', 'feature', 'refactor', 'chore']
 
 // A section's name as it is typed after section:, which has no room for a space.
-export const sectionSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
+const sectionSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
 
 const TOKEN = /^(author|assignee|label|type|section|is):(.*)$/i
 
@@ -61,53 +61,8 @@ export function filterIssues(issues: Issue[], query: string): Issue[] {
 
 export type Facet = { value: string; count: number }
 
-export function facet(issues: Issue[], pick: (issue: Issue) => string[]): Facet[] {
+export function facet<T>(items: T[], pick: (item: T) => string[]): Facet[] {
   const counts = new Map<string, number>()
-  for (const issue of issues) for (const value of new Set(pick(issue))) counts.set(value, (counts.get(value) ?? 0) + 1)
+  for (const item of items) for (const value of new Set(pick(item))) counts.set(value, (counts.get(value) ?? 0) + 1)
   return [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
-}
-
-export type Completion = { start: number; prefix: string; values: Facet[] }
-
-function valuesFor(field: string, issues: Issue[]): Facet[] {
-  if (field === 'author') return facet(issues, (i) => [i.author])
-  if (field === 'assignee') return [{ value: 'none', count: issues.filter((i) => i.assignees.length === 0).length }, ...facet(issues, (i) => i.assignees)]
-  if (field === 'label') return facet(issues, (i) => i.labels)
-  if (field === 'type') return TYPES.map((value) => ({ value, count: issues.filter((i) => i.type === value).length }))
-  if (field === 'section') return facet(issues, (i) => [sectionSlug(i.section)])
-  return [{ value: 'running', count: issues.filter((i) => i.sessionId).length }]
-}
-
-export function completionAt(query: string, issues: Issue[]): Completion | null {
-  if (/\s$/.test(query)) return null
-  const start = query.search(/\S+$/)
-  if (start < 0) return null
-  const raw = query.slice(start)
-  const negate = raw.startsWith('-') ? '-' : ''
-  const body = raw.slice(negate.length)
-  const match = body.startsWith('@') ? ['', 'author', body.slice(1)] : TOKEN.exec(body)
-  if (!match) return null
-  const field = match[1].toLowerCase()
-  const typed = match[2].toLowerCase()
-  const prefix = `${negate}${body.startsWith('@') ? '@' : `${field}:`}`
-  const values = valuesFor(field, issues).filter((v) => v.value.toLowerCase().startsWith(typed) && v.value.toLowerCase() !== typed)
-  return values.length ? { start, prefix, values } : null
-}
-
-export function applyCompletion(query: string, completion: Completion, value: string): string {
-  return `${query.slice(0, completion.start)}${completion.prefix}${value} `
-}
-
-export function withToken(query: string, field: 'author' | 'type', value: string | null): string {
-  const kept = query
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((part) => !(field === 'author' ? /^(@|author:)/i.test(part) : /^type:/i.test(part)))
-  if (value) kept.push(field === 'author' ? `@${value}` : `type:${value}`)
-  return kept.join(' ') + (kept.length ? ' ' : '')
-}
-
-export function activeValue(query: string, field: 'author' | 'type'): string | null {
-  const token = parseQuery(query).tokens.find((t) => t.field === field && !t.negate)
-  return token?.value ?? null
 }

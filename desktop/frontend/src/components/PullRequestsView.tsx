@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import type { PanelViewProps } from '../panelViews'
+import { usePullListBar } from '../usePullListBar'
 import { pullRows, pullsShown } from '../pullRows'
 import type { PullsRead } from '../pullRows'
 import type { RepoPull } from '../types'
 import { Ago } from './Ago'
 import { Icon } from './Icon'
+import { ListBar } from './ListBar'
 import { CenteredSpinner } from './CenteredSpinner'
 import { Notice } from './Notice'
 import { PRTab } from './PRTab'
@@ -105,6 +107,7 @@ export function PullRequestsView({ session }: PanelViewProps) {
   const shown = pullsShown(found, key, known)
   const pulls = shown.pulls
   const error = failed ?? shown.error
+  const list = usePullListBar({ pulls: pulls ?? [], loading: reading, onRefresh: read })
 
   if (project !== undefined && !repo) return <Notice title="No repo linked" hint={`${project} has no GitHub repo, so it has no pull requests.`} centered />
 
@@ -125,39 +128,38 @@ export function PullRequestsView({ session }: PanelViewProps) {
     )
   }
 
-  const { mine, rest } = pullRows(pulls ?? [], session?.pr ? session : null)
+  const { mine, rest } = pullRows(list.shown, session?.pr ? session : null)
   const titleOf = (p: RepoPull) => projectSessions.find((s) => s.id === p.thread)?.title
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      {session?.pr && (
-        <section aria-label="This thread" className="flex-none border-b border-line">
-          <h3 className="px-4 pt-3 text-label font-medium text-dim">This thread</h3>
-          <PRTab key={session.id} session={session} />
+    <div className="flex h-full min-h-0 flex-col">
+      <ListBar {...list.bar} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {session?.pr && (
+          <section aria-label="This thread" className="flex-none border-b border-line">
+            <h3 className="px-4 pt-3 text-label font-medium text-dim">This thread</h3>
+            <PRTab key={session.id} session={session} />
+          </section>
+        )}
+        <section aria-label="Open" className="flex min-h-0 flex-col pb-2">
+          {error && (
+            <p role="alert" className="px-4 pt-2 pb-1 text-small text-danger">
+              {error}
+            </p>
+          )}
+          {pulls === null ? (
+            error ? null : <CenteredSpinner />
+          ) : rest.length === 0 && !mine ? (
+            list.filtering && pulls.length > 0 ? (
+              <Notice title="No pull requests match" hint="Clear the search or the filters to see all of them." />
+            ) : (
+              <Notice title="No open pull requests" hint={`${repo || 'This project'} has none right now.`} />
+            )
+          ) : (
+            rest.map((p) => <PullRow key={p.number} pull={p} threadTitle={titleOf(p)} onOpen={() => setDetail(p.number)} />)
+          )}
         </section>
-      )}
-      <section aria-label="Open" className="flex min-h-0 flex-col pb-2">
-        <div className="flex items-center px-4 pt-3 pb-1">
-          <h3 className="text-label font-medium text-dim">Open</h3>
-          <button className="btn btn-ghost ml-auto h-6 w-6 justify-center px-0" title="Read the pull requests again" aria-label="Refresh" disabled={reading} onClick={read}>
-            <span className={`flex ${reading ? 'animate-spin' : ''}`}>
-              <Icon name="refresh" size={12} />
-            </span>
-          </button>
-        </div>
-        {error && (
-          <p role="alert" className="px-4 pb-1 text-small text-danger">
-            {error}
-          </p>
-        )}
-        {pulls === null ? (
-          error ? null : <CenteredSpinner />
-        ) : rest.length === 0 && !mine ? (
-          <Notice title="No open pull requests" hint={`${repo || 'This project'} has none right now.`} />
-        ) : (
-          rest.map((p) => <PullRow key={p.number} pull={p} threadTitle={titleOf(p)} onOpen={() => setDetail(p.number)} />)
-        )}
-      </section>
+      </div>
     </div>
   )
 }
