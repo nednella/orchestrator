@@ -12,24 +12,17 @@ import (
 func TestSetUpProject(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	if h.Snapshot().Project.NeedsSetup {
-		t.Error("a project with queue sections is offered setting up")
-	}
 	dir := filepath.Join(t.TempDir(), "fresh")
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := h.AddProjectDir(dir)
-	if err != nil || !snap.Project.NeedsSetup {
-		t.Fatalf("a new project = %+v, %v", snap.Project, err)
+	if _, err := h.AddProjectDir(dir); err != nil {
+		t.Fatal(err)
 	}
 
 	created, err := h.SetUpProject()
 	if err != nil || created.Title != "orchestrator setup" {
 		t.Fatalf("SetUpProject = %+v, %v", created, err)
-	}
-	if snap := h.Snapshot(); snap.Project.NeedsSetup {
-		t.Errorf("a set-up project is still offered setting up: %+v", snap.Project)
 	}
 	cfg, err := project.Load(h.Conf)
 	if err != nil {
@@ -47,7 +40,7 @@ func TestSetUpProject(t *testing.T) {
 func TestSetUpAddsAProjectMissingFromTheConfig(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{NoProject: true})
-	if snap := h.Snapshot(); snap.Project.Dir != h.Dir || !snap.Project.NeedsSetup {
+	if snap := h.Snapshot(); snap.Project.Dir != h.Dir {
 		t.Fatalf("the folder the app started in = %+v", snap.Project)
 	}
 	if _, err := h.SetUpProject(); err != nil {

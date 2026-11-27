@@ -9,7 +9,7 @@ import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMod
 
 type Handler = (payload: never) => void
 
-type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
+type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; cleanups: Cleanup[]; needsSetup?: boolean }
 
 const minute = 60_000
 const day = 86_400_000
@@ -227,8 +227,6 @@ export function createMock(params: URLSearchParams) {
       needsYou: own.filter((s) => s.state === 'waiting').length,
       working: own.filter((s) => s.state === 'working').length,
       threads: own.length,
-      needsSetup: !!p.needsSetup,
-      setupDismissed: !!p.setupDismissed,
     }
   }
 

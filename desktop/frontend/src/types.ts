@@ -125,8 +125,6 @@ export type Project = {
   needsYou: number
   working: number
   threads: number
-  needsSetup: boolean
-  setupDismissed: boolean
 }
 
 // ModelChoice is a model and an effort; '' where nothing sets one.
