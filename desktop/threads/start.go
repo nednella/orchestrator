@@ -55,6 +55,7 @@ type starting struct {
 	work       workPlace
 	branch     string // the branch a no-issue start picked
 	placed     bool
+	making     string // the folder git began to make the worktree in, which a quit may have cut short before it was recorded
 	note       string // what the owner should know of how the worktree was made, which goes into the chat before the agent starts
 	noted      bool   // the note is in the chat
 	setupTried bool   // the set-up command was looked at in this try: a retry looks again
@@ -199,10 +200,10 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 // does not run and the checks of a clean-up pass. It says why the worktree stays, "" when it went or there was none.
 func (s *Threads) undoCancelled(st *starting) string {
 	s.stopSetup(st.name.String())
-	if st.launched || !st.work.made {
+	if st.launched {
 		return ""
 	}
-	if reason := s.life.dropStartWorktree(context.WithoutCancel(st.app), st.name.String()); reason != "" {
+	if reason := s.dropWorktreeOf(context.WithoutCancel(st.app), st); reason != "" {
 		return reason
 	}
 	s.progress(st, func() {
@@ -213,6 +214,17 @@ func (s *Threads) undoCancelled(st *starting) string {
 		}
 	})
 	return ""
+}
+
+// dropWorktreeOf removes the worktree the start made, and says why it stays: see dropStartWorktree.
+func (s *Threads) dropWorktreeOf(ctx context.Context, st *starting) string {
+	s.mu.Lock()
+	branch, making := st.branch, st.making
+	s.mu.Unlock()
+	if st.issue > 0 {
+		branch = st.proj.BranchFor(st.issue)
+	}
+	return s.life.dropStartWorktree(ctx, st.proj, st.name, st.title, branch, making)
 }
 
 // startFailure is why a start failed, in a sentence for the thread's row: the host's own reason when it refused, else
@@ -422,7 +434,8 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 			branch, base = st.branch, st.o.Base
 		}
 		var err error
-		if work, err = s.life.makeWorktree(ctx, st.proj, st.name, branch, base, st.issue == 0); err != nil {
+		try := worktreeTry{prior: st.making, begin: func(dir string) { s.progress(st, func() { st.making = dir }) }}
+		if work, err = s.life.makeWorktree(ctx, st.proj, st.name, branch, base, st.issue == 0, try); err != nil {
 			return err
 		}
 		if work.made {
@@ -622,9 +635,9 @@ func (s *Threads) abortStart(id string, worktree bool) (bool, error) {
 		return false, nil
 	}
 	s.mu.Unlock()
-	if worktree && st.work.made {
+	if worktree {
 		s.stopSetup(id)
-		if reason := s.life.dropStartWorktree(s.context(), id); reason != "" {
+		if reason := s.dropWorktreeOf(s.context(), st); reason != "" {
 			s.mu.Lock()
 			st.aborted = false
 			if st.status == Starting {

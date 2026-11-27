@@ -125,7 +125,7 @@ func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
 	l, dir, _ := madeRepo(t)
 	wt := madeTree(t, l, dir, "feature", "p/aaaaaaaa")
 	proj := project.Project{Name: "p", Dir: dir}
-	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "feature", "", true)
+	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "feature", "", true, worktreeTry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
 		t.Errorf("git lists %d worktrees, want 2", n)
 	}
 	// Another thread's start of an issue's branch is not told the worktree is its own to remove.
-	other, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "feature", "", false)
+	other, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "feature", "", false, worktreeTry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,32 +145,104 @@ func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
 	}
 }
 
-func TestMakeWorktreeTakesForItsOwnTheOneAQuitLeftUnrecorded(t *testing.T) {
+func TestMakeWorktreeTakesForItsOwnOnlyTheOneItBeganToMake(t *testing.T) {
 	t.Parallel()
 	l, dir, _ := madeRepo(t)
-	wt := filepath.Join(dir, "trees", "feature")
-	gitT(t, dir, "worktree", "add", "-b", "feature", wt)
 	proj := project.Project{Name: "p", Dir: dir}
 	name := thread.Name{Project: "p", Token: "aaaaaaaa"}
-	got, err := l.makeWorktree(t.Context(), proj, name, "feature", "", true)
+	wt := folder.Canonical(filepath.Join(dir, "trees", "feature"))
+	gitT(t, dir, "worktree", "add", "-b", "feature", filepath.Join(dir, "trees", "feature"))
+
+	// With no word of a start that began to make it, a worktree on the branch is someone else's: the owner's, say.
+	got, err := l.makeWorktree(t.Context(), proj, name, "feature", "", true, worktreeTry{})
+	if err != nil || got.made {
+		t.Fatalf("worktree = %+v, %v; want it left unrecorded: no start began to make it", got, err)
+	}
+	// A start that began to make it at another folder did not make this one.
+	got, err = l.makeWorktree(t.Context(), proj, name, "feature", "", true, worktreeTry{prior: filepath.Join(dir, "trees", "other")})
+	if err != nil || got.made {
+		t.Fatalf("worktree = %+v, %v; want it left unrecorded: the start began elsewhere", got, err)
+	}
+	// Nor one that carries another thread's mark.
+	if err := l.mark(t.Context(), wt, "p/bbbbbbbb"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = l.makeWorktree(t.Context(), proj, name, "feature", "", true, worktreeTry{prior: wt})
+	if err != nil || got.made {
+		t.Fatalf("worktree = %+v, %v; want another thread's worktree left alone", got, err)
+	}
+	if _, ok := l.threads.made.Of("p", name.String()); ok {
+		t.Error("a record was made for a worktree of another thread")
+	}
+}
+
+func TestMakeWorktreeTakesTheOneAQuitLeftUnrecordedThatTheStartBeganToMake(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	name := thread.Name{Project: "p", Token: "aaaaaaaa"}
+	gitT(t, dir, "worktree", "add", "-b", "feature", filepath.Join(dir, "trees", "feature"))
+	wt := folder.Canonical(filepath.Join(dir, "trees", "feature"))
+	got, err := l.makeWorktree(t.Context(), proj, name, "feature", "", true, worktreeTry{prior: wt})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.dir != folder.Canonical(wt) || !got.made {
+	if got.dir != wt || !got.made {
 		t.Fatalf("worktree = %+v, want %s taken as the thread's own", got, wt)
 	}
-	if w, ok := l.threads.made.Of("p", name.String()); !ok || w.Path != folder.Canonical(wt) || w.Branch != "feature" || w.BaseOid == "" || !l.ours(t.Context(), "p", got.dir, name.String()) {
+	if w, ok := l.threads.made.Of("p", name.String()); !ok || w.Path != wt || w.Branch != "feature" || w.BaseOid == "" || !l.ours(t.Context(), "p", got.dir, name.String()) {
 		t.Errorf("record = %+v, %v; want it recorded and marked for the thread", w, ok)
 	}
-	// An issue's branch, which the thread did not pick, stays a worktree it merely runs in.
-	issue := filepath.Join(dir, "trees", "issue-7")
-	gitT(t, dir, "worktree", "add", "-b", "issue-7", issue)
-	run, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "issue-7", "", false)
-	if err != nil {
+}
+
+func TestMakeWorktreeTellsGitsBeginningBeforeItBegins(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	var began string
+	try := worktreeTry{begin: func(d string) {
+		began = d
+		if exists(d) {
+			t.Errorf("git made %s before the start said it would", d)
+		}
+	}}
+	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "feature", "", true, try)
+	if err != nil || began != got.dir {
+		t.Errorf("worktree = %+v, %v; began = %q, want the folder it made", got, err, began)
+	}
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+func TestDropStartWorktreeRemovesOnlyWhatTheStartMade(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	// A worktree no record names for the start, with no word that it began to make it, is not the start's, and stays with its ignored files.
+	other := filepath.Join(dir, "trees", "owners")
+	gitT(t, dir, "worktree", "add", "-b", "owners", other)
+	if err := os.WriteFile(filepath.Join(other, ".env"), []byte("secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if run.made {
-		t.Errorf("worktree = %+v, want an issue's own worktree left unrecorded", run)
+	if reason := l.dropStartWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "work", "owners", ""); reason != "" || !exists(filepath.Join(other, ".env")) {
+		t.Errorf("drop = %q; want the owner's worktree untouched", reason)
+	}
+	// A record that names another thread's worktree, or the project's own checkout, is refused.
+	taken := madeTree(t, l, dir, "taken", "p/cccccccc")
+	if err := l.threads.made.Add("p", Made{Path: taken, Branch: "taken", Thread: "p/dddddddd", Created: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if reason := l.dropStartWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "dddddddd"}, "work", "taken", ""); reason == "" || !exists(taken) {
+		t.Errorf("drop = %q, taken there: %v; want a refusal that keeps another thread's worktree", reason, exists(taken))
+	}
+	if err := l.threads.made.Add("p", Made{Path: dir, Branch: "main", Thread: "p/eeeeeeee", Created: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if reason := l.dropStartWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "eeeeeeee"}, "work", "main", ""); reason == "" || !exists(filepath.Join(dir, ".git")) {
+		t.Errorf("drop = %q; want a refusal that keeps the project's checkout", reason)
 	}
 }
 
@@ -228,7 +300,7 @@ func TestStopBeforeGitAnswersNeverRunsTheStartInTheProjectFolder(t *testing.T) {
 	proj := project.Project{Name: "p", Dir: dir}
 	stopped, stop := context.WithCancel(t.Context())
 	stop()
-	got, err := l.makeWorktree(stopped, proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login-2", "", true)
+	got, err := l.makeWorktree(stopped, proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login-2", "", true, worktreeTry{})
 	if !errors.Is(err, context.Canceled) || got.dir != "" {
 		t.Errorf("makeWorktree = %+v, %v; want the stop as the error and no folder", got, err)
 	}
@@ -245,7 +317,7 @@ func TestOnlyAFolderThatIsNoRepositoryRunsTheStartInItself(t *testing.T) {
 	l, _, _ := madeRepo(t)
 	plain := t.TempDir()
 	proj := project.Project{Name: "p", Dir: plain}
-	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true)
+	got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true, worktreeTry{})
 	if err != nil || got.dir != plain || got.made {
 		t.Errorf("makeWorktree = %+v, %v; want the project folder, as no repository", got, err)
 	}
@@ -257,7 +329,7 @@ func TestOnlyAFolderThatIsNoRepositoryRunsTheStartInItself(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(broken, ".git"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	got, err = l.makeWorktree(t.Context(), project.Project{Name: "p", Dir: broken}, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true)
+	got, err = l.makeWorktree(t.Context(), project.Project{Name: "p", Dir: broken}, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true, worktreeTry{})
 	if err == nil || got.dir != "" {
 		t.Errorf("makeWorktree in a broken repository = %+v, %v; want an error", got, err)
 	}

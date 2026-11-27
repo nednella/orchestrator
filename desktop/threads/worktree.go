@@ -133,7 +133,10 @@ type workPlace struct {
 // one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is cut by
 // git from base, a commit, or with no base from the local copy of the default branch on origin, with no fetch first. A
 // fresh branch is one the thread's title named, which origin is not asked for.
-func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string, fresh bool) (workPlace, error) {
+//
+// A start that is cut short while git makes its worktree has said so before it began (try.begin, saved with the start), so
+// its retry finds the worktree at that folder, with no mark of another thread, and takes it as its own (try.prior).
+func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string, fresh bool, try worktreeTry) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
 	switch {
 	case ctx.Err() != nil:
@@ -162,9 +165,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		switch {
 		case l.ours(ctx, proj.Key(), own, name.String()):
 			return workPlace{dir: own, branch: branch, made: true}, nil
-		case fresh:
-			// No branch is free to be picked while a worktree has it, so this is one an earlier try made and a quit cut
-			// short before it was recorded.
+		case try.prior != "" && own == try.prior && l.unclaimed(ctx, proj.Key(), own, name.String()):
 			return l.adoptWorktree(ctx, proj, name, own, branch, base)
 		}
 		return workPlace{dir: dir, branch: branch}, nil
@@ -181,7 +182,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	// A branch picked from the title is new, so origin is not asked for it: that would cost a round trip that always fails.
-	branchFound, unreachable, err := l.addWorktree(ctx, proj, dir, branch, !fresh)
+	branchFound, unreachable, err := l.addWorktree(ctx, proj, dir, branch, !fresh, func() { try.began(dir) })
 	if err != nil {
 		return workPlace{}, err
 	}
@@ -190,6 +191,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		note = fmt.Sprintf("Could not reach origin; started from %s as last fetched", l.mainBranch(ctx, proj.Dir))
 	}
 	if !branchFound {
+		try.began(dir)
 		if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
 			return workPlace{}, fmt.Errorf("making the worktree of %s: %w", branch, err)
 		}
@@ -207,6 +209,36 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	return workPlace{dir: dir, branch: branch, made: true, note: note}, nil
+}
+
+// worktreeTry is what a start tells makeWorktree of its earlier tries: prior is the folder one began to make a worktree
+// in, "", and begin hears the folder before git starts to make one.
+type worktreeTry struct {
+	prior string
+	begin func(dir string)
+}
+
+func (t worktreeTry) began(dir string) {
+	if t.begin != nil {
+		t.begin(folder.Canonical(dir))
+	}
+}
+
+// unclaimed says whether nothing says the worktree at dir is another thread's: no live record at its path for another
+// thread, and no mark of another thread in its git folder.
+func (l *Lifecycle) unclaimed(ctx context.Context, key, dir, thread string) bool {
+	if w, ok := l.threads.made.At(key, dir); ok && w.Removed == 0 && w.Thread != thread {
+		return false
+	}
+	gitDir, err := l.linkedGitDir(ctx, dir)
+	if err != nil {
+		return false
+	}
+	marker, err := os.ReadFile(filepath.Join(gitDir, markerFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	return err == nil && strings.TrimSpace(string(marker)) == thread
 }
 
 // adoptWorktree records the worktree at dir, on branch, as the one orchestrator made for the thread, which git made
@@ -234,7 +266,7 @@ func staleCheckout(branch, dir string) error {
 // addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
 // clone has no copy. When neither has the branch it adds nothing and says branchFound false, and unreachable when that
 // is because origin could not be asked.
-func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool) (branchFound, unreachable bool, err error) {
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool, begin func()) (branchFound, unreachable bool, err error) {
 	args := []string{"worktree", "add", "--quiet", dir, branch}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
@@ -253,6 +285,9 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 		return false, false, nil
 	}
 	// Once git has begun to make the worktree it ends, so a stop of the start finds it whole, with its record.
+	if begin != nil {
+		begin()
+	}
 	if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, args...); err != nil {
 		return true, false, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 	}
@@ -292,7 +327,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	if err := l.dropEntry(ctx, proj.Dir, trees, w.Path); err != nil {
 		return err
 	}
-	branchFound, _, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true)
+	branchFound, _, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true, nil)
 	if err != nil {
 		return err
 	}
@@ -464,32 +499,51 @@ func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, d
 	return nil
 }
 
-// dropStartWorktree removes the worktree the start of the thread id made, when the checks of a clean-up pass and no other
-// thread or running terminal is in it, and says why it stays, "" when it went or there was none. The branch stays.
-func (l *Lifecycle) dropStartWorktree(ctx context.Context, id string) string {
-	t, err := l.threads.target(id)
-	if err != nil || !t.made {
+// dropStartWorktree removes the worktree the start of the thread name made, when it is the one orchestrator made for the
+// thread, not the project's own checkout, the checks of a clean-up pass and no other thread or running terminal is in it,
+// and says why it stays, "" when it went or there was none. A worktree that a quit cut short before it was recorded, at
+// making, is recorded first. The branch stays.
+func (l *Lifecycle) dropStartWorktree(ctx context.Context, proj project.Project, name thread.Name, title, branch, making string) string {
+	id, key := name.String(), proj.Key()
+	if _, ok := l.threads.made.Of(key, id); !ok && making != "" && !gone(making) && branch != "" {
+		if trees, err := l.worktrees(ctx, proj.Dir); err == nil && folder.Canonical(trees.byBranch[branch]) == making && l.unclaimed(ctx, key, making, id) {
+			if _, err := l.adoptWorktree(ctx, proj, name, making, branch, ""); err != nil {
+				return err.Error()
+			}
+		}
+	}
+	w, ok := l.threads.made.Of(key, id)
+	if !ok || w.Removed != 0 {
 		return ""
+	}
+	t := target{id: id, title: title, branch: w.Branch, dir: w.Path, proj: proj, made: true}
+	trees, err := l.worktrees(ctx, proj.Dir)
+	if err != nil {
+		return fmt.Sprintf("git could not list the worktrees: %v", err)
+	}
+	if folder.Inside(proj.Dir, w.Path) || trees.main != "" && folder.Inside(trees.main, w.Path) {
+		return fmt.Sprintf("%s holds the project's own checkout, which orchestrator never removes", w.Path)
+	}
+	if !gone(w.Path) && !l.ours(ctx, key, w.Path, id) {
+		return fmt.Sprintf("%s is not the worktree orchestrator made for this thread", w.Path)
 	}
 	plan, reason := l.planFor(ctx, t, nil, false, l.unchanged(ctx, t))
 	if reason != "" || !plan.made {
 		return reason
 	}
 	if gone(plan.worktree) {
-		if trees, err := l.worktrees(ctx, t.proj.Dir); err == nil {
-			if err := l.dropEntry(ctx, t.proj.Dir, trees, plan.worktree); err != nil {
-				return err.Error()
-			}
+		if err := l.dropEntry(ctx, proj.Dir, trees, plan.worktree); err != nil {
+			return err.Error()
 		}
-		if err := l.threads.made.Removed(t.proj.Key(), plan.worktree, time.Now()); err != nil {
+		if err := l.threads.made.Removed(key, plan.worktree, time.Now()); err != nil {
 			log.Printf("orchestrator: recording the worktree %s removed: %v", plan.worktree, err)
 		}
 		return ""
 	}
-	if reason := l.threads.closeShellsIn(ctx, t.proj.Key(), plan.worktree, false); reason != "" {
+	if reason := l.threads.closeShellsIn(ctx, key, plan.worktree, false); reason != "" {
 		return reason
 	}
-	if err := l.removeUnstarted(ctx, t.proj, plan.worktree); err != nil {
+	if err := l.removeUnstarted(ctx, proj, plan.worktree); err != nil {
 		return "git could not remove it: " + util.FirstLine(err.Error())
 	}
 	return ""

@@ -989,3 +989,68 @@ func TestStopDuringTheFetchOfAnIssueBranchNeverMakesALocalOneThatShadowsOrigins(
 		t.Errorf("the worktree is at %s, want origin's issue-7, %s", head, want)
 	}
 }
+
+// quitWithAStartThatWasMakingItsWorktree leaves what a quit does when it comes while git makes the worktree of a new
+// thread: the worktree is there, no record names it, and the saved start says only what it was about to make, if making.
+// It returns the app that starts again, the thread's id and the worktree.
+func quitWithAStartThatWasMakingItsWorktree(t *testing.T, making bool) (*apptest.Harness, string, string) {
+	t.Helper()
+	h := apptest.New(t)
+	repoFixture(t, h)
+	tree := filepath.Join(h.Dir, "trees", "fix-login")
+	gitIn(t, h.Dir, "worktree", "add", "-b", "fix-login", tree)
+	if err := os.WriteFile(filepath.Join(tree, ".env"), []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	place := ""
+	if making {
+		place = realDir(t, tree)
+	}
+	const id = "main/aaaaaaaa"
+	saved := fmt.Sprintf(`{"name":%q,"number":1,"rawTitle":"Fix login","title":"Fix login","text":"make it faster","send":true,"model":{},"access":"supervised","place":"worktree","created":%d,"branch":"fix-login","making":%q,"status":"starting"}`, id, time.Now().UnixMilli(), place)
+	dir := filepath.Join(h.State, "data", "main", "starts")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "aaaaaaaa.json"), []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.BeginQuit()
+	h.App.Stop()
+	return h.Restart(t), id, tree
+}
+
+func TestDeleteWithTheBoxTakesTheWorktreeAQuitLeftUnrecordedMidMake(t *testing.T) {
+	t.Parallel()
+	h, id, tree := quitWithAStartThatWasMakingItsWorktree(t, true)
+	if row, ok := h.Thread(id); !ok || row.Start != threads.StartFailed {
+		t.Fatalf("the row = %+v, %v; want the failed start", row, ok)
+	}
+	if err := h.Threads().DeleteAndWait(id, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(tree) {
+		t.Error("the worktree the start was making is still there after a delete with the box")
+	}
+}
+
+func TestRetryAndDeleteLeaveAWorktreeNoStartSaidItWasMaking(t *testing.T) {
+	t.Parallel()
+	h, id, tree := quitWithAStartThatWasMakingItsWorktree(t, false)
+	if err := h.RetryThreadStart(id); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(id)
+		return row.Start == ""
+	})
+	if records := madeRecords(t, h); len(records) != 0 {
+		t.Errorf("records = %+v, want none: the worktree is not the start's", records)
+	}
+	if err := h.Threads().DeleteAndWait(id, true); err != nil {
+		t.Logf("delete: %v", err)
+	}
+	if !exists(filepath.Join(tree, ".env")) {
+		t.Error("the worktree and its ignored file went, which no start made")
+	}
+}
