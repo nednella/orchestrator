@@ -7,7 +7,7 @@ type Size = 'default' | 'reading' | 'wide' | 'settings'
 const CENTRED: Record<Size, CSSProperties> = {
   default: { top: '12vh', width: 'min(40rem, 92vw)', maxHeight: '70vh', transform: 'translateX(-50%)' },
   reading: { top: '50%', width: 'min(44rem, 92vw)', maxHeight: '84vh', transform: 'translate(-50%, -50%)' },
-  wide: { top: '2.5vh', width: 'min(72rem, 94vw)', maxHeight: '95vh', transform: 'translateX(-50%)' },
+  wide: { top: '50%', width: 'min(60rem, 94vw)', maxHeight: '88vh', transform: 'translate(-50%, -50%)' },
   settings: { top: '50%', width: 'min(80rem, calc(100vw - 3rem))', height: 'min(60rem, calc(100vh - 3rem))', transform: 'translate(-50%, -50%)' },
 }
 
@@ -37,7 +37,7 @@ export function Overlay({ label, size = 'default', onClose, children }: OverlayP
   return (
     <div
       className="fade-in fixed inset-0"
-      style={{ zIndex: 'var(--z-overlay)', background: 'var(--bg-overlay)' }}
+      style={{ zIndex: 'var(--z-overlay)', background: 'var(--bg-dialog-backdrop)', backdropFilter: 'blur(2px)' }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -45,7 +45,7 @@ export function Overlay({ label, size = 'default', onClose, children }: OverlayP
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className={`absolute flex flex-col overflow-hidden border border-line-strong bg-surface shadow-2xl ${size === 'settings' ? 'rounded-2xl' : 'rounded-md'}`}
+        className="absolute flex flex-col overflow-hidden rounded-2xl border border-(--border-dialog) bg-(--bg-raised) shadow-(--shadow-dialog)"
         style={{ ...CENTRED[size], left: '50%' }}
       >
         {children}

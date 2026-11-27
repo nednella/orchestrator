@@ -19,10 +19,10 @@ function split(label: string): { text: string; key: boolean }[] {
 
 export function Keycap({ children }: KeycapProps) {
   return (
-    <span className="keys">
+    <span className="inline-flex items-center gap-1 text-label whitespace-nowrap text-dim">
       {split(children).map((part, i) =>
         part.key ? (
-          <kbd key={i} className="keycap">
+          <kbd key={i} className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-(--bg-palette-key) px-1.5 font-sans text-small font-medium text-soft">
             {part.text}
           </kbd>
         ) : (
