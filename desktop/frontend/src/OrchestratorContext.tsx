@@ -221,12 +221,9 @@ export function useLatestOrchestrator(): () => Orchestrator {
 }
 
 const cleanupToast = (entry: Cleanup): ToastInput => {
-  if (!entry.merged) return { tone: 'info', text: `${entry.issue > 0 ? `#${entry.issue}` : entry.threadTitle} cleaned up` }
-  return {
-    tone: 'done',
-    text: "It's looking good brev",
-    detail: `Shipped! ${entry.threadTitle} · PR #${entry.pr} merged · worktree and branch cleaned up`,
-  }
+  const label = entry.issue > 0 ? `#${entry.issue}` : entry.threadTitle
+  if (!entry.merged) return { tone: 'info', text: `${label} cleaned up` }
+  return { tone: 'success', text: `${label} merged, cleaned up`, detail: 'Worktree and branch removed' }
 }
 
 const WARNING_SOURCES: Record<Warning['source'], string> = { tmux: 'tmux', github: 'GitHub', 'pull requests': 'Pull requests', worktrees: 'Worktrees', config: 'Config', agent: 'Agent' }

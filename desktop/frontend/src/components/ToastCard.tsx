@@ -13,7 +13,6 @@ const GLYPH: Record<Toast['tone'], { color: string; glyph: ReactNode }> = {
   network: { color: 'text-idle', glyph: <WifiOff size={GLYPH_SIZE} /> },
   warning: { color: 'text-idle', glyph: <TriangleAlert size={GLYPH_SIZE} /> },
   success: { color: 'text-finished', glyph: <CircleCheck size={GLYPH_SIZE} /> },
-  done: { color: 'text-finished', glyph: <CircleCheck size={GLYPH_SIZE} /> },
   info: { color: 'text-accent', glyph: <Info size={GLYPH_SIZE} /> },
   evidence: { color: 'text-accent', glyph: <Info size={GLYPH_SIZE} /> },
   waiting: { color: 'text-waiting', glyph: <StateDot state="waiting" /> },

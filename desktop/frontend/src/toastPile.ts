@@ -4,7 +4,7 @@ export type Toast = {
   key: number
   // A toast with the id of one shown replaces it; without one, the same tone, text and detail do.
   id?: string
-  tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'done' | 'success' | 'warning' | 'network'
+  tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'success' | 'warning' | 'network'
   text: string
   detail?: string
   threadId?: string
