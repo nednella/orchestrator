@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/environ"
@@ -130,6 +131,31 @@ func (b *Browsers) stopAgent(ctx context.Context, name thread.Name) error {
 		return fmt.Errorf("stopping the agent-browser of %s: %v: %s", name, err, out)
 	}
 	return nil
+}
+
+// agentRuns says whether the thread's agent-browser daemon runs. It may with no window: any agent-browser command starts
+// it, also one before the window opens, after it closed or after the browser went.
+func (b *Browsers) agentRuns(id string) bool {
+	name, ok := b.agentThread(id)
+	if !ok {
+		return false
+	}
+	pid := b.agentDaemon(name.Token)
+	return pid > 0 && processRuns(pid)
+}
+
+// agentDaemon is the pid in <token>.pid, the file in which agent-browser's daemon of the session token keeps its own;
+// 0 when there is no file or it holds no pid.
+func (b *Browsers) agentDaemon(token string) int {
+	data, err := os.ReadFile(filepath.Join(b.agentDir(), token+".pid"))
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
 }
 
 // Forget closes the thread's window and removes its agent-browser files: the thread is gone.

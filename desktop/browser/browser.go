@@ -774,15 +774,18 @@ func (b *Browsers) Show(ctx context.Context, id string) error {
 }
 
 // Close closes all the thread's pages, and stops the project's browser when no other thread has a window in it. The
-// thread's agent-browser is left bound to no tab.
+// thread's agent-browser is left bound to no tab, its daemon stopped; with no window, only when the daemon runs, so a
+// thread that never ran agent-browser runs no agent-browser close.
 func (b *Browsers) Close(ctx context.Context, id string) {
-	if err := b.bindAgent(ctx, id, ""); err != nil {
-		log.Printf("orchestrator: %v", err)
-	}
 	b.mu.Lock()
 	t := b.tabs[id]
 	delete(b.tabs, id)
 	b.mu.Unlock()
+	if t != nil || b.agentRuns(id) {
+		if err := b.bindAgent(ctx, id, ""); err != nil {
+			log.Printf("orchestrator: %v", err)
+		}
+	}
 	if t == nil {
 		return
 	}

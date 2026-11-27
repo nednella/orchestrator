@@ -131,6 +131,43 @@ func TestOpenCloseAndForgetBindTheThreadsAgentBrowser(t *testing.T) {
 	}
 }
 
+func TestTheEndOfAThreadWithNoWindowRunsNoAgentBrowser(t *testing.T) {
+	t.Parallel()
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
+	b.binary = "/chrome"
+	log := fakeAgentBrowser(t, b)
+	if _, err := b.AgentEnv("p/abcd2345", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	b.Forget(context.Background(), "p/abcd2345")
+	if _, err := os.Stat(log); err == nil {
+		t.Errorf("agent-browser ran for a thread that never opened a window: %q", calls(t, log))
+	}
+	if _, err := os.Stat(filepath.Join(b.agentDir(), "abcd2345.target")); err == nil {
+		t.Error("Forget left the thread's binding")
+	}
+}
+
+func TestTheEndOfAThreadWithNoWindowStopsItsDaemonThatRuns(t *testing.T) {
+	t.Parallel()
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
+	b.binary = "/chrome"
+	log := fakeAgentBrowser(t, b)
+	if _, err := b.AgentEnv("p/abcd2345", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(b.agentDir(), "abcd2345.pid"), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b.Forget(context.Background(), "p/abcd2345")
+	if got, want := calls(t, log), []string{"abcd2345 " + b.agentDir() + " close"}; !slices.Equal(got, want) {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(b.agentDir(), "abcd2345.pid")); err == nil {
+		t.Error("Forget left the daemon's pid file")
+	}
+}
+
 func TestAThreadWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
