@@ -80,3 +80,11 @@ export function onlyChildFolders(entries: FileEntry[]): Map<string, string> {
   for (const [folder, held] of children) if (folder !== '' && held.length === 1 && held[0].dir) only.set(folder, held[0].path)
   return only
 }
+
+// folderRow is the folder that names the tree's row of a folder: a folder that holds only a folder shares one row with
+// it, named by the innermost of them. onlyChild is what onlyChildFolders gives.
+export function folderRow(onlyChild: Map<string, string>, folder: string): string {
+  let row = folder
+  for (let inner = onlyChild.get(row); inner !== undefined; inner = onlyChild.get(row)) row = inner
+  return row
+}

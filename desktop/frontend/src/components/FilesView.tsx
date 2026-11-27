@@ -92,6 +92,10 @@ export function FilesView({ thread }: PanelViewProps) {
                 path={path}
                 entries={entries}
                 onOpen={open}
+                onShowFolder={(folder) => {
+                  close()
+                  setReveal((r) => ({ path: folder, n: (r?.n ?? 0) + 1 }))
+                }}
                 onReveal={(to) => {
                   setTreeOpen(true)
                   writeStored(FILES_TREE_KEY, true)

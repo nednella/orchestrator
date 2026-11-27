@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ancestorsOf, childrenOf, crumbsOf, formatBytes, isMarkdownPath, onlyChildFolders, parentOf, relativeTo, treePath, withFolders, withoutFrontMatter } from './fileTree.ts'
+import { ancestorsOf, childrenOf, crumbsOf, folderRow, formatBytes, isMarkdownPath, onlyChildFolders, parentOf, relativeTo, treePath, withFolders, withoutFrontMatter } from './fileTree.ts'
 import type { FileEntry } from './types.ts'
 
 const file = (path: string, ignored = false): FileEntry => ({ path, dir: false, ignored })
@@ -66,6 +66,15 @@ test('a folder that holds only a folder is known', () => {
     ['a', 'a/b'],
     ['node_modules', 'node_modules/left-pad'],
   ])
+})
+
+test('a folder that holds only a folder shows in the row of the innermost one', () => {
+  const onlyChild = onlyChildFolders(withFolders([file('trees/oxlint/docs/a.md'), file('trees/oxlint/CLAUDE.md'), file('d/e.ts'), file('d/f.ts')]))
+  assert.equal(folderRow(onlyChild, 'trees'), 'trees/oxlint')
+  assert.equal(folderRow(onlyChild, 'trees/oxlint'), 'trees/oxlint')
+  assert.equal(folderRow(onlyChild, 'trees/oxlint/docs'), 'trees/oxlint/docs')
+  assert.equal(folderRow(onlyChild, 'd'), 'd')
+  assert.equal(folderRow(onlyChildFolders(withFolders([file('a/b/c/d.ts')])), 'a'), 'a/b/c', 'a chain of three')
 })
 
 test('the file view takes a path inside the folder as the tree names it', () => {

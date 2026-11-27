@@ -1,10 +1,11 @@
+import type { FileTree as FileTreeModel } from '@pierre/trees'
 import { FileTree, useFileTree, useFileTreeSelector } from '@pierre/trees/react'
 import { ChevronsDownUp, ChevronsUpDown, RefreshCw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, RefObject } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { editorLabel } from '../contextCard'
-import { ancestorsOf, folderHandle, onlyChildFolders, treePath } from '../fileTree'
+import { ancestorsOf, folderHandle, folderRow, onlyChildFolders, treePath } from '../fileTree'
 import { FILE_ICONS, LOADER_ICON } from '../fileIcons'
 import { readStored, writeStored } from '../storage'
 import type { FileListingActions, FileListingState } from '../useFileListing'
@@ -21,6 +22,19 @@ const TREE_CSS = `
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { [data-item-loading] [data-icon-name] { animation: none; } }
 `
+
+// showPath opens the folders on the way to a tree path and the folder it names, makes its row the one selected and
+// scrolls it into view.
+function showPath(model: FileTreeModel, path: string, focus: boolean) {
+  for (const folder of ancestorsOf(path)) folderHandle(model, folder)?.expand()
+  folderHandle(model, path)?.expand()
+  const item = model.getItem(path)
+  if (item && !item.isSelected()) {
+    for (const selected of model.getSelectedPaths()) model.getItem(selected)?.deselect()
+    item.select()
+  }
+  model.scrollToPath(path, { focus, offset: 'center' })
+}
 
 const matchCount = (m: { getSearchMatchingPaths(): readonly string[] }) => m.getSearchMatchingPaths().length
 
@@ -141,13 +155,7 @@ export function FileTreePane({ project, folder, entries, listing, actions, openP
   // The open file is the tree's selected row, its folders open and in view.
   useEffect(() => {
     if (openPath === null || entries.length === 0) return
-    for (const folder of ancestorsOf(openPath)) folderHandle(model, folder)?.expand()
-    const item = model.getItem(openPath)
-    if (item && !item.isSelected()) {
-      for (const selected of model.getSelectedPaths()) model.getItem(selected)?.deselect()
-      item.select()
-    }
-    model.scrollToPath(openPath, { focus: false, offset: 'center' })
+    showPath(model, openPath, false)
   }, [model, openPath, entries])
 
   useEffect(() => {
@@ -156,10 +164,8 @@ export function FileTreePane({ project, folder, entries, listing, actions, openP
       model.focusFirstItem()
       return
     }
-    for (const folder of ancestorsOf(reveal.path)) folderHandle(model, folder)?.expand()
-    const folder = folderHandle(model, `${reveal.path}/`)
-    folder?.expand()
-    model.scrollToPath(folder ? `${reveal.path}/` : reveal.path, { focus: true, offset: 'center' })
+    const row = `${folderRow(latest.current.onlyChild, reveal.path)}/`
+    showPath(model, folderHandle(model, row) ? row : reveal.path, true)
   }, [model, reveal])
 
   const everyFolderOpen = useCallback(
