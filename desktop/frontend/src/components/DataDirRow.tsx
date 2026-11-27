@@ -41,7 +41,7 @@ export function DataDirRow({ dir, fixed }: DataDirRowProps) {
   return (
     <SettingsRow
       title="Data folder"
-      description={`Where orchestrator keeps your notes, media and digests. ${fixed ? 'ORCHESTRATOR_DEV_DATA_DIR sets it, so it cannot change here.' : 'Changing it relaunches orchestrator.'}`}
+      description={`Where orchestrator keeps your notes, media and news. ${fixed ? 'ORCHESTRATOR_DEV_DATA_DIR sets it, so it cannot change here.' : 'Changing it relaunches orchestrator.'}`}
       control={
         <>
           <div className="setting-field flex h-7 w-72 min-w-0 items-center gap-2 px-2.5 text-soft" title={shown}>
