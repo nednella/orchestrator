@@ -21,7 +21,8 @@ const TREE_WIDTH = { default: 256, min: 160, max: 560 }
 const FILE_MIN_WIDTH = 256
 
 // FilesView is the files of the thread's folder, its worktree else the project's, or of the project's on Home: the open
-// file on the left and the tree of the folder on the right, which fills the view while no file is open.
+// file on the left and the tree of the folder on the right, which fills the view while no file is open. Closing the file,
+// with its button or Esc in it, gives the tree the view again.
 export function FilesView({ thread }: PanelViewProps) {
   const { settings, report } = useOrchestrator('settings', 'report')
   const project = useOrchestratorSelector((a) => a.project)
@@ -48,6 +49,7 @@ export function FilesView({ thread }: PanelViewProps) {
     writeStored(name, value)
   }
   const open = (to: string) => pickFile(key, to)
+  const close = () => pickFile(key, null)
   const showTree = path === null || treeOpen
   const maxTree = Math.max(TREE_WIDTH.min, Math.min(TREE_WIDTH.max, room - FILE_MIN_WIDTH))
   const shownTree = Math.min(maxTree, Math.max(TREE_WIDTH.min, treeWidth))
@@ -71,10 +73,18 @@ export function FilesView({ thread }: PanelViewProps) {
     })
   }
 
+  // A menu or a search open in the view takes its Esc first.
+  const onFileKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    e.stopPropagation()
+    close()
+  }
+
   return (
     <div ref={box} className="absolute inset-0 flex" onKeyDown={onKeyDown}>
       {path !== null && (
-        <section className="flex min-w-0 flex-1 flex-col" aria-label="File">
+        <section tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none" aria-label="File" onKeyDown={onFileKeyDown}>
           <FileHeader
             crumbs={
               <FileCrumbs
@@ -99,6 +109,7 @@ export function FilesView({ thread }: PanelViewProps) {
             onRendered={remember(setRendered, FILES_RENDERED_KEY)}
             onWrap={remember(setWrap, FILES_WRAP_KEY)}
             onTree={remember(setTreeOpen, FILES_TREE_KEY)}
+            onClose={close}
           />
           {file?.status === 'loading' && <CenteredSpinner />}
           {file?.status === 'error' && (

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { imageTarget, linkTarget, planPath } from './filesView.ts'
+import { imageTarget, linkTarget, onPicked, pickedFile, pickFile, planPath } from './filesView.ts'
 
 test('a relative markdown link is a file', () => {
   assert.equal(planPath('docs/plan.md'), 'docs/plan.md')
@@ -47,4 +47,18 @@ test('a web, data or absolute image is not one', () => {
   for (const src of ['https://example.com/a.png', 'http://example.com/a.png', '//example.com/a.png', 'data:image/png;base64,AAAA', 'file:///tmp/a.png', '/tmp/a.png', '', '#x']) {
     assert.equal(imageTarget('README.md', src), null, src)
   }
+})
+
+test('a picked file opens in its own view, and null closes it there only', () => {
+  let heard = 0
+  const stop = onPicked(() => heard++)
+  pickFile('thread-a', 'docs/plan.md')
+  pickFile('thread-b', 'README.md')
+  assert.equal(pickedFile('thread-a'), 'docs/plan.md')
+  pickFile('thread-a', null)
+  assert.equal(pickedFile('thread-a'), null)
+  assert.equal(pickedFile('thread-b'), 'README.md')
+  assert.equal(heard, 3, 'each pick and the close are heard')
+  stop()
+  pickFile('thread-b', null)
 })

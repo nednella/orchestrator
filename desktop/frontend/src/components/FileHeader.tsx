@@ -1,4 +1,4 @@
-import { Check, Code, Copy, Eye, FolderTree, WrapText } from 'lucide-react'
+import { Check, Code, Copy, Eye, FolderTree, WrapText, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { editorLabel } from '../contextCard'
 import { useCopied } from '../useCopied'
@@ -20,11 +20,12 @@ type FileHeaderProps = {
   onRendered(rendered: boolean): void
   onWrap(wrap: boolean): void
   onTree(open: boolean): void
+  onClose(): void
 }
 
 // FileHeader is the bar over the open file: the way to it, and buttons that open it in the editor, switch it between its
-// rendered form and its source, wrap its lines, copy it, and show or hide the tree.
-export function FileHeader({ crumbs, editor, rendered, wrap, copyable, treeOpen, onOpenInEditor, onRendered, onWrap, onTree }: FileHeaderProps) {
+// rendered form and its source, wrap its lines, copy it, show or hide the tree, and close it.
+export function FileHeader({ crumbs, editor, rendered, wrap, copyable, treeOpen, onOpenInEditor, onRendered, onWrap, onTree, onClose }: FileHeaderProps) {
   const [copied, copy] = useCopied(copyable ?? '')
   const label = editorLabel(editor)
   return (
@@ -51,6 +52,9 @@ export function FileHeader({ crumbs, editor, rendered, wrap, copyable, treeOpen,
         )}
         <button className={toolButton} title={treeOpen ? 'Hide file explorer' : 'Show file explorer'} aria-label={treeOpen ? 'Hide file explorer' : 'Show file explorer'} aria-pressed={treeOpen} onClick={() => onTree(!treeOpen)}>
           <FolderTree size={14} aria-hidden="true" />
+        </button>
+        <button className={toolButton} title="Close file" aria-label="Close file" onClick={onClose}>
+          <X size={14} aria-hidden="true" />
         </button>
       </div>
     </div>

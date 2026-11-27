@@ -132,6 +132,12 @@ export function FileTreePane({ project, folder, entries, listing, actions, openP
     }
   }, [model, project])
 
+  // A closed file lets go of its row, so that a click on the row opens it again.
+  useEffect(() => {
+    if (openPath !== null) return
+    for (const selected of model.getSelectedPaths()) model.getItem(selected)?.deselect()
+  }, [model, openPath])
+
   // The open file is the tree's selected row, its folders open and in view.
   useEffect(() => {
     if (openPath === null || entries.length === 0) return

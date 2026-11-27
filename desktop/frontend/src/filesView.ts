@@ -55,8 +55,10 @@ const listeners = new Set<() => void>()
 
 export const filesKey = (thread: string | undefined, project: string) => thread ?? `project:${project}`
 
-export function pickFile(key: string, path: string) {
-  picked.set(key, path)
+// pickFile opens the file at path in the Files view of key; null closes the file open there.
+export function pickFile(key: string, path: string | null) {
+  if (path === null) picked.delete(key)
+  else picked.set(key, path)
   listeners.forEach((listener) => listener())
 }
 
