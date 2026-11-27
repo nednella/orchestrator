@@ -1529,6 +1529,10 @@ func (h *Harness) SetThemes(dark, light string) (settings.Settings, error) {
 	return h.settings.SetThemes(dark, light)
 }
 
+func (h *Harness) SetAccents(dark, light string) (settings.Settings, error) {
+	return h.settings.SetAccents(dark, light)
+}
+
 func (h *Harness) SetCleanup(event, mode string) (settings.Settings, error) {
 	return h.settings.SetCleanup(event, mode)
 }

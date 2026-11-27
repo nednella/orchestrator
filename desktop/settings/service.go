@@ -21,6 +21,8 @@ type Store interface {
 	SetTheme(theme string) error
 	Themes() (dark, light string)
 	SetThemes(dark, light string) error
+	Accents() (dark, light string)
+	SetAccents(dark, light string) error
 	TextScale() float64
 	SetTextScale(scale float64) error
 	KeepsAwake() bool
@@ -53,6 +55,8 @@ type Settings struct {
 	Theme        string          `json:"theme"`          // system, light or dark
 	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black, midnight or umber
 	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light or linen
+	DarkAccent   string          `json:"darkAccent"`     // the dark appearance's accent as #rrggbb; "" is the theme's own
+	LightAccent  string          `json:"lightAccent"`    // the light appearance's accent as #rrggbb; "" is the theme's own
 	TextScale    float64         `json:"textScale"`      // a multiple of the default text size
 	KeepAwake    bool            `json:"keepAwake"`      // hold off idle sleep while a thread works, for projects that do not say otherwise
 	Cleanup      project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
@@ -93,10 +97,13 @@ func (s *Service) Settings() Settings {
 	}
 	key := s.project.Current().Key()
 	dark, light := s.store.Themes()
+	darkAccent, lightAccent := s.store.Accents()
 	return Settings{
 		Theme:        theme,
 		DarkTheme:    dark,
 		LightTheme:   light,
+		DarkAccent:   darkAccent,
+		LightAccent:  lightAccent,
 		TextScale:    scale,
 		KeepAwake:    s.store.KeepsAwake(),
 		Cleanup:      s.store.Cleanup(key),
@@ -132,6 +139,17 @@ func (s *Service) SetThemes(dark, light string) (Settings, error) {
 		return Settings{}, fmt.Errorf("light theme must be %s, not %q", strings.Join(project.LightThemes, " or "), light)
 	}
 	return s.saved(s.store.SetThemes(dark, light))
+}
+
+// SetAccents saves the accents of the dark and the light appearance, each #rrggbb or "" for the theme's own.
+func (s *Service) SetAccents(dark, light string) (Settings, error) {
+	if err := project.CheckAccent(dark); err != nil {
+		return Settings{}, fmt.Errorf("dark %w", err)
+	}
+	if err := project.CheckAccent(light); err != nil {
+		return Settings{}, fmt.Errorf("light %w", err)
+	}
+	return s.saved(s.store.SetAccents(dark, light))
 }
 
 // SetCleanup saves how the current project cleans up after an event, "merge" or "close": "auto" or "manual".

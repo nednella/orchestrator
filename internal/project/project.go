@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -67,6 +68,8 @@ type Config struct {
 	Theme        string        `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
 	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default), midnight or umber
 	ThemeLight   string        `yaml:"app_theme_light,omitempty"`   // the light theme: light (default) or linen
+	AccentDark   string        `yaml:"app_accent_dark,omitempty"`   // the dark appearance's accent as #rrggbb; unset is the theme's own
+	AccentLight  string        `yaml:"app_accent_light,omitempty"`  // the light appearance's accent as #rrggbb; unset is the theme's own
 	TextScale    float64       `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
 	EditorApp    string        `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
 	ThreadPlace  string        `yaml:"new_thread_place,omitempty"`  // where a new thread with no issue starts: worktree or project; unset is worktree
@@ -111,6 +114,16 @@ func (c Config) DarkTheme() string { return cmp.Or(c.ThemeDark, DarkThemes[0]) }
 
 // LightTheme is the theme shown in the light appearance.
 func (c Config) LightTheme() string { return cmp.Or(c.ThemeLight, LightThemes[0]) }
+
+var accentColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// CheckAccent rejects an accent that is not a color written #rrggbb, or "", which is unset.
+func CheckAccent(accent string) error {
+	if accent != "" && !accentColor.MatchString(accent) {
+		return fmt.Errorf("accent must be a color written as #rrggbb, not %q", accent)
+	}
+	return nil
+}
 
 // The text sizes the app accepts, as a multiple of its default.
 const (
@@ -176,6 +189,12 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.ThemeLight != "" && !slices.Contains(LightThemes, cfg.ThemeLight) {
 		return Config{}, fmt.Errorf("%s: app_theme_light must be %s, not %q", path, strings.Join(LightThemes, " or "), cfg.ThemeLight)
+	}
+	if err := CheckAccent(cfg.AccentDark); err != nil {
+		return Config{}, fmt.Errorf("%s: app_accent_dark: %w", path, err)
+	}
+	if err := CheckAccent(cfg.AccentLight); err != nil {
+		return Config{}, fmt.Errorf("%s: app_accent_light: %w", path, err)
 	}
 	if cfg.TextScale != 0 {
 		if err := CheckTextScale(cfg.TextScale); err != nil {
@@ -293,6 +312,8 @@ func encode(path string, c Config) ([]byte, error) {
 	syncScalar(root, "app_theme", c.Theme, nil)
 	syncScalar(root, "app_theme_dark", c.ThemeDark, nil)
 	syncScalar(root, "app_theme_light", c.ThemeLight, nil)
+	syncScalar(root, "app_accent_dark", c.AccentDark, nil)
+	syncScalar(root, "app_accent_light", c.AccentLight, nil)
 	syncScalar(root, "app_text_scale", formatScale(c.TextScale), nil)
 	syncScalar(root, "editor_app", c.EditorApp, nil)
 	syncScalar(root, "new_thread_place", c.ThreadPlace, nil)

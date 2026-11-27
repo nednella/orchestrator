@@ -152,6 +152,7 @@ type OrchestratorActions = {
   setOverlay(overlay: Overlay): void
   setTheme(theme: ThemeSetting): Promise<void>
   setThemes(dark: DarkTheme, light: LightTheme): Promise<void>
+  setAccents(dark: string, light: string): Promise<void>
   setCleanup(event: CleanupEvent, mode: CleanupMode): Promise<void>
   setTextScale(scale: number): Promise<void>
   setKeepAwake(on: boolean): Promise<void>
@@ -297,7 +298,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
-  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
+  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', darkAccent: '', lightAccent: '', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
   const [shells, setShells] = useState<Shell[]>([])
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })
@@ -1097,6 +1098,9 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       },
       async setThemes(dark, light) {
         setSettings(await api.setThemes(dark, light))
+      },
+      async setAccents(dark, light) {
+        setSettings(await api.setAccents(dark, light))
       },
       async setCleanup(event, mode) {
         setSettings(await api.setCleanup(event, mode))

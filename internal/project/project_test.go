@@ -164,7 +164,7 @@ func TestLoadDataDir(t *testing.T) {
 
 func TestSaveRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "new", "config.yaml")
-	want := Config{Projects: []Project{
+	want := Config{AccentDark: "#f47db9", AccentLight: "#145ec1", Projects: []Project{
 		{Name: "a", Dir: "/srv/a", OnNote: "/plan {text}", QueueSections: []Section{{Name: "Go", Labels: []string{"go"}, Actions: []Action{{Name: "Work", Command: "/x {n}"}}}}},
 		{Name: "b", Dir: "/srv/b"},
 	}}
@@ -422,6 +422,61 @@ func TestThemeKeysValidate(t *testing.T) {
 	cfg, err = load("projects: []\n")
 	if err != nil || cfg.DarkTheme() != "black" || cfg.LightTheme() != "light" {
 		t.Errorf("defaults = %q, %q, %v", cfg.DarkTheme(), cfg.LightTheme(), err)
+	}
+}
+
+func TestAccentKeysValidate(t *testing.T) {
+	load := func(yaml string) (Config, error) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	cfg, err := load("app_accent_dark: \"#f47db9\"\napp_accent_light: '#BE222A'\n")
+	if err != nil || cfg.AccentDark != "#f47db9" || cfg.AccentLight != "#BE222A" {
+		t.Errorf("accents = %q, %q, %v", cfg.AccentDark, cfg.AccentLight, err)
+	}
+	for _, bad := range []string{"pink", "#fff", "f47db9", "#f47db9ff", "#g47db9", " #f47db9"} {
+		if _, err := load("app_accent_dark: \"" + bad + "\"\n"); err == nil || !strings.Contains(err.Error(), "app_accent_dark") || !strings.Contains(err.Error(), "#rrggbb") {
+			t.Errorf("dark %q: err = %v, want one naming app_accent_dark and #rrggbb", bad, err)
+		}
+		if _, err := load("app_accent_light: \"" + bad + "\"\n"); err == nil || !strings.Contains(err.Error(), "app_accent_light") {
+			t.Errorf("light %q: err = %v, want one naming app_accent_light", bad, err)
+		}
+	}
+}
+
+func TestAccentsSurviveASave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("app_theme_dark: umber\nprojects: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.AccentDark, cfg.AccentLight = "#f47db9", "#145ec1"
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Load(path); err != nil || got.AccentDark != "#f47db9" || got.AccentLight != "#145ec1" || got.ThemeDark != "umber" {
+		t.Errorf("after a save = %+v, %v", got, err)
+	}
+	cfg.AccentDark = ""
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "app_accent_dark") {
+		t.Errorf("an unset accent stays in the file:\n%s", data)
+	}
+	if got, err := Load(path); err != nil || got.AccentDark != "" || got.AccentLight != "#145ec1" {
+		t.Errorf("after unsetting the dark accent = %q, %q, %v", got.AccentDark, got.AccentLight, err)
 	}
 }
 

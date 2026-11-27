@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { applyAccent } from './accent'
 import { useOrchestrator } from './OrchestratorContext'
 import type { FocusTarget } from './OrchestratorContext'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
@@ -104,6 +105,7 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   const systemAppearance = useSystemAppearance()
   const appearance = settings.theme === 'system' ? systemAppearance : settings.theme
   const theme = themeHalves(settings)[appearance]
+  const accent = appearance === 'dark' ? settings.darkAccent : settings.lightAccent
   const [stored, setStored] = useState(() => readStored<Partial<AllPrefs>>(LAYOUT_KEY, {}))
   // Sidebar widths were saved per band before: until a width is saved on its own, the band the window opens in gives
   // the width the owner set. A saved null is a reset to the default.
@@ -122,6 +124,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useLayoutEffect(() => {
+    applyAccent(document.documentElement.style, accent)
+  }, [accent])
 
   const prefs: BandPrefs = { ...fresh(), ...stored[band] }
   const root = 16 * scale

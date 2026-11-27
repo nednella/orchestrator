@@ -218,6 +218,9 @@ export type Settings = {
   theme: ThemeSetting
   darkTheme: DarkTheme
   lightTheme: LightTheme
+  // darkAccent and lightAccent are the accent each appearance shows, as #rrggbb; '' is the theme's own.
+  darkAccent: string
+  lightAccent: string
   textScale: number
   keepAwake: boolean
   cleanup: CleanupSettings

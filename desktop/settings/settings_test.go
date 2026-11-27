@@ -310,3 +310,36 @@ func TestProjectsDir(t *testing.T) {
 		t.Errorf("unsetting left the key in the file:\n%s", data)
 	}
 }
+
+func TestAccents(t *testing.T) {
+	h := apptest.New(t)
+	if got := h.Settings(); got.DarkAccent != "" || got.LightAccent != "" {
+		t.Fatalf("default accents = %q, %q, want the themes' own", got.DarkAccent, got.LightAccent)
+	}
+	if got, err := h.SetAccents("#f47db9", ""); err != nil || got.DarkAccent != "#f47db9" || got.LightAccent != "" {
+		t.Fatalf("SetAccents(#f47db9, \"\") = %+v, %v", got, err)
+	}
+	if got, err := h.SetAccents("#f47db9", "#be222a"); err != nil || got.LightAccent != "#be222a" {
+		t.Fatalf("SetAccents(#f47db9, #be222a) = %+v, %v", got, err)
+	}
+	if cfg, err := project.Load(h.Conf); err != nil || cfg.AccentDark != "#f47db9" || cfg.AccentLight != "#be222a" {
+		t.Errorf("config = %q, %q, %v", cfg.AccentDark, cfg.AccentLight, err)
+	}
+	if got := h.Restart(t).Settings(); got.DarkAccent != "#f47db9" || got.LightAccent != "#be222a" {
+		t.Errorf("accents after restart = %q, %q", got.DarkAccent, got.LightAccent)
+	}
+	for _, bad := range [][2]string{{"pink", ""}, {"", "#fff"}, {"#f47db9ff", ""}, {"", "be222a"}} {
+		if _, err := h.SetAccents(bad[0], bad[1]); err == nil || !strings.Contains(err.Error(), "#rrggbb") {
+			t.Errorf("SetAccents(%q, %q) = %v, want an error naming #rrggbb", bad[0], bad[1], err)
+		}
+	}
+	if got := h.Settings(); got.DarkAccent != "#f47db9" || got.LightAccent != "#be222a" {
+		t.Errorf("a refused accent changed the settings to %q, %q", got.DarkAccent, got.LightAccent)
+	}
+	if got, err := h.SetAccents("", ""); err != nil || got.DarkAccent != "" || got.LightAccent != "" {
+		t.Fatalf("SetAccents to the themes' own = %+v, %v", got, err)
+	}
+	if cfg, err := project.Load(h.Conf); err != nil || cfg.AccentDark != "" || cfg.AccentLight != "" {
+		t.Errorf("config after the themes' own = %q, %q, %v", cfg.AccentDark, cfg.AccentLight, err)
+	}
+}

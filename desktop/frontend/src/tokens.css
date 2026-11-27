@@ -608,3 +608,24 @@
   --file-icon-vitest: oklch(0.566 0.16 138.8);
   --file-icon-language: oklch(0.514 0.033 268);
 }
+
+/* The accents the settings offer each appearance, saved to the config as written here. Picked in oklch: the dark ones at
+   a lightness of 0.70 to 0.76, which reads at 5.5:1 or more on every dark theme, the light ones at 0.50 to 0.53, 4.6:1
+   or more on Light and Linen. */
+:root {
+  --accent-preset-dark-blue: #65a7fa;
+  --accent-preset-dark-violet: #ac8ff8;
+  --accent-preset-dark-pink: #f47db9;
+  --accent-preset-dark-red: #fa686a;
+  --accent-preset-dark-orange: #f99549;
+  --accent-preset-dark-green: #58cd78;
+  --accent-preset-light-blue: #145ec1;
+  --accent-preset-light-violet: #6c3fc8;
+  --accent-preset-light-pink: #bc1e72;
+  --accent-preset-light-red: #be222a;
+  --accent-preset-light-orange: #a94e00;
+  --accent-preset-light-green: #21763c;
+  /* The text on an accent the owner picked: black on a light one, white on a dark one. */
+  --text-on-light-accent: #000;
+  --text-on-dark-accent: #fff;
+}

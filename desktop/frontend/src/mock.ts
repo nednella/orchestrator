@@ -1079,7 +1079,7 @@ export function createMock(params: URLSearchParams) {
   // The app's first gh calls, such as the PR fetch, start when it does.
   if (flags.offline) github(undefined, 1000).catch(() => {})
 
-  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code', projectsDir: '' }
+  let settings: Settings = { theme: 'system', darkTheme: 'black', lightTheme: 'light', darkAccent: '', lightAccent: '', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '~/.local/share/orchestrator', dataDirFixed: false, editorApp: 'Visual Studio Code', projectsDir: '' }
 
   // limitsNow are the plan limits of each provider as the Go side would read them at the time.
   const limitsNow = (): Limits[] => {
@@ -1634,6 +1634,13 @@ export function createMock(params: URLSearchParams) {
     },
     SetThemes: async (darkTheme: DarkTheme, lightTheme: LightTheme) => {
       settings = { ...settings, darkTheme, lightTheme }
+      return settings
+    },
+    SetAccents: async (darkAccent: string, lightAccent: string) => {
+      for (const [mode, accent] of [['dark', darkAccent], ['light', lightAccent]]) {
+        if (accent && !/^#[0-9a-f]{6}$/i.test(accent)) throw `${mode} accent must be a color written as #rrggbb, not "${accent}"`
+      }
+      settings = { ...settings, darkAccent, lightAccent }
       return settings
     },
     SetCleanup: async (event: CleanupEvent, mode: CleanupMode) => {

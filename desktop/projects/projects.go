@@ -118,6 +118,21 @@ func (r *Registry) SetThemes(dark, light string) error {
 	})
 }
 
+// Accents are the accents of the dark and the light appearance, "" for the theme's own.
+func (r *Registry) Accents() (dark, light string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.AccentDark, r.cfg.AccentLight
+}
+
+// SetAccents saves the accents of the dark and the light appearance; "" is the theme's own.
+func (r *Registry) SetAccents(dark, light string) error {
+	return r.edit(func(c *project.Config) error {
+		c.AccentDark, c.AccentLight = dark, light
+		return nil
+	})
+}
+
 // EditorApp is the macOS app that opens a thread's folder.
 func (r *Registry) EditorApp() string {
 	r.mu.Lock()

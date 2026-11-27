@@ -109,6 +109,7 @@ type Backend = {
   Settings(): Promise<Settings>
   SetTheme(theme: ThemeSetting): Promise<Settings>
   SetThemes(dark: DarkTheme, light: LightTheme): Promise<Settings>
+  SetAccents(dark: string, light: string): Promise<Settings>
   SetCleanup(event: CleanupEvent, mode: CleanupMode): Promise<Settings>
   SetTextScale(scale: number): Promise<Settings>
   SetKeepAwake(on: boolean): Promise<Settings>
@@ -152,7 +153,7 @@ const namespaces = {
   update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'NewReleaseNotes', 'ReleaseNotes'],
   limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
-  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
+  settings: ['Settings', 'SetTheme', 'SetThemes', 'SetAccents', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
 }
 
 // The Go side has no method for this: the window runtime opens web addresses itself.
@@ -285,6 +286,7 @@ export const api = {
   settings: () => backend.Settings(),
   setTheme: (theme: ThemeSetting) => backend.SetTheme(theme),
   setThemes: (dark: DarkTheme, light: LightTheme) => backend.SetThemes(dark, light),
+  setAccents: (dark: string, light: string) => backend.SetAccents(dark, light),
   setCleanup: (event: CleanupEvent, mode: CleanupMode) => backend.SetCleanup(event, mode),
   setTextScale: (scale: number) => backend.SetTextScale(scale),
   setKeepAwake: (on: boolean) => backend.SetKeepAwake(on),

@@ -1,4 +1,5 @@
 import { useLayout } from '../LayoutContext'
+import { AccentSettings } from './AccentSettings'
 import { ColorSchemeTiles } from './ColorSchemeTiles'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
@@ -17,6 +18,8 @@ export function AppearanceSettings() {
           <ColorSchemeTiles />
           <h3 className={`${heading} min-h-8 pt-5`}>Themes</h3>
           <ThemeCards />
+          <h3 className={`${heading} min-h-8 pt-5`}>Accent</h3>
+          <AccentSettings />
         </div>
       </SettingsSection>
       <SettingsSection title="Interface">
