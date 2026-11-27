@@ -27,34 +27,26 @@ jobs:
               - 'internal/prompts/**'
               - 'desktop/browser/**'
               - 'Makefile'
+              - 'scripts/go-test-shard.sh'
               - '.github/workflows/ci.yml'
             frontend:
               - 'desktop/frontend/**'
               - '.github/workflows/ci.yml'
 
   go-test:
-    name: Test Go (${{ matrix.name }})
+    name: Test Go (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: changes
     if: needs.changes.outputs.go == 'true'
     runs-on: macos-latest
     # The runner has no Chrome for Testing; its Google Chrome is no one's default browser.
     env:
       ORCHESTRATOR_BROWSER: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+      SHARD: ${{ matrix.shard }} ${{ strategy.job-total }}
     strategy:
       fail-fast: false
-      # threads and browser take most of the time, so each gets a runner of its own;
-      # issues, projects and notes come next, so they share one.
+      # scripts/go-test-shard.sh says what each shard runs, and refuses a shard count other than its table's.
       matrix:
-        include:
-          - name: threads
-            packages: ./desktop/threads
-          - name: browser
-            packages: ./desktop/browser
-          - name: issues, projects, notes
-            packages: ./desktop/issues ./desktop/projects ./desktop/notes
-          - name: other
-            packages: $(go list -tags stub ./... | grep -vE '/desktop/(threads|browser|issues|projects|notes)$')
-            vet: true
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -63,17 +55,20 @@ jobs:
       # The tests' plain agent is bash; macOS's own 3.2 has no bracketed paste, so pasted line breaks would run.
       - run: brew install tmux bash
       # orchestrator writes a file of agent-browser's own, so the pinned version must pass the agent-browser test.
-      - if: matrix.name == 'browser'
-        run: make agent-browser && echo "ORCHESTRATOR_AGENT_BROWSER=$PWD/bin/agent-browser" >> "$GITHUB_ENV"
-      - if: matrix.vet
+      - name: Install agent-browser on the shard of the browser tests
+        run: |
+          if scripts/go-test-shard.sh $SHARD list | grep -qx ./desktop/browser; then
+            make agent-browser && echo "ORCHESTRATOR_AGENT_BROWSER=$PWD/bin/agent-browser" >> "$GITHUB_ENV"
+          fi
+      - if: matrix.shard == strategy.job-total
         run: go vet -tags stub ./...
       # -p limits builds too, so compile every package in parallel first, running no tests;
       # the -p 1 step below then finds them in the build cache.
-      - run: go test -tags stub -race -run '^$' ${{ matrix.packages }}
+      - run: go test -tags stub -race -run '^$' $(scripts/go-test-shard.sh $SHARD list)
       # -p 1: many packages' tests start a real tmux server, real PTYs or a real headless
       # browser; -p 2 still let a different one of them miss its budget each run on
       # macos-latest's few vCPUs. One package at a time trades minutes for reliability.
-      - run: go test -tags stub -race -p 1 ${{ matrix.packages }}
+      - run: scripts/go-test-shard.sh $SHARD test -tags stub -race -p 1
 
   # The ruleset on main requires a check by this name.
   go:
