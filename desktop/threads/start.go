@@ -14,6 +14,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/term"
@@ -56,6 +57,8 @@ type starting struct {
 	setupTried bool // the set-up command was looked at in this try: a retry looks again
 	restore    func()
 	delivered  bool
+	sending    string // what a try handed to the host and has no reply for: sendingFirst or sendingHeld, else ""
+	sentBefore int    // how many such messages the host's chat log held then
 
 	// shown, under mu
 	info     term.Info
@@ -183,6 +186,12 @@ func startFailure(err error) string {
 	return util.FirstLine(err.Error())
 }
 
+// What a try of a start was sending when it ended without the host's reply.
+const (
+	sendingFirst = "first"
+	sendingHeld  = "held"
+)
+
 // errNotDelivered is the error of a first message the agent did not take.
 var errNotDelivered = errors.New("the agent did not take the first message in time")
 
@@ -223,14 +232,24 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 			go s.giveHost(st.app, st.name, st.text, st.send)
 			return nil
 		}
-		if err := toHost(ctx, s.hostSocket(st.name), st.text, st.send, hostWait); err != nil {
-			log.Printf("orchestrator: thread %s did not get its first prompt: %v", st.name, err)
-			if refused := (*host.Refused)(nil); errors.As(err, &refused) {
-				return err
+		first := host.Message{Text: st.text}
+		// A reply the app did not get may have come after the host took the message: it is sent once, ever. A draft
+		// replaces the draft it left, so it may go again.
+		if st.send && s.hostTook(st, sendingFirst, first) {
+			s.progress(st, func() { st.delivered, st.sending = true, "" })
+		} else {
+			before := s.hostHolds(st.name, first)
+			s.progress(st, func() { st.sending, st.sentBefore = sendingFirst, before })
+			if err := toHost(ctx, s.hostSocket(st.name), st.text, st.send, hostWait); err != nil {
+				log.Printf("orchestrator: thread %s did not get its first prompt: %v", st.name, err)
+				if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+					s.progress(st, func() { st.sending = "" })
+					return err
+				}
+				return errNotDelivered
 			}
-			return errNotDelivered
+			s.progress(st, func() { st.delivered, st.sending = true, "" })
 		}
-		st.delivered = true
 	}
 	return s.deliverQueued(ctx, st)
 }
@@ -291,18 +310,51 @@ func (s *Threads) deliverQueued(ctx context.Context, st *starting) error {
 		}
 		next := st.queue[0]
 		s.mu.Unlock()
-		if _, err := host.SendMessage(ctx, s.hostSocket(st.name), next); err != nil {
-			log.Printf("orchestrator: thread %s did not get a message sent while it started: %v", st.name, err)
-			if refused := (*host.Refused)(nil); errors.As(err, &refused) {
-				return err
+		if !s.hostTook(st, sendingHeld, next) {
+			before := s.hostHolds(st.name, next)
+			s.progress(st, func() { st.sending, st.sentBefore = sendingHeld, before })
+			if _, err := host.SendMessage(ctx, s.hostSocket(st.name), next); err != nil {
+				log.Printf("orchestrator: thread %s did not get a message sent while it started: %v", st.name, err)
+				if refused := (*host.Refused)(nil); errors.As(err, &refused) {
+					s.progress(st, func() { st.sending = "" })
+					return err
+				}
+				return errNotDelivered
 			}
-			return errNotDelivered
 		}
 		s.mu.Lock()
-		st.queue = st.queue[1:]
+		st.queue, st.sending = st.queue[1:], ""
 		s.sync()
 		s.mu.Unlock()
 	}
+}
+
+// progress changes what a start's own goroutine has done, which the list and a saved start read under mu.
+func (s *Threads) progress(st *starting, change func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	change()
+}
+
+// hostHolds is how many messages like m the thread's chat log, which its host keeps, holds as the user's or queued.
+func (s *Threads) hostHolds(name thread.Name, m host.Message) int {
+	events, err := chat.ReadLog(s.chatLogPath(name), 0, chat.KindUser, chat.KindQueued)
+	if err != nil {
+		return 0
+	}
+	ids := map[string]bool{}
+	for _, e := range events {
+		if e.Text == m.Text && e.From == m.From {
+			ids[e.ID] = true
+		}
+	}
+	return len(ids)
+}
+
+// hostTook says whether a try that handed m to the host and got no reply, as the start's record says, was in fact
+// taken: the host's log holds more such messages than before the try.
+func (s *Threads) hostTook(st *starting, what string, m host.Message) bool {
+	return st.sending == what && s.hostHolds(st.name, m) > st.sentBefore
 }
 
 // place finds or makes the folder the thread runs in, and the chat a fork starts with. One place at a time, so two
