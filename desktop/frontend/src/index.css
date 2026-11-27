@@ -224,33 +224,30 @@
     outline-offset: 2px;
   }
 
-  /* A setting's text field and select trigger: a 28px box that rings inside when it has the focus. */
+  /* A text field, or a select trigger in Settings: a rounded box that rings inside when it has the focus. */
+  .field,
   .setting-field {
     border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
     background: var(--bg-segment);
     box-shadow: var(--shadow-pill);
-    font-size: var(--fs-body);
   }
 
-  .setting-field:focus-visible {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: var(--shadow-pill), inset 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+  .setting-field {
+    font-size: var(--fs-body);
   }
 
   .field {
     height: 1.875rem;
     min-width: 0;
     padding: 0 0.5rem;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    background: var(--bg-app);
-    outline: none;
   }
 
-  .field:focus {
+  .field:focus-visible,
+  .setting-field:focus-visible {
+    outline: none;
     border-color: var(--accent);
+    box-shadow: var(--shadow-pill), inset 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
   .composer {
