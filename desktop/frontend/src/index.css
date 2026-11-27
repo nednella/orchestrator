@@ -1176,6 +1176,9 @@
     --trees-fg-override: var(--text);
     --trees-fg-muted-override: var(--text-dim);
     --trees-bg-muted-override: var(--bg-file-hover);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
     --trees-selected-bg-override: var(--bg-file-selected);
     --trees-border-color-override: var(--border-file);
     --trees-border-radius-override: var(--radius-md);
@@ -1191,15 +1194,17 @@
     min-width: 0;
     max-width: 100%;
     margin: 0 0 0.75rem;
-    border-radius: var(--radius-md);
-    background: var(--bg-code);
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--code-bg);
   }
 
   .chat-code-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.25rem 0.5rem 0 0.75rem;
+    margin: -0.4rem -0.5rem 0.1rem 0;
     color: var(--text-soft);
     font-size: var(--fs-small);
   }
