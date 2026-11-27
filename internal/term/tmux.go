@@ -142,22 +142,40 @@ func (t *Tmux) cleanEnv() []string {
 // ListAll returns the agent sessions and the shell sessions.
 // No running server means no sessions; any other failure is an error, because
 // callers must not read it as "everything ended".
+//
+// Under load tmux has printed a session's line cut short, with its newline and the other lines whole. A list with
+// such a line is read again, and is an error when it stays so: dropping the line would end the thread it names.
 func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
+	const tries = 3
+	for try := 1; ; try++ {
+		infos, shells, short, err := t.listOnce(ctx)
+		if !short {
+			return infos, shells, err
+		}
+		if try == tries {
+			return nil, nil, errors.New("tmux list-sessions printed a session cut short")
+		}
+	}
+}
+
+// listOnce is one list-sessions, and whether one of its lines was cut short.
+func (t *Tmux) listOnce(ctx context.Context) (infos []Info, shells []Shell, short bool, err error) {
 	const fields = 16
 	// The process name comes last, so a tab in it stays in its own field.
 	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+sideOption+"}\t#{"+fastOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
-			return nil, nil, nil
+			return nil, nil, false, nil
 		}
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	var infos []Info
-	var shells []Shell
 	for line := range strings.SplitSeq(out, "\n") {
 		f := strings.SplitN(line, "\t", fields)
 		if len(f) != fields {
+			if line != "" {
+				return nil, nil, true, nil
+			}
 			continue
 		}
 		name, err := thread.ParseName(f[0])
@@ -180,7 +198,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 		info.PID, _ = strconv.Atoi(f[10])
 		infos = append(infos, info)
 	}
-	return infos, shells, nil
+	return infos, shells, false, nil
 }
 
 // ShellPaths are the shell sessions with the folder each is in now: a shell's folder

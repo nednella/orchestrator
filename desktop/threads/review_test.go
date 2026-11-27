@@ -33,7 +33,8 @@ case " $* " in
   *" new-session "*) if [ -e %[1]s/fail-new ]; then echo "no room for a session" >&2; exit 1; fi ;;
   *" list-sessions "*)
     if [ -e %[1]s/fail-list ]; then echo "error connecting to /tmp/x (Permission denied)" >&2; exit 1; fi
-    if [ -e %[1]s/fail-slow-list ]; then out=$(%[2]s "$@"); rc=$?; sleep 0.4; printf '%%s\n' "$out"; exit $rc; fi ;;
+    if [ -e %[1]s/fail-slow-list ]; then out=$(%[2]s "$@"); rc=$?; sleep 0.4; printf '%%s\n' "$out"; exit $rc; fi
+    if [ -e %[1]s/fail-cut-list ]; then out=$(%[2]s "$@"); rc=$?; printf '%%s\n' "$out" | awk -F'\t' -v id="$(cat %[1]s/fail-cut-list)" 'BEGIN{OFS="\t"} $1==id {print $1,$2,$3,$4,$5,$6,""; next} {print}'; exit $rc; fi ;;
   *"@orchestrator-issue"*) if [ -e %[1]s/fail-issue ]; then echo "no space for the option" >&2; exit 1; fi ;;
   *"@orchestrator-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
   *" kill-session "*) if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi ;;
@@ -59,6 +60,22 @@ func (f fakeTmux) fail(t *testing.T, call string, on bool) {
 		return
 	}
 	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// cut makes list-sessions print the line of the session id cut short after its first fields, as tmux has under load,
+// or whole again when id is "".
+func (f fakeTmux) cut(t *testing.T, id string) {
+	t.Helper()
+	path := filepath.Join(f.dir, "fail-cut-list")
+	if id == "" {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if err := os.WriteFile(path, []byte(id), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -129,6 +146,42 @@ func TestRefreshRevivesAThreadTmuxStillLists(t *testing.T) {
 	}
 	if rec, _ := bus.ReadState(h.State, s.ID); rec.State == "settled" {
 		t.Error("the saved ended record outlived the revival")
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestACutShortSessionLineEndsNothing(t *testing.T) {
+	h := newHarness(t)
+	fake := newFakeTmux(t)
+	s, err := h.StartThread("runs on", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := h.StartThread("whole", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.cut(t, s.ID)
+	for range 3 {
+		h.Threads().Refresh()
+		for _, id := range []string{s.ID, other.ID} {
+			if got := stateOf(h, id); got != "idle" {
+				t.Fatalf("a list with a line cut short made thread %s %s", id, got)
+			}
+		}
+	}
+	if settled := h.Rec.Settled(); len(settled) != 0 {
+		t.Errorf("threads settled although every session runs: %v", settled)
+	}
+
+	fake.cut(t, "")
+	tmuxRun(t, h, "kill-session", "-t", "="+s.ID+":")
+	h.Threads().Refresh()
+	if got := stateOf(h, s.ID); got != "settled" {
+		t.Errorf("a thread whose session is gone is %s", got)
+	}
+	if got := stateOf(h, other.ID); got != "idle" {
+		t.Errorf("the thread whose session runs is %s", got)
 	}
 }
 
