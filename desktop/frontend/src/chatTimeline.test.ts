@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { EMPTY_CHAT, mergeEvents } from './chatEvents.ts'
-import { agentList, approvalKind, buildTimeline } from './chatTimeline.ts'
+import { agentList, approvalKind, buildTimeline, liveTimeline, loggedTimeline } from './chatTimeline.ts'
 import type { TimelineItem } from './chatTimeline.ts'
 import type { ChatEvent } from './types.ts'
 
@@ -676,6 +676,31 @@ test("a subagent's approval with no row of its own still shows, and waits", () =
   const nested = buildTimeline([...asking.slice(0, -1), ...log(from('a1', agentCall('n1', 'Look deeper')), from('n1', approval('r2', 'Bash', { command: 'ls' }, 's2')), message('msg_9', 'Still here.')).map((e) => ({ ...e, seq: e.seq + asking.length }))], {}, 'main/t1')
   assert.deepEqual(kinds(nested.items), ['user', 'working', 'agent', 'approval', 'reply'], "a subagent's subagent asks under the row it shows in")
   assert.equal(nested.pending?.request, 'r2')
+})
+
+test('one logged timeline takes each streamed text in turn, as a build from the log does', () => {
+  const events = log(
+    user('u1', 'Fix it'),
+    message('msg_1', 'Done.'),
+    turnEnd(),
+    user('u2', 'Now the rest'),
+    agentCall('a1', 'Look'),
+    from('a1', toolUse('s1', 'Write', { file_path: 'sub.txt' })),
+    from('a1', approval('r1', 'Write', { file_path: 'sub.txt' }, 's1')),
+    message('msg_2', 'Waiting on it.'),
+    toolUse('t1', 'Read'),
+  )
+  const logged = loggedTimeline(events)
+  const before = structuredClone(logged)
+  for (const [live, thinking] of [
+    [{ msg_3: 'The sub' }, {}],
+    [{}, { msg_3: 'Now I can ' }],
+    [{ msg_2: ' And more', msg_3: 'The subagent wrote it.' }, {}],
+    [{}, {}],
+  ] as Record<string, string>[][]) {
+    assert.deepEqual(liveTimeline(logged, live, 'main/t1', thinking), buildTimeline(events, live, 'main/t1', thinking), JSON.stringify([live, thinking]))
+  }
+  assert.deepEqual(logged, before, 'the streamed text leaves the logged timeline as it was')
 })
 
 test('an approval in a log from before the host named the subagent finds it by its call', () => {

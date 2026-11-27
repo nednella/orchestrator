@@ -143,9 +143,29 @@ const answersOf = (input: unknown): Record<string, string> | null => {
   return answers && typeof answers === 'object' ? (answers as Record<string, string>) : null
 }
 
+// LoggedTimeline is what a thread's logged events make of its chat, before the text streamed since: the items of the
+// turns that ended, the turn that runs, and what the chat waits on. liveTimeline never changes it, so a streamed delta,
+// which logs nothing, builds again only the turn that runs.
+export type LoggedTimeline = {
+  items: TimelineItem[]
+  running: Turn | null
+  // The subagents' approvals that wait, oldest first, each with the Agent call of the subagent that asks.
+  agentAsks: { agent: string; item: ApprovalItem }[]
+  waiting: Approval | null
+  interrupted: boolean
+  // The subagents a turn that ended waits on before Claude's next turn goes on with it.
+  subagents: number
+  // When the last event came: the time of a reply that has only streamed so far.
+  lastAt: number
+} & Pick<Timeline, 'queued' | 'turnOpen' | 'agentsRunning' | 'commands'>
+
 // buildTimeline turns a thread's logged events, and the text its messages and their thinking have streamed so far,
 // into what its chat shows. thread is the thread's id, for the pending approval.
 export function buildTimeline(events: ChatEvent[], live: Record<string, string>, thread = '', thinking: Record<string, string> = {}): Timeline {
+  return liveTimeline(loggedTimeline(events), live, thread, thinking)
+}
+
+export function loggedTimeline(events: ChatEvent[]): LoggedTimeline {
   const items: TimelineItem[] = []
   const calls = new Map<string, ToolCall>()
   const asks = new Map<string, AskItem>()
@@ -484,28 +504,44 @@ export function buildTimeline(events: ChatEvent[], live: Record<string, string>,
   }
 
   const running = turn as Turn | null
-  if (running) items.push(...unfolded(running, live, thinking, events.at(-1)?.at ?? 0))
+  const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
+  return {
+    items,
+    running,
+    agentAsks: asked.flatMap((a) => (a.agent && !a.answered && a.item ? [{ agent: a.agent, item: a.item }] : [])),
+    waiting: asked.find(unanswered) ?? null,
+    interrupted,
+    subagents: held === null ? 0 : tasks.filter((t) => t.works).length,
+    lastAt: events.at(-1)?.at ?? 0,
+    queued: [...queued.values()],
+    turnOpen: running !== null && held === null,
+    agentsRunning: [...agents.values()].some((a) => a.state === 'running'),
+    commands,
+  }
+}
+
+// liveTimeline puts the text the turn that runs has streamed so far, its messages' and their thinking's, on the logged
+// timeline, which it leaves as it was.
+export function liveTimeline(log: LoggedTimeline, live: Record<string, string>, thread = '', thinking: Record<string, string> = {}): Timeline {
+  const { running } = log
+  const items = running ? [...log.items, ...unfolded(running, live, thinking, log.lastAt)] : [...log.items]
   // A subagent's approval shows after its row until it is answered, or at the end when the chat has no row for it.
   const unplaced: ApprovalItem[] = []
-  for (const a of asked.filter((w) => w.agent && !w.answered).toReversed()) {
+  for (const a of log.agentAsks.toReversed()) {
     const at = items.findIndex((item) => item.kind === 'agent' && item.id === a.agent)
-    if (!a.item) continue
     if (at >= 0) items.splice(at + 1, 0, a.item)
     else unplaced.unshift(a.item)
   }
   items.push(...unplaced)
-  const unanswered = (a: Approval) => !a.answered && !a.ask?.expired && !a.item?.expired
-  const waiting = asked.find(unanswered)
   const streaming = Object.keys(live).length > 0 || Object.keys(thinking).length > 0
-  const subagents = held === null ? 0 : tasks.filter((t) => t.works).length
-  if (running && !streaming && !waiting && !interrupted) items.push({ kind: 'thinking', key: `thinking-${running.key}`, label: subagents > 0 ? waitingOn(subagents) : 'Thinking' })
+  if (running && !streaming && !log.waiting && !log.interrupted) items.push({ kind: 'thinking', key: `thinking-${running.key}`, label: log.subagents > 0 ? waitingOn(log.subagents) : 'Thinking' })
   return {
     items,
-    queued: [...queued.values()],
-    turnOpen: running !== null && held === null,
-    agentsRunning: [...agents.values()].some((a) => a.state === 'running'),
-    pending: waiting ? pendingOf(thread, waiting) : null,
-    commands,
+    queued: log.queued,
+    turnOpen: log.turnOpen,
+    agentsRunning: log.agentsRunning,
+    pending: log.waiting ? pendingOf(thread, log.waiting) : null,
+    commands: log.commands,
   }
 }
 

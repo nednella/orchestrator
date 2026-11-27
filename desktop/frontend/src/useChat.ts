@@ -4,7 +4,7 @@ import { api, chatEvent, errorMessage, on } from './api'
 import { EMPTY_CHAT, chatFeed } from './chatEvents'
 import { watchAgain } from './chatLive'
 import type { ChatState } from './chatEvents'
-import { buildTimeline } from './chatTimeline'
+import { liveTimeline, loggedTimeline } from './chatTimeline'
 import { ownStart } from './sideChat'
 import type { Timeline } from './chatTimeline'
 import type { ChatEvent, State } from './types'
@@ -67,10 +67,10 @@ export function useChat(id: string, state: State, side = false): { timeline: Tim
     if (watchAgain(before, state)) setWakes((n) => n + 1)
   }, [id, state])
   const shown = view.id === id ? view : startOf(id)
-  const timeline = useMemo(() => {
-    const { events } = shown.state
-    return buildTimeline(side ? events.slice(ownStart(events)) : events, shown.state.live, id, shown.state.thinking)
-  }, [shown.state, id, side])
+  const { events, live, thinking } = shown.state
+  // A streamed delta logs nothing, so the logged part is built again only when an event is logged.
+  const logged = useMemo(() => loggedTimeline(side ? events.slice(ownStart(events)) : events), [events, side])
+  const timeline = useMemo(() => liveTimeline(logged, live, id, thinking), [logged, live, id, thinking])
 
   useEffect(() => {
     const start = startOf(id)
@@ -106,5 +106,5 @@ export function useChat(id: string, state: State, side = false): { timeline: Tim
     }
   }, [id, latest, wakes])
 
-  return { timeline, events: shown.state.events, loading: shown.loading, error: shown.error }
+  return { timeline, events, loading: shown.loading, error: shown.error }
 }
