@@ -75,7 +75,9 @@ export const previewTokens = [
 // previewScheme is the theme's color-scheme, passed as a token too so that the page's own controls and canvas match.
 const SCHEME = 'color-scheme'
 
-// previewDocument is the page of an html block: the policy first, then the token values, then the block as it came.
+// previewDocument is the page of an html block: the policy first, then the token values and a guard for links, then the
+// block as it came. A link opens in a new window, which the sandbox refuses, and takes no pointer, so a page that the
+// dialog lets scroll cannot be navigated away.
 // values holds a value for each token the theme sets; one that cannot sit in a style rule is left out.
 export function previewDocument(html: string, values: Record<string, string>): string {
   const safe = (v: string) => !/[<>{}]/.test(v)
@@ -83,15 +85,16 @@ export function previewDocument(html: string, values: Record<string, string>): s
     .filter((name) => values[name] && safe(values[name]))
     .map((name) => `${name}:${values[name]}`)
     .join(';')
-  return `<meta http-equiv="Content-Security-Policy" content="${previewCSP}"><style>:root{${tokens}}</style>${html}`
+  return `<meta http-equiv="Content-Security-Policy" content="${previewCSP}"><base target="_blank"><style>:root{${tokens}}a,area{pointer-events:none}</style>${html}`
 }
 
 // previewFrame is the attributes of the iframe that shows an html block, and so of the one that shows it full size: an
 // empty sandbox, which allows nothing, and the page.
 export const previewFrame = (html: string, values: Record<string, string>) => ({ sandbox: previewSandbox, srcDoc: previewDocument(html, values), referrerPolicy: 'no-referrer' as const })
 
-// The full-size frame gets no pointer events, so that a click on a link in the page cannot navigate the frame.
-export const previewDialogFrameStyle = { pointerEvents: 'none', background: 'var(--bg-app)' } as const
+// The full-size frame takes the pointer, so that the wheel and the keys scroll a page taller than the dialog; the page
+// has no script, and its links are guarded in previewDocument.
+export const previewDialogFrameStyle = { background: 'var(--bg-app)' } as const
 
 // previewWidth is the width a page is laid out at, and previewHeight the height of its tile before it opens.
 export const previewWidth = 800

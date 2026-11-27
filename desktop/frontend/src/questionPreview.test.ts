@@ -43,13 +43,18 @@ test('the page of an html block carries the policy first and the theme tokens, a
   assert.equal(sandbox, '')
   assert.equal(srcDoc.startsWith(`<meta http-equiv="Content-Security-Policy" content="${previewCSP}">`), true, srcDoc)
   assert.equal(previewCSP, "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:")
-  assert.equal(srcDoc.includes(':root{color-scheme:dark;--bg-app:#000;--text:#f5f5f5;--accent:oklch(0.571 0.21 264)}'), true, srcDoc)
+  assert.equal(srcDoc.includes(':root{color-scheme:dark;--bg-app:#000;--text:#f5f5f5;--accent:oklch(0.571 0.21 264)}a,area{pointer-events:none}'), true, srcDoc)
   assert.equal(!srcDoc.includes('--ignored') && !srcDoc.includes('<script'), true, 'a value that would end the rule is left out')
   assert.equal(srcDoc.endsWith('<h1 style="color:var(--accent)">Hi</h1>'), true)
-  assert.equal(previewDocument('', {}), `<meta http-equiv="Content-Security-Policy" content="${previewCSP}"><style>:root{}</style>`)
+  assert.equal(previewDocument('', {}), `<meta http-equiv="Content-Security-Policy" content="${previewCSP}"><base target="_blank"><style>:root{}a,area{pointer-events:none}</style>`)
 })
 
-test('the full-size frame has no pointer events', () => assert.equal(previewDialogFrameStyle.pointerEvents, 'none'))
+test('the full-size frame takes the pointer so that it scrolls, and its links open nowhere', () => {
+  assert.equal('pointerEvents' in previewDialogFrameStyle, false)
+  const { srcDoc, sandbox } = previewFrame('<a href="https://example.com">x</a>', {})
+  assert.equal(sandbox, '', 'no allow-popups, so a link that targets a new window is refused')
+  assert.equal(srcDoc.includes('<base target="_blank">') && srcDoc.includes('a,area{pointer-events:none}'), true, srcDoc)
+})
 
 test('the prompt names every token a page may use', () => {
   const prompt = readFileSync(new URL('../../../internal/prompts/base.md', import.meta.url), 'utf8')
