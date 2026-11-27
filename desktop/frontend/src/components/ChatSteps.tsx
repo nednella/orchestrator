@@ -13,7 +13,7 @@ export function ChatSteps({ thread, steps, running, folder }: ChatStepsProps) {
         if (s.kind === 'note')
           return (
             <div key={s.key} className="py-1 text-small text-soft">
-              <ChatMarkdown text={s.text} />
+              <ChatMarkdown text={s.text} thread={thread} />
             </div>
           )
         if (s.kind === 'thought') return <ChatThoughtRow key={s.key} text={s.text} live={s.live} />
