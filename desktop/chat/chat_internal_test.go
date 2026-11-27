@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,5 +158,63 @@ func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// slowObserver is a live thread whose Observe is still folding an event when the chat service is told to stop.
+type slowObserver struct {
+	modeThread
+	entered  chan struct{}
+	release  chan struct{}
+	finished atomic.Bool
+}
+
+func (s *slowObserver) Observe(string, ...thread.Event) {
+	close(s.entered)
+	<-s.release
+	s.finished.Store(true)
+}
+
+func TestStopReturnsOnlyOnceNoFollowerIsFoldingAnEvent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "chat.jsonl")
+	l, err := chatlog.OpenLog(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []chatlog.Event{{Kind: chatlog.KindStart}, {Kind: chatlog.KindUser, Text: "go"}} {
+		if _, err := l.Append(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l.Close()
+	obs := &slowObserver{entered: make(chan struct{}), release: make(chan struct{})}
+	obs.chat = threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(dir, "none.sock"), Live: true}
+	chats := New(obs, t.TempDir(), func(string, any) {})
+	chats.hostWait = time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	chats.Start(ctx)
+	<-obs.entered
+	cancel()
+	stopped := make(chan struct{})
+	go func() {
+		chats.Stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while a follower was still folding an event")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(obs.release)
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop did not return once the follower finished")
+	}
+	if !obs.finished.Load() {
+		t.Error("Stop returned before the fold finished")
 	}
 }

@@ -106,6 +106,7 @@ type Chats struct {
 	hostWait  time.Duration   // how long a follower waits for its host to listen before it reads the log
 	followers map[string]*follower
 	watched   map[string]bool
+	stopped   bool
 }
 
 // New follows the threads t; it keeps each project's command list under dir, in the project's own folder.
@@ -152,7 +153,7 @@ func (c *Chats) reconcile() {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.ctx == nil || c.ctx.Err() != nil {
+	if c.ctx == nil || c.ctx.Err() != nil || c.stopped {
 		return
 	}
 	for id, f := range c.followers {
@@ -172,10 +173,25 @@ func (c *Chats) reconcile() {
 // follow starts the thread's follower. It needs mu, and Start to have run.
 func (c *Chats) follow(ch threads.Chat) *follower {
 	ctx, stop := context.WithCancel(c.ctx)
-	f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{}), state: newTurn(c.threads.TranscriptPath)}
+	f := &follower{chats: c, chat: ch, stop: stop, done: make(chan struct{}), read: make(chan struct{}), state: newTurn(c.threads.TranscriptPath)}
 	c.followers[ch.ID] = f
 	go f.run(ctx)
 	return f
+}
+
+// Stop ends every follower and returns once each has, so nothing of the chats reaches the threads after it.
+func (c *Chats) Stop() {
+	c.mu.Lock()
+	c.stopped = true
+	var done []chan struct{}
+	for _, f := range c.followers {
+		f.stop()
+		done = append(done, f.done)
+	}
+	c.mu.Unlock()
+	for _, d := range done {
+		<-d
+	}
 }
 
 // watch sends the live thread's events from where its follower read the log to. It returns once the follower has
@@ -188,7 +204,7 @@ func (c *Chats) watch(ch threads.Chat) error {
 	}
 	c.mu.Lock()
 	ctx := c.ctx
-	if ctx.Err() != nil {
+	if ctx.Err() != nil || c.stopped {
 		c.mu.Unlock()
 		return errors.New("The chat service has stopped")
 	}
@@ -329,6 +345,7 @@ type follower struct {
 	chats *Chats
 	chat  threads.Chat
 	stop  context.CancelFunc
+	done  chan struct{} // closed once the follower's goroutine has returned
 	read  chan struct{} // closed once the follower has read the log
 	state *turn         // what the run's state events need of the events before; the follower's goroutine only
 
@@ -361,6 +378,7 @@ type await struct {
 // subscribing again after the last event it had when the stream ends. It reads the log once the host listens, or has
 // had hostStartWait to: the host logs its run's start before it listens, so the log then holds the current run's start.
 func (f *follower) run(ctx context.Context) {
+	defer close(f.done)
 	defer f.end()
 	ready, cancel := context.WithTimeout(ctx, f.chats.hostWait)
 	listening := host.Ready(ready, f.chat.Socket) == nil
@@ -447,6 +465,9 @@ func (f *follower) run(ctx context.Context) {
 	for {
 		got := false
 		_ = host.Subscribe(ctx, f.chat.Socket, last, func(e chatlog.Event) {
+			if ctx.Err() != nil {
+				return
+			}
 			got = true
 			if e.Persisted() {
 				if e.Seq <= last {

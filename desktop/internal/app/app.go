@@ -249,6 +249,7 @@ func (a *App) Stop() {
 	if cancel := a.cancel.Load(); cancel != nil {
 		(*cancel)()
 	}
+	a.chats.Stop()
 	a.terms.CloseAll()
 	a.browsers.CloseAll()
 	a.awake.Hold(false)
