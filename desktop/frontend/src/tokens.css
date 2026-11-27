@@ -91,8 +91,6 @@
   --bg-dropdown-tint: linear-gradient(color-mix(in srgb, var(--bg-composer) 18%, transparent), color-mix(in srgb, var(--bg-composer) 18%, transparent));
   --border-card-section: color-mix(in srgb, var(--border) 65%, transparent);
   --shadow-tip: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 8px 10px -6px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.25);
-  --chart-bar: color-mix(in srgb, var(--text) 24%, transparent);
-  --chart-bar-on: color-mix(in srgb, var(--text) 75%, transparent);
 
   --text-chip: color-mix(in srgb, var(--text) 80%, transparent);
   --bg-danger: color-mix(in srgb, var(--danger) 6%, transparent);
@@ -160,7 +158,6 @@
   --fs-small: 0.75rem;
   --fs-body: 0.875rem;
   --fs-title: 1rem;
-  --fs-display: 1.375rem;
 
   --radius-sm: 4px;
   --radius-md: 6px;
