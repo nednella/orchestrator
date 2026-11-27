@@ -19,6 +19,9 @@ export const THEME_CARDS: ThemeCardDef[] = [
       { mode: 'dark', theme: 'black' },
     ],
   },
+  { id: 'midnight', label: 'Midnight', previews: [{ mode: 'dark', theme: 'midnight' }] },
+  { id: 'umber', label: 'Umber', previews: [{ mode: 'dark', theme: 'umber' }] },
+  { id: 'linen', label: 'Linen', previews: [{ mode: 'light', theme: 'linen' }] },
 ]
 
 const known = (mode: Appearance): string[] => THEME_CARDS.flatMap((card) => card.previews.filter((p) => p.mode === mode).map((p) => p.theme))

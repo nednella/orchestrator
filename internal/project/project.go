@@ -65,8 +65,8 @@ type Config struct {
 	ProjectsDir  string        `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
 	KeepAwake    *bool         `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a thread works; on unless false
 	Theme        string        `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
-	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default)
-	ThemeLight   string        `yaml:"app_theme_light,omitempty"`   // the light theme: light (default)
+	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default), midnight or umber
+	ThemeLight   string        `yaml:"app_theme_light,omitempty"`   // the light theme: light (default) or linen
 	TextScale    float64       `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
 	EditorApp    string        `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
 	ThreadPlace  string        `yaml:"new_thread_place,omitempty"`  // where a new thread with no issue starts: worktree or project; unset is worktree
@@ -102,8 +102,8 @@ var Themes = []string{"light", "dark"}
 
 // DarkThemes and LightThemes are the named themes each appearance can show; the first is the default.
 var (
-	DarkThemes  = []string{"black"}
-	LightThemes = []string{"light"}
+	DarkThemes  = []string{"black", "midnight", "umber"}
+	LightThemes = []string{"light", "linen"}
 )
 
 // DarkTheme is the theme shown in the dark appearance.

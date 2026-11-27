@@ -51,8 +51,8 @@ type Current interface {
 // Settings is what the settings panel shows.
 type Settings struct {
 	Theme        string          `json:"theme"`          // system, light or dark
-	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black
-	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light
+	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black, midnight or umber
+	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light or linen
 	TextScale    float64         `json:"textScale"`      // a multiple of the default text size
 	KeepAwake    bool            `json:"keepAwake"`      // hold off idle sleep while a thread works, for projects that do not say otherwise
 	Cleanup      project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close

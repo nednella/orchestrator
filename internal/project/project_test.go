@@ -407,6 +407,18 @@ func TestThemeKeysValidate(t *testing.T) {
 	if _, err := load("app_theme_light: black\n"); err == nil || !strings.Contains(err.Error(), "app_theme_light") {
 		t.Errorf("black as light: err = %v, want one naming app_theme_light", err)
 	}
+	if _, err := load("app_theme_light: midnight\n"); err == nil || !strings.Contains(err.Error(), "app_theme_light") {
+		t.Errorf("midnight as light: err = %v, want one naming app_theme_light", err)
+	}
+	if _, err := load("app_theme_dark: linen\n"); err == nil || !strings.Contains(err.Error(), "app_theme_dark") {
+		t.Errorf("linen as dark: err = %v, want one naming app_theme_dark", err)
+	}
+	for _, dark := range []string{"midnight", "umber"} {
+		cfg, err := load("app_theme_dark: " + dark + "\napp_theme_light: linen\n")
+		if err != nil || cfg.DarkTheme() != dark || cfg.LightTheme() != "linen" {
+			t.Errorf("%s and linen = %q, %q, %v", dark, cfg.DarkTheme(), cfg.LightTheme(), err)
+		}
+	}
 	cfg, err = load("projects: []\n")
 	if err != nil || cfg.DarkTheme() != "black" || cfg.LightTheme() != "light" {
 		t.Errorf("defaults = %q, %q, %v", cfg.DarkTheme(), cfg.LightTheme(), err)

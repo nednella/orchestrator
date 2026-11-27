@@ -254,6 +254,17 @@ func TestThemes(t *testing.T) {
 	if got := h.Restart(t).Settings().DarkTheme; got != "black" {
 		t.Errorf("dark theme after restart = %q", got)
 	}
+	for _, dark := range []string{"midnight", "umber"} {
+		if got, err := h.SetThemes(dark, "linen"); err != nil || got.DarkTheme != dark || got.LightTheme != "linen" {
+			t.Fatalf("SetThemes(%s, linen) = %+v, %v", dark, got, err)
+		}
+		if cfg, err := project.Load(h.Conf); err != nil || cfg.ThemeDark != dark || cfg.ThemeLight != "linen" {
+			t.Errorf("config after %s and linen = %q, %q, %v", dark, cfg.ThemeDark, cfg.ThemeLight, err)
+		}
+	}
+	if got := h.Restart(t).Settings(); got.DarkTheme != "umber" || got.LightTheme != "linen" {
+		t.Errorf("themes after restart = %q, %q", got.DarkTheme, got.LightTheme)
+	}
 	if _, err := h.SetThemes("violet", "light"); err == nil {
 		t.Error("the removed violet theme was accepted")
 	}
@@ -262,6 +273,9 @@ func TestThemes(t *testing.T) {
 	}
 	if _, err := h.SetThemes("black", "black"); err == nil {
 		t.Error("black was accepted as the light theme")
+	}
+	if _, err := h.SetThemes("linen", "light"); err == nil {
+		t.Error("linen was accepted as the dark theme")
 	}
 }
 
