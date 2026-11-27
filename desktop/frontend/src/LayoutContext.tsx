@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { applyAccent } from './accent'
+import { saveFirstPaint } from './firstPaint'
 import { useOrchestrator } from './OrchestratorContext'
 import type { FocusTarget } from './OrchestratorContext'
 import { closesPanel, modeFor, nextOverlay, SIDEBAR_DEFAULT_REM, SIDEBAR_MAX_REM, SIDEBAR_MIN_REM, sidebarBesidePx, sidebarFit, sidebarMax } from './panelLayout'
@@ -124,6 +125,10 @@ export function LayoutProvider({ children }: LayoutProviderProps) {
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    saveFirstPaint(settings)
+  }, [settings.theme, settings.lightTheme, settings.darkTheme, settings.lightAccent, settings.darkAccent])
 
   useLayoutEffect(() => {
     applyAccent(document.documentElement.style, accent)

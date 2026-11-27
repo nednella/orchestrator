@@ -13,6 +13,7 @@ import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
+import { savedFirstPaint } from './firstPaint'
 import { addToast, staleWaiting } from './toastPile'
 import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
@@ -285,7 +286,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [digestSeen, setDigestSeen] = useState(0)
   const [awake, setAwake] = useState(false)
   const [memory, setMemory] = useState<Memory | null>(null)
-  const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', darkAccent: '', lightAccent: '', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
+  const [settings, setSettings] = useState<Settings>({ ...savedFirstPaint(), textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
   const [shells, setShells] = useState<Shell[]>([])
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })

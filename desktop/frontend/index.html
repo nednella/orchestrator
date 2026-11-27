@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>orchestrator</title>
+    <script>
+      // The theme the last run showed, set before the styles paint so the window never shows another one first.
+      // The key and the fields are those of src/firstPaint.ts.
+      try {
+        var saved = JSON.parse(localStorage.getItem('orchestrator.firstPaint')) || {}
+        var dark = saved.theme === 'dark' || (saved.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = (dark ? saved.darkTheme : saved.lightTheme) || (dark ? 'black' : 'light')
+      } catch (e) {
+        document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'light'
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
