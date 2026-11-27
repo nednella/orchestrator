@@ -226,6 +226,7 @@ type Browsers interface {
 	Close(ctx context.Context, id string)
 	Forget(ctx context.Context, id string)
 	PIDs() []int
+	AgentDaemon(id string) (pid int, written time.Time)
 }
 
 // Awake holds off idle sleep.

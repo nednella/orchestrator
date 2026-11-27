@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/project"
@@ -22,6 +23,7 @@ func (f fakeBrowsers) Has(string) bool                           { return false 
 func (f fakeBrowsers) Close(context.Context, string)             {}
 func (f fakeBrowsers) Forget(context.Context, string)            {}
 func (f fakeBrowsers) PIDs() []int                               { return nil }
+func (f fakeBrowsers) AgentDaemon(string) (int, time.Time)       { return 0, time.Time{} }
 
 // commandFor is the argv claude starts with.
 func (s *Threads) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, access thread.Access) []string {

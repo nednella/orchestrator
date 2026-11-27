@@ -163,6 +163,19 @@ func (b *Browsers) agentDaemon(token string) (int, time.Time) {
 	return pid, info.ModTime()
 }
 
+// AgentDaemon is the process of the thread's agent-browser daemon, as the daemon wrote it, and when it wrote it: a
+// process with that pid that started after then is another one. 0 when the thread has none.
+func (b *Browsers) AgentDaemon(id string) (int, time.Time) {
+	if b == nil || b.agentBrowser == "" {
+		return 0, time.Time{}
+	}
+	name, err := thread.ParseName(id)
+	if err != nil {
+		return 0, time.Time{}
+	}
+	return b.agentDaemon(name.Token)
+}
+
 // stopAgents stops every thread's agent-browser daemon that runs, at once: the app quits, and its browsers with it. A
 // pid file that names no pid still gets a stop, since agent-browser may write it otherwise than this app reads it.
 func (b *Browsers) stopAgents() {

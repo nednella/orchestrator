@@ -168,6 +168,36 @@ func TestTheEndOfAThreadWithNoWindowStopsItsDaemonThatRuns(t *testing.T) {
 	}
 }
 
+func TestAgentDaemonIsThePidTheDaemonWrote(t *testing.T) {
+	t.Parallel()
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
+	fakeAgentBrowser(t, b)
+	if pid, _ := b.AgentDaemon("p/abcd2345"); pid != 0 {
+		t.Errorf("with no pid file: %d", pid)
+	}
+	if err := os.MkdirAll(b.agentDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(b.agentDir(), "abcd2345.pid")
+	if err := os.WriteFile(file, []byte("4321\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pid, written := b.AgentDaemon("p/abcd2345"); pid != 4321 || !written.Equal(info.ModTime()) {
+		t.Errorf("AgentDaemon = %d, %v; want 4321, %v", pid, written, info.ModTime())
+	}
+	if pid, _ := b.AgentDaemon("q/zzzz2345"); pid != 0 {
+		t.Errorf("another thread's daemon = %d", pid)
+	}
+	b.agentBrowser = ""
+	if pid, _ := b.AgentDaemon("p/abcd2345"); pid != 0 {
+		t.Errorf("with no agent-browser: %d", pid)
+	}
+}
+
 func TestCloseAllStopsEveryAgentBrowserThatRuns(t *testing.T) {
 	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())

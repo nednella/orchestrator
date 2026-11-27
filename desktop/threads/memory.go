@@ -74,8 +74,14 @@ func (s *Threads) SampleMemory() {
 		}
 	}
 	self, browserPIDs := os.Getpid(), s.browsers.PIDs()
+	daemons := map[string]int{}
+	for id := range panes {
+		if pid, written := s.browsers.AgentDaemon(id); tree.startedBy(pid, written) {
+			daemons[id] = pid
+		}
+	}
 	app, browsers := tree.appAndBrowsers(self, browserPIDs)
-	threads, outside := tree.threads(panes, append([]int{self, server}, browserPIDs...), s.procs.Marks)
+	threads, outside := tree.threads(panes, daemons, append([]int{self, server}, browserPIDs...), s.procs.Marks)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -105,15 +111,17 @@ func (s *Threads) SampleMemory() {
 type processes struct {
 	list     []procs.Process
 	parent   map[int]int
+	start    map[int]int64
 	children map[int][]int
 	size     func(pid int) int64
 	sizes    map[int]int64
 }
 
 func newProcesses(list []procs.Process, size func(pid int) int64) processes {
-	p := processes{list: list, parent: map[int]int{}, children: map[int][]int{}, size: size, sizes: map[int]int64{}}
+	p := processes{list: list, parent: map[int]int{}, start: map[int]int64{}, children: map[int][]int{}, size: size, sizes: map[int]int64{}}
 	for _, q := range list {
 		p.parent[q.PID] = q.PPID
+		p.start[q.PID] = q.Start
 		if q.PID != q.PPID {
 			p.children[q.PPID] = append(p.children[q.PPID], q.PID)
 		}
@@ -125,6 +133,13 @@ func newProcesses(list []procs.Process, size func(pid int) int64) processes {
 func (p processes) has(pid int) bool {
 	_, ok := p.parent[pid]
 	return ok
+}
+
+// startedBy says whether pid runs and started by the time written, so that it is still the process that wrote its pid
+// then, not a later one that took the pid.
+func (p processes) startedBy(pid int, written time.Time) bool {
+	start, ok := p.start[pid]
+	return pid > 0 && ok && !time.UnixMicro(start).After(written)
 }
 
 // appAndBrowsers is what the app, self, holds without the browsers it started, and what the browsers hold. A browser
@@ -141,10 +156,11 @@ func (p processes) appAndBrowsers(self int, browsers []int) (app, all int64) {
 	return max(app, 0), all
 }
 
-// threads is what each live thread holds, by id: the processes under its pane (panes), and the processes outside every
-// tree of roots that carry its marker (marks reads them) with the processes under them. A process counts once, for the
-// first thread that has it. outside is what of that runs outside the trees of roots.
-func (p processes) threads(panes map[string]int, roots []int, marks func([]procs.Process) map[int]string) (held map[string]int64, outside int64) {
+// threads is what each live thread holds, by id: the processes under its pane (panes), the processes outside every
+// tree of roots that carry its marker (marks reads them), and its agent-browser daemon (daemons), each of those with
+// the processes under it. A process counts once, for the first thread that has it. outside is what of that runs
+// outside the trees of roots.
+func (p processes) threads(panes, daemons map[string]int, roots []int, marks func([]procs.Process) map[int]string) (held map[string]int64, outside int64) {
 	placed := map[int]bool{}
 	for _, root := range roots {
 		p.each(root, func(pid int) { placed[pid] = true })
@@ -175,6 +191,9 @@ func (p processes) threads(panes map[string]int, roots []int, marks func([]procs
 		if _, live := panes[marked[pid]]; live {
 			claim(pid, marked[pid])
 		}
+	}
+	for id, pid := range daemons {
+		claim(pid, id)
 	}
 	held = make(map[string]int64, len(panes))
 	for id := range panes {
