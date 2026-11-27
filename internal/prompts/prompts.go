@@ -30,6 +30,10 @@ var (
 	base string
 	//go:embed read.md
 	read string
+	//go:embed write.md
+	write string
+	//go:embed access-change.md
+	accessChange string
 	//go:embed issue.md
 	issue string
 	//go:embed fork.md
@@ -101,6 +105,15 @@ func Base() string { return body(base) }
 
 // Read follows Base in the system prompt of a thread that starts in plan mode: what it may do and how it hands work on.
 func Read() string { return body(read) }
+
+// Write is what a thread learns when the owner switches it from Read to Write: plan mode is off.
+func Write() string { return body(write) }
+
+// AccessChange is the owner's message text with note before it, for the first message after the owner changed the
+// thread's access: the thread's system prompt cannot change, so the note says what is different now.
+func AccessChange(note, text string) string {
+	return strings.NewReplacer("{note}", note, "{text}", text).Replace(body(accessChange))
+}
 
 // Issue follows Base in the system prompt of a thread that works on the GitHub issue number.
 func Issue(number int) string {

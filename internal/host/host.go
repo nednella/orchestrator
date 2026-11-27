@@ -140,6 +140,9 @@ type host struct {
 	replies map[string]chan chat.Event
 	// mode is the permission mode the log holds last, "" until Claude reports one.
 	mode string
+	// accessNote is what Claude must learn of the access the owner switched to; its next message carries it, since the
+	// system prompt it started with cannot change. It is not logged.
+	accessNote string
 	// holding is set once the host answered a hold as idle, before a restart: it takes no more input.
 	holding bool
 	// plannedStop is why the app said it stops the host, chat.StopSettle or chat.StopRestart, "" until it says so; the
@@ -830,7 +833,12 @@ func (h *host) sendLocked(id string, m message, images []chat.Image) (lines [][]
 		}
 		return lines, logged, log(chat.Event{Kind: chat.KindUser, ID: id, Text: m.text, Parent: parent, Agent: agent})
 	}
-	line := chat.UserMessageWith(id, m.text, images)
+	text := m.text
+	if h.accessNote != "" {
+		text = prompts.AccessChange(h.accessNote, text)
+		h.accessNote = ""
+	}
+	line := chat.UserMessageWith(id, text, images)
 	if h.turnOpen || len(h.queued) > 0 {
 		if err := log(m.event(chat.KindQueued, id)); err != nil {
 			return nil, logged, err
@@ -1022,6 +1030,7 @@ func (h *host) setMode(mode string) error {
 		return err
 	}
 	h.replies[id] = got
+	was := h.mode
 	h.mu.Unlock()
 	err := h.writeLocked(chat.SetPermissionMode(id, mode))
 	h.stdinMu.Unlock()
@@ -1036,8 +1045,23 @@ func (h *host) setMode(mode string) error {
 	if r.Error {
 		return errors.New(cmp.Or(r.Text, "Claude did not change its mode"))
 	}
+	h.noteAccess(was, mode)
 	h.modeIs(mode)
 	return nil
+}
+
+// noteAccess keeps the text that the next message tells Claude of its new mode: the Read text for plan, and that plan
+// mode is off for default. A mode that does not change leaves the note as it is; a later switch replaces an unsent one.
+func (h *host) noteAccess(was, mode string) {
+	if mode == was {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.accessNote = prompts.Write()
+	if mode == "plan" {
+		h.accessNote = prompts.Read()
+	}
 }
 
 // applyFlags asks Claude to merge settings into the ones it runs with. Claude takes them in at once and uses them from

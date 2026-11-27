@@ -20,6 +20,8 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"browser", Browser(), "ee5bb9bca797cba998bff5c6ef1fada011bd7b84e2f6fffd45b5d6910724dc3c"},
 		{"base", Base(), "3b6d5a90720d57953b5ce14e39165eb50b0caba7d096da9b402bed72ea44784e"},
 		{"read", Read(), "2585aa2b08aed1e04cdc23b85176eb3fb2404c68976f5eaf6b392eb6f8ba3901"},
+		{"write", Write(), "365407ce10e7cabecacc60ab90fe2618d4613eafe381f0f406b689c16534f2dd"},
+		{"access change", AccessChange("{note}", "{text}"), "088dd3fcc91874a1aaa0160b3521171aad9b93c6643a71407757e3f1d4e3be39"},
 		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
 		{"fork", Fork("{title}"), "a71c570ca134236eb223adace70649cdfc97d0d7a8d752550a39181cf58bf1a5"},
 		{"child", Child("{parent}"), "3c69c5660bda43e9295b40772144ddf68e3d9f9af4deaf9ad650fa47feb41c30"},

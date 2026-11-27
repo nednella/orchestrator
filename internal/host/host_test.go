@@ -2420,6 +2420,76 @@ func TestModeSetsPermissionMode(t *testing.T) {
 	eventually(t, "the mode in the pane", func() bool { return strings.Contains(h.echo.String(), "permission mode: plan") })
 }
 
+// userTexts are the texts of the user messages written to Claude, in order.
+func userTexts(t *testing.T, stdin string) []string {
+	t.Helper()
+	var out []string
+	for _, l := range stdinLines(t, stdin) {
+		var line struct {
+			Type    string `json:"type"`
+			Message struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(l), &line) != nil || line.Type != "user" {
+			continue
+		}
+		var blocks []struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(line.Message.Content, &blocks); err != nil || len(blocks) == 0 {
+			t.Fatalf("user line %q has no content blocks", l)
+		}
+		out = append(out, blocks[0].Text)
+	}
+	return out
+}
+
+func TestModeChangeTellsClaudeWithItsNextMessage(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, from, to, note string
+	}{
+		{"Read to Write", "plan", "default", prompts.Write()},
+		{"Write to Read", "default", "plan", prompts.Read()},
+		{"no change", "plan", "plan", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			h := startHost(t, "ORC_FAKE_MODE="+tt.from)
+			events := subscribe(t, h.socket, 0)
+			waitKind(t, events, chat.KindInit)
+			waitKind(t, events, chat.KindMode)
+
+			if err := SetMode(ctxT(t), h.socket, tt.to); err != nil {
+				t.Fatal(err)
+			}
+			sendMessage(t, h.socket, "first")
+			waitKind(t, events, chat.KindTurnEnd)
+			sendMessage(t, h.socket, "second")
+			waitKind(t, events, chat.KindTurnEnd)
+
+			want := []string{"first", "second"}
+			if tt.note != "" {
+				want[0] = prompts.AccessChange(tt.note, "first")
+			}
+			if got := userTexts(t, h.stdin); !slices.Equal(got, want) {
+				t.Errorf("user messages = %q, want %q", got, want)
+			}
+			logged, err := chat.ReadLog(h.log, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range logged {
+				if e.Kind == chat.KindUser && strings.Contains(e.Text, "access") {
+					t.Errorf("the chat log holds the note: %+v", e)
+				}
+			}
+		})
+	}
+}
+
 func TestModeIsRefusedDuringATurn(t *testing.T) {
 	t.Parallel()
 	h := startHost(t)
