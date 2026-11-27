@@ -83,7 +83,7 @@ export function panelStateOf(saved: unknown): PanelState {
 
 // The least widths, in px at the default text size, of the chat and of the panel beside it.
 const CHAT_MIN = 360
-const PANEL_MIN = 300
+const PANEL_MIN = 360
 
 // At this window width or less the panel opens over the chat as a sheet, and so it does where the row has no room for
 // the chat and the panel at their least.

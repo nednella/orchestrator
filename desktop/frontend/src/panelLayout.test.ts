@@ -5,8 +5,8 @@ import { panelFit } from './panelTabs.ts'
 
 const ROOT = 16
 
-test('the sidebar and the rail are at least 300 px wide at the default text size', () => {
-  assert.equal((RAIL_REM + SIDEBAR_MIN_REM) * ROOT, 300)
+test('the sidebar and the rail are at least 360 px wide at the default text size', () => {
+  assert.equal((RAIL_REM + SIDEBAR_MIN_REM) * ROOT, 360)
 })
 
 test('the sidebar keeps the width it was set to at every window width', () => {
@@ -44,11 +44,11 @@ test('a drag of the docked sidebar stops where it would leave the side of the th
 })
 
 test('a drag of the docked sidebar leaves the open right panel and the chat their room', () => {
-  const max = sidebarMax(1512, 301, ROOT)
-  assert.equal(max, 42.5)
+  const max = sidebarMax(1512, 361, ROOT)
+  assert.equal(max, 38.75)
   const row = 1512 - (3 + max) * ROOT - 3
   const { width } = panelFit(1512, row, 540)
-  assert.equal(width >= 300 && row - width >= 360, true, `the panel at ${width}px leaves the chat ${row - width}px`)
+  assert.equal(width >= 360 && row - width >= 360, true, `the panel at ${width}px leaves the chat ${row - width}px`)
 })
 
 test('closing an overlay closes its panel, opening a thread only puts it away', () => {

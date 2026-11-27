@@ -8,10 +8,10 @@ const COMPACT_BELOW = 900
 const MEDIUM_BELOW = 1250
 
 export const RAIL_REM = 3
-export const SIDEBAR_DEFAULT_REM = 18
-// With the rail, the sidebar is at least 300 px at the default text size, the right panel's least width too. That holds
+// With the rail, the sidebar is at least 360 px at the default text size, the right panel's least width too. That holds
 // the title strip, which takes 281 px with the rail: the window buttons' room, the title and its arrows.
-export const SIDEBAR_MIN_REM = 300 / 16 - RAIL_REM
+export const SIDEBAR_MIN_REM = 360 / 16 - RAIL_REM
+export const SIDEBAR_DEFAULT_REM = SIDEBAR_MIN_REM
 export const SIDEBAR_MAX_REM = 32
 // The thread keeps at least this width beside the docked sidebar; a sidebar with no room for it opens over the thread.
 const THREAD_MIN_REM = 30
