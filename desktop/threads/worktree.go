@@ -399,6 +399,11 @@ func (l *Lifecycle) dropStartWorktree(ctx context.Context, id string) string {
 		return reason
 	}
 	if gone(plan.worktree) {
+		if trees, err := l.worktrees(ctx, t.proj.Dir); err == nil {
+			if err := l.dropEntry(ctx, t.proj.Dir, trees, plan.worktree); err != nil {
+				return err.Error()
+			}
+		}
 		if err := l.threads.made.Removed(t.proj.Key(), plan.worktree, time.Now()); err != nil {
 			log.Printf("orchestrator: recording the worktree %s removed: %v", plan.worktree, err)
 		}

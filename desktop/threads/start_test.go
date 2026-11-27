@@ -911,3 +911,40 @@ func TestStartInAProjectThatIsNoRepositoryRunsInTheProjectFolder(t *testing.T) {
 	}
 	eventually(t, "the first message", func() bool { return mentions(userLines(t, h, s.ID), "make it faster") == 1 })
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestCancelWhenTheWorktreeIsGoneLetsTheRetryMakeItAgain(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "slow-new", true)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := filepath.Join(h.Dir, "trees", "fix-login")
+	eventually(t, "the start to reach the agent", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Worktree != "" && row.Detail == "Starting Claude"
+	})
+	if err := os.RemoveAll(tree); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ := h.Thread(s.ID); row.Start != threads.StartCancelled || row.StartError != "Start cancelled" || row.Worktree != "" {
+		t.Errorf("the row = %+v, want a plain cancelled start", row)
+	}
+	tmux.fail(t, "slow-new", false)
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	if row, _ := h.Thread(s.ID); row.Branch != "fix-login" || !exists(tree) {
+		t.Errorf("the retried row = %+v, want the worktree made again on fix-login", row)
+	}
+}
