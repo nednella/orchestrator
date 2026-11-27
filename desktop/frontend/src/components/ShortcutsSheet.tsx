@@ -1,9 +1,9 @@
+import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { formatShortcut, LIST_KEYS, useActions } from '../actions'
 import { CLOSE_TERMINAL_KEY, NEW_TERMINAL_IN_TERMINAL_KEY, SPLIT_STACKED_KEY } from '../actions/shell'
 import type { Action } from '../actions'
-import { Icon } from './Icon'
 import { Keycap } from './Keycap'
 import { Overlay } from './Overlay'
 
@@ -42,8 +42,8 @@ type RowViewProps = { row: Row }
 
 function RowView({ row }: RowViewProps) {
   return (
-    <li className="flex h-7 items-center gap-3 border-b border-line last:border-b-0">
-      <span className="min-w-0 flex-1 truncate text-body">{row.label}</span>
+    <li className="flex min-h-8 items-center gap-3 rounded-lg px-2.5 py-1 hover:bg-(--bg-row-hover)">
+      <span className="min-w-0 flex-1 text-[0.8125rem] leading-5 text-(--text-chip)">{row.label}</span>
       {row.keys && <Keycap>{row.keys}</Keycap>}
     </li>
   )
@@ -80,7 +80,7 @@ function ShortcutsSheetDialog() {
   const blocks = (list: typeof groups) =>
     list.map((g) => (
       <section key={g.title} className="min-w-0">
-        <h3 className="label pb-0.5">{g.title}</h3>
+        <h3 className="px-2.5 pb-1 text-small font-medium text-dim">{g.title}</h3>
         {g.title === 'Shell' && <p className="pb-1 text-small text-dim">A zsh in the project folder.</p>}
         <ul>
           {g.rows.map((row) => (
@@ -92,27 +92,25 @@ function ShortcutsSheetDialog() {
 
   return (
     <Overlay size="wide" label="Keyboard shortcuts" onClose={() => setOverlay(null)}>
-      <div className="flex flex-none items-center gap-3 border-b border-line px-4 py-2.5">
+      <div className="flex flex-none items-center gap-3 border-b border-(--border-rule) px-4 py-3">
         <h2 className="flex-none text-title font-semibold">Shortcuts</h2>
-        <div className="relative min-w-0 flex-1">
-          <span className="pointer-events-none absolute top-2 left-2 text-dim">
-            <Icon name="search" size={13} />
-          </span>
+        <label className="thread-search flex h-[1.875rem] min-w-0 flex-1 cursor-text items-center gap-2 rounded-lg px-2.5 text-dim">
+          <Search size={14} aria-hidden="true" />
           <input
             autoFocus
             value={query}
             spellCheck={false}
             aria-label="Filter shortcuts"
             placeholder="Filter shortcuts and commands"
-            className="field w-full pl-7 text-small"
+            className="min-w-0 flex-1 bg-transparent text-small text-ink outline-none"
             onChange={(e) => setQuery(e.target.value)}
           />
-        </div>
+        </label>
         <Keycap>Esc</Keycap>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
-        {groups.length === 0 && <p className="py-8 text-center text-small text-dim">Nothing matches.</p>}
-        <div className="grid grid-cols-1 items-start gap-x-10 gap-y-4 lg:grid-cols-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {groups.length === 0 && <p className="py-8 text-center text-small text-soft">Nothing matches.</p>}
+        <div className="grid grid-cols-1 items-start gap-x-6 gap-y-4 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">{blocks(column(LEFT))}</div>
           <div className="flex min-w-0 flex-col gap-4">{blocks(column(RIGHT))}</div>
         </div>
