@@ -91,3 +91,26 @@ test('a listener that left hears nothing', async () => {
   await settle()
   assert.equal(heard, 0)
 })
+
+test('the answer read least recently goes first, and a path that went is asked for again', async () => {
+  const calls: string[][] = []
+  const store = createChipStore(
+    async (_thread, paths) => {
+      calls.push(paths)
+      return paths.map((p) => chip(p))
+    },
+    Date.now,
+    2,
+  )
+  store.ask('t1', 'a.ts')
+  store.ask('t1', 'b.ts')
+  await settle()
+  assert.equal(store.chipOf('t1', 'a.ts')?.exists, true, 'a chip on show reads its answer')
+  store.ask('t1', 'c.ts')
+  await settle()
+  assert.equal(store.chipOf('t1', 'a.ts')?.exists, true, 'the one read last stays')
+  assert.equal(store.chipOf('t1', 'b.ts'), undefined, 'the one not read goes')
+  store.ask('t1', 'b.ts')
+  await settle()
+  assert.deepEqual(calls, [['a.ts', 'b.ts'], ['c.ts'], ['b.ts']])
+})

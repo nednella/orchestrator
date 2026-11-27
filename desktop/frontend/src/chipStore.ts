@@ -8,8 +8,9 @@ const KEPT = 2000
 type Lookup = (thread: string, paths: string[]) => Promise<FileChip[]>
 
 // createChipStore keeps what each thread's paths are, as the app says. Paths asked for in one tick go to the app in
-// one call per thread, and a path it has an answer for is not asked again.
-export function createChipStore(lookup: Lookup, now: () => number = Date.now) {
+// one call per thread, and a path it has an answer for is not asked again. Past kept answers the one least recently
+// read goes.
+export function createChipStore(lookup: Lookup, now: () => number = Date.now, kept = KEPT) {
   const answers = new Map<string, { chip: FileChip; at: number }>()
   const waiting = new Map<string, Set<string>>()
   const asked = new Set<string>()
@@ -26,7 +27,7 @@ export function createChipStore(lookup: Lookup, now: () => number = Date.now) {
       asked.delete(key)
     }
     for (const old of answers.keys()) {
-      if (answers.size <= KEPT) break
+      if (answers.size <= kept) break
       answers.delete(old)
     }
     listeners.forEach((listener) => listener())
@@ -53,7 +54,14 @@ export function createChipStore(lookup: Lookup, now: () => number = Date.now) {
 
   return {
     // chipOf is what the app said of path, undefined before it said.
-    chipOf: (thread: string, path: string): FileChip | undefined => answers.get(keyOf(thread, path))?.chip,
+    chipOf(thread: string, path: string): FileChip | undefined {
+      const key = keyOf(thread, path)
+      const answer = answers.get(key)
+      if (!answer) return undefined
+      answers.delete(key)
+      answers.set(key, answer)
+      return answer.chip
+    },
     // ask has the app look at path, unless it answered already.
     ask(thread: string, path: string) {
       const key = keyOf(thread, path)
