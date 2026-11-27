@@ -12,6 +12,7 @@ import { RightPanel } from './components/RightPanel'
 import { WhatsNew } from './components/WhatsNew'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
+import { StartSplash } from './components/StartSplash'
 import { Toasts } from './components/Toasts'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
@@ -66,6 +67,7 @@ export function App() {
       </div>
       <UsageModal />
       <ConfirmHost />
+      <StartSplash />
       {!network.online && <OfflineSplash retrying={network.retrying} onRetry={() => void network.retry()} />}
     </>
   )

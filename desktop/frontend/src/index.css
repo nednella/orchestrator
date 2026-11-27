@@ -1593,6 +1593,46 @@
     to { opacity: 1; }
   }
 
+  .start-splash {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-splash);
+    display: grid;
+    place-items: center;
+    background: var(--bg-app);
+    pointer-events: none;
+    animation: splash-out 400ms ease-in-out 1200ms forwards;
+  }
+
+  .start-splash-mark {
+    display: inline-block;
+    font: 700 4.5rem/1 var(--font-brand);
+    letter-spacing: -0.01em;
+    color: var(--text);
+    animation: splash-settle 500ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  }
+
+  .start-splash-dot {
+    display: inline-block;
+    font-size: 1.4em;
+    line-height: 1;
+    font-weight: 900;
+    color: var(--accent);
+    animation: splash-dot 360ms cubic-bezier(0.2, 0.8, 0.2, 1) 380ms backwards;
+  }
+
+  @keyframes splash-settle {
+    from { opacity: 0; transform: translateY(12px); letter-spacing: 0.05em; }
+  }
+
+  @keyframes splash-dot {
+    from { opacity: 0; transform: translateY(-14px) scale(0.4); }
+  }
+
+  @keyframes splash-out {
+    to { opacity: 0; }
+  }
+
   .offline-screen {
     --u: calc(48px / 328);
     position: fixed;
@@ -1647,6 +1687,12 @@
     *::after {
       animation: none !important;
       transition: none !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .start-splash {
+      animation: splash-out 400ms ease-in-out 800ms forwards !important;
     }
   }
 
