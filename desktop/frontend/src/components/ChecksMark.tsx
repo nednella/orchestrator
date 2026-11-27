@@ -1,3 +1,4 @@
+import { Check, CircleDashed, X } from 'lucide-react'
 import type { PR } from '../types'
 
 type ChecksMarkProps = { checks: PR['checks'] }
@@ -16,29 +17,14 @@ const COLOR: Record<PR['checks'], string> = {
   failing: 'var(--danger)',
 }
 
+const ICON = { none: CircleDashed, pending: CircleDashed, passing: Check, failing: X }
+
 export function ChecksMark({ checks }: ChecksMarkProps) {
   if (checks === 'none') return null
+  const Shape = ICON[checks]
   return (
-    <svg
-      width="0.75rem"
-      height="0.75rem"
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke={COLOR[checks]}
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      role="img"
-      aria-label={LABEL[checks]}
-    >
-      <title>{LABEL[checks]}</title>
-      <ChecksShape checks={checks} />
-    </svg>
+    <span className="flex flex-none" role="img" aria-label={LABEL[checks]} title={LABEL[checks]}>
+      <Shape size={14} strokeWidth={2.25} color={COLOR[checks]} aria-hidden="true" />
+    </span>
   )
-}
-
-function ChecksShape({ checks }: ChecksMarkProps) {
-  if (checks === 'passing') return <path d="m2 6.5 2.7 2.7L10 3" />
-  if (checks === 'failing') return <path d="m3 3 6 6M9 3 3 9" />
-  return <circle cx="6" cy="6" r="3.5" strokeDasharray="2.2 2" />
 }

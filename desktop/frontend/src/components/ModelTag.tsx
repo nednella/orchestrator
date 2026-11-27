@@ -6,7 +6,7 @@ export function ModelTag({ model, effort, problem = '', className = '' }: ModelT
   const text = [shortModel(model), effort].filter(Boolean).join(' · ')
   if (!text) return null
   return (
-    <span className={`mono flex-none text-small whitespace-nowrap ${problem ? 'text-danger' : 'text-dim'} ${className}`} title={problem || 'Model and effort'}>
+    <span className={`flex-none text-small whitespace-nowrap ${problem ? 'text-danger' : 'text-dim'} ${className}`} title={problem || 'Model and effort'}>
       {text}
     </span>
   )

@@ -1,4 +1,4 @@
-import { Bot, CircleDot, CornerLeftUp, Folder, FileDiff, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
+import { Bot, CircleDot, CornerLeftUp, Folder, FileDiff, GitBranch, GitFork, Globe, Laptop, MessagesSquare } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
@@ -7,6 +7,7 @@ import { changesTip, editorLabel } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
 import { askToReadIssue } from '../issueReadRequest'
+import { PR_ICON, PR_STATE } from '../prState'
 import { useLayout } from '../LayoutContext'
 import type { PanelViewId } from '../panelTabs'
 import { AGENT_STATE_LABEL, STATE_LABEL } from '../stateMeta'
@@ -20,8 +21,6 @@ import { ContextCardRow } from './ContextCardRow'
 import { EditorMark } from './EditorMark'
 import { ServerMeta } from './ServerMeta'
 
-const PR_ICON = { open: GitPullRequestArrow, draft: GitPullRequestDraft, closed: GitPullRequestClosed, merged: GitMerge }
-const PR_STATE: Record<PR['state'], string> = { open: 'Open', draft: 'Draft', closed: 'Closed', merged: 'Merged' }
 const CHECKS: Record<PR['checks'], string> = { none: '', pending: 'Checks running', passing: 'Checks passed', failing: 'Checks failed' }
 const RELATION_ICON = { parent: CornerLeftUp, child: Bot, fork: GitFork }
 
