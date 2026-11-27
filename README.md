@@ -16,39 +16,18 @@
 
 ## Install
 
-Needs macOS on Apple silicon, plus:
+You need a Mac with Apple silicon, [Claude Code](https://docs.claude.com/en/docs/claude-code), [tmux](https://github.com/tmux/tmux) and the [GitHub CLI](https://cli.github.com) 2.99 or later, logged in.
 
-- [tmux](https://github.com/tmux/tmux): `brew install tmux`
-- [GitHub CLI](https://cli.github.com), logged in: `brew install gh && gh auth login`; 2.99 or later to attach pictures when a note becomes an issue
-- [Claude Code](https://docs.claude.com/en/docs/claude-code)
+Then run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nednella/orchestrator/main/install.sh | bash
 ```
 
-The script puts `orchestrator.app` in `~/Applications`, and Chrome for Testing, the agent browser, when it is not there yet; one that is there stays as it is. It then lists anything missing. No sudo. Another app that uses `Google Chrome for Testing.app` shares only that program with orchestrator, and nothing else.
+The install script verifies the download and lists any required software that's missing. No `sudo` required.
 
-## Start
+You get:
 
-1. Open `orchestrator`.
-2. Add a project: _+_ in the project rail.
-3. Start a thread: `⌘M`, or `Enter` on an issue in the queue to open it, then start one from it.
-4. Ask about the project without changing it: `⌘N` starts a read-only thread. It reads the project and changes nothing; it can file notes and issues.
-
-`⌘/` lists every shortcut.
-
-## Set up a project
-
-Right-click the project in the rail → _Set up project_. For a project with no queue sections it adds an Inbox whose _Work_ action runs `/work <n>`, plus the issue branch name and the PR commands. Then it starts a thread that writes the `/work` command, the issue template and `AGENTS.md` with you.
-
-To change the config by hand, edit `~/.config/orchestrator/config.yaml`; the app picks the change up while it runs. `docs/config.md` describes every key.
-
-## Update
-
-Click the update button at the bottom of the sidebar. It checks, then downloads, then asks before it installs and restarts. Threads keep running in their hosts.
-
-Releases are signed with one certificate, so macOS keeps the permissions you gave orchestrator across updates. The first signed release asks for each permission one last time. To clear the entries that earlier releases left behind, run `tccutil reset All io.github.nednella.orchestrator`, then approve the prompts once more.
-
-## Build
-
-Needs Go, Node and `tmux`. `make desktop-app` builds the front end and the app into `bin/orchestrator-dev.app`; `VERSION=v1.2.3` stamps a version. `make release` builds `bin/orchestrator-darwin-arm64.zip` and its `.sha256`. Run the tests with `go test -race -tags stub ./...` and `cd desktop/frontend && npm test`, with the isolation variables from `docs/testing.md` set. `AGENTS.md` describes how the app works.
+- `~/Applications/orchestrator.app`
+- [agent-browser](https://github.com/vercel-labs/agent-browser), inside the app, which agents drive their browser with
+- `~/Applications/Google Chrome for Testing.app`, the browser agents drive (kept as it is if you already have it)
