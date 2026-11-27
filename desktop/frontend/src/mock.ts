@@ -180,6 +180,7 @@ export function createMock(params: URLSearchParams) {
       state: s.state,
       detail: s.detail,
       lastEventAt: s.lastEventAt,
+      workingSince: s.workingSince,
       createdAt: s.createdAt,
       issue: s.issue,
       model: s.model,
@@ -346,6 +347,7 @@ export function createMock(params: URLSearchParams) {
       state: initial,
       detail: pick(details[initial]),
       lastEventAt,
+      workingSince: initial === 'working' ? Date.now() : 0,
       createdAt,
       issue,
       ...modelFor(owner, issue),
@@ -452,6 +454,7 @@ export function createMock(params: URLSearchParams) {
     const ats = trail.map(([, minutesAgo]) => now - minutesAgo * minute)
     const s = create(title, issue, state, ats.at(-1) ?? 0, ats[0] ? ats[0] - minute : now, owner, access)
     s.state = state
+    s.workingSince = state === 'working' ? s.lastEventAt : 0
     return s
   }
 
@@ -518,7 +521,7 @@ export function createMock(params: URLSearchParams) {
     const finder = seed('Find the flaky checkout test', 0, 'working', [['working', 9]], data[0], 'read')
     finder.parent = lead.id
     if (flags.childAsk !== null) {
-      Object.assign(finder, { state: 'waiting', detail: 'Claude needs your permission to use Bash: npm install' })
+      Object.assign(finder, { state: 'waiting', workingSince: 0, detail: 'Claude needs your permission to use Bash: npm install' })
       if (flags.childAsk === 'question' || flags.childAsk === 'plan') chats.ask(finder.id, flags.childAsk)
       else chats.seed(finder.id)
       setTimeout(() => emit('attention', { id: finder.id, state: 'waiting' }), 1500)
@@ -592,6 +595,7 @@ export function createMock(params: URLSearchParams) {
   function setState(s: Thread, state: State) {
     const at = Date.now()
     s.state = state
+    s.workingSince = state === 'working' ? at : 0
     s.detail = pick(details[state])
     s.lastEventAt = at
     publish()
@@ -623,6 +627,7 @@ export function createMock(params: URLSearchParams) {
     // As the Go side does, the thread is listed at once, starting, and its agent and first message come after.
     s.start = 'starting'
     s.state = 'working'
+    s.workingSince = s.createdAt
     s.detail = s.worktree ? 'Setting up the worktree' : 'Starting Claude'
     s.firstMessage = prompt
     const attempt = () => {
@@ -632,11 +637,11 @@ export function createMock(params: URLSearchParams) {
           starts.delete(s.id)
           if (flags.startFail && !failedOnce.has(s.id)) {
             failedOnce.add(s.id)
-            Object.assign(s, { start: 'failed', startError: 'The agent did not take the first message in time', state: 'waiting', detail: 'The agent did not take the first message in time' })
+            Object.assign(s, { start: 'failed', startError: 'The agent did not take the first message in time', state: 'waiting', workingSince: 0, detail: 'The agent did not take the first message in time' })
             publish()
             return
           }
-          Object.assign(s, { start: '', startError: '', firstMessage: '', state: 'idle', detail: pick(details.idle) })
+          Object.assign(s, { start: '', startError: '', firstMessage: '', state: 'idle', workingSince: 0, detail: pick(details.idle) })
           chats.start(s.id)
           if (flags.setup) {
             Object.assign(s, { setup: 'running', setupExit: 0, setupShell: `${s.project}/s1` })
@@ -652,7 +657,7 @@ export function createMock(params: URLSearchParams) {
       )
     }
     retries.set(s.id, () => {
-      Object.assign(s, { start: 'starting', startError: '', state: 'working', detail: s.worktree ? 'Setting up the worktree' : 'Starting Claude' })
+      Object.assign(s, { start: 'starting', startError: '', state: 'working', workingSince: Date.now(), detail: s.worktree ? 'Setting up the worktree' : 'Starting Claude' })
       attempt()
       publish()
     })

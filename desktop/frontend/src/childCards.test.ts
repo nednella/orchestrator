@@ -11,6 +11,7 @@ const thread = (over: Partial<Thread>): Thread => ({
   state: 'working',
   detail: '',
   lastEventAt: 0,
+  workingSince: 0,
   createdAt: 0,
   issue: 0,
   model: '',

@@ -77,6 +77,7 @@ export type Thread = {
   state: State
   detail: string
   lastEventAt: number
+  workingSince: number // when the stretch of work the thread shows began, 0 unless its state is working
   createdAt: number // the thread's first start
   issue: number
   model: string

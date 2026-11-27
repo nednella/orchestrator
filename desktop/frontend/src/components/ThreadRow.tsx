@@ -7,10 +7,9 @@ import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
 import { gigabytes, memoryNote } from '../memory'
 import { clickCloses } from '../threadClick'
-import { threadGoal } from '../threads'
+import { threadGoal, workingSinceOf } from '../threads'
 import type { Thread } from '../types'
 import type { Point } from '../useFloatingAt'
-import { ClaudeMark } from './ClaudeMark'
 import { CleanupMark } from './CleanupMark'
 import { InlineInput } from './InlineInput'
 import { LastActive } from './LastActive'
@@ -18,6 +17,7 @@ import { StateIcon } from './StateIcon'
 import { ThreadAnswer } from './ThreadAnswer'
 import { ThreadCard } from './ThreadCard'
 import { ThreadMenu } from './ThreadMenu'
+import { ThreadWorking } from './ThreadWorking'
 import { ThreadGoal } from './ThreadGoal'
 import { useHoverCard } from './useHoverCard'
 
@@ -44,6 +44,7 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
   const { show: showCard, close: closeCard } = card
   const settled = thread.state === 'settled'
   const branch = splitBranch(thread.branch)
+  const workingSince = workingSinceOf(thread, needs)
 
   // The request this row has answered: a row that mounts, or gets the cursor back, with an old one does not open.
   const answered = useRef(menuRequest)
@@ -135,9 +136,13 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
               {thread.title}
             </button>
             <span className="col-start-3 flex items-center justify-self-end gap-2">
-              <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
-                <LastActive at={thread.lastEventAt} />
-              </span>
+              {workingSince !== null ? (
+                <ThreadWorking since={workingSince} />
+              ) : (
+                <span className="thread-age thread-dim justify-self-end text-label text-dim tabular-nums">
+                  <LastActive at={thread.lastEventAt} />
+                </span>
+              )}
               {selected && (
                 <span className="thread-actions relative z-[1] items-center justify-self-end">
                   <button className="btn btn-ghost h-5 w-6 justify-center px-0" title="Close thread" aria-label="Close thread" onClick={() => a.showHome(thread.project)}>
@@ -145,7 +150,6 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
                   </button>
                 </span>
               )}
-              {thread.state === 'working' && <span className="thread-working"><ClaudeMark size={14} /></span>}
             </span>
           </>
         )}

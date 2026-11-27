@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { cleanupNote, threadGoal, descendantsOf, firstThread, goneThreads, isTopLevel, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { cleanupNote, workingSinceOf, threadGoal, descendantsOf, firstThread, goneThreads, isTopLevel, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Thread, State } from './types.ts'
 
@@ -14,6 +14,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     state,
     detail: '',
     lastEventAt,
+    workingSince: 0,
     createdAt: 0,
     issue: 0,
     model: '',
@@ -218,4 +219,12 @@ test('side chats are kept apart from the threads', () => {
   const { threads, sideChats } = splitSideChats(rows)
   assert.deepEqual(threads.map((s) => s.id), ['shop/a', 'shop/b'])
   assert.deepEqual(sideChats, [side])
+})
+
+test('a card shows work for a working thread with a start, and not for one that waits or has a waiting descendant', () => {
+  const working = { ...thread('a', 'working'), workingSince: 5000 }
+  assert.equal(workingSinceOf(working, undefined), 5000)
+  assert.equal(workingSinceOf(working, thread('b', 'waiting')), null)
+  assert.equal(workingSinceOf({ ...working, workingSince: 0 }, undefined), null)
+  assert.equal(workingSinceOf({ ...thread('c', 'idle'), workingSince: 5000 }, undefined), null)
 })

@@ -71,6 +71,12 @@ export function threadTreeOf(threads: Thread[]): ThreadTree {
   return { top, attention }
 }
 
+// When the stretch of work the card shows began, or null when the card does not show work: a thread that waits, or
+// has a waiting descendant (needs), is not at work, and one the app has no start for keeps the card's age.
+export function workingSinceOf(thread: Thread, needs: Thread | undefined): number | null {
+  return !needs && thread.state === 'working' && thread.workingSince > 0 ? thread.workingSince : null
+}
+
 // The thread list's order, of the top-level threads among threads: attention (a thread that waits or has a waiting
 // descendant), working, idle, then settled, newest first.
 export function sortThreads(threads: Thread[], tree = threadTreeOf(threads)): Thread[] {
