@@ -1,6 +1,6 @@
+import { Search } from 'lucide-react'
 import type { KeyboardEvent, RefObject } from 'react'
 import type { ModelTab } from '../modelMenu'
-import { Icon } from './Icon'
 import { ModelListRow, modelOptionId } from './ModelListRow'
 
 type ModelChoicesProps = {
@@ -41,7 +41,7 @@ export function ModelChoices({ tab, query, list, highlighted, selected, favorite
       <div className="flex-none px-3 pt-2.5">
         <label className="flex h-8 items-center gap-2 border-b border-line pb-1.5 text-body">
           <span className="flex text-dim">
-            <Icon name="search" size={14} />
+            <Search size={14} aria-hidden="true" />
           </span>
           <input
             ref={searchRef}

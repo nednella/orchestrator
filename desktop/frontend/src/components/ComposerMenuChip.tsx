@@ -1,6 +1,6 @@
+import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Icon } from './Icon'
 
 type ComposerMenuChipProps = {
   label: string
@@ -49,7 +49,7 @@ export function ComposerMenuChip({ label, children, menu }: ComposerMenuChipProp
         }}
       >
         {children}
-        <Icon name="chevron" size={12} />
+        <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open && (
         <div className="composer-menu fade-in right-0" role="dialog" aria-label={label} onMouseDown={(e) => e.preventDefault()}>

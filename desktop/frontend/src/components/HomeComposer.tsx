@@ -1,4 +1,4 @@
-import { MessageSquare, StickyNote } from 'lucide-react'
+import { MessageSquare, StickyNote, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -17,7 +17,6 @@ import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
 import { ComposerPickList } from './ComposerPickList'
-import { Icon } from './Icon'
 import { IssueChips } from './IssueChips'
 import { IssuePickList } from './IssuePickList'
 import { NoteImages } from './NoteImages'
@@ -190,7 +189,7 @@ export function HomeComposer() {
                   <span className="mono flex-none text-dim">{pickedIssue.number}</span>
                   <span className="min-w-0 truncate">{pickedIssue.title}</span>
                   <button className="flex-none text-dim hover:text-ink" aria-label="Remove issue" onClick={() => setPicked(null)}>
-                    <Icon name="close" size={11} />
+                    <X size={11} aria-hidden="true" />
                   </button>
                 </span>
               )

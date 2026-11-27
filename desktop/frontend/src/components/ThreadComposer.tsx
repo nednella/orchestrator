@@ -1,4 +1,4 @@
-import { Zap } from 'lucide-react'
+import { Paperclip, X, Zap } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { Ref, RefObject } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -25,7 +25,6 @@ import { Composer } from './Composer'
 import type { ComposerInput } from './ComposerEditor'
 import { ComposerModelChip } from './ComposerModelChip'
 import { ComposerPickList } from './ComposerPickList'
-import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
 import { SideChatChip } from './SideChatChip'
 
@@ -238,7 +237,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
               <div className="flex items-center gap-2 px-3 py-1.5 text-small text-soft">
                 <span className="min-w-0 flex-1 truncate">Replying to: {replyLabel(reply)}</span>
                 <button className="btn btn-ghost h-5 px-1" aria-label="Cancel reply" onClick={() => onReply(null)}>
-                  <Icon name="x" size={12} />
+                  <X size={12} aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -263,7 +262,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
       left={
         <>
           <button className="composer-chip" title="Attach images" aria-label="Attach images" onMouseDown={(e) => e.preventDefault()} onClick={() => picker.current?.click()}>
-            <Icon name="paperclip" size={14} />
+            <Paperclip size={14} aria-hidden="true" />
           </button>
           <input
             ref={picker}

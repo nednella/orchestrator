@@ -1,7 +1,7 @@
+import { Check } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 import { EFFORTS, EFFORT_HINTS, modelShortName } from '../model'
 import { reasoningChosen, reasoningLevels } from '../modelMenu'
-import { Icon } from './Icon'
 import { moveFocus } from './moveFocus'
 
 type ModelReasoningProps = {
@@ -55,7 +55,7 @@ export function ModelReasoning({ model, effort, defaultEffort, disabled, onPick,
             {id === chosen ? (
               <>
                 {id === defaultEffort && <span className="sr-only">Default</span>}
-                <Icon name="check" size={13} />
+                <Check size={13} aria-hidden="true" />
               </>
             ) : (
               id === defaultEffort && <span className="text-label text-dim">Default</span>

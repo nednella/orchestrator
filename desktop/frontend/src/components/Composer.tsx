@@ -1,3 +1,4 @@
+import { Square, ArrowUp, LoaderCircle } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { DragEvent, ReactNode, RefObject } from 'react'
 import { footerMode } from '../composerLayout'
@@ -5,7 +6,6 @@ import type { FooterMode } from '../composerLayout'
 import type { ComposerDraft } from '../composerMarkdown'
 import { ComposerEditor } from './ComposerEditor'
 import type { ComposerInput } from './ComposerEditor'
-import { Icon } from './Icon'
 
 // left may lay the footer's controls out for its mode, which the width of the form picks.
 type ComposerProps = {
@@ -98,7 +98,7 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
               onMouseDown={(e) => e.preventDefault()}
               onClick={stop.onStop}
             >
-              <Icon name="stop" size={14} />
+              <Square size={10} fill="currentColor" aria-hidden="true" />
             </button>
           ) : (
             <button
@@ -112,10 +112,10 @@ export function Composer({ inputRef, value, label, placeholder, canSend, sendLab
             >
               {sending ? (
                 <span className="flex animate-spin">
-                  <Icon name="loader" size={14} />
+                  <LoaderCircle size={14} aria-hidden="true" />
                 </span>
               ) : (
-                (sendText ?? <Icon name="arrow-up" size={14} />)
+                (sendText ?? <ArrowUp size={14} aria-hidden="true" />)
               )}
             </button>
           )}

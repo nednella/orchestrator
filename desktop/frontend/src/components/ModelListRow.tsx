@@ -1,7 +1,6 @@
-import { Star } from 'lucide-react'
+import { Check, Star } from 'lucide-react'
 import { CLAUDE_MODELS } from '../model'
 import { ClaudeMark } from './ClaudeMark'
-import { Icon } from './Icon'
 
 type ModelListRowProps = {
   id: string
@@ -39,7 +38,7 @@ export function ModelListRow({ id, highlighted, selected, favorite, starOnHover,
     >
       <ClaudeMark size={16} />
       <span className="min-w-0 truncate">{name}</span>
-      {selected && <Icon name="check" size={13} />}
+      {selected && <Check size={13} aria-hidden="true" />}
       <span className="min-w-2 flex-1" />
       <button
         aria-label={favorite ? `Remove ${name} from favorites` : `Add ${name} to favorites`}

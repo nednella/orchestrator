@@ -1,8 +1,8 @@
+import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import type { DataDirChoice } from '../types'
-import { Icon } from './Icon'
 import { SettingsRow } from './SettingsRow'
 
 type DataDirRowProps = { dir: string; fixed: boolean }
@@ -45,7 +45,7 @@ export function DataDirRow({ dir, fixed }: DataDirRowProps) {
       control={
         <>
           <div className="setting-field flex h-7 w-72 min-w-0 items-center gap-2 px-2.5 text-soft" title={shown}>
-            <Icon name="folder" />
+            <Folder size={14} aria-hidden="true" />
             {/* rtl puts the ellipsis at the start, so the end of a long path stays in view */}
             <span className="mono min-w-0 flex-1 truncate text-left text-small select-text" dir="rtl">
               <bdi>{shown}</bdi>
