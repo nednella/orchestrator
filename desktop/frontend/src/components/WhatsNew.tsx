@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api, errorMessage } from '../api'
+import { sentenceCase } from '../sentenceCase'
 import type { IssueType, Release } from '../types'
 import { Keycap } from './Keycap'
 import { Overlay } from './Overlay'
@@ -35,7 +36,7 @@ function WhatsNewDialog({ opened, onClose }: WhatsNewDialogProps) {
 
   return (
     <Overlay size="reading" label="What's new" onClose={onClose}>
-      <div className="flex flex-none items-center gap-3 border-b border-line px-4 py-2.5">
+      <div className="flex flex-none items-center gap-3 border-b border-(--border-rule) px-4 py-3">
         <h2 className="flex-none text-title font-semibold">{release ? `What's new in ${release.version}` : "What's new"}</h2>
         <span className="flex-1" />
         <Keycap>Esc</Keycap>
@@ -44,17 +45,17 @@ function WhatsNewDialog({ opened, onClose }: WhatsNewDialogProps) {
         {error && <p className="text-body text-dim">{error}</p>}
         {release?.sections.map((section) => (
           <section key={section.title} className="pb-4">
-            <h3 className="label pb-1">{section.title}</h3>
+            <h3 className="pb-1 text-small font-medium text-dim">{sentenceCase(section.title)}</h3>
             <ul>
               {section.changes.map((change, i) => (
-                <li key={i} className="flex items-baseline gap-3 border-b border-line py-1.5 last:border-b-0">
+                <li key={i} className="flex items-baseline gap-3 py-1.5">
                   <span className="flex-none self-center">
                     <TypeMark type={SECTION_TYPE[section.title] ?? 'chore'} />
                   </span>
-                  <span className="mono w-16 flex-none truncate text-label text-dim">{change.scope}</span>
+                  <span className="w-16 flex-none truncate text-label text-dim">{change.scope}</span>
                   <span className="min-w-0 flex-1 text-body">{change.text}</span>
                   {change.url && (
-                    <button className="link mono flex-none text-label" onClick={() => report(() => api.openURL(change.url))}>
+                    <button className="link flex-none text-label tabular-nums" onClick={() => report(() => api.openURL(change.url))}>
                       #{change.issue}
                     </button>
                   )}
