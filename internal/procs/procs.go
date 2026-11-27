@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -59,11 +60,64 @@ type Table struct {
 	run    Runner
 	grace  time.Duration
 	logf   func(format string, args ...any)
+
+	marksMu sync.Mutex
+	marks   map[int]mark // by pid: what Marks read of each process it was given last time
+}
+
+// mark is the thread whose marker a process carries, "" for none, and when the process started.
+type mark struct {
+	start  int64
+	thread string
 }
 
 // New is a table for the threads of the app whose control socket is socket. lsof runs through run.
 func New(socket string, run Runner) *Table {
 	return &Table{socket: socket, sys: kernel{}, run: run, grace: stopGrace, logf: log.Printf}
+}
+
+// Process is a live process. A pid with its start time names one process: a pid is reused.
+type Process struct {
+	PID, PPID int
+	Start     int64 // microseconds since the epoch
+}
+
+// Processes are the live processes, without zombies, from one listing of the kernel's.
+func (t *Table) Processes() ([]Process, error) {
+	list, err := t.sys.processes()
+	if err != nil {
+		return nil, fmt.Errorf("listing processes: %w", err)
+	}
+	out := make([]Process, len(list))
+	for i, p := range list {
+		out[i] = Process{PID: p.pid, PPID: p.ppid, Start: p.start}
+	}
+	return out, nil
+}
+
+// Marks are the threads of this app whose marker the processes of list carry, by pid; a process with none is left
+// out. It reads the environment of a process only the first time it is given it, and forgets each process list no
+// longer holds, so a caller that gives it the processes every few seconds reads only those started since.
+func (t *Table) Marks(list []Process) map[int]string {
+	t.marksMu.Lock()
+	defer t.marksMu.Unlock()
+	kept := make(map[int]mark, len(list))
+	found := map[int]string{}
+	for _, p := range list {
+		m, ok := t.marks[p.PID]
+		if !ok || m.start != p.Start {
+			m = mark{start: p.Start}
+			if _, env, err := t.sys.args(p.PID); err == nil {
+				m.thread, _ = t.marker(env)
+			}
+		}
+		kept[p.PID] = m
+		if m.thread != "" {
+			found[p.PID] = m.thread
+		}
+	}
+	t.marks = kept
+	return found
 }
 
 // Server is a process of a thread's that listens on TCP ports.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os/exec"
 	"slices"
 	"strings"
@@ -35,6 +36,7 @@ type fakeSystem struct {
 	mu    sync.Mutex
 	procs map[int]*fakeProc
 	sent  []signalled
+	reads []int // the pid of each args call
 }
 
 func newFake(procs ...fakeProc) *fakeSystem {
@@ -58,6 +60,7 @@ func (f *fakeSystem) processes() ([]process, error) {
 func (f *fakeSystem) args(pid int) ([]string, []string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.reads = append(f.reads, pid)
 	p, ok := f.procs[pid]
 	if !ok {
 		return nil, nil, syscall.ESRCH
@@ -188,6 +191,53 @@ func TestParseLsof(t *testing.T) {
 var thread = []fakeProc{
 	{process: process{pid: 100, ppid: 1, pgid: 100, start: 1}, argv: []string{"/bin/orchestrator", "host"}, env: marked("p/ab")},
 	{process: process{pid: 101, ppid: 100, pgid: 101, start: 1}, argv: []string{"claude", "-p"}, env: marked("p/ab")},
+}
+
+func TestMarksReadEachProcessOnce(t *testing.T) {
+	sys := newFake(
+		fakeProc{process: process{pid: 200, ppid: 1, start: 5}, env: marked("p/ab")},
+		fakeProc{process: process{pid: 201, ppid: 1, start: 5}, env: []string{threadVar + "=p/ab", socketVar + "=/other.sock"}},
+		fakeProc{process: process{pid: 202, ppid: 1, start: 5}, env: []string{"HOME=/h"}},
+	)
+	table := newTable(t, sys, lsofSays(""))
+	list, err := table.Processes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := func() []int {
+		sys.mu.Lock()
+		defer sys.mu.Unlock()
+		got := slices.Clone(sys.reads)
+		sys.reads = nil
+		slices.Sort(got)
+		return got
+	}
+	if got := table.Marks(list); !maps.Equal(got, map[int]string{200: "p/ab"}) {
+		t.Errorf("Marks = %v, want only this app's thread", got)
+	}
+	if got := reads(); !slices.Equal(got, []int{200, 201, 202}) {
+		t.Errorf("first Marks read %v, want every process", got)
+	}
+	if got := table.Marks(list); !maps.Equal(got, map[int]string{200: "p/ab"}) || len(reads()) != 0 {
+		t.Errorf("second Marks = %v, and read again", got)
+	}
+
+	// Pid 200 is taken by a new process with no marker, and 202 leaves the list given and comes back.
+	sys.procs[200] = &fakeProc{process: process{pid: 200, ppid: 1, start: 9}, env: []string{"HOME=/h"}}
+	if list, err = table.Processes(); err != nil {
+		t.Fatal(err)
+	}
+	slices.SortFunc(list, func(a, b Process) int { return a.PID - b.PID })
+	if got := table.Marks(list[:2]); len(got) != 0 {
+		t.Errorf("Marks after pid 200 was reused = %v", got)
+	}
+	if got := reads(); !slices.Equal(got, []int{200}) {
+		t.Errorf("after pid 200 was reused Marks read %v, want only it", got)
+	}
+	table.Marks(list)
+	if got := reads(); !slices.Equal(got, []int{202}) {
+		t.Errorf("Marks read %v, want the process it was not given last time", got)
+	}
 }
 
 func TestServers(t *testing.T) {

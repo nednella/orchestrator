@@ -198,7 +198,7 @@ type Threads struct {
 	restarting map[string]bool         // the threads settled for a change of access until they wake again: they keep their servers
 	background map[string]Background   // what each live thread's Claude does beside its turns, as its host's chat log says
 	memory     Memory
-	serverPID  int // the tmux server's, as tmux gave it; asked again once ps no longer lists it
+	serverPID  int // the tmux server's, as tmux gave it; asked again once the process listing no longer has it
 }
 
 // ProjectList is the configured projects.
