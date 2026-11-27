@@ -1,4 +1,4 @@
-import { Icon } from './Icon'
+import { X } from 'lucide-react'
 
 type NoteImagesProps = {
   urls: string[]
@@ -15,8 +15,7 @@ export function NoteImages({ urls, attachedTo = 'note', onOpen, onRemove }: Note
         <span key={url} className="relative">
           <button
             type="button"
-            className="block overflow-hidden rounded-sm border"
-            style={{ borderColor: attachedTo === 'note' ? 'var(--border-note)' : 'var(--border-strong)' }}
+            className="block overflow-hidden rounded-md border border-(--border-rule)"
             title="Open larger"
             onClick={(e) => {
               e.stopPropagation()
@@ -33,7 +32,7 @@ export function NoteImages({ urls, attachedTo = 'note', onOpen, onRemove }: Note
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onRemove(url)}
             >
-              <Icon name="x" size={10} />
+              <X size={12} aria-hidden="true" />
             </button>
           )}
         </span>

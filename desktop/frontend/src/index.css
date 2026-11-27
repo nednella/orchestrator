@@ -1525,14 +1525,34 @@
   }
 
   .note-card {
-    background: var(--bg-note-card);
-    border: 1px solid var(--border-note);
-    border-radius: var(--radius-md);
-    color: var(--text-note);
+    background: var(--bg-card);
+    border: 1px solid var(--border-rule);
+    border-radius: 0.75rem;
   }
 
   [data-panel][data-focused] .note-card[data-cursor='true'] {
     border-color: var(--accent);
+  }
+
+  .note-actions {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .note-card:is(:hover, :focus-within) .note-actions,
+  [data-panel][data-focused] .note-card[data-cursor='true'] .note-actions {
+    display: flex;
+  }
+
+  @media (hover: none) {
+    .note-actions {
+      display: flex;
+    }
+  }
+
+  [data-mode='narrow'] .note-actions {
+    display: flex;
   }
 
   /* A hairline between two columns, with a wider grip than it shows. */
@@ -1729,24 +1749,6 @@
     .thread-row .thread-working {
       animation: working-pulse 2s steps(6) infinite !important;
     }
-  }
-
-  .note-jot {
-    min-height: 2rem;
-    padding-top: 0.3125rem;
-    padding-bottom: 0.3125rem;
-    border-color: var(--border-note);
-  }
-
-  .note-jot:focus {
-    border-color: color-mix(in srgb, var(--accent) 70%, var(--border-note));
-  }
-
-  [data-section='notes'] .note-jot,
-  [data-section='notes'] .note-search {
-    background: var(--bg-note-card);
-    border-color: var(--border-note);
-    color: var(--text-note);
   }
 
   .reveal {

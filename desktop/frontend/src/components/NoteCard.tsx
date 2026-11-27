@@ -1,3 +1,4 @@
+import { Archive, ArchiveRestore, CircleDot, MessageSquarePlus, Pin, Trash2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { confirmed } from '../confirm'
@@ -5,7 +6,6 @@ import { imageFiles, readImage } from '../images'
 import type { Note } from '../types'
 import { Ago } from './Ago'
 import { AutoTextarea } from './AutoTextarea'
-import { Icon } from './Icon'
 import { NoteImages } from './NoteImages'
 import { NoteText } from './NoteText'
 
@@ -79,8 +79,7 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           autoFocus
           defaultValue={note.text}
           aria-label="Edit note"
-          className="note-jot rounded-md border px-2.5 text-body"
-          style={{ background: 'var(--bg-note)', borderColor: 'var(--border-note)' }}
+          className="rounded-lg border border-(--border-rule) bg-(--bg-app) px-2.5 py-1.5 text-body outline-none focus:border-(--accent)"
           onFocus={(e) => e.currentTarget.setSelectionRange(note.text.length, note.text.length)}
           onPaste={(e) => attach(imageFiles(e.clipboardData)) && e.preventDefault()}
           onInput={(e) => {
@@ -102,14 +101,15 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           }}
         />
         <NoteImages urls={note.images} onOpen={onOpenImage} onRemove={(url) => a.report(() => a.removeNoteImage(note.id, url))} />
-        <p className="text-label" style={{ color: 'var(--text-note-dim)' }}>
+        <p className="text-label text-soft">
           Saves as you type. Enter finishes, Esc discards the pending change, paste an image to attach it.
         </p>
       </article>
     )
   }
 
-  const iconButton = 'btn btn-ghost h-6 w-6 justify-center px-0'
+  const iconButton = 'btn btn-ghost h-7 w-7 justify-center px-0'
+  const textButton = 'btn btn-ghost h-7 px-2'
   return (
     <article className="note-card group p-3" data-cursor={cursor} style={{ opacity: note.archived ? 0.6 : 1 }}>
       <div
@@ -138,8 +138,8 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
         </div>
       </div>
       {(overflowing || expanded) && (
-        <button className="mt-1 text-small" style={{ color: 'var(--text-note-dim)' }} onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'less' : 'more'}
+        <button className="mt-1 text-small text-soft hover:text-ink" onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Show less' : 'Show more'}
         </button>
       )}
       {note.images.length > 0 && (
@@ -147,17 +147,18 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
           <NoteImages urls={note.images} onOpen={onOpenImage} />
         </div>
       )}
-      <div className="mt-2 flex min-h-6 flex-wrap items-center gap-x-1.5 gap-y-1">
-        <span className="mono mr-auto text-label" style={{ color: 'var(--text-note-dim)' }}>
+      <div className="mt-2 flex min-h-7 flex-wrap items-center gap-x-1 gap-y-1">
+        <span className="mr-auto text-small text-soft">
           <Ago at={note.createdAt} />
         </span>
-        <span className="reveal">
-          <button className="btn btn-primary h-6 px-2" title="Start a thread from this note" onClick={() => a.report(() => a.noteToThread(note.id))}>
-            <Icon name="play" size={10} />
+        <span className="note-actions">
+          <button className={textButton} title="Start a thread from this note" onClick={() => a.report(() => a.noteToThread(note.id))}>
+            <MessageSquarePlus size={14} aria-hidden="true" />
             Start thread
           </button>
           {canFile && (
-            <button className="btn h-6 px-2" title="File the note as an issue" onClick={fileIssue}>
+            <button className={textButton} title="File the note as an issue" onClick={fileIssue}>
+              <CircleDot size={14} aria-hidden="true" />
               File as issue
             </button>
           )}
@@ -167,22 +168,21 @@ export function NoteCard({ note, cursor, editing, onEdit, onStopEditing, onOpenI
             aria-label={note.archived ? 'Restore note' : 'Archive note'}
             onClick={() => a.report(() => a.setNoteArchived(note.id, !note.archived))}
           >
-            <Icon name="archive" size={13} />
+            {note.archived ? <ArchiveRestore size={14} aria-hidden="true" /> : <Archive size={14} aria-hidden="true" />}
           </button>
           <button className={iconButton} title="Delete" aria-label="Delete note" onClick={remove}>
-            <Icon name="trash" size={13} />
+            <Trash2 size={14} aria-hidden="true" />
           </button>
         </span>
         {!note.archived && (
           <button
-            className={`${iconButton} -mr-1.5`}
-            style={{ color: note.pinned ? 'var(--accent)' : 'var(--text-note-dim)' }}
+            className={`${iconButton} -mr-1.5 ${note.pinned ? 'text-(--accent)' : ''}`}
             title={note.pinned ? 'Pinned. Click to unpin (P)' : 'Pin to the top (P)'}
             aria-label={note.pinned ? 'Unpin note' : 'Pin note'}
             aria-pressed={note.pinned}
             onClick={() => a.report(() => a.setNotePinned(note.id, !note.pinned))}
           >
-            <Icon name="pin" size={13} />
+            <Pin size={14} fill={note.pinned ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { ChevronRight, Search } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -5,7 +6,6 @@ import type { Note } from '../types'
 import { useListNav, isTyping } from '../useListNav'
 import { useScrollCursorIntoView } from '../useScrollCursorIntoView'
 import { Collapse } from './Collapse'
-import { Icon } from './Icon'
 import { ImageViewer } from './ImageViewer'
 import { NoteCard } from './NoteCard'
 import { NoteJot } from './NoteJot'
@@ -81,15 +81,15 @@ export function NotesView() {
         <NoteJot />
         {a.notes.length > 0 && (
           <div className="relative">
-            <span className="pointer-events-none absolute top-1.5 left-2 text-dim">
-              <Icon name="search" size={13} />
+            <span className="pointer-events-none absolute top-2 left-2.5 text-soft">
+              <Search size={14} aria-hidden="true" />
             </span>
             <input
               value={query}
               placeholder="Search notes"
               aria-label="Search notes"
               spellCheck={false}
-              className="field note-search w-full pl-7 text-small"
+              className="h-8 w-full rounded-lg border border-(--border-rule) bg-(--bg-card) pr-2.5 pl-8 text-small outline-none focus:border-(--accent)"
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key !== 'Escape') return
@@ -102,14 +102,14 @@ export function NotesView() {
         )}
       </div>
       <div ref={list} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pt-1 pb-3">
-        {a.notes.length === 0 && <Notice title="Nothing jotted yet" hint="Half ideas, things to ask, bugs you noticed. Start a thread or file an issue from any note later." centered />}
+        {a.notes.length === 0 && <Notice title="No notes yet" hint="Write down an idea, a question or a bug. You can start a thread or file an issue from any note later." centered />}
         {a.notes.length > 0 && visible.length === 0 && <Notice title="No notes match" hint="Clear the search to see them all." centered />}
         {active.map(card)}
         {archived.length > 0 && (
           <>
-            <button className="flex items-center gap-1.5 px-1 py-1 text-small text-dim hover:text-ink" aria-expanded={showArchived} onClick={() => setArchivedOpen(!archivedOpen)}>
-              <span style={{ transform: showArchived ? 'none' : 'rotate(-90deg)' }}>
-                <Icon name="chevron" size={12} />
+            <button className="flex items-center gap-1.5 px-1 py-1 text-small text-soft hover:text-ink" aria-expanded={showArchived} onClick={() => setArchivedOpen(!archivedOpen)}>
+              <span className={`flex transition-transform motion-reduce:transition-none ${showArchived ? 'rotate-90' : ''}`}>
+                <ChevronRight size={14} aria-hidden="true" />
               </span>
               Archived ({archived.length})
             </button>

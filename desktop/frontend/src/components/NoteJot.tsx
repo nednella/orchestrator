@@ -1,3 +1,4 @@
+import { CornerDownLeft } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { useFocusRequest } from '../useFocusRequest'
@@ -31,7 +32,7 @@ export function NoteJot() {
 
   return (
     <div
-      className="flex flex-col gap-2 rounded-[0.625rem] border border-line-strong bg-raised px-2.5 py-1.5 focus-within:border-accent"
+      className="flex flex-col gap-2 rounded-xl border border-(--border-rule) bg-(--bg-card) px-3 py-2 focus-within:border-(--accent)"
       onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
       onDrop={(e) => pending.attach(e.dataTransfer) && e.preventDefault()}
     >
@@ -55,8 +56,8 @@ export function NoteJot() {
             file()
           }}
         />
-        <button className="mono h-6 flex-none text-small text-dim hover:text-ink disabled:hover:text-dim" title="Add the note (Enter)" aria-label="Add note" disabled={!canFile} onClick={file}>
-          ⏎
+        <button className="grid h-6 w-6 flex-none place-items-center rounded-md text-soft hover:text-ink disabled:opacity-50 disabled:hover:text-soft" title="Add the note (Enter)" aria-label="Add note" disabled={!canFile} onClick={file}>
+          <CornerDownLeft size={14} aria-hidden="true" />
         </button>
       </div>
       {pending.images.length > 0 && <NoteImages urls={pending.images.map((i) => i.preview)} onRemove={pending.remove} />}
