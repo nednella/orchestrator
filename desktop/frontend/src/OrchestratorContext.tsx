@@ -15,6 +15,8 @@ import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
 import { savedFirstPaint } from './firstPaint'
 import { addToast, staleWaiting } from './toastPile'
+import { forgettable } from './deleting'
+import type { Deleting } from './deleting'
 import { cleanupToast, threadName, warningToast } from './toastText'
 import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
@@ -313,6 +315,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const projectEpoch = useRef(0)
   const lastCleanupToast = useRef(0)
   const waitingToasts = useRef(new Map<string, number>())
+  // The threads whose delete runs, with the ids of their families.
+  const deleting = useRef<Deleting>(new Map())
   const warningToasts = useRef(new Map<Warning['source'], { message: string; key: number }>())
   const failedBrowserIds = useRef(new Set<string>())
   const detached = useRef(false)
@@ -448,7 +452,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const applySideChats = useCallback((projectKey: string | null, items: Thread[]) => {
     const before = sideChatsRef.current
     const kept = (s: Thread) => projectKey !== null && s.project !== projectKey
-    before.filter((s) => !kept(s) && !items.some((x) => x.id === s.id)).forEach((s) => forgetThread(s.id))
+    forgettable(before.filter((s) => !kept(s) && !items.some((x) => x.id === s.id)).map((s) => s.id), deleting.current).forEach(forgetThread)
     setSideChats((prev) => keepUnchanged(prev, [...prev.filter(kept), ...items], (s) => s.id))
   }, [])
 
@@ -456,7 +460,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
     (projectKey: string, rows: Thread[]) => {
       const { threads: items, sideChats } = splitSideChats(rows)
       applySideChats(projectKey, sideChats)
-      goneThreads(threadsRef.current, projectKey, items).forEach(forgetThread)
+      forgettable(goneThreads(threadsRef.current, projectKey, items), deleting.current).forEach(forgetThread)
       setThreads((prev) => keepUnchanged(prev, [...prev.filter((s) => s.project !== projectKey), ...items], (s) => s.id))
       const all = [...threadsRef.current.filter((s) => s.project !== projectKey), ...items]
       if (projectKey === projectRef.current?.key) selectAmong(items, all)
@@ -589,7 +593,24 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   )
   useEffect(() => on('term:exit', ({ id }) => setShells((list) => list.filter((x) => x.id !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
-  useEffect(() => on('delete:refused', ({ error }) => pushToast({ tone: 'error', text: error })), [pushToast])
+  useEffect(
+    () =>
+      on('delete:refused', ({ id, project, error }) => {
+        deleting.current.delete(id)
+        const other = project !== projectRef.current?.key ? projectsRef.current.find((p) => p.key === project)?.name : undefined
+        pushToast({ tone: 'error', text: other ? `${other}: ${error}` : error })
+      }),
+    [pushToast],
+  )
+  useEffect(
+    () =>
+      on('delete:done', ({ id }) => {
+        const family = deleting.current.get(id) ?? [id]
+        deleting.current.delete(id)
+        family.forEach(forgetThread)
+      }),
+    [],
+  )
   useEffect(() => on('awake', setAwake), [])
   useEffect(() => on('memory', setMemory), [])
   useEffect(() => on('issues', ifCurrent(setRawIssues)), [])
@@ -883,14 +904,16 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       // The delete takes the thread's asleep descendants too. The threads event may come before the call returns, so
       // the rows go from the latest list, never from one read before the await.
       async deleteThread(id, worktree) {
-        const owner = threadsRef.current.find((s) => s.id === id)?.project
-        const gone = new Set([id, ...descendantsOf(id, threadsRef.current).map((s) => s.id)])
-        await api.deleteThread(id, worktree)
-        gone.forEach(forgetThread)
-        setThreads((prev) => prev.filter((s) => !gone.has(s.id)))
-        const left = threadsRef.current.filter((s) => !gone.has(s.id))
-        if (owner === projectRef.current?.key) selectAmong(left.filter((s) => s.project === owner), left)
-        forgetGone(left, projectsRef.current)
+        // The rows leave the list with the threads event, which comes before this call settles or after; the draft and
+        // the panel of each go with delete:done, and stay if the delete is refused.
+        const family = [id, ...descendantsOf(id, threadsRef.current).map((s) => s.id), ...sideChatsRef.current.filter((s) => s.forkOf === id).map((s) => s.id)]
+        deleting.current.set(id, family)
+        try {
+          await api.deleteThread(id, worktree)
+        } catch (err) {
+          deleting.current.delete(id)
+          throw err
+        }
       },
       async wakeThread(id) {
         return addThread(await api.wakeThread(id))

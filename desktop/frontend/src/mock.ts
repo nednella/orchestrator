@@ -1239,7 +1239,7 @@ export function createMock(params: URLSearchParams) {
       const user = worktree && s.worktree ? worktreeUser(s, family) : undefined
       if (user) {
         setTimeout(() => {
-          emit('delete:refused', { id, error: `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree` })
+          emit('delete:refused', { id, project: s.project, error: `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree` })
           publish()
         }, 400)
         return
@@ -1252,7 +1252,7 @@ export function createMock(params: URLSearchParams) {
         logCleanup(x, [], reason)
         // As the app does, the call settles at once and the refusal comes after, with the rows back.
         setTimeout(() => {
-          emit('delete:refused', { id, error: `Thread ${x.n} keeps its worktree: ${reason}. Untick the box to keep ${taken.length > 1 ? 'the worktrees' : 'the worktree'}, or clean Thread ${x.n} up first` })
+          emit('delete:refused', { id, project: s.project, error: `Thread ${x.n} keeps its worktree: ${reason}. Untick the box to keep ${taken.length > 1 ? 'the worktrees' : 'the worktree'}, or clean Thread ${x.n} up first` })
           publish()
         }, 400)
         return
@@ -1268,6 +1268,7 @@ export function createMock(params: URLSearchParams) {
       }
       publish()
       emit('issues', { project: current.name, items: currentIssues() })
+      emit('delete:done', { id, project: s.project })
     },
     DeletePlan: async (id: string) => deletePlan(find(id)),
     PullRequests: async (): Promise<RepoPulls> => {
