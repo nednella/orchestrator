@@ -318,3 +318,20 @@ func TestAttachedSideChatGoesWithTheMessage(t *testing.T) {
 		t.Error("another thread's side chat went with a message")
 	}
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestCleanupWaitsForTheSideChatsItDeletesBeforeItChecksTheWorktreeAgain(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	parent := issueThread(h, t, 7)
+	withConversation(t, h, parent.ID)
+	writeChat(t, h, parent.ID, append([]chat.Event{{Kind: chat.KindInit, ID: "abc"}}, oneReply...)...)
+	side := sideChat(t, h, parent.ID)
+	// Each stop is slow, so the side chat's delete is still running when the thread's settle is over.
+	newFakeTmux(t).slowKill(t, "1")
+	cleanedUpAfterAMerge(t, h, parent)
+	eventually(t, "the side chat deleted", gone(t, h, side.ID))
+	if log := h.Cleanups(); len(log) != 1 || log[0].Status != "done" {
+		t.Errorf("log = %+v", log)
+	}
+}

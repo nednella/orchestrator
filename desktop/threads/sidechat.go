@@ -131,7 +131,7 @@ func (s *Threads) SideChatsOf(id string) []string {
 // delete takes already is left to it.
 func (s *Threads) deleteSideChats(id string) {
 	for _, side := range s.SideChatsOf(id) {
-		if err := s.Delete(side, false); err != nil {
+		if err := s.DeleteAndWait(side, false); err != nil {
 			log.Printf("orchestrator: deleting side chat %s of thread %s: %v", side, id, err)
 		}
 	}
@@ -153,7 +153,7 @@ func (s *Threads) DeleteSideChat(id string, unused bool) error {
 			return err
 		}
 	}
-	return s.Delete(id, false)
+	return s.DeleteAndWait(id, false)
 }
 
 // sideChatAsked says whether the side chat was sent a message of its own: one after its host first started, since the
