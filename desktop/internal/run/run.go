@@ -7,11 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nednella/orchestrator/internal/environ"
 )
 
 const (
@@ -43,12 +46,13 @@ func Exec(ctx context.Context, dir, name string, args ...string) ([]byte, error)
 
 // ExecEnv is the EnvRunner that runs the real command. The command and what it starts
 // share a process group, and the whole group is killed when ctx ends.
+// Like Stream, it leaves out what would point git at another repo (commandEnv).
 func ExecEnv(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
 	if name == "" {
 		return nil, errors.New("running a command: no command given")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir, cmd.Env = dir, env
+	cmd.Dir, cmd.Env = dir, commandEnv(env)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = waitDelay
@@ -73,7 +77,7 @@ func Stream(ctx context.Context, dir, name string, args ...string) (io.ReadClose
 		return nil, errors.New("running a command: no command given")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
+	cmd.Dir, cmd.Env = dir, commandEnv(nil)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = waitDelay
@@ -88,6 +92,15 @@ func Stream(ctx context.Context, dir, name string, args ...string) (io.ReadClose
 	}
 	running.add(cmd.Process.Pid)
 	return &stream{Reader: out, cmd: cmd, stderr: stderr, args: args}, nil
+}
+
+// commandEnv is env, ours when it is nil, without GIT_DIR and its kin. An app started by a git hook, or a test run
+// under git rebase --exec, has them, and they would point the git it runs in dir at that repo instead of dir's.
+func commandEnv(env []string) []string {
+	if env == nil {
+		env = os.Environ()
+	}
+	return environ.Without(env, environ.GitRepo...)
 }
 
 type stream struct {

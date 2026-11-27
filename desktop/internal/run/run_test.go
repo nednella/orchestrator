@@ -3,8 +3,10 @@ package run
 import (
 	"bufio"
 	"context"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +35,46 @@ func TestExecEnvWithoutArgumentsOrCommand(t *testing.T) {
 	}
 	if _, err := ExecEnv(context.Background(), "", nil, ""); err == nil {
 		t.Error("an empty command succeeded")
+	}
+}
+
+// Not parallel: it sets the process environment.
+func TestGitActsOnTheRepoOfItsFolderWhateverGitDirSays(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	ctx := context.Background()
+	repo, other := t.TempDir(), t.TempDir()
+	for _, dir := range []string{repo, other} {
+		if _, err := ExecEnv(ctx, dir, nil, "git", "init", "-q"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := ExecEnv(ctx, repo, nil, "git", "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pointer := []string{"GIT_DIR=" + filepath.Join(other, ".git"), "GIT_WORK_TREE=" + other}
+	for _, kv := range pointer {
+		name, value, _ := strings.Cut(kv, "=")
+		t.Setenv(name, value)
+	}
+	gitDir := []string{"rev-parse", "--absolute-git-dir"}
+	runs := map[string]func() ([]byte, error){
+		"Exec":                 func() ([]byte, error) { return Exec(ctx, repo, "git", gitDir...) },
+		"ExecEnv with its own": func() ([]byte, error) { return ExecEnv(ctx, repo, append(os.Environ(), pointer...), "git", gitDir...) },
+		"Stream": func() ([]byte, error) {
+			out, err := Stream(ctx, repo, "git", gitDir...)
+			if err != nil {
+				return nil, err
+			}
+			got, _ := io.ReadAll(out)
+			return got, out.Close()
+		},
+	}
+	for name, run := range runs {
+		if got, err := run(); err != nil || string(got) != string(want) {
+			t.Errorf("%s gave git dir %q, %v; want %q", name, got, err, want)
+		}
 	}
 }
 

@@ -23,15 +23,24 @@ func Get(env []string, key string) string {
 
 // With is env with each entry in set in place of any earlier entry of the same name. It leaves env as it was.
 func With(env []string, set ...string) []string {
-	out := slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.ContainsFunc(set, func(s string) bool {
-			setName, _, _ := strings.Cut(s, "=")
-			return setName == name
-		})
-	})
-	return append(out, set...)
+	names := make([]string, len(set))
+	for i, kv := range set {
+		names[i], _, _ = strings.Cut(kv, "=")
+	}
+	return append(Without(env, names...), set...)
 }
+
+// Without is env without the entries of the names given. It leaves env as it was.
+func Without(env []string, names ...string) []string {
+	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.Contains(names, name)
+	})
+}
+
+// GitRepo names what points git at a repo, or a part of one, in place of the repo of the folder it runs in. git sets
+// some of them for the commands a hook or git rebase --exec runs.
+var GitRepo = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE"}
 
 // LookPath is the executable that file names on env's PATH, as exec.LookPath finds it on the process's.
 func LookPath(env []string, file string) (string, error) {

@@ -60,6 +60,32 @@ func TestWith(t *testing.T) {
 	}
 }
 
+func TestWithout(t *testing.T) {
+	tests := []struct {
+		name  string
+		env   []string
+		names []string
+		want  []string
+	}{
+		{"drops every entry of each name", []string{"A=1", "B=2", "A=3", "C=4"}, []string{"A", "C"}, []string{"B=2"}},
+		{"a longer name stays", []string{"AB=1"}, []string{"A"}, []string{"AB=1"}},
+		{"a name not there", []string{"A=1"}, []string{"B"}, []string{"A=1"}},
+		{"no names", []string{"A=1"}, nil, []string{"A=1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			before := append([]string(nil), tt.env...)
+			if got := Without(tt.env, tt.names...); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Without = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(tt.env, before) {
+				t.Errorf("Without changed env to %v", tt.env)
+			}
+		})
+	}
+}
+
 func TestLookPath(t *testing.T) {
 	t.Parallel()
 	bin, other := t.TempDir(), t.TempDir()
