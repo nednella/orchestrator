@@ -1,6 +1,7 @@
 package threads_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/threads"
@@ -30,12 +31,13 @@ func TestThreadsShowTheMemoryTheirProcessesHold(t *testing.T) {
 	if m != h.Threads().Memory() {
 		t.Errorf("Memory() = %+v, want the last event %+v", h.Threads().Memory(), m)
 	}
-	// A sample that finds the figures where they were sends nothing; a loaded machine may move a rounded figure between
-	// two samples, and the test then has nothing to say.
-	sent, before, held := h.Rec.Count("threads"), h.Threads().Memory(), row.Memory
+	// A sample that finds the figures where they were sends nothing. The thread is still starting, and a change of its
+	// row sends the rows in between; a loaded machine may move a rounded figure between two samples. The test then has
+	// nothing to say.
+	sent, rows, before, held := h.Rec.Count("threads"), h.Rec.LastThreads(), h.Threads().Memory(), row.Memory
 	h.Threads().SampleMemory()
 	row, _ = h.Thread(s.ID)
-	if n := h.Rec.Count("threads"); n != sent && h.Threads().Memory() == before && row.Memory == held {
+	if n := h.Rec.Count("threads"); n != sent && reflect.DeepEqual(h.Rec.LastThreads(), rows) && h.Threads().Memory() == before && row.Memory == held {
 		t.Errorf("a sample with the same figures sent the threads %d more times", n-sent)
 	}
 
