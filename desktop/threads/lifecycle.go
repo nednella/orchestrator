@@ -145,15 +145,16 @@ func (noRepos) Reload(context.Context, project.Project) {}
 // Lifecycle follows each issue thread's branch, worktree and pull request, wakes the
 // thread when its PR needs work, and cleans up after it when the PR is merged or closed.
 type Lifecycle struct {
-	run      run.Runner
-	stream   run.Streamer
-	dataDir  string
-	stateDir string
-	emit     func(event string, payload any)
-	warn     *warn.Warnings
-	threads  *Threads
-	activity Activity
-	repos    Repos
+	originWait time.Duration // how long asking origin about a branch may take; 0 is gitTimeout
+	run        run.Runner
+	stream     run.Streamer
+	dataDir    string
+	stateDir   string
+	emit       func(event string, payload any)
+	warn       *warn.Warnings
+	threads    *Threads
+	activity   Activity
+	repos      Repos
 
 	pollMu sync.Mutex // one reconcile at a time
 	logMu  sync.Mutex // the clean-up log files

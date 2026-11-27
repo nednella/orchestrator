@@ -948,3 +948,44 @@ func TestCancelWhenTheWorktreeIsGoneLetsTheRetryMakeItAgain(t *testing.T) {
 		t.Errorf("the retried row = %+v, want the worktree made again on fix-login", row)
 	}
 }
+
+func TestStopDuringTheFetchOfAnIssueBranchNeverMakesALocalOneThatShadowsOrigins(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	origin := repoFixture(t, h)
+	// Another clone pushed issue-7, which this clone has no copy of.
+	clone := filepath.Join(t.TempDir(), "clone")
+	gitIn(t, filepath.Dir(clone), "clone", origin, clone)
+	gitIn(t, clone, "checkout", "-b", "issue-7")
+	if err := os.WriteFile(filepath.Join(clone, "work.txt"), []byte("work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, clone, "add", "work.txt")
+	gitIn(t, clone, "commit", "-m", "work")
+	gitIn(t, clone, "push", "origin", "issue-7")
+	want := gitIn(t, clone, "rev-parse", "HEAD")
+	slowOrigin(t, h, origin, 2*time.Second)
+
+	s, err := h.StartIssueLater(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, h.Dir, "branch", "--list", "issue-7"); got != "" || exists(filepath.Join(h.Dir, "trees", "issue-7")) {
+		t.Fatalf("the stop left the local branch %q or a worktree: it would shadow origin's", got)
+	}
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	row, _ := h.Thread(s.ID)
+	if head := gitIn(t, row.Worktree, "rev-parse", "HEAD"); head != want {
+		t.Errorf("the worktree is at %s, want origin's issue-7, %s", head, want)
+	}
+}

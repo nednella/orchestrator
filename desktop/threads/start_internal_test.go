@@ -3,11 +3,14 @@ package threads
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/folder"
@@ -257,5 +260,29 @@ func TestOnlyAFolderThatIsNoRepositoryRunsTheStartInItself(t *testing.T) {
 	got, err = l.makeWorktree(t.Context(), project.Project{Name: "p", Dir: broken}, thread.Name{Project: "p", Token: "aaaaaaaa"}, "fix-login", "", true)
 	if err == nil || got.dir != "" {
 		t.Errorf("makeWorktree in a broken repository = %+v, %v; want an error", got, err)
+	}
+}
+
+func TestOriginThatDoesNotAnswerInTimeFailsTheLookupNeitherFindingNorMissingTheBranch(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	gitT(t, dir, "remote", "add", "origin", t.TempDir())
+	real := l.run
+	l.run = func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+		if name == "git" && slices.Contains(args, "ls-remote") {
+			<-ctx.Done()
+			return nil, fmt.Errorf("git ls-remote: %w", ctx.Err())
+		}
+		return real(ctx, dir, name, args...)
+	}
+	l.originWait = 50 * time.Millisecond
+	found, unreachable, err := l.onOrigin(t.Context(), dir, "issue-7")
+	if err == nil || found || unreachable {
+		t.Errorf("onOrigin = %v, %v, %v; want an error: a timeout is no answer, and no unreachable origin", found, unreachable, err)
+	}
+	stopped, stop := context.WithCancel(t.Context())
+	stop()
+	if _, _, err := l.onOrigin(stopped, dir, "issue-7"); !errors.Is(err, context.Canceled) {
+		t.Errorf("onOrigin after a stop = %v, want the stop", err)
 	}
 }

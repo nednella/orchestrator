@@ -9,6 +9,7 @@ import (
 	"log"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -240,7 +241,10 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 	case !askOrigin && l.hasRef(ctx, proj.Dir, "refs/remotes/origin/"+branch):
 		args = []string{"worktree", "add", "--quiet", "--track", "-b", branch, dir, "origin/" + branch}
 	case askOrigin:
-		onOrigin, unreachable := l.onOrigin(ctx, proj.Dir, branch)
+		onOrigin, unreachable, err := l.onOrigin(ctx, proj.Dir, branch)
+		if err != nil {
+			return false, false, err
+		}
 		if !onOrigin {
 			return false, unreachable, nil
 		}
@@ -354,17 +358,38 @@ func (l *Lifecycle) startOf(ctx context.Context, dir, base string) (ref, oid str
 }
 
 // onOrigin says whether origin has branch, fetching it when this clone has no copy yet: it may have been pushed from
-// another clone. A fetch that says origin has no such branch, or a project with no origin, means it has none; any other
-// failure, as offline or a refused login, is origin not reached, and unreachable says so.
-func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) (found, unreachable bool) {
+// another clone. Origin saying it has no such branch, or a project with no origin, means it has none. A stop is an
+// error, and so is an origin that did not answer in time, so neither starts a new branch of that name. Any other failure
+// to ask, as offline, DNS or a refused login, is origin not reached, and unreachable says so. It goes by git's exit code
+// for a ref that is not there, not by what git says, which depends on its language.
+func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) (found, unreachable bool, err error) {
 	ref := "refs/remotes/origin/" + branch
 	if l.hasRef(ctx, dir, ref) {
-		return true, false
+		return true, false, nil
 	}
-	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
-		return false, ctx.Err() == nil && !strings.Contains(err.Error(), "couldn't find remote ref") && l.hasOrigin(ctx, dir)
+	if ctx.Err() != nil {
+		return false, false, ctx.Err()
 	}
-	return l.hasRef(ctx, dir, ref), false
+	if !l.hasOrigin(ctx, dir) {
+		return false, false, nil
+	}
+	asked, cancel := context.WithTimeout(ctx, cmp.Or(l.originWait, gitTimeout))
+	defer cancel()
+	_, err = l.git(asked, dir, "ls-remote", "--exit-code", "origin", "refs/heads/"+branch)
+	if err == nil {
+		_, err = l.git(asked, dir, "fetch", "--quiet", "origin", branch)
+	}
+	switch exit := (*exec.ExitError)(nil); {
+	case err == nil:
+		return l.hasRef(ctx, dir, ref), false, nil
+	case ctx.Err() != nil:
+		return false, false, ctx.Err()
+	case asked.Err() != nil:
+		return false, false, errors.New("origin did not answer in time")
+	case errors.As(err, &exit) && exit.ExitCode() == 2:
+		return false, false, nil
+	}
+	return false, true, nil
 }
 
 // hasOrigin says whether the repository has a remote called origin.
