@@ -181,6 +181,24 @@ func (c *Chats) follow(ch threads.Chat) *follower {
 	return f
 }
 
+// Gone says, once a thread is deleted, that it waits on nothing: it stops the thread's follower, which may not have
+// read the log yet and so may say nothing of the approval the log holds, waits for it, and then sends the update, so no
+// later one of the thread's says it still waits.
+func (c *Chats) Gone(id string) {
+	c.mu.Lock()
+	f := c.followers[id]
+	delete(c.followers, id)
+	delete(c.watched, id)
+	if f != nil {
+		f.stop()
+	}
+	c.mu.Unlock()
+	if f != nil {
+		<-f.done
+	}
+	c.emit("chat:pending", PendingUpdate{ID: id})
+}
+
 // Stop ends every follower and returns once each has, so nothing of the chats reaches the threads after it.
 func (c *Chats) Stop() {
 	c.mu.Lock()

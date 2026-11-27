@@ -747,3 +747,22 @@ func TestRateLimitEventsAreHandedOn(t *testing.T) {
 		t.Errorf("OnRateLimit heard %d more", len(limits))
 	}
 }
+
+func TestGoneTellsThatAThreadWithNoFollowerWaitsOnNothing(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	var got []chat.PendingUpdate
+	c := chat.New(oneThread{}, t.TempDir(), func(name string, payload any) {
+		if u, ok := payload.(chat.PendingUpdate); ok && name == "chat:pending" {
+			mu.Lock()
+			got = append(got, u)
+			mu.Unlock()
+		}
+	})
+	c.Gone("main/aaaaaaaa")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 || got[0].ID != "main/aaaaaaaa" || got[0].Pending != nil {
+		t.Errorf("updates = %+v, want one that says the thread waits on nothing", got)
+	}
+}

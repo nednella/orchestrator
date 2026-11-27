@@ -152,7 +152,10 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)
 	chats.OnTurnEnd(a.tools.ChildTurnEnded)
 	sess.OnSlept(a.tools.ChildSlept)
-	sess.OnDelete(a.tools.ThreadDeleted)
+	sess.OnDelete(func(id string) {
+		a.tools.ThreadDeleted(id)
+		chats.Gone(id)
+	})
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}
 	sc, ic := threads.NewCommands(sess), issues.NewCommands(iss, sessSvc)
 	// Only a tool call reaches these, as the thread its token names (orchestration.agentRequest sets the thread and
