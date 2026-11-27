@@ -20,7 +20,8 @@ export function ComposerMenuChip({ label, children, menu }: ComposerMenuChipProp
       if (!root.current?.contains(e.target as Node)) setOpen(false)
     }
     const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // A popup inside the menu closes first, on its own Esc.
+      if (e.key !== 'Escape' || root.current?.querySelector('[role="dialog"] [role="dialog"]')) return
       e.preventDefault()
       e.stopPropagation()
       setOpen(false)
