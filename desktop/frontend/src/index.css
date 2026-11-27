@@ -35,6 +35,7 @@
   --color-danger: var(--danger);
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
+  --font-brand: var(--font-brand);
   --text-label: var(--fs-label);
   --text-small: var(--fs-small);
   --text-body: var(--fs-body);
