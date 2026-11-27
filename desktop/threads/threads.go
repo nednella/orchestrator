@@ -3131,7 +3131,9 @@ func (s *Threads) dropCommands(id string) {
 // are being sent is passed over until they are, so nothing held after them overtakes them. It needs mu.
 func (s *Threads) deliverWakes() {
 	for id, all := range s.wakes {
-		if s.delivering[id] {
+		// A thread a delete runs for is not woken for what is held for it: the delete drops it, or, when it is refused,
+		// the thread gets it then.
+		if s.delivering[id] || s.deleting[id] {
 			continue
 		}
 		_, live := s.seen[id]

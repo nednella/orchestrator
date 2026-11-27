@@ -159,3 +159,15 @@ func TestResultsOfADeletedChildAreDropped(t *testing.T) {
 		})
 	}
 }
+
+func TestMessagesHeldForAThreadBeingDeletedAreKeptAndNotDelivered(t *testing.T) {
+	t.Parallel()
+	const id = "main/abcdefgh"
+	s := newThreads(Options{})
+	s.wakes[id] = []heldPrompt{{Told: Told{From: "main/bbbbbbbb", Text: "Check the tests"}}}
+	s.deleting[id] = true
+	s.deliverWakes()
+	if len(s.wakes[id]) != 1 || s.delivering[id] {
+		t.Errorf("held = %v, delivering %v: want the message kept, and nothing sent while the delete runs", s.wakes[id], s.delivering[id])
+	}
+}
