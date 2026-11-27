@@ -11,17 +11,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
 )
 
-// threads are the sessions with the live ones given.
-type threads []sessions.Chat
+// fakeThreads are the threads with the live ones given.
+type fakeThreads []threads.Chat
 
-func (t threads) Chats() []sessions.Chat { return t }
+func (t fakeThreads) Chats() []threads.Chat { return t }
 
-var oneLive = threads{{ID: "main/abcdefgh", Socket: "/tmp/h.sock", Live: true}}
+var oneLive = fakeThreads{{ID: "main/abcdefgh", Socket: "/tmp/h.sock", Live: true}}
 
 // clock is a time the test moves.
 type clock struct {
@@ -70,7 +70,7 @@ func (a *asker) count() int {
 
 const weekly96 = `{"rate_limits":{"five_hour":null,"seven_day":{"utilization":96,"resets_at":"2026-11-30T22:59:59.804611+00:00"}}}`
 
-// tracker is a Tracker on threads, ask and start, at a clock the test moves, that records what it emits.
+// tracker is a Tracker on fakeThreads, ask and start, at a clock the test moves, that records what it emits.
 func tracker(t *testing.T, th Threads, ask Asker, start Starter) (*Tracker, *clock, func() []Limits) {
 	t.Helper()
 	var mu sync.Mutex
@@ -301,7 +301,7 @@ func TestAGoodReadClearsAnError(t *testing.T) {
 
 func TestRefreshWaitsOnlyAsLongAsItsContext(t *testing.T) {
 	t.Parallel()
-	tr, _, _ := tracker(t, threads{}, nil, nil)
+	tr, _, _ := tracker(t, fakeThreads{}, nil, nil)
 	tr.reading <- struct{}{}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -312,7 +312,7 @@ func TestRefreshWaitsOnlyAsLongAsItsContext(t *testing.T) {
 
 func TestLimitsAreNeverNil(t *testing.T) {
 	t.Parallel()
-	tr, _, _ := tracker(t, threads{}, nil, nil)
+	tr, _, _ := tracker(t, fakeThreads{}, nil, nil)
 	if got := tr.Limits(); got.Windows == nil || len(got.Windows) != 0 {
 		t.Errorf("windows = %#v, want []", got.Windows)
 	}
@@ -320,7 +320,7 @@ func TestLimitsAreNeverNil(t *testing.T) {
 
 func TestLimitsNameTheirProvider(t *testing.T) {
 	t.Parallel()
-	tr, _, _ := tracker(t, threads{}, nil, nil)
+	tr, _, _ := tracker(t, fakeThreads{}, nil, nil)
 	if got := tr.Limits(); got.Provider != "claude" || got.ProviderLabel != "Claude" {
 		t.Errorf("provider = %q, %q, want claude, Claude", got.Provider, got.ProviderLabel)
 	}
@@ -346,7 +346,7 @@ func TestANullAnswerKeepsTheStreamsWindows(t *testing.T) {
 
 func TestAnOlderHostIsPassedOver(t *testing.T) {
 	t.Parallel()
-	two := threads{{ID: "main/oldhost1", Socket: "/tmp/old.sock", Live: true}, {ID: "main/newhost1", Socket: "/tmp/new.sock", Live: true}}
+	two := fakeThreads{{ID: "main/oldhost1", Socket: "/tmp/old.sock", Live: true}, {ID: "main/newhost1", Socket: "/tmp/new.sock", Live: true}}
 	var asked []string
 	ask := func(_ context.Context, socket string) (json.RawMessage, error) {
 		asked = append(asked, socket)
@@ -369,7 +369,7 @@ func TestAnOlderHostIsPassedOver(t *testing.T) {
 	}
 
 	// With every live host too old, the owner's ask probes.
-	tr, _, _ = tracker(t, threads{two[0]}, ask, f.start)
+	tr, _, _ = tracker(t, fakeThreads{two[0]}, ask, f.start)
 	if got, err := tr.Refresh(context.Background()); err != nil || len(got.Windows) != 1 || got.Error != "" {
 		t.Errorf("limits = %+v, %v; want the probe's answer", got, err)
 	}
@@ -380,7 +380,7 @@ func TestAnOlderHostIsPassedOver(t *testing.T) {
 
 func TestLimitsEventsComeInOrder(t *testing.T) {
 	t.Parallel()
-	tr, _, emitted := tracker(t, threads{}, nil, nil)
+	tr, _, emitted := tracker(t, fakeThreads{}, nil, nil)
 	var wg sync.WaitGroup
 	for i := range 50 {
 		wg.Go(func() {

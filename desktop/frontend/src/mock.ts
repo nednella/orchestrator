@@ -1212,7 +1212,7 @@ export function createMock(params: URLSearchParams) {
       wake(find(id))
       return view(find(id))
     },
-    ForkSession: async (id: string, at: string) => {
+    ForkThread: async (id: string, at: string) => {
       const from = find(id)
       const s = create(`${from.title} (fork)`, from.issue, 'idle', [], Date.now(), current, from.access)
       // Like the real fork: no worktree, and the branch only the issue's fallback that create gives it.
@@ -1304,7 +1304,7 @@ export function createMock(params: URLSearchParams) {
       s.effort = effort
       publish()
     },
-    RenameSession: async (id: string, title: string) => {
+    RenameThread: async (id: string, title: string) => {
       find(id).title = title
       publish()
     },
@@ -1432,7 +1432,7 @@ export function createMock(params: URLSearchParams) {
       touchNotes()
       emit('issues', { project: current.name, items: currentIssues() })
     },
-    NoteToSession: async (id: string) => {
+    NoteToThread: async (id: string) => {
       const note = noteById(id)
       return startSessionFor(note.text.split('\n')[0], 0, note.text)
     },

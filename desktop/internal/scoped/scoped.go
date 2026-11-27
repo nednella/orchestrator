@@ -2,7 +2,7 @@
 // so a late event of a project the user has left can be told from the current one.
 package scoped
 
-// List is the payload of the sessions, notes, issues and cleanups events.
+// List is the payload of the threads, notes, issues and cleanups events.
 type List[T any] struct {
 	Project string `json:"project"` // the project key
 	Items   []T    `json:"items"`

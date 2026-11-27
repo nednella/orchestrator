@@ -16,7 +16,7 @@ import (
 const testSocket = "/state/orchestrator.sock"
 
 func marked(id string) []string {
-	return []string{"HOME=/h", sessionVar + "=" + id, socketVar + "=" + testSocket}
+	return []string{"HOME=/h", threadVar + "=" + id, socketVar + "=" + testSocket}
 }
 
 type fakeProc struct {
@@ -141,12 +141,12 @@ func TestMarker(t *testing.T) {
 	}{
 		{"the thread", marked("p/ab"), "p/ab", true},
 		{"a longer id is its own", marked("p/ab2"), "p/ab2", true},
-		{"another app's socket", []string{sessionVar + "=p/ab", socketVar + "=/other/orchestrator.sock"}, "", false},
-		{"no socket", []string{sessionVar + "=p/ab"}, "", false},
-		{"no session", []string{socketVar + "=" + testSocket}, "", false},
-		{"an empty session", []string{sessionVar + "=", socketVar + "=" + testSocket}, "", false},
-		{"a name that only starts so", []string{sessionVar + "X=p/ab", socketVar + "=" + testSocket}, "", false},
-		{"the first entry counts", []string{sessionVar + "=p/ab", sessionVar + "=p/cd", socketVar + "=" + testSocket}, "p/ab", true},
+		{"another app's socket", []string{threadVar + "=p/ab", socketVar + "=/other/orchestrator.sock"}, "", false},
+		{"no socket", []string{threadVar + "=p/ab"}, "", false},
+		{"no thread", []string{socketVar + "=" + testSocket}, "", false},
+		{"an empty thread", []string{threadVar + "=", socketVar + "=" + testSocket}, "", false},
+		{"a name that only starts so", []string{threadVar + "X=p/ab", socketVar + "=" + testSocket}, "", false},
+		{"the first entry counts", []string{threadVar + "=p/ab", threadVar + "=p/cd", socketVar + "=" + testSocket}, "p/ab", true},
 	}
 	table := &Table{socket: testSocket}
 	for _, tt := range tests {
@@ -194,7 +194,7 @@ func TestServers(t *testing.T) {
 	procs := append(slices.Clone(thread),
 		fakeProc{process: process{pid: 200, ppid: 1, pgid: 200, start: 5}, argv: []string{"/usr/bin/python3", "-m", "http.server", "18080"}, env: marked("p/ab")},
 		fakeProc{process: process{pid: 201, ppid: 1, pgid: 201, start: 5}, argv: []string{"node", "b"}, env: marked("p/ab2")},
-		fakeProc{process: process{pid: 202, ppid: 1, pgid: 202, start: 5}, argv: []string{"node", "c"}, env: []string{sessionVar + "=p/ab", socketVar + "=/other.sock"}},
+		fakeProc{process: process{pid: 202, ppid: 1, pgid: 202, start: 5}, argv: []string{"node", "c"}, env: []string{threadVar + "=p/ab", socketVar + "=/other.sock"}},
 		fakeProc{process: process{pid: 300, ppid: 1, pgid: 300, start: 5}, argv: []string{"node", "mine"}, env: []string{"HOME=/h"}},
 	)
 	lsof := "p101\nn*:18001\np200\nn*:18080\np201\nn*:18081\np202\nn*:18082\np300\nn*:18083\np100\nn*:18084\n"

@@ -19,7 +19,7 @@ import (
 )
 
 // browserCmd runs an orchestrator browser command the way the cli sends it: flags become options.
-func browserCmd(t *testing.T, h *apptest.Harness, session string, args ...string) (string, error) {
+func browserCmd(t *testing.T, h *apptest.Harness, thread string, args ...string) (string, error) {
 	t.Helper()
 	var pos []string
 	opts := map[string]string{}
@@ -34,16 +34,16 @@ func browserCmd(t *testing.T, h *apptest.Harness, session string, args ...string
 			pos = append(pos, a)
 		}
 	}
-	resp := h.AskTool(t, ctl.Request{Cmd: "browser", Session: session, Args: pos, Opts: opts, TimeoutMs: 60_000})
+	resp := h.AskTool(t, ctl.Request{Cmd: "browser", Thread: thread, Args: pos, Opts: opts, TimeoutMs: 60_000})
 	if !resp.OK {
 		return "", errors.New(resp.Error)
 	}
 	return strings.TrimSpace(resp.Out), nil
 }
 
-func mustBrowser(t *testing.T, h *apptest.Harness, session string, args ...string) string {
+func mustBrowser(t *testing.T, h *apptest.Harness, thread string, args ...string) string {
 	t.Helper()
-	out, err := browserCmd(t, h, session, args...)
+	out, err := browserCmd(t, h, thread, args...)
 	if err != nil {
 		t.Fatalf("orchestrator browser %s: %v", strings.Join(args, " "), err)
 	}
@@ -64,8 +64,8 @@ func TestBrowserAgentCLI(t *testing.T) {
 	if !strings.Contains(out, "Demo") || !strings.Contains(out, srv.URL) {
 		t.Errorf("open printed %q", out)
 	}
-	if got, _ := h.Session(s.ID); !got.Browser {
-		t.Error("the session does not show its browser")
+	if got, _ := h.Thread(s.ID); !got.Browser {
+		t.Error("the thread does not show its browser")
 	}
 	if out := mustBrowser(t, h, s.ID, "open", srv.URL+"/second", "--front"); !strings.Contains(out, "Second") {
 		t.Errorf("open --front printed %q", out)
@@ -93,8 +93,8 @@ func TestBrowserAgentCLI(t *testing.T) {
 		if resp, err := http.Get(srvMedia.URL + items[0].URL); err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" {
 			t.Errorf("serving the screenshot: %v %v", resp, err)
 		}
-		if got, _ := h.Session(s.ID); got.Evidence != 1 {
-			t.Errorf("session evidence count = %d", got.Evidence)
+		if got, _ := h.Thread(s.ID); got.Evidence != 1 {
+			t.Errorf("thread evidence count = %d", got.Evidence)
 		}
 		if h.Rec.Count("attention") != before+1 || h.Rec.Count("evidence") == 0 {
 			t.Error("no attention or evidence event for the agent's screenshot")
@@ -128,14 +128,14 @@ func TestBrowserAgentCLI(t *testing.T) {
 			t.Errorf("a removed action's error = %v", err)
 		}
 		if out, err := browserCmd(t, h, "", "open", srv.URL); err == nil || !strings.Contains(err.Error(), "no calling thread") {
-			t.Errorf("without a session: %q, %v", out, err)
+			t.Errorf("without a thread: %q, %v", out, err)
 		}
 	})
 
 	t.Run("closing the tab ends the browser", func(t *testing.T) {
 		h.BrowserClose(s.ID)
-		if got, _ := h.Session(s.ID); got.Browser {
-			t.Error("the session still shows a browser")
+		if got, _ := h.Thread(s.ID); got.Browser {
+			t.Error("the thread still shows a browser")
 		}
 		if st := h.BrowserState(s.ID); st.Open {
 			t.Errorf("state = %+v", st)
@@ -176,7 +176,7 @@ func TestBrowserTabs(t *testing.T) {
 		return st.Pages == 1 && st.Title == "Demo"
 	})
 
-	t.Run("a tab the page opens is the session's", func(t *testing.T) {
+	t.Run("a tab the page opens is the thread's", func(t *testing.T) {
 		if err := b.OpenTab(t.Context(), s.ID, srv.URL+"/second"); err != nil {
 			t.Fatal(err)
 		}
@@ -187,7 +187,7 @@ func TestBrowserTabs(t *testing.T) {
 		})
 	})
 
-	t.Run("console from the new page reaches the session", func(t *testing.T) {
+	t.Run("console from the new page reaches the thread", func(t *testing.T) {
 		eval(`console.error("from the tab")`)
 		eventually(t, "the console line", func() bool { return slices.Contains(h.BrowserState(s.ID).Console, "console.error: from the tab") })
 	})
@@ -199,7 +199,7 @@ func TestBrowserTabs(t *testing.T) {
 		eventually(t, "the page to go on", func() bool { return eval("window.answer") == "false" })
 	})
 
-	t.Run("a page that closes leaves the session open", func(t *testing.T) {
+	t.Run("a page that closes leaves the thread open", func(t *testing.T) {
 		_, _ = b.Eval(t.Context(), s.ID, "window.close()")
 		eventually(t, "1 page", func() bool { return pages() == 1 })
 		if st := h.BrowserState(s.ID); !st.Open || st.Title != "Demo" {

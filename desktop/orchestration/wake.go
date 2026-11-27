@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/prompts"
 )
@@ -128,8 +128,8 @@ func (c *Commands) give(r report) {
 	}
 	if !given && c.claim(w, end, false) {
 		later := c.threads.Reported(r.child) > 0
-		text := sessions.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t, asleep), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
-		if !c.sendResult(ctx, w, sessions.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
+		text := threads.FromApp(prompts.ChildDone(c.threads.Title(r.child), r.child, outcomeText(t, asleep), t.reply, later, strings.HasSuffix(t.reply, cutMark)))
+		if !c.sendResult(ctx, w, threads.Told{From: r.child, Text: text, Body: t.reply, Result: true}) {
 			return
 		}
 	}
@@ -170,9 +170,9 @@ func (c *Commands) waitGets(ctx context.Context, w waitOn, end int64) bool {
 
 // sendResult tells the parent its child's result m until the parent takes it, and says whether it did: false once the
 // parent or the child is gone, or ctx ends. A message held for the parent counts once it goes; one a stop of the parent kept goes at
-// the parent's next turn, as the sessions hold it. One the parent could not take, as when its wake was refused, goes
+// the parent's next turn, as the threads hold it. One the parent could not take, as when its wake was refused, goes
 // again after a pause that doubles up to a minute.
-func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bool {
+func (c *Commands) sendResult(ctx context.Context, w waitOn, m threads.Told) bool {
 	pause := c.retryFirst
 	for {
 		done := make(chan error, 1)
@@ -192,7 +192,7 @@ func (c *Commands) sendResult(ctx context.Context, w waitOn, m sessions.Told) bo
 			log.Printf("orchestrator: thread %s did not get the result of its child %s: %v", w.waiter, w.thread, err)
 			return false
 		}
-		if errors.Is(err, sessions.ErrToldDeleted) { // the parent is there, so the child was deleted
+		if errors.Is(err, threads.ErrToldDeleted) { // the parent is there, so the child was deleted
 			log.Printf("orchestrator: thread %s did not get the result of its child %s, which was deleted", w.waiter, w.thread)
 			return false
 		}

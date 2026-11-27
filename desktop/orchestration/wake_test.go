@@ -17,7 +17,7 @@ import (
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // resultText is the line of a child's result as the parent's Claude reads it.
@@ -52,8 +52,8 @@ func results(t *testing.T, h *apptest.Harness, parent, child string) []chat.Even
 // asleep says whether the thread's row has gone to sleep.
 func asleep(t *testing.T, h *apptest.Harness, id string) bool {
 	t.Helper()
-	s, ok := h.Session(id)
-	return ok && s.State == session.Settled
+	s, ok := h.Thread(id)
+	return ok && s.State == thread.Settled
 }
 
 // quiet waits until each child has gone to sleep, as it does once its result went to its parent, and its parent's turn
@@ -62,7 +62,7 @@ func quiet(t *testing.T, h *apptest.Harness, children ...string) {
 	t.Helper()
 	apptest.Eventually(t, "the children asleep and their parents idle", func() bool {
 		for _, c := range children {
-			if !asleep(t, h, c) || turnOpen(t, h, h.Sessions().ParentOf(c)) {
+			if !asleep(t, h, c) || turnOpen(t, h, h.Threads().ParentOf(c)) {
 				return false
 			}
 		}
@@ -79,7 +79,7 @@ func withConversation(t *testing.T, h *apptest.Harness, id string) {
 		t.Fatal(err)
 	}
 	h.Observe(t, id, "SessionStart", fmt.Sprintf(`{"session_id":"conversation-1","transcript_path":%q}`, transcript))
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestChildResultWakesASettledParent(t *testing.T) {
 	if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], resultText("Count files", c, "completed", "done", false)) {
 		t.Errorf("the parent read %q", lines)
 	}
-	if r := row(t, h, parent); r.State == session.Settled || !slices.Contains(tmuxSessions(t, h), parent) {
+	if r := row(t, h, parent); r.State == thread.Settled || !slices.Contains(tmuxSessions(t, h), parent) {
 		t.Errorf("the parent is %s, running %v; want it awake under its own id", r.State, slices.Contains(tmuxSessions(t, h), parent))
 	}
 	if !slices.Contains(claudeArgs(t, h, parent), "--resume") {
@@ -172,12 +172,12 @@ func TestChildResultIsSentOnceAcrossARestart(t *testing.T) {
 		c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
 		quiet(t, h, c)
 		end := slices.IndexFunc(logOf(t, h, c), func(e chat.Event) bool { return e.Kind == chat.KindTurnEnd })
-		if got, want := h.Sessions().Reported(c), logOf(t, h, c)[end].Seq; got != want {
+		if got, want := h.Threads().Reported(c), logOf(t, h, c)[end].Seq; got != want {
 			t.Errorf("Reported = %d, want the seq of the turn's end, %d", got, want)
 		}
 		h.App.Stop()
 		fresh := h.Restart(t)
-		if got := fresh.Sessions().Reported(c); got == 0 {
+		if got := fresh.Threads().Reported(c); got == 0 {
 			t.Error("the restart lost Reported")
 		}
 		// A woken child's follower starts at its last turn_end, whose result went already.
@@ -204,7 +204,7 @@ func TestWaitingParentGetsNoSecondCopy(t *testing.T) {
 	if got := results(t, h, parent, c); len(got) != 0 {
 		t.Errorf("the parent's log has %+v, want no result: the wait gave it", got)
 	}
-	if h.Sessions().Reported(c) == 0 {
+	if h.Threads().Reported(c) == 0 {
 		t.Error("the result the wait gave is not recorded as given")
 	}
 }
@@ -310,9 +310,9 @@ func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
 	c := mustDelegate(t, h, parent, `{"task":"keep working","access":"read"}`).ID
 	for _, id := range []string{c, parent} {
 		h.Observe(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
-		apptest.Eventually(t, "the turn working", func() bool { return row(t, h, id).State == session.Working })
+		apptest.Eventually(t, "the turn working", func() bool { return row(t, h, id).State == thread.Working })
 		h.Observe(t, id, "Stop", `{}`)
-		apptest.Eventually(t, "the turn's end", func() bool { return row(t, h, id).State == session.Idle })
+		apptest.Eventually(t, "the turn's end", func() bool { return row(t, h, id).State == thread.Idle })
 	}
 	if n := h.Rec.CountAttentionFor(c, "replied"); n != 0 {
 		t.Errorf("the child's reply raised %d replied alerts, want none: its parent reads it", n)
@@ -352,8 +352,8 @@ func TestChildResultWaitsForTheParentsSubagentApproval(t *testing.T) {
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
 	apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
 	time.Sleep(time.Second)
-	if lines := resultLines(t, h, parent, c); len(lines) != 0 || !h.Sessions().HoldsTold(parent) {
-		t.Fatalf("the parent read %q while its subagent's approval waited, held %v; want the result held", lines, h.Sessions().HoldsTold(parent))
+	if lines := resultLines(t, h, parent, c); len(lines) != 0 || !h.Threads().HoldsTold(parent) {
+		t.Fatalf("the parent read %q while its subagent's approval waited, held %v; want the result held", lines, h.Threads().HoldsTold(parent))
 	}
 	if asleep(t, h, c) {
 		t.Error("the child went to sleep before its result went")
@@ -371,7 +371,7 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 	h := apptest.New(t)
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"slow","title":"Count files","access":"read"}`).ID
-	ch, err := h.Sessions().ChatOf(parent)
+	ch, err := h.Threads().ChatOf(parent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,11 +380,11 @@ func TestChildResultWaitsOutAnAccessChangeOfTheParent(t *testing.T) {
 		t.Fatalf("Hold = %v, %v, want the parent's host held", idle, err)
 	}
 	apptest.Eventually(t, "the child's turn to end", func() bool { return turnEnded(t, h, c) })
-	apptest.Eventually(t, "the result held for the parent", func() bool { return h.Sessions().HoldsTold(parent) })
+	apptest.Eventually(t, "the result held for the parent", func() bool { return h.Threads().HoldsTold(parent) })
 	if lines := resultLines(t, h, parent, c); len(lines) != 0 {
 		t.Fatalf("the parent read %q through a held host", lines)
 	}
-	if err := h.Sessions().SetAccess(parent, session.Full); err != nil {
+	if err := h.Threads().SetAccess(parent, thread.Full); err != nil {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the result once the parent runs again", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
@@ -409,7 +409,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{RetryFirst: retry})
 			repoFixture(t, h)
-			parent := threadWith(t, h, "Plan the release", session.Supervised)
+			parent := threadWith(t, h, "Plan the release", thread.Supervised)
 			if parent.Worktree == "" {
 				t.Fatalf("the parent has no worktree: %+v", parent)
 			}
@@ -429,7 +429,7 @@ func TestChildResultRetriesARefusedWakeOfItsParent(t *testing.T) {
 			if lines := resultLines(t, h, parent.ID, c); len(lines) != 0 || !asleep(t, h, parent.ID) {
 				t.Fatalf("the parent read %q, asleep %v; want its wake refused", lines, asleep(t, h, parent.ID))
 			}
-			if h.Sessions().Reported(c) != 0 {
+			if h.Threads().Reported(c) != 0 {
 				t.Fatal("the result is recorded as given while the parent could not wake for it")
 			}
 			if tt.delete {
@@ -462,9 +462,9 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 	// The parent waits on the owner in the middle of its turn, so the result is held for it. It waits before the child
 	// starts: a child that ended first would give its result to a parent that still takes it.
 	h.Observe(t, parent, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
-	apptest.Eventually(t, "the parent waiting", func() bool { return row(t, h, parent).State == session.Waiting })
+	apptest.Eventually(t, "the parent waiting", func() bool { return row(t, h, parent).State == thread.Waiting })
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
-	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
+	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Threads().HoldsTold(parent) })
 
 	if stopped, err := stopAs(t, h, top, parent); err != "" || !slices.Contains(stopped, parent) {
 		t.Fatalf("stop = %q, %q", stopped, err)
@@ -474,7 +474,7 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 	if lines := resultLines(t, h, parent, c); len(lines) != 0 {
 		t.Fatalf("the parent read %q after the stop dropped the result", lines)
 	}
-	if got := h.Sessions().Reported(c); got != 0 {
+	if got := h.Threads().Reported(c); got != 0 {
 		t.Fatalf("Reported = %d after the result was dropped, want 0", got)
 	}
 	if asleep(t, h, c) {
@@ -485,7 +485,7 @@ func TestDroppedResultGoesAtTheParentsNextTurn(t *testing.T) {
 		t.Fatalf("send answered %+v, want the message sent", a)
 	}
 	apptest.Eventually(t, "the result at the parent's next turn", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
-	apptest.Eventually(t, "the result recorded as given", func() bool { return h.Sessions().Reported(c) > 0 })
+	apptest.Eventually(t, "the result recorded as given", func() bool { return h.Threads().Reported(c) > 0 })
 	noMoreResults(t, h, parent, c, 1)
 }
 
@@ -520,7 +520,7 @@ func TestWaitWhileTheResultIsHeldSaysSo(t *testing.T) {
 		return asks && turnEnded(t, h, parent)
 	})
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
-	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Sessions().HoldsTold(parent) })
+	apptest.Eventually(t, "the result held for the parent", func() bool { return turnEnded(t, h, c) && h.Threads().HoldsTold(parent) })
 	// The message took the result before the wait came, so the wait does not give it too.
 	a := waitOn(t, h, parent, c, 5*time.Second)
 	if want := "Thread " + c + "'s result of this turn is sent to you as a message instead."; !a.Done || a.Text != want {
@@ -550,7 +550,7 @@ func TestChildPutToSleepMidTurnTellsItsParent(t *testing.T) {
 	if lines := resultLines(t, h, parent, c); len(lines) != 1 || !strings.Contains(lines[0], "Task Count files in thread "+c+" was put to sleep by the owner:") {
 		t.Errorf("the parent read %q, want one result that says the owner put the child to sleep", lines)
 	}
-	if h.Sessions().Reported(c) == 0 {
+	if h.Threads().Reported(c) == 0 {
 		t.Error("the result of the sleep is not recorded as given")
 	}
 	noMoreResults(t, h, parent, c, 1)
@@ -564,7 +564,7 @@ func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
 		c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
 		apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
 		// The app's own settle, as at the end of a PR, says no more than that.
-		if err := h.Sessions().Settle(c); err != nil {
+		if err := h.Threads().Settle(c); err != nil {
 			t.Fatal(err)
 		}
 		apptest.Eventually(t, "the sleep on the parent's stdin", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
@@ -578,7 +578,7 @@ func TestChildPutToSleepUnfollowedTellsItsParent(t *testing.T) {
 		parent := newThread(t, h, "Plan the release").ID
 		c := mustDelegate(t, h, parent, `{"task":"keep working","title":"Count files","access":"read"}`).ID
 		apptest.Eventually(t, "the child's task taken in", func() bool { return stdinHas(t, h, c, "keep working") })
-		ch, err := h.Sessions().ChatOf(c)
+		ch, err := h.Threads().ChatOf(c)
 		if err != nil {
 			t.Fatal(err)
 		}

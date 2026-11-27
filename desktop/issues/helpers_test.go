@@ -38,7 +38,7 @@ func gitRepo(t *testing.T, h *apptest.Harness) {
 	}
 }
 
-// sent says whether the session's claude read a user message with the text.
+// sent says whether the thread's claude read a user message with the text.
 func sent(t *testing.T, h *apptest.Harness, id, text string) bool {
 	t.Helper()
 	quoted, _ := json.Marshal(text)
@@ -47,7 +47,7 @@ func sent(t *testing.T, h *apptest.Harness, id, text string) bool {
 	})
 }
 
-// drafted says whether the session's chat log holds a draft of the text.
+// drafted says whether the thread's chat log holds a draft of the text.
 func drafted(h *apptest.Harness, id, text string) bool {
 	events, _ := h.ChatHistory(id, 0)
 	return slices.ContainsFunc(events, func(e chatlog.Event) bool { return e.Kind == chatlog.KindDraft && e.Text == text })

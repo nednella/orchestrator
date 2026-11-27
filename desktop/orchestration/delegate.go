@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // delegateInput is what a call of delegate asks for, as the tool's schema has it.
@@ -26,14 +26,14 @@ type delegateInput struct {
 
 // started is what delegate answers: the child it started.
 type started struct {
-	ID      string         `json:"id"`
-	N       int            `json:"n"`
-	Title   string         `json:"title"`
-	Project string         `json:"project"`
-	Access  session.Access `json:"access"`
-	Where   string         `json:"where"`
-	Dir     string         `json:"dir"`
-	Branch  string         `json:"branch"`
+	ID      string        `json:"id"`
+	N       int           `json:"n"`
+	Title   string        `json:"title"`
+	Project string        `json:"project"`
+	Access  thread.Access `json:"access"`
+	Where   string        `json:"where"`
+	Dir     string        `json:"dir"`
+	Branch  string        `json:"branch"`
 }
 
 // delegate starts a child of the caller for the task the input gives, in the project the input names, else the
@@ -50,16 +50,16 @@ func (c *Commands) delegate(ctx context.Context, caller string, req ctl.Request)
 	}
 	access := c.threads.AccessOf(caller)
 	if in.Access != "" {
-		access = session.Access(in.Access)
+		access = thread.Access(in.Access)
 	}
 	where := in.Where
 	if where == "" {
-		where = sessions.WhereWorktree
-		if access == session.Read {
-			where = sessions.WhereFolder
+		where = threads.WhereWorktree
+		if access == thread.Read {
+			where = threads.WhereFolder
 		}
 	}
-	child, err := c.threads.CreateChild(ctx, sessions.ChildOptions{
+	child, err := c.threads.CreateChild(ctx, threads.ChildOptions{
 		Parent: caller, Task: in.Task, Title: in.Title, Access: access,
 		Model: project.Model{Model: in.Model, Effort: in.Effort}, Project: in.Project, Where: where, Issue: in.Issue,
 	})

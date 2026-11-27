@@ -12,7 +12,7 @@ import (
 
 type fixedAsker struct{}
 
-func (fixedAsker) AskerSession(ctl.Request) (string, error) { return "main/3", nil }
+func (fixedAsker) AskerThread(ctl.Request) (string, error) { return "main/3", nil }
 
 type fixedRoots []string
 

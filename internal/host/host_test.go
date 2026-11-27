@@ -2336,7 +2336,7 @@ func TestImagesToAnOldHostAreAnError(t *testing.T) {
 			conn.Close()
 		}
 	}()
-	if _, err := SendMessage(ctxT(t), socket, Message{Text: "see", Files: []string{"dot.png"}}); err == nil || err.Error() != "this session's host is too old for images" {
+	if _, err := SendMessage(ctxT(t), socket, Message{Text: "see", Files: []string{"dot.png"}}); err == nil || err.Error() != "this thread's host is too old for images" {
 		t.Fatalf("send of an image = %v, want the host named too old", err)
 	}
 	if err := Send(ctxT(t), socket, "hi"); err != nil {

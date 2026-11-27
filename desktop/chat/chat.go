@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -31,25 +31,25 @@ const (
 // died, or the app stops.
 var ErrThreadGone = errors.New("the thread no longer runs")
 
-// Threads are the sessions whose agents run under a host. Observe takes in the changes of a thread's state that its
+// Threads are the threads whose agents run under a host. Observe takes in the changes of a thread's state that its
 // stream shows, each once, as the seq of the event says; TranscriptPath is where Claude writes a conversation, for a Claude started
 // in the folder origin. Wake starts a settled one again under its id, and AccessChanged follows the permission mode its Claude reports, saying whether the owner approved its plan just before.
 // FlagRefused says that a thread's Claude did not know flag, so its host started it without. FilesRewind says where a
-// rewind may put a thread's files back, as Sessions.FilesRewind does. BackgroundChanged says what a thread's Claude
+// rewind may put a thread's files back, as Threads.FilesRewind does. BackgroundChanged says what a thread's Claude
 // does beside its turns.
 type Threads interface {
-	ChatOf(id string) (sessions.Chat, error)
-	Chats() []sessions.Chat
-	Observe(id string, evs ...session.Event)
+	ChatOf(id string) (threads.Chat, error)
+	Chats() []threads.Chat
+	Observe(id string, evs ...thread.Event)
 	TranscriptPath(origin, conversation string) string
-	BackgroundChanged(id string, b sessions.Background)
+	BackgroundChanged(id string, b threads.Background)
 	AccessChanged(id, mode string, planApproved bool)
 	FlagRefused(flag string)
 	NextTurn(id string)
-	Wake(id string) (sessions.Chat, error)
+	Wake(id string) (threads.Chat, error)
 	FilesRewind(id string) (dir string, inProject bool, reason string)
 	Title(id string) string
-	StartSideChat(parent string) (sessions.Session, error)
+	StartSideChat(parent string) (threads.Thread, error)
 	DeleteSideChat(id string, unused bool) error
 	NameSideChat(id, text string) error
 	SideChatsOf(id string) []string
@@ -84,7 +84,7 @@ type PendingUpdate struct {
 }
 
 // Chats follows the host of each live thread, one subscription per host: it hands each change of the thread's state to
-// the sessions, tells the front end which approval each thread waits on, sends the events of the threads it watches and keeps each
+// the threads, tells the front end which approval each thread waits on, sends the events of the threads it watches and keeps each
 // project's latest command list.
 type Chats struct {
 	threads  Threads
@@ -146,7 +146,7 @@ func (c *Chats) Start(ctx context.Context) {
 
 // reconcile follows each live thread that has no follower and stops the follower of each thread that is gone.
 func (c *Chats) reconcile() {
-	live := map[string]sessions.Chat{}
+	live := map[string]threads.Chat{}
 	for _, ch := range c.threads.Chats() {
 		live[ch.ID] = ch
 	}
@@ -170,7 +170,7 @@ func (c *Chats) reconcile() {
 }
 
 // follow starts the thread's follower. It needs mu, and Start to have run.
-func (c *Chats) follow(ch sessions.Chat) *follower {
+func (c *Chats) follow(ch threads.Chat) *follower {
 	ctx, stop := context.WithCancel(c.ctx)
 	f := &follower{chats: c, chat: ch, stop: stop, read: make(chan struct{}), state: newTurn(c.threads.TranscriptPath)}
 	c.followers[ch.ID] = f
@@ -180,7 +180,7 @@ func (c *Chats) follow(ch sessions.Chat) *follower {
 
 // watch sends the live thread's events from where its follower read the log to. It returns once the follower has
 // read it, starting the follower if it has none, so a history read after it misses nothing.
-func (c *Chats) watch(ch sessions.Chat) error {
+func (c *Chats) watch(ch threads.Chat) error {
 	select {
 	case <-c.started:
 	case <-time.After(startWait):
@@ -268,7 +268,7 @@ func (c *Chats) followerOf(ctx context.Context, id string) (*follower, error) {
 	if f != nil {
 		return f, nil
 	}
-	// ChatOf takes the sessions' lock, which reconcile never holds with mu, so it is read before mu.
+	// ChatOf takes the threads' lock, which reconcile never holds with mu, so it is read before mu.
 	ch, err := c.threads.ChatOf(id)
 	if err != nil || !ch.Live {
 		return nil, ErrThreadGone
@@ -305,7 +305,7 @@ func (c *Chats) pending() []Pending {
 }
 
 // waitingIn reads what the thread waits on from its log.
-func waitingIn(ch sessions.Chat) *Pending {
+func waitingIn(ch threads.Chat) *Pending {
 	logged, err := chatlog.ReadLog(ch.Log, 0)
 	if err != nil {
 		log.Printf("orchestrator: reading the chat log of %s: %v", ch.ID, err)
@@ -327,7 +327,7 @@ func waitingIn(ch sessions.Chat) *Pending {
 // follower follows one thread's host.
 type follower struct {
 	chats *Chats
-	chat  sessions.Chat
+	chat  threads.Chat
 	stop  context.CancelFunc
 	read  chan struct{} // closed once the follower has read the log
 	state *turn         // what the run's state events need of the events before; the follower's goroutine only
@@ -415,7 +415,7 @@ func (f *follower) run(ctx context.Context) {
 	f.mu.Unlock()
 	close(f.read)
 	// What the run's events changed while the app was closed, a turn interrupted among them, is taken in first: the
-	// sessions drop what they have taken in already, and a thread whose Claude exited is known so before its approvals
+	// threads drop what they have taken in already, and a thread whose Claude exited is known so before its approvals
 	// are said to be gone.
 	f.replay(logged)
 	f.chats.threads.BackgroundChanged(f.chat.ID, f.backgroundNow())
@@ -484,7 +484,7 @@ func (f *follower) take(e chatlog.Event) {
 	f.observe(e)
 	switch e.Kind {
 	case chatlog.KindTurnEnd:
-		// The sessions, and then OnTurnEnd's fn, hear of the turn's end before an await does, so they see a wait on it
+		// The threads, and then OnTurnEnd's fn, hear of the turn's end before an await does, so they see a wait on it
 		// still in flight.
 		f.chats.turnEnded(f.chat.ID, e)
 		f.reached(e)
@@ -510,7 +510,7 @@ func (f *follower) take(e chatlog.Event) {
 	}
 }
 
-// replay hands the sessions the state changes of the run the log ends in: the events since its latest start.
+// replay hands the threads the state changes of the run the log ends in: the events since its latest start.
 func (f *follower) replay(logged []chatlog.Event) {
 	from := 0
 	for i := len(logged) - 1; i >= 0; i-- {
@@ -519,7 +519,7 @@ func (f *follower) replay(logged []chatlog.Event) {
 			break
 		}
 	}
-	var evs []session.Event
+	var evs []thread.Event
 	for _, e := range logged[from:] {
 		if ev, ok := stateEvent(e, f.state); ok {
 			evs = append(evs, ev)
@@ -530,7 +530,7 @@ func (f *follower) replay(logged []chatlog.Event) {
 	}
 }
 
-// observe hands the sessions the change of state that e makes, if it makes one.
+// observe hands the threads the change of state that e makes, if it makes one.
 func (f *follower) observe(e chatlog.Event) {
 	if ev, ok := stateEvent(e, f.state); ok {
 		f.chats.threads.Observe(f.chat.ID, ev)
@@ -563,10 +563,10 @@ func (f *follower) see(e chatlog.Event) (mode string, planApproved bool) {
 }
 
 // backgroundNow is what the thread's Claude does beside its turns, with no time.
-func (f *follower) backgroundNow() sessions.Background {
+func (f *follower) backgroundNow() threads.Background {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return sessions.Background{Subagents: f.tasks.Working(), Reporting: f.reporting, Asks: len(f.approvals) > 0}
+	return threads.Background{Subagents: f.tasks.Working(), Reporting: f.reporting, Asks: len(f.approvals) > 0}
 }
 
 func (f *follower) hasRead() bool {

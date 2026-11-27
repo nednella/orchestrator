@@ -13,10 +13,10 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/internal/scoped"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 var issueURL = regexp.MustCompile(`https://[^\s/]+/[^\s/]+/[^\s/]+/issues/\d+`)
@@ -24,9 +24,9 @@ var issueURL = regexp.MustCompile(`https://[^\s/]+/[^\s/]+/[^\s/]+/issues/\d+`)
 // Projects knows the current project.
 type Projects interface{ Current() project.Project }
 
-// Sessions starts sessions.
-type Sessions interface {
-	Create(proj project.Project, title, text string, send bool, issue int, access session.Access) (sessions.Session, error)
+// Threads starts threads.
+type Threads interface {
+	Create(proj project.Project, title, text string, send bool, issue int, access thread.Access) (threads.Thread, error)
 }
 
 // Issues knows a folder's GitHub repo and can reload a project's issues.
@@ -44,7 +44,7 @@ type Activity interface {
 type Service struct {
 	notes    *Notes
 	project  Projects
-	sessions Sessions
+	threads  Threads
 	issues   Issues
 	activity Activity
 	run      run.Runner
@@ -55,8 +55,8 @@ type Service struct {
 	filing   map[string]bool // "<project key>/<note id>" of notes being filed as issues
 }
 
-func NewService(n *Notes, p Projects, s Sessions, i Issues, a Activity, runner run.Runner, emit func(string, any), ctx func() context.Context) *Service {
-	return &Service{notes: n, project: p, sessions: s, issues: i, activity: a, run: runner, emit: emit, ctx: ctx, filing: map[string]bool{}}
+func NewService(n *Notes, p Projects, s Threads, i Issues, a Activity, runner run.Runner, emit func(string, any), ctx func() context.Context) *Service {
+	return &Service{notes: n, project: p, threads: s, issues: i, activity: a, run: runner, emit: emit, ctx: ctx, filing: map[string]bool{}}
 }
 
 func (s *Service) emitNotes() {
@@ -184,14 +184,14 @@ func (s *Service) NoteToIssue(id string) error {
 	return nil
 }
 
-// NoteToSession starts a Supervised thread titled by the note, with the project's note command typed in.
-func (s *Service) NoteToSession(id string) (sessions.Session, error) {
+// NoteToThread starts a Supervised thread titled by the note, with the project's note command typed in.
+func (s *Service) NoteToThread(id string) (threads.Thread, error) {
 	cur := s.project.Current()
 	n, err := s.notes.Get(cur.Key(), id)
 	if err != nil {
-		return sessions.Session{}, err
+		return threads.Thread{}, err
 	}
-	return s.sessions.Create(cur, n.title(), cur.NoteCommand(n.Text), cur.SendsPrompt(), 0, session.Supervised)
+	return s.threads.Create(cur, n.title(), cur.NoteCommand(n.Text), cur.SendsPrompt(), 0, thread.Supervised)
 }
 
 // issueBody is the issue template filled with the note's text; gh appends the pictures.

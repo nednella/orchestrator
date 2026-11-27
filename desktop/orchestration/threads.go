@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // allProjects is the project the threads tool takes for every project's threads.
@@ -19,17 +19,17 @@ type threadsInput struct {
 
 // listed is one thread as the threads tool lists it. You marks the caller's own.
 type listed struct {
-	ID      string         `json:"id"`
-	N       int            `json:"n"`
-	Title   string         `json:"title"`
-	Project string         `json:"project"`
-	State   session.State  `json:"state"`
-	Access  session.Access `json:"access"`
-	Parent  string         `json:"parent"`
-	Issue   int            `json:"issue"`
-	Branch  string         `json:"branch"`
-	PR      int            `json:"pr"`
-	You     bool           `json:"you,omitempty"`
+	ID      string        `json:"id"`
+	N       int           `json:"n"`
+	Title   string        `json:"title"`
+	Project string        `json:"project"`
+	State   thread.State  `json:"state"`
+	Access  thread.Access `json:"access"`
+	Parent  string        `json:"parent"`
+	Issue   int           `json:"issue"`
+	Branch  string        `json:"branch"`
+	PR      int           `json:"pr"`
+	You     bool          `json:"you,omitempty"`
 }
 
 // list answers the threads tool: the threads of the project the input names, of every project for all, else of the
@@ -68,7 +68,7 @@ func (c *Commands) list(_ context.Context, caller string, req ctl.Request) (stri
 func (c *Commands) projectKey(name, caller string) (string, error) {
 	switch name {
 	case "":
-		return session.ProjectKey(caller), nil
+		return thread.ProjectKey(caller), nil
 	case allProjects:
 		return allProjects, nil
 	}

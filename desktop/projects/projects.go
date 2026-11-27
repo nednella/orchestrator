@@ -13,7 +13,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // NewRegistry keeps cfg, read from path, and saves it to path whenever a project is added or removed.
@@ -76,7 +76,7 @@ func (r *Registry) List() []project.Project {
 	return slices.DeleteFunc(slices.Clone(r.cfg.Projects), func(p project.Project) bool { return !p.Present() })
 }
 
-// KeepAwake says whether a working session of the project holds off idle sleep. A project that is
+// KeepAwake says whether a working thread of the project holds off idle sleep. A project that is
 // not configured follows the config.
 func (r *Registry) KeepAwake(key string) bool {
 	r.mu.Lock()
@@ -156,14 +156,14 @@ func (r *Registry) SetThreadPlace(place string) error {
 }
 
 // ThreadAccess is the access a new thread starts with, "" when it is not set.
-func (r *Registry) ThreadAccess() session.Access {
+func (r *Registry) ThreadAccess() thread.Access {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.cfg.ThreadAccess
 }
 
 // SetThreadAccess saves the access a new thread starts with; "" unsets it.
-func (r *Registry) SetThreadAccess(access session.Access) error {
+func (r *Registry) SetThreadAccess(access thread.Access) error {
 	return r.edit(func(c *project.Config) error {
 		c.ThreadAccess = access
 		return nil
@@ -207,7 +207,7 @@ func (r *Registry) KeepsAwake() bool {
 	return r.cfg.KeepsAwake(project.Project{})
 }
 
-// SetKeepAwake saves whether a working session holds off idle sleep.
+// SetKeepAwake saves whether a working thread holds off idle sleep.
 func (r *Registry) SetKeepAwake(on bool) error {
 	return r.edit(func(c *project.Config) error {
 		c.KeepAwake = &on
@@ -225,10 +225,10 @@ func (r *Registry) SetCleanup(key, event, mode string) error {
 	return r.editProject(key, func(p *project.Project) error { return p.CleanupMode.Set(event, mode) })
 }
 
-// BrowserEnabled says whether the project's sessions get the browser. A project that is not configured has the default.
+// BrowserEnabled says whether the project's threads get the browser. A project that is not configured has the default.
 func (r *Registry) BrowserEnabled(key string) bool { return r.project(key).BrowserOn() }
 
-// SetBrowserEnabled saves whether the project's sessions get the browser and evidence commands.
+// SetBrowserEnabled saves whether the project's threads get the browser and evidence commands.
 func (r *Registry) SetBrowserEnabled(key string, on bool) error {
 	return r.editProject(key, func(p *project.Project) error {
 		p.Browser = &on
@@ -253,13 +253,13 @@ func (r *Registry) SetDigestSchedule(key, schedule string) error {
 // PromptSend is the project's prompt send mode, the default filled in. A project that is not configured has the default.
 func (r *Registry) PromptSend(key string) string { return r.project(key).PromptSend() }
 
-// SetPromptSend saves whether the project sends the text a session starts with at once, "auto", or waits for Enter, "manual".
+// SetPromptSend saves whether the project sends the text a thread starts with at once, "auto", or waits for Enter, "manual".
 func (r *Registry) SetPromptSend(key, mode string) error {
 	if mode != project.PromptAuto && mode != project.PromptManual {
 		return fmt.Errorf("prompt send must be %s or %s, not %q", project.PromptAuto, project.PromptManual, mode)
 	}
 	return r.editProject(key, func(p *project.Project) error {
-		p.SessionPromptSend = mode
+		p.Send = mode
 		return nil
 	})
 }

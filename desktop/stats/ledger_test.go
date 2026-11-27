@@ -21,14 +21,14 @@ func TestLedger(t *testing.T) {
 	day := func(ago int) time.Time { return now.AddDate(0, 0, -ago) }
 	log := loaded(t, t.TempDir())
 	projects := fakeProjects{{Name: "Alpha", Dir: "/a"}, {Name: "Beta", Dir: "/b"}, {Name: "Gamma", Dir: "/g"}, {Name: "Delta", Dir: "/d"}}
-	record := func(p string, ago, prompts int, sessions int, issue bool, workMs int64) {
+	record := func(p string, ago, prompts int, threads int, issue bool, workMs int64) {
 		key := strings.ToLower(p)
 		at := day(ago).UnixMilli()
 		for range prompts {
 			log.Record(key, activity.Event{At: at, Kind: activity.Prompt})
 		}
-		for range sessions {
-			e := activity.Event{At: at, Kind: activity.SessionStart}
+		for range threads {
+			e := activity.Event{At: at, Kind: activity.ThreadStart}
 			if issue {
 				e.Issue = 1
 			}
@@ -66,21 +66,21 @@ func TestLedger(t *testing.T) {
 			t.Errorf("projects = %v, want %v", names, want)
 		}
 		alpha := led.Projects[0]
-		if alpha.Sessions != 2 || alpha.IssueSessions != 1 || alpha.WorkMs != 1500 {
+		if alpha.Threads != 2 || alpha.IssueThreads != 1 || alpha.WorkMs != 1500 {
 			t.Errorf("alpha = %+v", alpha)
 		}
 		tot := led.Totals
-		if tot.Project != "" || tot.Prompts != 9 || tot.Sessions != 3 || tot.IssueSessions != 2 || tot.WorkMs != 5500 {
+		if tot.Project != "" || tot.Prompts != 9 || tot.Threads != 3 || tot.IssueThreads != 2 || tot.WorkMs != 5500 {
 			t.Errorf("totals = %+v", tot)
 		}
 	})
 
 	t.Run("year and lifetime", func(t *testing.T) {
-		if year := build(365).Totals; year.Prompts != 14 || year.Sessions != 5 {
+		if year := build(365).Totals; year.Prompts != 14 || year.Threads != 5 {
 			t.Errorf("year totals = %+v", year)
 		}
 		life := build(0)
-		if life.Days != 0 || life.Totals.Prompts != 23 || life.Totals.Sessions != 8 || life.Totals.WorkMs != 7600 {
+		if life.Days != 0 || life.Totals.Prompts != 23 || life.Totals.Threads != 8 || life.Totals.WorkMs != 7600 {
 			t.Errorf("lifetime = %+v", life)
 		}
 	})
@@ -133,8 +133,8 @@ func TestLedgerPullRequestsAndIssues(t *testing.T) {
 		{At: at(2), Kind: activity.PRMerged, Ms: 2000},
 		{At: at(1), Kind: activity.PRClosed, Ms: 9000},
 		{At: at(1), Kind: activity.IssueFiled},
-		{At: at(1), Kind: activity.SessionEnd, Ms: 100},
-		{At: at(1), Kind: activity.SessionEnd, Ms: 300},
+		{At: at(1), Kind: activity.ThreadEnd, Ms: 100},
+		{At: at(1), Kind: activity.ThreadEnd, Ms: 300},
 		{At: at(50), Kind: activity.PRMerged, Issue: 6, Ms: 5000},
 	} {
 		log.Record("alpha", e)
@@ -145,11 +145,11 @@ func TestLedgerPullRequestsAndIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	alpha := led.Projects[0]
-	want := LedgerRow{Project: "Alpha", PRsOpened: 1, PRsMerged: 3, PRsClosed: 1, IssuesFiled: 1, IssuesClosed: 1, SessionMs: 400, AvgSessionMs: 200, AvgLeadMs: 2000}
+	want := LedgerRow{Project: "Alpha", PRsOpened: 1, PRsMerged: 3, PRsClosed: 1, IssuesFiled: 1, IssuesClosed: 1, ThreadMs: 400, AvgThreadMs: 200, AvgLeadMs: 2000}
 	if alpha != want {
 		t.Errorf("alpha = %+v, want %+v", alpha, want)
 	}
-	if tot := led.Totals; tot.PRsMerged != 4 || tot.IssuesClosed != 2 || tot.AvgLeadMs != 2500 || tot.AvgSessionMs != 200 {
+	if tot := led.Totals; tot.PRsMerged != 4 || tot.IssuesClosed != 2 || tot.AvgLeadMs != 2500 || tot.AvgThreadMs != 200 {
 		t.Errorf("totals = %+v: issue 5 of each project counts once per project", tot)
 	}
 }
@@ -158,8 +158,8 @@ func TestLedgerUsage(t *testing.T) {
 	now := time.Date(2026, 10, 9, 15, 0, 0, 0, time.Local)
 	at := func(ago int) int64 { return now.AddDate(0, 0, -ago).UnixMilli() }
 	log := loaded(t, t.TempDir())
-	use := func(key, session string, ago, issue int, model, effort, title string, input, cost int64) {
-		log.Record(key, activity.Event{At: at(ago), Kind: activity.Usage, Session: session, Issue: issue, Model: model, Effort: effort, Title: title,
+	use := func(key, thread string, ago, issue int, model, effort, title string, input, cost int64) {
+		log.Record(key, activity.Event{At: at(ago), Kind: activity.Usage, Thread: thread, Issue: issue, Model: model, Effort: effort, Title: title,
 			Tokens: usage.Tokens{Input: input, Output: 10, Cost: cost}})
 	}
 	use("alpha", "alpha/aaaaaaaa", 3, 7, "claude-opus-5-5", "high", "#7 first", 100, 2_000_000)
@@ -177,19 +177,19 @@ func TestLedgerUsage(t *testing.T) {
 		t.Errorf("alpha = %+v", a)
 	}
 	tot := led.Usage.Totals
-	if tot.Sessions != 4 || tot.Input != 381 || tot.Output != 50 || tot.Tokens != 431 || tot.Cost != 3.510001 || led.Usage.PricesAsOf == "" {
+	if tot.Threads != 4 || tot.Input != 381 || tot.Output != 50 || tot.Tokens != 431 || tot.Cost != 3.510001 || led.Usage.PricesAsOf == "" {
 		t.Errorf("usage totals = %+v", led.Usage)
 	}
 	var models []string
 	for _, r := range led.Usage.ByModel {
-		models = append(models, fmt.Sprintf("%s/%s:%d:%v", r.Model, r.Effort, r.Sessions, r.Cost))
+		models = append(models, fmt.Sprintf("%s/%s:%d:%v", r.Model, r.Effort, r.Threads, r.Cost))
 	}
 	if want := []string{"claude-opus-5-5/high:2:3", "claude-sonnet-5-5/:1:0.5", "claude-haiku-5-5/high:1:0.01", "claude-opus-5-5/medium:1:1e-06"}; !slices.Equal(models, want) {
 		t.Errorf("by model = %v, want %v", models, want)
 	}
 	var work []string
 	for _, w := range led.Work {
-		work = append(work, fmt.Sprintf("%s#%d%s:%s:%d:%d", w.Project, w.Issue, w.Session, w.Title, w.Sessions, w.Tokens))
+		work = append(work, fmt.Sprintf("%s#%d%s:%s:%d:%d", w.Project, w.Issue, w.Thread, w.Title, w.Threads, w.Tokens))
 	}
 	if want := []string{"Alpha#0alpha/cccccccc:Plain task:1:40", "Beta#7:#7 beta's own:1:11", "Alpha#7:#7 resumed:2:380"}; !slices.Equal(work, want) {
 		t.Errorf("work = %v, want %v", work, want)
@@ -221,7 +221,7 @@ func TestLedgerPerDay(t *testing.T) {
 		{"alpha", 14, activity.Prompt, 0, 0},
 		{"beta", -1, activity.Prompt, 0, 0},
 	} {
-		log.Record(r.key, activity.Event{At: at(r.ago), Kind: r.kind, Session: r.key + "/aaaaaaaa", Ms: r.ms, Tokens: usage.Tokens{Input: 1, Cost: r.cost}})
+		log.Record(r.key, activity.Event{At: at(r.ago), Kind: r.kind, Thread: r.key + "/aaaaaaaa", Ms: r.ms, Tokens: usage.Tokens{Input: 1, Cost: r.cost}})
 	}
 	books := NewBooks(log, fakeProjects{{Name: "Alpha", Dir: "/a"}, {Name: "Beta", Dir: "/b"}})
 	build := func(days int, key string) Ledger {

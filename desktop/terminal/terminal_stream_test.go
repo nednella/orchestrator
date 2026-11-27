@@ -33,15 +33,15 @@ func TestTerminalStream(t *testing.T) {
 	if err := h.TermWrite(id, "x"); err == nil {
 		t.Error("writing to a closed terminal succeeded")
 	}
-	if err := h.TermOpen("not a session", 80, 24); err == nil {
-		t.Error("a name that is no session was attached")
+	if err := h.TermOpen("not a thread", 80, 24); err == nil {
+		t.Error("a name that is no thread was attached")
 	}
 }
 
 func TestOpenRefusesAThreadID(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	s, _ := h.NewSession("a thread", "")
+	s, _ := h.StartThread("a thread", "")
 	if err := h.TermOpen(s.ID, 80, 24); err == nil || err.Error() != "Only a shell has a terminal" {
 		t.Errorf("open = %v, want %q", err, "Only a shell has a terminal")
 	}

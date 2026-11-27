@@ -14,7 +14,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // waitAnswer is what one slice of wait answers, and all it answers.
@@ -130,7 +130,7 @@ func TestWaitRightAfterDelegateWaitsForTheTask(t *testing.T) {
 	if turnEnded(t, h, c.ID) {
 		t.Fatal("the child's task ended before the wait began")
 	}
-	if r := row(t, h, c.ID); r.State != session.Idle {
+	if r := row(t, h, c.ID); r.State != thread.Idle {
 		t.Logf("the child's row is %s before its first turn", r.State)
 	}
 	a := waitOn(t, h, parent, c.ID, 30*time.Second)
@@ -245,7 +245,7 @@ func TestWaitWaitsForAHeldMessage(t *testing.T) {
 	parent := newThread(t, h, "Plan the release").ID
 	// The child waits on the owner at an approval, as its stream says.
 	c := mustDelegate(t, h, parent, `{"task":"Count the files, which needs approval","access":"read"}`).ID
-	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, c).State == session.Waiting })
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, c).State == thread.Waiting })
 	sibling := newThread(t, h, "Fix the login").ID
 	if a := sendAs(t, h, sibling, `{"thread":"`+c+`","text":"Count the tests too"}`); !a.Held {
 		t.Fatalf("send answered %+v, want it held", a)

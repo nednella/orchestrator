@@ -10,11 +10,11 @@ import (
 func TestNoteCommand(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	s, err := h.NewSession("asker", "")
+	s, err := h.StartThread("asker", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp := h.AskTool(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"check the", "login page"}})
+	resp := h.AskTool(t, ctl.Request{Cmd: "note", Thread: s.ID, Args: []string{"check the", "login page"}})
 	if !resp.OK || !strings.Contains(resp.Out, "note saved") {
 		t.Fatalf("response = %+v", resp)
 	}
@@ -24,7 +24,7 @@ func TestNoteCommand(t *testing.T) {
 	if h.Rec.Last("notes") == nil {
 		t.Error("no notes event")
 	}
-	if resp := h.AskTool(t, ctl.Request{Cmd: "note", Session: s.ID, Args: []string{"  "}}); resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "note", Thread: s.ID, Args: []string{"  "}}); resp.OK {
 		t.Error("an empty note was accepted")
 	}
 }

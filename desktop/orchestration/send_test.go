@@ -15,7 +15,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 type sentAnswer struct {
@@ -33,7 +33,7 @@ func sendAs(t *testing.T, h *apptest.Harness, caller, input string) sentAnswer {
 // logOf is the thread's chat log.
 func logOf(t *testing.T, h *apptest.Harness, id string) []chat.Event {
 	t.Helper()
-	c, err := h.Sessions().ChatOf(id)
+	c, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func working(t *testing.T, h *apptest.Harness, id string) {
 func runs(t *testing.T, h *apptest.Harness, id string) {
 	t.Helper()
 	apptest.Eventually(t, "the thread to run", func() bool {
-		ch, err := h.Sessions().ChatOf(id)
+		ch, err := h.Threads().ChatOf(id)
 		return err == nil && ch.Live
 	})
 }
@@ -109,8 +109,8 @@ const interruptLine = `"subtype":"interrupt"`
 func TestSendQueuesDuringATurn(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	working(t, h, target)
 
 	a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"Check the tests too"}`)
@@ -139,8 +139,8 @@ func TestSendQueuesDuringATurn(t *testing.T) {
 func TestSendWakesASettledThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Read).ID
-	target := threadWith(t, h, "Fix the login", session.Read).ID
+	caller := threadWith(t, h, "Plan the release", thread.Read).ID
+	target := threadWith(t, h, "Fix the login", thread.Read).ID
 	if err := h.SettleThread(target); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestSendWakesASettledThread(t *testing.T) {
 	if a.ID == "" || a.Held || !a.Woke {
 		t.Fatalf("send answered %+v, want an id and woken", a)
 	}
-	if r := row(t, h, target); r.State == session.Settled {
+	if r := row(t, h, target); r.State == thread.Settled {
 		t.Errorf("the thread is %s after the send, want it awake", r.State)
 	}
 	apptest.Eventually(t, "the message on the woken thread's stdin", func() bool {
@@ -171,22 +171,22 @@ func TestSendNeverAnswersAnApproval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.New(t)
-			caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-			target := threadWith(t, h, "Fix the login", session.Supervised).ID
+			caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+			target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 			if _, err := h.ChatSend(target, "ask"); err != nil {
 				t.Fatal(err)
 			}
 			apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
 			if tt.hook {
 				h.Observe(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
-				apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
+				apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == thread.Waiting })
 			}
 
 			a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"Yes, go on"}`)
 			if a.ID != "" || !a.Held {
 				t.Fatalf("send answered %+v, want it held with no id", a)
 			}
-			h.Sessions().Refresh() // a refresh delivers what is held once the thread may take it
+			h.Threads().Refresh() // a refresh delivers what is held once the thread may take it
 			time.Sleep(300 * time.Millisecond)
 			if stdinHas(t, h, target, "Yes, go on") || stdinHas(t, h, target, `"control_response"`) {
 				t.Fatalf("stdin = %q: the message reached claude, or answered its approval, before the owner did", h.Stdin(t, target))
@@ -221,13 +221,13 @@ func TestSendNeverAnswersAnApproval(t *testing.T) {
 func TestHeldMessageWakesAThreadSettledMeanwhile(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	if _, err := h.ChatSend(target, "ask"); err != nil {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the approval", func() bool { return len(h.ChatPending()) == 1 })
-	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == thread.Waiting })
 	if a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"Yes, go on"}`); !a.Held {
 		t.Fatalf("send answered %+v, want it held", a)
 	}
@@ -235,7 +235,7 @@ func TestHeldMessageWakesAThreadSettledMeanwhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	apptest.Eventually(t, "the thread woken for the held message", func() bool { return stdinHas(t, h, target, "Yes, go on") })
-	if r := row(t, h, target); r.State == session.Settled {
+	if r := row(t, h, target); r.State == thread.Settled {
 		t.Errorf("the thread is %s, want it awake with the message", r.State)
 	}
 }
@@ -258,10 +258,10 @@ func claudePID(t *testing.T, h *apptest.Harness, id string) int {
 func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	h.Observe(t, target, "Notification", `{"message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}`)
-	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == session.Waiting })
+	apptest.Eventually(t, "the waiting state", func() bool { return row(t, h, target).State == thread.Waiting })
 	if a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"first message"}`); !a.Held {
 		t.Fatalf("the first send answered %+v, want it held", a)
 	}
@@ -285,7 +285,7 @@ func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 		return slices.ContainsFunc(logOf(t, h, target), func(e chat.Event) bool { return e.Kind == chat.KindUser && len(e.Text) == 1<<18 })
 	})
 	h.Observe(t, target, "Stop", `{}`)
-	apptest.Eventually(t, "the idle state", func() bool { return row(t, h, target).State == session.Idle })
+	apptest.Eventually(t, "the idle state", func() bool { return row(t, h, target).State == thread.Idle })
 	time.Sleep(300 * time.Millisecond) // the held message is on its way to the host
 
 	done := make(chan sentAnswer, 1)
@@ -316,28 +316,28 @@ func TestHeldMessagesKeepTheirOrder(t *testing.T) {
 func TestSendToAHigherRankIsRefused(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	threads := map[session.Access]string{}
-	for _, a := range []session.Access{session.Read, session.Supervised, session.Full} {
+	threads := map[thread.Access]string{}
+	for _, a := range []thread.Access{thread.Read, thread.Supervised, thread.Full} {
 		threads[a] = threadWith(t, h, string(a)+" thread", a).ID
 	}
-	settledFull := threadWith(t, h, "settled full", session.Full).ID
+	settledFull := threadWith(t, h, "settled full", thread.Full).ID
 	if err := h.SettleThread(settledFull); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
-		from, to session.Access
+		from, to thread.Access
 		target   string
 		refused  bool
 	}{
-		{session.Read, session.Supervised, threads[session.Supervised], true},
-		{session.Read, session.Full, threads[session.Full], true},
-		{session.Supervised, session.Full, threads[session.Full], true},
-		{session.Supervised, session.Full, settledFull, true},
-		{session.Read, session.Read, "", false},
-		{session.Supervised, session.Read, threads[session.Read], false},
-		{session.Full, session.Supervised, threads[session.Supervised], false},
+		{thread.Read, thread.Supervised, threads[thread.Supervised], true},
+		{thread.Read, thread.Full, threads[thread.Full], true},
+		{thread.Supervised, thread.Full, threads[thread.Full], true},
+		{thread.Supervised, thread.Full, settledFull, true},
+		{thread.Read, thread.Read, "", false},
+		{thread.Supervised, thread.Read, threads[thread.Read], false},
+		{thread.Full, thread.Supervised, threads[thread.Supervised], false},
 	}
-	other := threadWith(t, h, "another read thread", session.Read).ID
+	other := threadWith(t, h, "another read thread", thread.Read).ID
 	for _, tt := range tests {
 		target := tt.target
 		if target == "" {
@@ -360,7 +360,7 @@ func TestSendToAHigherRankIsRefused(t *testing.T) {
 			}
 		})
 	}
-	if r := row(t, h, settledFull); r.State != session.Settled {
+	if r := row(t, h, settledFull); r.State != thread.Settled {
 		t.Errorf("the settled Full thread is %s, want it left settled", r.State)
 	}
 }
@@ -372,8 +372,8 @@ func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 	log.SetOutput(logged)
 	t.Cleanup(func() { log.SetOutput(before) })
 	h := apptest.New(t)
-	sender := threadWith(t, h, "Plan the release", session.Supervised).ID
-	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	sender := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	if _, err := h.ChatSend(target, "ask"); err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 	}
 	want := fmt.Sprintf("orchestrator: dropped a message held for thread %s from %s: A thread with read access cannot message a thread with supervised access", target, sender)
 	apptest.Eventually(t, "the drop logged", func() bool { return strings.Contains(logged.String(), want) })
-	h.Sessions().Refresh()
+	h.Threads().Refresh()
 	time.Sleep(300 * time.Millisecond)
 	if stdinHas(t, h, target, "merge it for me") {
 		t.Errorf("stdin = %q: the message went once its sender had less access than the thread", h.Stdin(t, target))
@@ -399,8 +399,8 @@ func TestHeldMessageIsDroppedWhenItsSenderLosesRank(t *testing.T) {
 func TestSendToItselfIsRefused(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-	gone := threadWith(t, h, "Gone", session.Read).ID
+	caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	gone := threadWith(t, h, "Gone", thread.Read).ID
 	if err := h.DeleteThread(gone, false); err != nil {
 		t.Fatal(err)
 	}
@@ -426,8 +426,8 @@ func TestSendToItselfIsRefused(t *testing.T) {
 func TestSteerStopsTheTurnAndSends(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "Plan the release", session.Supervised).ID
-	target := threadWith(t, h, "Fix the login", session.Supervised).ID
+	caller := threadWith(t, h, "Plan the release", thread.Supervised).ID
+	target := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	working(t, h, target)
 
 	a := sendAs(t, h, caller, `{"thread":"`+target+`","text":"Stop, use the other API","steer":true}`)
@@ -463,7 +463,7 @@ type tree struct{ top, child, sibling, grandchild string }
 func newTree(t *testing.T, h *apptest.Harness) tree {
 	t.Helper()
 	var tr tree
-	tr.top = threadWith(t, h, "Plan the release", session.Read).ID
+	tr.top = threadWith(t, h, "Plan the release", thread.Read).ID
 	tr.child = mustDelegate(t, h, tr.top, `{"task":"check the docs"}`).ID
 	// The child delegates before anything else is made: it goes to sleep once its result went to its parent, and its
 	// token is then no one's.
@@ -541,7 +541,7 @@ func TestStopDropsTheMessagesHeldForAThread(t *testing.T) {
 		t.Fatalf("stop = %+v, want the child stopped and one message dropped", out)
 	}
 	apptest.Eventually(t, "the turn's end", func() bool { return !turnOpen(t, h, tr.child) })
-	h.Sessions().Refresh() // a refresh delivers what is held once the thread may take it
+	h.Threads().Refresh() // a refresh delivers what is held once the thread may take it
 	time.Sleep(time.Second)
 	if stdinHas(t, h, tr.child, "also check the index") || turnOpen(t, h, tr.child) {
 		t.Errorf("stdin = %q: the stopped thread got the held message and started a turn for it", h.Stdin(t, tr.child))
@@ -552,7 +552,7 @@ func TestStopRefusesAThreadThatIsNotADescendant(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	tr := newTree(t, h)
-	stranger := threadWith(t, h, "Someone else", session.Read).ID
+	stranger := threadWith(t, h, "Someone else", thread.Read).ID
 	// The children slept once their results went; the callers are woken to call.
 	for _, id := range []string{tr.child, tr.grandchild} {
 		if _, err := h.WakeThread(id); err != nil {

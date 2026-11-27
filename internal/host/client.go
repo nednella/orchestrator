@@ -45,7 +45,7 @@ type Message struct {
 
 // ErrTooOldForImages is what SendMessage returns when a host from before message ids sent the text of a message and
 // dropped its images.
-var ErrTooOldForImages = &Refused{Reason: "this session's host is too old for images"}
+var ErrTooOldForImages = &Refused{Reason: "this thread's host is too old for images"}
 
 // ErrApprovalWaits is what SendMessage returns for a message from a thread while an approval waits: the host sends
 // none, since a message then would deny the approval with its text.

@@ -39,7 +39,7 @@ const wailsReply = `[
 func TestDigestRun(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Env: []string{
-		"ORCHESTRATOR_SESSION=main/9", // a run must not inherit a session
+		"ORCHESTRATOR_SESSION=main/9", // a run must not inherit a thread
 		"DEPLOY_TOKEN=secret",
 		"ANTHROPIC_API_KEY=claude-needs-this",
 	}})

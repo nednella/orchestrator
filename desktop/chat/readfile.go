@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 )
 
 const (
@@ -60,11 +60,11 @@ func (v *Service) ProjectReadFile(project, path string) (FileContent, error) {
 }
 
 // threadDir is the folder the thread works in: its worktree, else the project folder.
-func (v *Service) threadDir(ch sessions.Chat) string { return cmp.Or(ch.Dir, v.projectDir(ch.Project)) }
+func (v *Service) threadDir(ch threads.Chat) string { return cmp.Or(ch.Dir, v.projectDir(ch.Project)) }
 
-// readFile is the file at path in dir, as sessions.OpenFile opens it; of names whose folder dir is, for the error.
+// readFile is the file at path in dir, as threads.OpenFile opens it; of names whose folder dir is, for the error.
 func readFile(dir, path, of string) (FileContent, error) {
-	f, real, err := sessions.OpenFile(dir, path, of)
+	f, real, err := threads.OpenFile(dir, path, of)
 	if err != nil {
 		return FileContent{}, err
 	}

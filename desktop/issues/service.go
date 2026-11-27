@@ -3,7 +3,7 @@ package issues
 import (
 	"context"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/project"
 )
 
@@ -18,23 +18,23 @@ func NewService(i *Issues, ctx func() context.Context) *Service { return &Servic
 
 // Issues is the current project's open issues, cached unless refresh.
 func (s *Service) Issues(refresh bool) ([]Issue, error) {
-	list, err := s.issues.List(s.ctx(), s.issues.sessions.Current(), refresh)
+	list, err := s.issues.List(s.ctx(), s.issues.threads.Current(), refresh)
 	if err != nil {
 		return nil, err
 	}
-	return s.issues.WithSessions(list), nil
+	return s.issues.WithThreads(list), nil
 }
 
-// StartIssue opens a session for the issue and gives it the command of the action with that name, the section's
+// StartIssue opens a thread for the issue and gives it the command of the action with that name, the section's
 // default for "", followed by the prompt. A model or effort that is not empty wins over the action's and the labels',
 // and fast runs the agent in its faster mode.
-// An issue that has a live session gets it back, and neither the prompt nor the model reaches it.
-func (s *Service) StartIssue(number int, action, prompt, model, effort string, fast bool) (sessions.Session, error) {
-	v, _, err := s.issues.Start(s.ctx(), s.issues.sessions.Current(), number, action, "", sessions.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}})
+// An issue that has a live thread gets it back, and neither the prompt nor the model reaches it.
+func (s *Service) StartIssue(number int, action, prompt, model, effort string, fast bool) (threads.Thread, error) {
+	v, _, err := s.issues.Start(s.ctx(), s.issues.threads.Current(), number, action, "", threads.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}})
 	return v, err
 }
 
-// MoveIssue relabels the issue on GitHub so that it falls in the section, one of its moves; no session starts.
+// MoveIssue relabels the issue on GitHub so that it falls in the section, one of its moves; no thread starts.
 // The queue is read again and arrives as the issues event.
 func (s *Service) MoveIssue(number int, section string) error {
 	return s.issues.Move(s.ctx(), number, section)
@@ -47,5 +47,5 @@ func (s *Service) UndoMove(number int) error {
 
 // IssueDetail is the issue's body and comments as GitHub renders them.
 func (s *Service) IssueDetail(number int) (IssueDetail, error) {
-	return s.issues.Detail(s.ctx(), s.issues.sessions.Current().Dir, number)
+	return s.issues.Detail(s.ctx(), s.issues.threads.Current().Dir, number)
 }

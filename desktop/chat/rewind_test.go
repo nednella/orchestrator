@@ -12,7 +12,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // talked sends each text as a turn of its own to the thread, waits for each turn's end and returns the messages' ids.
@@ -73,7 +73,7 @@ func worktreeThread(t *testing.T) (h *apptest.Harness, id, file string) {
 	}
 	gitIn(t, h.Dir, "add", "README")
 	gitIn(t, h.Dir, "commit", "-q", "-m", "first")
-	s, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "", false, 7, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), "#7 work", "", false, 7, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,13 +236,13 @@ func TestASettledThreadIsWokenThenRewound(t *testing.T) {
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread settled", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+	eventually(t, "the thread settled", func() bool { s, _ := h.Thread(id); return s.State == "settled" })
 
 	prefill, err := h.RewindTo(id, ids[0], false)
 	if err != nil || prefill != "one" {
 		t.Fatalf("RewindTo = %q, %v", prefill, err)
 	}
-	if s, _ := h.Session(id); s.State == "settled" {
+	if s, _ := h.Thread(id); s.State == "settled" {
 		t.Errorf("the thread is still settled")
 	}
 	// The woken host reads the log: three went with the first rewind, so two is the newest message.
@@ -299,7 +299,7 @@ func TestFilesAreNotRewoundWhileAShellRunsACommandInTheWorktree(t *testing.T) {
 	t.Parallel()
 	h, id, file := worktreeThread(t)
 	ids := talked(t, h, id, "one")
-	s, _ := h.Session(id)
+	s, _ := h.Thread(id)
 	h.Observe(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
 	shell, err := h.ShellNew("")
 	if err != nil {
@@ -307,7 +307,7 @@ func TestFilesAreNotRewoundWhileAShellRunsACommandInTheWorktree(t *testing.T) {
 	}
 	typeIn(t, h, shell.ID, fmt.Sprintf("cd %q && sleep 30", s.Worktree))
 	eventually(t, "the shell's command in the worktree", func() bool {
-		_, _, reason := h.Sessions().FilesRewind(id)
+		_, _, reason := h.Threads().FilesRewind(id)
 		return reason != ""
 	})
 
@@ -335,7 +335,7 @@ func TestFilesAreNotRewoundWhileAShellRunsACommandInTheWorktree(t *testing.T) {
 func TestFilesAreRewoundBesideAnIdleShell(t *testing.T) {
 	t.Parallel()
 	h, id, _ := worktreeThread(t)
-	s, _ := h.Session(id)
+	s, _ := h.Thread(id)
 	h.Observe(t, id, "Stop", fmt.Sprintf(`{"cwd":%q}`, s.Worktree))
 	shell, err := h.ShellNew(id)
 	if err != nil {
@@ -347,7 +347,7 @@ func TestFilesAreRewoundBesideAnIdleShell(t *testing.T) {
 
 	typeIn(t, h, shell.ID, "sleep 30")
 	eventually(t, "the shell's command keeps the files", func() bool {
-		_, _, reason := h.Sessions().FilesRewind(id)
+		_, _, reason := h.Threads().FilesRewind(id)
 		return reason != ""
 	})
 	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "A command is running in a terminal in this worktree" {
@@ -365,18 +365,18 @@ func TestTheFilesOfferWakesNoThread(t *testing.T) {
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread settled", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+	eventually(t, "the thread settled", func() bool { s, _ := h.Thread(id); return s.State == "settled" })
 
 	if offer := h.RewindFilesOffer(id); !offer.Offered || offer.Reason != "" {
 		t.Errorf("RewindFilesOffer = %+v", offer)
 	}
-	if s, _ := h.Session(id); s.State != "settled" {
+	if s, _ := h.Thread(id); s.State != "settled" {
 		t.Errorf("the offer woke the thread: %s", s.State)
 	}
 	if preview, err := h.RewindPreview(id, ids[0]); err != nil || len(preview.Files) != 1 {
 		t.Errorf("RewindPreview = %+v, %v", preview, err)
 	}
-	if s, _ := h.Session(id); s.State == "settled" {
+	if s, _ := h.Thread(id); s.State == "settled" {
 		t.Errorf("the dry run did not wake the thread")
 	}
 }

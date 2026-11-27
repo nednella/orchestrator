@@ -46,7 +46,7 @@ func listener(t *testing.T, port int, env ...string) *exec.Cmd {
 	t.Helper()
 	cmd := exec.Command("python3", "-c", listen, fmt.Sprint(port))
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		return strings.HasPrefix(kv, sessionVar+"=") || strings.HasPrefix(kv, socketVar+"=")
+		return strings.HasPrefix(kv, threadVar+"=") || strings.HasPrefix(kv, socketVar+"=")
 	}), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	out, err := cmd.StdoutPipe()
@@ -75,13 +75,13 @@ func execRunner(ctx context.Context, name string, args ...string) ([]byte, error
 func running(pid int) bool { return syscall.Kill(pid, 0) == nil }
 
 func TestKernelReadsAProcess(t *testing.T) {
-	cmd := listener(t, freePort(t), sessionVar+"=test/kernel", socketVar+"="+testSocket)
+	cmd := listener(t, freePort(t), threadVar+"=test/kernel", socketVar+"="+testSocket)
 	argv, env, err := kernel{}.args(cmd.Process.Pid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(argv) != 4 || argv[1] != "-c" || !slices.Contains(env, sessionVar+"=test/kernel") {
-		t.Errorf("args = %q, env has the marker: %v", argv, slices.Contains(env, sessionVar+"=test/kernel"))
+	if len(argv) != 4 || argv[1] != "-c" || !slices.Contains(env, threadVar+"=test/kernel") {
+		t.Errorf("args = %q, env has the marker: %v", argv, slices.Contains(env, threadVar+"=test/kernel"))
 	}
 	list, err := kernel{}.processes()
 	if err != nil {
@@ -109,9 +109,9 @@ func TestServersAndStopOnThisMac(t *testing.T) {
 	socket := t.TempDir() + "/orchestrator.sock"
 	id := fmt.Sprintf("test/%d", os.Getpid())
 	mine := freePort(t)
-	server := listener(t, mine, sessionVar+"="+id, socketVar+"="+socket)
+	server := listener(t, mine, threadVar+"="+id, socketVar+"="+socket)
 	owners := listener(t, freePort(t))
-	otherApps := listener(t, freePort(t), sessionVar+"="+id, socketVar+"=/another/app/orchestrator.sock")
+	otherApps := listener(t, freePort(t), threadVar+"="+id, socketVar+"=/another/app/orchestrator.sock")
 	table := New(socket, execRunner)
 
 	servers, err := table.Servers(context.Background(), map[string]int{id: 0})

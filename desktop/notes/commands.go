@@ -26,7 +26,7 @@ func NewCommands(n *Notes, a Asker, p Projects, emit func(string, any)) *Command
 	return &Commands{notes: n, asker: a, project: p, emit: emit}
 }
 
-// Note adds a note to the asking session's project.
+// Note adds a note to the asking thread's project.
 func (c *Commands) Note(_ context.Context, req control.Request) (string, error) {
 	key := c.asker.AskerProject(req)
 	n, err := c.notes.Add(key, strings.Join(req.Args, " "))

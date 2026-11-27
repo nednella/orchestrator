@@ -15,8 +15,8 @@ import (
 
 const pageProbeLimit = 3 * time.Second
 
-// page is one browser page a session owns: its first, the tabs and popups it opens, and any tab the owner opens in
-// the session's window. Its fields are guarded by the mutex of its session's tab.
+// page is one browser page a thread owns: its first, the tabs and popups it opens, and any tab the owner opens in
+// the thread's window. Its fields are guarded by the mutex of its thread's tab.
 type page struct {
 	t        *tab
 	targetID string
@@ -25,7 +25,7 @@ type page struct {
 	windowID  int    // 0 until asked for
 	mainFrame string
 	url       string
-	title     string // without the session's label
+	title     string // without the thread's label
 	loading   bool
 	loadSeq   int
 	loadedAt  int64
@@ -85,7 +85,7 @@ func (pg *page) stopDialog() {
 	}
 }
 
-// activeLocked is the page the session shows: the newest whose document is visible, else the newest. The tab's
+// activeLocked is the page the thread shows: the newest whose document is visible, else the newest. The tab's
 // mutex must be held.
 func (t *tab) activeLocked() *page {
 	for _, pg := range slices.Backward(t.pages) {
@@ -99,7 +99,7 @@ func (t *tab) activeLocked() *page {
 	return nil
 }
 
-var errNoPage = errors.New("this session has no open page")
+var errNoPage = errors.New("this thread has no open page")
 
 func (t *tab) activePage() (*page, error) {
 	t.mu.Lock()
@@ -128,7 +128,7 @@ func (t *tab) eval(ctx context.Context, expression string) (json.RawMessage, err
 	return pg.eval(ctx, expression)
 }
 
-// change runs fn, then brings the session's state in line with its active page and publishes it if that changed it.
+// change runs fn, then brings the thread's state in line with its active page and publishes it if that changed it.
 // It reports whether the state changed. fn runs with the tab's mutex held.
 func (t *tab) change(fn func()) bool {
 	t.mu.Lock()
@@ -216,7 +216,7 @@ func (pg *page) refreshMeta(ctx context.Context) {
 	})
 }
 
-// refreshAll looks at every page of the session, so the active one is current.
+// refreshAll looks at every page of the thread, so the active one is current.
 func (t *tab) refreshAll(ctx context.Context) {
 	t.mu.Lock()
 	pages := slices.Clone(t.pages)
@@ -233,7 +233,7 @@ func (t *tab) refreshActive(ctx context.Context) (*page, error) {
 	return t.activePage()
 }
 
-// watch keeps the pages' titles and the active page current while the session has a browser.
+// watch keeps the pages' titles and the active page current while the thread has a browser.
 func (t *tab) watch() {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
@@ -354,7 +354,7 @@ type targetInfo struct {
 	Title    string `json:"title"`
 }
 
-// pageBy finds the page, of any session, that match accepts. match runs with its tab's mutex held.
+// pageBy finds the page, of any thread, that match accepts. match runs with its tab's mutex held.
 func (b *Browsers) pageBy(match func(*page) bool) *page {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -377,7 +377,7 @@ func (b *Browsers) pageOfTarget(targetID string) *page {
 	return b.pageBy(func(pg *page) bool { return pg.targetID == targetID })
 }
 
-// ownerOf is the session a new page belongs to: the one that owns the page which opened it, else the one with a page
+// ownerOf is the thread a new page belongs to: the one that owns the page which opened it, else the one with a page
 // in the same window (a tab the owner opened by hand); nil when the page is not the app's.
 func (b *Browsers) ownerOf(ctx context.Context, p *browserProc, info targetInfo) *tab {
 	if info.OpenerID != "" {
@@ -410,7 +410,7 @@ func (b *Browsers) ownerOf(ctx context.Context, p *browserProc, info targetInfo)
 	return nil
 }
 
-// claim adds the page to the session, unless some session has it already or the session has closed.
+// claim adds the page to the thread, unless some thread has it already or the thread has closed.
 func (b *Browsers) claim(t *tab, pg *page) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -431,7 +431,7 @@ func (b *Browsers) claim(t *tab, pg *page) bool {
 	return true
 }
 
-// adopt takes a page that appeared in the browser into the session it belongs to, if any.
+// adopt takes a page that appeared in the browser into the thread it belongs to, if any.
 func (b *Browsers) adopt(p *browserProc, info targetInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*callLimit)
 	defer cancel()
@@ -451,7 +451,7 @@ func (b *Browsers) adopt(p *browserProc, info targetInfo) {
 	t.change(func() {})
 }
 
-// drop removes a page from the session and reports how many are left.
+// drop removes a page from the thread and reports how many are left.
 func (t *tab) drop(pg *page) int {
 	t.mu.Lock()
 	t.pages = slices.DeleteFunc(t.pages, func(x *page) bool { return x == pg })
@@ -462,7 +462,7 @@ func (t *tab) drop(pg *page) int {
 	return left
 }
 
-// pageGone forgets a page that closed. The session's browser counts as closed when its last page is gone.
+// pageGone forgets a page that closed. The thread's browser counts as closed when its last page is gone.
 func (b *Browsers) pageGone(targetID string) {
 	pg := b.pageOfTarget(targetID)
 	if pg == nil {

@@ -95,16 +95,16 @@ func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 		t.Fatalf("Open in the app that reclaims: %v", err)
 	}
 	if got := second.tab("p/1").proc.pid; got != old.pid {
-		t.Errorf("the session got the browser with pid %d, want the running %d", got, old.pid)
+		t.Errorf("the thread got the browser with pid %d, want the running %d", got, old.pid)
 	}
 	if st.Pages != 2 {
-		t.Errorf("the session got %d pages back, want its 2", st.Pages)
+		t.Errorf("the thread got %d pages back, want its 2", st.Pages)
 	}
 	if n := second.State("p/2").Pages; n != 0 {
-		t.Errorf("the other session's window was taken before it opened: %d pages", n)
+		t.Errorf("the other thread's window was taken before it opened: %d pages", n)
 	}
 	if _, err := second.Open(ctx, "p/2", ""); err != nil || second.State("p/2").Pages != 1 {
-		t.Errorf("the other session did not get its window back: %+v, %v", second.State("p/2"), err)
+		t.Errorf("the other thread did not get its window back: %+v, %v", second.State("p/2"), err)
 	}
 	select {
 	case <-old.gone:
@@ -175,7 +175,7 @@ func TestDroppedConnectionIsRemade(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if !b.Has("p/1") {
-		t.Fatal("the session lost its browser when the connection dropped")
+		t.Fatal("the thread lost its browser when the connection dropped")
 	}
 	if got, err := b.Eval(ctx, "p/1", "document.title"); err != nil || got != `"[] Kept"` {
 		t.Errorf("Eval over the remade connection = %s, %v", got, err)
@@ -190,10 +190,10 @@ func TestDroppedConnectionIsRemade(t *testing.T) {
 	}
 }
 
-func TestOpenLeavesAnotherSessionsPagesAlone(t *testing.T) {
+func TestOpenLeavesAnotherThreadsPagesAlone(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
-	// Every session gets the same label, as a page's would read when its session cannot be named.
+	// Every thread gets the same label, as a page's would read when its thread cannot be named.
 	if _, err := b.Open(ctx, "p/1", "about:blank"); err != nil {
 		t.Fatal(err)
 	}
@@ -203,12 +203,12 @@ func TestOpenLeavesAnotherSessionsPagesAlone(t *testing.T) {
 	first, _ := b.tab("p/1").activePage()
 	second, _ := b.tab("p/2").activePage()
 	if first.targetID == second.targetID {
-		t.Fatal("the second session took the first session's page")
+		t.Fatal("the second thread took the first thread's page")
 	}
 	b.Close(ctx, "p/1")
 	time.Sleep(500 * time.Millisecond)
 	if st := b.State("p/2"); !st.Open || st.Pages != 1 {
-		t.Errorf("closing one session's browser left the other's as %+v", st)
+		t.Errorf("closing one thread's browser left the other's as %+v", st)
 	}
 }
 
@@ -671,7 +671,7 @@ func waitPages(t *testing.T, b *Browsers, id string, want int) {
 	}
 }
 
-// waitLabelled waits until the browser lists want pages with the session's label in their title. A session counts a
+// waitLabelled waits until the browser lists want pages with the thread's label in their title. A thread counts a
 // page as soon as it claims it, before the page has the label.
 func waitLabelled(t *testing.T, ctx context.Context, b *Browsers, p *browserProc, id string, want int) {
 	t.Helper()
@@ -685,7 +685,7 @@ func waitLabelled(t *testing.T, ctx context.Context, b *Browsers, p *browserProc
 	}
 }
 
-func TestSessionClosesWithItsLastPage(t *testing.T) {
+func TestThreadClosesWithItsLastPage(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	mux := http.NewServeMux()
@@ -704,25 +704,25 @@ func TestSessionClosesWithItsLastPage(t *testing.T) {
 	}
 	waitPages(t, b, "p/1", 2)
 
-	// A page nobody opened for the session (no opener, and its own window) is not the session's.
+	// A page nobody opened for the thread (no opener, and its own window) is not the thread's.
 	other := b.procs["p"]
 	if _, err := other.conn().call(ctx, "", "Target.createTarget", map[string]any{"url": "about:blank", "newWindow": true}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(500 * time.Millisecond)
 	if n := b.State("p/1").Pages; n != 2 {
-		t.Fatalf("a stranger's page joined the session: %d pages", n)
+		t.Fatalf("a stranger's page joined the thread: %d pages", n)
 	}
 
 	pages := b.tab("p/1").pagesCopy()
 	closeTarget(t, ctx, b, pages[1])
 	waitPages(t, b, "p/1", 1)
 	if st := b.State("p/1"); !st.Open || !b.Has("p/1") {
-		t.Fatalf("closing one of two pages closed the session: %+v", st)
+		t.Fatalf("closing one of two pages closed the thread: %+v", st)
 	}
 	select {
 	case <-closed:
-		t.Fatal("the session counted as closed with a page left")
+		t.Fatal("the thread counted as closed with a page left")
 	default:
 	}
 
@@ -730,7 +730,7 @@ func TestSessionClosesWithItsLastPage(t *testing.T) {
 	select {
 	case <-closed:
 	case <-time.After(10 * time.Second):
-		t.Fatal("closing the last page did not close the session")
+		t.Fatal("closing the last page did not close the thread")
 	}
 	if st := b.State("p/1"); st.Open || b.Has("p/1") {
 		t.Errorf("state after the last page = %+v", st)
@@ -738,6 +738,6 @@ func TestSessionClosesWithItsLastPage(t *testing.T) {
 	select {
 	case <-other.gone:
 	case <-time.After(10 * time.Second):
-		t.Fatal("the browser still runs with no session's window in it")
+		t.Fatal("the browser still runs with no thread's window in it")
 	}
 }

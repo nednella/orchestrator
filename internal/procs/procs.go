@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	sessionVar = "ORCHESTRATOR_SESSION"
-	socketVar  = "ORCHESTRATOR_CONTROL"
+	threadVar = "ORCHESTRATOR_SESSION"
+	socketVar = "ORCHESTRATOR_CONTROL"
 
 	// stopGrace is how long a server has to exit after SIGTERM before it gets SIGKILL.
 	stopGrace = 5 * time.Second
@@ -112,7 +112,7 @@ func (t *Table) scan(want func(id string) bool) (snapshot, error) {
 
 // marker is the thread the environment names, when it names one of this app's.
 func (t *Table) marker(env []string) (string, bool) {
-	id, ok := lookup(env, sessionVar)
+	id, ok := lookup(env, threadVar)
 	if !ok || id == "" {
 		return "", false
 	}

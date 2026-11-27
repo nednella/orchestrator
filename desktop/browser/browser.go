@@ -1,4 +1,4 @@
-// Package browser runs one browser per project and one window per session.
+// Package browser runs one browser per project and one window per thread.
 package browser
 
 import (
@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 	dialogShown = 80
 )
 
-// BrowserState is what the front end shows of a session's browser: the state of its active page.
+// BrowserState is what the front end shows of a thread's browser: the state of its active page.
 type BrowserState struct {
 	ID       string `json:"id"`
 	Open     bool   `json:"open"`
@@ -49,7 +49,7 @@ type BrowserState struct {
 	Loading  bool   `json:"loading"`
 	Error    string `json:"error"`
 	LoadedAt int64  `json:"loadedAt"` // unix ms the main frame last finished loading, 0 if it never has
-	Pages    int    `json:"pages"`    // how many pages the session has open; the rest of the state is of the active one
+	Pages    int    `json:"pages"`    // how many pages the thread has open; the rest of the state is of the active one
 	// Console is the page's last few console errors, failed requests and dismissed dialogs, oldest first.
 	Console []string `json:"console"`
 }
@@ -80,8 +80,8 @@ func findBrowser(env []string) string {
 	return ""
 }
 
-// Browsers runs one browser per project and one window per session. ORCHESTRATOR_BROWSER_HEADLESS=1 starts the
-// browser without windows, for tests. agentBrowser is the command the sessions' agents drive their tab with.
+// Browsers runs one browser per project and one window per thread. ORCHESTRATOR_BROWSER_HEADLESS=1 starts the
+// browser without windows, for tests. agentBrowser is the command the threads' agents drive their tab with.
 type Browsers struct {
 	dataDir      string
 	binary       string
@@ -90,16 +90,16 @@ type Browsers struct {
 	headless     bool
 	emit         func(event string, payload any)
 	dialogWait   time.Duration
-	urlFor       func(sessionID string) string // the page a new tab opens first
-	labelFor     func(sessionID string) string // names the session in its window's title
-	onTabs       func()                        // a tab opened or closed
+	urlFor       func(id string) string // the page a new tab opens first
+	labelFor     func(id string) string // names the thread in its window's title
+	onTabs       func()                 // a tab opened or closed
 	launchMu     sync.Mutex
 	portMu       sync.Mutex
 
 	mu      sync.Mutex
 	procs   map[string]*browserProc // by project key
-	tabs    map[string]*tab         // by session id
-	opening map[string]*sync.Mutex  // by session id: one Open at a time per session
+	tabs    map[string]*tab         // by thread id
+	opening map[string]*sync.Mutex  // by thread id: one Open at a time per thread
 }
 
 // New runs the browsers with their profiles under dataDir, and reads the environment env.
@@ -115,7 +115,7 @@ func New(dataDir string, emit func(string, any), env []string) *Browsers {
 // Available says whether there is a browser to drive.
 func (b *Browsers) Available() bool { return b != nil && b.binary != "" }
 
-// Has says whether the session has a tab.
+// Has says whether the thread has a tab.
 func (b *Browsers) Has(id string) bool {
 	if b == nil {
 		return false
@@ -165,7 +165,7 @@ func (p *browserProc) setConn(c *cdp) {
 	p.cdp = c
 }
 
-// tab is one session's browser: the pages it owns, and the state the front end shows.
+// tab is one thread's browser: the pages it owns, and the state the front end shows.
 type tab struct {
 	b      *Browsers
 	proc   *browserProc
@@ -235,7 +235,7 @@ func (b *Browsers) start(ctx context.Context, key string) (*browserProc, error) 
 		return p, nil
 	}
 	stopStrayBrowser(profile)
-	// A browser that ended with pages open restores them at its next start, into the first session's window, which
+	// A browser that ended with pages open restores them at its next start, into the first thread's window, which
 	// then adopts them as its own.
 	if err := os.RemoveAll(filepath.Join(profile, "Default", "Sessions")); err != nil {
 		return nil, fmt.Errorf("clearing the browser's last session: %w", err)
@@ -266,8 +266,8 @@ func (b *Browsers) start(ctx context.Context, key string) (*browserProc, error) 
 }
 
 // reclaim takes over a browser that still runs on the profile and answers on the project's saved port: one this app
-// forgot when its connection dropped and could not be made again in time. Its windows are matched to sessions by
-// their labels when each session next opens its browser.
+// forgot when its connection dropped and could not be made again in time. Its windows are matched to threads by
+// their labels when each thread next opens its browser.
 func (b *Browsers) reclaim(ctx context.Context, key, profile string) *browserProc {
 	pid, running := lockedPID(profile)
 	port := b.savedPort(key)
@@ -319,7 +319,7 @@ func (b *Browsers) connect(ctx context.Context, p *browserProc) error {
 	return nil
 }
 
-// reconnect remakes a connection the browser dropped, as after the Mac slept, and attaches the sessions' pages again:
+// reconnect remakes a connection the browser dropped, as after the Mac slept, and attaches the threads' pages again:
 // the browser keeps running with every window, and the pages keep their target ids. A browser that does not answer
 // in time is forgotten; the next start ends it as a stray if it still does not answer, and reclaims it if it does.
 func (b *Browsers) reconnect(p *browserProc, dropped *cdp) {
@@ -396,7 +396,7 @@ func (b *Browsers) launchArgs(profile string, port int) []string {
 }
 
 // Port is the project's remote debugging port: the one saved for it, else a free one it saves now, 0 when that fails.
-// It starts no browser, so a session can name the port in its agent's tool config before the first page opens.
+// It starts no browser, so a thread can name the port in its agent's tool config before the first page opens.
 func (b *Browsers) Port(key string) int {
 	b.portMu.Lock()
 	defer b.portMu.Unlock()
@@ -562,7 +562,7 @@ func (b *Browsers) exited(p *browserProc) {
 	}
 }
 
-// openLock is the lock that keeps two Opens of one session from each making a tab.
+// openLock is the lock that keeps two Opens of one thread from each making a tab.
 func (b *Browsers) openLock(id string) *sync.Mutex {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -572,7 +572,7 @@ func (b *Browsers) openLock(id string) *sync.Mutex {
 	return b.opening[id]
 }
 
-// Open gives the session a browser with one page, starting the project's browser if needed, and goes to url when it
+// Open gives the thread a browser with one page, starting the project's browser if needed, and goes to url when it
 // is not empty. When the first page cannot be opened the page stays, and Open returns the state with the error.
 func (b *Browsers) Open(ctx context.Context, id, url string) (BrowserState, error) {
 	lock := b.openLock(id)
@@ -586,7 +586,7 @@ func (b *Browsers) Open(ctx context.Context, id, url string) (BrowserState, erro
 		}
 		return t.snapshotState(), nil
 	}
-	key := session.ProjectKey(id)
+	key := thread.ProjectKey(id)
 	p, err := b.start(ctx, key)
 	if err != nil {
 		return BrowserState{ID: id, Error: err.Error()}, err
@@ -639,8 +639,8 @@ func (b *Browsers) Open(ctx context.Context, id, url string) (BrowserState, erro
 	return t.snapshotState(), nil
 }
 
-// labelledTargets are the pages that carry the session's label in their title and belong to no session: the windows
-// of a session that the app lost track of, in a browser that start reclaimed.
+// labelledTargets are the pages that carry the thread's label in their title and belong to no thread: the windows
+// of a thread that the app lost track of, in a browser that start reclaimed.
 func (b *Browsers) labelledTargets(ctx context.Context, p *browserProc, prefix string) []string {
 	raw, err := p.conn().call(ctx, "", "Target.getTargets", nil)
 	if err != nil {
@@ -711,10 +711,10 @@ func (b *Browsers) need(id string) (*tab, error) {
 	if t := b.tab(id); t != nil {
 		return t, nil
 	}
-	return nil, errors.New("this session has no browser tab yet")
+	return nil, errors.New("this thread has no browser tab yet")
 }
 
-// State is the session's tab state; a session without a tab reports it closed.
+// State is the thread's tab state; a thread without a tab reports it closed.
 func (b *Browsers) State(id string) BrowserState {
 	if t := b.tab(id); t != nil {
 		return t.snapshotState()
@@ -747,7 +747,7 @@ func webAddress(s string) (string, error) {
 	return "https://" + s, nil
 }
 
-// Goto starts loading an address in the session's active page.
+// Goto starts loading an address in the thread's active page.
 func (b *Browsers) Goto(ctx context.Context, id, address string) error {
 	t, err := b.need(id)
 	if err != nil {
@@ -760,7 +760,7 @@ func (b *Browsers) Goto(ctx context.Context, id, address string) error {
 	return pg.goTo(ctx, address)
 }
 
-// Show brings the window of the session's active page to the front.
+// Show brings the window of the thread's active page to the front.
 func (b *Browsers) Show(ctx context.Context, id string) error {
 	t, err := b.need(id)
 	if err != nil {
@@ -773,8 +773,8 @@ func (b *Browsers) Show(ctx context.Context, id string) error {
 	return pg.activate(ctx)
 }
 
-// Close closes all the session's pages, and stops the project's browser when no other session has a window in it. The
-// session's agent-browser is left bound to no tab.
+// Close closes all the thread's pages, and stops the project's browser when no other thread has a window in it. The
+// thread's agent-browser is left bound to no tab.
 func (b *Browsers) Close(ctx context.Context, id string) {
 	if err := b.bindAgent(ctx, id, ""); err != nil {
 		log.Printf("orchestrator: %v", err)
@@ -807,7 +807,7 @@ func (b *Browsers) Close(ctx context.Context, id string) {
 	b.stopIfIdle(t.proc)
 }
 
-// stopIfIdle stops the browser when no session has a window in it.
+// stopIfIdle stops the browser when no thread has a window in it.
 func (b *Browsers) stopIfIdle(p *browserProc) {
 	b.mu.Lock()
 	// Forgotten before it stops, so an Open meanwhile starts a new browser rather than reuse this one.
@@ -834,7 +834,7 @@ func (b *Browsers) CloseAll() {
 	}
 }
 
-// Screenshot returns a PNG of the viewport or the whole page of the session's active page.
+// Screenshot returns a PNG of the viewport or the whole page of the thread's active page.
 func (b *Browsers) Screenshot(ctx context.Context, id string, full bool) ([]byte, error) {
 	t, err := b.need(id)
 	if err != nil {
@@ -916,13 +916,13 @@ func (b *Browsers) StopStrays() {
 	}
 }
 
-// Hook sets what the browsers ask of the app: the page a new tab opens first, the label that names a session in
+// Hook sets what the browsers ask of the app: the page a new tab opens first, the label that names a thread in
 // its window's title, and a nudge when a tab opens or closes.
-func (b *Browsers) Hook(urlFor, labelFor func(sessionID string) string, onTabs func()) {
+func (b *Browsers) Hook(urlFor, labelFor func(id string) string, onTabs func()) {
 	b.urlFor, b.labelFor, b.onTabs = urlFor, labelFor, onTabs
 }
 
-// Eval runs JavaScript in the session's page and returns its JSON result.
+// Eval runs JavaScript in the thread's page and returns its JSON result.
 func (b *Browsers) Eval(ctx context.Context, id, js string) (string, error) {
 	t, err := b.need(id)
 	if err != nil {

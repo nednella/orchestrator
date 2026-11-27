@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Model is the model and effort level a session's agent runs at. An empty field means unset, which leaves the choice to the agent.
+// Model is the model and effort level a thread's agent runs at. An empty field means unset, which leaves the choice to the agent.
 // Fast runs the agent in its faster mode; only the owner picks it, so no config sets it.
 type Model struct {
 	Model  string `yaml:"model,omitempty"`
@@ -19,9 +19,9 @@ func (m Model) over(base Model) Model {
 	return Model{Model: cmp.Or(m.Model, base.Model), Effort: cmp.Or(m.Effort, base.Effort), Fast: m.Fast || base.Fast}
 }
 
-// Pick chooses the model and effort for a session. From weakest to strongest: the action's, then the issue's
+// Pick chooses the model and effort for a thread. From weakest to strongest: the action's, then the issue's
 // `model:<x>` and `effort:<y>` labels. A label value that valid rejects is skipped, and ignored says why, a sentence
-// per label. A session for no issue passes an empty action and no labels.
+// per label. A thread for no issue passes an empty action and no labels.
 func Pick(action Action, labels []string, valid func(model, effort string) error) (m Model, ignored []string) {
 	m = Model{Model: action.Model, Effort: action.Effort}
 	for _, l := range slices.Backward(labels) {

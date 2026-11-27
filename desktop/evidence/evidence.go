@@ -1,4 +1,4 @@
-// Package evidence keeps what a session files for the owner to see: pictures and text cards.
+// Package evidence keeps what a thread files for the owner to see: pictures and text cards.
 package evidence
 
 import (
@@ -19,10 +19,10 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/media"
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/atomicfile"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
-// Evidence is one thing a session shows the owner: a picture or a text card.
+// Evidence is one thing a thread shows the owner: a picture or a text card.
 type Evidence struct {
 	ID      string `json:"id"`
 	Kind    string `json:"kind"`
@@ -33,13 +33,13 @@ type Evidence struct {
 	At      int64  `json:"at"`
 }
 
-// Store keeps each session's evidence in its own folder of the data dir.
+// Store keeps each thread's evidence in its own folder of the data dir.
 type Store struct {
 	dir      string
 	activity Activity
 
 	mu    sync.Mutex
-	items map[string][]Evidence // by session id
+	items map[string][]Evidence // by thread id
 }
 
 // Activity records what the app does.
@@ -55,9 +55,9 @@ func New(dataDir string, a Activity) *Store {
 // File is the file behind the URL of a picture, or "".
 func (e *Store) File(url string) string { return media.File(e.dir, media.EvidenceFolder, url) }
 
-// folder is where the session's evidence lives.
+// folder is where the thread's evidence lives.
 func (e *Store) folder(id string) (string, error) {
-	name, err := session.ParseName(id)
+	name, err := thread.ParseName(id)
 	if err != nil {
 		return "", err
 	}
@@ -105,7 +105,7 @@ func (e *Store) save(id string, items []Evidence) error {
 	return nil
 }
 
-// List is the session's evidence, oldest first.
+// List is the thread's evidence, oldest first.
 func (e *Store) List(id string) []Evidence {
 	if e == nil {
 		return []Evidence{}
@@ -154,7 +154,7 @@ func (e *Store) AddImage(id string, data []byte, caption, source string) (Eviden
 	if err := atomicfile.Write(filepath.Join(dir, name+ext), data, 0o600); err != nil {
 		return Evidence{}, err
 	}
-	parsed, _ := session.ParseName(id)
+	parsed, _ := thread.ParseName(id)
 	item := Evidence{ID: name, Kind: "image", Caption: caption, Source: source, At: time.Now().UnixMilli(),
 		URL: path.Join(media.Prefix, parsed.Project, media.EvidenceFolder, parsed.Token, name+ext)}
 	return e.add(id, item, filepath.Join(dir, name+ext))
@@ -181,7 +181,7 @@ func (e *Store) add(id string, item Evidence, file string) (Evidence, error) {
 		_ = os.Remove(file)
 	}
 	if err == nil {
-		e.activity.Record(session.ProjectKey(id), activity.Event{At: time.Now().UnixMilli(), Kind: activity.Evidence, Session: id, Label: item.Kind})
+		e.activity.Record(thread.ProjectKey(id), activity.Event{At: time.Now().UnixMilli(), Kind: activity.Evidence, Thread: id, Label: item.Kind})
 	}
 	return item, err
 }
@@ -203,7 +203,7 @@ func (e *Store) Delete(id, evidenceID string) error {
 	return e.save(id, slices.Delete(slices.Clone(items), i, i+1))
 }
 
-// Purge removes everything the session filed, and reports how many items there were.
+// Purge removes everything the thread filed, and reports how many items there were.
 func (e *Store) Purge(id string) int {
 	if e == nil {
 		return 0

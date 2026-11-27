@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
 )
@@ -48,9 +48,9 @@ type Limits struct {
 	Error         string   `json:"error"`
 }
 
-// Threads are the sessions; a live one's host is asked for the usage.
+// Threads is the thread list; a live one's host is asked for the usage.
 type Threads interface {
-	Chats() []sessions.Chat
+	Chats() []threads.Chat
 }
 
 // Asker asks the host at socket for Claude's get_usage answer, as host.Usage does.

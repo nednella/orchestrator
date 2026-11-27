@@ -10,46 +10,46 @@ import (
 	"github.com/nednella/orchestrator/internal/usage"
 )
 
-// spend is what API calls used and cost, and which sessions made them.
+// spend is what API calls used and cost, and which threads made them.
 type spend struct {
 	usage.Tokens
-	sessions map[string]bool
+	threads map[string]bool
 }
 
 func (s *spend) count(id string, t usage.Tokens) {
 	s.Add(t)
-	if s.sessions == nil {
-		s.sessions = map[string]bool{}
+	if s.threads == nil {
+		s.threads = map[string]bool{}
 	}
-	s.sessions[id] = true
+	s.threads[id] = true
 }
 
 func (s *spend) merge(o spend) {
 	s.Add(o.Tokens)
-	if s.sessions == nil {
-		s.sessions = map[string]bool{}
+	if s.threads == nil {
+		s.threads = map[string]bool{}
 	}
-	maps.Copy(s.sessions, o.sessions)
+	maps.Copy(s.threads, o.threads)
 }
 
 func (s spend) row(model, effort string) UsageRow {
 	return UsageRow{
-		Model: model, Effort: effort, Sessions: len(s.sessions), Tokens: s.Total(), Cost: s.Dollars(),
+		Model: model, Effort: effort, Threads: len(s.threads), Tokens: s.Total(), Cost: s.Dollars(),
 		Input: s.Input, Output: s.Output, CacheRead: s.CacheRead, CacheWrite: s.CacheWrite, Thinking: s.Thinking,
 	}
 }
 
-// work is what one issue's sessions used, or one session with no issue.
+// work is what one issue's threads used, or one thread with no issue.
 type work struct {
-	issue   int
-	session string // "" for an issue
-	title   string // of the latest session
-	lastAt  int64
+	issue  int
+	thread string // "" for an issue
+	title  string // of the latest thread
+	lastAt int64
 	spend
 }
 
 func (w *work) merge(o work) {
-	w.issue, w.session = o.issue, o.session
+	w.issue, w.thread = o.issue, o.thread
 	if o.lastAt >= w.lastAt {
 		w.lastAt, w.title = o.lastAt, o.title
 	}
@@ -63,33 +63,33 @@ type spending struct {
 	all     spend
 	tasks   spend
 	byModel map[modelEffort]*spend
-	byWork  map[string]*work // by "#<issue>" or session id
+	byWork  map[string]*work // by "#<issue>" or thread id
 }
 
 func (s *spending) count(e activity.Event) {
 	if s.byModel == nil {
 		s.byModel, s.byWork = map[modelEffort]*spend{}, map[string]*work{}
 	}
-	s.all.count(e.Session, e.Tokens)
+	s.all.count(e.Thread, e.Tokens)
 	key := modelEffort{e.Model, e.Effort}
 	if s.byModel[key] == nil {
 		s.byModel[key] = &spend{}
 	}
-	s.byModel[key].count(e.Session, e.Tokens)
-	s.tasks.count(e.Session, e.Tokens)
+	s.byModel[key].count(e.Thread, e.Tokens)
+	s.tasks.count(e.Thread, e.Tokens)
 	one := work{issue: e.Issue, title: e.Title, lastAt: e.At}
-	one.count(e.Session, e.Tokens)
+	one.count(e.Thread, e.Tokens)
 	if e.Issue == 0 {
-		one.session = e.Session
+		one.thread = e.Thread
 	}
-	s.mergeWork(workKey(e.Issue, e.Session), one)
+	s.mergeWork(workKey(e.Issue, e.Thread), one)
 }
 
-func workKey(issue int, session string) string {
+func workKey(issue int, thread string) string {
 	if issue > 0 {
 		return "#" + strconv.Itoa(issue)
 	}
-	return session
+	return thread
 }
 
 func (s *spending) mergeWork(key string, o work) {
@@ -123,8 +123,8 @@ func (s *spending) merge(o spending) {
 // UsageRow is the tokens a model used at one effort, or all of them in the totals.
 type UsageRow struct {
 	Model      string  `json:"model"`  // "" in the totals
-	Effort     string  `json:"effort"` // "" when the session was started without one
-	Sessions   int     `json:"sessions"`
+	Effort     string  `json:"effort"` // "" when the thread was started without one
+	Threads    int     `json:"sessions"`
 	Tokens     int64   `json:"tokens"` // input, output and cache reads and writes together
 	Input      int64   `json:"input"`
 	Output     int64   `json:"output"` // thinking included
@@ -134,16 +134,16 @@ type UsageRow struct {
 	Cost       float64 `json:"cost"` // US dollars at list prices
 }
 
-// WorkRow is what one issue's sessions used, resumed ones included, or one session with no issue.
+// WorkRow is what one issue's threads used, resumed ones included, or one thread with no issue.
 type WorkRow struct {
-	Project  string  `json:"project"`
-	Issue    int     `json:"issue"`   // 0 for a session with no issue
-	Session  string  `json:"session"` // "" for an issue
-	Title    string  `json:"title"`
-	Sessions int     `json:"sessions"`
-	Tokens   int64   `json:"tokens"`
-	Cost     float64 `json:"cost"`
-	LastAt   int64   `json:"lastAt"` // unix ms of the latest usage
+	Project string  `json:"project"`
+	Issue   int     `json:"issue"`   // 0 for a thread with no issue
+	Thread  string  `json:"session"` // "" for an issue
+	Title   string  `json:"title"`
+	Threads int     `json:"sessions"`
+	Tokens  int64   `json:"tokens"`
+	Cost    float64 `json:"cost"`
+	LastAt  int64   `json:"lastAt"` // unix ms of the latest usage
 }
 
 // Usage is what the agents used over the ledger's days.
@@ -169,8 +169,8 @@ func (s spending) work(project string) []WorkRow {
 	out := make([]WorkRow, 0, len(s.byWork))
 	for _, w := range s.byWork {
 		out = append(out, WorkRow{
-			Project: project, Issue: w.issue, Session: w.session, Title: w.title,
-			Sessions: len(w.sessions), Tokens: w.Total(), Cost: w.Dollars(), LastAt: w.lastAt,
+			Project: project, Issue: w.issue, Thread: w.thread, Title: w.title,
+			Threads: len(w.threads), Tokens: w.Total(), Cost: w.Dollars(), LastAt: w.lastAt,
 		})
 	}
 	return out

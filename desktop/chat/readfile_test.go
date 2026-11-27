@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 )
 
 // fileThread is one ended thread, number 7, that works in its folder.
@@ -18,8 +18,8 @@ type fileThread struct {
 	folderThread
 }
 
-func (f fileThread) ChatOf(id string) (sessions.Chat, error) {
-	return sessions.Chat{ID: id, Project: "main", Dir: string(f.folderThread), N: 7}, nil
+func (f fileThread) ChatOf(id string) (threads.Chat, error) {
+	return threads.Chat{ID: id, Project: "main", Dir: string(f.folderThread), N: 7}, nil
 }
 
 // readService is a service for one thread in dir and the project demo in projectDir.

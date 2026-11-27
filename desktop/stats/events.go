@@ -31,7 +31,7 @@ type Log struct {
 	machine string
 
 	// appending is apart from mu so that an event never waits for a read: Load can take half a minute
-	// on files iCloud must download first, and the sessions record events under their own locks.
+	// on files iCloud must download first, and the threads record events under their own locks.
 	// Record writes only today's file, and compress touches only the days before yesterday.
 	appending sync.Mutex
 
@@ -262,30 +262,30 @@ func readEvents(r io.Reader, each func(activity.Event)) {
 
 // Day is what one project's agents did on one local day.
 type Day struct {
-	Prompts       int
-	Sessions      int
-	IssueSessions int   // of Sessions, those started from an issue
-	WorkMs        int64 // time sessions spent working
+	Prompts      int
+	Threads      int
+	IssueThreads int   // of Threads, those started from an issue
+	WorkMs       int64 // time threads spent working
 
-	Ended        int   // sessions that ended
-	SessionMs    int64 // how long the ended sessions ran
+	Ended        int   // threads that ended
+	ThreadMs     int64 // how long the ended threads ran
 	PRsOpened    int
 	PRsMerged    int
 	PRsClosed    int   // closed without a merge
 	LeadMs       int64 // of the merged PRs, the time from first seen open to merged
 	IssuesFiled  int
-	ClosedIssues []int // the issues whose session's PR merged
+	ClosedIssues []int // the issues whose thread's PR merged
 
 	spending spending // the tokens the agents used
 }
 
 func (d *Day) add(o Day) {
 	d.Prompts += o.Prompts
-	d.Sessions += o.Sessions
-	d.IssueSessions += o.IssueSessions
+	d.Threads += o.Threads
+	d.IssueThreads += o.IssueThreads
 	d.WorkMs += o.WorkMs
 	d.Ended += o.Ended
-	d.SessionMs += o.SessionMs
+	d.ThreadMs += o.ThreadMs
 	d.PRsOpened += o.PRsOpened
 	d.PRsMerged += o.PRsMerged
 	d.PRsClosed += o.PRsClosed
@@ -305,14 +305,14 @@ func apply(days map[string]*Day, e activity.Event) {
 	switch e.Kind {
 	case activity.Prompt:
 		d.Prompts++
-	case activity.SessionStart:
-		d.Sessions++
+	case activity.ThreadStart:
+		d.Threads++
 		if e.Issue > 0 {
-			d.IssueSessions++
+			d.IssueThreads++
 		}
-	case activity.SessionEnd:
+	case activity.ThreadEnd:
 		d.Ended++
-		d.SessionMs += e.Ms
+		d.ThreadMs += e.Ms
 	case activity.Worked:
 		d.WorkMs += e.Ms
 	case activity.PROpened:

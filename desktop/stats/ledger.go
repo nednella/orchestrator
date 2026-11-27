@@ -32,21 +32,21 @@ type DayFigures struct {
 
 // LedgerRow is one project's figures, or all of them in the totals.
 type LedgerRow struct {
-	Project       string  `json:"project"`
-	Prompts       int     `json:"prompts"`
-	Sessions      int     `json:"sessions"`
-	IssueSessions int     `json:"issueSessions"`
-	WorkMs        int64   `json:"workMs"`
-	PRsOpened     int     `json:"prsOpened"`
-	PRsMerged     int     `json:"prsMerged"`
-	PRsClosed     int     `json:"prsClosed"` // closed without a merge
-	IssuesFiled   int     `json:"issuesFiled"`
-	IssuesClosed  int     `json:"issuesClosed"`
-	SessionMs     int64   `json:"sessionMs"`    // how long the ended sessions ran, start to end, all together
-	AvgSessionMs  int64   `json:"avgSessionMs"` // 0 when no session ended
-	AvgLeadMs     int64   `json:"avgLeadMs"`    // from a PR first seen open to merged; 0 when none merged
-	Tokens        int64   `json:"tokens"`
-	Cost          float64 `json:"cost"` // US dollars at list prices
+	Project      string  `json:"project"`
+	Prompts      int     `json:"prompts"`
+	Threads      int     `json:"sessions"`
+	IssueThreads int     `json:"issueSessions"`
+	WorkMs       int64   `json:"workMs"`
+	PRsOpened    int     `json:"prsOpened"`
+	PRsMerged    int     `json:"prsMerged"`
+	PRsClosed    int     `json:"prsClosed"` // closed without a merge
+	IssuesFiled  int     `json:"issuesFiled"`
+	IssuesClosed int     `json:"issuesClosed"`
+	ThreadMs     int64   `json:"sessionMs"`    // how long the ended threads ran, start to end, all together
+	AvgThreadMs  int64   `json:"avgSessionMs"` // 0 when no thread ended
+	AvgLeadMs    int64   `json:"avgLeadMs"`    // from a PR first seen open to merged; 0 when none merged
+	Tokens       int64   `json:"tokens"`
+	Cost         float64 `json:"cost"` // US dollars at list prices
 }
 
 // total is days added up, and the issues closed over them.
@@ -57,12 +57,12 @@ type total struct {
 
 func (t total) row(project string) LedgerRow {
 	r := LedgerRow{
-		Project: project, Prompts: t.Prompts, Sessions: t.Sessions, IssueSessions: t.IssueSessions, WorkMs: t.WorkMs, SessionMs: t.SessionMs,
+		Project: project, Prompts: t.Prompts, Threads: t.Threads, IssueThreads: t.IssueThreads, WorkMs: t.WorkMs, ThreadMs: t.ThreadMs,
 		PRsOpened: t.PRsOpened, PRsMerged: t.PRsMerged, PRsClosed: t.PRsClosed, IssuesFiled: t.IssuesFiled, IssuesClosed: t.issuesClosed,
 		Tokens: t.spending.all.Total(), Cost: t.spending.all.Dollars(),
 	}
 	if t.Ended > 0 {
-		r.AvgSessionMs = t.SessionMs / int64(t.Ended)
+		r.AvgThreadMs = t.ThreadMs / int64(t.Ended)
 	}
 	if t.PRsMerged > 0 {
 		r.AvgLeadMs = t.LeadMs / int64(t.PRsMerged)
@@ -169,7 +169,7 @@ func (b *Books) Ledger(days int, key string, now time.Time) (Ledger, error) {
 		return strings.Compare(a.Project, b.Project)
 	})
 	slices.SortFunc(led.Work, func(a, b WorkRow) int {
-		return cmp.Or(cmp.Compare(b.LastAt, a.LastAt), cmp.Compare(a.Project, b.Project), cmp.Compare(a.Issue, b.Issue), cmp.Compare(a.Session, b.Session))
+		return cmp.Or(cmp.Compare(b.LastAt, a.LastAt), cmp.Compare(a.Project, b.Project), cmp.Compare(a.Issue, b.Issue), cmp.Compare(a.Thread, b.Thread))
 	})
 	led.Totals = totals.row("")
 	led.Previous = previous.row("")

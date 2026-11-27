@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 )
 
-// OpenTab opens address in a new tab from the session's page, as a click on a link with target _blank does.
+// OpenTab opens address in a new tab from the thread's page, as a click on a link with target _blank does.
 func (b *Browsers) OpenTab(ctx context.Context, id, address string) error {
 	t, err := b.need(id)
 	if err != nil {

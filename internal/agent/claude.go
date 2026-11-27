@@ -10,7 +10,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/nednella/orchestrator/internal/mcp"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/usage"
 )
 
@@ -18,7 +18,7 @@ import (
 // the owner's queue or plan one in it.
 var threadTools = []string{"Bash(gh issue create:*)", "Bash(gh issue comment:*)", "Bash(gh issue edit:*)"}
 
-// browserTool drives the session's browser tab. A session with a browser may run it without asking.
+// browserTool drives the thread's browser tab. A thread with a browser may run it without asking.
 const browserTool = "Bash(agent-browser:*)"
 
 // toolTimeout is how long, in milliseconds, Claude lets an MCP tool call run: a little over the hour an orchestrator wait
@@ -107,7 +107,7 @@ func (c Claude) Command(l Launch) []string {
 	if l.MCPConfig != "" {
 		argv = append(argv, "--mcp-config", l.MCPConfig)
 		orchestrator := mcp.ClaudeNames()
-		if l.Access == session.Read {
+		if l.Access == thread.Read {
 			orchestrator = mcp.ReadNames()
 		}
 		allowed = append(slices.Clip(allowed), orchestrator...)
@@ -130,30 +130,30 @@ func modelArg(model string) string {
 }
 
 // PermissionMode is claude's mode for the access. A level it does not know is Supervised, never more.
-func PermissionMode(a session.Access) string {
+func PermissionMode(a thread.Access) string {
 	switch a {
-	case session.Read:
+	case thread.Read:
 		return "plan"
-	case session.Full:
+	case thread.Full:
 		return "bypassPermissions"
 	}
 	return "default"
 }
 
 // AccessOfMode is the access claude's permission mode gives, false for a mode orchestrator does not know.
-func AccessOfMode(mode string) (session.Access, bool) {
+func AccessOfMode(mode string) (thread.Access, bool) {
 	switch mode {
 	case "plan":
-		return session.Read, true
+		return thread.Read, true
 	case "default", "acceptEdits":
-		return session.Supervised, true
+		return thread.Supervised, true
 	case "bypassPermissions":
-		return session.Full, true
+		return thread.Full, true
 	}
 	return "", false
 }
 
-// Env sets claude's temp folder to the session's own, lets an orchestrator tool call run as long as a wait may, and keeps a
+// Env sets claude's temp folder to the thread's own, lets an orchestrator tool call run as long as a wait may, and keeps a
 // checkpoint of the files each message's turn edits, which claude records only while it runs with the setting.
 func (c Claude) Env(l Launch) []string {
 	return []string{"CLAUDE_CODE_TMPDIR=" + l.TmpDir, "MCP_TOOL_TIMEOUT=" + toolTimeout, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=1"}

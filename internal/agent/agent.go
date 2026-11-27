@@ -9,33 +9,33 @@ import (
 	"strings"
 
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/usage"
 )
 
-// Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.
+// Launch is what a thread is started with besides its name. An empty field leaves the choice to the agent.
 // Fast says the agent runs in its faster mode, for a model that has one. Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
 // continues the conversation up to there under a new id. Access is what the agent may do without asking. Prompt is
-// the text orchestrator adds to the agent's system prompt. Browser says the session drives its browser tab with
-// agent-browser. TmpDir is the session's own temp folder. MCPConfig is the file that starts the orchestrator tools' server
+// the text orchestrator adds to the agent's system prompt. Browser says the thread drives its browser tab with
+// agent-browser. TmpDir is the thread's own temp folder. MCPConfig is the file that starts the orchestrator tools' server
 // with the thread's token, "" for none.
 type Launch struct {
 	Model, Effort, Resume string
 	ForkAt                string
 	Fast                  bool
-	Access                session.Access
+	Access                thread.Access
 	Browser               bool
 	Prompt                string
 	TmpDir                string
 	MCPConfig             string
 }
 
-// Provider is one agent CLI as orchestrator runs it: the command and environment a session starts with, and the way its
+// Provider is one agent CLI as orchestrator runs it: the command and environment a thread starts with, and the way its
 // transcripts are read.
 type Provider interface {
 	Name() string
 	Command(l Launch) []string
-	// Env is what the agent needs in its environment besides what every session gets.
+	// Env is what the agent needs in its environment besides what every thread gets.
 	Env(l Launch) []string
 	// Fill sets the model and effort l leaves empty to what the agent's own settings for dir choose.
 	Fill(dir string, l Launch) Launch
@@ -102,7 +102,7 @@ func checkModel(agent string, models []Model, model, effort string) error {
 	return nil
 }
 
-// Registry makes the provider each session starts with. Dirs are the app's folders the agent may use. Env is the
+// Registry makes the provider each thread starts with. Dirs are the app's folders the agent may use. Env is the
 // environment the agent is found and told its settings by; the process's when nil.
 type Registry struct {
 	Dirs []string

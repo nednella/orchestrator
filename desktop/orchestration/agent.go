@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -27,7 +27,7 @@ func agentTools() map[string]string {
 // agentTool runs the agent tool name as the caller, through the handler its orchestrator command reached.
 func (c *Commands) agentTool(name string) tool {
 	return func(ctx context.Context, caller string, req ctl.Request) (string, error) {
-		r, err := agentRequest(name, json.RawMessage(req.Opts["input"]), caller, session.ProjectKey(caller))
+		r, err := agentRequest(name, json.RawMessage(req.Opts["input"]), caller, thread.ProjectKey(caller))
 		if err != nil {
 			return "", err
 		}
@@ -48,12 +48,12 @@ func (c *Commands) agentTool(name string) tool {
 
 // newThreadAccess is the access of the thread new_thread starts: the one asked for, else the caller's, and never one
 // that ranks above the caller's.
-func (c *Commands) newThreadAccess(caller, asked string) (session.Access, error) {
+func (c *Commands) newThreadAccess(caller, asked string) (thread.Access, error) {
 	has := c.threads.AccessOf(caller)
 	if asked == "" {
 		return has, nil
 	}
-	want, err := session.ParseAccess(asked)
+	want, err := thread.ParseAccess(asked)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +77,7 @@ func agentRequest(tool string, input json.RawMessage, caller, project string) (c
 	if len(opts["prompt"]) > maxPrompt {
 		return ctl.Request{}, fmt.Errorf("The prompt is %d bytes, more than the %d a thread takes: put the long parts in a file and give its path", len(opts["prompt"]), maxPrompt)
 	}
-	return ctl.Request{Cmd: cmd, Session: caller, Project: project, Args: args, Opts: opts}, nil
+	return ctl.Request{Cmd: cmd, Thread: caller, Project: project, Args: args, Opts: opts}, nil
 }
 
 // agentArgs reads the input of the agent tool into the args and options its handler reads.

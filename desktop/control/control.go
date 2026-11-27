@@ -9,14 +9,14 @@ import (
 
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // Handler runs one command and returns what the command prints.
 type Handler func(ctx context.Context, req ctl.Request) (string, error)
 
-// Sessions tells who may ask.
-type Sessions interface {
+// Threads tells who may ask.
+type Threads interface {
 	Has(id string) bool
 	Current() project.Project
 	ThreadOfToken(token string) (string, bool)
@@ -24,19 +24,19 @@ type Sessions interface {
 
 // Router sends each command to its handler.
 type Router struct {
-	sessions Sessions
+	threads  Threads
 	handlers map[string]Handler
 	external map[string]bool
 	server   *ctl.Server
 }
 
 // New routes commands.
-func New(s Sessions) *Router {
-	return &Router{sessions: s, handlers: map[string]Handler{}, external: map[string]bool{}}
+func New(s Threads) *Router {
+	return &Router{threads: s, handlers: map[string]Handler{}, external: map[string]bool{}}
 }
 
 // Handle registers the handler of a command that only a tool call reaches, through Answer. Such a handler trusts the
-// request's session and project, which the tool call sets from the thread's token, so the socket never answers it:
+// request's thread and project, which the tool call sets from the thread's token, so the socket never answers it:
 // a client there could name any thread.
 func (r *Router) Handle(cmd string, h Handler) { r.handlers[cmd] = h }
 
@@ -86,15 +86,15 @@ func (r *Router) Answer(ctx context.Context, req ctl.Request) ctl.Response {
 	return ctl.Response{OK: true, Out: out}
 }
 
-// AskerSession checks that the command comes from a session that runs.
-func (r *Router) AskerSession(req ctl.Request) (string, error) {
-	if _, err := session.ParseName(req.Session); err != nil {
+// AskerThread checks that the command comes from a thread that runs.
+func (r *Router) AskerThread(req ctl.Request) (string, error) {
+	if _, err := thread.ParseName(req.Thread); err != nil {
 		return "", errors.New("no calling thread")
 	}
-	if !r.sessions.Has(req.Session) {
-		return "", fmt.Errorf("session %s is not running", req.Session)
+	if !r.threads.Has(req.Thread) {
+		return "", fmt.Errorf("thread %s is not running", req.Thread)
 	}
-	return req.Session, nil
+	return req.Thread, nil
 }
 
 // Caller is the thread whose host the request's token was made for. It reads nothing else of the request: an orchestrator
@@ -103,20 +103,20 @@ func (r *Router) Caller(req ctl.Request) (string, error) {
 	if req.Token == "" {
 		return "", errors.New("This call carries no orchestrator thread token")
 	}
-	id, ok := r.sessions.ThreadOfToken(req.Token)
+	id, ok := r.threads.ThreadOfToken(req.Token)
 	if !ok {
 		return "", errors.New("This thread token is not valid: the thread settled or was woken again")
 	}
 	return id, nil
 }
 
-// AskerProject is the project key of the asking session, else the current project.
+// AskerProject is the project key of the asking thread, else the current project.
 func (r *Router) AskerProject(req ctl.Request) string {
 	if req.Project != "" {
 		return req.Project
 	}
-	if name, err := session.ParseName(req.Session); err == nil {
+	if name, err := thread.ParseName(req.Thread); err == nil {
 		return name.Project
 	}
-	return r.sessions.Current().Key()
+	return r.threads.Current().Key()
 }

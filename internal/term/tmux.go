@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -75,14 +75,14 @@ func (t *Tmux) WithEnv(env []string) *Tmux {
 
 // Info is one agent session as tmux reports it.
 type Info struct {
-	Name    session.Name
+	Name    thread.Name
 	Title   string
 	Path    string
 	Issue   string // the GitHub issue number the session was started for, or ""
 	Model   string // the model the agent runs: the start choice until its first turn, then what it used last, or ""
 	Effort  string // the effort the agent runs, kept like Model, or ""
 	Fast    bool   // the agent runs in its faster mode
-	Access  session.Access
+	Access  thread.Access
 	Action  string // the queue action the session was started with, or ""
 	Fork    string // the session a fork was forked from, or ""
 	Branch  string // the branch the thread works on, in the worktree it started in, or ""
@@ -94,7 +94,7 @@ type Info struct {
 
 // Shell is one shell session as tmux reports it.
 type Shell struct {
-	Name    session.Name
+	Name    thread.Name
 	Folder  string // the folder the shell started in; only ListAll reads it
 	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
 	PID     int    // the shell's own process, which its pane runs
@@ -161,7 +161,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 		if len(f) != fields {
 			continue
 		}
-		name, err := session.ParseName(f[0])
+		name, err := thread.ParseName(f[0])
 		if err != nil {
 			continue
 		}
@@ -174,7 +174,7 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 		if f[6] == "" {
 			continue
 		}
-		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: session.StoredAccess(f[6]), Action: f[7], Fork: f[8], Branch: f[11], Parent: f[12], Side: f[13] == "1", Fast: f[14] == "1"}
+		info := Info{Name: name, Title: f[1], Path: f[2], Issue: f[3], Model: f[4], Effort: f[5], Access: thread.StoredAccess(f[6]), Action: f[7], Fork: f[8], Branch: f[11], Parent: f[12], Side: f[13] == "1", Fast: f[14] == "1"}
 		if secs, err := strconv.ParseInt(f[9], 10, 64); err == nil {
 			info.Created = time.Unix(secs, 0)
 		}
@@ -203,7 +203,7 @@ func (t *Tmux) ShellPaths(ctx context.Context) ([]Shell, error) {
 		if len(f) != 2 {
 			continue
 		}
-		if name, err := session.ParseName(f[0]); err == nil && name.IsShell() {
+		if name, err := thread.ParseName(f[0]); err == nil && name.IsShell() {
 			shells = append(shells, Shell{Name: name, Path: f[1]})
 		}
 	}
@@ -231,7 +231,7 @@ func noServer(msg string) bool {
 
 // target names a session for -t. The "=" makes tmux match the whole name: without
 // it "p/1" also matches "p/10". The ":" lets commands that take a pane accept it.
-func target(name session.Name) string { return "=" + name.String() + ":" }
+func target(name thread.Name) string { return "=" + name.String() + ":" }
 
 // arg escapes a trailing ";", which tmux would take as the end of the command.
 func arg(s string) string {
@@ -242,13 +242,13 @@ func arg(s string) string {
 }
 
 // Has says whether a tmux session of that name exists.
-func (t *Tmux) Has(ctx context.Context, name session.Name) bool {
+func (t *Tmux) Has(ctx context.Context, name thread.Name) bool {
 	_, err := t.run(ctx, "has-session", "-t", target(name))
 	return err == nil
 }
 
 // NewSession starts argv detached in dir at the given size.
-func (t *Tmux) NewSession(ctx context.Context, name session.Name, title, dir string, env []string, argv []string, cols, rows int) error {
+func (t *Tmux) NewSession(ctx context.Context, name thread.Name, title, dir string, env []string, argv []string, cols, rows int) error {
 	args := []string{
 		"new-session", "-d", "-s", name.String(), "-c", dir,
 		"-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows),
@@ -272,7 +272,7 @@ func (t *Tmux) NewSession(ctx context.Context, name session.Name, title, dir str
 
 // Kill stops a session and every process under its pane. tmux only hangs the pane up, and a child that ignores
 // SIGHUP or runs in a process group of its own would outlive the session.
-func (t *Tmux) Kill(ctx context.Context, name session.Name) error {
+func (t *Tmux) Kill(ctx context.Context, name thread.Name) error {
 	var procs map[int]proc
 	if out, err := t.run(ctx, "display-message", "-p", "-t", target(name), "#{pane_pid}"); err == nil {
 		pid, _ := strconv.Atoi(strings.TrimSpace(out))
@@ -287,7 +287,7 @@ func (t *Tmux) Kill(ctx context.Context, name session.Name) error {
 	return nil
 }
 
-func (t *Tmux) Rename(ctx context.Context, name session.Name, title string) error {
+func (t *Tmux) Rename(ctx context.Context, name thread.Name, title string) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), titleOption, arg(oneLine(title))); err != nil {
 		return fmt.Errorf("renaming session %s: %w", name, err)
 	}
@@ -295,7 +295,7 @@ func (t *Tmux) Rename(ctx context.Context, name session.Name, title string) erro
 }
 
 // SetIssue records which GitHub issue a session was started for.
-func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error {
+func (t *Tmux) SetIssue(ctx context.Context, name thread.Name, issue int) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), issueOption, strconv.Itoa(issue)); err != nil {
 		return fmt.Errorf("tagging session %s: %w", name, err)
 	}
@@ -303,7 +303,7 @@ func (t *Tmux) SetIssue(ctx context.Context, name session.Name, issue int) error
 }
 
 // SetAccess records a session's access.
-func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.Access) error {
+func (t *Tmux) SetAccess(ctx context.Context, name thread.Name, access thread.Access) error {
 	if err := plain(string(access)); err != nil {
 		return fmt.Errorf("recording the access of session %s: %w", name, err)
 	}
@@ -314,7 +314,7 @@ func (t *Tmux) SetAccess(ctx context.Context, name session.Name, access session.
 }
 
 // SetFork records the session a fork was forked from.
-func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) error {
+func (t *Tmux) SetFork(ctx context.Context, name thread.Name, from string) error {
 	if err := plain(from); err != nil {
 		return fmt.Errorf("recording the fork source of session %s: %w", name, err)
 	}
@@ -325,7 +325,7 @@ func (t *Tmux) SetFork(ctx context.Context, name session.Name, from string) erro
 }
 
 // SetSide marks a session as a side chat of the thread its fork tag names.
-func (t *Tmux) SetSide(ctx context.Context, name session.Name) error {
+func (t *Tmux) SetSide(ctx context.Context, name thread.Name) error {
 	if _, err := t.run(ctx, "set-option", "-t", target(name), sideOption, "1"); err != nil {
 		return fmt.Errorf("tagging side chat %s: %w", name, err)
 	}
@@ -333,7 +333,7 @@ func (t *Tmux) SetSide(ctx context.Context, name session.Name) error {
 }
 
 // SetBranch records the branch a thread works on.
-func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) error {
+func (t *Tmux) SetBranch(ctx context.Context, name thread.Name, branch string) error {
 	if err := plain(branch); err != nil {
 		return fmt.Errorf("recording the branch of session %s: %w", name, err)
 	}
@@ -344,7 +344,7 @@ func (t *Tmux) SetBranch(ctx context.Context, name session.Name, branch string) 
 }
 
 // SetParent records the thread that delegated to a session.
-func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) error {
+func (t *Tmux) SetParent(ctx context.Context, name thread.Name, parent string) error {
 	if err := plain(parent); err != nil {
 		return fmt.Errorf("recording the parent of session %s: %w", name, err)
 	}
@@ -355,7 +355,7 @@ func (t *Tmux) SetParent(ctx context.Context, name session.Name, parent string) 
 }
 
 // SetAction records the queue action a session was started with.
-func (t *Tmux) SetAction(ctx context.Context, name session.Name, action string) error {
+func (t *Tmux) SetAction(ctx context.Context, name thread.Name, action string) error {
 	if err := plain(action); err != nil {
 		return fmt.Errorf("recording the action of session %s: %w", name, err)
 	}
@@ -366,7 +366,7 @@ func (t *Tmux) SetAction(ctx context.Context, name session.Name, action string) 
 }
 
 // SetModel records the model and effort a session's agent runs, and whether it runs fast.
-func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort string, fast bool) error {
+func (t *Tmux) SetModel(ctx context.Context, name thread.Name, model, effort string, fast bool) error {
 	if err := plain(model, effort); err != nil {
 		return fmt.Errorf("recording the model of session %s: %w", name, err)
 	}
@@ -381,7 +381,7 @@ func (t *Tmux) SetModel(ctx context.Context, name session.Name, model, effort st
 }
 
 // AttachArgv is the command that shows a shell in a terminal.
-func (t *Tmux) AttachArgv(name session.Name) []string {
+func (t *Tmux) AttachArgv(name thread.Name) []string {
 	return t.argv("attach-session", "-t", target(name))
 }
 

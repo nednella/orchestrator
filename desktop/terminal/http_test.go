@@ -174,7 +174,7 @@ func TestStreamCarriesRawBytesInOrder(t *testing.T) {
 func TestStreamRefusesAThreadID(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	s, err := h.NewSession("a thread", "")
+	s, err := h.StartThread("a thread", "")
 	if err != nil {
 		t.Fatal(err)
 	}

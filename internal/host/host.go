@@ -98,9 +98,9 @@ type host struct {
 	log     *chat.Log
 	echo    io.Writer
 
-	echoMu      sync.Mutex
-	echoSession string  // the session id the echo showed last
-	echoTotal   float64 // Claude's running cost at the last turn's end
+	echoMu           sync.Mutex
+	echoConversation string  // the thread id the echo showed last
+	echoTotal        float64 // Claude's running cost at the last turn's end
 
 	stdinMu  sync.Mutex
 	stdin    io.Writer
@@ -585,10 +585,10 @@ func (h *host) echoEvent(e chat.Event) {
 	defer h.echoMu.Unlock()
 	switch e.Kind {
 	case chat.KindInit:
-		if e.ID == h.echoSession {
+		if e.ID == h.echoConversation {
 			return
 		}
-		h.echoSession = e.ID
+		h.echoConversation = e.ID
 	case chat.KindTurnEnd:
 		if total := e.Cost; total > 0 {
 			if total >= h.echoTotal {

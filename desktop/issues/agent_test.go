@@ -15,7 +15,7 @@ const agentQueue = `    queue_sections:
           - {name: Opus, command: "/work {n}", model: opus}
 `
 
-func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
+func TestIssueThreadsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: agentQueue})
 	h.GH.SetIssues(`[
@@ -44,7 +44,7 @@ func TestIssueSessionsGetTheModelTheirLabelsAndActionPick(t *testing.T) {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
 		if s.Model != tt.model || s.Effort != "" {
-			t.Errorf("%s: session runs %s %s, want %s", tt.name, s.Model, s.Effort, tt.model)
+			t.Errorf("%s: thread runs %s %s, want %s", tt.name, s.Model, s.Effort, tt.model)
 		}
 		if model, effort := flagsOf(t, h.ClaudeDir(), s.ID); model != tt.model || effort != "" {
 			t.Errorf("%s: claude got --model %q --effort %q, want %q and none", tt.name, model, effort, tt.model)

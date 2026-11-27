@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 )
 
 const demoPage = `<!doctype html><html><head><title>Demo</title></head><body>
@@ -34,13 +34,13 @@ func demoServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func browserHarness(t *testing.T) (*apptest.Harness, sessions.Session) {
+func browserHarness(t *testing.T) (*apptest.Harness, threads.Thread) {
 	t.Helper()
 	h := newHarness(t)
 	if !h.App.Browsers().Available() {
 		t.Skip("no Chrome for Testing installed")
 	}
-	s, err := h.NewSession("web", "")
+	s, err := h.StartThread("web", "")
 	if err != nil {
 		t.Fatal(err)
 	}

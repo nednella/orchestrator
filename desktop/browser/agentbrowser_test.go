@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // fakeAgentBrowser makes b's agent-browser a stand-in that appends each call to the returned log, as
@@ -48,7 +48,7 @@ func calls(t *testing.T, log string) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func TestAgentEnvBindsTheSessionToNoTab(t *testing.T) {
+func TestAgentEnvBindsTheThreadToNoTab(t *testing.T) {
 	t.Parallel()
 	b := New(t.TempDir(), func(string, any) {}, testEnv())
 	b.binary = "/chrome"
@@ -87,7 +87,7 @@ func TestAgentEnvNeedsAgentBrowser(t *testing.T) {
 	}
 }
 
-func TestOpenCloseAndForgetBindTheSessionsAgentBrowser(t *testing.T) {
+func TestOpenCloseAndForgetBindTheThreadsAgentBrowser(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	log := fakeAgentBrowser(t, b)
@@ -127,11 +127,11 @@ func TestOpenCloseAndForgetBindTheSessionsAgentBrowser(t *testing.T) {
 	}
 	b.Forget(ctx, "p/abcd2345")
 	if files, _ := os.ReadDir(b.agentDir()); len(files) != 1 || files[0].Name() != "zzzz2345.target" {
-		t.Errorf("files after Forget = %v, want only the other session's", files)
+		t.Errorf("files after Forget = %v, want only the other thread's", files)
 	}
 }
 
-func TestASessionWithoutAgentBrowserIsLeftAlone(t *testing.T) {
+func TestAThreadWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)
 	log := fakeAgentBrowser(t, b)
@@ -140,16 +140,16 @@ func TestASessionWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 	}
 	b.Forget(ctx, "p/abcd2345")
 	if _, err := os.Stat(log); err == nil {
-		t.Errorf("agent-browser ran for a session that never got it: %q", calls(t, log))
+		t.Errorf("agent-browser ran for a thread that never got it: %q", calls(t, log))
 	}
 	if _, err := os.Stat(b.agentDir()); err == nil {
 		t.Error("Close made the agent-browser folder")
 	}
 }
 
-// TestAgentBrowserDrivesOnlyTheSessionsTab runs the agent-browser that ORCHESTRATOR_AGENT_BROWSER names, as make
+// TestAgentBrowserDrivesOnlyTheThreadsTab runs the agent-browser that ORCHESTRATOR_AGENT_BROWSER names, as make
 // agent-browser fetches it: the binding file is agent-browser's own, so a new version must pass this before it ships.
-func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
+func TestAgentBrowserDrivesOnlyTheThreadsTab(t *testing.T) {
 	t.Parallel()
 	real := os.Getenv("ORCHESTRATOR_AGENT_BROWSER")
 	if out, err := exec.Command(real, "--version").Output(); real == "" || err != nil || !strings.HasPrefix(string(out), "agent-browser ") {
@@ -197,7 +197,7 @@ func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
 	}
 	open(1)
 	if out, err := run(ids[0], "get", "url"); err == nil || !strings.Contains(out, "tab_gone") {
-		t.Errorf("before its window, beside another session's: %q, %v; want tab_gone", out, err)
+		t.Errorf("before its window, beside another thread's: %q, %v; want tab_gone", out, err)
 	}
 	open(0)
 	for i, id := range ids {
@@ -209,10 +209,10 @@ func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
 		t.Fatalf("open = %q, %v", out, err)
 	}
 	if out, _ := run(ids[1], "get", "title"); !strings.Contains(out, "page 1") {
-		t.Errorf("the other session's tab = %q, want it untouched", out)
+		t.Errorf("the other thread's tab = %q, want it untouched", out)
 	}
 	if st := b.State(ids[0]); st.Title != "moved" {
-		t.Errorf("the session's state = %+v, want the page agent-browser opened", st)
+		t.Errorf("the thread's state = %+v, want the page agent-browser opened", st)
 	}
 
 	closed := b.tab(ids[0]).pagesCopy()
@@ -221,9 +221,9 @@ func TestAgentBrowserDrivesOnlyTheSessionsTab(t *testing.T) {
 	if out, err := run(ids[0], "get", "url"); err == nil || !strings.Contains(out, "tab_gone") {
 		t.Errorf("after its window closed: %q, %v; want tab_gone", out, err)
 	}
-	name, _ := session.ParseName(ids[1])
+	name, _ := thread.ParseName(ids[1])
 	if _, err := os.Stat(filepath.Join(b.agentDir(), name.Token+".sock")); err != nil {
-		t.Errorf("the other session's daemon has no socket: %v", err)
+		t.Errorf("the other thread's daemon has no socket: %v", err)
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
 
@@ -48,18 +48,18 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Fatalf("List without a server = %v, %v", infos, err)
 	}
 
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	dir := t.TempDir()
 	if err := tmux.NewSession(ctx, name, "first agent", dir, []string{"ORCHESTRATOR_SESSION=demo/a1"}, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	other := session.Name{Project: "demo", Token: "b2"}
+	other := thread.Name{Project: "demo", Token: "b2"}
 	if err := tmux.NewSession(ctx, other, "tabs\tand ünïcode", dir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, n := range []session.Name{name, other} {
-		if err := tmux.SetAccess(ctx, n, session.Supervised); err != nil {
+	for _, n := range []thread.Name{name, other} {
+		if err := tmux.SetAccess(ctx, n, thread.Supervised); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -73,7 +73,7 @@ func TestSessionLifecycle(t *testing.T) {
 	if err != nil || len(infos) != 2 {
 		t.Fatalf("List = %v, %v", infos, err)
 	}
-	byName := map[session.Name]Info{}
+	byName := map[thread.Name]Info{}
 	for _, in := range infos {
 		byName[in.Name] = in
 	}
@@ -127,7 +127,7 @@ func TestKillStopsEveryProcessUnderThePane(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
 	pidFile := filepath.Join(t.TempDir(), "pids")
-	name := session.Name{Project: "demo", Token: "k1"}
+	name := thread.Name{Project: "demo", Token: "k1"}
 	if err := tmux.NewSession(ctx, name, "agent", t.TempDir(), nil, []string{"sh", "-c", paneScript, "sh", pidFile}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
@@ -190,23 +190,23 @@ func gone(pid int) bool {
 func TestAccessTag(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	full, read, untagged := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}, session.Name{Project: "demo", Token: "c3"}
-	for _, n := range []session.Name{full, read, untagged} {
+	full, read, untagged := thread.Name{Project: "demo", Token: "a1"}, thread.Name{Project: "demo", Token: "b2"}, thread.Name{Project: "demo", Token: "c3"}
+	for _, n := range []thread.Name{full, read, untagged} {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := tmux.SetAccess(ctx, full, session.Full); err != nil {
+	if err := tmux.SetAccess(ctx, full, thread.Full); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, read, session.Read); err != nil {
+	if err := tmux.SetAccess(ctx, read, thread.Read); err != nil {
 		t.Fatal(err)
 	}
 	infos, err := list(tmux, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[session.Name]session.Access{full: session.Full, read: session.Read}
+	want := map[thread.Name]thread.Access{full: thread.Full, read: thread.Read}
 	for _, in := range infos {
 		if in.Access != want[in.Name] {
 			t.Errorf("%s: access = %q, want %q", in.Name, in.Access, want[in.Name])
@@ -220,12 +220,12 @@ func TestAccessTag(t *testing.T) {
 func TestSideTag(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	side, fork := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Token: "b2"}
-	for _, n := range []session.Name{side, fork} {
+	side, fork := thread.Name{Project: "demo", Token: "a1"}, thread.Name{Project: "demo", Token: "b2"}
+	for _, n := range []thread.Name{side, fork} {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
-		if err := tmux.SetAccess(ctx, n, session.Read); err != nil {
+		if err := tmux.SetAccess(ctx, n, thread.Read); err != nil {
 			t.Fatal(err)
 		}
 		if err := tmux.SetFork(ctx, n, "demo/parent00"); err != nil {
@@ -260,16 +260,16 @@ func TestListSkipsSessionsOrchestratorDidNotMake(t *testing.T) {
 func TestShellSessionsAreListedApart(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	agent, shell := session.Name{Project: "demo", Token: "a1"}, session.Name{Project: "demo", Shell: 1}
+	agent, shell := thread.Name{Project: "demo", Token: "a1"}, thread.Name{Project: "demo", Shell: 1}
 	if tmux.Has(ctx, shell) {
 		t.Fatal("Has without a server is true")
 	}
-	for _, n := range []session.Name{agent, shell} {
+	for _, n := range []thread.Name{agent, shell} {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := tmux.SetAccess(ctx, agent, session.Supervised); err != nil {
+	if err := tmux.SetAccess(ctx, agent, thread.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	infos, shells, err := tmux.ListAll(ctx)
@@ -279,7 +279,7 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 	if infos, err = list(tmux, ctx); err != nil || len(infos) != 1 {
 		t.Errorf("List = %v, %v", infos, err)
 	}
-	if !tmux.Has(ctx, shell) || !tmux.Has(ctx, agent) || tmux.Has(ctx, session.Name{Project: "demo", Token: "b2"}) || tmux.Has(ctx, session.Name{Project: "dem", Shell: 1}) {
+	if !tmux.Has(ctx, shell) || !tmux.Has(ctx, agent) || tmux.Has(ctx, thread.Name{Project: "demo", Token: "b2"}) || tmux.Has(ctx, thread.Name{Project: "dem", Shell: 1}) {
 		t.Error("Has gave a wrong answer")
 	}
 }
@@ -287,8 +287,8 @@ func TestShellSessionsAreListedApart(t *testing.T) {
 func TestShellListsItsStartFolderAndItsFolderNow(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	first, second := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
-	dirs := map[session.Name]string{first: t.TempDir(), second: t.TempDir()}
+	first, second := thread.Name{Project: "demo", Shell: 1}, thread.Name{Project: "demo", Shell: 2}
+	dirs := map[thread.Name]string{first: t.TempDir(), second: t.TempDir()}
 	for n, dir := range dirs {
 		if err := tmux.NewSession(ctx, n, "shell", dir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
@@ -326,11 +326,11 @@ func TestListGivesThePanesProcessUnderTheServer(t *testing.T) {
 	if pid, err := tmux.ServerPID(ctx); err != nil || pid != 0 {
 		t.Fatalf("ServerPID without a server = %d, %v", pid, err)
 	}
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+	if err := tmux.SetAccess(ctx, name, thread.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	infos, err := list(tmux, ctx)
@@ -355,8 +355,8 @@ func list(t *Tmux, ctx context.Context) ([]Info, error) {
 func TestTargetsMatchTheWholeName(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	one, ten := session.Name{Project: "p", Token: "a1"}, session.Name{Project: "p", Token: "a10"}
-	for _, n := range []session.Name{one, ten} {
+	one, ten := thread.Name{Project: "p", Token: "a1"}, thread.Name{Project: "p", Token: "a10"}
+	for _, n := range []thread.Name{one, ten} {
 		if err := tmux.NewSession(ctx, n, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 			t.Fatal(err)
 		}
@@ -387,14 +387,14 @@ func TestTargetsMatchTheWholeName(t *testing.T) {
 func TestTrailingSemicolonSurvives(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "fix a;", t.TempDir(), nil, []string{"cat"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	if err := tmux.Rename(ctx, name, "then b;"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+	if err := tmux.SetAccess(ctx, name, thread.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	infos, _ := list(tmux, ctx)
@@ -469,18 +469,18 @@ func TestShellPathsNamesEachShellsFolder(t *testing.T) {
 		t.Fatalf("ShellPaths without a server = %v, %v", paths, err)
 	}
 	start, moved, agentDir := t.TempDir(), t.TempDir(), t.TempDir()
-	shell, second := session.Name{Project: "demo", Shell: 1}, session.Name{Project: "demo", Shell: 2}
+	shell, second := thread.Name{Project: "demo", Shell: 1}, thread.Name{Project: "demo", Shell: 2}
 	if err := tmux.NewSession(ctx, shell, "shell", start, nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	if err := tmux.NewSession(ctx, second, "shell", start, nil, []string{"sh", "-c", fmt.Sprintf("cd %q && exec sleep 60", moved)}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.NewSession(ctx, session.Name{Project: "demo", Token: "a1"}, "agent", agentDir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
+	if err := tmux.NewSession(ctx, thread.Name{Project: "demo", Token: "a1"}, "agent", agentDir, nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	resolved := func(p string) string { r, _ := filepath.EvalSymlinks(p); return r }
-	paths := map[session.Name]string{}
+	paths := map[thread.Name]string{}
 	for range 50 {
 		shells, err := tmux.ShellPaths(ctx)
 		if err != nil {
@@ -504,13 +504,13 @@ func TestNewSessionGivesThePaneItsPath(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
 	// The server is up first, so the pane cannot get the PATH from the server's start.
-	if err := tmux.NewSession(ctx, session.Name{Project: "demo", Token: "a1"}, "first", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
+	if err := tmux.NewSession(ctx, thread.Name{Project: "demo", Token: "a1"}, "first", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
 	out := filepath.Join(dir, "path")
 	path := "PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH")
-	if err := tmux.NewSession(ctx, session.Name{Project: "demo", Token: "a2"}, "second", dir, []string{path}, []string{"sh", "-c", `echo "$PATH" > path; sleep 60`}, 100, 30); err != nil {
+	if err := tmux.NewSession(ctx, thread.Name{Project: "demo", Token: "a2"}, "second", dir, []string{path}, []string{"sh", "-c", `echo "$PATH" > path; sleep 60`}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	var got []byte
@@ -528,18 +528,18 @@ func TestNewSessionGivesThePaneItsPath(t *testing.T) {
 func TestOptionValuesWithATabOrLineBreakAreRefused(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+	if err := tmux.SetAccess(ctx, name, thread.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
 		name string
 		set  func(value string) error
 	}{
-		{"access", func(v string) error { return tmux.SetAccess(ctx, name, session.Access(v)) }},
+		{"access", func(v string) error { return tmux.SetAccess(ctx, name, thread.Access(v)) }},
 		{"fork", func(v string) error { return tmux.SetFork(ctx, name, v) }},
 		{"branch", func(v string) error { return tmux.SetBranch(ctx, name, v) }},
 		{"parent", func(v string) error { return tmux.SetParent(ctx, name, v) }},
@@ -557,7 +557,7 @@ func TestOptionValuesWithATabOrLineBreakAreRefused(t *testing.T) {
 		}
 	}
 	infos, err := list(tmux, ctx)
-	if err != nil || len(infos) != 1 || infos[0].Name != name || infos[0].Access != session.Supervised || infos[0].Branch != "" || infos[0].Parent != "" {
+	if err != nil || len(infos) != 1 || infos[0].Name != name || infos[0].Access != thread.Supervised || infos[0].Branch != "" || infos[0].Parent != "" {
 		t.Fatalf("after the refusals the list is %+v, %v", infos, err)
 	}
 }
@@ -565,11 +565,11 @@ func TestOptionValuesWithATabOrLineBreakAreRefused(t *testing.T) {
 func TestATitleWithLineBreaksStaysOneLine(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "fix\tthe\nbug\r\nnow", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, name, session.Supervised); err != nil {
+	if err := tmux.SetAccess(ctx, name, thread.Supervised); err != nil {
 		t.Fatal(err)
 	}
 	if err := tmux.Rename(ctx, name, "ask\there\nplease"); err != nil {

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // headlessFlags are what claude needs to run under orchestrator host.
@@ -25,7 +25,7 @@ func TestClaudeCommand(t *testing.T) {
 }
 
 func TestNoHookInTheSettings(t *testing.T) {
-	argv := Claude{Dirs: []string{"/d"}}.Command(Launch{Access: session.Full, Browser: true, MCPConfig: "/m.json", Prompt: "p"})
+	argv := Claude{Dirs: []string{"/d"}}.Command(Launch{Access: thread.Full, Browser: true, MCPConfig: "/m.json", Prompt: "p"})
 	var settings map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(argv[2]), &settings); err != nil {
 		t.Fatal(err)
@@ -120,13 +120,13 @@ func TestClaudeLaunch(t *testing.T) {
 		{"ultracode is xhigh", Launch{Effort: Ultracode}, append([]string{"--effort", "xhigh"}, supervised...)},
 		{"fast mode is a setting", Launch{Fast: true}, supervised},
 		{"resume", Launch{Resume: "abc"}, append([]string{"--resume", "abc"}, supervised...)},
-		{"read haiku is the full id", Launch{Model: "haiku", Access: session.Read}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "plan", "--allowedTools", tools}},
+		{"read haiku is the full id", Launch{Model: "haiku", Access: thread.Read}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "plan", "--allowedTools", tools}},
 		{"haiku supervised is the full id", Launch{Model: "haiku"}, append([]string{"--model", "claude-haiku-5-5"}, supervised...)},
-		{"haiku full is the full id", Launch{Model: "haiku", Access: session.Full}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "bypassPermissions", "--allowedTools", tools}},
-		{"read", Launch{Access: session.Read}, []string{"--permission-mode", "plan", "--allowedTools", tools}},
+		{"haiku full is the full id", Launch{Model: "haiku", Access: thread.Full}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "bypassPermissions", "--allowedTools", tools}},
+		{"read", Launch{Access: thread.Read}, []string{"--permission-mode", "plan", "--allowedTools", tools}},
 		{"browser", Launch{Browser: true}, []string{"--permission-mode", "default", "--allowedTools", tools + ",Bash(agent-browser:*)"}},
 		{"prompt", Launch{Prompt: "where you run"}, append(slices.Clone(supervised), "--append-system-prompt", "where you run")},
-		{"all, in order", Launch{Access: session.Read, Browser: true, Prompt: "p"},
+		{"all, in order", Launch{Access: thread.Read, Browser: true, Prompt: "p"},
 			[]string{"--permission-mode", "plan", "--allowedTools", tools + ",Bash(agent-browser:*)", "--append-system-prompt", "p"}},
 	}
 	for _, tt := range tests {
@@ -141,7 +141,7 @@ func TestClaudeLaunch(t *testing.T) {
 }
 
 func TestAccessFlags(t *testing.T) {
-	modes := map[session.Access]string{session.Read: "plan", session.Supervised: "default", session.Full: "bypassPermissions"}
+	modes := map[thread.Access]string{thread.Read: "plan", thread.Supervised: "default", thread.Full: "bypassPermissions"}
 	base := Launch{Model: "opus", Effort: "high", Resume: "abc", Browser: true, Prompt: "p", TmpDir: "/tmp/s"}
 	without := func(argv []string) []string {
 		i := slices.Index(argv, "--permission-mode")
@@ -176,12 +176,12 @@ func TestAccessFlags(t *testing.T) {
 }
 
 func TestAccessOfModeUndoesPermissionMode(t *testing.T) {
-	for _, a := range []session.Access{session.Read, session.Supervised, session.Full} {
+	for _, a := range []thread.Access{thread.Read, thread.Supervised, thread.Full} {
 		if got, ok := AccessOfMode(PermissionMode(a)); !ok || got != a {
 			t.Errorf("%s: AccessOfMode(%q) = %q, %v", a, PermissionMode(a), got, ok)
 		}
 	}
-	if got, ok := AccessOfMode("acceptEdits"); !ok || got != session.Supervised {
+	if got, ok := AccessOfMode("acceptEdits"); !ok || got != thread.Supervised {
 		t.Errorf("acceptEdits = %q, %v, want Supervised", got, ok)
 	}
 	if got, ok := AccessOfMode("auto"); ok {
@@ -220,7 +220,7 @@ func TestMCPConfigFlag(t *testing.T) {
 	const orchestration = "mcp__orchestrator__delegate,mcp__orchestrator__threads,mcp__orchestrator__read,mcp__orchestrator__send,mcp__orchestrator__wait,mcp__orchestrator__stop"
 	const readTools = orchestration + ",mcp__orchestrator__note,mcp__orchestrator__issue,mcp__orchestrator__new_thread,mcp__orchestrator__refresh,mcp__orchestrator__browser"
 	const writeTools = orchestration + ",mcp__orchestrator__note,mcp__orchestrator__issue,mcp__orchestrator__new_thread,mcp__orchestrator__show,mcp__orchestrator__track,mcp__orchestrator__refresh,mcp__orchestrator__browser"
-	for access, orchestrator := range map[session.Access]string{session.Read: readTools, session.Supervised: writeTools, session.Full: writeTools} {
+	for access, orchestrator := range map[thread.Access]string{thread.Read: readTools, thread.Supervised: writeTools, thread.Full: writeTools} {
 		argv := Claude{}.Command(Launch{Access: access, MCPConfig: "/state/hosts/ab/tok.mcp.json"})
 		if n := slices.Index(argv, "--mcp-config"); n < 0 || argv[n+1] != "/state/hosts/ab/tok.mcp.json" || slices.Index(argv[n+1:], "--mcp-config") >= 0 {
 			t.Errorf("%s: argv = %q, want --mcp-config and its path once", access, argv)
@@ -237,13 +237,13 @@ func TestMCPConfigFlag(t *testing.T) {
 
 func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
 	tests := []struct {
-		access     session.Access
+		access     thread.Access
 		showTrack  bool
 		agentTools int
 	}{
-		{session.Read, false, 11},
-		{session.Supervised, true, 13},
-		{session.Full, true, 13},
+		{thread.Read, false, 11},
+		{thread.Supervised, true, 13},
+		{thread.Full, true, 13},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.access), func(t *testing.T) {
@@ -267,7 +267,7 @@ func TestReadThreadGetsOnlyTheReadTools(t *testing.T) {
 }
 
 func TestNoAllowRuleNamesTheCommand(t *testing.T) {
-	for _, access := range []session.Access{session.Read, session.Supervised, session.Full} {
+	for _, access := range []thread.Access{thread.Read, thread.Supervised, thread.Full} {
 		for _, l := range []Launch{{Access: access}, {Access: access, Browser: true, MCPConfig: "/m.json"}} {
 			for _, rule := range allowedTools(t, Claude{}.Command(l)) {
 				if strings.Contains(rule, "orchestrator ") || strings.Contains(rule, "orchestrator:") {
@@ -331,10 +331,10 @@ func TestClaudeTranscript(t *testing.T) {
 	// The hash is the one claude's own function gives for this path.
 	long := "/" + strings.Repeat("a/", 120)
 	tests := []struct {
-		name            string
-		configDir       string
-		origin, session string
-		want            string
+		name           string
+		configDir      string
+		origin, thread string
+		want           string
 	}{
 		{"a folder", "/c", "/tmp/rec", "8a2bd559", "/c/projects/-tmp-rec/8a2bd559.jsonl"},
 		{"characters outside letters and digits", "/c", "/Users/a b/my_dir.v2/x", "s1", "/c/projects/-Users-a-b-my-dir-v2-x/s1.jsonl"},
@@ -346,8 +346,8 @@ func TestClaudeTranscript(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := (Claude{ConfigDir: tt.configDir}).Transcript(tt.origin, tt.session); got != tt.want {
-				t.Errorf("Transcript(%q, %q) = %q, want %q", tt.origin, tt.session, got, tt.want)
+			if got := (Claude{ConfigDir: tt.configDir}).Transcript(tt.origin, tt.thread); got != tt.want {
+				t.Errorf("Transcript(%q, %q) = %q, want %q", tt.origin, tt.thread, got, tt.want)
 			}
 		})
 	}

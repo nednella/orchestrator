@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func tempDir(t *testing.T) string {
@@ -24,8 +24,8 @@ func tempDir(t *testing.T) string {
 
 func TestStateFiles(t *testing.T) {
 	dir := tempDir(t)
-	rec := session.Record{Session: "p/1", State: session.Waiting, Event: "Notification", At: time.Now().UTC().Truncate(time.Second), Detail: "needs you", Changes: []session.Change{{State: session.Working, At: 1}, {State: session.Waiting, At: 2}}}
-	if got, err := ReadState(dir, "p/1"); err != nil || !reflect.DeepEqual(got, session.Record{}) {
+	rec := thread.Record{Thread: "p/1", State: thread.Waiting, Event: "Notification", At: time.Now().UTC().Truncate(time.Second), Detail: "needs you", Changes: []thread.Change{{State: thread.Working, At: 1}, {State: thread.Waiting, At: 2}}}
+	if got, err := ReadState(dir, "p/1"); err != nil || !reflect.DeepEqual(got, thread.Record{}) {
 		t.Fatalf("ReadState of nothing = %+v, %v", got, err)
 	}
 	if err := WriteState(dir, rec); err != nil {
@@ -35,7 +35,7 @@ func TestStateFiles(t *testing.T) {
 		t.Errorf("ReadState = %+v, %v", got, err)
 	}
 
-	other := session.Record{Session: "q/2", State: session.Working}
+	other := thread.Record{Thread: "q/2", State: thread.Working}
 	if err := WriteState(dir, other); err != nil {
 		t.Fatal(err)
 	}

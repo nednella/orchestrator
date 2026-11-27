@@ -205,7 +205,7 @@ func TestMCPWaitPausesAfterAnEarlyAnswer(t *testing.T) {
 	}
 }
 
-func TestMCPIgnoresOrchestratorSession(t *testing.T) {
+func TestMCPIgnoresOrchestratorThread(t *testing.T) {
 	var got control.Request
 	fakeApp(t, func(_ context.Context, req control.Request) control.Response {
 		got = req
@@ -215,7 +215,7 @@ func TestMCPIgnoresOrchestratorSession(t *testing.T) {
 	t.Setenv("ORCHESTRATOR_SESSION", "demo/other")
 	t.Setenv("ORCHESTRATOR_PROJECT", "other")
 	callTool(t, "threads", `{}`)
-	if got.Cmd != "orchestrate" || got.Session != "" || got.Project != "" {
+	if got.Cmd != "orchestrate" || got.Thread != "" || got.Project != "" {
 		t.Errorf("request = %+v", got)
 	}
 }

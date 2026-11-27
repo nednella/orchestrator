@@ -19,18 +19,18 @@ import (
 	"github.com/nednella/orchestrator/internal/bus"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 
 var eventually = apptest.Eventually
 
-// newThread starts a hosted session on the stand-in claude.
+// newThread starts a hosted thread on the stand-in claude.
 func newThread(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()
 	h := apptest.New(t)
-	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestHistoryOfAnEndedThread(t *testing.T) {
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Thread(id); return s.State == "settled" })
 
 	if events := history(t, h, id, 0); len(events) < 5 || events[1].Kind != chatlog.KindUser {
 		t.Errorf("history of the ended thread = %v", kinds(events))
@@ -302,7 +302,7 @@ func TestDeltasAreBatched(t *testing.T) {
 	}
 }
 
-func TestEndedSessionKeepsItsRowAfterARestart(t *testing.T) {
+func TestEndedThreadKeepsItsRowAfterARestart(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
 	send(t, h, id, "hi")
@@ -310,10 +310,10 @@ func TestEndedSessionKeepsItsRowAfterARestart(t *testing.T) {
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Thread(id); return s.State == "settled" })
 
 	second := h.Restart(t)
-	s, ok := second.Session(id)
+	s, ok := second.Thread(id)
 	if !ok || s.State != "settled" {
 		t.Fatalf("ended row after a restart = %+v (%v), want settled", s, ok)
 	}
@@ -326,8 +326,8 @@ func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
 	h.Observe(t, id, "UserPromptSubmit", `{"prompt":"go"}`)
-	eventually(t, "working", func() bool { s, _ := h.Session(id); return s.State == "working" })
-	ch, err := h.Sessions().ChatOf(id)
+	eventually(t, "working", func() bool { s, _ := h.Thread(id); return s.State == "working" })
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestATurnThatEndedWhileTheAppWasClosedEndsAtTheNextStart(t *testing.T) {
 	}
 
 	second := h.Restart(t)
-	eventually(t, "idle after the next start", func() bool { s, _ := second.Session(id); return s.State == "idle" })
+	eventually(t, "idle after the next start", func() bool { s, _ := second.Thread(id); return s.State == "idle" })
 }
 
 func TestTheHostsOwnReasonReachesTheUser(t *testing.T) {
@@ -384,7 +384,7 @@ func TestImagesAreSavedAndSent(t *testing.T) {
 		t.Fatalf("user event = %+v, want the image's file", user)
 	}
 	file := user.Files[0]
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestImagesAreSavedAndSent(t *testing.T) {
 func TestTooManyImagesAreRefused(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestTooManyImagesAreRefused(t *testing.T) {
 func TestDeleteRemovesChatImages(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +447,7 @@ func TestDeleteRemovesChatImages(t *testing.T) {
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the thread to settle", func() bool { s, _ := h.Session(id); return s.State == "settled" })
+	eventually(t, "the thread to settle", func() bool { s, _ := h.Thread(id); return s.State == "settled" })
 	if !apptest.Exists(ch.Media) {
 		t.Fatalf("%s went when the thread ended", ch.Media)
 	}
@@ -476,7 +476,7 @@ func TestAnImageIsSavedAsTheTypeItIs(t *testing.T) {
 func TestAThreadWorksInTheFolderItStartedIn(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +494,7 @@ func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
 	}
 	gitIn(t, h.Dir, "add", "README")
 	gitIn(t, h.Dir, "commit", "-q", "-m", "first")
-	s, err := h.Sessions().Create(h.Sessions().Current(), "#7 work", "", false, 7, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), "#7 work", "", false, 7, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +534,7 @@ func TestAThreadWorksWhileItsSubagentRuns(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
 	subagents := func(h *apptest.Harness) (string, int) {
-		s, _ := h.Session(id)
+		s, _ := h.Thread(id)
 		return string(s.State), s.Subagents
 	}
 	h.Observe(t, id, "UserPromptSubmit", `{"prompt":"background"}`)
@@ -578,7 +578,7 @@ func TestASubagentsApprovalWaitsPastTheTurnUntilItIsAnswered(t *testing.T) {
 func TestAThreadWhoseSubagentsEndWasMissedStopsWorkingWhenClaudeListsNoTask(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
-	state := func() (string, int) { s, _ := h.Session(id); return string(s.State), s.Subagents }
+	state := func() (string, int) { s, _ := h.Thread(id); return string(s.State), s.Subagents }
 	h.Observe(t, id, "UserPromptSubmit", `{"prompt":"background"}`)
 	send(t, h, id, "background")
 	eventually(t, "the turn that started the subagent to end", func() bool { return turnEnds(t, h, id) == 1 })
@@ -603,7 +603,7 @@ func TestASubagentsApprovalStopsWaitingWhenClaudeListsNoTask(t *testing.T) {
 func TestChatHistoryCutsAHugeToolResultAndTheLogKeepsIt(t *testing.T) {
 	t.Parallel()
 	h, id := newThread(t)
-	ch, err := h.Sessions().ChatOf(id)
+	ch, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}

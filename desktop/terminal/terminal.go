@@ -16,8 +16,8 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/term"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -51,7 +51,7 @@ func New(tmux *term.Tmux, emit func(string, any), clip func(string)) *Terms {
 // Open attaches a PTY of the given size to the shell. Opening an open shell keeps its
 // stream, at the new size; the next reader gets the whole screen painted again.
 func (t *Terms) Open(id string, cols, rows int) error {
-	name, err := session.ParseName(id)
+	name, err := thread.ParseName(id)
 	if err != nil || !name.IsShell() {
 		return errNotShell
 	}

@@ -41,7 +41,7 @@ func (pg *page) seq() int {
 	return pg.loadSeq
 }
 
-// tabFor returns the session's tab, opening one if there is none.
+// tabFor returns the thread's tab, opening one if there is none.
 func (b *Browsers) tabFor(ctx context.Context, id string) (*tab, error) {
 	if t := b.tab(id); t != nil {
 		return t, nil
@@ -52,7 +52,7 @@ func (b *Browsers) tabFor(ctx context.Context, id string) (*tab, error) {
 	return b.need(id)
 }
 
-// AgentOpen is the browser tool's open: it loads the page in the session's window and prints it.
+// AgentOpen is the browser tool's open: it loads the page in the thread's window and prints it.
 func (b *Browsers) AgentOpen(ctx context.Context, id, address string, front bool) (string, error) {
 	t, err := b.tabFor(ctx, id)
 	if err != nil {

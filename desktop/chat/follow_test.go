@@ -18,29 +18,29 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/chat"
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // oneThread is a single live thread under a host at socket, with an empty chat log.
-type oneThread struct{ chat sessions.Chat }
+type oneThread struct{ chat threads.Chat }
 
-func (o oneThread) ChatOf(string) (sessions.Chat, error)           { return o.chat, nil }
-func (o oneThread) Chats() []sessions.Chat                         { return []sessions.Chat{o.chat} }
-func (o oneThread) Observe(string, ...session.Event)               {}
-func (o oneThread) TranscriptPath(string, string) string           { return "" }
-func (o oneThread) BackgroundChanged(string, sessions.Background)  {}
-func (o oneThread) AccessChanged(string, string, bool)             {}
-func (o oneThread) FlagRefused(string)                             {}
-func (o oneThread) NextTurn(string)                                {}
-func (o oneThread) Wake(string) (sessions.Chat, error)             { return o.chat, nil }
-func (o oneThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
-func (o oneThread) Title(string) string                            { return "" }
-func (o oneThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
-func (o oneThread) DeleteSideChat(string, bool) error              { return nil }
-func (o oneThread) NameSideChat(string, string) error              { return nil }
-func (o oneThread) SideChatsOf(string) []string                    { return nil }
+func (o oneThread) ChatOf(string) (threads.Chat, error)          { return o.chat, nil }
+func (o oneThread) Chats() []threads.Chat                        { return []threads.Chat{o.chat} }
+func (o oneThread) Observe(string, ...thread.Event)              {}
+func (o oneThread) TranscriptPath(string, string) string         { return "" }
+func (o oneThread) BackgroundChanged(string, threads.Background) {}
+func (o oneThread) AccessChanged(string, string, bool)           {}
+func (o oneThread) FlagRefused(string)                           {}
+func (o oneThread) NextTurn(string)                              {}
+func (o oneThread) Wake(string) (threads.Chat, error)            { return o.chat, nil }
+func (o oneThread) FilesRewind(string) (string, bool, string)    { return "", true, "" }
+func (o oneThread) Title(string) string                          { return "" }
+func (o oneThread) StartSideChat(string) (threads.Thread, error) { return threads.Thread{}, nil }
+func (o oneThread) DeleteSideChat(string, bool) error            { return nil }
+func (o oneThread) NameSideChat(string, string) error            { return nil }
+func (o oneThread) SideChatsOf(string) []string                  { return nil }
 
 // noProject knows no project.
 func noProject(string) string { return "" }
@@ -113,7 +113,7 @@ func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
 	go fake.serve(t, ln, [][]int64{{1, 2, 3}, {4, 5}})
 
 	rec := &apptest.Recorder{}
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Live: true}}
 	chats := chat.New(thread, t.TempDir(), rec.Emit)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -202,7 +202,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 	appendMessage()
 
 	rec := &apptest.Recorder{}
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
 	chats := chat.New(thread, t.TempDir(), rec.Emit)
 	svc := chat.NewService(chats, nil, noProject, context.Background)
 	read := make(chan []chatlog.Event)
@@ -238,7 +238,7 @@ func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 func TestAHostThatCannotBeReachedIsNamedPlainly(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: filepath.Join(dir, "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	if err, want := svc.ChatInterrupt(thread.chat.ID), "Thread main/abcdefgh did not take the interrupt"; err == nil || err.Error() != want {
 		t.Errorf("ChatInterrupt = %v, want %q", err, want)
@@ -262,7 +262,7 @@ func TestAKilledRunsApprovalDoesNotWaitOnceTheNextRunStarts(t *testing.T) {
 		}
 	}
 	chatLog.Close()
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	if got := svc.ChatPending(); len(got) != 0 {
 		t.Errorf("ChatPending = %+v, want nothing: the run that asked was killed", got)
@@ -286,7 +286,7 @@ func TestPendingIsRightBeforeTheFollowerReadsTheLog(t *testing.T) {
 		}
 	}
 	chatLog.Close()
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	want := []chat.Pending{{ID: thread.chat.ID, Request: "req-2", Tool: "Bash", Summary: "make test", Kind: "tool", Input: json.RawMessage(`{"command":"make test"}`)}}
 	if got := svc.ChatPending(); !slices.EqualFunc(got, want, samePending) {
@@ -311,7 +311,7 @@ func TestASubagentClaudesListLeavesOutDoesNotWaitBeforeTheFollowerReadsTheLog(t 
 		}
 	}
 	chatLog.Close()
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: filepath.Join(t.TempDir(), "gone.sock"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	if got := svc.ChatPending(); len(got) != 0 {
 		t.Errorf("ChatPending = %+v, want nothing: Claude's list left the subagent that asked out", got)
@@ -345,7 +345,7 @@ func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 		}
 	}()
 
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: filepath.Join(dir, "chat.jsonl"), Socket: socket, Media: filepath.Join(dir, "media"), Live: true}}
 	svc := chat.NewService(chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit), nil, noProject, context.Background)
 	sent, err := svc.ChatSend(thread.chat.ID, "see", []chat.Image{{Base64: dot, Mime: "image/png"}}, nil)
 	if want := "Your text was sent, but this thread's host is too old for images. Restart the thread to send images."; err != nil || sent.Notice != want {
@@ -413,7 +413,7 @@ func keptCommands(t *testing.T, more ...chatlog.Event) func() []chat.Command {
 	}
 	go serveEvents(t, ln, stream)
 
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
 	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
 	svc := chat.NewService(chats, nil, func(key string) string {
 		if key == "main" {
@@ -476,17 +476,17 @@ type switchedThread struct {
 	live *atomic.Bool
 }
 
-func (s switchedThread) ChatOf(string) (sessions.Chat, error) {
+func (s switchedThread) ChatOf(string) (threads.Chat, error) {
 	c := s.chat
 	c.Live = s.live.Load()
 	return c, nil
 }
 
-func (s switchedThread) Chats() []sessions.Chat {
+func (s switchedThread) Chats() []threads.Chat {
 	if !s.live.Load() {
 		return nil
 	}
-	return []sessions.Chat{s.chat}
+	return []threads.Chat{s.chat}
 }
 
 // awaitable starts the chats of a live thread whose log holds logged and whose host streams what is sent on the
@@ -520,7 +520,7 @@ func awaitable(t *testing.T, logged ...chatlog.Event) (*chat.Chats, switchedThre
 
 	live := &atomic.Bool{}
 	live.Store(true)
-	thread := switchedThread{oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}, live}
+	thread := switchedThread{oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}, live}
 	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -673,7 +673,7 @@ func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
 			t.Cleanup(func() { close(events) })
 			go pushed(t, ln, events)
 
-			thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+			thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
 			chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
 			heard := make(chan chatlog.Event, 4)
 			chats.OnTurnEnd(func(_ string, e chatlog.Event) {
@@ -710,7 +710,7 @@ func TestRateLimitEventsAreHandedOn(t *testing.T) {
 	t.Cleanup(func() { close(events) })
 	go pushed(t, ln, events)
 
-	thread := oneThread{sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
+	thread := oneThread{threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}}
 	chats := chat.New(thread, t.TempDir(), (&apptest.Recorder{}).Emit)
 	type heard struct {
 		id string

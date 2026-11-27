@@ -21,9 +21,9 @@ type Backend = {
   SetEffort(id: string, effort: string): Promise<void>
   OpenInEditor(id: string, path: string): Promise<void>
   OpenProjectInEditor(project: string, path: string): Promise<void>
-  ForkSession(id: string, at: string): Promise<Session>
+  ForkThread(id: string, at: string): Promise<Session>
   SideChatDelete(id: string, unused: boolean): Promise<void>
-  RenameSession(id: string, title: string): Promise<void>
+  RenameThread(id: string, title: string): Promise<void>
   SwitchProject(name: string): Promise<Snapshot>
   PickFolder(): Promise<string>
   AddProjectDir(dir: string, create: boolean): Promise<Snapshot>
@@ -41,7 +41,7 @@ type Backend = {
   RemoveNoteImage(id: string, url: string): Promise<Note>
   DeleteNote(id: string): Promise<void>
   NoteToIssue(id: string): Promise<void>
-  NoteToSession(id: string): Promise<Session>
+  NoteToThread(id: string): Promise<Session>
   Issues(refresh: boolean): Promise<Issue[]>
   StartIssue(number: number, action: string, prompt: string, model: string, effort: string, fast: boolean): Promise<Session>
   MoveIssue(number: number, section: string): Promise<void>
@@ -140,11 +140,11 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'SideChatDelete', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  threads: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'ForkThread', 'SideChatDelete', 'RenameThread', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
-  notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToSession'],
+  notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToThread'],
   stats: ['Ledger'],
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
@@ -195,10 +195,10 @@ export const api = {
   // A path opens that markdown file in the thread's folder, '' the folder itself.
   openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
   openProjectInEditor: (project: string, path: string) => backend.OpenProjectInEditor(project, path),
-  forkSession: (id: string, at: string) => backend.ForkSession(id, at),
+  forkSession: (id: string, at: string) => backend.ForkThread(id, at),
   // With unused the side chat goes only when nobody sent it a message, as when its tab closes.
   sideChatDelete: (id: string, unused = false) => backend.SideChatDelete(id, unused),
-  renameSession: (id: string, title: string) => backend.RenameSession(id, title),
+  renameSession: (id: string, title: string) => backend.RenameThread(id, title),
   switchProject: (name: string) => backend.SwitchProject(name),
   // pickFolder is the native folder picker; '' when the user cancels it.
   pickFolder: () => backend.PickFolder(),
@@ -219,7 +219,7 @@ export const api = {
   removeNoteImage: (id: string, url: string) => backend.RemoveNoteImage(id, url),
   deleteNote: (id: string) => backend.DeleteNote(id),
   noteToIssue: (id: string) => backend.NoteToIssue(id),
-  noteToSession: (id: string) => backend.NoteToSession(id),
+  noteToSession: (id: string) => backend.NoteToThread(id),
   issues: (refresh: boolean) => backend.Issues(refresh),
   startIssue: (number: number, action: string, prompt = '', model = '', effort = '', fast = false) => backend.StartIssue(number, action, prompt, model, effort, fast),
   moveIssue: (number: number, section: string) => backend.MoveIssue(number, section),

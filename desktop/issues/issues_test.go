@@ -16,11 +16,11 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/warn"
 	"github.com/nednella/orchestrator/desktop/issues"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
-// noSessions is a session list with nothing in it, for tests that only read issues.
-type noSessions struct{ issues.Sessions }
+// noThreads is a thread list with nothing in it, for tests that only read issues.
+type noThreads struct{ issues.Threads }
 
 func TestAnIssueSaysTheAccessItsActionStartsWith(t *testing.T) {
 	t.Parallel()
@@ -39,9 +39,9 @@ func TestAnIssueSaysTheAccessItsActionStartsWith(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, is := range got {
-		want := session.Supervised
+		want := thread.Supervised
 		if is.Section == "Ready" {
-			want = session.Read
+			want = thread.Read
 		}
 		if is.Access != want {
 			t.Errorf("issue %d in %q has access %q, want %q", is.Number, is.Section, is.Access, want)
@@ -88,7 +88,7 @@ func TestIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.Issue != 7 || s.Action != "Work" || s.Title != "#7 Fix the thing that breaks when the window is narrow" {
-		t.Errorf("session = %+v", s)
+		t.Errorf("thread = %+v", s)
 	}
 	eventually(t, "/ship sent", func() bool { return sent(t, h, s.ID, "/ship 7") })
 	again, err := h.StartIssue(7)
@@ -96,8 +96,8 @@ func TestIssues(t *testing.T) {
 		t.Errorf("second start = %+v, %v", again, err)
 	}
 	got, _ = h.Issues(false)
-	if got[0].SessionID != s.ID || got[1].SessionID != "" {
-		t.Errorf("session ids = %q %q", got[0].SessionID, got[1].SessionID)
+	if got[0].ThreadID != s.ID || got[1].ThreadID != "" {
+		t.Errorf("thread ids = %q %q", got[0].ThreadID, got[1].ThreadID)
 	}
 	if _, err := h.StartIssue(999); err == nil {
 		t.Error("starting an unknown issue succeeded")
@@ -110,19 +110,19 @@ func TestIssues(t *testing.T) {
 		list := h.Rec.LastIssues()
 		for _, is := range list {
 			if is.Number == number {
-				return is.SessionID
+				return is.ThreadID
 			}
 		}
 		return "?"
 	}
-	eventually(t, "issues event with the session", func() bool { return issuesEvent(7) == s.ID })
+	eventually(t, "issues event with the thread", func() bool { return issuesEvent(7) == s.ID })
 	if got := h.Rec.ProjectOf("issues"); got != "main" {
 		t.Errorf("issues event project = %q", got)
 	}
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "issues event after the session ends", func() bool { return issuesEvent(7) == "" })
+	eventually(t, "issues event after the thread ends", func() bool { return issuesEvent(7) == "" })
 	eventually(t, "/investigate sent", func() bool { return sent(t, h, plan.ID, "/investigate 8") })
 }
 
@@ -145,7 +145,7 @@ func TestStartReadsTheListAgainForANewIssue(t *testing.T) {
 	})
 }
 
-func TestStartsAtOnceMakeOneSession(t *testing.T) {
+func TestStartsAtOnceMakeOneThread(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	ids := make([]string, 4)
@@ -163,17 +163,17 @@ func TestStartsAtOnceMakeOneSession(t *testing.T) {
 	}
 	wg.Wait()
 	if got := slices.Compact(slices.Clone(ids)); len(got) != 1 || got[0] == "" {
-		t.Errorf("starts got sessions %v, want one", ids)
+		t.Errorf("starts got threads %v, want one", ids)
 	}
-	if n := len(h.Sessions().List()); n != 1 {
-		t.Errorf("%d sessions, want 1", n)
+	if n := len(h.Threads().List()); n != 1 {
+		t.Errorf("%d threads, want 1", n)
 	}
 }
 
 func TestIssuesWithoutRepo(t *testing.T) {
 	t.Parallel()
 	gh := &apptest.FakeGH{Repo: errors.New("gh repo view: exit status 1: not a git repository")}
-	is := issues.New(gh.Run, noSessions{}, func(string, any) {})
+	is := issues.New(gh.Run, noThreads{}, func(string, any) {})
 	list, err := is.List(context.Background(), project.Project{Dir: "/x"}, false)
 	if err != nil || list == nil || len(list) != 0 {
 		t.Errorf("List = %v, %v", list, err)
@@ -186,7 +186,7 @@ func TestIssuesWithoutRepo(t *testing.T) {
 func TestIssuesDisabled(t *testing.T) {
 	t.Parallel()
 	gh := &apptest.FakeGH{IssuesErr: errors.New("gh issue list: exit status 1: the 'acme/widgets' repository has disabled issues")}
-	is := issues.New(gh.Run, noSessions{}, func(string, any) {})
+	is := issues.New(gh.Run, noThreads{}, func(string, any) {})
 	if _, err := is.List(context.Background(), project.Project{Dir: "/x"}, false); err != issues.ErrIssuesDisabled {
 		t.Errorf("List error = %v, want ErrIssuesDisabled", err)
 	}
@@ -217,21 +217,21 @@ func TestReadActionGivesTheIssueItsOneThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Access != session.Read || plan.Issue != 7 || plan.Action != "Plan" || plan.Title != "#7 Fix the thing that breaks when the window is narrow" {
+	if plan.Access != thread.Read || plan.Issue != 7 || plan.Action != "Plan" || plan.Title != "#7 Fix the thing that breaks when the window is narrow" {
 		t.Errorf("plan = %+v", plan)
 	}
 	eventually(t, "claude in plan mode", func() bool { return strings.Contains(strings.Join(h.Args(t, plan.ID), " "), "--permission-mode plan") })
-	eventually(t, "issue 7 links to its thread", func() bool { got, _ := h.Issues(false); return got[0].SessionID == plan.ID })
+	eventually(t, "issue 7 links to its thread", func() bool { got, _ := h.Issues(false); return got[0].ThreadID == plan.ID })
 	work, err := h.StartIssue(7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if work.ID != plan.ID || work.Access != session.Read {
+	if work.ID != plan.ID || work.Access != thread.Read {
 		t.Errorf("work = %+v, want the issue's Read thread %s back", work, plan.ID)
 	}
 }
 
-func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
+func TestThreadKeepsItsActionAcrossRestarts(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	work, err := h.StartIssue(11)
@@ -246,13 +246,13 @@ func TestSessionKeepsItsActionAcrossRestarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "plan ended", func() bool {
-		s, ok := h.Session(plan.ID)
-		return ok && s.State == session.Settled
+		s, ok := h.Thread(plan.ID)
+		return ok && s.State == thread.Settled
 	})
 	again := h.Restart(t)
 	for id, want := range map[string]string{work.ID: "Investigate", plan.ID: "Plan"} {
-		if s, ok := again.Session(id); !ok || s.Action != want {
-			t.Errorf("after a restart, session %s = %+v, want action %q", id, s, want)
+		if s, ok := again.Thread(id); !ok || s.Action != want {
+			t.Errorf("after a restart, thread %s = %+v, want action %q", id, s, want)
 		}
 	}
 }
@@ -299,7 +299,7 @@ func TestRepoFailureIsWarnedAboutAndNotRemembered(t *testing.T) {
 	t.Parallel()
 	gh := &apptest.FakeGH{Repo: errors.New("gh repo view: exit status 1: error connecting to api.github.com\nsecond line")}
 	var warnings []warn.Warning
-	is := issues.New(gh.Run, noSessions{}, func(event string, payload any) {
+	is := issues.New(gh.Run, noThreads{}, func(event string, payload any) {
 		if w, ok := payload.(warn.Warning); ok && event == "warnings" {
 			warnings = append(warnings, w)
 		}
@@ -343,7 +343,7 @@ func TestRefreshKeepsTheKnownRepo(t *testing.T) {
 		}
 		return gh.Run(ctx, dir, name, args...)
 	}
-	is := issues.New(runner, noSessions{}, func(string, any) {})
+	is := issues.New(runner, noThreads{}, func(string, any) {})
 	ctx, proj := context.Background(), project.Project{Dir: "/x"}
 	if _, err := is.List(ctx, proj, false); err != nil {
 		t.Fatal(err)

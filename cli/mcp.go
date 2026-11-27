@@ -59,7 +59,7 @@ func newMCPCmd() *cobra.Command {
 	}
 }
 
-// orchestrate sends one tool call as the thread the token names. It sends no session or project:
+// orchestrate sends one tool call as the thread the token names. It sends no thread or project:
 // the app takes both from the token.
 func orchestrate(ctx context.Context, socket, token, tool string, input json.RawMessage, opts map[string]string, timeout time.Duration) (string, error) {
 	o := map[string]string{"input": string(input)}

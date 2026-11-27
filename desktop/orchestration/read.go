@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/nednella/orchestrator/desktop/chat"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 )
@@ -133,7 +133,7 @@ func senderOf(e chatlog.Event) string {
 	switch {
 	case e.From != "":
 		return e.From
-	case strings.HasPrefix(e.Text, sessions.AppPrompt):
+	case strings.HasPrefix(e.Text, threads.AppPrompt):
 		return fromApp
 	}
 	return fromOwner

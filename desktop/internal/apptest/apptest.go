@@ -1,5 +1,5 @@
 // Package apptest runs the whole app on a private tmux socket, state dir and config, for the services' tests.
-// A test must never use the default socket: it holds live sessions.
+// A test must never use the default socket: it holds live threads.
 package apptest
 
 import (
@@ -34,16 +34,16 @@ import (
 	"github.com/nednella/orchestrator/desktop/limits"
 	"github.com/nednella/orchestrator/desktop/notes"
 	"github.com/nednella/orchestrator/desktop/projects"
-	"github.com/nednella/orchestrator/desktop/sessions"
 	"github.com/nednella/orchestrator/desktop/settings"
 	"github.com/nednella/orchestrator/desktop/stats"
 	"github.com/nednella/orchestrator/desktop/terminal"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/bus"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
 
@@ -151,7 +151,7 @@ func (r *Recorder) CountAttention(state string) int {
 }
 
 // last is the payload of the latest event of that name, or nil.
-// CountAttentionFor counts the attention events of one state for one session.
+// CountAttentionFor counts the attention events of one state for one thread.
 func (r *Recorder) CountAttentionFor(id, state string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -206,17 +206,17 @@ func lastList[T any](r *Recorder, name string) scoped.List[T] {
 	return list
 }
 
-// LastSessions is the list of the latest sessions event.
-func (r *Recorder) LastSessions() []sessions.Session {
-	return lastList[sessions.Session](r, "sessions").Items
+// LastThreads is the list of the latest threads event.
+func (r *Recorder) LastThreads() []threads.Thread {
+	return lastList[threads.Thread](r, "sessions").Items
 }
 
-// LastSessionsOf is the list of the latest sessions event of one project, nil when it has had none.
-func (r *Recorder) LastSessionsOf(project string) []sessions.Session {
+// LastThreadsOf is the list of the latest threads event of one project, nil when it has had none.
+func (r *Recorder) LastThreadsOf(project string) []threads.Thread {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, e := range slices.Backward(r.events) {
-		if list, ok := e.payload.(scoped.List[sessions.Session]); ok && e.name == "sessions" && list.Project == project {
+		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "sessions" && list.Project == project {
 			return list.Items
 		}
 	}
@@ -230,8 +230,8 @@ func (r *Recorder) LastNotes() []notes.Note { return lastList[notes.Note](r, "no
 func (r *Recorder) LastIssues() []issues.Issue { return lastList[issues.Issue](r, "issues").Items }
 
 // LastCleanups is the list of the latest cleanups event.
-func (r *Recorder) LastCleanups() []sessions.Cleanup {
-	return lastList[sessions.Cleanup](r, "cleanups").Items
+func (r *Recorder) LastCleanups() []threads.Cleanup {
+	return lastList[threads.Cleanup](r, "cleanups").Items
 }
 
 // Warnings are the warnings events so far, in order.
@@ -247,13 +247,13 @@ func (r *Recorder) Warnings() []warn.Warning {
 	return out
 }
 
-// Settled are the ids of the sessions that any sessions event showed as settled.
+// Settled are the ids of the threads that any threads event showed as settled.
 func (r *Recorder) Settled() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
 	for _, e := range r.events {
-		if list, ok := e.payload.(scoped.List[sessions.Session]); ok && e.name == "sessions" {
+		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "sessions" {
 			for _, s := range list.Items {
 				if s.State == "settled" && !slices.Contains(out, s.ID) {
 					out = append(out, s.ID)
@@ -264,17 +264,17 @@ func (r *Recorder) Settled() []string {
 	return out
 }
 
-// ProjectOf is the project key of the latest event of that name (sessions, notes, issues or cleanups), or "".
+// ProjectOf is the project key of the latest event of that name (threads, notes, issues or cleanups), or "".
 func (r *Recorder) ProjectOf(name string) string {
 	switch name {
 	case "sessions":
-		return lastList[sessions.Session](r, name).Project
+		return lastList[threads.Thread](r, name).Project
 	case "notes":
 		return lastList[notes.Note](r, name).Project
 	case "issues":
 		return lastList[issues.Issue](r, name).Project
 	case "cleanups":
-		return lastList[sessions.Cleanup](r, name).Project
+		return lastList[threads.Cleanup](r, name).Project
 	}
 	return ""
 }
@@ -611,11 +611,11 @@ type Options struct {
 	StopSettle      time.Duration     // how long after a turn's end its usage is counted; 0 keeps the app's second
 	RetryFirst      time.Duration     // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
 	ConfigTick      time.Duration     // how often the config file is read again; 0 keeps the app's 2 seconds
-	Env             []string          // entries of the environment the app and its sessions run in; the harness's own isolation wins over them
+	Env             []string          // entries of the environment the app and its threads run in; the harness's own isolation wins over them
 	PathWithout     []string          // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
 }
 
-// Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
+// Harness is an app whose Claude threads run the stand-in claude under the built command's host.
 type Harness struct {
 	App    *app.App
 	Rec    *Recorder
@@ -625,14 +625,14 @@ type Harness struct {
 	Dir    string
 	State  string
 	Conf   string
-	Env    []string // the environment the app and its sessions run in: the process's, with the harness's own entries
+	Env    []string // the environment the app and its threads run in: the process's, with the harness's own entries
 
 	opts      Options // what the harness was made with
 	claudeDir string
 	cancel    context.CancelFunc // ends the context the app started with
 
 	projects *projects.Service
-	sessions *sessions.Service
+	threads  *threads.Service
 	chat     *chat.Service
 	terminal *terminal.Service
 	issues   *issues.Service
@@ -734,7 +734,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	}
 	h.App.Updates().SetRelaunch(h.Rec.Relaunch)
 	if o.CleanupSweep != 0 {
-		h.App.Sessions().SetCleanupSweep(o.CleanupSweep)
+		h.App.Threads().SetCleanupSweep(o.CleanupSweep)
 	}
 	h.opts = o
 	h.shortenWaits()
@@ -755,10 +755,10 @@ func NewWith(t *testing.T, o Options) *Harness {
 // shortenWaits applies the waits the options shorten to the app.
 func (h *Harness) shortenWaits() {
 	if h.opts.PollEvery != 0 {
-		h.App.Sessions().SetPollEvery(h.opts.PollEvery)
+		h.App.Threads().SetPollEvery(h.opts.PollEvery)
 	}
 	if h.opts.StopSettle != 0 {
-		h.App.Sessions().SetStopSettle(h.opts.StopSettle)
+		h.App.Threads().SetStopSettle(h.opts.StopSettle)
 	}
 	if h.opts.RetryFirst != 0 {
 		h.App.Tools().SetRetryFirst(h.opts.RetryFirst)
@@ -781,8 +781,8 @@ func (h *Harness) build(t *testing.T) *app.App {
 		switch s := svc.(type) {
 		case *projects.Service:
 			h.projects = s
-		case *sessions.Service:
-			h.sessions = s
+		case *threads.Service:
+			h.threads = s
 		case *chat.Service:
 			h.chat = s
 		case *terminal.Service:
@@ -836,14 +836,14 @@ func (h *Harness) Restart(t *testing.T, env ...string) *Harness {
 // BeginQuit ends the context the app started with, as the app's quit does before it stops answering commands.
 func (h *Harness) BeginQuit() { h.cancel() }
 
-// Sessions is the session list behind the bound service.
-func (h *Harness) Sessions() *sessions.Sessions { return h.App.Sessions() }
+// Threads is the thread list behind the bound service.
+func (h *Harness) Threads() *threads.Threads { return h.App.Threads() }
 
 // Notes is the notes store behind the bound service.
 func (h *Harness) Notes() *notes.Notes { return h.App.Notes() }
 
 // Observe gives the thread a change of state in the names and the payload fields of Claude's hooks, as its follower
-// gives the sessions one it read off the host's stream. A live thread has had its SessionStart, so one is given first
+// gives the threads one it read off the host's stream. A live thread has had its SessionStart, so one is given first
 // when the thread has no state file. A test of how the stream makes these changes drives its host instead.
 func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 	t.Helper()
@@ -851,8 +851,8 @@ func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 	if live {
 		h.followsHost(t, id)
 	}
-	if rec, _ := bus.ReadState(h.State, id); live && event != "SessionStart" && rec.Session == "" {
-		h.Sessions().Observe(id, session.Event{Name: "SessionStart"})
+	if rec, _ := bus.ReadState(h.State, id); live && event != "SessionStart" && rec.Thread == "" {
+		h.Threads().Observe(id, thread.Event{Name: "SessionStart"})
 	}
 	var p struct {
 		NotificationType     string         `json:"notification_type"`
@@ -874,7 +874,7 @@ func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 			t.Fatal(err)
 		}
 	}
-	ev := session.Event{Name: event, NotificationType: p.NotificationType, Message: p.Message, Cwd: p.Cwd, Conversation: p.SessionID, Transcript: p.TranscriptPath}
+	ev := thread.Event{Name: event, NotificationType: p.NotificationType, Message: p.Message, Cwd: p.Cwd, Conversation: p.SessionID, Transcript: p.TranscriptPath}
 	switch event {
 	case "Notification":
 		ev.Detail = p.Message
@@ -893,7 +893,7 @@ func (h *Harness) Observe(t *testing.T, id, event, payload string) {
 		ev.Detail = p.LastAssistantMessage
 		ev.Asks = strings.HasSuffix(strings.TrimRight(p.LastAssistantMessage, " \t\n*_"), "?")
 	}
-	h.Sessions().Observe(id, ev)
+	h.Threads().Observe(id, ev)
 }
 
 // followsHost waits until the app has taken in the start of the thread's host, which its follower does once the host
@@ -911,14 +911,14 @@ func (h *Harness) followsHost(t *testing.T, id string) {
 	})
 }
 
-// Session is the session with that id in the current project's list.
-func (h *Harness) Session(id string) (sessions.Session, bool) {
-	for _, s := range h.Sessions().List() {
+// Thread is the thread with that id in the current project's list.
+func (h *Harness) Thread(id string) (threads.Thread, bool) {
+	for _, s := range h.Threads().List() {
 		if s.ID == id {
 			return s, true
 		}
 	}
-	return sessions.Session{}, false
+	return threads.Thread{}, false
 }
 
 // harnesses numbers the harnesses of this process, so each has a tmux socket of its own.
@@ -960,9 +960,9 @@ func CLIPath(t *testing.T) string {
 }
 
 // ClaudeDir is the folder of the stand-in claude, which NewWith puts first on PATH beside the built orchestrator command,
-// so the app runs its Claude provider and each session's host starts the stand-in. The stand-in writes the
-// environment it was started with to <dir>/<session id, "/" as "_">.env and its arguments
-// to <dir>/<session id, "/" as "_">.args, then appends each line it reads to <dir>/<session id, "/" as "_">.stdin
+// so the app runs its Claude provider and each thread's host starts the stand-in. The stand-in writes the
+// environment it was started with to <dir>/<thread id, "/" as "_">.env and its arguments
+// to <dir>/<thread id, "/" as "_">.args, then appends each line it reads to <dir>/<thread id, "/" as "_">.stdin
 // until its stdin ends. It answers each user message with an init line, a reply and a result, as Claude does each
 // turn, an interrupt with a result that has an error, a mode change with Claude's reply and its report of the new
 // mode, and any other control request with a success. Each init line names the folder the stand-in runs in, as Claude
@@ -978,13 +978,13 @@ func CLIPath(t *testing.T) string {
 // as a task delegated so, keeps its turn open until an interrupt: it
 // holds each message read meanwhile, and after the interrupt takes them in and replies to them in a turn of their own,
 // as Claude does, and "serve <port>" starts a listener on 127.0.0.1:<port> in a session of its own, which writes its
-// pid to <dir>/<session id, "/" as "_">.serve<port>, and "exit" ends it, as Claude ending by itself. It answers a rewind
+// pid to <dir>/<thread id, "/" as "_">.serve<port>, and "exit" ends it, as Claude ending by itself. It answers a rewind
 // of the files with the files RewindAs names, into each of which a rewind that is not a dry run writes "before", and a
 // rewind of the conversation with the text of the message rewound to, as Claude does; RewindAs can make it answer as
 // another Claude would.
 func (h *Harness) ClaudeDir() string { return h.claudeDir }
 
-// RewindAs makes the session's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
+// RewindAs makes the thread's stand-in claude answer its rewinds so: "" as Claude Code does, "stale" holding a later
 // message than any named, "nocheckpoint" as a Claude started without file checkpoints and "unsupported" as one that
 // knows neither request. A rewind of the files changes files.
 func (h *Harness) RewindAs(t *testing.T, id, mode string, files ...string) {
@@ -1001,8 +1001,8 @@ func (h *Harness) RewindAs(t *testing.T, id, mode string, files ...string) {
 	}
 }
 
-// standIn is the path of the stand-in claude's file of the session with that extension.
-// RefuseFlags makes the session's stand-in claude refuse a change of its settings with reason, as Claude does for
+// standIn is the path of the stand-in claude's file of the thread with that extension.
+// RefuseFlags makes the thread's stand-in claude refuse a change of its settings with reason, as Claude does for
 // ultracode on a model that has none.
 func (h *Harness) RefuseFlags(t *testing.T, id, reason string) {
 	t.Helper()
@@ -1015,7 +1015,7 @@ func (h *Harness) standIn(id, ext string) string {
 	return filepath.Join(h.claudeDir, strings.ReplaceAll(id, "/", "_")+ext)
 }
 
-// Proceed lets the session's stand-in claude go on from a "tool wait" message: it holds its tool call until then, and
+// Proceed lets the thread's stand-in claude go on from a "tool wait" message: it holds its tool call until then, and
 // its turn after the tool's result until Finish.
 func (h *Harness) Proceed(t *testing.T, id string) {
 	t.Helper()
@@ -1032,19 +1032,19 @@ func (h *Harness) Finish(t *testing.T, id string) {
 	}
 }
 
-// Stdin are the lines the session's stand-in claude has read so far, none before it starts.
+// Stdin are the lines the thread's stand-in claude has read so far, none before it starts.
 func (h *Harness) Stdin(t *testing.T, id string) []string {
 	t.Helper()
 	return readLines(t, h.standIn(id, ".stdin"))
 }
 
-// Refused is how many times the session's stand-in claude failed at its start on the flag it does not know.
+// Refused is how many times the thread's stand-in claude failed at its start on the flag it does not know.
 func (h *Harness) Refused(t *testing.T, id string) int {
 	t.Helper()
 	return len(readLines(t, h.standIn(id, ".refused")))
 }
 
-// Args are the arguments the session's stand-in claude was started with, none before it starts.
+// Args are the arguments the thread's stand-in claude was started with, none before it starts.
 func (h *Harness) Args(t *testing.T, id string) []string {
 	t.Helper()
 	return readLines(t, h.standIn(id, ".args"))
@@ -1067,7 +1067,7 @@ const standInEnv = `env > "$f.env"
 `
 
 // rejecting makes the stand-in claude fail as Claude does when it is started with flag and does not know it. Each
-// start that fails adds a line to <dir>/<session id, "/" as "_">.refused.
+// start that fails adds a line to <dir>/<thread id, "/" as "_">.refused.
 func rejecting(flag string) string {
 	return `for a in "$@"; do
 	if [ "$a" = '` + flag + `' ]; then
@@ -1080,12 +1080,12 @@ done
 }
 
 // fakeClaudeTurns is the stand-in claude's stream-json side. serve is a listener on the port given that leaves the
-// stand-in's process and session, as a server a Bash call starts with & does, writes its pid to the file given and
+// stand-in's process and thread, as a server a Bash call starts with & does, writes its pid to the file given and
 // lives five minutes. "background" starts a subagent in the background, which ends at the next "finish", or is gone
 // with no end when "list none" lists no task; "subagent asks" starts one that asks for an approval, which waits past
 // the turn's end, and ends once it is answered; "subagent lost" starts one that asks and is gone with no end a moment
 // after the turn's end. "limit" streams a rate_limit event before its reply, and a get_usage request is answered with a
-// session and a weekly window.
+// thread and a weekly window.
 const fakeClaudeTurns = `here=$(pwd -P)
 serve='import os, socket, sys, time
 if os.fork():
@@ -1277,7 +1277,7 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	return dir
 }
 
-// ClaudeConfigDir is the folder the app's Claude sessions keep their settings and transcripts in.
+// ClaudeConfigDir is the folder the app's Claude threads keep their settings and transcripts in.
 func (h *Harness) ClaudeConfigDir() string { return environ.Get(h.Env, "CLAUDE_CONFIG_DIR") }
 
 // RemoveClaude takes the stand-in claude off the harness's PATH, as if claude were not installed.
@@ -1353,68 +1353,68 @@ func (h *Harness) CreateProject(name string) (projects.NewProject, error) {
 	return h.projects.CreateProject(name)
 }
 func (h *Harness) PublishProject(key string) (string, error) { return h.projects.PublishProject(key) }
-func (h *Harness) SetUpProject() (sessions.Session, error)   { return h.projects.SetUpProject() }
+func (h *Harness) SetUpProject() (threads.Thread, error)     { return h.projects.SetUpProject() }
 
-func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, false, access, "")
+func (h *Harness) NewThread(title, prompt, model, effort, access string) (threads.Thread, error) {
+	return h.threads.NewThread(title, prompt, model, effort, false, access, "")
 }
 
 // NewThreadFast starts a Supervised thread with the model and effort given and fast mode as given.
-func (h *Harness) NewThreadFast(title, model, effort string, fast bool) (sessions.Session, error) {
-	return h.sessions.NewThread(title, "", model, effort, fast, "supervised", "")
+func (h *Harness) NewThreadFast(title, model, effort string, fast bool) (threads.Thread, error) {
+	return h.threads.NewThread(title, "", model, effort, fast, "supervised", "")
 }
 
-func (h *Harness) SetFast(id string, on bool) error  { return h.sessions.SetFast(id, on) }
-func (h *Harness) SetEffort(id, effort string) error { return h.sessions.SetEffort(id, effort) }
+func (h *Harness) SetFast(id string, on bool) error  { return h.threads.SetFast(id, on) }
+func (h *Harness) SetEffort(id, effort string) error { return h.threads.SetEffort(id, effort) }
 
 // NewThreadIn starts a thread with the access given in the place given: worktree, project, or "" for the default.
-func (h *Harness) NewThreadIn(title, prompt, access, place string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, "", "", false, access, place)
+func (h *Harness) NewThreadIn(title, prompt, access, place string) (threads.Thread, error) {
+	return h.threads.NewThread(title, prompt, "", "", false, access, place)
 }
 
-func (h *Harness) DefaultModel(model string) sessions.ModelChoice {
-	return h.sessions.DefaultModel(model)
+func (h *Harness) DefaultModel(model string) threads.ModelChoice {
+	return h.threads.DefaultModel(model)
 }
 
-// NewSession starts a Supervised thread.
-func (h *Harness) NewSession(title, prompt string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, "", "", false, "supervised", "")
+// StartThread starts a Supervised thread.
+func (h *Harness) StartThread(title, prompt string) (threads.Thread, error) {
+	return h.threads.NewThread(title, prompt, "", "", false, "supervised", "")
 }
 
-// NewSessionWith starts a Supervised thread with the model and effort given.
-func (h *Harness) NewSessionWith(title, prompt, model, effort string) (sessions.Session, error) {
-	return h.sessions.NewThread(title, prompt, model, effort, false, "supervised", "")
+// StartThreadWith starts a Supervised thread with the model and effort given.
+func (h *Harness) StartThreadWith(title, prompt, model, effort string) (threads.Thread, error) {
+	return h.threads.NewThread(title, prompt, model, effort, false, "supervised", "")
 }
-func (h *Harness) ShellNew(id string) (sessions.ShellInfo, error) { return h.sessions.ShellNew(id) }
-func (h *Harness) ShellClose(id string) error                     { return h.sessions.ShellClose(id) }
-func (h *Harness) SettleThread(id string) error                   { return h.sessions.SettleThread(id) }
-func (h *Harness) OwnWorktree(id string) string                   { return h.Sessions().OwnWorktree(id) }
-func (h *Harness) DeletePlan(id string) sessions.DeletePlan       { return h.sessions.DeletePlan(id) }
-func (h *Harness) Servers(id string) ([]sessions.Server, error)   { return h.sessions.Servers(id) }
-func (h *Harness) StopServer(id string, pid int) error            { return h.sessions.StopServer(id, pid) }
-func (h *Harness) OpenServer(port int) error                      { return h.sessions.OpenServer(port) }
-func (h *Harness) RenameSession(id, title string) error           { return h.sessions.RenameSession(id, title) }
-func (h *Harness) SetAccess(id, access string) error              { return h.sessions.SetAccess(id, access) }
-func (h *Harness) TypeInto(id, text string) error                 { return h.sessions.TypeInto(id, text) }
-func (h *Harness) RefreshPRs()                                    { h.sessions.RefreshPRs() }
-func (h *Harness) AckPR(id string) error                          { return h.sessions.AckPR(id) }
-func (h *Harness) Cleanup(id string, force bool) error            { return h.sessions.Cleanup(id, force) }
-func (h *Harness) Cleanups() []sessions.Cleanup                   { return h.sessions.Cleanups() }
+func (h *Harness) ShellNew(id string) (threads.ShellInfo, error) { return h.threads.ShellNew(id) }
+func (h *Harness) ShellClose(id string) error                    { return h.threads.ShellClose(id) }
+func (h *Harness) SettleThread(id string) error                  { return h.threads.SettleThread(id) }
+func (h *Harness) OwnWorktree(id string) string                  { return h.Threads().OwnWorktree(id) }
+func (h *Harness) DeletePlan(id string) threads.DeletePlan       { return h.threads.DeletePlan(id) }
+func (h *Harness) Servers(id string) ([]threads.Server, error)   { return h.threads.Servers(id) }
+func (h *Harness) StopServer(id string, pid int) error           { return h.threads.StopServer(id, pid) }
+func (h *Harness) OpenServer(port int) error                     { return h.threads.OpenServer(port) }
+func (h *Harness) RenameThread(id, title string) error           { return h.threads.RenameThread(id, title) }
+func (h *Harness) SetAccess(id, access string) error             { return h.threads.SetAccess(id, access) }
+func (h *Harness) TypeInto(id, text string) error                { return h.threads.TypeInto(id, text) }
+func (h *Harness) RefreshPRs()                                   { h.threads.RefreshPRs() }
+func (h *Harness) AckPR(id string) error                         { return h.threads.AckPR(id) }
+func (h *Harness) Cleanup(id string, force bool) error           { return h.threads.Cleanup(id, force) }
+func (h *Harness) Cleanups() []threads.Cleanup                   { return h.threads.Cleanups() }
 
 func (h *Harness) DeleteThread(id string, worktree bool) error {
-	return h.sessions.DeleteThread(id, worktree)
+	return h.threads.DeleteThread(id, worktree)
 }
 
-func (h *Harness) WakeThread(id string) (sessions.Session, error) {
-	return h.sessions.WakeThread(id)
+func (h *Harness) WakeThread(id string) (threads.Thread, error) {
+	return h.threads.WakeThread(id)
 }
 
-func (h *Harness) ForkSession(id, at string) (sessions.Session, error) {
-	return h.sessions.ForkSession(id, at)
+func (h *Harness) ForkThread(id, at string) (threads.Thread, error) {
+	return h.threads.ForkThread(id, at)
 }
 
 func (h *Harness) SideChatDelete(id string, unused bool) error {
-	return h.sessions.SideChatDelete(id, unused)
+	return h.threads.SideChatDelete(id, unused)
 }
 
 func (h *Harness) ChatHistory(id string, after int64) ([]chatlog.Event, error) {
@@ -1448,7 +1448,7 @@ func (h *Harness) ChatSendWith(id, text string, sideChats ...string) (chat.Sent,
 	return h.chat.ChatSend(id, text, nil, sideChats)
 }
 
-func (h *Harness) SideChatStart(parent, text string, images ...chat.Image) (sessions.Session, error) {
+func (h *Harness) SideChatStart(parent, text string, images ...chat.Image) (threads.Thread, error) {
 	return h.chat.SideChatStart(parent, text, images)
 }
 func (h *Harness) ChatInterrupt(id string) error        { return h.chat.ChatInterrupt(id) }
@@ -1477,13 +1477,13 @@ func (h *Harness) TermResize(id string, cols, rows int) error {
 func (h *Harness) TermClose(id string) { h.terminal.TermClose(id) }
 
 func (h *Harness) Issues(refresh bool) ([]issues.Issue, error) { return h.issues.Issues(refresh) }
-func (h *Harness) StartIssue(number int) (sessions.Session, error) {
+func (h *Harness) StartIssue(number int) (threads.Thread, error) {
 	return h.issues.StartIssue(number, "", "", "", "", false)
 }
-func (h *Harness) StartIssueWith(number int, action string) (sessions.Session, error) {
+func (h *Harness) StartIssueWith(number int, action string) (threads.Thread, error) {
 	return h.issues.StartIssue(number, action, "", "", "", false)
 }
-func (h *Harness) StartIssueOwn(number int, action, prompt, model, effort string) (sessions.Session, error) {
+func (h *Harness) StartIssueOwn(number int, action, prompt, model, effort string) (threads.Thread, error) {
 	return h.issues.StartIssue(number, action, prompt, model, effort, false)
 }
 func (h *Harness) MoveIssue(number int, section string) error {
@@ -1512,8 +1512,8 @@ func (h *Harness) RemoveNoteImage(id, url string) (notes.Note, error) {
 	return h.notes.RemoveNoteImage(id, url)
 }
 func (h *Harness) NoteToIssue(id string) error { return h.notes.NoteToIssue(id) }
-func (h *Harness) NoteToSession(id string) (sessions.Session, error) {
-	return h.notes.NoteToSession(id)
+func (h *Harness) NoteToThread(id string) (threads.Thread, error) {
+	return h.notes.NoteToThread(id)
 }
 
 func (h *Harness) Settings() settings.Settings { return h.settings.Settings() }
@@ -1671,14 +1671,14 @@ func (h *Harness) Ask(t *testing.T, req ctl.Request) ctl.Response {
 	return resp
 }
 
-// AskTool runs a command as a tool call does: the router's handler, with the session and project the request names. A
+// AskTool runs a command as a tool call does: the router's handler, with the thread and project the request names. A
 // tool call sets both from the thread's token, and the control socket never answers such a command. A request with no
 // project gets the asking thread's, else the current one, as a tool call from a thread of that project would.
 func (h *Harness) AskTool(t *testing.T, req ctl.Request) ctl.Response {
 	t.Helper()
 	if req.Project == "" {
-		req.Project = h.Sessions().Current().Key()
-		if name, err := session.ParseName(req.Session); err == nil {
+		req.Project = h.Threads().Current().Key()
+		if name, err := thread.ParseName(req.Thread); err == nil {
 			req.Project = name.Project
 		}
 	}

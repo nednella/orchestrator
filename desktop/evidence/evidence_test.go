@@ -40,7 +40,7 @@ func TestEvidenceStore(t *testing.T) {
 	if _, err := e.AddText(id, "words", "", "agent"); err != nil {
 		t.Fatal(err)
 	}
-	if len(recorded) != 2 || recorded[0].Kind != activity.Evidence || recorded[0].Session != id || recorded[0].Label != "image" || recorded[1].Label != "text" {
+	if len(recorded) != 2 || recorded[0].Kind != activity.Evidence || recorded[0].Thread != id || recorded[0].Label != "image" || recorded[1].Label != "text" {
 		t.Errorf("events = %+v, want one per item filed", recorded)
 	}
 	again := New(e.dir, &recorded)
@@ -48,7 +48,7 @@ func TestEvidenceStore(t *testing.T) {
 		t.Errorf("after reload: %+v", got)
 	}
 	if got := again.List("main/4"); len(got) != 0 {
-		t.Errorf("another session's evidence: %+v", got)
+		t.Errorf("another thread's evidence: %+v", got)
 	}
 	if err := again.Delete(id, img.ID); err != nil || again.Count(id) != 1 || exists(e.File(img.URL)) {
 		t.Errorf("Delete: %v", err)
@@ -56,7 +56,7 @@ func TestEvidenceStore(t *testing.T) {
 	if n := again.Purge(id); n != 1 || again.Count(id) != 0 || exists(filepath.Join(e.dir, "main", "evidence", "3")) {
 		t.Errorf("Purge removed %d", n)
 	}
-	if got := again.List("not a session"); len(got) != 0 {
+	if got := again.List("not a thread"); len(got) != 0 {
 		t.Errorf("a bad id gave %+v", got)
 	}
 }

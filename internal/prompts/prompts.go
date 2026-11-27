@@ -27,7 +27,7 @@ var (
 	//go:embed start-issue-branch.md
 	startIssueBranch string
 	//go:embed session.md
-	session string
+	base string
 	//go:embed thread.md
 	thread string
 	//go:embed issue.md
@@ -98,10 +98,10 @@ func Digest(dependencies []string) string {
 // Browser is appended to a thread's system prompt when it has a browser.
 func Browser() string { return body(browser) }
 
-// Session starts the system prompt of every Claude thread: where it runs and the tools every thread uses.
-func Session() string { return body(session) }
+// Base starts the system prompt of every Claude thread: where it runs and the tools every thread uses.
+func Base() string { return body(base) }
 
-// Thread follows Session in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
+// Thread follows Base in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
 func Thread() string { return body(thread) }
 
 // Issue follows Thread in the system prompt of a thread that works on the GitHub issue number.
@@ -214,10 +214,10 @@ func Tool(name string) string {
 	return ""
 }
 
-// SetupBrief is added to the system prompt of the session that sets up a project's repository.
+// SetupBrief is added to the system prompt of the base that sets up a project's repository.
 func SetupBrief() string { return body(setupBrief) }
 
-// SetupStart is what the session that sets up a project's repository starts with.
+// SetupStart is what the base that sets up a project's repository starts with.
 func SetupStart() string { return body(setupStart) }
 
 // SetupReview is the pr_review_command that setting up a project writes; {n} is the PR number.
@@ -229,7 +229,7 @@ func SetupChecks() string { return body(setupChecks) }
 // SetupConflict is the pr_conflict_command that setting up a project writes; {n} is the PR number.
 func SetupConflict() string { return body(setupConflict) }
 
-// StartIssue is what a session for an issue is started with when the project defines no action for it.
+// StartIssue is what a base for an issue is started with when the project defines no action for it.
 // {n} is the issue number, {title} its title and {branch} the branch orchestrator makes for it.
 func StartIssue() string { return body(startIssueBranch) }
 

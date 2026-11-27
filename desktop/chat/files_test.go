@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
-	"github.com/nednella/orchestrator/desktop/sessions"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/desktop/threads"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // noProject knows no project.
@@ -172,23 +172,23 @@ func TestFilesForgetsOldFolders(t *testing.T) {
 // folderThread is one ended thread that works in dir.
 type folderThread string
 
-func (f folderThread) ChatOf(id string) (sessions.Chat, error) {
-	return sessions.Chat{ID: id, Project: "main", Dir: string(f)}, nil
+func (f folderThread) ChatOf(id string) (threads.Chat, error) {
+	return threads.Chat{ID: id, Project: "main", Dir: string(f)}, nil
 }
-func (folderThread) Chats() []sessions.Chat                         { return nil }
-func (folderThread) Observe(string, ...session.Event)               {}
-func (folderThread) TranscriptPath(string, string) string           { return "" }
-func (folderThread) BackgroundChanged(string, sessions.Background)  {}
-func (folderThread) AccessChanged(string, string, bool)             {}
-func (folderThread) FlagRefused(string)                             {}
-func (folderThread) NextTurn(string)                                {}
-func (folderThread) Wake(string) (sessions.Chat, error)             { return sessions.Chat{}, nil }
-func (folderThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
-func (folderThread) Title(string) string                            { return "" }
-func (folderThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
-func (folderThread) DeleteSideChat(string, bool) error              { return nil }
-func (folderThread) NameSideChat(string, string) error              { return nil }
-func (folderThread) SideChatsOf(string) []string                    { return nil }
+func (folderThread) Chats() []threads.Chat                        { return nil }
+func (folderThread) Observe(string, ...thread.Event)              {}
+func (folderThread) TranscriptPath(string, string) string         { return "" }
+func (folderThread) BackgroundChanged(string, threads.Background) {}
+func (folderThread) AccessChanged(string, string, bool)           {}
+func (folderThread) FlagRefused(string)                           {}
+func (folderThread) NextTurn(string)                              {}
+func (folderThread) Wake(string) (threads.Chat, error)            { return threads.Chat{}, nil }
+func (folderThread) FilesRewind(string) (string, bool, string)    { return "", true, "" }
+func (folderThread) Title(string) string                          { return "" }
+func (folderThread) StartSideChat(string) (threads.Thread, error) { return threads.Thread{}, nil }
+func (folderThread) DeleteSideChat(string, bool) error            { return nil }
+func (folderThread) NameSideChat(string, string) error            { return nil }
+func (folderThread) SideChatsOf(string) []string                  { return nil }
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()

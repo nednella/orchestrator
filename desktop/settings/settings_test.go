@@ -133,7 +133,7 @@ func TestBrowserEnabled(t *testing.T) {
 	if got, err := h.SetBrowserEnabled(false); err != nil || got.Browser {
 		t.Fatalf("SetBrowserEnabled(false) = %+v, %v", got, err)
 	}
-	if h.App.Sessions().Current().BrowserOn() {
+	if h.App.Threads().Current().BrowserOn() {
 		t.Error("the current project still has the browser on")
 	}
 	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# keep me") || !strings.Contains(string(data), "browser_enabled: false") {
@@ -152,7 +152,7 @@ func TestPromptSend(t *testing.T) {
 	if got, err := h.SetPromptSend("manual"); err != nil || got.Prompt != "manual" {
 		t.Fatalf("SetPromptSend(manual) = %+v, %v", got, err)
 	}
-	if h.App.Sessions().Current().SendsPrompt() {
+	if h.App.Threads().Current().SendsPrompt() {
 		t.Error("the current project still sends the prompt at once")
 	}
 	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# keep me") || !strings.Contains(string(data), "session_prompt_send: manual") {
@@ -177,7 +177,7 @@ func TestDigestSchedule(t *testing.T) {
 	if got, err := h.SetDigestSchedule("off"); err != nil || got.Digest != "off" {
 		t.Fatalf("SetDigestSchedule(off) = %+v, %v", got, err)
 	}
-	if h.App.Sessions().Current().DigestOn() {
+	if h.App.Threads().Current().DigestOn() {
 		t.Error("the current project still runs its digest")
 	}
 	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# keep me") || !strings.Contains(string(data), "digest_schedule: off") {

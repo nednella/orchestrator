@@ -18,7 +18,7 @@ import (
 	"github.com/nednella/orchestrator/internal/atomicfile"
 )
 
-// Note is a line of thought kept for a project, which can become an issue or a session.
+// Note is a line of thought kept for a project, which can become an issue or a thread.
 type Note struct {
 	ID        string   `json:"id"`
 	Text      string   `json:"text"`

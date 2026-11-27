@@ -96,7 +96,7 @@ const usageReply = `{"type":"control_response","response":{"subtype":"success","
 func TestNoLiveThreadStartsAProbe(t *testing.T) {
 	t.Parallel()
 	f := &fakeClaude{reply: usageReply}
-	tr, _, _ := tracker(t, threads{{ID: "main/settled", Socket: "/tmp/s.sock"}}, nil, f.start)
+	tr, _, _ := tracker(t, fakeThreads{{ID: "main/settled", Socket: "/tmp/s.sock"}}, nil, f.start)
 	// What a probe left, as one the app was quit during, is gone before the next starts.
 	if err := os.MkdirAll(tr.dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestNoLiveThreadStartsAProbe(t *testing.T) {
 func TestFreshValuesStartNoProbe(t *testing.T) {
 	t.Parallel()
 	f := &fakeClaude{reply: usageReply}
-	tr, c, _ := tracker(t, threads{}, nil, f.start)
+	tr, c, _ := tracker(t, fakeThreads{}, nil, f.start)
 	for _, step := range []struct {
 		name   string
 		after  time.Duration
@@ -183,7 +183,7 @@ func TestFailedProbeIsNotCached(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &fakeClaude{reply: tt.reply}
-			tr, _, _ := tracker(t, threads{}, nil, f.start)
+			tr, _, _ := tracker(t, fakeThreads{}, nil, f.start)
 			got, err := tr.Refresh(context.Background())
 			if err != nil {
 				t.Fatal(err)
@@ -238,7 +238,7 @@ func TestProbeTimesOut(t *testing.T) {
 func TestOneProbeAtATime(t *testing.T) {
 	t.Parallel()
 	f := &fakeClaude{reply: usageReply, delay: 100 * time.Millisecond}
-	tr, _, _ := tracker(t, threads{}, nil, f.start)
+	tr, _, _ := tracker(t, fakeThreads{}, nil, f.start)
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Go(func() {

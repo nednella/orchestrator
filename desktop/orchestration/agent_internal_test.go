@@ -16,7 +16,7 @@ func TestAgentRequestMakesTheCommandsRequest(t *testing.T) {
 	t.Parallel()
 	const caller, project = "main/abcdefgh", "main"
 	ask := func(cmd string, args []string, opts map[string]string) ctl.Request {
-		return ctl.Request{Cmd: cmd, Session: caller, Project: project, Args: args, Opts: opts}
+		return ctl.Request{Cmd: cmd, Thread: caller, Project: project, Args: args, Opts: opts}
 	}
 	tests := []struct {
 		tool, input string
@@ -48,7 +48,7 @@ func TestAgentRequestRefusesABadInput(t *testing.T) {
 	t.Parallel()
 	tests := []struct{ tool, input, err string }{
 		{"note", `{"text":""}`, "The note is empty"},
-		{"note", `{"text":"x","session":"main/bbbbbbbb"}`, "The tool's input is not what its schema asks for"},
+		{"note", `{"text":"x","thread":"main/bbbbbbbb"}`, "The tool's input is not what its schema asks for"},
 		{"note", ``, "The tool's input is not what its schema asks for"},
 		{"note", `{"text":"` + strings.Repeat("x", maxNote+1) + `"}`, "The note is 65537 bytes, more than the 65536 a note takes"},
 		{"show", `{"text":"x","caption":"` + strings.Repeat("x", maxCaption+1) + `"}`, "The caption is 1025 bytes, more than the 1024 a caption takes"},

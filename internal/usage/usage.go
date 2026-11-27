@@ -1,4 +1,4 @@
-// Package usage reads the tokens a session's agent used from its transcripts, and prices them.
+// Package usage reads the tokens a thread's agent used from its transcripts, and prices them.
 package usage
 
 import (
@@ -41,7 +41,7 @@ func (t *Tokens) Add(o Tokens) {
 	t.Cost += o.Cost
 }
 
-// Part is what one model used, in the session itself or in its subagents.
+// Part is what one model used, in the thread itself or in its subagents.
 type Part struct {
 	Model    string
 	Subagent bool
@@ -54,7 +54,7 @@ type Current struct {
 	Effort string
 }
 
-// Reader reads what a session's agent used from its transcript, a little at a time, as its provider knows how.
+// Reader reads what a thread's agent used from its transcript, a little at a time, as its provider knows how.
 type Reader interface {
 	// Read counts what was written to the transcript at path since the last read, one part for each model, and
 	// says what the agent used last. model is the one the agent reports it runs now, for a transcript whose lines
@@ -66,7 +66,7 @@ type Reader interface {
 	Mark() Mark
 }
 
-// Mark is where a reader stands in a session's transcripts: the time of the latest message read, and how far each
+// Mark is where a reader stands in a thread's transcripts: the time of the latest message read, and how far each
 // file was read. A reader started from a mark counts what one started after the same time counts, and only skips
 // reading what lies before the offsets.
 type Mark struct {
@@ -74,7 +74,7 @@ type Mark struct {
 	Offsets map[string]int64 `json:"offsets,omitempty"`
 }
 
-// Cursor reads a session's transcripts a little at a time. Claude Code writes each API response
+// Cursor reads a thread's transcripts a little at a time. Claude Code writes each API response
 // once per content block, so a message is counted once by its id.
 type Cursor struct {
 	after time.Time // a file read for the first time is counted from this time on
@@ -98,8 +98,8 @@ func (c *Cursor) Mark() Mark { return c.tail.mark(c.after) }
 
 // Read counts what was written since the last read to the transcript at path and to the transcripts
 // of its subagents, which Claude Code keeps in <session id>/subagents beside it. It returns one part
-// for each model, the session's own before its subagents'. The lines name their model, so the one given is not used;
-// the newest line of the session's own transcript says what it used last.
+// for each model, the thread's own before its subagents'. The lines name their model, so the one given is not used;
+// the newest line of the thread's own transcript says what it used last.
 func (c *Cursor) Read(path, _ string) ([]Part, Current, error) {
 	sums := map[Part]*Tokens{}
 	var order []Part
@@ -230,7 +230,7 @@ func (t tail) lines(file string, each func(b []byte, known bool)) error {
 
 // count counts the line's message, once. In a file read before, every new line is new; in a file
 // read for the first time, only the lines after c.after are. latest moves to the time of the latest line counted,
-// and the session's own newest line, not a subagent's, sets what the agent used last.
+// and the thread's own newest line, not a subagent's, sets what the agent used last.
 func (c *Cursor) count(b []byte, known, subagent bool, latest *time.Time, each func(model string, t Tokens)) {
 	if !bytes.Contains(b, []byte(`"usage"`)) {
 		return

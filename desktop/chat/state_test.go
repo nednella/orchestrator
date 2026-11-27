@@ -13,7 +13,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/agent"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // configDir is the folder the recorded run's transcript paths start with.
@@ -82,45 +82,45 @@ func TestStateFollowsTheStream(t *testing.T) {
 	want := []struct {
 		line  int
 		kind  chatlog.Kind
-		state session.State
+		state thread.State
 		why   string
 	}{
-		{0, chatlog.KindStart, session.Idle, "idle from the host's start"},
-		{5, chatlog.KindInit, session.Idle, "system/init comes after the prompt and starts nothing"},
-		{7, chatlog.KindUser, session.Working, "working at the prompt"},
-		{10, chatlog.KindToolUse, session.Working, "working at a tool call"},
-		{14, chatlog.KindToolResult, session.Working, "working at its result"},
-		{23, chatlog.KindTurnEnd, session.Idle, "idle at the turn's end"},
-		{29, chatlog.KindUser, session.Working, "working at the next prompt"},
-		{52, chatlog.KindApproval, session.Waiting, "waiting at a permission"},
-		{53, chatlog.KindAnswer, session.Working, "working once it is answered"},
-		{54, chatlog.KindToolResult, session.Working, "working at the result of the tool it allowed"},
-		{69, chatlog.KindTurnEnd, session.Idle, "idle at the end of that turn"},
-		{89, chatlog.KindTurnEnd, session.Waiting, "waiting at a reply that ends in a question"},
-		{95, chatlog.KindUser, session.Working, "working at the prompt after it"},
-		{110, chatlog.KindApproval, session.Waiting, "waiting at AskUserQuestion"},
-		{111, chatlog.KindAnswer, session.Working, "working once the question is answered"},
-		{134, chatlog.KindTurnEnd, session.Idle, "idle at the end of that turn"},
-		{158, chatlog.KindToolUse, session.Working, "working at a subagent's tool call"},
-		{179, chatlog.KindTurnEnd, session.Idle, "idle at the end of the turn with a subagent"},
-		{192, chatlog.KindApproval, session.Waiting, "waiting at the permission of the call to be interrupted"},
-		{197, chatlog.KindToolResult, session.Working, "working at the interrupted call's result"},
-		{199, chatlog.KindTurnEnd, session.Idle, "idle at an interrupted turn, which has no Stop"},
-		{0, chatlog.KindExit, session.Idle, "idle at the exit: the row sleeps once tmux has lost the session"},
+		{0, chatlog.KindStart, thread.Idle, "idle from the host's start"},
+		{5, chatlog.KindInit, thread.Idle, "system/init comes after the prompt and starts nothing"},
+		{7, chatlog.KindUser, thread.Working, "working at the prompt"},
+		{10, chatlog.KindToolUse, thread.Working, "working at a tool call"},
+		{14, chatlog.KindToolResult, thread.Working, "working at its result"},
+		{23, chatlog.KindTurnEnd, thread.Idle, "idle at the turn's end"},
+		{29, chatlog.KindUser, thread.Working, "working at the next prompt"},
+		{52, chatlog.KindApproval, thread.Waiting, "waiting at a permission"},
+		{53, chatlog.KindAnswer, thread.Working, "working once it is answered"},
+		{54, chatlog.KindToolResult, thread.Working, "working at the result of the tool it allowed"},
+		{69, chatlog.KindTurnEnd, thread.Idle, "idle at the end of that turn"},
+		{89, chatlog.KindTurnEnd, thread.Waiting, "waiting at a reply that ends in a question"},
+		{95, chatlog.KindUser, thread.Working, "working at the prompt after it"},
+		{110, chatlog.KindApproval, thread.Waiting, "waiting at AskUserQuestion"},
+		{111, chatlog.KindAnswer, thread.Working, "working once the question is answered"},
+		{134, chatlog.KindTurnEnd, thread.Idle, "idle at the end of that turn"},
+		{158, chatlog.KindToolUse, thread.Working, "working at a subagent's tool call"},
+		{179, chatlog.KindTurnEnd, thread.Idle, "idle at the end of the turn with a subagent"},
+		{192, chatlog.KindApproval, thread.Waiting, "waiting at the permission of the call to be interrupted"},
+		{197, chatlog.KindToolResult, thread.Working, "working at the interrupted call's result"},
+		{199, chatlog.KindTurnEnd, thread.Idle, "idle at an interrupted turn, which has no Stop"},
+		{0, chatlog.KindExit, thread.Idle, "idle at the exit: the row sleeps once tmux has lost the session"},
 	}
-	var rec session.Record
+	var rec thread.Record
 	type point struct {
 		line int
 		kind chatlog.Kind
 	}
-	got := map[point]session.State{}
+	got := map[point]thread.State{}
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {
 		ev, ok := stateEvent(e.Event, state)
 		if !ok {
 			continue
 		}
-		rec = session.Apply("main/abcdefgh", rec, ev, ev.At)
+		rec = thread.Apply("main/abcdefgh", rec, ev, ev.At)
 		if _, seen := got[point{e.line, e.Kind}]; !seen {
 			got[point{e.line, e.Kind}] = rec.State
 		}
@@ -134,10 +134,10 @@ func TestStateFollowsTheStream(t *testing.T) {
 
 func TestTurnEndNamesTheReplyAndWhetherItAsks(t *testing.T) {
 	t.Parallel()
-	var ends []session.Event
+	var ends []thread.Event
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {
-		if ev, ok := stateEvent(e.Event, state); ok && (ev.Name == "Stop" || ev.Name == session.TurnError) {
+		if ev, ok := stateEvent(e.Event, state); ok && (ev.Name == "Stop" || ev.Name == thread.TurnError) {
 			ends = append(ends, ev)
 		}
 	}
@@ -152,14 +152,14 @@ func TestTurnEndNamesTheReplyAndWhetherItAsks(t *testing.T) {
 	if !strings.HasPrefix(ends[2].Detail, "I wrote `hi` to `a.txt`") {
 		t.Errorf("turn 3's reply = %q", ends[2].Detail)
 	}
-	if last := ends[5]; last.Name != session.TurnError || last.Asks || last.Detail != "" {
+	if last := ends[5]; last.Name != thread.TurnError || last.Asks || last.Detail != "" {
 		t.Errorf("the interrupted turn ended with %+v, want a TurnError", last)
 	}
 }
 
 func TestToolEventsNameTheToolAndItsCommand(t *testing.T) {
 	t.Parallel()
-	var pre, post session.Event
+	var pre, post thread.Event
 	state := claudeTranscripts()
 	for _, e := range recordedLog(t) {
 		ev, ok := stateEvent(e.Event, state)
@@ -204,7 +204,7 @@ func TestInitGivesTheTranscriptHooksReported(t *testing.T) {
 	inits := 0
 	for _, e := range recordedLog(t) {
 		ev, ok := stateEvent(e.Event, state)
-		if !ok || ev.Name != session.Init {
+		if !ok || ev.Name != thread.Init {
 			continue
 		}
 		inits++
@@ -216,10 +216,10 @@ func TestInitGivesTheTranscriptHooksReported(t *testing.T) {
 		t.Errorf("%d inits, want 6", inits)
 	}
 	// After the turn that went into sub, the folder changes and the transcript's does not.
-	var inSub session.Event
+	var inSub thread.Event
 	state = claudeTranscripts()
 	for _, e := range recordedLog(t) {
-		if ev, ok := stateEvent(e.Event, state); ok && ev.Name == session.Init && e.line == 27 {
+		if ev, ok := stateEvent(e.Event, state); ok && ev.Name == thread.Init && e.line == 27 {
 			inSub = ev
 		}
 	}
@@ -243,7 +243,7 @@ func TestResumeAndForkNameTheirOwnTranscripts(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ev, ok := stateEvent(tt.init, claudeTranscripts())
-			if !ok || ev.Name != session.Init || ev.Transcript != tt.want || ev.Conversation != tt.init.ID {
+			if !ok || ev.Name != thread.Init || ev.Transcript != tt.want || ev.Conversation != tt.init.ID {
 				t.Errorf("stateEvent = %+v, %v, want the transcript %q", ev, ok, tt.want)
 			}
 		})
@@ -257,30 +257,30 @@ func TestStateEventForEachKind(t *testing.T) {
 		name   string
 		before []chatlog.Event
 		e      chatlog.Event
-		want   session.Event
+		want   thread.Event
 		ok     bool
 	}{
-		{"a message of the owner", nil, chatlog.Event{Kind: chatlog.KindUser, Text: "fix\n  the bug"}, session.Event{Name: "UserPromptSubmit", Detail: "fix the bug"}, true},
-		{"a message that denies an approval", nil, chatlog.Event{Kind: chatlog.KindUser, Parent: "r1", Text: "no"}, session.Event{}, false},
-		{"a tool call", nil, chatlog.Event{Kind: chatlog.KindToolUse, ID: "t1", Tool: "Edit", Input: json.RawMessage(`{"file_path":"a.go"}`)}, session.Event{Name: "PreToolUse", Tool: "Edit", Detail: "Edit a.go"}, true},
-		{"a tool call of a subagent", nil, chatlog.Event{Kind: chatlog.KindToolUse, ID: "t1", Agent: "a1", Tool: "Bash", Input: json.RawMessage(`{"command":"ls"}`)}, session.Event{Name: "PreToolUse", Tool: "Bash", Command: "ls", Detail: "Bash ls"}, true},
-		{"the result of a call the log has no start of", nil, chatlog.Event{Kind: chatlog.KindToolResult, Parent: "t9"}, session.Event{Name: "PostToolUse"}, true},
-		{"an approval", nil, approval, session.Event{Name: "Notification", NotificationType: "permission_prompt", Message: "Bash make test", Detail: "Bash make test"}, true},
-		{"a subagent's approval", nil, chatlog.Event{Kind: chatlog.KindApproval, ID: "r2", Agent: "a1", Tool: "Write"}, session.Event{}, false},
-		{"an answer to a subagent's approval", []chatlog.Event{{Kind: chatlog.KindApproval, ID: "r2", Agent: "a1", Tool: "Write"}}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r2"}, session.Event{}, false},
-		{"an answer", []chatlog.Event{approval}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r1"}, session.Event{Name: "PreToolUse", Tool: "Bash", Command: "make test", Detail: "Bash make test"}, true},
-		{"an answer while another approval waits", []chatlog.Event{approval, {Kind: chatlog.KindApproval, ID: "r2", Tool: "Edit"}}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r1"}, session.Event{}, false},
-		{"an answer to nothing", nil, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r7"}, session.Event{}, false},
-		{"a reply of a subagent is not the turn's", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}, {Kind: chatlog.KindMessage, Agent: "a1", Text: "done"}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, session.Event{Name: "Stop", Detail: "Ready?", Asks: true}, true},
-		{"a reply that ends in a question under markup", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Done.\n\n**Do you want me to push?**\n"}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, session.Event{Name: "Stop", Detail: "Done. **Do you want me to push?**", Asks: true}, true},
-		{"a question inside the reply", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Why? The test was flaky. I fixed it."}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, session.Event{Name: "Stop", Detail: "Why? The test was flaky. I fixed it."}, true},
-		{"the reply of an earlier turn is not this one's", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}, {Kind: chatlog.KindTurnEnd}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, session.Event{Name: "Stop"}, true},
-		{"a turn that ended in an error", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}}, chatlog.Event{Kind: chatlog.KindTurnEnd, Error: true}, session.Event{Name: session.TurnError}, true},
-		{"the exit", nil, chatlog.Event{Kind: chatlog.KindExit}, session.Event{Name: "SessionEnd"}, true},
-		{"a failed exit", nil, chatlog.Event{Kind: chatlog.KindExit, Error: true}, session.Event{Name: "SessionEnd"}, true},
-		{"the host's start", nil, chatlog.Event{Kind: chatlog.KindStart}, session.Event{Name: "SessionStart"}, true},
-		{"a delta", nil, chatlog.Event{Kind: chatlog.KindDelta, Text: "x"}, session.Event{}, false},
-		{"a queued message", nil, chatlog.Event{Kind: chatlog.KindQueued, Text: "x"}, session.Event{}, false},
+		{"a message of the owner", nil, chatlog.Event{Kind: chatlog.KindUser, Text: "fix\n  the bug"}, thread.Event{Name: "UserPromptSubmit", Detail: "fix the bug"}, true},
+		{"a message that denies an approval", nil, chatlog.Event{Kind: chatlog.KindUser, Parent: "r1", Text: "no"}, thread.Event{}, false},
+		{"a tool call", nil, chatlog.Event{Kind: chatlog.KindToolUse, ID: "t1", Tool: "Edit", Input: json.RawMessage(`{"file_path":"a.go"}`)}, thread.Event{Name: "PreToolUse", Tool: "Edit", Detail: "Edit a.go"}, true},
+		{"a tool call of a subagent", nil, chatlog.Event{Kind: chatlog.KindToolUse, ID: "t1", Agent: "a1", Tool: "Bash", Input: json.RawMessage(`{"command":"ls"}`)}, thread.Event{Name: "PreToolUse", Tool: "Bash", Command: "ls", Detail: "Bash ls"}, true},
+		{"the result of a call the log has no start of", nil, chatlog.Event{Kind: chatlog.KindToolResult, Parent: "t9"}, thread.Event{Name: "PostToolUse"}, true},
+		{"an approval", nil, approval, thread.Event{Name: "Notification", NotificationType: "permission_prompt", Message: "Bash make test", Detail: "Bash make test"}, true},
+		{"a subagent's approval", nil, chatlog.Event{Kind: chatlog.KindApproval, ID: "r2", Agent: "a1", Tool: "Write"}, thread.Event{}, false},
+		{"an answer to a subagent's approval", []chatlog.Event{{Kind: chatlog.KindApproval, ID: "r2", Agent: "a1", Tool: "Write"}}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r2"}, thread.Event{}, false},
+		{"an answer", []chatlog.Event{approval}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r1"}, thread.Event{Name: "PreToolUse", Tool: "Bash", Command: "make test", Detail: "Bash make test"}, true},
+		{"an answer while another approval waits", []chatlog.Event{approval, {Kind: chatlog.KindApproval, ID: "r2", Tool: "Edit"}}, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r1"}, thread.Event{}, false},
+		{"an answer to nothing", nil, chatlog.Event{Kind: chatlog.KindAnswer, ID: "r7"}, thread.Event{}, false},
+		{"a reply of a subagent is not the turn's", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}, {Kind: chatlog.KindMessage, Agent: "a1", Text: "done"}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, thread.Event{Name: "Stop", Detail: "Ready?", Asks: true}, true},
+		{"a reply that ends in a question under markup", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Done.\n\n**Do you want me to push?**\n"}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, thread.Event{Name: "Stop", Detail: "Done. **Do you want me to push?**", Asks: true}, true},
+		{"a question inside the reply", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Why? The test was flaky. I fixed it."}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, thread.Event{Name: "Stop", Detail: "Why? The test was flaky. I fixed it."}, true},
+		{"the reply of an earlier turn is not this one's", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}, {Kind: chatlog.KindTurnEnd}}, chatlog.Event{Kind: chatlog.KindTurnEnd}, thread.Event{Name: "Stop"}, true},
+		{"a turn that ended in an error", []chatlog.Event{{Kind: chatlog.KindMessage, Text: "Ready?"}}, chatlog.Event{Kind: chatlog.KindTurnEnd, Error: true}, thread.Event{Name: thread.TurnError}, true},
+		{"the exit", nil, chatlog.Event{Kind: chatlog.KindExit}, thread.Event{Name: "SessionEnd"}, true},
+		{"a failed exit", nil, chatlog.Event{Kind: chatlog.KindExit, Error: true}, thread.Event{Name: "SessionEnd"}, true},
+		{"the host's start", nil, chatlog.Event{Kind: chatlog.KindStart}, thread.Event{Name: "SessionStart"}, true},
+		{"a delta", nil, chatlog.Event{Kind: chatlog.KindDelta, Text: "x"}, thread.Event{}, false},
+		{"a queued message", nil, chatlog.Event{Kind: chatlog.KindQueued, Text: "x"}, thread.Event{}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			state := claudeTranscripts()

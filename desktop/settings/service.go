@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const (
@@ -35,8 +35,8 @@ type Store interface {
 	SetDigestSchedule(projectKey, schedule string) error
 	ThreadPlace() string
 	SetThreadPlace(place string) error
-	ThreadAccess() session.Access
-	SetThreadAccess(access session.Access) error
+	ThreadAccess() thread.Access
+	SetThreadAccess(access thread.Access) error
 	SetDataDir(dir string) error
 	ProjectsDir() string
 	SetProjectsDir(dir string) error
@@ -54,10 +54,10 @@ type Settings struct {
 	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black
 	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light
 	TextScale    float64         `json:"textScale"`      // a multiple of the default text size
-	KeepAwake    bool            `json:"keepAwake"`      // hold off idle sleep while a session works, for projects that do not say otherwise
+	KeepAwake    bool            `json:"keepAwake"`      // hold off idle sleep while a thread works, for projects that do not say otherwise
 	Cleanup      project.Cleanup `json:"cleanup"`        // the current project's: auto or manual, for merge and close
 	Prompt       string          `json:"promptSend"`     // the current project's: auto or manual
-	Browser      bool            `json:"browserEnabled"` // the current project's sessions get the browser and evidence commands
+	Browser      bool            `json:"browserEnabled"` // the current project's threads get the browser and evidence commands
 	Digest       string          `json:"digestSchedule"` // the current project's: weekly or off
 	ThreadPlace  string          `json:"threadPlace"`    // where a new thread with no issue starts: worktree or project; "" is unset, a worktree
 	ThreadAccess string          `json:"threadAccess"`   // the access a new thread starts with: read, supervised or full; "" is unset, supervised
@@ -150,17 +150,17 @@ func (s *Service) SetTextScale(scale float64) (Settings, error) {
 	return s.saved(s.store.SetTextScale(scale))
 }
 
-// SetKeepAwake saves whether a working session holds off idle sleep. A project's own setting still wins.
+// SetKeepAwake saves whether a working thread holds off idle sleep. A project's own setting still wins.
 func (s *Service) SetKeepAwake(on bool) (Settings, error) {
 	return s.saved(s.store.SetKeepAwake(on))
 }
 
-// SetPromptSend saves whether the current project sends the text a session starts with at once: "auto" or "manual".
+// SetPromptSend saves whether the current project sends the text a thread starts with at once: "auto" or "manual".
 func (s *Service) SetPromptSend(mode string) (Settings, error) {
 	return s.saved(s.store.SetPromptSend(s.project.Current().Key(), mode))
 }
 
-// SetBrowserEnabled saves whether the current project's sessions get the browser and evidence commands.
+// SetBrowserEnabled saves whether the current project's threads get the browser and evidence commands.
 func (s *Service) SetBrowserEnabled(on bool) (Settings, error) {
 	return s.saved(s.store.SetBrowserEnabled(s.project.Current().Key(), on))
 }
@@ -180,10 +180,10 @@ func (s *Service) SetThreadPlace(place string) (Settings, error) {
 
 // SetThreadAccess saves the access a new thread starts with: "read", "supervised" or "full"; "" unsets it.
 func (s *Service) SetThreadAccess(access string) (Settings, error) {
-	if _, err := session.ParseAccess(access); err != nil {
+	if _, err := thread.ParseAccess(access); err != nil {
 		return Settings{}, err
 	}
-	return s.saved(s.store.SetThreadAccess(session.Access(access)))
+	return s.saved(s.store.SetThreadAccess(thread.Access(access)))
 }
 
 // SetProjectsDir saves the folder a new project is made in, an absolute path or one that starts with ~; "" unsets it.

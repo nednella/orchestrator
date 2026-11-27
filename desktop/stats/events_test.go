@@ -37,9 +37,9 @@ func TestLogRollsUpEventsByDay(t *testing.T) {
 	day2 := time.Date(2026, 10, 9, 0, 1, 0, 0, time.Local)
 	l.Record("proj", ev(activity.Prompt, day1))
 	l.Record("proj", ev(activity.Prompt, day2))
-	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.SessionStart, Issue: 4})
-	l.Record("proj", ev(activity.SessionStart, day2))
-	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.SessionEnd, Ms: 600})
+	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.ThreadStart, Issue: 4})
+	l.Record("proj", ev(activity.ThreadStart, day2))
+	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.ThreadEnd, Ms: 600})
 	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.Worked, Ms: 1500})
 	l.Record("proj", ev(activity.PROpened, day2))
 	l.Record("proj", activity.Event{At: day2.UnixMilli(), Kind: activity.PRMerged, Issue: 7, Ms: 100})
@@ -51,7 +51,7 @@ func TestLogRollsUpEventsByDay(t *testing.T) {
 
 	want := map[string]Day{
 		"2026-10-08": {Prompts: 1},
-		"2026-10-09": {Prompts: 1, Sessions: 2, IssueSessions: 1, Ended: 1, SessionMs: 600, WorkMs: 1500,
+		"2026-10-09": {Prompts: 1, Threads: 2, IssueThreads: 1, Ended: 1, ThreadMs: 600, WorkMs: 1500,
 			PRsOpened: 1, PRsMerged: 2, PRsClosed: 1, LeadMs: 400, IssuesFiled: 1, ClosedIssues: []int{7}},
 	}
 	check := func(l *Log) {

@@ -10,7 +10,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 type readEntry struct {
@@ -27,11 +27,11 @@ type readPage struct {
 // settledWithLog starts a thread, settles it so no host writes its chat log, and appends events to the log.
 func settledWithLog(t *testing.T, h *apptest.Harness, events ...chat.Event) string {
 	t.Helper()
-	id := threadWith(t, h, "Fix the login", session.Supervised).ID
+	id := threadWith(t, h, "Fix the login", thread.Supervised).ID
 	if err := h.SettleThread(id); err != nil {
 		t.Fatal(err)
 	}
-	c, err := h.Sessions().ChatOf(id)
+	c, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestReadPagesBackwards(t *testing.T) {
 		events = append(events, e)
 	}
 	target := settledWithLog(t, h, events...)
-	reader := threadWith(t, h, "Read it", session.Read).ID
+	reader := threadWith(t, h, "Read it", thread.Read).ID
 
 	seen := map[int64]bool{}
 	var pages [][]string
@@ -125,7 +125,7 @@ func TestReadSaysWhoEachMessageIsFrom(t *testing.T) {
 		chat.Event{Kind: chat.KindMessage, ID: "msg_1", Text: "second block"},
 		chat.Event{Kind: chat.KindMessage, ID: "msg_2", Text: "another reply"},
 	)
-	reader := threadWith(t, h, "Read it", session.Read).ID
+	reader := threadWith(t, h, "Read it", thread.Read).ID
 	p := readAs(t, h, reader, fmt.Sprintf(`{"thread":%q,"view":"messages"}`, target))
 	got := []string{}
 	for _, e := range p.Items {
@@ -146,7 +146,7 @@ func TestReadSaysWhoEachMessageIsFrom(t *testing.T) {
 func TestReadCutsLongTexts(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	reader := threadWith(t, h, "Read it", session.Read).ID
+	reader := threadWith(t, h, "Read it", thread.Read).ID
 
 	t.Run("a text", func(t *testing.T) {
 		target := settledWithLog(t, h, chat.Event{Kind: chat.KindUser, ID: "u1", Text: strings.Repeat("é", 3000)})
@@ -207,7 +207,7 @@ func TestReadActivityShowsToolCalls(t *testing.T) {
 		chat.Event{Kind: chat.KindToolUse, ID: "t3", Tool: "TodoWrite", Input: json.RawMessage(`{"todos":[]}`)},
 		chat.Event{Kind: chat.KindMessage, ID: "msg_1", Text: "One test fails."},
 	)
-	reader := threadWith(t, h, "Read it", session.Read).ID
+	reader := threadWith(t, h, "Read it", thread.Read).ID
 	tests := []struct {
 		view string
 		want []string
@@ -236,8 +236,8 @@ func TestReadActivityShowsToolCalls(t *testing.T) {
 func TestReadChecksItsInput(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	reader := threadWith(t, h, "Read it", session.Read).ID
-	gone := threadWith(t, h, "Gone", session.Supervised).ID
+	reader := threadWith(t, h, "Read it", thread.Read).ID
+	gone := threadWith(t, h, "Gone", thread.Supervised).ID
 	if err := h.DeleteThread(gone, false); err != nil {
 		t.Fatal(err)
 	}

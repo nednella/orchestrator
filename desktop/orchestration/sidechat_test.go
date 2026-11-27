@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 )
 
 // sideChatOf starts a side chat of the thread, which withReply gave a reply.
-func sideChatOf(t *testing.T, h *apptest.Harness, parent string) sessions.Session {
+func sideChatOf(t *testing.T, h *apptest.Harness, parent string) threads.Thread {
 	t.Helper()
-	var side sessions.Session
+	var side threads.Thread
 	// The Stop hook reaches the app a moment after it runs; until then the thread has no conversation to fork.
 	apptest.Eventually(t, "the side chat", func() bool { s, err := h.SideChatStart(parent, ""); side = s; return err == nil })
 	return side
@@ -56,7 +56,7 @@ func TestSideChatCannotDelegate(t *testing.T) {
 	if err := useTool(t, h, side.ID, "delegate", `{"task":"count the files"}`, nil); err != "A side chat cannot delegate" {
 		t.Errorf("delegate from a side chat: %q", err)
 	}
-	if children := h.Sessions().ChildrenOf(side.ID); len(children) != 0 {
+	if children := h.Threads().ChildrenOf(side.ID); len(children) != 0 {
 		t.Errorf("the side chat has children %q", children)
 	}
 }

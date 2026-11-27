@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/desktop/chat"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 )
@@ -280,7 +280,7 @@ func (c *Commands) stillRuns(id string) (turn, bool, error) {
 // waitFor is the answer once the thread's turn ends, it no longer runs or ctx ends. Each turn_end its follower takes
 // has the log read again, since a message queued meanwhile, or held for it while it waited on the owner, starts a turn
 // of its own.
-func (c *Commands) waitFor(ctx context.Context, ch sessions.Chat) waited {
+func (c *Commands) waitFor(ctx context.Context, ch threads.Chat) waited {
 	for {
 		t := c.turnOf(ch)
 		switch {
@@ -328,7 +328,7 @@ type turn struct {
 }
 
 // turnOf reads the thread's last turn from its log; a log that cannot be read is an empty one.
-func (c *Commands) turnOf(ch sessions.Chat) turn {
+func (c *Commands) turnOf(ch threads.Chat) turn {
 	events, err := chatlog.ReadLog(ch.Log, 0)
 	if err != nil {
 		log.Printf("orchestrator: reading the chat log of %s: %v", ch.ID, err)

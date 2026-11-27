@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/prompts"
@@ -124,7 +124,7 @@ func (v *Service) send(id, text string, images []Image, sideChats []string, wait
 // SideChatStart starts a side chat of the thread parent, a fork of its conversation at its latest finished reply, and
 // sends it text and images as its first message when there are any, with the parent's model. A first message that does
 // not go deletes the side chat, so a failed start leaves nothing behind.
-func (v *Service) SideChatStart(parent, text string, images []Image) (sessions.Session, error) {
+func (v *Service) SideChatStart(parent, text string, images []Image) (threads.Thread, error) {
 	side, err := v.c.threads.StartSideChat(parent)
 	if err != nil || strings.TrimSpace(text) == "" && len(images) == 0 {
 		return side, err
@@ -133,7 +133,7 @@ func (v *Service) SideChatStart(parent, text string, images []Image) (sessions.S
 		if err := v.c.threads.DeleteSideChat(side.ID, false); err != nil {
 			log.Printf("orchestrator: removing side chat %s, which did not take its first message: %v", side.ID, err)
 		}
-		return sessions.Session{}, err
+		return threads.Thread{}, err
 	}
 	return side, nil
 }
@@ -183,7 +183,7 @@ func sideChatTurns(events []chatlog.Event) []prompts.SideChatTurn {
 		switch {
 		case e.Kind == chatlog.KindUser && e.Parent == "":
 			end()
-			turns = append(turns, prompts.SideChatTurn{Question: cmp.Or(e.Body, strings.TrimPrefix(e.Text, sessions.AppPrompt))})
+			turns = append(turns, prompts.SideChatTurn{Question: cmp.Or(e.Body, strings.TrimPrefix(e.Text, threads.AppPrompt))})
 		case e.Kind == chatlog.KindMessage && e.Agent == "" && len(turns) > 0 && strings.TrimSpace(e.Text) != "":
 			answer = append(answer, e.Text)
 		}
@@ -383,20 +383,20 @@ func (v *Service) rewindFailed(id, what string, err error) error {
 func (v *Service) ChatPending() []Pending { return v.c.pending() }
 
 // live is the chat of a thread that runs.
-func (v *Service) live(id string) (sessions.Chat, error) {
+func (v *Service) live(id string) (threads.Chat, error) {
 	ch, err := v.c.threads.ChatOf(id)
 	if err != nil {
-		return sessions.Chat{}, err
+		return threads.Chat{}, err
 	}
 	if !ch.Live {
-		return sessions.Chat{}, fmt.Errorf("Thread %s is asleep", id)
+		return threads.Chat{}, fmt.Errorf("Thread %s is asleep", id)
 	}
 	return ch, nil
 }
 
 // awake is the chat of a thread that runs, woken first when it has settled. When another wake started it first, it is
 // that wake's chat, once its host listens.
-func (v *Service) awake(id string) (sessions.Chat, error) {
+func (v *Service) awake(id string) (threads.Chat, error) {
 	ch, err := v.c.threads.ChatOf(id)
 	if err != nil || ch.Live {
 		return ch, err
@@ -407,7 +407,7 @@ func (v *Service) awake(id string) (sessions.Chat, error) {
 	}
 	ch, again := v.c.threads.ChatOf(id)
 	if again != nil || !ch.Live {
-		return sessions.Chat{}, err
+		return threads.Chat{}, err
 	}
 	ready, cancel := context.WithTimeout(v.ctx(), hostStarting)
 	defer cancel()

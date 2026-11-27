@@ -8,18 +8,18 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/notes"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/prompts"
 )
 
-// Sessions is what the projects need of the session list, which also knows the current project.
-type Sessions interface {
+// Threads is what the projects need of the thread list, which also knows the current project.
+type Threads interface {
 	Current() project.Project
-	Projects() []sessions.Project
-	List() []sessions.Session
-	Shells() []sessions.Shell
-	CreateBriefed(title, text, brief string) (sessions.Session, error)
+	Projects() []threads.Project
+	List() []threads.Thread
+	Shells() []threads.Shell
+	CreateBriefed(title, text, brief string) (threads.Thread, error)
 	SwitchProject(name string) (project.Project, error)
 }
 
@@ -36,18 +36,18 @@ type Repos interface {
 
 // Snapshot is everything the screen needs on load.
 type Snapshot struct {
-	Project  sessions.Project   `json:"project"`
-	Projects []sessions.Project `json:"projects"`
-	Sessions []sessions.Session `json:"sessions"`
-	Notes    []notes.Note       `json:"notes"`
-	Shells   []sessions.Shell   `json:"shells"`  // the current project's shell sessions, by shell number
-	Machine  string             `json:"machine"` // this Mac's name, as its owner set it
+	Project  threads.Project   `json:"project"`
+	Projects []threads.Project `json:"projects"`
+	Threads  []threads.Thread  `json:"sessions"`
+	Notes    []notes.Note      `json:"notes"`
+	Shells   []threads.Shell   `json:"shells"`  // the current project's shells, by shell number
+	Machine  string            `json:"machine"` // this Mac's name, as its owner set it
 }
 
 // Service is bound to the front end.
 type Service struct {
 	registry *Registry
-	sessions Sessions
+	threads  Threads
 	notes    Notes
 	repos    Repos
 	run      run.Runner
@@ -57,17 +57,17 @@ type Service struct {
 	ctx      func() context.Context
 }
 
-func NewService(r *Registry, s Sessions, n Notes, repos Repos, runner run.Runner, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
-	return &Service{registry: r, sessions: s, notes: n, repos: repos, run: runner, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
+func NewService(r *Registry, s Threads, n Notes, repos Repos, runner run.Runner, stateDir string, pickDir func() (string, error), machine func() string, ctx func() context.Context) *Service {
+	return &Service{registry: r, threads: s, notes: n, repos: repos, run: runner, stateDir: stateDir, pickDir: pickDir, machine: machine, ctx: ctx}
 }
 
 // Snapshot is everything the screen needs; call it on load.
 func (s *Service) Snapshot() Snapshot {
-	cur := s.sessions.Current()
+	cur := s.threads.Current()
 	repo := s.repos.Repo(s.ctx(), cur.Dir)
-	projects := s.sessions.Projects()
-	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Shells: s.sessions.Shells(), Machine: s.machine()}
-	snap.Project = sessions.Project{Key: cur.Key(), Name: cur.Name, Dir: cur.Dir}
+	projects := s.threads.Projects()
+	snap := Snapshot{Projects: projects, Threads: s.threads.List(), Shells: s.threads.Shells(), Machine: s.machine()}
+	snap.Project = threads.Project{Key: cur.Key(), Name: cur.Name, Dir: cur.Dir}
 	for i, p := range projects {
 		if p.Dir == cur.Dir {
 			projects[i].Repo = repo
@@ -84,7 +84,7 @@ func (s *Service) Snapshot() Snapshot {
 
 // SwitchProject makes the project current; it is remembered for the next start.
 func (s *Service) SwitchProject(name string) (Snapshot, error) {
-	p, err := s.sessions.SwitchProject(name)
+	p, err := s.threads.SwitchProject(name)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -125,24 +125,24 @@ func (s *Service) AddProjectDir(dir string, create bool) (Snapshot, error) {
 }
 
 // SetUpProject writes a basic orchestrator block into the current project's config and starts a Supervised thread that
-// sets up the repository with the user. A project that has queue sections keeps its config: only the session starts.
-func (s *Service) SetUpProject() (sessions.Session, error) {
+// sets up the repository with the user. A project that has queue sections keeps its config: only the thread starts.
+func (s *Service) SetUpProject() (threads.Thread, error) {
 	key, err := s.configure()
 	if err != nil {
-		return sessions.Session{}, err
+		return threads.Thread{}, err
 	}
 	if s.registry.project(key).NeedsSetup() {
 		if err := s.registry.SetUp(key); err != nil {
-			return sessions.Session{}, err
+			return threads.Thread{}, err
 		}
 	}
-	return s.sessions.CreateBriefed("orchestrator setup", prompts.SetupStart(), prompts.SetupBrief())
+	return s.threads.CreateBriefed("orchestrator setup", prompts.SetupStart(), prompts.SetupBrief())
 }
 
 // configure is the key of the config's entry for the current project's folder, adding the entry when the folder is
 // not in the config: the folder the app started in may not be. Another machine's project of the same name is not it.
 func (s *Service) configure() (string, error) {
-	cur := s.sessions.Current()
+	cur := s.threads.Current()
 	if p, ok := s.registry.ByDir(cur.Dir); ok {
 		return p.Key(), nil
 	}

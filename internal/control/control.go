@@ -28,11 +28,11 @@ const (
 	MaxTimeout = 2 * time.Minute
 )
 
-// Request is one command. Session and Project say who asks; Opts carry the flags.
-// Token says which thread an orchestration call acts as; it replaces Session for that call.
+// Request is one command. Thread and Project say who asks; Opts carry the flags.
+// Token says which thread an orchestration call acts as; it replaces Thread for that call.
 type Request struct {
 	Cmd       string            `json:"cmd"`
-	Session   string            `json:"session,omitempty"`
+	Thread    string            `json:"thread,omitempty"`
 	Project   string            `json:"project,omitempty"`
 	Args      []string          `json:"args,omitempty"`
 	Opts      map[string]string `json:"opts,omitempty"`

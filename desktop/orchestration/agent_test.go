@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const badInput = "The tool's input is not what its schema asks for"
@@ -40,7 +40,7 @@ func noteTexts(t *testing.T, h *apptest.Harness, key string) []string {
 }
 
 // threadIn starts a Supervised thread in the project of that name, and makes main the current project again.
-func threadIn(t *testing.T, h *apptest.Harness, project, title string) sessions.Session {
+func threadIn(t *testing.T, h *apptest.Harness, project, title string) threads.Thread {
 	t.Helper()
 	if _, err := h.SwitchProject(project); err != nil {
 		t.Fatal(err)
@@ -53,11 +53,11 @@ func threadIn(t *testing.T, h *apptest.Harness, project, title string) sessions.
 }
 
 // threadTitled is the row of the thread with that title.
-func threadTitled(h *apptest.Harness, title string) (sessions.Session, bool) {
-	list := h.Sessions().List()
-	i := slices.IndexFunc(list, func(s sessions.Session) bool { return s.Title == title })
+func threadTitled(h *apptest.Harness, title string) (threads.Thread, bool) {
+	list := h.Threads().List()
+	i := slices.IndexFunc(list, func(s threads.Thread) bool { return s.Title == title })
 	if i < 0 {
-		return sessions.Session{}, false
+		return threads.Thread{}, false
 	}
 	return list[i], true
 }
@@ -101,8 +101,8 @@ func TestToolIgnoresAThreadInItsInput(t *testing.T) {
 
 	// The request's own fields name B, as a forged call would.
 	asB := func(tool, input string) ctl.Response {
-		return h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Session: b.ID, Project: key, Args: []string{tool},
-			Opts: map[string]string{"input": input, "session": b.ID, "project": key}})
+		return h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Thread: b.ID, Project: key, Args: []string{tool},
+			Opts: map[string]string{"input": input, "thread": b.ID, "project": key}})
 	}
 	if resp := asB("note", `{"text":"from a"}`); !resp.OK {
 		t.Fatalf("note = %+v", resp)
@@ -129,7 +129,7 @@ func TestToolIgnoresAThreadInItsInput(t *testing.T) {
 
 	// A field in the input that names a thread or a project is refused, never followed.
 	for _, input := range []string{
-		`{"text":"x","session":"` + b.ID + `"}`,
+		`{"text":"x","thread":"` + b.ID + `"}`,
 		`{"text":"x","thread":"` + b.ID + `"}`,
 		`{"text":"x","project":"` + key + `"}`,
 	} {
@@ -146,19 +146,19 @@ func TestNewThreadToolRefusesMoreAccessThanTheCaller(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
-		caller session.Access
+		caller thread.Access
 		asked  string
-		want   session.Access
+		want   thread.Access
 		err    string
 	}{
-		{"supervised asks full", session.Supervised, "full", "", "A thread with supervised access cannot start a thread with full access"},
-		{"read asks supervised", session.Read, "supervised", "", "A thread with read access cannot start a thread with supervised access"},
-		{"read asks full", session.Read, "full", "", "A thread with read access cannot start a thread with full access"},
-		{"read gets read by default", session.Read, "", session.Read, ""},
-		{"supervised asks read", session.Supervised, "read", session.Read, ""},
-		{"supervised gets supervised by default", session.Supervised, "", session.Supervised, ""},
-		{"full asks full", session.Full, "full", session.Full, ""},
-		{"an access orchestrator does not know", session.Full, "write", "", `access must be read, supervised or full, not "write"`},
+		{"supervised asks full", thread.Supervised, "full", "", "A thread with supervised access cannot start a thread with full access"},
+		{"read asks supervised", thread.Read, "supervised", "", "A thread with read access cannot start a thread with supervised access"},
+		{"read asks full", thread.Read, "full", "", "A thread with read access cannot start a thread with full access"},
+		{"read gets read by default", thread.Read, "", thread.Read, ""},
+		{"supervised asks read", thread.Supervised, "read", thread.Read, ""},
+		{"supervised gets supervised by default", thread.Supervised, "", thread.Supervised, ""},
+		{"full asks full", thread.Full, "full", thread.Full, ""},
+		{"an access orchestrator does not know", thread.Full, "write", "", `access must be read, supervised or full, not "write"`},
 	}
 	h := apptest.New(t)
 	for i, tt := range tests {
@@ -193,12 +193,12 @@ func TestNewThreadToolRefusesMoreAccessThanTheCaller(t *testing.T) {
 func TestIssueToolStartsTheIssueThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "plan", session.Read)
-	issueThread := func() (sessions.Session, bool) {
-		list := h.Sessions().List()
-		i := slices.IndexFunc(list, func(s sessions.Session) bool { return s.Issue == 7 })
+	caller := threadWith(t, h, "plan", thread.Read)
+	issueThread := func() (threads.Thread, bool) {
+		list := h.Threads().List()
+		i := slices.IndexFunc(list, func(s threads.Thread) bool { return s.Issue == 7 })
 		if i < 0 {
-			return sessions.Session{}, false
+			return threads.Thread{}, false
 		}
 		return list[i], true
 	}
@@ -219,10 +219,10 @@ func TestIssueToolStartsTheIssueThread(t *testing.T) {
 
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, caller.ID), Args: []string{"issue"}, Opts: map[string]string{"input": `{"number":7,"prompt":"the patch is in /tmp/x"}`}})
 	s, ok := issueThread()
-	if !resp.OK || !ok || resp.Out != fmt.Sprintf("started 1 session: #7 (%d)", s.N) {
+	if !resp.OK || !ok || resp.Out != fmt.Sprintf("started 1 thread: #7 (%d)", s.N) {
 		t.Fatalf("issue 7 = %+v, thread %+v", resp, s)
 	}
-	if s.Access != session.Read {
+	if s.Access != thread.Read {
 		t.Errorf("the issue thread's access = %q, want Read, the caller's, since the action's is Supervised", s.Access)
 	}
 	if got := systemPrompt(t, h, s.ID); !strings.Contains(got, prompts.Handover("the patch is in /tmp/x")) {
@@ -237,14 +237,14 @@ func TestIssueToolStartsTheIssueThread(t *testing.T) {
 func TestIssueToolGivesTheLowerOfTheActionsAndTheCallersAccess(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	caller := threadWith(t, h, "boss", session.Full)
+	caller := threadWith(t, h, "boss", thread.Full)
 	mustUse(t, h, caller.ID, "issue", `{"number":7}`, nil)
-	list := h.Sessions().List()
-	i := slices.IndexFunc(list, func(s sessions.Session) bool { return s.Issue == 7 })
+	list := h.Threads().List()
+	i := slices.IndexFunc(list, func(s threads.Thread) bool { return s.Issue == 7 })
 	if i < 0 {
 		t.Fatal("no thread for #7")
 	}
-	if list[i].Access != session.Supervised {
+	if list[i].Access != thread.Supervised {
 		t.Errorf("a Full caller's issue thread has %q access, want Supervised, the action's", list[i].Access)
 	}
 }
@@ -253,7 +253,7 @@ func TestTrackToolTakesTheBranchForTheCaller(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
-	reader := threadWith(t, h, "reader", session.Read)
+	reader := threadWith(t, h, "reader", thread.Read)
 
 	mustUse(t, h, a.ID, "track", `{"branch":" feature-a "}`, nil)
 	apptest.Eventually(t, "A on feature-a", func() bool { return row(t, h, a.ID).Branch == "feature-a" })
@@ -276,7 +276,7 @@ func TestShowToolTakesFilesOnlyFromTheThreadsFolders(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	a := newThread(t, h, "a")
-	roots := h.Sessions().ShowRoots(a.ID)
+	roots := h.Threads().ShowRoots(a.ID)
 	if len(roots) != 3 {
 		t.Fatalf("roots = %q, want the thread's folder, the project's and the temp folder", roots)
 	}
@@ -330,7 +330,7 @@ func TestShowToolFilesEvidenceForTheCaller(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
-	file := filepath.Join(h.Sessions().ShowRoots(a.ID)[0], "result.txt")
+	file := filepath.Join(h.Threads().ShowRoots(a.ID)[0], "result.txt")
 	if err := os.WriteFile(file, []byte("all 12 tests pass\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestBrowserToolOpensTheCallersWindow(t *testing.T) {
 		{`{"action":"open"}`, "open needs a url"},
 		{`{"action":"help"}`, `action is open, screenshot or close, not "help"`},
 		{`{}`, `action is open, screenshot or close, not ""`},
-		{`{"action":"open","url":"x","session":"` + b.ID + `"}`, badInput},
+		{`{"action":"open","url":"x","thread":"` + b.ID + `"}`, badInput},
 	} {
 		if err := useTool(t, h, a.ID, "browser", tt.input, nil); !strings.HasPrefix(err, tt.err) {
 			t.Errorf("browser %s: %q, want %q", tt.input, err, tt.err)
@@ -405,7 +405,7 @@ func TestBrowserToolOpensTheCallersWindow(t *testing.T) {
 	}
 
 	url := pageServer(t)
-	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Session: b.ID, Args: []string{"browser"}, Opts: map[string]string{"input": `{"action":"open","url":"` + url + `"}`}, TimeoutMs: 75_000})
+	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Thread: b.ID, Args: []string{"browser"}, Opts: map[string]string{"input": `{"action":"open","url":"` + url + `"}`}, TimeoutMs: 75_000})
 	if !resp.OK || !strings.Contains(resp.Out, "Demo") {
 		t.Fatalf("open = %+v", resp)
 	}
@@ -423,7 +423,7 @@ func TestBrowserToolOpensTheCallersWindow(t *testing.T) {
 func TestRefreshToolReadsTheQueueAgain(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	a := threadWith(t, h, "reader", session.Read)
+	a := threadWith(t, h, "reader", thread.Read)
 	before := h.GH.IssueCalls()
 	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Token: tokenOf(t, h, a.ID), Args: []string{"refresh"}, Opts: map[string]string{"input": `{}`}})
 	if !resp.OK || !strings.HasPrefix(resp.Out, "refreshed ") {
@@ -440,7 +440,7 @@ func TestRefreshToolReadsTheQueueAgain(t *testing.T) {
 func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	a := threadWith(t, h, "reader", session.Read)
+	a := threadWith(t, h, "reader", thread.Read)
 	data, err := os.ReadFile(configOf(t, h, a.ID))
 	if err != nil {
 		t.Fatal(err)
@@ -460,7 +460,7 @@ func TestMCPServerServesTheAgentToolsAsTheThread(t *testing.T) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, server.Command, server.Args...)
 	// The server runs with Claude's environment, which names the app's socket, and the config's, which holds the token.
-	// A session and a project set there name another thread; the call still acts as the token's.
+	// A thread and a project set there name another thread; the call still acts as the token's.
 	cmd.Env = append(slices.Clone(h.Env), "ORCHESTRATOR_SESSION=main/bbbbbbbb", "ORCHESTRATOR_PROJECT=elsewhere")
 	for k, v := range server.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)

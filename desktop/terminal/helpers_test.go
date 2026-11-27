@@ -15,7 +15,7 @@ var eventually = apptest.Eventually
 
 func newHarness(t *testing.T) *apptest.Harness { return apptest.New(t) }
 
-// newShell is the project's shell session, on /bin/sh with a throwaway home so no profile of the owner runs: a pane
+// newShell is a shell of the project, on /bin/sh with a throwaway home so no profile of the owner runs: a pane
 // that runs what the test types.
 func newShell(t *testing.T) (*apptest.Harness, string) {
 	t.Helper()

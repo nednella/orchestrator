@@ -13,11 +13,11 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // child is what delegate answers.
@@ -52,9 +52,9 @@ func mustDelegate(t *testing.T, h *apptest.Harness, caller, input string) child 
 }
 
 // threadWith starts a thread with the access given and no prompt.
-func threadWith(t *testing.T, h *apptest.Harness, title string, access session.Access) sessions.Session {
+func threadWith(t *testing.T, h *apptest.Harness, title string, access thread.Access) threads.Thread {
 	t.Helper()
-	s, err := h.Sessions().Create(h.Sessions().Current(), title, "", false, 0, access)
+	s, err := h.Threads().Create(h.Threads().Current(), title, "", false, 0, access)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,9 +62,9 @@ func threadWith(t *testing.T, h *apptest.Harness, title string, access session.A
 }
 
 // row is the thread's row.
-func row(t *testing.T, h *apptest.Harness, id string) sessions.Session {
+func row(t *testing.T, h *apptest.Harness, id string) threads.Thread {
 	t.Helper()
-	s, ok := h.Session(id)
+	s, ok := h.Thread(id)
 	if !ok {
 		t.Fatalf("no row for %s", id)
 	}
@@ -165,7 +165,7 @@ func TestDelegateStartsAChild(t *testing.T) {
 	if c.Title != "Count files" || c.Access != "read" || c.Where != "folder" || c.Project != "main" || c.N == 0 || c.Dir == "" {
 		t.Errorf("delegate answered %+v", c)
 	}
-	if r := row(t, h, c.ID); r.Parent != parent.ID || r.Access != session.Read || r.Title != "Count files" {
+	if r := row(t, h, c.ID); r.Parent != parent.ID || r.Access != thread.Read || r.Title != "Count files" {
 		t.Errorf("the child's row: parent %q, access %q, title %q; want %s, read, Count files", r.Parent, r.Access, r.Title, parent.ID)
 	}
 	if p := row(t, h, parent.ID); p.Parent != "" {
@@ -209,7 +209,7 @@ func TestDelegateAboveTheCallersRankIsRefused(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	supervised := newThread(t, h, "supervised")
-	read := threadWith(t, h, "read", session.Read)
+	read := threadWith(t, h, "read", thread.Read)
 	before := tmuxSessions(t, h)
 	for _, where := range []string{"", `"where":"folder",`, `"where":"worktree",`, `"where":"issue","issue":8,`} {
 		for _, tt := range []struct {
@@ -227,7 +227,7 @@ func TestDelegateAboveTheCallersRankIsRefused(t *testing.T) {
 	if after := tmuxSessions(t, h); !slices.Equal(after, before) {
 		t.Errorf("tmux sessions = %q, want %q: a refused delegate started one", after, before)
 	}
-	if n := len(h.Sessions().List()); n != 2 {
+	if n := len(h.Threads().List()); n != 2 {
 		t.Errorf("%d rows, want the two callers'", n)
 	}
 }
@@ -236,9 +236,9 @@ func TestDelegateDefaultsToTheCallersAccess(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	for _, tt := range []struct {
-		access session.Access
+		access thread.Access
 		where  string
-	}{{session.Read, "folder"}, {session.Supervised, "worktree"}, {session.Full, "worktree"}} {
+	}{{thread.Read, "folder"}, {thread.Supervised, "worktree"}, {thread.Full, "worktree"}} {
 		parent := threadWith(t, h, string(tt.access), tt.access)
 		c := mustDelegate(t, h, parent.ID, `{"task":"look"}`)
 		if c.Access != string(tt.access) || c.Where != tt.where || c.Title != "look" {
@@ -350,7 +350,7 @@ func TestDelegateToAnIssueWithAThreadIsRefused(t *testing.T) {
 	if r := row(t, h, c.ID); r.Issue != 8 || r.Parent != parent.ID || c.Where != "issue" {
 		t.Errorf("the child for #8: issue %d, parent %q, where %q", r.Issue, r.Parent, c.Where)
 	}
-	if got := h.Sessions().IssueSessions()[8]; got != c.ID {
+	if got := h.Threads().IssueThreads()[8]; got != c.ID {
 		t.Errorf("the thread of #8 is %q, want the child %s", got, c.ID)
 	}
 }
@@ -373,7 +373,7 @@ func TestDelegateDeeperThanTheLimitIsRefused(t *testing.T) {
 	if after := tmuxSessions(t, h); len(after) != len(before) {
 		t.Errorf("tmux sessions = %q, want %q", after, before)
 	}
-	s := h.Sessions()
+	s := h.Threads()
 	if got := s.Descendants(top.ID); !slices.Equal(got, ids[1:]) {
 		t.Errorf("Descendants = %q, want %q", got, ids[1:])
 	}
@@ -403,7 +403,7 @@ func TestLiveChildrenLimit(t *testing.T) {
 	if err := h.SettleThread(children[0]); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.Sessions().ChildrenOf(parent.ID); len(got) != 8 || !slices.Contains(got, children[0]) {
+	if got := h.Threads().ChildrenOf(parent.ID); len(got) != 8 || !slices.Contains(got, children[0]) {
 		t.Errorf("ChildrenOf = %q, want all eight, the settled one too", got)
 	}
 	c := mustDelegate(t, h, parent.ID, `{"task":"one more","where":"folder","access":"read"}`)
@@ -415,7 +415,7 @@ func TestLiveChildrenLimit(t *testing.T) {
 func TestWokenChildKeepsItsAccess(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	parent := threadWith(t, h, "Lead", session.Full)
+	parent := threadWith(t, h, "Lead", thread.Full)
 	c := mustDelegate(t, h, parent.ID, `{"task":"write the tests","access":"supervised","where":"folder"}`)
 	if got := permissionMode(t, h, c.ID); got != "default" {
 		t.Fatalf("the child starts with --permission-mode %s, want default", got)
@@ -423,7 +423,7 @@ func TestWokenChildKeepsItsAccess(t *testing.T) {
 	if err := h.SettleThread(c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if r := row(t, h, c.ID); r.State != session.Settled || r.Parent != parent.ID {
+	if r := row(t, h, c.ID); r.State != thread.Settled || r.Parent != parent.ID {
 		t.Errorf("the settled child: state %q, parent %q", r.State, r.Parent)
 	}
 	if err := os.Remove(filepath.Join(h.ClaudeDir(), strings.ReplaceAll(c.ID, "/", "_")+".args")); err != nil {
@@ -435,7 +435,7 @@ func TestWokenChildKeepsItsAccess(t *testing.T) {
 	if got := permissionMode(t, h, c.ID); got != "default" {
 		t.Errorf("the woken child runs with --permission-mode %s, want default: its own access, not its parent's", got)
 	}
-	if r := row(t, h, c.ID); r.Access != session.Supervised || r.Parent != parent.ID {
+	if r := row(t, h, c.ID); r.Access != thread.Supervised || r.Parent != parent.ID {
 		t.Errorf("the woken child: access %q, parent %q", r.Access, r.Parent)
 	}
 	if !strings.Contains(systemPrompt(t, h, c.ID), prompts.Child("Lead")) {
@@ -459,10 +459,10 @@ func TestParentLinkSurvivesARestart(t *testing.T) {
 			t.Errorf("after a restart %s has parent %q, want %s", id, r.Parent, parent.ID)
 		}
 	}
-	if got := fresh.Sessions().ChildrenOf(parent.ID); len(got) != 2 {
+	if got := fresh.Threads().ChildrenOf(parent.ID); len(got) != 2 {
 		t.Errorf("after a restart ChildrenOf = %q, want both children", got)
 	}
-	if got := fresh.Sessions().AccessOf(running.ID); got != session.Supervised {
+	if got := fresh.Threads().AccessOf(running.ID); got != thread.Supervised {
 		t.Errorf("after a restart the child's access is %q", got)
 	}
 }
@@ -474,7 +474,7 @@ func TestChildInTheParentsFolderLeavesTheParentsBranch(t *testing.T) {
 	parent := newThread(t, h, "Fix the login")
 	c := mustDelegate(t, h, parent.ID, `{"task":"read the login code","where":"folder","access":"supervised"}`)
 	gitIn(t, parent.Worktree, "checkout", "-b", "login-v2")
-	if err := h.Sessions().Track(parent.ID, "login-v2"); err != nil {
+	if err := h.Threads().Track(parent.ID, "login-v2"); err != nil {
 		t.Fatalf("the parent tracks the branch its worktree is on: %v; a child in its folder must not hold it", err)
 	}
 	if r := row(t, h, parent.ID); r.Branch != "login-v2" {
@@ -491,14 +491,14 @@ func TestChildInTheParentsFolderTracksNoBranch(t *testing.T) {
 	repoFixture(t, h)
 	parent := newThread(t, h, "Fix the login")
 	inFolder := mustDelegate(t, h, parent.ID, `{"task":"read the login code","where":"folder","access":"supervised"}`)
-	want := "session " + inFolder.ID + " is a child with no worktree, which works on no branch of its own"
+	want := "thread " + inFolder.ID + " is a child with no worktree, which works on no branch of its own"
 	for _, branch := range []string{"side-work", parent.Branch} {
-		if err := h.Sessions().Track(inFolder.ID, branch); err == nil || err.Error() != want {
+		if err := h.Threads().Track(inFolder.ID, branch); err == nil || err.Error() != want {
 			t.Errorf("the child in its parent's folder tracks %s: %v, want %q", branch, err, want)
 		}
 	}
 	inTree := mustDelegate(t, h, parent.ID, `{"task":"test the login","title":"Test the login","where":"worktree"}`)
-	if err := h.Sessions().Track(inTree.ID, "test-the-login"); err != nil {
+	if err := h.Threads().Track(inTree.ID, "test-the-login"); err != nil {
 		t.Errorf("a child in its own worktree tracks its branch: %v", err)
 	}
 }
@@ -510,14 +510,14 @@ func TestCancelledDelegateStartsNoChild(t *testing.T) {
 	before := tmuxSessions(t, h)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := h.Sessions().CreateChild(ctx, sessions.ChildOptions{Parent: parent.ID, Task: "too late", Access: session.Read, Where: sessions.WhereFolder})
+	_, err := h.Threads().CreateChild(ctx, threads.ChildOptions{Parent: parent.ID, Task: "too late", Access: thread.Read, Where: threads.WhereFolder})
 	if err == nil || !strings.Contains(err.Error(), "no child started") {
 		t.Errorf("a cancelled delegate: %v, want no child started", err)
 	}
 	if after := tmuxSessions(t, h); !slices.Equal(after, before) {
 		t.Errorf("tmux sessions = %q, want %q", after, before)
 	}
-	if got := h.Sessions().ChildrenOf(parent.ID); len(got) != 0 {
+	if got := h.Threads().ChildrenOf(parent.ID); len(got) != 0 {
 		t.Errorf("ChildrenOf = %q, want none", got)
 	}
 }
@@ -561,16 +561,16 @@ func TestDelegateToAnotherProject(t *testing.T) {
 	if r := row(t, h, c.ID); r.Project != key || r.Parent != parent.ID || r.Branch != "" {
 		t.Errorf("the child's row: project %q, parent %q, branch %q; want %s, %s, none", r.Project, r.Parent, r.Branch, key, parent.ID)
 	}
-	if session.ProjectKey(c.ID) != key {
+	if thread.ProjectKey(c.ID) != key {
 		t.Errorf("the child's id %s is not of project %s", c.ID, key)
 	}
-	apptest.Eventually(t, "the other project's sessions event with the child", func() bool {
-		return slices.ContainsFunc(h.Rec.LastSessionsOf(key), func(s sessions.Session) bool { return s.ID == c.ID && s.Parent == parent.ID })
+	apptest.Eventually(t, "the other project's threads event with the child", func() bool {
+		return slices.ContainsFunc(h.Rec.LastThreadsOf(key), func(s threads.Thread) bool { return s.ID == c.ID && s.Parent == parent.ID })
 	})
-	if slices.ContainsFunc(h.Rec.LastSessionsOf("main"), func(s sessions.Session) bool { return s.ID == c.ID }) {
-		t.Error("main's sessions event lists the child")
+	if slices.ContainsFunc(h.Rec.LastThreadsOf("main"), func(s threads.Thread) bool { return s.ID == c.ID }) {
+		t.Error("main's threads event lists the child")
 	}
-	if got := h.Sessions().ChildrenOf(parent.ID); !slices.Equal(got, []string{c.ID}) {
+	if got := h.Threads().ChildrenOf(parent.ID); !slices.Equal(got, []string{c.ID}) {
 		t.Errorf("ChildrenOf = %q, want the child in the other project", got)
 	}
 
@@ -664,7 +664,7 @@ func TestCrossProjectRankStillApplies(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	supervised := newThread(t, h, "supervised")
-	read := threadWith(t, h, "read", session.Read)
+	read := threadWith(t, h, "read", thread.Read)
 	_, key := otherProject(t, h, t.TempDir())
 	before := tmuxSessions(t, h)
 	for _, where := range []string{"", `"where":"folder",`, `"where":"worktree",`, `"where":"issue","issue":8,`} {
@@ -685,7 +685,7 @@ func TestCrossProjectRankStillApplies(t *testing.T) {
 		t.Errorf("tmux sessions = %q, want %q: a refused delegate started one", after, before)
 	}
 	c := mustDelegate(t, h, read.ID, `{"task":"look","project":"`+key+`"}`)
-	if r := row(t, h, c.ID); r.Access != session.Read || r.Project != key || c.Where != "folder" {
+	if r := row(t, h, c.ID); r.Access != thread.Read || r.Project != key || c.Where != "folder" {
 		t.Errorf("a read caller's child in the other project: access %q, project %q, where %q", r.Access, r.Project, c.Where)
 	}
 }

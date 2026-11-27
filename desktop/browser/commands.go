@@ -9,9 +9,9 @@ import (
 	"github.com/nednella/orchestrator/internal/control"
 )
 
-// Asker checks which session a command comes from.
+// Asker checks which thread a command comes from.
 type Asker interface {
-	AskerSession(req control.Request) (string, error)
+	AskerThread(req control.Request) (string, error)
 }
 
 // Commands answers the browser tool.
@@ -26,7 +26,7 @@ func NewCommands(b *Browsers, a Asker, s *evidence.Store, c evidence.Changes) *C
 	return &Commands{browsers: b, asker: a, store: s, changes: c}
 }
 
-// Browser runs one browser action (open, screenshot, close) for the asking session.
+// Browser runs one browser action (open, screenshot, close) for the asking thread.
 func (c *Commands) Browser(ctx context.Context, req control.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("browser needs an action: open, screenshot or close")
@@ -35,7 +35,7 @@ func (c *Commands) Browser(ctx context.Context, req control.Request) (string, er
 	if sub != "open" && sub != "screenshot" && sub != "close" {
 		return "", fmt.Errorf("unknown browser action %q: it is open, screenshot or close", sub)
 	}
-	id, err := c.asker.AskerSession(req)
+	id, err := c.asker.AskerThread(req)
 	if err != nil {
 		return "", err
 	}

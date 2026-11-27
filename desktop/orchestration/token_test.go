@@ -10,10 +10,10 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/control"
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
@@ -21,9 +21,9 @@ func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 const refused = "This thread token is not valid: the thread settled or was woken again"
 
 // newThread starts a Supervised thread with no prompt.
-func newThread(t *testing.T, h *apptest.Harness, title string) sessions.Session {
+func newThread(t *testing.T, h *apptest.Harness, title string) threads.Thread {
 	t.Helper()
-	s, err := h.Sessions().Create(h.Sessions().Current(), title, "", false, 0, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), title, "", false, 0, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func newThread(t *testing.T, h *apptest.Harness, title string) sessions.Session 
 // configOf is the MCP config of the thread's host, beside its socket.
 func configOf(t *testing.T, h *apptest.Harness, id string) string {
 	t.Helper()
-	c, err := h.Sessions().ChatOf(id)
+	c, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,9 +60,9 @@ func tokenOf(t *testing.T, h *apptest.Harness, id string) string {
 	return token
 }
 
-// callerOf is the thread a call with that token and that session field acts as, or why there is none.
-func callerOf(h *apptest.Harness, token, sessionField string) (string, error) {
-	return control.New(h.Sessions()).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Session: sessionField})
+// callerOf is the thread a call with that token and that thread field acts as, or why there is none.
+func callerOf(h *apptest.Harness, token, threadField string) (string, error) {
+	return control.New(h.Threads()).Caller(ctl.Request{Cmd: "orchestrate", Token: token, Thread: threadField})
 }
 
 func wantCaller(t *testing.T, h *apptest.Harness, token, want string) {
@@ -93,19 +93,19 @@ func TestTokenNamesItsThread(t *testing.T) {
 	}
 }
 
-func TestTokenIgnoresTheSessionField(t *testing.T) {
+func TestTokenIgnoresTheThreadField(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	if got, err := callerOf(h, tokenOf(t, h, a.ID), b.ID); err != nil || got != a.ID {
-		t.Errorf("A's token with session B: caller = %q, %v; want A, %s", got, err, a.ID)
+		t.Errorf("A's token with thread B: caller = %q, %v; want A, %s", got, err, a.ID)
 	}
 	if got, err := callerOf(h, "", b.ID); err == nil || err.Error() != "This call carries no orchestrator thread token" {
-		t.Errorf("no token with session B: caller = %q, %v", got, err)
+		t.Errorf("no token with thread B: caller = %q, %v", got, err)
 	}
-	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Session: b.ID, Project: "main", Args: []string{"threads"}})
+	resp := h.Ask(t, ctl.Request{Cmd: "orchestrate", Thread: b.ID, Project: "main", Args: []string{"threads"}})
 	if resp.OK || resp.Error != "This call carries no orchestrator thread token" {
-		t.Errorf("a call with a session and no token = %+v", resp)
+		t.Errorf("a call with a thread and no token = %+v", resp)
 	}
 }
 
@@ -185,7 +185,7 @@ func withReply(t *testing.T, h *apptest.Harness, id string) {
 		t.Fatal(err)
 	}
 	h.Observe(t, id, "Stop", fmt.Sprintf(`{"session_id":"abc","transcript_path":%q}`, transcript))
-	c, err := h.Sessions().ChatOf(id)
+	c, err := h.Threads().ChatOf(id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,9 +207,9 @@ func TestForkGetsItsOwnToken(t *testing.T) {
 	h := apptest.New(t)
 	src := newThread(t, h, "work")
 	withReply(t, h, src.ID)
-	var fork sessions.Session
+	var fork threads.Thread
 	// The Stop hook reaches the app a moment after it runs; until then the thread has no conversation to fork.
-	apptest.Eventually(t, "the fork", func() bool { f, err := h.ForkSession(src.ID, "r1"); fork = f; return err == nil })
+	apptest.Eventually(t, "the fork", func() bool { f, err := h.ForkThread(src.ID, "r1"); fork = f; return err == nil })
 
 	srcToken, forkToken := tokenOf(t, h, src.ID), tokenOf(t, h, fork.ID)
 	if srcToken == forkToken {
@@ -234,20 +234,20 @@ func TestSocketNeverRunsAnAgentCommandAsAThreadItNames(t *testing.T) {
 	h := apptest.New(t)
 	a, b := newThread(t, h, "a"), newThread(t, h, "b")
 	for _, req := range []ctl.Request{
-		{Cmd: "note", Session: b.ID, Project: "main", Opts: map[string]string{"text": "forged"}},
-		{Cmd: "issue", Session: b.ID, Project: "main", Args: []string{"7"}, Opts: map[string]string{"prompt": "forged"}},
-		{Cmd: "new", Session: b.ID, Project: "main", Args: []string{"forged"}, Opts: map[string]string{"access": "full"}},
-		{Cmd: "show", Session: b.ID, Opts: map[string]string{"text": "forged"}},
-		{Cmd: "track", Session: b.ID, Opts: map[string]string{"branch": "forged"}},
-		{Cmd: "refresh", Session: b.ID, Project: "main"},
-		{Cmd: "browser", Session: b.ID, Args: []string{"open", "http://127.0.0.1:1/"}},
-		{Cmd: "note", Token: tokenOf(t, h, a.ID), Session: b.ID, Opts: map[string]string{"text": "forged"}},
+		{Cmd: "note", Thread: b.ID, Project: "main", Opts: map[string]string{"text": "forged"}},
+		{Cmd: "issue", Thread: b.ID, Project: "main", Args: []string{"7"}, Opts: map[string]string{"prompt": "forged"}},
+		{Cmd: "new", Thread: b.ID, Project: "main", Args: []string{"forged"}, Opts: map[string]string{"access": "full"}},
+		{Cmd: "show", Thread: b.ID, Opts: map[string]string{"text": "forged"}},
+		{Cmd: "track", Thread: b.ID, Opts: map[string]string{"branch": "forged"}},
+		{Cmd: "refresh", Thread: b.ID, Project: "main"},
+		{Cmd: "browser", Thread: b.ID, Args: []string{"open", "http://127.0.0.1:1/"}},
+		{Cmd: "note", Token: tokenOf(t, h, a.ID), Thread: b.ID, Opts: map[string]string{"text": "forged"}},
 	} {
 		if resp := h.Ask(t, req); resp.OK || resp.Error != fmt.Sprintf("unknown command %q", req.Cmd) {
-			t.Errorf("%s as %s over the socket = %+v, want unknown command", req.Cmd, req.Session, resp)
+			t.Errorf("%s as %s over the socket = %+v, want unknown command", req.Cmd, req.Thread, resp)
 		}
 	}
-	if n := len(h.Sessions().List()); n != 2 {
+	if n := len(h.Threads().List()); n != 2 {
 		t.Errorf("%d threads, want the 2 that were there", n)
 	}
 	if notes, err := h.Notes().List("main"); err != nil || len(notes) != 0 {

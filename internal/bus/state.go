@@ -11,7 +11,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // DefaultDir is where state files and the sockets live for the environment env. ORCHESTRATOR_STATE_DIR overrides it.
@@ -31,26 +31,26 @@ func stateFile(dir, name string) string {
 }
 
 // WriteState saves rec.
-func WriteState(dir string, rec session.Record) error {
+func WriteState(dir string, rec thread.Record) error {
 	data, err := json.Marshal(rec)
 	if err != nil {
 		return fmt.Errorf("encoding state: %w", err)
 	}
-	return atomicfile.Write(stateFile(dir, rec.Session), data, 0o600)
+	return atomicfile.Write(stateFile(dir, rec.Thread), data, 0o600)
 }
 
 // ReadState returns the saved record, or the zero record when there is none.
-func ReadState(dir, name string) (session.Record, error) {
+func ReadState(dir, name string) (thread.Record, error) {
 	data, err := os.ReadFile(stateFile(dir, name))
 	if errors.Is(err, fs.ErrNotExist) {
-		return session.Record{}, nil
+		return thread.Record{}, nil
 	}
 	if err != nil {
-		return session.Record{}, fmt.Errorf("reading state of %s: %w", name, err)
+		return thread.Record{}, fmt.Errorf("reading state of %s: %w", name, err)
 	}
-	var rec session.Record
+	var rec thread.Record
 	if err := json.Unmarshal(data, &rec); err != nil {
-		return session.Record{}, fmt.Errorf("decoding state of %s: %w", name, err)
+		return thread.Record{}, fmt.Errorf("decoding state of %s: %w", name, err)
 	}
 	return rec, nil
 }
@@ -62,10 +62,10 @@ func RemoveState(dir, name string) error {
 	return nil
 }
 
-// ReadAll returns every saved record by session name, but those skip says to leave unread. skip may be nil.
+// ReadAll returns every saved record by thread name, but those skip says to leave unread. skip may be nil.
 // Unreadable files are skipped.
-func ReadAll(dir string, skip func(name string, info fs.FileInfo) bool) map[string]session.Record {
-	out := map[string]session.Record{}
+func ReadAll(dir string, skip func(name string, info fs.FileInfo) bool) map[string]thread.Record {
+	out := map[string]thread.Record{}
 	root := filepath.Join(dir, "sessions")
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") {
@@ -82,9 +82,9 @@ func ReadAll(dir string, skip func(name string, info fs.FileInfo) bool) map[stri
 		if err != nil {
 			return nil
 		}
-		var rec session.Record
-		if json.Unmarshal(data, &rec) == nil && rec.Session != "" {
-			out[rec.Session] = rec
+		var rec thread.Record
+		if json.Unmarshal(data, &rec) == nil && rec.Thread != "" {
+			out[rec.Thread] = rec
 		}
 		return nil
 	})

@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	ctl "github.com/nednella/orchestrator/internal/control"
 )
 
-// PRs polls the pull requests of the sessions.
+// PRs polls the pull requests of the threads.
 type PRs interface{ RefreshPRs() }
 
 // Commands answers the orchestrator commands that work on issues.
@@ -22,14 +22,14 @@ type Commands struct {
 
 func NewCommands(i *Issues, prs PRs) *Commands { return &Commands{issues: i, prs: prs} }
 
-// Issue starts a session for each issue number given, wakes its settled one, or finds the one already running. A
-// prompt is the asking session's handover; it reaches a session that starts or wakes, not one already running. A thread
+// Issue starts a thread for each issue number given, wakes its settled one, or finds the one already running. A
+// prompt is the asking thread's handover; it reaches a thread that starts or wakes, not one already running. A thread
 // that is not Full access cannot start or wake one that is.
 func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	if len(req.Args) == 0 {
 		return "", errors.New("issue needs a number")
 	}
-	proj, ok := c.issues.sessions.ProjectByKey(req.Project)
+	proj, ok := c.issues.threads.ProjectByKey(req.Project)
 	if !ok {
 		return "", fmt.Errorf("no project %q", req.Project)
 	}
@@ -40,17 +40,17 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 			failed = append(failed, fmt.Sprintf("%s (not a number)", arg))
 			continue
 		}
-		s, did, err := c.issues.Start(ctx, proj, n, "", req.Opts["prompt"], sessions.StartOptions{Asker: req.Session})
+		s, did, err := c.issues.Start(ctx, proj, n, "", req.Opts["prompt"], threads.StartOptions{Asker: req.Thread})
 		switch {
 		case err != nil:
 			failed = append(failed, fmt.Sprintf("#%d (%v)", n, err))
-		case did == sessions.Woken && req.Opts["prompt"] != "":
+		case did == threads.Woken && req.Opts["prompt"] != "":
 			woken = append(woken, fmt.Sprintf("#%d (%d, with the prompt)", n, s.N))
-		case did == sessions.Woken:
+		case did == threads.Woken:
 			woken = append(woken, fmt.Sprintf("#%d (%d)", n, s.N))
-		case did == sessions.Kept && req.Opts["prompt"] != "":
+		case did == threads.Kept && req.Opts["prompt"] != "":
 			running = append(running, fmt.Sprintf("#%d (%d, the prompt was not given to it)", n, s.N))
-		case did == sessions.Kept:
+		case did == threads.Kept:
 			running = append(running, fmt.Sprintf("#%d (%d)", n, s.N))
 		default:
 			started = append(started, fmt.Sprintf("#%d (%d)", n, s.N))
@@ -58,9 +58,9 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 	}
 	var parts []string
 	if len(started) > 0 {
-		noun := "sessions"
+		noun := "threads"
 		if len(started) == 1 {
-			noun = "session"
+			noun = "thread"
 		}
 		parts = append(parts, fmt.Sprintf("started %d %s: %s", len(started), noun, strings.Join(started, ", ")))
 	}
@@ -82,7 +82,7 @@ func (c *Commands) Issue(ctx context.Context, req ctl.Request) (string, error) {
 
 // Refresh reads the issues and the pull requests afresh.
 func (c *Commands) Refresh(ctx context.Context, req ctl.Request) (string, error) {
-	proj, ok := c.issues.sessions.ProjectByKey(req.Project)
+	proj, ok := c.issues.threads.ProjectByKey(req.Project)
 	if !ok {
 		return "", fmt.Errorf("no project %q", req.Project)
 	}

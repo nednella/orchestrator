@@ -17,11 +17,11 @@ var onePixelPNG, _ = base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAA
 func TestShowFilesEvidence(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
-	s, err := h.NewSession("show", "")
+	s, err := h.StartThread("show", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := h.Sessions().ShowRoots(s.ID)[0]
+	dir := h.Threads().ShowRoots(s.ID)[0]
 	img, note, bin := filepath.Join(dir, "shot.png"), filepath.Join(dir, "notes.txt"), filepath.Join(dir, "blob.bin")
 	for path, data := range map[string][]byte{img: onePixelPNG, note: []byte("all green\nno regressions\n"), bin: {0xff, 0xfe, 0x00}} {
 		if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -29,7 +29,7 @@ func TestShowFilesEvidence(t *testing.T) {
 		}
 	}
 	show := func(args []string, opts map[string]string) ctl.Response {
-		return h.AskTool(t, ctl.Request{Cmd: "show", Session: s.ID, Args: args, Opts: opts})
+		return h.AskTool(t, ctl.Request{Cmd: "show", Thread: s.ID, Args: args, Opts: opts})
 	}
 	before := h.Rec.CountAttention("evidence")
 	for _, resp := range []ctl.Response{show([]string{img}, map[string]string{"caption": "pixel"}), show([]string{note}, nil), show(nil, map[string]string{"text": "ran 40 tests", "caption": "tests"})} {
@@ -53,14 +53,14 @@ func TestShowFilesEvidence(t *testing.T) {
 	if got := h.Rec.CountAttention("evidence"); got != before+3 {
 		t.Errorf("attention events = %d, want %d", got, before+3)
 	}
-	if got, _ := h.Session(s.ID); got.Evidence != 3 {
-		t.Errorf("session evidence count = %d", got.Evidence)
+	if got, _ := h.Thread(s.ID); got.Evidence != 3 {
+		t.Errorf("thread evidence count = %d", got.Evidence)
 	}
 	for _, bad := range []ctl.Request{
-		{Cmd: "show", Session: s.ID, Args: []string{bin}},
-		{Cmd: "show", Session: s.ID, Args: []string{filepath.Join(dir, "missing.png")}},
-		{Cmd: "show", Session: s.ID, Args: []string{filepath.Join(t.TempDir(), "outside.png")}},
-		{Cmd: "show", Session: s.ID},
+		{Cmd: "show", Thread: s.ID, Args: []string{bin}},
+		{Cmd: "show", Thread: s.ID, Args: []string{filepath.Join(dir, "missing.png")}},
+		{Cmd: "show", Thread: s.ID, Args: []string{filepath.Join(t.TempDir(), "outside.png")}},
+		{Cmd: "show", Thread: s.ID},
 		{Cmd: "show", Args: []string{img}},
 	} {
 		if h.Ask(t, bad).OK {
@@ -90,9 +90,9 @@ func TestShowFilesEvidence(t *testing.T) {
 		if err := h.SettleThread(s.ID); err != nil {
 			t.Fatal(err)
 		}
-		eventually(t, "the session to show as settled", func() bool { got, _ := h.Session(s.ID); return got.State == "settled" })
+		eventually(t, "the thread to show as settled", func() bool { got, _ := h.Thread(s.ID); return got.State == "settled" })
 		if len(h.Evidence(s.ID)) != 2 {
-			t.Error("evidence went with the ended session")
+			t.Error("evidence went with the ended thread")
 		}
 		if err := h.DeleteThread(s.ID, false); err != nil {
 			t.Fatal(err)

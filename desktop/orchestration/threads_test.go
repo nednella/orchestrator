@@ -9,7 +9,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // useTool calls the orchestrator tool over the control socket as the thread whose token it sends, and reads its answer
@@ -69,17 +69,17 @@ func newFamily(t *testing.T) family {
 	t.Helper()
 	h := apptest.New(t)
 	f := family{h: h}
-	f.caller = threadWith(t, h, "Plan the release", session.Supervised).ID
-	f.reader = threadWith(t, h, "Read the code", session.Read).ID
+	f.caller = threadWith(t, h, "Plan the release", thread.Supervised).ID
+	f.reader = threadWith(t, h, "Read the code", thread.Read).ID
 	f.child = mustDelegate(t, h, f.caller, `{"task":"count the files","access":"read"}`).ID
 	// The child answers, its result goes to the caller, which answers that, and the child goes to sleep.
 	quiet(t, h, f.child)
-	apptest.Eventually(t, "the caller idle", func() bool { return row(t, h, f.caller).State == session.Idle })
-	f.settled = threadWith(t, h, "Done already", session.Supervised).ID
+	apptest.Eventually(t, "the caller idle", func() bool { return row(t, h, f.caller).State == thread.Idle })
+	f.settled = threadWith(t, h, "Done already", thread.Supervised).ID
 	if err := h.SettleThread(f.settled); err != nil {
 		t.Fatal(err)
 	}
-	f.deleted = threadWith(t, h, "Gone", session.Supervised).ID
+	f.deleted = threadWith(t, h, "Gone", thread.Supervised).ID
 	if err := h.DeleteThread(f.deleted, false); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func newFamily(t *testing.T) family {
 	if _, err := h.SwitchProject(f.otherName); err != nil {
 		t.Fatal(err)
 	}
-	f.other = threadWith(t, h, "Elsewhere", session.Read).ID
+	f.other = threadWith(t, h, "Elsewhere", thread.Read).ID
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}

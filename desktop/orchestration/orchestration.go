@@ -11,20 +11,20 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/chat"
 	"github.com/nednella/orchestrator/desktop/control"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	ctl "github.com/nednella/orchestrator/internal/control"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // Threads is what the tools use of the threads.
 type Threads interface {
-	CreateChild(ctx context.Context, o sessions.ChildOptions) (sessions.Session, error)
-	AccessOf(id string) session.Access
-	ChatOf(id string) (sessions.Chat, error)
-	List() []sessions.Session
-	Projects() []sessions.Project
+	CreateChild(ctx context.Context, o threads.ChildOptions) (threads.Thread, error)
+	AccessOf(id string) thread.Access
+	ChatOf(id string) (threads.Chat, error)
+	List() []threads.Thread
+	Projects() []threads.Project
 	Title(id string) string
-	Tell(id string, m sessions.Told) (string, error)
+	Tell(id string, m threads.Told) (string, error)
 	Descendants(id string) []string
 	ParentOf(id string) string
 	SideChat(id string) bool
@@ -60,7 +60,7 @@ type Commands struct {
 
 // NewCommands answers the orchestrator tools as the threads s, and gives each child's result to its parent until the context
 // ctx gives ends.
-func NewCommands(s *sessions.Sessions, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
+func NewCommands(s *threads.Threads, chats *chat.Chats, r *control.Router, ctx func() context.Context) *Commands {
 	c := &Commands{threads: s, chats: chats, router: r, waiting: map[waitOn]held{}, given: map[waitOn]givenBy{}, ctx: ctx, retryFirst: defaultRetryFirst, reporting: map[string]bool{}, reportNext: map[string]report{}}
 	c.tools = map[string]tool{"delegate": c.delegate, "threads": c.list, "read": c.read, "send": c.send, "wait": c.wait, "stop": c.stop}
 	for name := range agentTools() {

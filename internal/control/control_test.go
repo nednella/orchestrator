@@ -25,7 +25,7 @@ func TestCallAndListen(t *testing.T) {
 	srv, err := Listen(socket, func(ctx context.Context, req Request) Response {
 		switch req.Cmd {
 		case "echo":
-			return Response{OK: true, Out: strings.Join(req.Args, " ") + "|" + req.Opts["k"] + "|" + req.Session}
+			return Response{OK: true, Out: strings.Join(req.Args, " ") + "|" + req.Opts["k"] + "|" + req.Thread}
 		case "slow":
 			<-ctx.Done()
 			return Response{Error: "timed out"}
@@ -42,7 +42,7 @@ func TestCallAndListen(t *testing.T) {
 		req  Request
 		want Response
 	}{
-		{"echo", Request{Cmd: "echo", Args: []string{"a", "b"}, Opts: map[string]string{"k": "v"}, Session: "p/1"}, Response{OK: true, Out: "a b|v|p/1"}},
+		{"echo", Request{Cmd: "echo", Args: []string{"a", "b"}, Opts: map[string]string{"k": "v"}, Thread: "p/1"}, Response{OK: true, Out: "a b|v|p/1"}},
 		{"unknown", Request{Cmd: "nope"}, Response{Error: "unknown command"}},
 		{"deadline", Request{Cmd: "slow", TimeoutMs: 100}, Response{Error: "timed out"}},
 	}

@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // DefaultWorktreeCommand makes a worktree on a new branch cut from the base.
@@ -31,26 +31,26 @@ func (p Project) RemoveWorktree() string { return cmp.Or(p.CleanupCommand, Defau
 
 // Project is the unit orchestrator is scoped to: a name and the folder agents start in.
 type Project struct {
-	Name               string    `yaml:"name"`
-	Dir                string    `yaml:"directory"`
-	QueueSections      []Section `yaml:"queue_sections,omitempty"`           // the groups of the queue, each with the actions that start a session
-	NoteSessionCommand string    `yaml:"note_session_command,omitempty"`     // typed into a session started from a note; {text} is the note, the note itself when unset
-	SessionPromptSend  string    `yaml:"session_prompt_send,omitempty"`      // auto (the default) sends what a session starts with at once; manual waits for Enter
-	Branch             string    `yaml:"session_branch_fallback,omitempty"`  // branch of an issue's work when the session reports none; {n} is the number
-	CleanupCommand     string    `yaml:"session_cleanup_command,omitempty"`  // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
-	WorktreeCommand    string    `yaml:"session_worktree_command,omitempty"` // shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir} and {base}
-	CleanupMode        Cleanup   `yaml:"session_cleanup_mode,omitempty"`     // whether the app cleans up by itself, per event
-	URL                string    `yaml:"browser_start_url,omitempty"`        // the page a session's browser opens first
-	Browser            *bool     `yaml:"browser_enabled,omitempty"`          // give sessions the browser and evidence commands; on unless false
-	Digest             string    `yaml:"digest_schedule,omitempty"`          // weekly (the default) or off
-	PRWatch            string    `yaml:"pr_watch_method,omitempty"`          // webhook or poll; unset tries the webhook and polls when it does not work
-	PRPoll             string    `yaml:"pr_poll_interval,omitempty"`         // how often to poll pull requests, "10s" by default
-	KeepAwake          *bool     `yaml:"keep_mac_awake,omitempty"`           // overrides the config's keep_mac_awake for this project
-	OnReview           string    `yaml:"pr_review_command,omitempty"`        // typed into a session whose PR got a review or comment; {n} is the PR number
-	ReviewDrafts       bool      `yaml:"pr_review_drafts,omitempty"`         // send pr_review_command while the PR is a draft too
-	OnChecks           string    `yaml:"pr_checks_command,omitempty"`        // typed into a session whose PR has failing checks; {n} is the PR number
-	OnConflict         string    `yaml:"pr_conflict_command,omitempty"`      // typed into a session whose PR conflicts with its base branch; {n} is the PR number
-	SetupDismissed     bool      `yaml:"setup_dismissed,omitempty"`          // the owner turned down the offer to set the project up
+	Name            string    `yaml:"name"`
+	Dir             string    `yaml:"directory"`
+	QueueSections   []Section `yaml:"queue_sections,omitempty"`           // the groups of the queue, each with the actions that start a thread
+	OnNote          string    `yaml:"note_session_command,omitempty"`     // typed into a thread started from a note; {text} is the note, the note itself when unset
+	Send            string    `yaml:"session_prompt_send,omitempty"`      // auto (the default) sends what a thread starts with at once; manual waits for Enter
+	Branch          string    `yaml:"session_branch_fallback,omitempty"`  // branch of an issue's work when the thread reports none; {n} is the number
+	CleanupCommand  string    `yaml:"session_cleanup_command,omitempty"`  // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
+	WorktreeCommand string    `yaml:"session_worktree_command,omitempty"` // shell command that makes the worktree of an issue thread; {branch}, {worktree}, {dir} and {base}
+	CleanupMode     Cleanup   `yaml:"session_cleanup_mode,omitempty"`     // whether the app cleans up by itself, per event
+	URL             string    `yaml:"browser_start_url,omitempty"`        // the page a thread's browser opens first
+	Browser         *bool     `yaml:"browser_enabled,omitempty"`          // give threads the browser and evidence commands; on unless false
+	Digest          string    `yaml:"digest_schedule,omitempty"`          // weekly (the default) or off
+	PRWatch         string    `yaml:"pr_watch_method,omitempty"`          // webhook or poll; unset tries the webhook and polls when it does not work
+	PRPoll          string    `yaml:"pr_poll_interval,omitempty"`         // how often to poll pull requests, "10s" by default
+	KeepAwake       *bool     `yaml:"keep_mac_awake,omitempty"`           // overrides the config's keep_mac_awake for this project
+	OnReview        string    `yaml:"pr_review_command,omitempty"`        // typed into a thread whose PR got a review or comment; {n} is the PR number
+	ReviewDrafts    bool      `yaml:"pr_review_drafts,omitempty"`         // send pr_review_command while the PR is a draft too
+	OnChecks        string    `yaml:"pr_checks_command,omitempty"`        // typed into a thread whose PR has failing checks; {n} is the PR number
+	OnConflict      string    `yaml:"pr_conflict_command,omitempty"`      // typed into a thread whose PR conflicts with its base branch; {n} is the PR number
+	SetupDismissed  bool      `yaml:"setup_dismissed,omitempty"`          // the owner turned down the offer to set the project up
 }
 
 // Present says whether the project's folder exists on this machine.
@@ -61,17 +61,17 @@ func (p Project) Present() bool {
 
 // Config is the optional ~/.config/orchestrator/config.yaml.
 type Config struct {
-	DataDir      string         `yaml:"data_dir,omitempty"`          // where notes, stats and digests live; may sit in a synced folder
-	ProjectsDir  string         `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
-	KeepAwake    *bool          `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a session works; on unless false
-	Theme        string         `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
-	ThemeDark    string         `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default)
-	ThemeLight   string         `yaml:"app_theme_light,omitempty"`   // the light theme: light (default)
-	TextScale    float64        `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
-	EditorApp    string         `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
-	ThreadPlace  string         `yaml:"new_thread_place,omitempty"`  // where a new thread with no issue starts: worktree or project; unset is worktree
-	ThreadAccess session.Access `yaml:"new_thread_access,omitempty"` // the access a new thread starts with: read, supervised or full; unset is supervised
-	Projects     []Project      `yaml:"projects"`
+	DataDir      string        `yaml:"data_dir,omitempty"`          // where notes, stats and digests live; may sit in a synced folder
+	ProjectsDir  string        `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
+	KeepAwake    *bool         `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a thread works; on unless false
+	Theme        string        `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
+	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default)
+	ThemeLight   string        `yaml:"app_theme_light,omitempty"`   // the light theme: light (default)
+	TextScale    float64       `yaml:"app_text_scale,omitempty"`    // size of the app's text, between MinTextScale and MaxTextScale; unset is 1
+	EditorApp    string        `yaml:"editor_app,omitempty"`        // the macOS app that opens a thread's folder; unset is DefaultEditorApp
+	ThreadPlace  string        `yaml:"new_thread_place,omitempty"`  // where a new thread with no issue starts: worktree or project; unset is worktree
+	ThreadAccess thread.Access `yaml:"new_thread_access,omitempty"` // the access a new thread starts with: read, supervised or full; unset is supervised
+	Projects     []Project     `yaml:"projects"`
 }
 
 // ThreadPlaces are the values of Config.ThreadPlace: a new worktree, or the project folder on its current branch.
@@ -185,7 +185,7 @@ func Load(path string) (Config, error) {
 	if err := CheckThreadPlace(cfg.ThreadPlace); err != nil {
 		return Config{}, fmt.Errorf("%s: new_thread_place: %w", path, err)
 	}
-	if _, err := session.ParseAccess(string(cfg.ThreadAccess)); err != nil {
+	if _, err := thread.ParseAccess(string(cfg.ThreadAccess)); err != nil {
 		return Config{}, fmt.Errorf("%s: new_thread_access: %w", path, err)
 	}
 	for i, p := range cfg.Projects {
@@ -436,7 +436,7 @@ func editInPlace(seq *yaml.Node, p Project) int {
 	entry := seq.Content[i]
 	keys := len(entry.Content)
 	syncCleanup(entry, p.CleanupMode)
-	syncScalar(entry, "session_prompt_send", p.SessionPromptSend, nil)
+	syncScalar(entry, "session_prompt_send", p.Send, nil)
 	syncScalar(entry, "browser_enabled", formatBool(p.Browser), nil)
 	syncScalar(entry, "digest_schedule", p.Digest, nil)
 	syncScalar(entry, "session_branch_fallback", p.Branch, nil)

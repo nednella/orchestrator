@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestIssueCommand(t *testing.T) {
@@ -25,8 +25,8 @@ func TestIssueCommand(t *testing.T) {
 		want string
 		fail bool
 	}{
-		{"two issues", []string{"7", "#8"}, "started 2 sessions: #7 (1), #8 (2)", false},
-		{"one running one new", []string{"7", "11"}, "started 1 session: #11 (3); already running: #7 (1)", false},
+		{"two issues", []string{"7", "#8"}, "started 2 threads: #7 (1), #8 (2)", false},
+		{"one running one new", []string{"7", "11"}, "started 1 thread: #11 (3); already running: #7 (1)", false},
 		{"some fail", []string{"x", "999", "8"}, "already running: #8 (2); failed: x (not a number), #999 (issue #999 is not open in this project)", false},
 		{"all fail", []string{"x"}, "failed: x (not a number)", true},
 		{"none", nil, "issue needs a number", true},
@@ -48,9 +48,9 @@ func TestIssueCommandHandsThePromptOver(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
 	}
-	list := h.Sessions().List()
+	list := h.Threads().List()
 	if len(list) != 1 || list[0].Issue != 7 {
-		t.Fatalf("sessions = %+v, want one for #7", list)
+		t.Fatalf("threads = %+v, want one for #7", list)
 	}
 	if args := argsOf(t, h.ClaudeDir(), list[0].ID); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
 		t.Errorf("the system prompt lacks the handover:\n%s", args)
@@ -69,7 +69,7 @@ func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
 	}
-	old := h.Sessions().List()[0]
+	old := h.Threads().List()[0]
 	argsOf(t, h.ClaudeDir(), old.ID)
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[],"updatedAt":"2026-10-01T12:00:00Z"}]`)
 	h.RefreshPRs()
@@ -81,7 +81,7 @@ func TestWokenThreadGetsTheHandoverAgain(t *testing.T) {
 	}
 	h.GH.SetPR(`[{"number":12,"url":"https://github.com/acme/widgets/pull/12","state":"OPEN","isDraft":false,"statusCheckRollup":[],"comments":[],"reviews":[{"id":"x"}],"updatedAt":"2026-10-01T12:00:00Z"}]`)
 	h.RefreshPRs()
-	eventually(t, "the thread woken for the review", func() bool { got, _ := h.Session(old.ID); return got.State != "settled" })
+	eventually(t, "the thread woken for the review", func() bool { got, _ := h.Thread(old.ID); return got.State != "settled" })
 	if args := argsOf(t, h.ClaudeDir(), old.ID); !strings.Contains(args, prompts.Handover("the patch is in /tmp/x")) {
 		t.Errorf("the woken thread's system prompt lacks the handover:\n%s", args)
 	}
@@ -93,7 +93,7 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": "the patch is in /tmp/x"}}); !resp.OK {
 		t.Fatalf("issue 7 = %+v", resp)
 	}
-	old := h.Sessions().List()[0]
+	old := h.Threads().List()[0]
 	argsOf(t, h.ClaudeDir(), old.ID)
 	if err := h.SettleThread(old.ID); err != nil {
 		t.Fatal(err)
@@ -106,8 +106,8 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 	if !resp.OK || resp.Out != "woke the sleeping: #7 (1, with the prompt)" {
 		t.Errorf("issue 7 on a settled thread = %+v", resp)
 	}
-	if list := h.Sessions().List(); len(list) != 1 || list[0].ID != old.ID || list[0].State == "settled" {
-		t.Errorf("sessions = %+v, want %s woken", list, old.ID)
+	if list := h.Threads().List(); len(list) != 1 || list[0].ID != old.ID || list[0].State == "settled" {
+		t.Errorf("threads = %+v, want %s woken", list, old.ID)
 	}
 	args := argsOf(t, h.ClaudeDir(), old.ID)
 	if !strings.Contains(args, prompts.Handover("now see /tmp/y")) || strings.Contains(args, "/tmp/x") {
@@ -124,14 +124,14 @@ func TestIssueCommandWakesTheSettledThreadWithTheNewHandover(t *testing.T) {
 	})
 }
 
-func TestLongestPromptStartsTheSession(t *testing.T) {
+func TestLongestPromptStartsTheThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	handover := strings.Repeat(`it's "quoted" $HOME \ `, 6<<10)[:6<<10] // the most orchestrator issue --prompt takes
 	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Args: []string{"7"}, Opts: map[string]string{"prompt": handover}}); !resp.OK {
 		t.Fatalf("issue 7 with the longest prompt = %+v", resp)
 	}
-	if args := argsOf(t, h.ClaudeDir(), h.Sessions().List()[0].ID); !strings.Contains(args, strings.TrimSpace(handover)) {
+	if args := argsOf(t, h.ClaudeDir(), h.Threads().List()[0].ID); !strings.Contains(args, strings.TrimSpace(handover)) {
 		t.Error("the system prompt lacks the handover")
 	}
 }
@@ -161,12 +161,12 @@ const fullActionQueue = `    queue_sections:
 func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		asker         session.Access
-		full, regular session.Access // what issue 7, whose action is Full, and issue 11, whose action is Supervised, get
+		asker         thread.Access
+		full, regular thread.Access // what issue 7, whose action is Full, and issue 11, whose action is Supervised, get
 	}{
-		{session.Read, session.Read, session.Read},
-		{session.Supervised, session.Supervised, session.Supervised},
-		{session.Full, session.Full, session.Supervised},
+		{thread.Read, thread.Read, thread.Read},
+		{thread.Supervised, thread.Supervised, thread.Supervised},
+		{thread.Full, thread.Full, thread.Supervised},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.asker), func(t *testing.T) {
@@ -175,16 +175,16 @@ func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			for issue, want := range map[string]session.Access{"7": tt.full, "11": tt.regular} {
-				if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: asker.ID, Args: []string{issue}}); !resp.OK {
+			for issue, want := range map[string]thread.Access{"7": tt.full, "11": tt.regular} {
+				if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: asker.ID, Args: []string{issue}}); !resp.OK {
 					t.Fatalf("issue %s from a %s thread = %+v", issue, tt.asker, resp)
 				}
 				n, _ := strconv.Atoi(issue)
-				i := slices.IndexFunc(h.Sessions().List(), func(s sessions.Session) bool { return s.Issue == n })
+				i := slices.IndexFunc(h.Threads().List(), func(s threads.Thread) bool { return s.Issue == n })
 				if i < 0 {
 					t.Fatalf("issue %s started no thread", issue)
 				}
-				if got := h.Sessions().List()[i].Access; got != want {
+				if got := h.Threads().List()[i].Access; got != want {
 					t.Errorf("issue %s from a %s thread: access %q, want %q", issue, tt.asker, got, want)
 				}
 			}
@@ -195,15 +195,15 @@ func TestIssueCommandGivesTheLowerOfTheActionsAndTheThreadsAccess(t *testing.T) 
 func TestIssueCommandRefusesAnAskerThatIsNotARunningThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
-	for from, asker := range map[string]string{"a session that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"} {
+	for from, asker := range map[string]string{"an id that is not a thread": "garbage", "a thread that is gone": "main/abcdefgh"} {
 		for _, issue := range []string{"7", "11"} {
-			resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: asker, Args: []string{issue}})
+			resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: asker, Args: []string{issue}})
 			if resp.OK || !strings.Contains(resp.Error, "Only a running thread can start an issue's thread") {
 				t.Errorf("issue %s from %s = %+v", issue, from, resp)
 			}
 		}
 	}
-	if list := h.Sessions().List(); len(list) != 0 {
+	if list := h.Threads().List(); len(list) != 0 {
 		t.Errorf("a refused asker started %+v", list)
 	}
 }
@@ -211,7 +211,7 @@ func TestIssueCommandRefusesAnAskerThatIsNotARunningThread(t *testing.T) {
 func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Queue: fullActionQueue})
-	supervised, err := h.NewSession("supervised", "")
+	supervised, err := h.StartThread("supervised", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,22 +223,22 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 	refused := func(what string) {
 		t.Helper()
 		for from, asker := range askers {
-			resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: asker, Args: []string{"7"}})
+			resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: asker, Args: []string{"7"}})
 			if resp.OK || !strings.Contains(resp.Error, "A thread that is not Full access cannot start one that is") {
 				t.Errorf("issue 7 %s from %s = %+v", what, from, resp)
 			}
 		}
 	}
-	issueThread := func() (sessions.Session, bool) {
-		for _, s := range h.Sessions().List() {
+	issueThread := func() (threads.Thread, bool) {
+		for _, s := range h.Threads().List() {
 			if s.Issue == 7 {
 				return s, true
 			}
 		}
-		return sessions.Session{}, false
+		return threads.Thread{}, false
 	}
 
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: read.ID, Args: []string{"11"}}); !resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: read.ID, Args: []string{"11"}}); !resp.OK {
 		t.Errorf("issue 11, a Supervised action, from a Read thread = %+v", resp)
 	}
 
@@ -246,23 +246,23 @@ func TestIssueCommandRefusesWakingAFullThreadFromOneThatIsNot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: owner.ID, Args: []string{"7"}}); !resp.OK {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: owner.ID, Args: []string{"7"}}); !resp.OK {
 		t.Fatalf("issue 7 from a Full thread = %+v", resp)
 	}
 	full, ok := issueThread()
-	if !ok || full.Access != session.Full {
+	if !ok || full.Access != thread.Full {
 		t.Fatalf("issue 7 from a Full thread started %+v", full)
 	}
 	if err := h.SettleThread(full.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the Full thread settled", func() bool { s, _ := h.Session(full.ID); return s.State == session.Settled })
+	eventually(t, "the Full thread settled", func() bool { s, _ := h.Thread(full.ID); return s.State == thread.Settled })
 
 	refused("with a settled Full thread")
-	if s, _ := h.Session(full.ID); s.State != session.Settled {
+	if s, _ := h.Thread(full.ID); s.State != thread.Settled {
 		t.Errorf("a thread that is not Full woke the Full thread: %+v", s)
 	}
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: owner.ID, Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: owner.ID, Args: []string{"7"}}); !resp.OK || !strings.HasPrefix(resp.Out, "woke the sleeping: #7") {
 		t.Errorf("issue 7 from a Full thread on the settled Full thread = %+v", resp)
 	}
 }
@@ -277,14 +277,14 @@ func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
 	if _, err := h.SwitchProject("main"); err != nil {
 		t.Fatal(err)
 	}
-	here, err := h.NewSession("here", "")
+	here, err := h.StartThread("here", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.SwitchProject(other); err != nil {
 		t.Fatal(err)
 	}
-	there, err := h.NewSession("there", "")
+	there, err := h.StartThread("there", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,17 +299,17 @@ func TestIssueAndRefreshWorkInTheCallersProject(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: c.id, Args: []string{c.issue}}); !resp.OK {
+			if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: c.id, Args: []string{c.issue}}); !resp.OK {
 				t.Errorf("issue %s from %s = %+v", c.issue, c.id, resp)
 			}
-			if resp := h.AskTool(t, ctl.Request{Cmd: "refresh", Session: c.id}); !resp.OK {
+			if resp := h.AskTool(t, ctl.Request{Cmd: "refresh", Thread: c.id}); !resp.OK {
 				t.Errorf("refresh from %s = %+v", c.id, resp)
 			}
 		}()
 	}
 	wg.Wait()
 	projectOf := map[int]string{}
-	for _, s := range h.Sessions().List() {
+	for _, s := range h.Threads().List() {
 		if s.Issue > 0 {
 			projectOf[s.Issue] = s.Project
 		}
@@ -329,27 +329,27 @@ func TestIssueCommandRefusesWakingAThreadWithMoreAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	supervised, err := h.NewSession("supervised", "")
+	supervised, err := h.StartThread("supervised", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	asleep, err := h.StartIssue(11)
-	if err != nil || asleep.Access != session.Supervised {
+	if err != nil || asleep.Access != thread.Supervised {
 		t.Fatalf("issue 11 started %+v, %v", asleep, err)
 	}
 	if err := h.SettleThread(asleep.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: read.ID, Args: []string{"11"}, Opts: map[string]string{"prompt": "do it my way"}})
+	resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: read.ID, Args: []string{"11"}, Opts: map[string]string{"prompt": "do it my way"}})
 	if resp.OK || !strings.Contains(resp.Error, "A thread with read access cannot wake a thread with supervised access") {
 		t.Fatalf("issue 11 from a Read thread = %+v", resp)
 	}
-	if got, _ := h.Session(asleep.ID); got.State != "settled" {
+	if got, _ := h.Thread(asleep.ID); got.State != "settled" {
 		t.Errorf("the thread of #11 is %q after the refusal, want settled", got.State)
 	}
 
-	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Session: supervised.ID, Args: []string{"11"}}); !resp.OK || !strings.Contains(resp.Out, "woke the sleeping") {
+	if resp := h.AskTool(t, ctl.Request{Cmd: "issue", Thread: supervised.ID, Args: []string{"11"}}); !resp.OK || !strings.Contains(resp.Out, "woke the sleeping") {
 		t.Errorf("issue 11 from a Supervised thread = %+v", resp)
 	}
 }

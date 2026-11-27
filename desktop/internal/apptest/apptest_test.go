@@ -9,12 +9,12 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
 
-// defaultSockets are the tmux sockets that hold the owner's live sessions, under the names of this app and of its
+// defaultSockets are the tmux sockets that hold the owner's live threads, under the names of this app and of its
 // predecessor.
 var defaultSockets = []string{"orchestrator", "agentos"}
 
@@ -37,12 +37,12 @@ func TestTheHarnessNeverUsesADefaultSocket(t *testing.T) {
 			if got != h.Socket || got == "" || strings.Contains(strings.Join(defaultSockets, " "), got) {
 				t.Errorf("the app's socket = %q, the harness's = %q; want one private name", got, h.Socket)
 			}
-			s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
+			s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if err := exec.Command("tmux", "-L", h.Socket, "has-session", "-t", "="+s.ID).Run(); err != nil {
-				t.Errorf("the session is not on the harness's socket: %v", err)
+				t.Errorf("the thread is not on the harness's socket: %v", err)
 			}
 		})
 	}
@@ -68,11 +68,11 @@ func TestHarnessesInOneProcessShareNothing(t *testing.T) {
 			t.Errorf("%s: %q and %q; want two names of their own", tt.name, tt.a, tt.b)
 		}
 	}
-	sa, err := a.NewSession("a", "")
+	sa, err := a.StartThread("a", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb, err := b.NewSession("b", "")
+	sb, err := b.StartThread("b", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestRestartKeepsTheHarnessIsolation(t *testing.T) {
 func TestObserveWaitsForTheStartOfTheHost(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	s, err := h.NewSession("work", "")
+	s, err := h.StartThread("work", "")
 	if err != nil {
 		t.Fatal(err)
 	}

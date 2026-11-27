@@ -42,18 +42,18 @@ jobs:
       ORCHESTRATOR_BROWSER: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
     strategy:
       fail-fast: false
-      # sessions and browser take most of the time, so each gets a runner of its own;
+      # threads and browser take most of the time, so each gets a runner of its own;
       # issues, projects and notes come next, so they share one.
       matrix:
         include:
-          - name: sessions
-            packages: ./desktop/sessions
+          - name: threads
+            packages: ./desktop/threads
           - name: browser
             packages: ./desktop/browser
           - name: issues, projects, notes
             packages: ./desktop/issues ./desktop/projects ./desktop/notes
           - name: other
-            packages: $(go list -tags stub ./... | grep -vE '/desktop/(sessions|browser|issues|projects|notes)$')
+            packages: $(go list -tags stub ./... | grep -vE '/desktop/(threads|browser|issues|projects|notes)$')
             vet: true
     steps:
       - uses: actions/checkout@v4

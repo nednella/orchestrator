@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/host"
@@ -51,8 +51,8 @@ func (c *Commands) send(_ context.Context, caller string, req ctl.Request) (stri
 	}
 	ch, err := c.threads.ChatOf(in.Thread)
 	settled := err == nil && !ch.Live
-	text := sessions.FromApp(prompts.FromThread(c.threads.Title(caller), caller, in.Text))
-	id, err := c.threads.Tell(in.Thread, sessions.Told{From: caller, Text: text, Body: in.Text, Steer: in.Steer, Ranked: true})
+	text := threads.FromApp(prompts.FromThread(c.threads.Title(caller), caller, in.Text))
+	id, err := c.threads.Tell(in.Thread, threads.Told{From: caller, Text: text, Body: in.Text, Steer: in.Steer, Ranked: true})
 	if err != nil {
 		return "", err
 	}

@@ -17,20 +17,20 @@ import (
 
 const maxTextCard = 64 << 10
 
-// Asker checks which session a command comes from.
+// Asker checks which thread a command comes from.
 type Asker interface {
-	AskerSession(req ctl.Request) (string, error)
+	AskerThread(req ctl.Request) (string, error)
 }
 
-// Roots names the folders a session may file evidence from.
+// Roots names the folders a thread may file evidence from.
 type Roots interface {
 	ShowRoots(id string) []string
 }
 
-// Changes is told when a session's evidence changed.
+// Changes is told when a thread's evidence changed.
 type Changes struct {
 	Emit  func(event string, payload any)
-	Touch func() // the session list shows the evidence count
+	Touch func() // the thread list shows the evidence count
 }
 
 // Service is bound to the front end.
@@ -41,10 +41,10 @@ type Service struct {
 
 func NewService(s *Store, c Changes) *Service { return &Service{store: s, changes: c} }
 
-// Evidence is the session's evidence, oldest first.
+// Evidence is the thread's evidence, oldest first.
 func (s *Service) Evidence(id string) []Evidence { return s.store.List(id) }
 
-// DeleteEvidence removes one item of a session's evidence.
+// DeleteEvidence removes one item of a thread's evidence.
 func (s *Service) DeleteEvidence(id, evidenceID string) error {
 	err := s.store.Delete(id, evidenceID)
 	if err == nil {
@@ -53,7 +53,7 @@ func (s *Service) DeleteEvidence(id, evidenceID string) error {
 	return err
 }
 
-// Changed tells the front end that a session's evidence changed; an agent's new evidence also raises the session.
+// Changed tells the front end that a thread's evidence changed; an agent's new evidence also raises the thread.
 func (c Changes) Changed(store *Store, id string, byAgent bool) {
 	c.Emit("evidence", map[string]any{"id": id, "items": store.List(id)})
 	if byAgent {
@@ -75,9 +75,9 @@ func NewCommands(s *Store, a Asker, r Roots, c Changes) *Commands {
 	return &Commands{store: s, asker: a, roots: r, changes: c}
 }
 
-// Show files a picture, a text file or some words as the session's evidence.
+// Show files a picture, a text file or some words as the thread's evidence.
 func (c *Commands) Show(_ context.Context, req ctl.Request) (string, error) {
-	id, err := c.asker.AskerSession(req)
+	id, err := c.asker.AskerThread(req)
 	if err != nil {
 		return "", err
 	}

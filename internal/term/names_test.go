@@ -5,17 +5,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestTmuxTagsCarryTheNewName(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()
-	name := session.Name{Project: "demo", Token: "a1"}
+	name := thread.Name{Project: "demo", Token: "a1"}
 	if err := tmux.NewSession(ctx, name, "title", t.TempDir(), nil, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := tmux.SetAccess(ctx, name, session.Read); err != nil {
+	if err := tmux.SetAccess(ctx, name, thread.Read); err != nil {
 		t.Fatal(err)
 	}
 	out, err := tmux.run(ctx, "show-options", "-t", target(name))

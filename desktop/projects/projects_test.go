@@ -9,7 +9,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/app"
 	"github.com/nednella/orchestrator/desktop/projects"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/project"
 )
@@ -75,14 +75,14 @@ func TestProjects(t *testing.T) {
 		if _, err := h.SwitchProject("main"); err != nil {
 			t.Fatal(err)
 		}
-		a, err := h.NewSession("a", "")
+		a, err := h.StartThread("a", "")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := h.SwitchProject("other"); err != nil {
 			t.Fatal(err)
 		}
-		b, err := h.NewSession("b", "")
+		b, err := h.StartThread("b", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,10 +90,10 @@ func TestProjects(t *testing.T) {
 		h.Observe(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
 		counts := func() string {
 			var out []string
-			list, _ := h.Rec.Last("projects").([]sessions.Project)
+			list, _ := h.Rec.Last("projects").([]threads.Project)
 			for _, p := range list {
-				if p.Sessions > 0 {
-					out = append(out, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Sessions))
+				if p.Threads > 0 {
+					out = append(out, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Threads))
 				}
 			}
 			return strings.Join(out, " ")
@@ -101,8 +101,8 @@ func TestProjects(t *testing.T) {
 		eventually(t, "counts across projects", func() bool { return counts() == "main:1/0/1 other:0/1/1" })
 		var viaSnapshot []string
 		for _, p := range h.Snapshot().Projects {
-			if p.Sessions > 0 {
-				viaSnapshot = append(viaSnapshot, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Sessions))
+			if p.Threads > 0 {
+				viaSnapshot = append(viaSnapshot, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Threads))
 			}
 		}
 		if got := strings.Join(viaSnapshot, " "); got != "main:1/0/1 other:0/1/1" {

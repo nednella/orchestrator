@@ -24,15 +24,15 @@ import (
 	"github.com/nednella/orchestrator/desktop/notes"
 	"github.com/nednella/orchestrator/desktop/orchestration"
 	"github.com/nednella/orchestrator/desktop/projects"
-	"github.com/nednella/orchestrator/desktop/sessions"
 	"github.com/nednella/orchestrator/desktop/settings"
 	"github.com/nednella/orchestrator/desktop/stats"
 	"github.com/nednella/orchestrator/desktop/terminal"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/desktop/update"
 	"github.com/nednella/orchestrator/internal/agent"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/host"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	upd "github.com/nednella/orchestrator/internal/update"
 )
 
@@ -52,7 +52,7 @@ const defaultConfigTick = 2 * time.Second
 type App struct {
 	ctx      atomic.Pointer[context.Context]
 	cancel   atomic.Pointer[context.CancelFunc]
-	sessions *sessions.Sessions
+	threads  *threads.Threads
 	chats    *chat.Chats
 	terms    *terminal.Terms
 	notes    *notes.Notes
@@ -93,7 +93,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	browsers := browser.New(c.LocalDir, h.Emit, c.Env)
 	terms := terminal.New(c.Tmux, h.Emit, h.Clipboard)
 	stayAwake := awake.New(h.Awake, h.Emit)
-	sess := sessions.New(sessions.Options{
+	sess := threads.New(threads.Options{
 		Tmux: c.Tmux, Agents: c.Agents, Binary: c.Binary, StateDir: c.StateDir, LocalDir: c.LocalDir, Projects: c.Registry,
 		Current: c.Project, Emit: h.Emit, Run: runner, Stream: stream, Activity: events, CloseTerminal: terms.Close, Evidence: proofs, Browsers: browsers,
 		Awake: stayAwake, KeepAwake: c.Registry.KeepAwake, EditorApp: c.Registry.EditorApp, ThreadPlace: c.Registry.ThreadPlace,
@@ -105,7 +105,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	sess.Hook(iss.CachedRepo, iss.Emit, iss)
 	a.registry, a.issues, a.warn, a.agents = c.Registry, iss, warn.New(h.Emit), c.Agents
 	store := notes.New(c.DataDir)
-	a.sessions, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
+	a.threads, a.chats, a.terms, a.notes, a.evidence, a.events, a.stateDir = sess, chats, terms, store, proofs, events, c.StateDir
 	a.browsers, a.awake = browsers, stayAwake
 	a.media = media.Handler(c.DataDir, c.LocalDir)
 	assets := http.NewServeMux()
@@ -113,7 +113,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 	assets.Handle(terminal.Prefix, terms.Handler())
 	a.assets = assets
 	browsers.Hook(func(id string) string {
-		name, err := session.ParseName(id)
+		name, err := thread.ParseName(id)
 		if err != nil {
 			return ""
 		}
@@ -124,7 +124,7 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		}
 		return ""
 	}, func(id string) string {
-		name, err := session.ParseName(id)
+		name, err := thread.ParseName(id)
 		if err != nil {
 			return id
 		}
@@ -146,15 +146,15 @@ func New(c Config, h Host, runner run.Runner, stream run.Streamer, claude run.En
 		machine = sync.OnceValue(h.Machine)
 	}
 	proj := projects.NewService(c.Registry, sess, store, iss, runner, c.StateDir, h.PickDir, machine, ctx)
-	sessSvc := sessions.NewService(sess, ctx)
+	sessSvc := threads.NewService(sess, ctx)
 	a.router = control.New(sess)
 	a.tools = orchestration.NewCommands(sess, chats, a.router, ctx)
 	chats.OnTurnEnd(a.tools.ChildTurnEnded)
 	sess.OnSlept(a.tools.ChildSlept)
 	sess.OnDelete(a.tools.ThreadDeleted)
 	changes := evidence.Changes{Emit: h.Emit, Touch: sess.Touch}
-	sc, ic := sessions.NewCommands(sess), issues.NewCommands(iss, sessSvc)
-	// Only a tool call reaches these, as the thread its token names (orchestration.agentRequest sets the session and
+	sc, ic := threads.NewCommands(sess), issues.NewCommands(iss, sessSvc)
+	// Only a tool call reaches these, as the thread its token names (orchestration.agentRequest sets the thread and
 	// the project from it); the socket answers none of them.
 	a.handle(map[string]control.Handler{
 		"track":   sc.Track,
@@ -195,14 +195,14 @@ func (a *App) handle(handlers map[string]control.Handler) {
 // Services are the structs to bind to the front end.
 func (a *App) Services() []any { return a.services }
 
-// Start begins following the sessions; it runs until ctx ends or Stop.
+// Start begins following the threads; it runs until ctx ends or Stop.
 func (a *App) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	a.ctx.Store(&ctx)
 	a.cancel.Store(&cancel)
 	a.browsers.StopStrays()
 	go a.events.Load()
-	if err := a.sessions.Run(ctx); err != nil {
+	if err := a.threads.Run(ctx); err != nil {
 		return err
 	}
 	a.chats.Start(ctx)
@@ -225,7 +225,7 @@ func (a *App) followConfig(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		if err := a.agents.CheckInstalled(a.sessions.Provider()); err != nil {
+		if err := a.agents.CheckInstalled(a.threads.Provider()); err != nil {
 			a.warn.Report("agent", err.Error())
 		} else {
 			a.warn.Clear("agent")
@@ -237,7 +237,7 @@ func (a *App) followConfig(ctx context.Context) {
 		}
 		a.warn.Clear("config")
 		if changed {
-			a.issues.Reload(ctx, a.sessions.Current())
+			a.issues.Reload(ctx, a.threads.Current())
 		}
 	}
 }
@@ -251,7 +251,7 @@ func (a *App) Stop() {
 	a.terms.CloseAll()
 	a.browsers.CloseAll()
 	a.awake.Hold(false)
-	a.sessions.Stop()
+	a.threads.Stop()
 	a.router.Close()
 }
 
@@ -270,8 +270,8 @@ func (a *App) Answer(ctx context.Context, req ctl.Request) ctl.Response {
 // Tools returns the commands that answer the orchestrator tools threads call, for tests and wiring.
 func (a *App) Tools() *orchestration.Commands { return a.tools }
 
-// Sessions is the session list, for tests and wiring.
-func (a *App) Sessions() *sessions.Sessions { return a.sessions }
+// Threads is the thread list, for tests and wiring.
+func (a *App) Threads() *threads.Threads { return a.threads }
 
 // Notes is the notes store, for tests.
 func (a *App) Notes() *notes.Notes { return a.notes }

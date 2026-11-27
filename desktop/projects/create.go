@@ -113,7 +113,7 @@ type FolderListing struct {
 func (s *Service) resolveFolder(path string) string {
 	path = strings.TrimSpace(path)
 	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") || path == "." || path == ".." {
-		path = filepath.Join(s.sessions.Current().Dir, path)
+		path = filepath.Join(s.threads.Current().Dir, path)
 	}
 	path = project.ExpandHome(path)
 	if abs, err := filepath.Abs(path); err == nil {

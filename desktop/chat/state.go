@@ -6,7 +6,7 @@ import (
 	"time"
 
 	chatlog "github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // turn is what stateEvent keeps of the events of a run before the one it reads: the tools called and not yet answered,
@@ -37,20 +37,20 @@ func (t *turn) reset() {
 
 // stateEvent is the change of the thread's state that the logged event e makes, in the names of Claude's hooks. It
 // reports false for an event that changes none. A subagent's approval is not one: Background tells of those.
-func stateEvent(e chatlog.Event, t *turn) (session.Event, bool) {
-	ev := session.Event{At: time.UnixMilli(e.At), Seq: e.Seq}
+func stateEvent(e chatlog.Event, t *turn) (thread.Event, bool) {
+	ev := thread.Event{At: time.UnixMilli(e.At), Seq: e.Seq}
 	switch e.Kind {
 	case chatlog.KindStart:
 		t.reset()
 		ev.Name = "SessionStart"
 	case chatlog.KindInit:
-		ev.Name = session.Init
+		ev.Name = thread.Init
 		ev.Conversation, ev.Cwd, ev.Model = e.ID, e.Cwd, e.Model
 		ev.Transcript = t.transcript(e.Origin, e.ID)
 	case chatlog.KindUser:
 		// A message that only denies an approval starts no turn.
 		if e.Parent != "" {
-			return session.Event{}, false
+			return thread.Event{}, false
 		}
 		ev.Name, ev.Detail = "UserPromptSubmit", oneLine(e.Text, 120)
 	case chatlog.KindToolUse:
@@ -63,7 +63,7 @@ func stateEvent(e chatlog.Event, t *turn) (session.Event, bool) {
 		ev.Name, ev.Tool, ev.Command, ev.Detail = "PostToolUse", c.tool, c.command, c.detail
 	case chatlog.KindApproval:
 		if e.Agent != "" {
-			return session.Event{}, false
+			return thread.Event{}, false
 		}
 		t.approvals[e.ID] = callOf(e.Tool, e.Input)
 		ev.Name, ev.NotificationType = "Notification", "permission_prompt"
@@ -74,22 +74,22 @@ func stateEvent(e chatlog.Event, t *turn) (session.Event, bool) {
 		c, ok := t.approvals[e.ID]
 		delete(t.approvals, e.ID)
 		if !ok || len(t.approvals) > 0 {
-			return session.Event{}, false
+			return thread.Event{}, false
 		}
 		ev.Name, ev.Tool, ev.Command, ev.Detail = "PreToolUse", c.tool, c.command, c.detail
 	case chatlog.KindCancel:
 		delete(t.approvals, e.ID)
-		return session.Event{}, false
+		return thread.Event{}, false
 	case chatlog.KindMessage:
 		if e.Agent == "" {
 			t.reply = e.Text
 		}
-		return session.Event{}, false
+		return thread.Event{}, false
 	case chatlog.KindTurnEnd:
 		reply := t.reply
 		t.reset()
 		if e.Error {
-			ev.Name = session.TurnError
+			ev.Name = thread.TurnError
 			break
 		}
 		ev.Name, ev.Detail, ev.Asks = "Stop", oneLine(reply, 120), asks(reply)
@@ -97,7 +97,7 @@ func stateEvent(e chatlog.Event, t *turn) (session.Event, bool) {
 		t.reset()
 		ev.Name = "SessionEnd"
 	default:
-		return session.Event{}, false
+		return thread.Event{}, false
 	}
 	return ev, true
 }

@@ -13,7 +13,7 @@ import (
 const (
 	// Prefix is where the pictures are served.
 	Prefix = "/media/"
-	// NotesFolder holds a project's note pictures, EvidenceFolder the pictures of its sessions' evidence and
+	// NotesFolder holds a project's note pictures, EvidenceFolder the pictures of its threads' evidence and
 	// ChatFolder the images sent in its threads.
 	NotesFolder    = "notes-media"
 	EvidenceFolder = "evidence"

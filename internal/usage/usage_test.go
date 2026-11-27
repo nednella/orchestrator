@@ -89,7 +89,7 @@ func TestReadSaysWhatTheAgentUsedLast(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cur != (Current{Model: "claude-fable-5-1", Effort: "medium"}) {
-		t.Errorf("current = %+v, want the newest line of the session's own transcript", cur)
+		t.Errorf("current = %+v, want the newest line of the thread's own transcript", cur)
 	}
 	if _, again, _ := c.Read(path, ""); again != cur {
 		t.Errorf("current after a read with nothing new = %+v, want %+v", again, cur)
@@ -132,7 +132,7 @@ func TestReadAddsSubagents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(parts) != 2 || parts[0].Subagent || !parts[1].Subagent || parts[1].Model != "claude-haiku-5-5" || parts[1].Input != 3 {
-		t.Errorf("parts = %+v, want the session's then the subagent's", parts)
+		t.Errorf("parts = %+v, want the thread's then the subagent's", parts)
 	}
 }
 

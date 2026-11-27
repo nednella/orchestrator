@@ -8,7 +8,7 @@ import (
 )
 
 func stateOf(h *apptest.Harness, id string) string {
-	s, _ := h.Session(id)
+	s, _ := h.Thread(id)
 	return string(s.State)
 }
 

@@ -1,4 +1,4 @@
-// Package issues reads a project's GitHub issues into queue sections and starts sessions for them.
+// Package issues reads a project's GitHub issues into queue sections and starts threads for them.
 package issues
 
 import (
@@ -16,46 +16,46 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/internal/scoped"
 	"github.com/nednella/orchestrator/desktop/internal/warn"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/util"
 )
 
-// Sessions is what the issues need of the session list.
-type Sessions interface {
+// Threads is what the issues need of the thread list.
+type Threads interface {
 	Current() project.Project
 	ProjectByKey(key string) (project.Project, bool)
-	IssueSessions() map[int]string
-	List() []sessions.Session
-	CreateIssue(proj project.Project, title, text string, issue int, action project.Action, labels []string, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error)
+	IssueThreads() map[int]string
+	List() []threads.Thread
+	CreateIssue(proj project.Project, title, text string, issue int, action project.Action, labels []string, handover string, o threads.StartOptions) (view threads.Thread, did threads.IssueStart, err error)
 }
 
 // Issue is a GitHub issue placed in a section of the queue.
 type Issue struct {
-	Number    int            `json:"number"`
-	Title     string         `json:"title"`
-	Type      string         `json:"type"`
-	Section   string         `json:"section"`
-	Actions   []string       `json:"actions"` // names of what can start a session for it, the default first
-	Access    session.Access `json:"access"`  // the access the default action starts its thread with
-	Moves     []string       `json:"moves"`   // names of the sections it can be dropped into, in queue order
-	URL       string         `json:"url"`
-	SessionID string         `json:"sessionId"`
-	Author    string         `json:"author"`
-	Assignees []string       `json:"assignees"`
-	Labels    []string       `json:"labels"`
-	Ignored   []string       `json:"ignored"` // why each model: and effort: label claude rejects is skipped
-	CreatedAt int64          `json:"createdAt"`
-	UpdatedAt int64          `json:"updatedAt"`
+	Number    int           `json:"number"`
+	Title     string        `json:"title"`
+	Type      string        `json:"type"`
+	Section   string        `json:"section"`
+	Actions   []string      `json:"actions"` // names of what can start a thread for it, the default first
+	Access    thread.Access `json:"access"`  // the access the default action starts its thread with
+	Moves     []string      `json:"moves"`   // names of the sections it can be dropped into, in queue order
+	URL       string        `json:"url"`
+	ThreadID  string        `json:"sessionId"`
+	Author    string        `json:"author"`
+	Assignees []string      `json:"assignees"`
+	Labels    []string      `json:"labels"`
+	Ignored   []string      `json:"ignored"` // why each model: and effort: label claude rejects is skipped
+	CreatedAt int64         `json:"createdAt"`
+	UpdatedAt int64         `json:"updatedAt"`
 }
 
 // Issues reads a project's open issues through the gh CLI and caches them per folder.
 type Issues struct {
-	run      run.Runner
-	sessions Sessions
-	emit     func(event string, payload any)
+	run     run.Runner
+	threads Threads
+	emit    func(event string, payload any)
 
 	warn *warn.Warnings
 
@@ -84,8 +84,8 @@ var ErrIssuesDisabled = errors.New("issues are disabled for this repo")
 const repoRetry = 30 * time.Second
 
 // New reads issues through run.
-func New(runner run.Runner, sessions Sessions, emit func(string, any)) *Issues {
-	return &Issues{run: runner, sessions: sessions, emit: emit, warn: warn.New(emit), repos: map[string]string{}, repoFailed: map[string]time.Time{}, lists: map[string][]Issue{}, moved: map[moveKey]relabel{}}
+func New(runner run.Runner, threads Threads, emit func(string, any)) *Issues {
+	return &Issues{run: runner, threads: threads, emit: emit, warn: warn.New(emit), repos: map[string]string{}, repoFailed: map[string]time.Time{}, lists: map[string][]Issue{}, moved: map[moveKey]relabel{}}
 }
 
 // Repo is "owner/name" of the folder's GitHub repository, or "" when it has none or gh cannot say.
@@ -264,22 +264,22 @@ func (i *Issues) CachedRepo(dir string) string {
 	return i.repos[dir]
 }
 
-// WithSessions fills in which live session each issue has.
-func (i *Issues) WithSessions(list []Issue) []Issue {
-	live := i.sessions.IssueSessions()
+// WithThreads fills in which live thread each issue has.
+func (i *Issues) WithThreads(list []Issue) []Issue {
+	live := i.threads.IssueThreads()
 	for k := range list {
-		list[k].SessionID = live[list[k].Number]
+		list[k].ThreadID = live[list[k].Number]
 	}
 	return list
 }
 
-// Emit sends the cached issues of the current project, when there are any, with their current sessions. emitFor does
+// Emit sends the cached issues of the current project, when there are any, with their current threads. emitFor does
 // it for any project; the window drops a list of a project it does not show.
-func (i *Issues) Emit() { i.emitFor(i.sessions.Current()) }
+func (i *Issues) Emit() { i.emitFor(i.threads.Current()) }
 
 func (i *Issues) emitFor(proj project.Project) {
 	if list, ok := i.Cached(proj.Dir); ok {
-		i.emit("issues", scoped.Of(proj.Key(), i.WithSessions(list)))
+		i.emit("issues", scoped.Of(proj.Key(), i.WithThreads(list)))
 	}
 }
 
@@ -290,16 +290,16 @@ func (i *Issues) Reload(ctx context.Context, proj project.Project) {
 	}
 }
 
-// Start opens a session for the issue with the action of its section that has the name given, or the
-// section's default action when action is "". An issue that already has a live session gets that session back
+// Start opens a thread for the issue with the action of its section that has the name given, or the
+// section's default action when action is "". An issue that already has a live thread gets that thread back
 // instead of a second agent, and one whose thread settled gets it woken, as did says. An issue not in the cached list
 // may be new: the list is read again once. A new thread runs where an issue thread does, in its own worktree.
-func (i *Issues) Start(ctx context.Context, proj project.Project, number int, action, handover string, o sessions.StartOptions) (view sessions.Session, did sessions.IssueStart, err error) {
+func (i *Issues) Start(ctx context.Context, proj project.Project, number int, action, handover string, o threads.StartOptions) (view threads.Thread, did threads.IssueStart, err error) {
 	o.Place = ""
 	for _, refresh := range []bool{false, true} {
 		list, err := i.List(ctx, proj, refresh)
 		if err != nil {
-			return sessions.Session{}, sessions.Kept, err
+			return threads.Thread{}, threads.Kept, err
 		}
 		at := slices.IndexFunc(list, func(is Issue) bool { return is.Number == number })
 		if at < 0 {
@@ -312,16 +312,16 @@ func (i *Issues) Start(ctx context.Context, proj project.Project, number int, ac
 		_, section := proj.Section(is.Labels)
 		act, ok := pickAction(section, action)
 		if !ok {
-			return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d has no action %q", number, action)
+			return threads.Thread{}, threads.Kept, fmt.Errorf("issue #%d has no action %q", number, action)
 		}
-		return i.sessions.CreateIssue(proj, fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
+		return i.threads.CreateIssue(proj, fmt.Sprintf("#%d %s", number, is.Title), act.Render(number, is.Title, proj.BranchFor(number)), number, act, is.Labels, handover, o)
 	}
-	return sessions.Session{}, sessions.Kept, fmt.Errorf("issue #%d is not open in this project", number)
+	return threads.Thread{}, threads.Kept, fmt.Errorf("issue #%d is not open in this project", number)
 }
 
 // Move relabels the issue on GitHub so that it falls in the section, then reads the queue again.
 func (i *Issues) Move(ctx context.Context, number int, section string) error {
-	proj := i.sessions.Current()
+	proj := i.threads.Current()
 	list, err := i.List(ctx, proj, false)
 	if err != nil {
 		return err
@@ -346,7 +346,7 @@ func (i *Issues) Move(ctx context.Context, number int, section string) error {
 
 // UndoMove reverses the last move of the issue, whatever the moves of its section now allow.
 func (i *Issues) UndoMove(ctx context.Context, number int) error {
-	proj := i.sessions.Current()
+	proj := i.threads.Current()
 	key := moveKey{proj.Dir, number}
 	i.mu.Lock()
 	last, ok := i.moved[key]

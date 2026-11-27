@@ -150,11 +150,11 @@ func TestNoteToIssueWithoutRepo(t *testing.T) {
 	}
 }
 
-func TestNoteToSession(t *testing.T) {
+func TestNoteToThread(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	n, _ := h.AddNote("remember this")
-	s, err := h.NoteToSession(n.ID)
+	s, err := h.NoteToThread(n.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,11 +168,11 @@ func TestNoteToSession(t *testing.T) {
 	})
 }
 
-func TestNoteToSessionKeepsLineBreaksUnsent(t *testing.T) {
+func TestNoteToThreadKeepsLineBreaksUnsent(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
 	n, _ := h.AddNote("first line\nsecond line")
-	s, err := h.NoteToSession(n.ID)
+	s, err := h.NoteToThread(n.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

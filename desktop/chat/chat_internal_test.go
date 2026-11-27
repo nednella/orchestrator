@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestToolSummaryMatchesPending(t *testing.T) {
@@ -78,25 +78,25 @@ func TestPendingInputIsCapped(t *testing.T) {
 
 // modeThread is a live thread whose AccessChanged calls are kept.
 type modeThread struct {
-	chat  sessions.Chat
+	chat  threads.Chat
 	modes chan string
 }
 
-func (m modeThread) ChatOf(string) (sessions.Chat, error)           { return m.chat, nil }
-func (m modeThread) Chats() []sessions.Chat                         { return []sessions.Chat{m.chat} }
-func (m modeThread) Observe(string, ...session.Event)               {}
-func (m modeThread) TranscriptPath(string, string) string           { return "" }
-func (m modeThread) BackgroundChanged(string, sessions.Background)  {}
-func (m modeThread) AccessChanged(_, mode string, _ bool)           { m.modes <- mode }
-func (m modeThread) FlagRefused(string)                             {}
-func (m modeThread) NextTurn(string)                                {}
-func (m modeThread) Wake(string) (sessions.Chat, error)             { return m.chat, nil }
-func (m modeThread) FilesRewind(string) (string, bool, string)      { return "", true, "" }
-func (m modeThread) Title(string) string                            { return "" }
-func (m modeThread) StartSideChat(string) (sessions.Session, error) { return sessions.Session{}, nil }
-func (m modeThread) DeleteSideChat(string, bool) error              { return nil }
-func (m modeThread) NameSideChat(string, string) error              { return nil }
-func (m modeThread) SideChatsOf(string) []string                    { return nil }
+func (m modeThread) ChatOf(string) (threads.Chat, error)          { return m.chat, nil }
+func (m modeThread) Chats() []threads.Chat                        { return []threads.Chat{m.chat} }
+func (m modeThread) Observe(string, ...thread.Event)              {}
+func (m modeThread) TranscriptPath(string, string) string         { return "" }
+func (m modeThread) BackgroundChanged(string, threads.Background) {}
+func (m modeThread) AccessChanged(_, mode string, _ bool)         { m.modes <- mode }
+func (m modeThread) FlagRefused(string)                           {}
+func (m modeThread) NextTurn(string)                              {}
+func (m modeThread) Wake(string) (threads.Chat, error)            { return m.chat, nil }
+func (m modeThread) FilesRewind(string) (string, bool, string)    { return "", true, "" }
+func (m modeThread) Title(string) string                          { return "" }
+func (m modeThread) StartSideChat(string) (threads.Thread, error) { return threads.Thread{}, nil }
+func (m modeThread) DeleteSideChat(string, bool) error            { return nil }
+func (m modeThread) NameSideChat(string, string) error            { return nil }
+func (m modeThread) SideChatsOf(string) []string                  { return nil }
 
 func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 	t.Parallel()
@@ -140,7 +140,7 @@ func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 					}
 				}()
 			}
-			thread := modeThread{chat: sessions.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}, modes: make(chan string, 4)}
+			thread := modeThread{chat: threads.Chat{ID: "main/abcdefgh", Project: "main", Log: logPath, Socket: socket, Live: true}, modes: make(chan string, 4)}
 			chats := New(thread, t.TempDir(), func(string, any) {})
 			chats.hostWait = 300 * time.Millisecond
 			ctx, cancel := context.WithCancel(context.Background())

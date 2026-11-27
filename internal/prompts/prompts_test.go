@@ -18,7 +18,7 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		hash string
 	}{
 		{"browser", Browser(), "eaa2c696c1572510d631edd9644c5635af7848e1f885bc230cfa1d8baeae1a21"},
-		{"session", Session(), "345bbda91f77a7f0892ef2163374417afeb217cd0a55f9d0082e17d2b9051117"},
+		{"base", Base(), "345bbda91f77a7f0892ef2163374417afeb217cd0a55f9d0082e17d2b9051117"},
 		{"thread", Thread(), "9537c98996d32f40f2b10c86bff1a096250bdb00b977424ae3431df5f18d9f22"},
 		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
@@ -223,7 +223,7 @@ func TestToolTextsNameTheTools(t *testing.T) {
 		name, text string
 		want       []string
 	}{
-		{"session", Session(), []string{"`note`", "`issue`", "`new_thread`", "`refresh`"}},
+		{"base", Base(), []string{"`note`", "`issue`", "`new_thread`", "`refresh`"}},
 		{"thread", Thread(), []string{"`issue`", "`note`", "`show`", "`track`", "`delegate`", "`wait`", "A child never gets more access than you have"}},
 		{"tool browser", Tool("browser"), []string{"`open`", "`screenshot`", "`close`", "--pin-tab", "dialog accept", "5 seconds"}},
 	} {

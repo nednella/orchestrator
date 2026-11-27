@@ -12,7 +12,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/limits"
 	"github.com/nednella/orchestrator/internal/host"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
@@ -35,11 +35,11 @@ func usageRequests(lines []string) (asks int, user bool) {
 func TestRefreshAsksALiveThread(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chat, err := h.Sessions().ChatOf(s.ID)
+	chat, err := h.Threads().ChatOf(s.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestRefreshAsksALiveThread(t *testing.T) {
 func TestARateLimitInATurnReachesTheLimits(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	s, err := h.Sessions().Create(h.Sessions().Current(), "work", "", false, 0, session.Supervised)
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestRefreshWithNoThreadProbes(t *testing.T) {
 	if !reflect.DeepEqual(got.Windows, standInWindows) || got.Error != "" {
 		t.Errorf("limits = %+v, want the stand-in's windows", got)
 	}
-	// The probe's claude runs with no thread, so its files have no session id in their names.
+	// The probe's claude runs with no thread, so its files have no thread id in their names.
 	want := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--strict-mcp-config", "--tools", "", "--setting-sources", "project,local"}
 	if args := h.Args(t, ""); !slices.Equal(args, want) {
 		t.Errorf("the probe ran claude %q, want %q", args, want)

@@ -64,7 +64,7 @@ func TestLoad(t *testing.T) {
 		{
 			name: "queue sections",
 			path: write("projects:\n  - name: api\n    directory: /srv/api\n    session_prompt_send: manual\n    queue_sections:\n      - {name: Ready, labels: [ready], actions: [{name: Work, command: \"/work {n}\", model: opus, effort: high}, {name: Plan, access: read}]}\n"),
-			want: Config{Projects: []Project{{Name: "api", Dir: "/srv/api", SessionPromptSend: "manual", QueueSections: []Section{{Name: "Ready", Labels: []string{"ready"}, Actions: []Action{{Name: "Work", Command: "/work {n}", Model: "opus", Effort: "high"}, {Name: "Plan", Access: "read"}}}}}}},
+			want: Config{Projects: []Project{{Name: "api", Dir: "/srv/api", Send: "manual", QueueSections: []Section{{Name: "Ready", Labels: []string{"ready"}, Actions: []Action{{Name: "Work", Command: "/work {n}", Model: "opus", Effort: "high"}, {Name: "Plan", Access: "read"}}}}}}},
 		},
 		{name: "section without a name", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{labels: [x]}]}\n"), wantErr: true},
 		{name: "two sections of a name", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: A}, {name: A}]}\n"), wantErr: true},
@@ -165,7 +165,7 @@ func TestLoadDataDir(t *testing.T) {
 func TestSaveRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "new", "config.yaml")
 	want := Config{Projects: []Project{
-		{Name: "a", Dir: "/srv/a", NoteSessionCommand: "/plan {text}", QueueSections: []Section{{Name: "Go", Labels: []string{"go"}, Actions: []Action{{Name: "Work", Command: "/x {n}"}}}}},
+		{Name: "a", Dir: "/srv/a", OnNote: "/plan {text}", QueueSections: []Section{{Name: "Go", Labels: []string{"go"}, Actions: []Action{{Name: "Work", Command: "/x {n}"}}}}},
 		{Name: "b", Dir: "/srv/b"},
 	}}
 	if err := Save(path, want); err != nil {

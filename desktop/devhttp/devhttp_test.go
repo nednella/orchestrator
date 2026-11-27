@@ -20,24 +20,24 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/app"
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/projects"
-	"github.com/nednella/orchestrator/desktop/sessions"
+	"github.com/nednella/orchestrator/desktop/threads"
 )
 
 func TestCallRunsABoundMethod(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
-	got, err := call(h.App.Services(), "sessions.Service", "NewThread", []byte(`["via call","","","",false,"supervised",""]`))
+	got, err := call(h.App.Services(), "threads.Service", "NewThread", []byte(`["via call","","","",false,"supervised",""]`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, ok := got.(sessions.Session)
+	s, ok := got.(threads.Thread)
 	if !ok || s.Title != "via call" {
 		t.Fatalf("result = %+v", got)
 	}
-	if got, err = call(h.App.Services(), "projects.Service", "Snapshot", []byte(`[]`)); err != nil || len(got.(projects.Snapshot).Sessions) != 1 {
+	if got, err = call(h.App.Services(), "projects.Service", "Snapshot", []byte(`[]`)); err != nil || len(got.(projects.Snapshot).Threads) != 1 {
 		t.Errorf("Snapshot = %+v, %v", got, err)
 	}
-	if got, err = call(h.App.Services(), "sessions.Service", "RenameSession", []byte(`["`+s.ID+`","renamed"]`)); err != nil || got != nil {
+	if got, err = call(h.App.Services(), "threads.Service", "RenameThread", []byte(`["`+s.ID+`","renamed"]`)); err != nil || got != nil {
 		t.Errorf("a method with no result gave %v, %v", got, err)
 	}
 }
@@ -46,11 +46,11 @@ func TestCallReportsProblems(t *testing.T) {
 	t.Parallel()
 	h := apptest.New(t)
 	for _, tt := range []struct{ method, body string }{
-		{"sessions.Service/NoSuchMethod", `[]`},
-		{"sessions.Service/NewThread", `["only one argument"]`},
-		{"sessions.Service/NewThread", `[1,2]`},
+		{"threads.Service/NoSuchMethod", `[]`},
+		{"threads.Service/NewThread", `["only one argument"]`},
+		{"threads.Service/NewThread", `[1,2]`},
 		{"projects.Service/Snapshot", `not json`},
-		{"sessions.Service/SettleThread", `["main/99"]`}, // the method itself fails
+		{"threads.Service/SettleThread", `["main/99"]`}, // the method itself fails
 		{"nothing.Service/Snapshot", `[]`},
 	} {
 		svc, method, _ := strings.Cut(tt.method, "/")
@@ -216,8 +216,8 @@ func TestBrowserModeServesTheAppAndTheShim(t *testing.T) {
 func TestTermStreamNeedsTheAppHeader(t *testing.T) {
 	t.Parallel()
 	_, base := serve(t, "SHELL=/bin/sh", "HOME="+t.TempDir())
-	var shell sessions.ShellInfo
-	callJSON(t, base, "sessions.Service/ShellNew", `[""]`, &shell)
+	var shell threads.ShellInfo
+	callJSON(t, base, "threads.Service/ShellNew", `[""]`, &shell)
 	callJSON(t, base, "terminal.Service/TermOpen", `["`+shell.ID+`",80,24]`, nil)
 
 	for _, tt := range []struct {

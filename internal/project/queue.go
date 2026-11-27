@@ -11,7 +11,7 @@ import (
 
 	"github.com/nednella/orchestrator/internal/agent"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 // DefaultPRPoll is how often pull requests are polled when pr_poll_interval is not set.
@@ -19,16 +19,16 @@ const DefaultPRPoll = 10 * time.Second
 
 // Action is a way to start a thread for an issue: a command to send, run with its own model, effort and access.
 type Action struct {
-	Name    string         `yaml:"name"`
-	Command string         `yaml:"command,omitempty"` // {n} is the issue number, {title} its title
-	Model   string         `yaml:"model,omitempty"`
-	Effort  string         `yaml:"effort,omitempty"`
-	Access  session.Access `yaml:"access,omitempty"` // Supervised unless set
-	Kind    string         `yaml:"kind,omitempty"`   // read only to refuse it: a config that sets it does not load
+	Name    string        `yaml:"name"`
+	Command string        `yaml:"command,omitempty"` // {n} is the issue number, {title} its title
+	Model   string        `yaml:"model,omitempty"`
+	Effort  string        `yaml:"effort,omitempty"`
+	Access  thread.Access `yaml:"access,omitempty"` // Supervised unless set
+	Kind    string        `yaml:"kind,omitempty"`   // read only to refuse it: a config that sets it does not load
 }
 
 // ThreadAccess is the access the action starts its thread with.
-func (a Action) ThreadAccess() session.Access { return cmp.Or(a.Access, session.Supervised) }
+func (a Action) ThreadAccess() thread.Access { return cmp.Or(a.Access, thread.Supervised) }
 
 // Section is a group of the queue. It takes the issues that have any of its labels, the issues that have
 // none when it names no labels, or every issue when its labels hold "*".
@@ -129,20 +129,20 @@ func (a Action) Render(number int, title, branch string) string {
 	return strings.NewReplacer("{n}", strconv.Itoa(number), "{title}", title, "{branch}", branch).Replace(a.Command)
 }
 
-// NoteCommand is what a session for a note types into the agent; the note itself unless the project sets
+// NoteCommand is what a thread for a note types into the agent; the note itself unless the project sets
 // note_session_command.
 func (p Project) NoteCommand(text string) string {
-	return strings.ReplaceAll(cmp.Or(p.NoteSessionCommand, "{text}"), "{text}", text)
+	return strings.ReplaceAll(cmp.Or(p.OnNote, "{text}"), "{text}", text)
 }
 
-// The values of Project.SessionPromptSend.
+// The values of Project.Send.
 const (
 	PromptAuto   = "auto"
 	PromptManual = "manual"
 )
 
-// SendsPrompt says whether the text a session is started with is sent at once, or waits for Enter.
-func (p Project) SendsPrompt() bool { return p.SessionPromptSend != PromptManual }
+// SendsPrompt says whether the text a thread is started with is sent at once, or waits for Enter.
+func (p Project) SendsPrompt() bool { return p.Send != PromptManual }
 
 // PromptSend is the project's prompt send mode, the default filled in.
 func (p Project) PromptSend() string {
@@ -154,8 +154,8 @@ func (p Project) PromptSend() string {
 
 // validateQueue checks the queue settings. An action's model and effort are checked by claude.
 func (p Project) validateQueue() error {
-	if p.SessionPromptSend != "" && p.SessionPromptSend != PromptAuto && p.SessionPromptSend != PromptManual {
-		return fmt.Errorf("session_prompt_send must be %s or %s, not %q", PromptAuto, PromptManual, p.SessionPromptSend)
+	if p.Send != "" && p.Send != PromptAuto && p.Send != PromptManual {
+		return fmt.Errorf("session_prompt_send must be %s or %s, not %q", PromptAuto, PromptManual, p.Send)
 	}
 	var sections []string
 	for i, s := range p.QueueSections {
@@ -188,7 +188,7 @@ func (p Project) validateQueue() error {
 			if a.Kind != "" {
 				return fmt.Errorf("queue_sections.%s.%s: kind is gone; use access: read for a read-only action", s.Name, a.Name)
 			}
-			if _, err := session.ParseAccess(string(a.Access)); err != nil {
+			if _, err := thread.ParseAccess(string(a.Access)); err != nil {
 				return fmt.Errorf("queue_sections.%s.%s: %w", s.Name, a.Name, err)
 			}
 		}
@@ -209,17 +209,17 @@ func (p Project) validateQueue() error {
 	return nil
 }
 
-// ReviewCommand is what a session whose PR got a review or a comment is sent, or "".
+// ReviewCommand is what a thread whose PR got a review or a comment is sent, or "".
 func (p Project) ReviewCommand(pr int) string {
 	return strings.ReplaceAll(p.OnReview, "{n}", strconv.Itoa(pr))
 }
 
-// ChecksCommand is what a session whose PR has failing checks is sent, or "".
+// ChecksCommand is what a thread whose PR has failing checks is sent, or "".
 func (p Project) ChecksCommand(pr int) string {
 	return strings.ReplaceAll(p.OnChecks, "{n}", strconv.Itoa(pr))
 }
 
-// ConflictCommand is what a session whose PR conflicts with its base branch is sent, or "".
+// ConflictCommand is what a thread whose PR conflicts with its base branch is sent, or "".
 func (p Project) ConflictCommand(pr int) string {
 	return strings.ReplaceAll(p.OnConflict, "{n}", strconv.Itoa(pr))
 }
@@ -229,7 +229,7 @@ func (p Project) BranchFor(number int) string {
 	return strings.ReplaceAll(cmp.Or(p.Branch, "issue-{n}"), "{n}", strconv.Itoa(number))
 }
 
-// Cleanup says, per event, whether the app cleans up after a session by itself. An empty
+// Cleanup says, per event, whether the app cleans up after a thread by itself. An empty
 // field takes the default: auto after a merge, manual after a close.
 type Cleanup struct {
 	Merge string `yaml:"merge,omitempty" json:"merge"`
@@ -274,10 +274,10 @@ func (c *Cleanup) Set(event, mode string) error {
 	return nil
 }
 
-// BrowserOn says whether sessions get the browser and evidence commands.
+// BrowserOn says whether threads get the browser and evidence commands.
 func (p Project) BrowserOn() bool { return p.Browser == nil || *p.Browser }
 
-// KeepsAwake says whether a working session of the project holds off idle sleep: the project's own
+// KeepsAwake says whether a working thread of the project holds off idle sleep: the project's own
 // setting, else the config's, else on.
 func (c Config) KeepsAwake(p Project) bool {
 	switch {

@@ -13,10 +13,10 @@ import (
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/environ"
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
-// findAgentBrowser returns the agent-browser that sessions drive their tab with: ORCHESTRATOR_AGENT_BROWSER, else the one
+// findAgentBrowser returns the agent-browser that threads drive their tab with: ORCHESTRATOR_AGENT_BROWSER, else the one
 // the app bundle carries beside this binary, else "".
 func findAgentBrowser(env []string) string {
 	if p := environ.Get(env, "ORCHESTRATOR_AGENT_BROWSER"); p != "" {
@@ -36,18 +36,18 @@ func findAgentBrowser(env []string) string {
 	return filepath.Clean(p)
 }
 
-// AgentReady says whether sessions can drive a tab of their own with agent-browser.
+// AgentReady says whether threads can drive a tab of their own with agent-browser.
 func (b *Browsers) AgentReady() bool { return b.Available() && b.agentBrowser != "" }
 
-// agentDir is where the sessions' agent-browser daemons keep their sockets and bindings, each as <token>.*. It is
+// agentDir is where the threads' agent-browser daemons keep their sockets and bindings, each as <token>.*. It is
 // short and the same for every project, because a socket path may not pass 103 bytes.
 func (b *Browsers) agentDir() string { return filepath.Join(b.dataDir, "agent-browser") }
 
-// AgentEnv is what the session's agent needs in its environment to drive its own tab of the project's browser with
-// agent-browser; tmpDir is the session's temp folder. It binds the session to no tab first, so a command before the
-// session's window exists fails rather than drive the tab of another session.
+// AgentEnv is what the thread's agent needs in its environment to drive its own tab of the project's browser with
+// agent-browser; tmpDir is the thread's temp folder. It binds the thread to no tab first, so a command before the
+// thread's window exists fails rather than drive the tab of another thread.
 func (b *Browsers) AgentEnv(id, tmpDir string) ([]string, error) {
-	name, err := session.ParseName(id)
+	name, err := thread.ParseName(id)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +79,11 @@ func (b *Browsers) AgentEnv(id, tmpDir string) ([]string, error) {
 	}, nil
 }
 
-// agentBinding is the file in which agent-browser's daemon keeps the tab a session drives,
+// agentBinding is the file in which agent-browser's daemon keeps the tab a thread drives,
 // <socket dir>/<session>.target (agent-browser 0.43.0). Pinned, the daemon stays on that tab and fails with tab_gone
 // when it is not there, rather than take another. It reads the file only when it attaches to the browser.
 //
-// orchestrator writes this file because agent-browser has no command that binds a session to a tab of a browser it shares
+// orchestrator writes this file because agent-browser has no command that binds a thread to a tab of a browser it shares
 // without bringing Chrome in front of the owner's windows: tab <id> does, and so does --pin-tab with no binding.
 type agentBinding struct {
 	TargetID string `json:"targetId"`
@@ -91,16 +91,16 @@ type agentBinding struct {
 	Pinned   bool   `json:"pinned"`
 }
 
-func (b *Browsers) writeBinding(name session.Name, targetID string) error {
+func (b *Browsers) writeBinding(name thread.Name, targetID string) error {
 	data, _ := json.Marshal(agentBinding{TargetID: targetID, Pinned: true})
 	return atomicfile.Write(filepath.Join(b.agentDir(), name.Token+".target"), data, 0o600)
 }
 
-// bindAgent points the session's agent-browser at the tab targetID, "" for none. It stops the session's daemon first,
-// since the daemon reads the binding only when it attaches; the agent's next command starts it again. A session that
+// bindAgent points the thread's agent-browser at the tab targetID, "" for none. It stops the thread's daemon first,
+// since the daemon reads the binding only when it attaches; the agent's next command starts it again. A thread that
 // never got agent-browser has nothing to bind.
 func (b *Browsers) bindAgent(ctx context.Context, id, targetID string) error {
-	name, ok := b.agentSession(id)
+	name, ok := b.agentThread(id)
 	if !ok {
 		return nil
 	}
@@ -110,18 +110,18 @@ func (b *Browsers) bindAgent(ctx context.Context, id, targetID string) error {
 	return b.writeBinding(name, targetID)
 }
 
-// agentSession is the session's name, when it has an agent-browser binding.
-func (b *Browsers) agentSession(id string) (session.Name, bool) {
-	name, err := session.ParseName(id)
+// agentThread is the thread's name, when it has an agent-browser binding.
+func (b *Browsers) agentThread(id string) (thread.Name, bool) {
+	name, err := thread.ParseName(id)
 	if err != nil || b.agentBrowser == "" {
-		return session.Name{}, false
+		return thread.Name{}, false
 	}
 	_, err = os.Stat(filepath.Join(b.agentDir(), name.Token+".target"))
 	return name, err == nil
 }
 
-// stopAgent stops the session's agent-browser daemon, which leaves its tab alone.
-func (b *Browsers) stopAgent(ctx context.Context, name session.Name) error {
+// stopAgent stops the thread's agent-browser daemon, which leaves its tab alone.
+func (b *Browsers) stopAgent(ctx context.Context, name thread.Name) error {
 	ctx, cancel := context.WithTimeout(ctx, stopLimit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, b.agentBrowser, "close")
@@ -132,10 +132,10 @@ func (b *Browsers) stopAgent(ctx context.Context, name session.Name) error {
 	return nil
 }
 
-// Forget closes the session's window and removes its agent-browser files: the session is gone.
+// Forget closes the thread's window and removes its agent-browser files: the thread is gone.
 func (b *Browsers) Forget(ctx context.Context, id string) {
 	b.Close(ctx, id)
-	name, ok := b.agentSession(id)
+	name, ok := b.agentThread(id)
 	if !ok {
 		return
 	}

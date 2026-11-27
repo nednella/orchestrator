@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/session"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 func TestSection(t *testing.T) {
@@ -56,12 +56,12 @@ func TestActionList(t *testing.T) {
 func TestActionAccess(t *testing.T) {
 	tests := []struct {
 		access string
-		want   session.Access
+		want   thread.Access
 	}{
-		{"", session.Supervised},
-		{"read", session.Read},
-		{"supervised", session.Supervised},
-		{"full", session.Full},
+		{"", thread.Supervised},
+		{"read", thread.Read},
+		{"supervised", thread.Supervised},
+		{"full", thread.Full},
 	}
 	for _, tt := range tests {
 		line := "{name: X}"
@@ -117,7 +117,7 @@ func TestNoteCommand(t *testing.T) {
 	if got := (Project{}).NoteCommand("buy milk"); got != "buy milk" {
 		t.Errorf("default = %q", got)
 	}
-	if got := (Project{NoteSessionCommand: "/plan {text}"}).NoteCommand("x"); got != "/plan x" {
+	if got := (Project{OnNote: "/plan {text}"}).NoteCommand("x"); got != "/plan x" {
 		t.Errorf("template = %q", got)
 	}
 }
@@ -127,7 +127,7 @@ func TestSendsPrompt(t *testing.T) {
 		mode string
 		want bool
 	}{{"", true}, {"auto", true}, {"manual", false}} {
-		if got := (Project{SessionPromptSend: tt.mode}).SendsPrompt(); got != tt.want {
+		if got := (Project{Send: tt.mode}).SendsPrompt(); got != tt.want {
 			t.Errorf("SendsPrompt(%q) = %v, want %v", tt.mode, got, tt.want)
 		}
 	}

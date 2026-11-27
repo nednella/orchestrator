@@ -1,0 +1,53 @@
+package threads_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/nednella/orchestrator/internal/thread"
+)
+
+func TestActivityIsCounted(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	s, err := h.Threads().Create(h.Threads().Current(), "#4 work", "", false, 4, thread.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"a"}`)
+	time.Sleep(50 * time.Millisecond)
+	h.Observe(t, s.ID, "Stop", `{}`)
+	h.Observe(t, s.ID, "UserPromptSubmit", `{"prompt":"b"}`)
+	time.Sleep(50 * time.Millisecond)
+	h.Observe(t, s.ID, "Stop", `{}`)
+
+	eventually(t, "two prompts and the work between them", func() bool {
+		led, err := h.Ledger(30, "")
+		return err == nil && led.Totals.Prompts == 2 && led.Totals.WorkMs >= 100
+	})
+	led, err := h.Ledger(30, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if led.Totals.Threads != 1 || led.Totals.IssueThreads != 1 || led.Projects[0].Project != "main" || led.PerDay[29].Prompts != 2 {
+		t.Errorf("totals = %+v, today = %+v", led.Totals, led.PerDay[29])
+	}
+
+	second := h.Restart(t)
+	time.Sleep(200 * time.Millisecond)
+	again, err := second.Ledger(30, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Totals.Prompts != 2 || again.Totals.Threads != 1 {
+		t.Errorf("after a restart, totals = %+v: a replayed record or a known thread was counted", again.Totals)
+	}
+
+	if err := second.Threads().Settle(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the thread's length", func() bool {
+		led, err := second.Ledger(30, "")
+		return err == nil && led.Totals.AvgThreadMs >= 100
+	})
+}

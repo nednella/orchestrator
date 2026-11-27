@@ -18,8 +18,8 @@ import (
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/project"
-	"github.com/nednella/orchestrator/internal/session"
 	"github.com/nednella/orchestrator/internal/term"
+	"github.com/nednella/orchestrator/internal/thread"
 )
 
 const defaultTmuxSocket = "orchestrator"
@@ -126,7 +126,7 @@ func machineID(stateDir string) (string, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("reading machine id: %w", err)
 	}
-	id := session.NewToken()
+	id := thread.NewToken()
 	if err := atomicfile.Write(path, []byte(id+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("saving machine id: %w", err)
 	}
