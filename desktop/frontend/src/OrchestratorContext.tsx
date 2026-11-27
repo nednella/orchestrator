@@ -7,25 +7,15 @@ import { back, current, forward, goneAgent, goneFrom, NO_HISTORY, projectOf, pru
 import type { History, Known, View } from './navHistory'
 import { forgetPanel } from './panelStore'
 import { shellsChanged } from './projectTerminals'
-import type { PanelViewId } from './panelTabs'
 import { EMPTY_DRAFT, draftOf, fromMarkdown, readDraft, saveDraft } from './composerMarkdown'
 import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
+import { addToast } from './toastPile'
+import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
-
-export type Toast = {
-  key: number
-  tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'done' | 'success' | 'warning'
-  text: string
-  detail?: string
-  threadId?: string
-  view?: PanelViewId
-  sticky?: boolean
-  action?: { label: string; run(): void }
-}
 
 export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'changelog' | null
 export type FocusTarget = 'thread' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
@@ -170,7 +160,7 @@ type OrchestratorActions = {
   // onFocus calls listener with each focus target asked for, at the ask, until the returned function is called.
   onFocus(listener: (target: FocusTarget) => void): () => void
   report(run: () => unknown): void
-  pushToast(toast: Omit<Toast, 'key'>): number
+  pushToast(toast: ToastInput): number
   dismissToast(key: number): void
 }
 
@@ -230,7 +220,7 @@ export function useLatestOrchestrator(): () => Orchestrator {
   return useStore().get
 }
 
-const cleanupToast = (entry: Cleanup): Omit<Toast, 'key'> => {
+const cleanupToast = (entry: Cleanup): ToastInput => {
   if (!entry.merged) return { tone: 'info', text: `${entry.issue > 0 ? `#${entry.issue}` : entry.threadTitle} cleaned up` }
   return {
     tone: 'done',
@@ -327,7 +317,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const projectRef = useRef(project)
   const lastSelected = useRef(new Map<string, string>())
   const toastKey = useRef(0)
-  const toastTimers = useRef(new Map<number, number>())
+  const toastsRef = useRef<Toast[]>([])
   const projectEpoch = useRef(0)
   const lastCleanupToast = useRef(0)
   const warningToasts = useRef(new Map<Warning['source'], { message: string; key: number }>())
@@ -407,24 +397,15 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   }, [])
 
   const dismissToast = useCallback((key: number) => {
-    clearTimeout(toastTimers.current.get(key))
-    toastTimers.current.delete(key)
-    setToasts((list) => list.filter((t) => t.key !== key))
+    toastsRef.current = toastsRef.current.filter((t) => t.key !== key)
+    setToasts(toastsRef.current)
   }, [])
 
-  const pushToast = useCallback(
-    (toast: Omit<Toast, 'key'>) => {
-      const key = ++toastKey.current
-      setToasts((list) => [...list.slice(-2), { ...toast, key }])
-      if (!toast.sticky) toastTimers.current.set(key, window.setTimeout(() => dismissToast(key), toast.tone === 'error' || toast.tone === 'done' ? 8000 : 5000))
-      return key
-    },
-    [dismissToast],
-  )
-
-  useEffect(() => {
-    const timers = toastTimers.current
-    return () => timers.forEach((timer) => clearTimeout(timer))
+  const pushToast = useCallback((toast: ToastInput) => {
+    const added = addToast(toastsRef.current, toast, ++toastKey.current)
+    toastsRef.current = added.list
+    setToasts(added.list)
+    return added.key
   }, [])
 
   const publishNewProject = useCallback(
