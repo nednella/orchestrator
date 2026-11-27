@@ -1,6 +1,7 @@
+import { FileDiff, TriangleAlert, Upload } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { Thread } from '../types'
 import { Chip } from './Chip'
-import type { IconName } from './Icon'
 
 type WorkChipsProps = { thread: Thread }
 
@@ -9,9 +10,9 @@ export function WorkChips({ thread }: WorkChipsProps) {
   if (!git) return null
   const merged = pr?.state === 'merged'
   const tone = merged ? 'bad' : thread.state === 'working' ? 'dim' : 'warn'
-  const items: { n: number; icon: IconName; label: string }[] = [
-    merged ? { n: git.notInMain, icon: 'alert', label: 'not in main' } : { n: git.unpushed, icon: 'repo-push', label: 'unpushed' },
-    { n: git.uncommitted, icon: 'file-diff', label: 'uncommitted' },
+  const items: { n: number; icon: LucideIcon; label: string }[] = [
+    merged ? { n: git.notInMain, icon: TriangleAlert, label: 'not in main' } : { n: git.unpushed, icon: Upload, label: 'unpushed' },
+    { n: git.uncommitted, icon: FileDiff, label: 'uncommitted' },
   ]
 
   return items

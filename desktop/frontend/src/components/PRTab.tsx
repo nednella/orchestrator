@@ -1,26 +1,20 @@
+import { ArrowLeft, CircleCheck, GitBranch, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, TriangleAlert } from 'lucide-react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
-import type { PR, Thread } from '../types'
+import type { Thread } from '../types'
 import { BranchBar } from './BranchBar'
 import { Chip } from './Chip'
-import { Icon } from './Icon'
 import { PRTiles } from './PRTiles'
 import { Ref } from './Ref'
 import { WorkChips } from './WorkChips'
 
 type PRTabProps = { thread: Thread }
 
-const PILL: Record<
-  PR['state'],
-  {
-    icon: 'git-pull-request' | 'git-pull-request-draft' | 'git-merge' | 'git-pull-request-closed'
-    label: string
-  }
-> = {
-  open: { icon: 'git-pull-request', label: 'Open' },
-  draft: { icon: 'git-pull-request-draft', label: 'Draft' },
-  merged: { icon: 'git-merge', label: 'Merged' },
-  closed: { icon: 'git-pull-request-closed', label: 'Closed' },
+const PILL = {
+  open: { icon: GitPullRequestArrow, label: 'Open' },
+  draft: { icon: GitPullRequestDraft, label: 'Draft' },
+  merged: { icon: GitMerge, label: 'Merged' },
+  closed: { icon: GitPullRequestClosed, label: 'Closed' },
 }
 
 function isReady({ pr, git }: Thread): boolean {
@@ -39,6 +33,7 @@ export function PRTab({ thread }: PRTabProps) {
   const { closeOverlay } = useLayout()
   const { pr, git } = thread
   const live = pr?.state === 'draft' || pr?.state === 'open'
+  const pill = PILL[pr?.state ?? 'open']
   const action = pr && thread.prAttention ? PR_ACTION[thread.prAttention] : null
 
   if (!pr && !git) {
@@ -59,10 +54,10 @@ export function PRTab({ thread }: PRTabProps) {
                 className="inline-flex h-[22px] flex-none items-center gap-1 rounded-full pr-2 pl-1.5 text-label font-medium text-white"
                 style={{ background: `var(--pr-${pr.state})` }}
               >
-                <Icon name={PILL[pr.state].icon} size={14} />
-                {PILL[pr.state].label}
+                <pill.icon size={14} aria-hidden="true" />
+                {pill.label}
               </span>
-              <span className="mono text-small text-dim">#{pr.number}</span>
+              <span className="text-small text-dim tabular-nums">#{pr.number}</span>
             </div>
             <button
               className="text-left text-title font-semibold text-ink hover:underline"
@@ -74,14 +69,16 @@ export function PRTab({ thread }: PRTabProps) {
           </>
         ) : (
           <div className="flex items-center gap-2">
-            <Icon name="git-branch" size={14} />
+            <GitBranch size={14} aria-hidden="true" />
             <span className="text-soft">No pull request yet</span>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-label text-dim">
           {git && (
             <span className="inline-flex min-w-0 items-center gap-1">
-              <Ref>{git.base}</Ref>←<Ref>{thread.branch}</Ref>
+              <Ref>{git.base}</Ref>
+              <ArrowLeft size={12} aria-hidden="true" />
+              <Ref>{thread.branch}</Ref>
             </span>
           )}
           {git && (
@@ -92,13 +89,13 @@ export function PRTab({ thread }: PRTabProps) {
         </div>
         <div className="flex flex-wrap gap-1.5 empty:hidden">
           {live && pr.conflicting && (
-            <Chip tone="bad" icon="alert">
+            <Chip tone="bad" icon={TriangleAlert}>
               Conflicts
             </Chip>
           )}
           {isReady(thread) && (
-            <Chip tone="ok" icon="check-circle-fill" title="Ready to merge. This is not an approval.">
-              ready
+            <Chip tone="ok" icon={CircleCheck} title="Ready to merge. This is not an approval.">
+              Ready
             </Chip>
           )}
           <WorkChips thread={thread} />
@@ -106,12 +103,12 @@ export function PRTab({ thread }: PRTabProps) {
       </div>
       {pr && <PRTiles pr={pr} />}
       {pr && (
-        <p className="border-t border-line px-4 py-3 text-small text-soft">
+        <p className="border-t border-(--border-rule) px-4 py-3 text-small text-soft">
           {pr.comments === 0 ? 'No review comments.' : `${pr.comments} review ${pr.comments === 1 ? 'comment' : 'comments'}, ${pr.newComments} new.`}
         </p>
       )}
       {pr && action && (
-        <div className="border-t border-line px-4 py-3">
+        <div className="border-t border-(--border-rule) px-4 py-3">
           <button
             className="btn btn-accent"
             onClick={() => {

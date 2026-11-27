@@ -1,6 +1,5 @@
+import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Icon } from './Icon'
-import type { IconName } from './Icon'
 
 type ChipTone = 'ok' | 'warn' | 'bad' | 'dim'
 
@@ -13,19 +12,20 @@ const COLOR: Record<ChipTone, string> = {
 
 type ChipProps = {
   tone: ChipTone
-  icon: IconName
+  icon: LucideIcon
   title?: string
   children?: ReactNode
 }
 
-export function Chip({ tone, icon, title, children }: ChipProps) {
+export function Chip({ tone, icon: Glyph, title, children }: ChipProps) {
   return (
     <span
-      className="inline-flex h-5 flex-none items-center gap-1 rounded-sm px-1.5 text-label font-medium whitespace-nowrap"
-      style={{ color: COLOR[tone], background: 'color-mix(in srgb, currentColor 14%, transparent)' }}
+      className="inline-flex h-6 flex-none items-center gap-1.5 rounded-full border border-(--border-rule) bg-(--bg-card) pr-2.5 pl-2 text-label font-medium whitespace-nowrap text-soft tabular-nums"
       title={title}
     >
-      <Icon name={icon} size={12} />
+      <span className="flex" style={{ color: COLOR[tone] }}>
+        <Glyph size={12} aria-hidden="true" />
+      </span>
       {children}
     </span>
   )
