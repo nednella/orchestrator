@@ -1,6 +1,6 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import type { CleanupMode } from '../types'
-import { SelectField } from './SelectField'
+import { SelectMenu } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
@@ -18,12 +18,12 @@ export function GitSettings() {
         <SettingsRow
           title="Clean up after a merge"
           description="Auto removes the worktree orchestrator made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks."
-          control={<SelectField label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />}
+          control={<SelectMenu label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />}
         />
         <SettingsRow
           title="Clean up after a close"
           description="Auto cleans up when you close the pull request. Manual asks first."
-          control={<SelectField label="Clean up after a close" options={MODES} value={settings.cleanup.close} onChange={(value) => report(() => setCleanup('close', value))} />}
+          control={<SelectMenu label="Clean up after a close" options={MODES} value={settings.cleanup.close} onChange={(value) => report(() => setCleanup('close', value))} />}
         />
       </SettingsSection>
     </SettingsPage>

@@ -1,7 +1,7 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import { useLayout } from '../LayoutContext'
 import type { DarkTheme, ThemeSetting } from '../types'
-import { SelectField } from './SelectField'
+import { SelectMenu } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
@@ -26,12 +26,12 @@ export function AppearanceSettings() {
         <SettingsRow
           title="Theme"
           description="System follows the macOS appearance."
-          control={<SelectField label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />}
+          control={<SelectMenu label="Theme" options={THEMES} value={settings.theme} onChange={(value) => report(() => setTheme(value))} />}
         />
         <SettingsRow
           title="Dark theme"
           description="Shown when the theme is dark, or System follows a dark macOS."
-          control={<SelectField label="Dark theme" options={DARK_THEMES} value={settings.darkTheme} onChange={(value) => report(() => setThemes(value, settings.lightTheme))} />}
+          control={<SelectMenu label="Dark theme" options={DARK_THEMES} value={settings.darkTheme} onChange={(value) => report(() => setThemes(value, settings.lightTheme))} />}
         />
       </SettingsSection>
       <SettingsSection title="Interface">

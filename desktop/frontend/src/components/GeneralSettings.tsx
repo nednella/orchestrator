@@ -1,7 +1,7 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import type { DigestSchedule } from '../types'
 import { DataDirRow } from './DataDirRow'
-import { SelectField } from './SelectField'
+import { SelectMenu } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
@@ -37,7 +37,7 @@ export function GeneralSettings() {
           <SettingsRow
             title="News schedule"
             description="Weekly checks for news by itself. Off leaves it to you."
-            control={<SelectField label="News schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />}
+            control={<SelectMenu label="News schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />}
           />
         </SettingsSection>
       )}

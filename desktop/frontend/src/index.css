@@ -215,6 +215,21 @@
     color: var(--danger);
   }
 
+  /* A setting's text field and select trigger: a 28px box that rings inside when it has the focus. */
+  .setting-field {
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    background: var(--bg-segment);
+    box-shadow: var(--shadow-pill);
+    font-size: var(--fs-body);
+  }
+
+  .setting-field:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--shadow-pill), inset 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
   .btn-split {
     display: inline-flex;
     flex: none;

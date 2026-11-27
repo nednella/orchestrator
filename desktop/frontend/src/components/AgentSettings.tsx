@@ -2,7 +2,7 @@ import { useOrchestrator } from '../OrchestratorContext'
 import { ACCESSES, ACCESS_NAME, newThreadAccess } from '../access'
 import { PLACE_LABEL, placeFor } from '../place'
 import type { Access, Place, PromptSend } from '../types'
-import { SelectField } from './SelectField'
+import { SelectMenu } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
@@ -27,12 +27,12 @@ export function AgentSettings() {
         <SettingsRow
           title="New threads start in"
           description="Where a new thread works."
-          control={<SelectField label="New threads start in" options={PLACES} value={placeFor(settings.threadPlace, false)} onChange={(value) => report(() => setThreadPlace(value))} />}
+          control={<SelectMenu label="New threads start in" options={PLACES} value={placeFor(settings.threadPlace, false)} onChange={(value) => report(() => setThreadPlace(value))} />}
         />
         <SettingsRow
           title="Default access"
           description="A thread can change it in the model menu."
-          control={<SelectField label="Default access" options={ACCESS_OPTIONS} value={newThreadAccess(settings.threadAccess)} onChange={(value) => report(() => setThreadAccess(value))} />}
+          control={<SelectMenu label="Default access" options={ACCESS_OPTIONS} value={newThreadAccess(settings.threadAccess)} onChange={(value) => report(() => setThreadAccess(value))} />}
         />
       </SettingsSection>
       {project && (
@@ -40,7 +40,7 @@ export function AgentSettings() {
           <SettingsRow
             title="Send the first prompt"
             description="Auto sends what a new task starts with at once. Manual leaves it as a draft in the chat."
-            control={<SelectField label="Send the first prompt" options={PROMPT_SEND} value={settings.promptSend} onChange={(value) => report(() => setPromptSend(value))} />}
+            control={<SelectMenu label="Send the first prompt" options={PROMPT_SEND} value={settings.promptSend} onChange={(value) => report(() => setPromptSend(value))} />}
           />
         </SettingsSection>
       )}
