@@ -17,6 +17,7 @@ import (
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/bus"
 	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/thread"
 )
@@ -105,14 +106,7 @@ func TestPRTracking(t *testing.T) {
 
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gittest.Run(t, dir, args...)
 }
 
 // repoFixture makes h.Dir a git repo with a bare origin, and returns the origin's path.
@@ -1403,10 +1397,7 @@ func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
 	pushWork(t, wt)
-	cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "--exec", "false", "HEAD~1")
-	cmd.Dir = wt
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	if out, err := cmd.CombinedOutput(); err == nil {
+	if out, err := gittest.Command(wt, "-c", "user.name=t", "-c", "user.email=t@example.com", "rebase", "--exec", "false", "HEAD~1").CombinedOutput(); err == nil {
 		t.Fatalf("the rebase did not stop: %s", out)
 	}
 

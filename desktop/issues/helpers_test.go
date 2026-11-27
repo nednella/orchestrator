@@ -3,7 +3,6 @@ package issues_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/gittest"
 )
 
 func TestMain(m *testing.M) { os.Exit(apptest.Main(m)) }
@@ -29,12 +29,7 @@ func gitRepo(t *testing.T, h *apptest.Harness) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"init"}, {"add", "README"}, {"commit", "-m", "first"}} {
-		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-		cmd.Dir = h.Dir
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
+		gittest.Run(t, h.Dir, args...)
 	}
 }
 

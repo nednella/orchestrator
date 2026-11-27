@@ -4,7 +4,6 @@ import (
 	"context"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/desktop/threads"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -192,7 +192,5 @@ func (folderThread) SideChatsOf(string) []string                  { return nil }
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v: %s", args, err, out)
-	}
+	gittest.Run(t, dir, args...)
 }

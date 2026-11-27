@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -15,20 +14,14 @@ import (
 
 	"github.com/nednella/orchestrator/desktop/internal/run"
 	"github.com/nednella/orchestrator/internal/folder"
+	"github.com/nednella/orchestrator/internal/gittest"
 )
 
 var isolatedGit = []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"}
 
 func gitT(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), isolatedGit...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gittest.Run(t, dir, args...)
 }
 
 // madeRepo is a throwaway repo with one commit, and a Lifecycle whose record lives in local.

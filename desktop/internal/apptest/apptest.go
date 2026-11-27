@@ -43,6 +43,7 @@ import (
 	chatlog "github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
 	"github.com/nednella/orchestrator/internal/environ"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/thread"
 	"github.com/nednella/orchestrator/internal/tmuxtest"
 )
@@ -698,7 +699,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 		start += rejecting(o.ClaudeRejects)
 	}
 	h.claudeDir = agentOnPath(t, "claude", start, fakeClaudeTurns)
-	env := environ.With(os.Environ(), o.Env...)
+	env := environ.With(gittest.Env(), o.Env...)
 	path := environ.Get(env, "PATH")
 	if len(o.PathWithout) > 0 {
 		path = environ.PathWithout(env, o.PathWithout...)
@@ -1645,10 +1646,7 @@ func MergeAs(t *testing.T, origin, branch, how string) string {
 // gitIn runs git in dir as GitHub's merge button, with no user or system config.
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=GitHub", "-c", "user.email=noreply@github.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	out, err := cmd.CombinedOutput()
+	out, err := gittest.Command(dir, append([]string{"-c", "user.name=GitHub", "-c", "user.email=noreply@github.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
 	}

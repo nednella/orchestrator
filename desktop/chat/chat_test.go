@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/internal/bus"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/thread"
 )
@@ -513,12 +513,7 @@ func TestChatFilesListsTheThreadsWorktree(t *testing.T) {
 
 func gitIn(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
-	}
+	gittest.Run(t, dir, args...)
 }
 
 // samePending compares two approvals field by field, their inputs as JSON values.

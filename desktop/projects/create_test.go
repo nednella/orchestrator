@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/projects"
+	"github.com/nednella/orchestrator/internal/gittest"
 )
 
 func TestFolderName(t *testing.T) {
@@ -62,9 +62,7 @@ func newCreateHarness(t *testing.T) (*apptest.Harness, string) {
 
 func gitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gittest.Command(dir, args...).Output()
 	if err != nil {
 		t.Fatalf("git %v: %v", args, err)
 	}

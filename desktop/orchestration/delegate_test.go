@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/chat"
 	ctl "github.com/nednella/orchestrator/internal/control"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/prompts"
 	"github.com/nednella/orchestrator/internal/thread"
 )
@@ -129,14 +130,7 @@ func permissionMode(t *testing.T, h *apptest.Harness, id string) string {
 
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v in %s: %v: %s", args, dir, err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gittest.Run(t, dir, args...)
 }
 
 // repoFixture makes the project folder a git repository with a bare origin in the test's temp folder.
