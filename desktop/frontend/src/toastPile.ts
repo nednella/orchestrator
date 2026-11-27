@@ -7,6 +7,8 @@ export type Toast = {
   tone: 'waiting' | 'replied' | 'opened' | 'pr' | 'evidence' | 'error' | 'info' | 'success' | 'warning' | 'network'
   text: string
   detail?: string
+  // hint is the text's whole form, shown as a tooltip when the text is cut short.
+  hint?: string
   threadId?: string
   view?: PanelViewId
   sticky?: boolean

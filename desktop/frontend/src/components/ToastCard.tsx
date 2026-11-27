@@ -43,7 +43,9 @@ export function ToastCard({ toast, depth, onDismiss, onJump }: ToastCardProps) {
     <div ref={card} className="toast" data-depth={depth} data-leaving={toast.leaving || undefined} aria-hidden={toast.leaving || undefined} style={leaving}>
       <span className={`flex h-5 w-5 flex-none items-center justify-center ${color}`}>{toast.busy ? <Spinner size={16} /> : glyph}</span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-body font-medium">{toast.text}</span>
+        <span className="text-body font-medium" title={toast.hint}>
+          {toast.text}
+        </span>
         {toast.detail && <span className="text-small break-words text-soft">{toast.detail}</span>}
       </span>
       {toast.threadId && (

@@ -15,6 +15,7 @@ import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
 import { savedFirstPaint } from './firstPaint'
 import { addToast, staleWaiting } from './toastPile'
+import { cleanupToast, threadName, warningToast } from './toastText'
 import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
@@ -220,14 +221,6 @@ export function useOrchestratorSelector<T>(select: (a: Orchestrator) => T): T {
 export function useLatestOrchestrator(): () => Orchestrator {
   return useStore().get
 }
-
-const cleanupToast = (entry: Cleanup): ToastInput => {
-  const label = entry.issue > 0 ? `#${entry.issue}` : entry.threadTitle
-  if (!entry.merged) return { tone: 'info', text: `${label} cleaned up` }
-  return { tone: 'success', text: `${label} merged, cleaned up`, detail: 'Worktree and branch removed' }
-}
-
-const WARNING_SOURCES: Record<Warning['source'], string> = { tmux: 'tmux', github: 'GitHub', 'pull requests': 'Pull requests', worktrees: 'Worktrees', config: 'Config', agent: 'Agent' }
 
 const digestKey = (project: string) => `orchestrator.digestSeen.${project}`
 
@@ -658,7 +651,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         if (shown) dismissToast(shown.key)
         warningToasts.current.delete(source)
         if (!message) return
-        const key = pushToast({ tone: source === 'tmux' ? 'error' : 'info', text: `${WARNING_SOURCES[source]}: ${message}`, sticky: true })
+        const key = pushToast(warningToast({ source, message }))
         warningToasts.current.set(source, { message, key })
       }),
     [pushToast, dismissToast],
@@ -697,10 +690,12 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
           const top = treeRef.current.top.get(id)
           if (state === 'waiting' && current.state !== 'waiting') return
           if (state === 'waiting' && top && top.id !== id) {
-            waitingToasts.current.set(id, pushToast({ tone: state, text: `${top.title} · ${current.title} needs attention`, threadId: top.id, sticky: true }))
+            const child = threadName(current.title, current.issue)
+            waitingToasts.current.set(id, pushToast({ tone: state, text: `${child.name} needs attention`, hint: child.full, detail: `In ${threadName(top.title, top.issue).name}`, threadId: top.id, sticky: true }))
             return
           }
-          const key = pushToast({ tone: state, text: `${current.title} ${describe(current)}`, threadId: id, view: state === 'evidence' ? 'media' : undefined, sticky: state === 'waiting' })
+          const { name, full } = threadName(current.title, current.issue)
+          const key = pushToast({ tone: state, text: `${name} ${describe(current)}`, hint: full, threadId: id, view: state === 'evidence' ? 'media' : undefined, sticky: state === 'waiting' })
           if (state === 'waiting') waitingToasts.current.set(id, key)
         }, 50)
       }),
