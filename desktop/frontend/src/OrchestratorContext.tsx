@@ -74,7 +74,6 @@ type OrchestratorState = {
   composerAccess: Access
   focusRequest: { target: FocusTarget; n: number }
   shells: Shell[]
-  version: string
   machine: string
   update: UpdateState
   startNotes: Release[]
@@ -300,7 +299,6 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [memory, setMemory] = useState<Memory | null>(null)
   const [settings, setSettings] = useState<Settings>({ theme: 'system', darkTheme: 'black', lightTheme: 'light', textScale: 1, keepAwake: true, cleanup: { merge: 'auto', close: 'manual' }, promptSend: 'auto', browserEnabled: true, digestSchedule: 'weekly', threadPlace: '', threadAccess: '', dataDir: '', dataDirFixed: true, editorApp: '', projectsDir: '' })
   const [shells, setShells] = useState<Shell[]>([])
-  const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })
   const [startNotes, setStartNotes] = useState<Release[]>([])
@@ -537,7 +535,6 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       setNotes(snap.notes)
       setShells(snap.shells)
       shellsChanged(snap.project.key, snap.shells)
-      setVersion(snap.version)
       setMachine(snap.machine)
       setRawIssues([])
       setIssuesDisabled(false)
@@ -1190,13 +1187,12 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       composerAccess,
       focusRequest,
       shells,
-      version,
       machine,
       update,
       startNotes,
       ...actions,
     }),
-    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, startNotes, actions],
+    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, machine, update, startNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

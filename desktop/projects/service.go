@@ -11,7 +11,6 @@ import (
 	"github.com/nednella/orchestrator/desktop/sessions"
 	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/prompts"
-	"github.com/nednella/orchestrator/internal/version"
 )
 
 // Sessions is what the projects need of the session list, which also knows the current project.
@@ -41,7 +40,6 @@ type Snapshot struct {
 	Projects []sessions.Project `json:"projects"`
 	Sessions []sessions.Session `json:"sessions"`
 	Notes    []notes.Note       `json:"notes"`
-	Version  string             `json:"version"`
 	Shells   []sessions.Shell   `json:"shells"`  // the current project's shell sessions, by shell number
 	Machine  string             `json:"machine"` // this Mac's name, as its owner set it
 }
@@ -68,7 +66,7 @@ func (s *Service) Snapshot() Snapshot {
 	cur := s.sessions.Current()
 	repo := s.repos.Repo(s.ctx(), cur.Dir)
 	projects := s.sessions.Projects()
-	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Version: version.Version, Shells: s.sessions.Shells(), Machine: s.machine()}
+	snap := Snapshot{Projects: projects, Sessions: s.sessions.List(), Shells: s.sessions.Shells(), Machine: s.machine()}
 	snap.Project = sessions.Project{Key: cur.Key(), Name: cur.Name, Dir: cur.Dir}
 	for i, p := range projects {
 		if p.Dir == cur.Dir {

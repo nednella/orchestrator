@@ -45,7 +45,7 @@ func TestSnapshotListsTheProjectsOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 		snap := snapshot(cfg)
-		if snap.Project.Name != "api" || len(snap.Projects) != 1 || snap.Version != "dev" {
+		if snap.Project.Name != "api" || len(snap.Projects) != 1 {
 			t.Errorf("snapshot = %+v", snap)
 		}
 	})

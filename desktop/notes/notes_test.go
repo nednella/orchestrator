@@ -86,9 +86,6 @@ func TestNotes(t *testing.T) {
 	if got := ids(h.Snapshot().Notes); got != "edited" {
 		t.Errorf("after delete: %q", got)
 	}
-	if got := h.Snapshot().Version; got == "" {
-		t.Error("no version in the snapshot")
-	}
 }
 
 func TestNoteToIssue(t *testing.T) {

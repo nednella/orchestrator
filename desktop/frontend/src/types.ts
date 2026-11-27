@@ -188,7 +188,6 @@ export type Snapshot = {
   projects: Project[]
   sessions: Session[]
   notes: Note[]
-  version: string
   shells: Shell[]
   machine: string
 }
