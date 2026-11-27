@@ -165,7 +165,7 @@ func Run(ctx context.Context, c Config) error {
 		log.Close()
 		return err
 	}
-	logged, err := chat.ReadLog(c.Log, 0)
+	logged, err := chat.ReadLog(c.Log, 0, chat.PromptKinds...)
 	if err != nil {
 		log.Close()
 		return err

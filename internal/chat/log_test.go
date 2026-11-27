@@ -292,3 +292,42 @@ func TestReadLogAfterKeepsWhatAFullReadKeeps(t *testing.T) {
 		}
 	}
 }
+
+func TestReadLogOfKindsKeepsWhatAFullReadKeeps(t *testing.T) {
+	p := logPath(t)
+	l := openLog(t, p)
+	mustAppend(t, l, Event{Kind: KindUser, ID: "a"})
+	mustAppend(t, l, Event{Kind: KindToolResult, Text: `{"seq":9,"at":1,"kind":"user"}`})
+	mustAppend(t, l, Event{Kind: KindRewind, ID: "a"})
+	l.Close()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("{\"at\":1,\"seq\":4,\"kind\":\"user\"}\n{\"seq\":5,\"at\":1,\"kind\":\"message\"}\n{\"seq\":6,\"at\":1,\"kind\":\"user\"\n")
+	f.Close()
+
+	all, err := ReadLog(p, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, after := range []int64{0, 1, 3, 4} {
+		var want []int64
+		for _, e := range all {
+			if e.Seq > after && (e.Kind == KindUser || e.Kind == KindRewind) {
+				want = append(want, e.Seq)
+			}
+		}
+		got, err := ReadLog(p, after, KindUser, KindRewind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var seqs []int64
+		for _, e := range got {
+			seqs = append(seqs, e.Seq)
+		}
+		if !slices.Equal(seqs, want) {
+			t.Errorf("after %d: seqs %v, want %v", after, seqs, want)
+		}
+	}
+}

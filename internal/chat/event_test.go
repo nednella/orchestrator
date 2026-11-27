@@ -26,3 +26,19 @@ func TestPromptsAreTheMessagesTheConversationHolds(t *testing.T) {
 		t.Errorf("prompts = %q, want %q", ids, want)
 	}
 }
+
+func TestPromptsChangeOnlyForPromptKinds(t *testing.T) {
+	kinds := []Kind{KindStart, KindInit, KindUser, KindDelta, KindMessage, KindToolUse, KindToolResult, KindApproval,
+		KindAnswer, KindTurnEnd, KindDraft, KindQueued, KindInterrupt, KindCommands, KindCompact, KindThinking,
+		KindThought, KindEcho, KindStillQueued, KindUnsent, KindMode, KindReply, KindTaskStart, KindTaskEnd, KindRewind,
+		KindExit, KindTasks, KindCancel, KindRateLimit}
+	for _, k := range kinds {
+		if slices.Contains(PromptKinds, k) {
+			continue
+		}
+		ids := []string{"a", "b"}
+		if got := Prompts(ids, Event{Kind: k, ID: "b", Error: true}); !slices.Equal(got, ids) {
+			t.Errorf("an event of kind %s changed the prompts to %v; add it to PromptKinds", k, got)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -109,10 +110,11 @@ func (l *Log) Close() error {
 	return l.f.Close()
 }
 
-// ReadLog returns the events with Seq above after. A line that does not parse is skipped, and so is a last line with no newline.
-// A line whose Seq is at or below after is skipped undecoded, so reading the tail of a long log costs little more than
+// ReadLog returns the events with Seq above after, and only those of kinds when any are given. A line that does not
+// parse is skipped, and so is a last line with no newline. A line whose Seq is at or below after, or whose kind is not
+// asked for, is skipped undecoded, so reading the tail of a long log, or a few kinds of it, costs little more than
 // reading the file.
-func ReadLog(path string, after int64) ([]Event, error) {
+func ReadLog(path string, after int64, kinds ...Kind) ([]Event, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Event{}, nil
@@ -122,12 +124,13 @@ func ReadLog(path string, after int64) ([]Event, error) {
 	}
 	defer f.Close()
 	out := []Event{}
+	wanted := func(k Kind) bool { return len(kinds) == 0 || slices.Contains(kinds, k) }
 	if _, err := eachLine(f, func(line []byte) {
-		if seq, ok := seqOf(line); ok && seq <= after {
+		if seq, kind, ok := headOf(line); ok && (seq <= after || !wanted(kind)) {
 			return
 		}
 		var e Event
-		if json.Unmarshal(line, &e) == nil && e.Seq > after {
+		if json.Unmarshal(line, &e) == nil && e.Seq > after && wanted(e.Kind) {
 			out = append(out, e)
 		}
 	}); err != nil {
@@ -153,16 +156,36 @@ func eachLine(r io.Reader, fn func(line []byte)) (int64, error) {
 	}
 }
 
-// seqOf reads the Seq a line starts with, as Append writes it. It reports false for a line that starts otherwise.
-func seqOf(line []byte) (int64, bool) {
-	digits, ok := bytes.CutPrefix(line, []byte(`{"seq":`))
+// headOf reads the Seq and the Kind a line starts with, as Append writes them. It reports false for a line that starts
+// otherwise.
+func headOf(line []byte) (int64, Kind, bool) {
+	rest, ok := bytes.CutPrefix(line, []byte(`{"seq":`))
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
+	seq, rest, ok := leadingInt(rest)
+	if !ok {
+		return 0, "", false
+	}
+	if rest, ok = bytes.CutPrefix(rest, []byte(`,"at":`)); !ok {
+		return 0, "", false
+	}
+	if _, rest, ok = leadingInt(rest); !ok {
+		return 0, "", false
+	}
+	if rest, ok = bytes.CutPrefix(rest, []byte(`,"kind":"`)); !ok {
+		return 0, "", false
+	}
+	kind, _, ok := bytes.Cut(rest, []byte(`"`))
+	return seq, Kind(kind), ok
+}
+
+// leadingInt reads the number b starts with, and returns what follows it.
+func leadingInt(b []byte) (int64, []byte, bool) {
 	n := 0
-	for n < len(digits) && '0' <= digits[n] && digits[n] <= '9' {
+	for n < len(b) && '0' <= b[n] && b[n] <= '9' {
 		n++
 	}
-	seq, err := strconv.ParseInt(string(digits[:n]), 10, 64)
-	return seq, err == nil
+	v, err := strconv.ParseInt(string(b[:n]), 10, 64)
+	return v, b[n:], err == nil
 }

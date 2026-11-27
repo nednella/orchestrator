@@ -145,6 +145,9 @@ func (e Event) Persisted() bool {
 	return true
 }
 
+// PromptKinds are the kinds of event that Prompts folds in.
+var PromptKinds = []Kind{KindUser, KindUnsent, KindRewind}
+
 // Prompts folds e into ids, the user's messages that Claude's conversation holds, oldest first. A message that only
 // denied a tool is not one of them, nor is one that a Claude that failed at its start never read; a rewind takes out
 // the message it names and every one after it.
