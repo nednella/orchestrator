@@ -218,16 +218,7 @@ export function createMock(params: URLSearchParams) {
   }
 
   function projectView(p: ProjectData): Project {
-    const own = threads.filter((s) => s.project === p.name && !s.side)
-    return {
-      key: p.name,
-      name: p.name,
-      dir: p.dir,
-      repo: p.repo,
-      needsYou: own.filter((s) => s.state === 'waiting').length,
-      working: own.filter((s) => s.state === 'working').length,
-      threads: own.length,
-    }
+    return { key: p.name, name: p.name, dir: p.dir, repo: p.repo }
   }
 
   function currentNotes(): Note[] {
@@ -305,7 +296,6 @@ export function createMock(params: URLSearchParams) {
 
   function publish() {
     data.forEach((p) => emit('threads', { project: p.name, items: threadsOf(p.name) }))
-    emit('projects', data.map(projectView))
   }
 
   function find(id: string): Thread {
@@ -1138,7 +1128,7 @@ export function createMock(params: URLSearchParams) {
 
   const backend = {
     Snapshot: async () => snapshot(),
-    Awake: async () => data.some((p) => projectView(p).working > 0),
+    Awake: async () => threads.some((s) => s.state === 'working' && !s.side),
     NewThread: async (title: string, prompt: string, model: string, effort: string, fast: boolean, access: Access, place: Place | '') => {
       if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`

@@ -47,9 +47,6 @@ func TestShell(t *testing.T) {
 	if list := h.Threads().List(); len(list) != 1 || list[0].ID != agent.ID {
 		t.Errorf("thread rows = %+v", list)
 	}
-	if got := h.Snapshot().Project.Threads; got != 1 {
-		t.Errorf("project counts %d threads", got)
-	}
 	if records := bus.ReadAll(h.State, nil); len(records) != 1 || records[agent.ID].Title != "agent" {
 		t.Errorf("state = %v, want only the agent's", records)
 	}

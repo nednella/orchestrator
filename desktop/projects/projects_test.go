@@ -1,10 +1,9 @@
 package projects_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/app"
@@ -71,42 +70,29 @@ func TestProjects(t *testing.T) {
 		}
 	})
 
-	t.Run("counts", func(t *testing.T) {
-		if _, err := h.SwitchProject("main"); err != nil {
+	t.Run("projects event", func(t *testing.T) {
+		added := filepath.Join(root, "e", "added")
+		if err := os.MkdirAll(added, 0o700); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := h.AddProjectDir(added); err != nil {
+			t.Fatal(err)
+		}
+		eventually(t, "a projects event with the added project", func() bool {
+			list, _ := h.Rec.Last("projects").([]threads.Project)
+			return slices.ContainsFunc(list, func(p threads.Project) bool { return p.Dir == added })
+		})
+
 		a, err := h.StartThread("a", "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := h.SwitchProject("other"); err != nil {
-			t.Fatal(err)
-		}
-		b, err := h.StartThread("b", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		h.Observe(t, a.ID, "Notification", `{"message":"needs you"}`)
-		h.Observe(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
-		counts := func() string {
-			var out []string
-			list, _ := h.Rec.Last("projects").([]threads.Project)
-			for _, p := range list {
-				if p.Threads > 0 {
-					out = append(out, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Threads))
-				}
-			}
-			return strings.Join(out, " ")
-		}
-		eventually(t, "counts across projects", func() bool { return counts() == "main:1/0/1 other:0/1/1" })
-		var viaSnapshot []string
-		for _, p := range h.Snapshot().Projects {
-			if p.Threads > 0 {
-				viaSnapshot = append(viaSnapshot, fmt.Sprintf("%s:%d/%d/%d", p.Name, p.NeedsYou, p.Working, p.Threads))
-			}
-		}
-		if got := strings.Join(viaSnapshot, " "); got != "main:1/0/1 other:0/1/1" {
-			t.Errorf("snapshot counts = %s", got)
+		h.Threads().Refresh()
+		sent := h.Rec.Count("projects")
+		h.Observe(t, a.ID, "PreToolUse", `{"tool_name":"Edit"}`)
+		h.Threads().Refresh()
+		if n := h.Rec.Count("projects"); n != sent {
+			t.Errorf("a change of a thread's state sent the projects %d more times", n-sent)
 		}
 	})
 

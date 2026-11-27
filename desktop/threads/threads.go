@@ -106,15 +106,12 @@ type Thread struct {
 	Subagents int `json:"subagents"` // the tasks other than shells that its Claude runs in the background, which a settle stops
 }
 
-// Project is a project as the front end sees it, with how its threads stand.
+// Project is a project as the front end sees it.
 type Project struct {
-	Key      string `json:"key"` // the project's key, as in the project field of events and in thread ids
-	Name     string `json:"name"`
-	Dir      string `json:"dir"`
-	Repo     string `json:"repo"`
-	NeedsYou int    `json:"needsYou"`
-	Working  int    `json:"working"`
-	Threads  int    `json:"threads"`
+	Key  string `json:"key"` // the project's key, as in the project field of events and in thread ids
+	Name string `json:"name"`
+	Dir  string `json:"dir"`
+	Repo string `json:"repo"`
 }
 
 // Threads tracks the agents in the private tmux server and tells the front end when they change.
@@ -1504,7 +1501,7 @@ func (s *Threads) holdAwake() {
 	s.awake.Hold(working)
 }
 
-// announceProjects tells the front end when a project appears, goes, or its counts move. It needs mu.
+// announceProjects tells the front end when a project appears, goes or changes. It needs mu.
 func (s *Threads) announceProjects() {
 	views := s.projectViews()
 	if reflect.DeepEqual(views, s.lastProjs) {
@@ -1533,26 +1530,11 @@ func (s *Threads) announceIssues(list []Thread) {
 	}
 }
 
-// projectViews lists every known project with its thread counts. It needs mu.
+// projectViews lists every known project. It needs mu.
 func (s *Threads) projectViews() []Project {
 	var views []Project
 	for _, p := range s.projects() {
-		v := Project{Key: p.Key(), Name: p.Name, Dir: p.Dir, Repo: s.repoOf(p.Dir)}
-		for _, in := range s.info {
-			if in.Name.Project != p.Key() || in.Side {
-				continue
-			}
-			switch s.stateOf(in.Name.String()) {
-			case thread.Settled:
-				continue
-			case thread.Waiting:
-				v.NeedsYou++
-			case thread.Working:
-				v.Working++
-			}
-			v.Threads++
-		}
-		views = append(views, v)
+		views = append(views, Project{Key: p.Key(), Name: p.Name, Dir: p.Dir, Repo: s.repoOf(p.Dir)})
 	}
 	return views
 }

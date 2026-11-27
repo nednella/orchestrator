@@ -80,11 +80,6 @@ func TestSideChatForksTheParentAtItsLatestFinishedReply(t *testing.T) {
 	if got := h.Threads().IssueThreads()[7]; got != parent.ID {
 		t.Errorf("issue 7's thread = %q, want the parent", got)
 	}
-	for _, p := range h.Threads().Projects() {
-		if p.Key == "main" && p.Threads != 1 {
-			t.Errorf("the project counts %d threads, want the parent alone", p.Threads)
-		}
-	}
 }
 
 func TestSideChatIsRefused(t *testing.T) {
@@ -136,11 +131,6 @@ func TestSideChatShowsNoAttention(t *testing.T) {
 	h.Threads().Touch()
 	if got := h.Rec.CountAttentionFor(side.ID, "waiting"); got != before {
 		t.Errorf("%d waiting alerts for the side chat", got-before)
-	}
-	for _, p := range h.Threads().Projects() {
-		if p.Key == "main" && (p.NeedsYou != 0 || p.Threads != 1) {
-			t.Errorf("project counts = %+v, want only the parent", p)
-		}
 	}
 }
 

@@ -122,9 +122,6 @@ export type Project = {
   name: string
   dir: string
   repo: string
-  needsYou: number
-  working: number
-  threads: number
 }
 
 // ModelChoice is a model and an effort; '' where nothing sets one.

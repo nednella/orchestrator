@@ -124,10 +124,6 @@ func TestThreadLifecycle(t *testing.T) {
 			s := h.Rec.LastThreads()
 			return len(s) == 1 && s[0].State == "settled" && s[0].SettledAt > 0 && s[0].Title == "renamed"
 		})
-		if h.Snapshot().Projects[0].Threads != 0 {
-			t.Error("an ended thread counts as a running one")
-		}
-
 		// A new thread does not take the ended one's number.
 		third, err := h.StartThread("third", "")
 		if err != nil || third.ID == second.ID {
@@ -909,41 +905,6 @@ func TestSettledThreadsSurviveARestart(t *testing.T) {
 	if rec, err := bus.ReadState(h.State, s.ID); err != nil || rec.Thread != "" {
 		t.Errorf("the state file of a deleted thread = %+v, %v; want it gone", rec, err)
 	}
-}
-
-func TestProjectCountsFollowTheThreads(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	counts := func() threads.Project { return h.Snapshot().Project }
-	a, err := h.StartThread("a", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := h.StartThread("b", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := counts(); got.Threads != 2 || got.NeedsYou != 0 || got.Working != 0 {
-		t.Errorf("fresh counts = %+v", got)
-	}
-	h.Observe(t, a.ID, "Notification", `{"message":"needs you","notification_type":"permission_prompt"}`)
-	h.Observe(t, b.ID, "PreToolUse", `{"tool_name":"Edit"}`)
-	eventually(t, "counts to follow the hooks", func() bool {
-		got := counts()
-		return got.Threads == 2 && got.NeedsYou == 1 && got.Working == 1
-	})
-	if h.Rec.Count("projects") == 0 {
-		t.Error("no projects event")
-	}
-	h.Observe(t, b.ID, "Stop", `{}`)
-	eventually(t, "a replied thread to count as idle, not needing you", func() bool {
-		got := counts()
-		return got.NeedsYou == 1 && got.Working == 0
-	})
-	if err := h.SettleThread(a.ID); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, "a settled thread to leave the counts", func() bool { return counts().Threads == 1 })
 }
 
 func TestRefreshReadsAStateFileAgainOnlyOnceItChanges(t *testing.T) {
