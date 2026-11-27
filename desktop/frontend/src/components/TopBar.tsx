@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { useLayout } from '../LayoutContext'
 import { useElementWidth } from '../useElementWidth'
 import { MemoryTotal } from './MemoryTotal'
+import { NetworkIndicator } from './NetworkIndicator'
 import { ThreadCardToggle } from './ThreadCardToggle'
 import { TitleBreadcrumb } from './TitleBreadcrumb'
 import { WindowButtons } from './WindowButtons'
@@ -29,6 +30,7 @@ export function TopBar() {
         <TitleBreadcrumb />
       </div>
       <div className="flex flex-none items-center gap-0.5" style={noDrag}>
+        <NetworkIndicator />
         {width >= MEMORY_MIN && <MemoryTotal />}
         <ThreadCardToggle />
         {!besidePanel && <WindowButtons />}

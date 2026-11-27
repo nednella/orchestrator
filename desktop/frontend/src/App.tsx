@@ -22,11 +22,12 @@ import { useFocusedPanel } from './useFocusedPanel'
 import { useFullscreen } from './useFullscreen'
 import { useDigestToasts } from './useDigestToasts'
 import { useDockIcon } from './useDockIcon'
+import { NetworkContext } from './NetworkContext'
 import { useNetwork } from './useNetwork'
 import { useShortcuts } from './useShortcuts'
 
 export function App() {
-  useNetwork()
+  const network = useNetwork()
   const confirming = useConfirming()
   useShortcuts(!confirming)
   useDigestToasts()
@@ -37,7 +38,7 @@ export function App() {
   const { mode, docked, sidebarOpen, rightOpen, overlay, panelExpanded } = useLayout()
 
   return (
-    <>
+    <NetworkContext.Provider value={network}>
       <div
         className="flex h-full flex-col bg-app"
         style={{ '--title-inset': fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)' } as CSSProperties}
@@ -66,6 +67,6 @@ export function App() {
       <UsageModal />
       <ConfirmHost />
       <StartSplash />
-    </>
+    </NetworkContext.Provider>
   )
 }
