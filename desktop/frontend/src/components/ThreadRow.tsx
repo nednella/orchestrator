@@ -5,6 +5,7 @@ import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from 
 import { splitBranch } from '../branchLabel'
 import { approvalLine } from '../chatQuestions'
 import { confirmDelete } from '../confirm'
+import { gigabytes, memoryNote } from '../memory'
 import { clickCloses } from '../threadClick'
 import { threadGoal } from '../threads'
 import type { Thread } from '../types'
@@ -73,7 +74,7 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
   }, [cursor, showCard, closeCard])
 
   const askDelete = () => a.report(() => confirmDelete(thread, () => latest().threads, a.deleteThread))
-  const line2 = settled || thread.branch !== '' || threadGoal(thread) !== null || thread.cleanup === 'blocked' || thread.cleanup === 'ask'
+  const line2 = settled || thread.branch !== '' || thread.memory > 0 || threadGoal(thread) !== null || thread.cleanup === 'blocked' || thread.cleanup === 'ask'
 
   return (
     <div
@@ -160,6 +161,14 @@ function ThreadRowView({ thread, needs, selected, cursor, menuRequest }: ThreadR
                     {branch.tail && <span className="flex-none">{branch.tail}</span>}
                   </span>
                 </>
+              )}
+              {thread.memory > 0 && (
+                <span
+                  className="relative z-[1] flex-none cursor-default whitespace-nowrap text-dim tabular-nums"
+                  title={`The agent, every process under it, what it started that left its terminal, and its agent-browser. ${memoryNote}`}
+                >
+                  {thread.branch ? `· ${gigabytes(thread.memory)}` : gigabytes(thread.memory)}
+                </span>
               )}
             </span>
             {settled ? (
