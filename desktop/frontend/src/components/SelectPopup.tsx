@@ -86,7 +86,7 @@ export function SelectPopup<T extends string>({ anchor, trigger, label, options,
           type="button"
           role="option"
           aria-selected={option.value === value}
-          className={`flex min-h-7 w-full cursor-pointer items-center rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-(--bg-hover) focus:bg-(--bg-hover) ${option.value === value ? 'bg-(--bg-row-active)' : ''} ${option.description ? 'min-w-64' : ''}`}
+          className={`flex min-h-7 w-full cursor-pointer items-center rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-(--bg-hover) focus:bg-(--bg-hover) ${option.value === value ? 'bg-(--bg-row-active)' : ''} ${option.description ? 'max-w-80 min-w-64' : ''}`}
           onClick={() => onPick(option.value)}
         >
           <span className="grid min-w-0 gap-0.5">

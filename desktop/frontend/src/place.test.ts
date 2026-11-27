@@ -7,10 +7,10 @@ test('unset is a new worktree', () => {
   assert.equal(PLACE_LABEL.worktree, 'New worktree')
 })
 
-test('current branch when set', () => {
+test('current checkout when set', () => {
   assert.equal(placeFor('project', false), 'project')
   assert.equal(placeFor('worktree', false), 'worktree')
-  assert.equal(PLACE_LABEL.project, 'Current branch')
+  assert.equal(PLACE_LABEL.project, 'Current checkout')
 })
 
 test('an issue is always a worktree', () => {

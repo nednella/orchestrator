@@ -16,7 +16,7 @@ export function TextField({ label, value, placeholder, onCommit }: TextFieldProp
   return (
     <input
       aria-label={label}
-      className="mono h-8 w-72 min-w-0 rounded-lg border border-line-strong bg-raised px-3 text-small text-ink placeholder:text-dim hover:bg-hover focus:bg-raised"
+      className="setting-field h-7 w-full min-w-0 px-2.5 text-ink placeholder:text-dim @lg:w-72"
       value={shown}
       placeholder={placeholder}
       spellCheck={false}

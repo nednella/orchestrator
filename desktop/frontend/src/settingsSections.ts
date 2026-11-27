@@ -1,28 +1,28 @@
-import { Bot, GitBranch, Globe, Info, Palette, Settings2 } from 'lucide-react'
+import { Globe, Info, FolderTree, MessagesSquare, Palette, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export type SettingsSectionId = 'general' | 'appearance' | 'agents' | 'browser' | 'git' | 'about'
+export type SettingsSectionId = 'appearance' | 'threads' | 'browser' | 'worktrees' | 'maintenance' | 'about'
 
 export type SettingsSectionEntry = { id: SettingsSectionId; label: string; icon: LucideIcon }
 
 export type SettingsNavGroup = { heading?: string; sections: SettingsSectionEntry[] }
 
 export const SETTINGS_NAV: SettingsNavGroup[] = [
-  {
-    sections: [
-      { id: 'general', label: 'General', icon: Settings2 },
-      { id: 'appearance', label: 'Appearance', icon: Palette },
-    ],
-  },
+  { sections: [{ id: 'appearance', label: 'Appearance', icon: Palette }] },
   {
     heading: 'Agents',
     sections: [
-      { id: 'agents', label: 'Agents', icon: Bot },
+      { id: 'threads', label: 'Threads', icon: MessagesSquare },
       { id: 'browser', label: 'Browser', icon: Globe },
     ],
   },
-  { heading: 'Code', sections: [{ id: 'git', label: 'Git and pull requests', icon: GitBranch }] },
-  { sections: [{ id: 'about', label: 'About', icon: Info }] },
+  { heading: 'Code', sections: [{ id: 'worktrees', label: 'Worktrees', icon: FolderTree }] },
+  {
+    sections: [
+      { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+      { id: 'about', label: 'About', icon: Info },
+    ],
+  },
 ]
 
 export function sectionLabel(id: SettingsSectionId): string {

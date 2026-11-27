@@ -4,26 +4,26 @@ import { useOrchestrator } from '../OrchestratorContext'
 import { sectionLabel } from '../settingsSections'
 import type { SettingsSectionId } from '../settingsSections'
 import { AboutSettings } from './AboutSettings'
-import { AgentSettings } from './AgentSettings'
 import { AppearanceSettings } from './AppearanceSettings'
 import { BrowserSettings } from './BrowserSettings'
-import { GeneralSettings } from './GeneralSettings'
-import { GitSettings } from './GitSettings'
+import { MaintenanceSettings } from './MaintenanceSettings'
 import { Overlay } from './Overlay'
 import { SettingsNav } from './SettingsNav'
+import { ThreadsSettings } from './ThreadsSettings'
+import { WorktreesSettings } from './WorktreesSettings'
 
 const PAGES: Record<SettingsSectionId, () => JSX.Element> = {
-  general: GeneralSettings,
   appearance: AppearanceSettings,
-  agents: AgentSettings,
+  threads: ThreadsSettings,
   browser: BrowserSettings,
-  git: GitSettings,
+  worktrees: WorktreesSettings,
+  maintenance: MaintenanceSettings,
   about: AboutSettings,
 }
 
 export function SettingsPanel() {
   const { overlay, setOverlay } = useOrchestrator('overlay', 'setOverlay')
-  const [section, setSection] = useState<SettingsSectionId>('general')
+  const [section, setSection] = useState<SettingsSectionId>('appearance')
   if (overlay !== 'settings') return null
   const Page = PAGES[section]
 

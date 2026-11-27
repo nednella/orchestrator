@@ -1,23 +1,24 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import type { CleanupMode } from '../types'
 import { SelectMenu } from './SelectMenu'
+import type { SelectOption } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
 import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
 
-const MODES: { value: CleanupMode; label: string }[] = [
+const MODES: SelectOption<CleanupMode>[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'manual', label: 'Manual' },
 ]
 
-export function GitSettings() {
+export function WorktreesSettings() {
   const { settings, setCleanup, report } = useOrchestrator('settings', 'setCleanup', 'report')
   return (
     <SettingsPage perProject>
-      <SettingsSection title="Clean up">
+      <SettingsSection title="Cleanup">
         <SettingsRow
           title="Clean up after a merge"
-          description="Auto removes the worktree orchestrator made; the branch stays. Manual asks first. Unsaved or unpushed work always blocks."
+          description="Remove worktrees whose pull request is merged and whose commits are included in the default branch. Auto removes them at once and Manual asks first. The branch stays; unsaved or unpushed work always blocks."
           control={<SelectMenu label="Clean up after a merge" options={MODES} value={settings.cleanup.merge} onChange={(value) => report(() => setCleanup('merge', value))} />}
         />
         <SettingsRow
