@@ -1741,34 +1741,6 @@
     }
   }
 
-  .reveal {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  @media (hover: hover) {
-    .reveal {
-      max-width: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity 0.12s;
-    }
-
-    .group:hover .reveal,
-    .group:focus-within .reveal,
-    [data-panel][data-focused] [data-cursor='true'] .reveal {
-      max-width: 20rem;
-      opacity: 1;
-    }
-  }
-
-  [data-mode='narrow'] .reveal {
-    max-width: 20rem;
-    opacity: 1;
-  }
-
   .fold {
     display: grid;
     grid-template-rows: 1fr;
