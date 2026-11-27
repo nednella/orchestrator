@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -17,10 +18,18 @@ import (
 // moment alone, which the tests that wait for a reply give up on.
 const slotWait = time.Minute
 
+// holders are the tests that took a slot. A test takes one slot for all its apps: one that waited for a second while
+// it held the first would wait out slotWait whenever the other slots are held, as they are on a machine with two.
+var holders sync.Map
+
 // takeSlot waits for a free slot, and gives it back when the test ends. After slotWait it goes on without one, so a
-// test that makes a second app while it holds the first cannot hold the others up for good.
+// subtest that waits while its parent holds a slot cannot hold the others up for good.
 func takeSlot(t *testing.T) {
 	t.Helper()
+	if _, held := holders.LoadOrStore(t, true); held {
+		return
+	}
+	t.Cleanup(func() { holders.Delete(t) })
 	dir := filepath.Join(os.TempDir(), "orchestrator-apptest-slots")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Logf("apptest: no folder for the slots: %v", err)
