@@ -48,7 +48,7 @@ const seedsByRepo: Record<string, Seed[]> = {
 
 const labelFor = (lane: Lane) => ({ ready: 'ready', plan: 'needs-plan', you: 'needs-human', idea: 'idea', inbox: '' })[lane]
 
-// The queue sections of the mock project; an issue no section takes goes last with no section, as in the core.
+// The sections of the mock project; an issue no section takes goes last with no section, as in the core.
 const sections: Record<Lane, { name: string; actions: string[] }> = {
   inbox: { name: 'Inbox', actions: ['Plan', 'Investigate', 'Work'] },
   ready: { name: 'Ready', actions: ['Work'] },

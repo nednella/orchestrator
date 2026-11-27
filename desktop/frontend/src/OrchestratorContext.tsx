@@ -19,7 +19,7 @@ import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
 export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'changelog' | null
-export type FocusTarget = 'thread' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
+export type FocusTarget = 'thread' | 'sidebar' | 'right' | 'thread-search' | 'issue-filter' | 'note-jot' | 'composer'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
 // A thread's composer text, and the seq of the last draft orchestrator left in it that the composer has shown.

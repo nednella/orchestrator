@@ -4,7 +4,7 @@ import { useLayout } from '../LayoutContext'
 import type { Layout } from '../LayoutContext'
 import { modelActions } from './models'
 import { navigateActions } from './navigate'
-import { queueActions } from './queue'
+import { issueActions } from './issues'
 import { threadActions } from './threads'
 import { shellActions } from './shell'
 import type { Action } from './types'
@@ -22,7 +22,7 @@ export function actionsFor(a: Orchestrator, layout: Layout): Action[] {
   return [
     ...threadActions(context),
     ...navigateActions(context),
-    ...queueActions(context),
+    ...issueActions(context),
     ...modelActions(),
     ...viewActions(context),
     ...shellActions(context),

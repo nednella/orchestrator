@@ -10,8 +10,8 @@ import { Collapse } from './Collapse'
 import { IssueRow } from './IssueRow'
 import { SkeletonRows } from './SkeletonRows'
 import { Notice } from './Notice'
-import { QueueSection } from './QueueSection'
-import { QueueUnsortedHeader } from './QueueUnsortedHeader'
+import { IssueSection } from './IssueSection'
+import { IssueUnsortedHeader } from './IssueUnsortedHeader'
 import { SectionHeader } from './SectionHeader'
 
 const STEPS: Record<string, number> = { ArrowUp: -1, w: -1, ArrowDown: 1, s: 1 }
@@ -71,14 +71,14 @@ export function IssueList({ shown: coreShown, filtering, onRead }: IssueListProp
 
   const body = () => {
     if (loading) return <SkeletonRows />
-    if (issues.length === 0) return <Notice title="No open issues" hint="This repo has nothing in the queue." centered />
+    if (issues.length === 0) return <Notice title="No open issues" hint="This repo has no open issues." centered />
     if (filtering && shown.length === 0) return <Notice title="No issues match" hint="Clear the filter to see all of them." centered />
     return sections.map((section) => (
-      <QueueSection key={section.name} name={section.name} className="queue-section" drag={drag}>
+      <IssueSection key={section.name} name={section.name} className="issue-section" drag={drag}>
         {section.name ? (
           <SectionHeader name={section.name} count={section.issues.length} open={section.open} locked={filtering} onToggle={() => toggle(section.name, isClosed(section.name))} />
         ) : (
-          sorted && <QueueUnsortedHeader count={section.issues.length} open={section.open} locked={filtering} onToggle={() => toggle('', isClosed(''))} />
+          sorted && <IssueUnsortedHeader count={section.issues.length} open={section.open} locked={filtering} onToggle={() => toggle('', isClosed(''))} />
         )}
         <Collapse open={section.open}>
           <div className="flex flex-col gap-0.5 pb-1">
@@ -87,7 +87,7 @@ export function IssueList({ shown: coreShown, filtering, onRead }: IssueListProp
             ))}
           </div>
         </Collapse>
-      </QueueSection>
+      </IssueSection>
     ))
   }
 

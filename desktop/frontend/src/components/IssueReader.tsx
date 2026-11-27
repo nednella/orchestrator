@@ -54,7 +54,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
         </div>
         <h2 className="text-title font-semibold break-words">
           <span className="mono mr-1.5 text-soft">#{number}</span>
-          {issue?.title ?? 'No longer in the queue'}
+          {issue?.title ?? 'Not in the open issues'}
         </h2>
         {issue && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-dim">

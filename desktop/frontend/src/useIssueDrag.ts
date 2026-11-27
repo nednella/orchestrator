@@ -11,7 +11,7 @@ export type IssueDrag = {
   place(list: Issue[]): Issue[]
 }
 
-// Where the queue shows an issue until the core's own list agrees: `settled` is the list that was
+// Where the list shows an issue until the core's own list agrees: `settled` is the list that was
 // current when the call finished, so the next list to arrive replaces the override.
 type Placement = { section: string; settled: Issue[] | null }
 

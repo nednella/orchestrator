@@ -4,14 +4,14 @@ import { api } from '../api'
 import { useIssueReadRequest } from '../issueReadRequest'
 import { useFocusRequest } from '../useFocusRequest'
 import { useIssueListBar } from '../useIssueListBar'
-import { useRefreshQueueOnShow } from '../useRefreshQueueOnShow'
+import { useRefreshIssuesOnShow } from '../useRefreshIssuesOnShow'
 import { IssueList } from './IssueList'
 import { IssueReader } from './IssueReader'
 import { Notice } from './Notice'
 import { ListBar } from './ListBar'
 import { ProviderLine } from './ProviderLine'
 
-// IssuesView is the queue's list, and an issue read in its place, or beside it where the panel is 720 px wide or more.
+// IssuesView is the list of issues, and an issue read in its place, or beside it where the panel is 720 px wide or more.
 export function IssuesView() {
   const { issues, issuesDisabled, issueFilter, report } = useOrchestrator('issues', 'issuesDisabled', 'issueFilter', 'report')
   const projectName = useOrchestratorSelector((a) => a.project?.name)
@@ -19,11 +19,11 @@ export function IssuesView() {
   const root = useRef<HTMLDivElement>(null)
   const [reading, setReading] = useState<number | null>(null)
 
-  useRefreshQueueOnShow()
+  useRefreshIssuesOnShow()
 
-  // Searching or filtering the queue from a shortcut or a command shows the list again.
+  // Searching or filtering the issues from a shortcut or a command shows the list again.
   const closeReader = useCallback(() => setReading(null), [])
-  useFocusRequest('queue-filter', closeReader)
+  useFocusRequest('issue-filter', closeReader)
   const [filterShown, setFilterShown] = useState(issueFilter)
   if (filterShown !== issueFilter) {
     setFilterShown(issueFilter)
@@ -41,7 +41,7 @@ export function IssuesView() {
         {repo}
       </button>
     )
-    return <Notice title="Issues are disabled" hint={<>{link} has issues disabled, enable them to use the queue feature</>} centered />
+    return <Notice title="Issues are disabled" hint={<>{link} has issues turned off. Turn them on in its settings to see them here.</>} centered />
   }
   const back = () => {
     const number = reading

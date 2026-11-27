@@ -50,7 +50,7 @@ export function useIssueListBar(issues: Issue[]): { bar: ListBarProps; shown: Is
       label: 'Search issues',
       placeholder: 'Search issues',
       title: 'Search by text, @author, assignee:, label:, type:, section: and is:running; a leading - leaves matches out',
-      focusOn: 'queue-filter',
+      focusOn: 'issue-filter',
       onChange: (q) => change({ q }),
       onLeave: () => focus(panelExpanded ? 'right' : 'thread'),
     },

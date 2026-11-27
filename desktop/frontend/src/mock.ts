@@ -16,7 +16,7 @@ const day = 86_400_000
 // The reply of the seeded #444 chat that its mock fork is cut at.
 const FORK_AT = 'r-2'
 
-// A project that is not set up has no queue sections, so every issue sits in the nameless group.
+// A project that is not set up has no issue sections, so every issue sits in the nameless group.
 const unsorted = (issues: Issue[]) => issues.map((issue) => ({ ...issue, section: '', actions: ['Start'], access: actionAccess('Start'), moves: [] }))
 const noteTexts = [
   'Retry banner when the websocket drops\nShow a thin bar under the header and retry with backoff. Maybe reuse the toast style so it does not feel like a third kind of notice.\nThe backoff should reset on the first successful frame, not on connect, because the proxy accepts and then drops.',

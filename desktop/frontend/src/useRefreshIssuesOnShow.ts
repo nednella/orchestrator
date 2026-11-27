@@ -3,13 +3,13 @@ import { useOrchestrator, useOrchestratorSelector } from './OrchestratorContext'
 
 const MIN_GAP_MS = 5000
 
-// Shared by every caller, so two of them on screen at once read the queue once.
+// Shared by every caller, so two of them on screen at once read the issues once.
 let last = { at: 0, projectKey: undefined as string | undefined }
 
 // Issues change on GitHub with no event the app hears, so issues on screen are read again when they are
 // shown, when the project changes and when the window comes back into focus. The caller is mounted only
 // while it shows issues.
-export function useRefreshQueueOnShow() {
+export function useRefreshIssuesOnShow() {
   const { refreshIssues, report } = useOrchestrator('refreshIssues', 'report')
   const projectKey = useOrchestratorSelector((a) => a.project?.key)
   const refresh = useRef<() => void>(() => {})

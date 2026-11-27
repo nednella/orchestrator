@@ -1,9 +1,9 @@
 import { useState, type DragEvent, type ReactNode } from 'react'
 import type { IssueDrag } from '../useIssueDrag'
 
-type QueueSectionProps = { name: string; className?: string; drag: IssueDrag; children: ReactNode }
+type IssueSectionProps = { name: string; className?: string; drag: IssueDrag; children: ReactNode }
 
-export function QueueSection({ name, className, drag, children }: QueueSectionProps) {
+export function IssueSection({ name, className, drag, children }: IssueSectionProps) {
   const [over, setOver] = useState(false)
   const { dragging } = drag
   const state = !dragging || dragging.section === name ? undefined : dragging.moves.includes(name) ? (over ? 'over' : 'target') : 'refused'

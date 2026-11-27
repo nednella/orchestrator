@@ -1,6 +1,6 @@
 import type { Action, ActionContext } from './types'
 
-export const queueActions = ({ a }: ActionContext): Action[] => [
+export const issueActions = ({ a }: ActionContext): Action[] => [
   {
     id: 'refresh-issues',
     label: 'Refresh issues and PRs',

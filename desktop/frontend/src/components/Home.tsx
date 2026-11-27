@@ -1,13 +1,13 @@
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { isTyping } from '../useListNav'
-import { useRefreshQueueOnShow } from '../useRefreshQueueOnShow'
+import { useRefreshIssuesOnShow } from '../useRefreshIssuesOnShow'
 import { HomeComposer } from './HomeComposer'
 
 export function Home() {
   const { project, focus } = useOrchestrator('project', 'focus')
 
-  useRefreshQueueOnShow()
+  useRefreshIssuesOnShow()
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || isTyping(e.target)) return

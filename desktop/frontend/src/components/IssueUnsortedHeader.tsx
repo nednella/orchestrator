@@ -1,8 +1,8 @@
 import { Icon } from './Icon'
 
-type QueueUnsortedHeaderProps = { count: number; open: boolean; locked: boolean; onToggle(): void }
+type IssueUnsortedHeaderProps = { count: number; open: boolean; locked: boolean; onToggle(): void }
 
-export function QueueUnsortedHeader({ count, open, locked, onToggle }: QueueUnsortedHeaderProps) {
+export function IssueUnsortedHeader({ count, open, locked, onToggle }: IssueUnsortedHeaderProps) {
   return (
     <button className="section-head text-small" aria-expanded={open} disabled={locked} onClick={onToggle}>
       <span>{`${count} ${open ? '' : 'more '}${count === 1 ? 'issue matches' : 'issues match'} no section`}</span>
