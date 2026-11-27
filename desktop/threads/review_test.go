@@ -223,7 +223,7 @@ func TestEventsNameTheirProject(t *testing.T) {
 	if _, err := h.StartThread("x", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.Rec.ProjectOf("sessions"); got != "main" {
+	if got := h.Rec.ProjectOf("threads"); got != "main" {
 		t.Errorf("threads event project = %q", got)
 	}
 	if got := h.Snapshot().Project.Key; got != "main" {

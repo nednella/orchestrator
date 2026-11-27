@@ -14,7 +14,7 @@ export function IssuePickList({ issues, cursor, onPick }: IssuePickListProps) {
       </>
     ),
     name: issue.title,
-    badge: issue.sessionId ? 'has a thread' : undefined,
+    badge: issue.threadId ? 'has a thread' : undefined,
   }))
   return <ComposerPickList label="Issues" rows={rows} cursor={cursor} empty="No open issue matches." onPick={(i) => onPick(issues[i].number)} />
 }

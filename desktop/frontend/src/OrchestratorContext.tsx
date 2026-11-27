@@ -230,11 +230,11 @@ export function useLatestOrchestrator(): () => Orchestrator {
 }
 
 const cleanupToast = (entry: Cleanup): Omit<Toast, 'key'> => {
-  if (!entry.merged) return { tone: 'info', text: `${entry.issue > 0 ? `#${entry.issue}` : entry.sessionTitle} cleaned up` }
+  if (!entry.merged) return { tone: 'info', text: `${entry.issue > 0 ? `#${entry.issue}` : entry.threadTitle} cleaned up` }
   return {
     tone: 'done',
     text: "It's looking good brev",
-    detail: `Shipped! ${entry.sessionTitle} · PR #${entry.pr} merged · worktree and branch cleaned up`,
+    detail: `Shipped! ${entry.threadTitle} · PR #${entry.pr} merged · worktree and branch cleaned up`,
   }
 }
 
@@ -522,8 +522,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   // record adds the view the project opens on to history; a step through history shows its own view instead.
   const enterProject = useCallback(
     (whole: Snapshot, epoch: number, homeUnlessRemembered = false, record = true) => {
-      const { threads, sideChats } = splitSideChats(whole.sessions)
-      const snap = { ...whole, sessions: threads }
+      const { threads: topLevel, sideChats } = splitSideChats(whole.threads)
+      const snap = { ...whole, threads: topLevel }
       applySideChats(null, sideChats)
       projectEpoch.current = epoch
       if (projectRef.current && selectedRef.current) lastSelected.current.set(projectRef.current.name, selectedRef.current)
@@ -549,13 +549,13 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       })
       void loadDigest(epoch)
       setDigestSeen(readStored(digestKey(snap.project.name), 0))
-      setSessions((prev) => keepUnchanged(prev, snap.sessions, (s) => s.id))
-      quietly(() => selectAmong(snap.sessions.filter((s) => s.project === snap.project.key), snap.sessions, homeUnlessRemembered))
+      setSessions((prev) => keepUnchanged(prev, snap.threads, (s) => s.id))
+      quietly(() => selectAmong(snap.threads.filter((s) => s.project === snap.project.key), snap.threads, homeUnlessRemembered))
       if (record) remember(viewOf(selectedRef.current, snap.project.key))
       // The snapshot holds the threads of every project.
       projectsRead.current = true
       snap.projects.forEach((p) => threadsRead.current.add(p.key))
-      forgetGone(snap.sessions, snap.projects)
+      forgetGone(snap.threads, snap.projects)
       report(() => loadIssues(false))
     },
     [selectAmong, loadIssues, loadDigest, report, selectId, remember, quietly, forgetGone, applySideChats],
@@ -600,7 +600,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       if (payload.project === projectRef.current?.key) handler(payload.items)
     }
 
-  useEffect(() => on('sessions', ({ project: key, items }) => applySessions(key, items)), [applySessions])
+  useEffect(() => on('threads', ({ project: key, items }) => applySessions(key, items)), [applySessions])
   useEffect(
     () =>
       on(

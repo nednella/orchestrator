@@ -38,7 +38,7 @@ type Repos interface {
 type Snapshot struct {
 	Project  threads.Project   `json:"project"`
 	Projects []threads.Project `json:"projects"`
-	Threads  []threads.Thread  `json:"sessions"`
+	Threads  []threads.Thread  `json:"threads"`
 	Notes    []notes.Note      `json:"notes"`
 	Shells   []threads.Shell   `json:"shells"`  // the current project's shells, by shell number
 	Machine  string            `json:"machine"` // this Mac's name, as its owner set it

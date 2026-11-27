@@ -32,10 +32,10 @@ func TestThreadsShowTheMemoryTheirProcessesHold(t *testing.T) {
 	}
 	// A sample that finds the figures where they were sends nothing; a loaded machine may move a rounded figure between
 	// two samples, and the test then has nothing to say.
-	sent, before, held := h.Rec.Count("sessions"), h.Threads().Memory(), row.Memory
+	sent, before, held := h.Rec.Count("threads"), h.Threads().Memory(), row.Memory
 	h.Threads().SampleMemory()
 	row, _ = h.Thread(s.ID)
-	if n := h.Rec.Count("sessions"); n != sent && h.Threads().Memory() == before && row.Memory == held {
+	if n := h.Rec.Count("threads"); n != sent && h.Threads().Memory() == before && row.Memory == held {
 		t.Errorf("a sample with the same figures sent the threads %d more times", n-sent)
 	}
 

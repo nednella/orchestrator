@@ -76,7 +76,7 @@ export function HomeComposer() {
   const highlighted = pickCursor(cursor, rows)
   const typingCommand = !note && commandToken(caret.before) !== null
   const pickedIssue = note ? undefined : a.issues.find((i) => i.number === picked)
-  const live = Boolean(pickedIssue?.sessionId)
+  const live = Boolean(pickedIssue?.threadId)
   const canSend = note ? text.trim() !== '' || pending.images.length > 0 : pickedIssue !== undefined || text.trim() !== ''
   // The top of the queue: the issues of its first section, which the core lists first.
   const chips = useMemo(() => a.issues.filter((i) => i.section === a.issues[0]?.section).slice(0, CHIP_LIMIT), [a.issues])

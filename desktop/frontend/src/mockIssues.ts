@@ -102,7 +102,7 @@ export function buildIssues(repo: string): Issue[] {
       access: actionAccess(sections[lane].actions[0]),
       moves: movesFrom(sections[lane].name),
       url: `https://github.com/${repo}/issues/${number}`,
-      sessionId: '',
+      threadId: '',
       author,
       assignees,
       labels,

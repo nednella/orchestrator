@@ -208,7 +208,7 @@ func lastList[T any](r *Recorder, name string) scoped.List[T] {
 
 // LastThreads is the list of the latest threads event.
 func (r *Recorder) LastThreads() []threads.Thread {
-	return lastList[threads.Thread](r, "sessions").Items
+	return lastList[threads.Thread](r, "threads").Items
 }
 
 // LastThreadsOf is the list of the latest threads event of one project, nil when it has had none.
@@ -216,7 +216,7 @@ func (r *Recorder) LastThreadsOf(project string) []threads.Thread {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, e := range slices.Backward(r.events) {
-		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "sessions" && list.Project == project {
+		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "threads" && list.Project == project {
 			return list.Items
 		}
 	}
@@ -253,7 +253,7 @@ func (r *Recorder) Settled() []string {
 	defer r.mu.Unlock()
 	var out []string
 	for _, e := range r.events {
-		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "sessions" {
+		if list, ok := e.payload.(scoped.List[threads.Thread]); ok && e.name == "threads" {
 			for _, s := range list.Items {
 				if s.State == "settled" && !slices.Contains(out, s.ID) {
 					out = append(out, s.ID)
@@ -267,7 +267,7 @@ func (r *Recorder) Settled() []string {
 // ProjectOf is the project key of the latest event of that name (threads, notes, issues or cleanups), or "".
 func (r *Recorder) ProjectOf(name string) string {
 	switch name {
-	case "sessions":
+	case "threads":
 		return lastList[threads.Thread](r, name).Project
 	case "notes":
 		return lastList[notes.Note](r, name).Project

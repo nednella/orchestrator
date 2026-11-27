@@ -34,17 +34,17 @@ type DayFigures struct {
 type LedgerRow struct {
 	Project      string  `json:"project"`
 	Prompts      int     `json:"prompts"`
-	Threads      int     `json:"sessions"`
-	IssueThreads int     `json:"issueSessions"`
+	Threads      int     `json:"threads"`
+	IssueThreads int     `json:"issueThreads"`
 	WorkMs       int64   `json:"workMs"`
 	PRsOpened    int     `json:"prsOpened"`
 	PRsMerged    int     `json:"prsMerged"`
 	PRsClosed    int     `json:"prsClosed"` // closed without a merge
 	IssuesFiled  int     `json:"issuesFiled"`
 	IssuesClosed int     `json:"issuesClosed"`
-	ThreadMs     int64   `json:"sessionMs"`    // how long the ended threads ran, start to end, all together
-	AvgThreadMs  int64   `json:"avgSessionMs"` // 0 when no thread ended
-	AvgLeadMs    int64   `json:"avgLeadMs"`    // from a PR first seen open to merged; 0 when none merged
+	ThreadMs     int64   `json:"threadMs"`    // how long the ended threads ran, start to end, all together
+	AvgThreadMs  int64   `json:"avgThreadMs"` // 0 when no thread ended
+	AvgLeadMs    int64   `json:"avgLeadMs"`   // from a PR first seen open to merged; 0 when none merged
 	Tokens       int64   `json:"tokens"`
 	Cost         float64 `json:"cost"` // US dollars at list prices
 }

@@ -115,7 +115,7 @@ export type Server = {
 export type Memory = {
   app: number
   browsers: number
-  sessions: number
+  threads: number
   total: number
   machine: number
 }
@@ -127,7 +127,7 @@ export type Project = {
   repo: string
   needsYou: number
   working: number
-  sessions: number
+  threads: number
   needsSetup: boolean
   setupDismissed: boolean
 }
@@ -163,7 +163,7 @@ export type Issue = {
   access: Access
   moves: string[]
   url: string
-  sessionId: string
+  threadId: string
   author: string
   assignees: string[]
   labels: string[]
@@ -191,7 +191,7 @@ export type Shell = { id: string; folder: string; command: string; busy: boolean
 export type Snapshot = {
   project: Project
   projects: Project[]
-  sessions: Session[]
+  threads: Session[]
   notes: Note[]
   shells: Shell[]
   machine: string
@@ -268,16 +268,16 @@ export type DataDirChoice = {
 export type LedgerRow = {
   project: string
   prompts: number
-  sessions: number
-  issueSessions: number
+  threads: number
+  issueThreads: number
   workMs: number
   prsOpened: number
   prsMerged: number
   prsClosed: number
   issuesFiled: number
   issuesClosed: number
-  sessionMs: number
-  avgSessionMs: number
+  threadMs: number
+  avgThreadMs: number
   avgLeadMs: number
   tokens: number
   cost: number
@@ -286,7 +286,7 @@ export type LedgerRow = {
 export type UsageRow = {
   model: string
   effort: string
-  sessions: number
+  threads: number
   tokens: number
   input: number
   output: number
@@ -299,9 +299,9 @@ export type UsageRow = {
 export type WorkRow = {
   project: string
   issue: number
-  session: string
+  thread: string
   title: string
-  sessions: number
+  threads: number
   tokens: number
   cost: number
   lastAt: number
@@ -348,7 +348,7 @@ export type Limits = {
 
 export type Cleanup = {
   at: number
-  sessionTitle: string
+  threadTitle: string
   issue: number
   pr: number
   merged: boolean
@@ -521,7 +521,7 @@ export type EventMap = {
   // A thread's own events; its id holds a slash, which keeps 'chat:pending' out of the pattern.
   [k: `chat:${string}/${string}`]: ChatUpdate
   'chat:pending': { id: string; pending: Pending | null }
-  sessions: ProjectList<Session>
+  threads: ProjectList<Session>
   shells: ProjectList<Shell>
   projects: Project[]
   notes: ProjectList<Note>

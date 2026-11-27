@@ -42,7 +42,7 @@ type Issue struct {
 	Access    thread.Access `json:"access"`  // the access the default action starts its thread with
 	Moves     []string      `json:"moves"`   // names of the sections it can be dropped into, in queue order
 	URL       string        `json:"url"`
-	ThreadID  string        `json:"sessionId"`
+	ThreadID  string        `json:"threadId"`
 	Author    string        `json:"author"`
 	Assignees []string      `json:"assignees"`
 	Labels    []string      `json:"labels"`

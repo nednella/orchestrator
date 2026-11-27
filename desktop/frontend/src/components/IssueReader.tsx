@@ -22,7 +22,7 @@ export function IssueReader({ number, onBack }: IssueReaderProps) {
   const [error, setError] = useState('')
   const loading = !detail && !error
   const issue = issues.find((i) => i.number === number)
-  const session = sessions.find((s) => s.id === issue?.sessionId)
+  const session = sessions.find((s) => s.id === issue?.threadId)
 
   useEffect(() => {
     api.issueDetail(number).then(setDetail, (err) => setError(errorMessage(err)))

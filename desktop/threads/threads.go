@@ -115,7 +115,7 @@ type Project struct {
 	Repo     string `json:"repo"`
 	NeedsYou int    `json:"needsYou"`
 	Working  int    `json:"working"`
-	Threads  int    `json:"sessions"`
+	Threads  int    `json:"threads"`
 
 	NeedsSetup     bool `json:"needsSetup"`     // the project has no queue sections, so the app offers to set it up
 	SetupDismissed bool `json:"setupDismissed"` // the owner turned the offer down; it stays in the project's menu on the rail
@@ -1407,13 +1407,13 @@ func (s *Threads) sync() {
 	changed := false
 	for _, k := range slices.Sorted(maps.Keys(byProject)) {
 		if !reflect.DeepEqual(byProject[k], s.lastSent[k]) {
-			s.emit("sessions", scoped.Of(k, byProject[k]))
+			s.emit("threads", scoped.Of(k, byProject[k]))
 			changed = true
 		}
 	}
 	for _, k := range slices.Sorted(maps.Keys(s.lastSent)) {
 		if _, ok := byProject[k]; !ok {
-			s.emit("sessions", scoped.Of(k, []Thread{}))
+			s.emit("threads", scoped.Of(k, []Thread{}))
 			changed = true
 		}
 	}

@@ -145,7 +145,7 @@ export function createMock(params: URLSearchParams) {
   const termReaders = new Map<string, { onData: (bytes: Uint8Array) => void; onEnd: () => void }>()
   const sessions: Session[] = []
   const data: ProjectData[] = [
-    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, sessionTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, sessionTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, sessionTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
+    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, threadTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, threadTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, threadTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
     { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), cleanups: [], needsSetup: true },
     { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], cleanups: [] },
   ]
@@ -208,7 +208,7 @@ export function createMock(params: URLSearchParams) {
     const app = 2 * tenthGB
     const browsers = 11 * tenthGB
     const live = sessions.filter((s) => s.state !== 'settled').reduce((sum, s) => sum + s.memory, 0)
-    return { app, browsers, sessions: live, total: app + browsers + live, machine: 16 * 2 ** 30 }
+    return { app, browsers, threads: live, total: app + browsers + live, machine: 16 * 2 ** 30 }
   }
 
   function sessionsOf(project: string): Session[] {
@@ -227,7 +227,7 @@ export function createMock(params: URLSearchParams) {
       repo: p.repo,
       needsYou: own.filter((s) => s.state === 'waiting').length,
       working: own.filter((s) => s.state === 'working').length,
-      sessions: own.length,
+      threads: own.length,
       needsSetup: !!p.needsSetup,
       setupDismissed: !!p.setupDismissed,
     }
@@ -244,7 +244,7 @@ export function createMock(params: URLSearchParams) {
   function currentIssues(): Issue[] {
     return current.issues.map((issue) => ({
       ...issue,
-      sessionId: sessions.find((s) => s.project === current.name && !s.forkOf && s.issue === issue.number)?.id ?? '',
+      threadId: sessions.find((s) => s.project === current.name && !s.forkOf && s.issue === issue.number)?.id ?? '',
     }))
   }
 
@@ -299,7 +299,7 @@ export function createMock(params: URLSearchParams) {
     return {
       project: projectView(current),
       projects: data.map(projectView),
-      sessions: data.flatMap((p) => sessionsOf(p.name)),
+      threads: data.flatMap((p) => sessionsOf(p.name)),
       notes: currentNotes(),
       shells: shellsOf(current.name).map(shellView),
       machine: 'Studio MacBook Pro',
@@ -307,7 +307,7 @@ export function createMock(params: URLSearchParams) {
   }
 
   function publish() {
-    data.forEach((p) => emit('sessions', { project: p.name, items: sessionsOf(p.name) }))
+    data.forEach((p) => emit('threads', { project: p.name, items: sessionsOf(p.name) }))
     emit('projects', data.map(projectView))
   }
 
@@ -693,16 +693,16 @@ export function createMock(params: URLSearchParams) {
     const row = (project: string, prompts: number): LedgerRow => ({
       project,
       prompts: Math.round(prompts * scale),
-      sessions: Math.round(prompts * scale * 0.08),
-      issueSessions: Math.round(prompts * scale * 0.045),
+      threads: Math.round(prompts * scale * 0.08),
+      issueThreads: Math.round(prompts * scale * 0.045),
       workMs: Math.round(prompts * scale * 0.13 * 3_600_000),
       prsOpened: Math.round(prompts * scale * 0.05),
       prsMerged: Math.round(prompts * scale * 0.04),
       prsClosed: Math.round(prompts * scale * 0.005),
       issuesFiled: Math.round(prompts * scale * 0.02),
       issuesClosed: Math.round(prompts * scale * 0.035),
-      sessionMs: Math.round(prompts * scale * 0.08) * 52 * 60_000,
-      avgSessionMs: prompts > 100 ? 52 * 60_000 : 0,
+      threadMs: Math.round(prompts * scale * 0.08) * 52 * 60_000,
+      avgThreadMs: prompts > 100 ? 52 * 60_000 : 0,
       avgLeadMs: prompts > 100 ? 5 * 3_600_000 : 0,
       tokens: Math.round(prompts * scale * 61_000),
       cost: prompts * scale * 0.083,
@@ -718,26 +718,26 @@ export function createMock(params: URLSearchParams) {
     const totals: LedgerRow = {
       project: '',
       prompts: projects.reduce((a, r) => a + r.prompts, 0),
-      sessions: projects.reduce((a, r) => a + r.sessions, 0),
-      issueSessions: projects.reduce((a, r) => a + r.issueSessions, 0),
+      threads: projects.reduce((a, r) => a + r.threads, 0),
+      issueThreads: projects.reduce((a, r) => a + r.issueThreads, 0),
       workMs: projects.reduce((a, r) => a + r.workMs, 0),
       prsOpened: projects.reduce((a, r) => a + r.prsOpened, 0),
       prsMerged: projects.reduce((a, r) => a + r.prsMerged, 0),
       prsClosed: projects.reduce((a, r) => a + r.prsClosed, 0),
       issuesFiled: projects.reduce((a, r) => a + r.issuesFiled, 0),
       issuesClosed: projects.reduce((a, r) => a + r.issuesClosed, 0),
-      sessionMs: projects.reduce((a, r) => a + r.sessionMs, 0),
-      avgSessionMs: 52 * 60_000,
+      threadMs: projects.reduce((a, r) => a + r.threadMs, 0),
+      avgThreadMs: 52 * 60_000,
       avgLeadMs: 5 * 3_600_000,
       tokens: projects.reduce((a, r) => a + r.tokens, 0),
       cost: projects.reduce((a, r) => a + r.cost, 0),
     }
-    const usageRow = (model: string, effort: string, share: number, sessions: number): UsageRow => {
+    const usageRow = (model: string, effort: string, share: number, threads: number): UsageRow => {
       const tokens = Math.round(totals.tokens * share)
       return {
         model,
         effort,
-        sessions,
+        threads,
         tokens,
         input: Math.round(tokens * 0.002),
         output: Math.round(tokens * 0.018),
@@ -748,35 +748,35 @@ export function createMock(params: URLSearchParams) {
       }
     }
     const byModel = [
-      usageRow('claude-opus-5-5', 'high', 0.62, Math.round(totals.sessions * 0.6)),
-      usageRow('claude-opus-5-5', '', 0.21, Math.round(totals.sessions * 0.3)),
-      usageRow('claude-sonnet-5-5', 'medium', 0.12, Math.round(totals.sessions * 0.1)),
-      usageRow('claude-haiku-5-5', '', 0.05, Math.round(totals.sessions * 0.4)),
+      usageRow('claude-opus-5-5', 'high', 0.62, Math.round(totals.threads * 0.6)),
+      usageRow('claude-opus-5-5', '', 0.21, Math.round(totals.threads * 0.3)),
+      usageRow('claude-sonnet-5-5', 'medium', 0.12, Math.round(totals.threads * 0.1)),
+      usageRow('claude-haiku-5-5', '', 0.05, Math.round(totals.threads * 0.4)),
     ]
     const hoursAgo = (h: number) => Date.now() - h * 3_600_000
     const titles = ['Retry banner on websocket drop', 'Postcode match ignores case', 'Rename Catalogue to Shop', 'Weekly sales sparkline', 'Dark mode for emails', 'Order export as CSV', 'Faster product search', 'Gift card balance check', 'Stock alerts by email', 'Split the admin bundle']
-    const older: WorkRow[] = titles.map((title, i) => ({ project: 'storefront', issue: 400 + i, session: '', title: `#${400 + i} ${title}`, sessions: 1 + (i % 3), tokens: (i + 1) * 1_300_000, cost: (i + 1) * 0.64, lastAt: hoursAgo(60 + i * 20) }))
+    const older: WorkRow[] = titles.map((title, i) => ({ project: 'storefront', issue: 400 + i, thread: '', title: `#${400 + i} ${title}`, threads: 1 + (i % 3), tokens: (i + 1) * 1_300_000, cost: (i + 1) * 0.64, lastAt: hoursAgo(60 + i * 20) }))
     const work: WorkRow[] = [
       ...older,
-      { project: 'orchestrator', issue: 320, session: '', title: '#320 Token usage and estimated cost per issue', sessions: 2, tokens: 18_400_000, cost: 9.12, lastAt: hoursAgo(0.2) },
-      { project: 'orchestrator', issue: 316, session: '', title: '#316 Switch task and chat shortcuts', sessions: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
-      { project: 'storefront', issue: 0, session: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', sessions: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
-      { project: 'orchestrator', issue: 309, session: '', title: '#309 Empty states for session groups', sessions: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
+      { project: 'orchestrator', issue: 320, thread: '', title: '#320 Token usage and estimated cost per issue', threads: 2, tokens: 18_400_000, cost: 9.12, lastAt: hoursAgo(0.2) },
+      { project: 'orchestrator', issue: 316, thread: '', title: '#316 Switch task and chat shortcuts', threads: 1, tokens: 2_100_000, cost: 1.04, lastAt: hoursAgo(3) },
+      { project: 'storefront', issue: 0, thread: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', threads: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
+      { project: 'orchestrator', issue: 309, thread: '', title: '#309 Empty states for session groups', threads: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
-    const usage = { totals: usageRow('', '', 1, totals.sessions), tasks: usageRow('', '', 0.92, totals.sessions), byModel, pricesAsOf: '2026-10-06' }
+    const usage = { totals: usageRow('', '', 1, totals.threads), tasks: usageRow('', '', 0.92, totals.threads), byModel, pricesAsOf: '2026-10-06' }
     const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
     const perDay = shape.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.weight) / weight), workMs: Math.round((totals.workMs * d.weight) / weight), cost: (totals.cost * d.weight) / weight }))
     const before = (n: number) => Math.round(n * 0.88)
     const previous: LedgerRow =
       days === 0
         ? row('', 0)
-        : { ...totals, prompts: before(totals.prompts), sessions: before(totals.sessions * 1.1), workMs: before(totals.workMs * 0.9), cost: totals.cost * 0.85, prsMerged: before(totals.prsMerged) }
+        : { ...totals, prompts: before(totals.prompts), threads: before(totals.threads * 1.1), workMs: before(totals.workMs * 0.9), cost: totals.cost * 0.85, prsMerged: before(totals.prsMerged) }
     return { days, since: dayKey(120), totals, projects, previous, perDay, usage, work: work.filter((w) => !project || w.project === project) }
   }
 
   function logCleanup(s: Session, removed: string[], reason: string) {
     const target = owner(s)
-    target.cleanups.unshift({ at: Date.now(), sessionTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
+    target.cleanups.unshift({ at: Date.now(), threadTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
     if (target === current) emit('cleanups', { project: target.name, items: [...target.cleanups] })
   }
 
@@ -1420,7 +1420,7 @@ export function createMock(params: URLSearchParams) {
         access: actionAccess('Plan'),
         moves: movesFrom('Inbox'),
         url: `https://github.com/${current.repo}/issues/${number}`,
-        sessionId: '',
+        threadId: '',
         author: 'nednella',
         assignees: [],
         labels: [],

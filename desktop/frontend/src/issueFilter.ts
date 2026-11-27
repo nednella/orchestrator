@@ -43,7 +43,7 @@ function tokenMatches(issue: Issue, { field, value }: Token): boolean {
   if (field === 'label') return issue.labels.some((l) => l.toLowerCase().startsWith(value))
   if (field === 'type') return issue.type === value
   if (field === 'section') return sectionSlug(issue.section) === value
-  return value === 'running' && issue.sessionId !== ''
+  return value === 'running' && issue.threadId !== ''
 }
 
 export function matchIssue(issue: Issue, parsed: ParsedQuery): boolean {

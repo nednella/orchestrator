@@ -5,7 +5,7 @@ export function MemoryTotal() {
   const { memory } = useOrchestrator('memory')
   if (!memory || memory.total === 0) return null
   const machine = memory.machine > 0 ? `\nof ${Math.round(memory.machine / 2 ** 30)} GB` : ''
-  const parts = [`orchestrator ${gigabytes(memory.app)}`, `Browsers ${gigabytes(memory.browsers)}`, `Sessions and shells ${gigabytes(memory.sessions)}`]
+  const parts = [`orchestrator ${gigabytes(memory.app)}`, `Browsers ${gigabytes(memory.browsers)}`, `Sessions and shells ${gigabytes(memory.threads)}`]
   return (
     <span className="mono flex-none cursor-default px-1 text-small whitespace-nowrap text-dim" title={`${parts.join('\n')}${machine}\n\n${memoryNote}`}>
       mem <span className="text-soft">{gigabytes(memory.total)}</span>

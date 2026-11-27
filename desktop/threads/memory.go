@@ -24,7 +24,7 @@ const (
 type Memory struct {
 	App      int64 `json:"app"`      // the app and the commands it runs, without its browsers
 	Browsers int64 `json:"browsers"` // the projects' browsers and their helper processes
-	Threads  int64 `json:"sessions"` // the tmux server and everything under it: every project's agents and shells
+	Threads  int64 `json:"threads"`  // the tmux server and everything under it: every project's agents and shells
 	Total    int64 `json:"total"`
 	Machine  int64 `json:"machine"` // the Mac's memory, 0 when not known
 }

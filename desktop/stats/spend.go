@@ -124,7 +124,7 @@ func (s *spending) merge(o spending) {
 type UsageRow struct {
 	Model      string  `json:"model"`  // "" in the totals
 	Effort     string  `json:"effort"` // "" when the thread was started without one
-	Threads    int     `json:"sessions"`
+	Threads    int     `json:"threads"`
 	Tokens     int64   `json:"tokens"` // input, output and cache reads and writes together
 	Input      int64   `json:"input"`
 	Output     int64   `json:"output"` // thinking included
@@ -137,10 +137,10 @@ type UsageRow struct {
 // WorkRow is what one issue's threads used, resumed ones included, or one thread with no issue.
 type WorkRow struct {
 	Project string  `json:"project"`
-	Issue   int     `json:"issue"`   // 0 for a thread with no issue
-	Thread  string  `json:"session"` // "" for an issue
+	Issue   int     `json:"issue"`  // 0 for a thread with no issue
+	Thread  string  `json:"thread"` // "" for an issue
 	Title   string  `json:"title"`
-	Threads int     `json:"sessions"`
+	Threads int     `json:"threads"`
 	Tokens  int64   `json:"tokens"`
 	Cost    float64 `json:"cost"`
 	LastAt  int64   `json:"lastAt"` // unix ms of the latest usage

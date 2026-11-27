@@ -98,7 +98,7 @@ func TestEventHubReachesEveryTab(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	hub.Emit("sessions", []string{"a"})
+	hub.Emit("threads", []string{"a"})
 	for range 2 {
 		select {
 		case line := <-lines:
@@ -106,7 +106,7 @@ func TestEventHubReachesEveryTab(t *testing.T) {
 				Event   string
 				Payload []string
 			}
-			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &m); err != nil || m.Event != "sessions" || m.Payload[0] != "a" {
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &m); err != nil || m.Event != "threads" || m.Payload[0] != "a" {
 				t.Errorf("event line %q: %v", line, err)
 			}
 		case <-time.After(3 * time.Second):

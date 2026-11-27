@@ -4,7 +4,7 @@ import { DEFAULT_ISSUE_PREFS, issueFilterCount, issueFacets, listIssues } from '
 import type { Issue } from './types.ts'
 
 const issue = (number: number, extra: Partial<Issue> = {}): Issue => ({
-  number, title: `Issue ${number}`, type: 'bug', section: 'Ready', actions: [], access: 'supervised', moves: [], url: '', sessionId: '',
+  number, title: `Issue ${number}`, type: 'bug', section: 'Ready', actions: [], access: 'supervised', moves: [], url: '', threadId: '',
   author: 'amy', assignees: [], labels: [], ignored: [], createdAt: number, updatedAt: number, ...extra,
 })
 const numbers = (list: Issue[]) => list.map((i) => i.number)

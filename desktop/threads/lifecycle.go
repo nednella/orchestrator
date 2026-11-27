@@ -73,7 +73,7 @@ type BranchStatus struct {
 // Cleanup is one entry of the clean-up log.
 type Cleanup struct {
 	At          int64    `json:"at"`
-	ThreadTitle string   `json:"sessionTitle"`
+	ThreadTitle string   `json:"threadTitle"`
 	Issue       int      `json:"issue"`
 	PR          int      `json:"pr"`
 	Merged      bool     `json:"merged"`
