@@ -978,3 +978,42 @@ func TestWokenForkFailsWhenItsFolderIsGone(t *testing.T) {
 		t.Error("a folder is at the source's worktree path")
 	}
 }
+
+func TestNameOfAClosedSetupTerminalIsNotTheSetupOfThatThreadAnyMore(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "exit 3"})
+	repoFixture(t, h)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the set-up to fail", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == threads.SetupFailed
+	})
+	row, _ := h.Thread(s.ID)
+	if err := h.Threads().CloseShell(row.SetupShell); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := h.Thread(s.ID); got.Setup != "" || got.SetupShell != "" {
+		t.Errorf("the row still has the closed set-up terminal: %+v", got)
+	}
+	// The next terminal takes the name the set-up's had.
+	own, err := h.Threads().NewShell("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if own != row.SetupShell {
+		t.Fatalf("the new shell is %s, want it to reuse %s", own, row.SetupShell)
+	}
+	time.Sleep(600 * time.Millisecond)
+	if got, _ := h.Thread(s.ID); got.Setup != "" {
+		t.Errorf("the owner's shell was taken for the set-up: %+v", got)
+	}
+	if err := h.Threads().Delete(s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if shells := h.Threads().Shells(); len(shells) != 1 || shells[0].ID != own {
+		t.Errorf("the owner's shell did not survive the delete: %+v", shells)
+	}
+}

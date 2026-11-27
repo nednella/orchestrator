@@ -28,6 +28,7 @@ const (
 	forkOption   = "@orchestrator-fork"
 	branchOption = "@orchestrator-branch"
 	parentOption = "@orchestrator-parent"
+	setupOption  = "@orchestrator-setup"
 	sideOption   = "@orchestrator-side"
 )
 
@@ -100,6 +101,7 @@ type Shell struct {
 	Command string // the name of the process in front in the shell's pane, such as zsh, vim or node, or ""
 	PID     int    // the shell's own process, which its pane runs
 	Path    string // the folder the shell is in now; only ShellPaths reads it
+	Setup   string // the thread whose set-up command the shell runs, "" for any other shell; only ListAll reads it
 }
 
 // argv runs tmux with -u: without a UTF-8 locale (an app started from Finder has none)
@@ -160,9 +162,9 @@ func (t *Tmux) ListAll(ctx context.Context) ([]Info, []Shell, error) {
 
 // listOnce is one list-sessions, and whether one of its lines was cut short.
 func (t *Tmux) listOnce(ctx context.Context) (infos []Info, shells []Shell, short bool, err error) {
-	const fields = 16
+	const fields = 17
 	// The process name comes last, so a tab in it stays in its own field.
-	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+sideOption+"}\t#{"+fastOption+"}\t#{pane_current_command}")
+	out, err := t.run(ctx, "list-sessions", "-F", "#{session_name}\t#{"+titleOption+"}\t#{session_path}\t#{"+issueOption+"}\t#{"+modelOption+"}\t#{"+effortOption+"}\t#{"+accessOption+"}\t#{"+actionOption+"}\t#{"+forkOption+"}\t#{session_created}\t#{pane_pid}\t#{"+branchOption+"}\t#{"+parentOption+"}\t#{"+sideOption+"}\t#{"+fastOption+"}\t#{"+setupOption+"}\t#{pane_current_command}")
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && noServer(err.Error()) {
@@ -184,7 +186,7 @@ func (t *Tmux) listOnce(ctx context.Context) (infos []Info, shells []Shell, shor
 		}
 		if name.IsShell() {
 			pid, _ := strconv.Atoi(f[10])
-			shells = append(shells, Shell{Name: name, Folder: f[2], Command: f[15], PID: pid})
+			shells = append(shells, Shell{Name: name, Folder: f[2], Command: f[16], PID: pid, Setup: f[15]})
 			continue
 		}
 		// Every thread of this build has an access tag; a session with none is not one of its threads.
@@ -266,6 +268,16 @@ func (t *Tmux) Has(ctx context.Context, name thread.Name) bool {
 
 // NewSession starts argv detached in dir at the given size.
 func (t *Tmux) NewSession(ctx context.Context, name thread.Name, title, dir string, env []string, argv []string, cols, rows int) error {
+	return t.newSession(ctx, name, title, dir, env, argv, cols, rows, "")
+}
+
+// NewSetupSession is NewSession for a shell that runs the set-up command of the thread setup, which tmux tags in the same
+// call, so a listing never shows the shell without it.
+func (t *Tmux) NewSetupSession(ctx context.Context, name thread.Name, title, dir string, env []string, argv []string, cols, rows int, setup string) error {
+	return t.newSession(ctx, name, title, dir, env, argv, cols, rows, setup)
+}
+
+func (t *Tmux) newSession(ctx context.Context, name thread.Name, title, dir string, env []string, argv []string, cols, rows int, setup string) error {
 	args := []string{
 		"new-session", "-d", "-s", name.String(), "-c", dir,
 		"-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows),
@@ -281,6 +293,9 @@ func (t *Tmux) NewSession(ctx context.Context, name thread.Name, title, dir stri
 	args = append(args, "--")
 	args = append(args, argv...)
 	args = append(args, ";", "set-option", "-t", target(name), titleOption, arg(oneLine(title)))
+	if setup != "" {
+		args = append(args, ";", "set-option", "-t", target(name), setupOption, arg(setup))
+	}
 	if _, err := t.runWith(ctx, client, args...); err != nil {
 		return fmt.Errorf("starting session %s: %w", name, err)
 	}

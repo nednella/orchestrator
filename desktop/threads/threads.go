@@ -107,6 +107,7 @@ type Thread struct {
 	FirstMessage string     `json:"firstMessage"` // the message the thread starts with, shown as sent while it starts; "" when none
 	Setup        SetupState `json:"setup"`        // the thread's set-up command: "running", or "failed" when it exited with a code other than 0; "" when it did not run or ended well
 	SetupExit    int        `json:"setupExit"`    // the exit code of a failed set-up command
+	SetupProblem string     `json:"setupProblem"` // why a set-up command that could not start did not
 	SetupShell   string     `json:"setupShell"`   // the terminal the set-up command runs in, which stays open for a failed one
 	StartQueue   []string   `json:"startQueue"`   // what the owner sent while it started, which the agent gets after the first message; [] when none
 }
@@ -1609,7 +1610,10 @@ func (s *Threads) list() []Thread {
 		view.Memory = s.held[id]
 		view.Subagents = s.background[id].Subagents
 		if run := s.setups[id]; run != nil {
-			view.Setup, view.SetupExit, view.SetupShell = run.status, run.code, run.shell.String()
+			view.Setup, view.SetupExit, view.SetupProblem = run.status, run.code, run.problem
+			if run.shell != (thread.Name{}) {
+				view.SetupShell = run.shell.String()
+			}
 		}
 		if st := s.starting[id]; st != nil {
 			view.Start, view.StartError, view.FirstMessage = st.status, st.failure, st.shownText()
@@ -4477,7 +4481,7 @@ func (s *Threads) shellsInTree(ctx context.Context, key, worktree string) (workt
 		case sh.Path == "":
 			in.unknown = in.unknown || sh.Name.Project == key
 		case folder.Inside(sh.Path, worktree):
-			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) && !s.isSetupShell(sh.Name) {
+			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) && !s.runsSetup(sh.Name) {
 				in.busy = append(in.busy, sh.Name)
 			} else {
 				in.idle = append(in.idle, sh.Name)
@@ -4648,12 +4652,12 @@ func (s *Threads) NewShell(thread string) (string, error) {
 
 // startShell starts a shell of the project proj in dir. It needs shellMu.
 func (s *Threads) startShell(proj project.Project, dir string) (string, error) {
-	return s.startShellRunning(proj, dir, "shell", []string{s.loginShell(), "-l"})
+	return s.startShellRunning(proj, dir, "shell", []string{s.loginShell(), "-l"}, "")
 }
 
 // startShellRunning starts a shell of the project proj in dir, which runs argv in place of a login shell. It needs
 // shellMu.
-func (s *Threads) startShellRunning(proj project.Project, dir, title string, argv []string) (string, error) {
+func (s *Threads) startShellRunning(proj project.Project, dir, title string, argv []string, setupOf string) (string, error) {
 	s.mu.Lock()
 	ctx := s.ctx
 	var used []int
@@ -4667,14 +4671,14 @@ func (s *Threads) startShellRunning(proj project.Project, dir, title string, arg
 	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
 	env := []string{"ORCHESTRATOR_PROJECT=" + proj.Key()}
-	if err := s.tmux.NewSession(tctx, name, title, dir, env, argv, startCols, startRows); err != nil {
+	if err := s.tmux.NewSetupSession(tctx, name, title, dir, env, argv, startCols, startRows, setupOf); err != nil {
 		return "", err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// A refresh may have listed the shell before it was added here.
 	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
-	s.shells = append(s.shells, term.Shell{Name: name, Folder: dir})
+	s.shells = append(s.shells, term.Shell{Name: name, Folder: dir, Setup: setupOf})
 	s.shellStart[name] = time.Now()
 	s.announceShells()
 	return name.String(), nil
@@ -4694,6 +4698,7 @@ func (s *Threads) CloseShell(id string) error {
 
 // stopShell stops the shell name and its terminal.
 func (s *Threads) stopShell(name thread.Name) error {
+	s.forgetSetupShell(name)
 	s.closeTerm(name.String())
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
