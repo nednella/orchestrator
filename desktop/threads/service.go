@@ -30,6 +30,10 @@ func (v *Service) NewThread(title, prompt, model, effort string, fast bool, acce
 // RetryThreadStart goes on with the start of a thread that failed to start, from the step that failed.
 func (v *Service) RetryThreadStart(id string) error { return v.s.RetryStart(id) }
 
+// CancelThreadStart stops the start of a thread that is under way, at the owner's word: the thread stays listed as a
+// cancelled start, which RetryThreadStart goes on with. The worktree its start made goes, unless something in it keeps it.
+func (v *Service) CancelThreadStart(id string) error { return v.s.CancelStart(id) }
+
 // ModelChoice is a model and an effort; "" where nothing sets one.
 type ModelChoice struct {
 	Model  string `json:"model"`

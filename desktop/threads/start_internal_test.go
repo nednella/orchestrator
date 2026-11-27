@@ -11,6 +11,7 @@ import (
 	"github.com/nednella/orchestrator/internal/folder"
 	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/project"
+	"github.com/nednella/orchestrator/internal/term"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -136,5 +137,52 @@ func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
 	}
 	if other.made {
 		t.Errorf("worktree for another thread = %+v, want it unrecorded", other)
+	}
+}
+
+func TestSetupCommandRunsAgainOnARetryUnlessItEndedWithZeroOrStillRuns(t *testing.T) {
+	t.Parallel()
+	s, st := startedAt(t)
+	id := st.name.String()
+	exit := filepath.Join(s.tmpDir(st.name), "setup-exit")
+	if err := os.MkdirAll(filepath.Dir(exit), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		exit  string // what the exit file holds, "" for no file
+		shell bool   // a terminal tagged with the thread is open
+		run   bool   // the app holds a running set-up of the thread
+		want  bool
+	}{
+		{name: "never ran", want: false},
+		{name: "ended with 0", exit: "0", want: true},
+		{name: "ended with 0, its terminal gone", exit: "0", want: true},
+		{name: "failed", exit: "2", shell: true, want: false},
+		{name: "cut short: no exit, no terminal", want: false},
+		{name: "still runs in its terminal", shell: true, want: true},
+		{name: "still runs, terminal not listed yet", run: true, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Remove(exit)
+			if tt.exit != "" {
+				if err := os.WriteFile(exit, []byte(tt.exit), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.mu.Lock()
+			s.shells, s.setups = nil, map[string]*setupRun{}
+			if tt.shell {
+				s.shells = []term.Shell{{Name: thread.Name{Project: "p", Token: "shell"}, Setup: id}}
+			}
+			if tt.run {
+				s.setups[id] = &setupRun{status: SetupRunning, cancel: func() {}}
+			}
+			s.mu.Unlock()
+			if got := s.setupDone(id, exit); got != tt.want {
+				t.Errorf("setupDone = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

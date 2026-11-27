@@ -606,3 +606,180 @@ func TestRestartOfAnAgentThatNeverGotItsFirstMessageOffersTheRetry(t *testing.T)
 		t.Error("the saved start is still there")
 	}
 }
+
+func cancelled(h *apptest.Harness, id string) bool {
+	row, _ := h.Thread(id)
+	return row.Start == threads.StartCancelled
+}
+
+func TestCancelStopsAStartThatWaitsForOriginAndRetryGoesOn(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 3*time.Second)
+	s, err := h.StartIssueLater(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "and be quick"); err != nil {
+		t.Fatal(err)
+	}
+	began := time.Now()
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took > time.Second {
+		t.Errorf("the cancel took %v, which the 3 s fetch holds up", took)
+	}
+	row, _ := h.Thread(s.ID)
+	if row.Start != threads.StartCancelled || row.StartError != "Start cancelled" || row.State != "waiting" || row.FirstMessage == "" || len(row.StartQueue) != 1 {
+		t.Errorf("the row = %+v, want a cancelled start with its messages kept", row)
+	}
+	if exists(filepath.Join(h.Dir, "trees", "issue-7")) || len(userLines(t, h, s.ID)) != 0 {
+		t.Error("the cancelled start left a worktree or reached the agent")
+	}
+	if err := h.CancelThreadStart(s.ID); err == nil {
+		t.Error("a start that is not under way was cancelled")
+	}
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	eventually(t, "both messages", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
+	users := userLines(t, h, s.ID)
+	if len(users) != 2 || !strings.Contains(users[0], "/ship 7") || !strings.Contains(users[1], "and be quick") {
+		t.Errorf("messages = %v", users)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestCancelDuringTheAgentsStartRemovesTheWorktreeItMade(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "slow-new", true)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "and the signup form"); err != nil {
+		t.Fatal(err)
+	}
+	tree := filepath.Join(h.Dir, "trees", "fix-login")
+	eventually(t, "the start to reach the agent", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Worktree != "" && row.Detail == "Starting Claude"
+	})
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := h.Thread(s.ID)
+	if row.Start != threads.StartCancelled || row.StartError != "Start cancelled" || row.Worktree != "" || row.FirstMessage != "make it faster" || len(row.StartQueue) != 1 {
+		t.Errorf("the row = %+v, want a cancelled start with no worktree and its messages kept", row)
+	}
+	if exists(tree) || tmuxHas(h, s.ID) {
+		t.Error("the cancelled start left its worktree or a session")
+	}
+	if got := gitIn(t, h.Dir, "branch", "--list", "fix-login"); got == "" {
+		t.Error("the branch went with the worktree, which only the thread's own delete may take")
+	}
+	tmux.fail(t, "slow-new", false)
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	eventually(t, "both messages", func() bool { return len(userLines(t, h, s.ID)) >= 2 })
+	row, _ = h.Thread(s.ID)
+	users := userLines(t, h, s.ID)
+	if len(users) != 2 || !strings.Contains(users[0], "make it faster") || !strings.Contains(users[1], "and the signup form") || row.Branch != "fix-login" || !exists(tree) {
+		t.Errorf("messages = %v, row = %+v; want the messages once, in order, on the same branch", users, row)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestCancelKeepsAWorktreeWithChangesAndSaysWhy(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "slow-new", true)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := filepath.Join(h.Dir, "trees", "fix-login")
+	eventually(t, "the start to reach the agent", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Worktree != "" && row.Detail == "Starting Claude"
+	})
+	if err := os.WriteFile(filepath.Join(tree, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := h.Thread(s.ID)
+	if row.Start != threads.StartCancelled || !strings.HasPrefix(row.StartError, "Start cancelled. The worktree stays: ") || row.Worktree == "" || !exists(filepath.Join(tree, "notes.txt")) {
+		t.Errorf("the row = %+v, want a cancelled start that says why the worktree stays", row)
+	}
+	tmux.fail(t, "slow-new", false)
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == ""
+	})
+	if after, _ := h.Thread(s.ID); after.Worktree != row.Worktree || !exists(filepath.Join(tree, "notes.txt")) {
+		t.Errorf("the retried row = %+v, want the worktree %s with the file", after, row.Worktree)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestCancelStopsTheSetupCommandAndRetryRunsItAgain(t *testing.T) {
+	runs := filepath.Join(t.TempDir(), "runs")
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "echo run >> " + runs + "; sleep 60"})
+	repoFixture(t, h)
+	tmux := newFakeTmux(t)
+	tmux.fail(t, "slow-shell", true)
+	s, err := h.NewThreadLater("Fix login", "make it faster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The set-up command's terminal takes a second to open, with the agent running already: the start is still under way.
+	eventually(t, "the agent to run", func() bool { ch, _ := h.Threads().ChatOf(s.ID); return ch.Live })
+	if err := h.CancelThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := h.Thread(s.ID)
+	if row.Start != threads.StartCancelled || row.Setup != "" || len(h.Threads().Shells()) != 0 {
+		t.Errorf("the row = %+v, shells = %+v; want the set-up stopped and its terminal closed", row, h.Threads().Shells())
+	}
+	if !exists(row.Worktree) {
+		t.Error("the worktree of a thread whose agent runs went")
+	}
+	tmux.fail(t, "slow-shell", false)
+	if err := h.RetryThreadStart(s.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retry to start the thread and its set-up", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == "" && row.Setup == threads.SetupRunning
+	})
+	if shells := h.Threads().Shells(); len(shells) != 1 {
+		t.Errorf("shells = %+v, want the one terminal of the set-up that runs again", shells)
+	}
+	eventually(t, "the set-up command's own mark", func() bool { return strings.Contains(readFile(runs), "run") })
+	if n := mentions(userLines(t, h, s.ID), "make it faster"); n != 1 {
+		t.Errorf("the first message reached the agent %d times, want once", n)
+	}
+}
+
+func readFile(path string) string {
+	data, _ := os.ReadFile(path)
+	return string(data)
+}

@@ -26,8 +26,9 @@ import (
 type StartState string
 
 const (
-	Starting    StartState = "starting" // the worktree, the host or the first message is still on its way
-	StartFailed StartState = "failed"   // a step failed; RetryStart goes on from it
+	Starting       StartState = "starting"  // the worktree, the host or the first message is still on its way
+	StartFailed    StartState = "failed"    // a step failed; RetryStart goes on from it
+	StartCancelled StartState = "cancelled" // the owner stopped it; RetryStart goes on from the step it stopped at
 )
 
 // starting is a thread being started: its worktree, its host and its first message come after its row, which is in
@@ -62,16 +63,17 @@ type starting struct {
 	sentBefore int    // how many such messages the host's chat log held then
 
 	// shown, under mu
-	info     term.Info
-	status   StartState
-	failure  string
-	running  bool
-	launched bool
-	aborted  bool
-	cancel   context.CancelFunc
-	done     chan struct{}
-	step     string         // the step that runs, for the row
-	queue    []host.Message // what the owner sent while it started, oldest first
+	info      term.Info
+	status    StartState
+	failure   string
+	running   bool
+	launched  bool
+	aborted   bool
+	cancelled bool // the owner stopped the start
+	cancel    context.CancelFunc
+	done      chan struct{}
+	step      string         // the step that runs, for the row
+	queue     []host.Message // what the owner sent while it started, oldest first
 }
 
 // shownText is the first message as the thread shows it while it starts: what the owner sent, and nothing when it is
@@ -156,28 +158,59 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 	for {
 		err := s.execute(ctx, st)
 		s.mu.Lock()
-		switch {
-		case err != nil:
-			st.running = false
-			// A start the app's quit stopped is saved as it was, and listed as failed when the app starts again.
-			if !st.aborted && st.app.Err() == nil {
-				log.Printf("orchestrator: thread %s did not start: %v", st.name, err)
-				st.status, st.failure = StartFailed, startFailure(err)
-				s.sync()
-			}
-		case len(st.queue) > 0:
+		if err == nil && len(st.queue) > 0 {
 			// A message that came after the last delivery.
 			s.mu.Unlock()
 			continue
-		default:
-			st.running = false
+		}
+		cancelled := err != nil && st.cancelled && !st.aborted
+		s.mu.Unlock()
+		kept := ""
+		if cancelled {
+			kept = s.undoCancelled(st)
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		st.running = false
+		switch {
+		case err == nil:
 			delete(s.starting, st.name.String())
 			s.dropStartRecord(st.name)
-			s.sync()
+		// A start the app's quit stopped is saved as it was, and listed as failed when the app starts again.
+		case st.aborted || st.app.Err() != nil:
+			return
+		case cancelled:
+			st.status, st.failure = StartCancelled, "Start cancelled"
+			if kept != "" {
+				st.failure += ". The worktree stays: " + kept
+			}
+		default:
+			log.Printf("orchestrator: thread %s did not start: %v", st.name, err)
+			st.status, st.failure = StartFailed, startFailure(err)
 		}
-		s.mu.Unlock()
+		s.sync()
 		return
 	}
+}
+
+// undoCancelled stops the set-up command of a start the owner stopped, and removes the worktree it made when its agent
+// does not run and the checks of a clean-up pass. It says why the worktree stays, "" when it went or there was none.
+func (s *Threads) undoCancelled(st *starting) string {
+	s.stopSetup(st.name.String())
+	if st.launched || !st.work.made {
+		return ""
+	}
+	if reason := s.life.dropStartWorktree(context.WithoutCancel(st.app), st.name.String()); reason != "" {
+		return reason
+	}
+	s.progress(st, func() {
+		st.work, st.placed = workPlace{}, false
+		st.info = st.placeholder()
+		if i := slices.IndexFunc(s.info, func(in term.Info) bool { return in.Name == st.name }); i >= 0 && !st.launched {
+			s.info[i] = st.info
+		}
+	})
+	return ""
 }
 
 // startFailure is why a start failed, in a sentence for the thread's row: the host's own reason when it refused, else
@@ -216,6 +249,9 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 	launched := st.launched
 	s.mu.Unlock()
 	if !launched {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		s.setStep(st, "Starting Claude")
 		if err := s.boot(ctx, st); err != nil {
 			if !st.o.Later {
@@ -229,6 +265,9 @@ func (s *Threads) execute(ctx context.Context, st *starting) error {
 	s.startSetup(st)
 	if st.work.branch != "" {
 		s.life.ensureWatchers(st.app)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if st.text != "" && !st.delivered {
 		if !st.o.Later {
@@ -431,6 +470,12 @@ func (s *Threads) boot(ctx context.Context, st *starting) error {
 	defer cancel()
 	title := s.titleOfStart(st)
 	if err := s.launch(tctx, st.p, st.name, title, st.proj, st.work.dir, st.work.branch, st.issue, st.model, st.fork.conversation, st.brief, st.handover, st.o.Access, st.action, st.fork, st.o.Parent); err != nil {
+		// A stop may have cut tmux off after it made the session.
+		if ctx.Err() != nil {
+			killCtx, kill := context.WithTimeout(context.WithoutCancel(ctx), tmuxTimeout)
+			defer kill()
+			_ = s.tmux.Kill(killCtx, st.name)
+		}
 		return err
 	}
 	s.register(st.name, title, st.work, st.issue, st.model, st.created, st.o.Access, st.action, st.fork, st.o.Parent)
@@ -486,16 +531,35 @@ func (s *Threads) RetryStart(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.starting[id]
-	if st == nil || st.status != StartFailed || st.running || st.aborted {
+	if st == nil || st.status != StartFailed && st.status != StartCancelled || st.running || st.aborted {
 		return fmt.Errorf("Thread %s has no failed start to retry", id)
 	}
-	st.status, st.failure, st.running = Starting, "", true
+	st.status, st.failure, st.running, st.cancelled = Starting, "", true, false
 	st.setupTried = false
 	st.done = make(chan struct{})
 	var run context.Context
 	run, st.cancel = context.WithCancel(st.app)
 	s.sync()
 	go s.runStart(run, st)
+	return nil
+}
+
+// CancelStart stops the start of the thread id that is under way, at the owner's word. It stops the set-up command and
+// the agent's start, and removes the worktree the start made when no thread or terminal is in it and the checks of a
+// clean-up pass; one that stays is said in the row. The thread stays listed as a cancelled start, with its first message
+// and the held ones kept for a retry, which makes the worktree again if it went. The call returns once that is so.
+func (s *Threads) CancelStart(id string) error {
+	s.mu.Lock()
+	st := s.starting[id]
+	if st == nil || st.status != Starting || !st.running || st.aborted {
+		s.mu.Unlock()
+		return fmt.Errorf("Thread %s has no start to cancel", id)
+	}
+	st.cancelled = true
+	cancel, done := st.cancel, st.done
+	s.mu.Unlock()
+	cancel()
+	<-done
 	return nil
 }
 

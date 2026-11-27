@@ -1383,7 +1383,7 @@ func (h *Harness) started(v threads.Thread, err error) (threads.Thread, error) {
 		for _, row := range h.Threads().List() {
 			switch {
 			case row.ID != v.ID:
-			case row.Start == threads.StartFailed:
+			case row.Start == threads.StartFailed || row.Start == threads.StartCancelled:
 				return row, errors.New(row.StartError)
 			case row.Start == "":
 				return row, nil
@@ -1402,6 +1402,9 @@ func (h *Harness) NewThreadLater(title, prompt string) (threads.Thread, error) {
 
 // RetryThreadStart goes on with a thread whose start failed.
 func (h *Harness) RetryThreadStart(id string) error { return h.threads.RetryThreadStart(id) }
+
+// CancelThreadStart stops a start that is under way.
+func (h *Harness) CancelThreadStart(id string) error { return h.threads.CancelThreadStart(id) }
 
 func (h *Harness) NewThread(title, prompt, model, effort, access string) (threads.Thread, error) {
 	return h.started(h.threads.NewThread(title, prompt, model, effort, false, access, ""))

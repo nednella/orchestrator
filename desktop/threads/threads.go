@@ -4333,7 +4333,7 @@ func (s *Threads) shownState(id string) thread.State {
 	switch st := s.starting[id]; {
 	case st == nil:
 		return s.stateOf(id)
-	case st.status == StartFailed:
+	case st.status != Starting:
 		return thread.Waiting
 	}
 	return thread.Working

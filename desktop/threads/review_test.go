@@ -33,7 +33,8 @@ case " $* " in
   *" new-session "*)
     if [ -e %[1]s/fail-new ]; then echo "no room for a session" >&2; exit 1; fi
     if [ -e %[1]s/fail-new-shell ]; then case "$*" in *ORCHESTRATOR_PROJECT=*) echo "no room for a shell" >&2; exit 1 ;; esac; fi
-    if [ -e %[1]s/fail-slow-new ]; then case "$*" in *ORCHESTRATOR_THREAD=*) sleep 1 ;; esac; fi ;;
+    if [ -e %[1]s/fail-slow-new ]; then case "$*" in *ORCHESTRATOR_THREAD=*) sleep 1 ;; esac; fi
+    if [ -e %[1]s/fail-slow-shell ]; then case "$*" in *ORCHESTRATOR_PROJECT=*) sleep 1 ;; esac; fi ;;
   *" list-sessions "*)
     if [ -e %[1]s/fail-list ]; then echo "error connecting to /tmp/x (Permission denied)" >&2; exit 1; fi
     if [ -e %[1]s/fail-slow-list ]; then out=$(%[2]s "$@"); rc=$?; sleep 0.4; printf '%%s\n' "$out"; exit $rc; fi
@@ -73,7 +74,7 @@ func (f fakeTmux) releaseKill(t *testing.T) {
 	}
 }
 
-// fail makes the named call ("new", "list", "issue", "access" or "kill") fail; "slow-new" makes a thread's new-session wait a second and "new-shell" fails the new-session of a shell, or work again. "slow-list" makes list-sessions
+// fail makes the named call ("new", "list", "issue", "access" or "kill") fail; "slow-new" makes a thread's new-session wait a second, "slow-shell" a shell's, and "new-shell" fails the new-session of a shell, or work again. "slow-list" makes list-sessions
 // answer late with what tmux held when it was asked.
 func (f fakeTmux) fail(t *testing.T, call string, on bool) {
 	t.Helper()

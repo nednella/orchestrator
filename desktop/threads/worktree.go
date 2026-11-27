@@ -149,10 +149,11 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	if !branchFound {
-		if _, err := l.git(ctx, proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
+		if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
 			return workPlace{}, fmt.Errorf("making the worktree of %s: %w", branch, err)
 		}
 	}
+	ctx = context.WithoutCancel(ctx)
 	// As git lists it, with every link resolved: the folder a thread is known by, wherever the project sits.
 	dir = folder.Canonical(dir)
 	w := Made{Path: dir, Branch: branch, Base: base, BaseOid: baseOid, Thread: name.String(), Created: time.Now().UnixMilli()}
@@ -183,7 +184,8 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 	default:
 		return false, nil
 	}
-	if _, err := l.git(ctx, proj.Dir, args...); err != nil {
+	// Once git has begun to make the worktree it ends, so a stop of the start finds it whole, with its record.
+	if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, args...); err != nil {
 		return true, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 	}
 	return true, nil

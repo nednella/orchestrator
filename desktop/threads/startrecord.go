@@ -145,7 +145,9 @@ func (s *Threads) restoreStart(proj project.Project, name thread.Name) bool {
 		delivered: rec.Done, sending: rec.Sending, sentBefore: rec.Before, queue: rec.Queue, status: rec.Status, failure: rec.Failure,
 		saved: data,
 	}
-	st.status, st.failure = StartFailed, quitFailure
+	if st.status != StartCancelled {
+		st.status, st.failure = StartFailed, quitFailure
+	}
 	st.info = st.placeholder()
 	if st.placed {
 		st.info.Path, st.info.Branch = st.work.dir, st.work.branch
