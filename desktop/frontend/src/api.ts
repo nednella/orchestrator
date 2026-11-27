@@ -2,7 +2,7 @@ import { chatMediaURL } from './chatEvents'
 import type { Command } from './chatTimeline'
 import { createMock } from './mock'
 import { openTermStream } from './termStream'
-import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Changes, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, ThemeName, ThemeSetting, UpdateState } from './types'
+import type { Access, BrowserState, ChatEvent, ChatImage, ChatSent, Changes, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, DataDirChoice, Digest, DigestSchedule, EventMap, Evidence, FilesRewind, FolderListing, Issue, IssueDetail, FileChip, FileContent, FileListing, Ledger, LightTheme, Limits, Memory, ModelChoice, NewProject, NewProjectOptions, Note, Pending, Place, Release, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, ThemeName, ThemeSetting, UpdateState } from './types'
 
 type Backend = {
   Snapshot(): Promise<Snapshot>
@@ -23,6 +23,8 @@ type Backend = {
   SetEffort(id: string, effort: string): Promise<void>
   OpenInEditor(id: string, path: string): Promise<void>
   OpenProjectInEditor(project: string, path: string): Promise<void>
+  OpenFileInEditor(id: string, path: string, line: number): Promise<void>
+  RevealInFinder(id: string, path: string): Promise<void>
   ForkThread(id: string, at: string): Promise<Thread>
   SideChatDelete(id: string, unused: boolean): Promise<void>
   RenameThread(id: string, title: string): Promise<void>
@@ -79,6 +81,8 @@ type Backend = {
   ChatReadFile(id: string, path: string): Promise<FileContent>
   ChatReadImage(id: string, path: string): Promise<FileContent>
   ProjectReadFile(project: string, path: string): Promise<FileContent>
+  ChatReadOutside(id: string, path: string): Promise<FileContent>
+  ChatFileChips(id: string, paths: string[]): Promise<FileChip[]>
   ChatFileTree(id: string): Promise<FileListing>
   ProjectFileTree(project: string): Promise<FileListing>
   ChatFileDir(id: string, dir: string): Promise<FileListing>
@@ -145,8 +149,8 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  threads: ['NewThread', 'RetryThreadStart', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'Changes', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'ForkThread', 'SideChatDelete', 'RenameThread', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
-  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ChatReadImage', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
+  threads: ['NewThread', 'RetryThreadStart', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'Changes', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'OpenFileInEditor', 'RevealInFinder', 'ForkThread', 'SideChatDelete', 'RenameThread', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ChatReadImage', 'ProjectReadFile', 'ChatReadOutside', 'ChatFileChips', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
   notes: ['AddNote', 'UpdateNote', 'SetNotePinned', 'SetNoteArchived', 'AddNoteImage', 'RemoveNoteImage', 'DeleteNote', 'NoteToIssue', 'NoteToThread'],
@@ -202,6 +206,9 @@ export const api = {
   // A path opens that markdown file in the thread's folder, '' the folder itself.
   openInEditor: (id: string, path: string) => backend.OpenInEditor(id, path),
   openProjectInEditor: (project: string, path: string) => backend.OpenProjectInEditor(project, path),
+  // The file or folder at a path a chat message names, anywhere on disk, at line when it is above zero and the editor takes one.
+  openFileInEditor: (id: string, path: string, line = 0) => backend.OpenFileInEditor(id, path, line),
+  revealInFinder: (id: string, path: string) => backend.RevealInFinder(id, path),
   forkThread: (id: string, at: string) => backend.ForkThread(id, at),
   // With unused the side chat goes only when nobody sent it a message, as when its tab closes.
   sideChatDelete: (id: string, unused = false) => backend.SideChatDelete(id, unused),
@@ -274,6 +281,10 @@ export const api = {
   // A question's preview image: a file of the thread's folder, or in its temp folder or chat images, and nowhere else.
   chatReadImage: (id: string, path: string) => backend.ChatReadImage(id, path),
   projectReadFile: (project: string, path: string) => backend.ProjectReadFile(project, path),
+  // The file at an absolute path the owner clicked in the chat, read only, wherever it is; a regular file, under the same limits.
+  chatReadOutside: (id: string, path: string) => backend.ChatReadOutside(id, path),
+  // What is at each path a message names, in order: the paths are looked at, no file is read.
+  chatFileChips: (id: string, paths: string[]) => backend.ChatFileChips(id, paths),
   chatFileTree: (id: string) => backend.ChatFileTree(id),
   projectFileTree: (project: string) => backend.ProjectFileTree(project),
   chatFileDir: (id: string, dir: string) => backend.ChatFileDir(id, dir),

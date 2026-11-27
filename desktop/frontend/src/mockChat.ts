@@ -1,4 +1,4 @@
-import type { Access, ChatEvent, ChatImage, EventMap, FileContent, FileEntry, FileListing, FilesRewind, Pending, State } from './types'
+import type { Access, ChatEvent, ChatImage, EventMap, FileChip, FileContent, FileEntry, FileListing, FilesRewind, Pending, State } from './types'
 
 type Emit = <K extends keyof EventMap>(event: K, payload: EventMap[K]) => void
 
@@ -71,6 +71,14 @@ const source: Record<string, string> = {
 const logo =
   '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect width="240" height="120" rx="12" fill="#5b6ee1"/><text x="120" y="70" font-family="sans-serif" font-size="30" text-anchor="middle" fill="#fff">storefront</text></svg>'
 const maxText = 1 << 20
+// The folder of a mock thread that has no worktree.
+const projectFolder = '/Users/demo/code/storefront'
+// Files outside every thread's folder, by path, as an agent leaves them in a scratch folder; a folder holds what starts with its path.
+const outsideFiles: Record<string, string> = {
+  '/private/tmp/claude-501/scratchpad/rule-inventory.html': '<!doctype html>\n<html>\n<head><title>Rule inventory</title></head>\n<body>\n  <h1>Rule inventory</h1>\n  <ul>\n    <li>Never push to main</li>\n    <li>One issue, one branch, one draft PR</li>\n  </ul>\n</body>\n</html>\n',
+  '/tmp/storefront/checkout-flow.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120"><rect width="320" height="120" rx="12" fill="#2f855a"/><text x="160" y="68" font-family="sans-serif" font-size="22" text-anchor="middle" fill="#fff">checkout flow</text></svg>',
+  '/tmp/storefront/notes/review.md': '# Review notes\n\n- The cart total rounds each line first.\n- The coupon strip hides when the code has run out.\n',
+}
 // The text of the markdown files among them.
 const markdown: Record<string, string> = {
   'AGENTS.md': '# AGENTS.md\n\nstorefront: the shop\'s web app and its API.\n\n## Hard rules\n\n- Tests run against a throwaway database, never the shared one.\n- Never push to `main`; one issue, one branch, one draft PR.\n\n## Commands\n\n| What | Command |\n| --- | --- |\n| Front end tests | `npm test` |\n| API tests | `go test ./...` |\n\nThe settings are in [docs/config.md](docs/config.md).',
@@ -108,6 +116,15 @@ const replies = [
   'I read the router and the checkout page. Nothing else needs to change for this.',
   'Tests pass: 48 passed, 0 failed.',
 ]
+
+// fileReply is the reply to a message that says "files": links and code that name files in the thread's folder and outside it, one
+// name twice, a folder, and paths that are not there.
+const fileReply = [
+  'The double fetch starts in [useCheckout.ts](app-frontend/src/js/hooks/useCheckout.ts#L18), and the total rounds in `app-frontend/src/js/cart.ts:5-7`. `app-frontend/src/js/money.ts:1:8` formats it.',
+  'Two files share a name: [package.json](package.json) and [package.json](app-frontend/package.json). The settings are in [docs/config.md](docs/config.md) and the tests in [src](app-frontend/test).',
+  'I left the inventory in [rule-inventory.html](/private/tmp/claude-501/scratchpad/rule-inventory.html), the flow as a picture in `/tmp/storefront/checkout-flow.svg`, the notes in [review.md](/tmp/storefront/notes/review.md#L2) and the rest in [the scratch folder](/tmp/storefront).',
+  'Not there: `app-frontend/src/js/coupon.ts:12` and [the old plan](docs/old-plan.md). A bare path such as app-frontend/src/js/cart.ts in a sentence stays text, and so does [a web link](https://example.com/docs).',
+].join('\n\n')
 
 // thoughts are the thinking Claude streams before each reply, one per reply, as summaries Claude Code shows.
 const thoughts = [
@@ -248,7 +265,7 @@ function olderTurns(items: number, ago: (minutes: number) => number): Draft[] {
 // mockChat stands in for the chat service: logs kept in memory, chat:<id> events for watched threads in batches, and a
 // reply streamed as deltas over a second, or over eight to a message that says "slow", which leaves time to queue
 // another, after three tool calls of a second and a half each to a message that says "tools", or about 30 KB of
-// markdown, as Claude streams it, to a message that says "long", or two subagents in the background to a message that
+// markdown, as Claude streams it, to a message that says "long", or a reply that names files to one that says "files", or two subagents in the background to a message that
 // says "agents", whose Bash call waits on an approval when the message also says "ask". Claude exits on a message that
 // is just "exit". The images sent are kept in memory, at the paths the service would save them to, and mediaURL gives
 // each one's address. thread throws for an id that has no chat, and isProject says whether a project key is configured.
@@ -346,7 +363,7 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     const t = thread(id)
     const n = nextReply++
     const long = /\blong\b/i.test(asked)
-    const text = long ? longReply : replies[n % replies.length]
+    const text = long ? longReply : /\bfiles\b/i.test(asked) ? fileReply : replies[n % replies.length]
     const thought = thoughts[n % thoughts.length]
     const words = long ? text.match(/[^]{1,15}/g)! : text.split(/(?<= )/)
     const thinking = thought.split(/(?<= )/)
@@ -805,6 +822,26 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
       known(project)
       return readFile(path, '', `project ${project}`)
     },
+    ChatReadOutside: async (id: string, path: string) => {
+      thread(id)
+      if (!path.startsWith('/')) throw 'This file is not at an absolute path'
+      const text = outsideFiles[path]
+      if (text === undefined) throw outsideFolder(path) ? 'This is not a file' : 'This file does not exist'
+      if (path.endsWith('.svg')) return { kind: 'image' as const, text: '', size: text.length, truncated: false, mime: 'image/svg+xml', data: btoa(text) }
+      return { kind: 'text' as const, text, size: text.length, truncated: false, mime: '', data: '' }
+    },
+    ChatFileChips: async (id: string, paths: string[]) => {
+      const folder = thread(id).worktree || projectFolder
+      return paths.map((path) => chipAt(folder, path))
+    },
+    OpenFileInEditor: async (id: string, path: string) => {
+      const t = thread(id)
+      if (!chipAt(t.worktree || projectFolder, path).exists) throw 'This file does not exist'
+    },
+    RevealInFinder: async (id: string, path: string) => {
+      const t = thread(id)
+      if (!chipAt(t.worktree || projectFolder, path).exists) throw 'This file does not exist'
+    },
     ChatFileTree: async (id: string) => {
       thread(id)
       return fileTree()
@@ -865,6 +902,32 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     const children = ignoredFolders[rel]
     if (children === undefined) throw 'This folder does not exist'
     return { entries: children.map((path) => ({ path, dir: path in ignoredFolders, ignored: true })), truncated: false }
+  }
+
+  const outsideFolder = (path: string) => Object.keys(outsideFiles).some((p) => p.startsWith(`${path}/`))
+
+  // chipAt is what ChatFileChips says of a path of a message of a thread whose folder is folder: its sample files and
+  // folders, and the files outside it.
+  function chipAt(folder: string, path: string): FileChip {
+    const none = { path, exists: false, dir: false, size: 0, abs: path, inside: false, rel: '' }
+    const parts: string[] = []
+    for (const step of (path.startsWith('/') ? path : `${folder}/${path}`).split('/')) {
+      if (step === '..') parts.pop()
+      else if (step !== '' && step !== '.') parts.push(step)
+    }
+    const abs = `/${parts.join('/')}`.replace(/^\/~/, '~')
+    if (path === '' || path.startsWith('~')) return none
+    const rel = abs.startsWith(`${folder}/`) ? abs.slice(folder.length + 1) : abs === folder ? '' : null
+    if (rel !== null) {
+      const all = [...files, ...ignoredRoot, ...Object.values(ignoredFolders).flat()]
+      const dir = rel === '' || all.some((p) => p.startsWith(`${rel}/`))
+      if (!dir && !all.includes(rel)) return { ...none, abs }
+      const size = dir ? 0 : (source[rel] ?? markdown[rel] ?? `// ${rel}\n`).length
+      return { path, exists: true, dir, size, abs, inside: true, rel }
+    }
+    if (outsideFolder(abs)) return { path, exists: true, dir: true, size: 0, abs, inside: false, rel: '' }
+    const text = outsideFiles[abs]
+    return text === undefined ? { ...none, abs } : { path, exists: true, dir: false, size: text.length, abs, inside: false, rel: '' }
   }
 
   // readFile is the file at path in folder as the service reads it: any regular file inside the folder.

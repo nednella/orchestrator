@@ -63,6 +63,12 @@ export type FileListing = { entries: FileEntry[]; truncated: boolean }
 // base64 in data. A binary file has neither.
 export type FileContent = { kind: 'text' | 'image' | 'binary'; text: string; size: number; truncated: boolean; mime: string; data: string }
 
+// FileChip is what is at a path a chat message names (desktop/chat.FileChip). path is the path as asked and abs the path
+// made absolute. A path that is in the thread's folder has inside set and rel, its path from the folder, '' for the
+// folder itself. size is a file's size in bytes. exists is false for a path with nothing there, or nothing but a file or
+// a folder.
+export type FileChip = { path: string; exists: boolean; dir: boolean; size: number; abs: string; inside: boolean; rel: string }
+
 export type Thread = {
   id: string
   project: string
