@@ -3,7 +3,7 @@ import type { CSSProperties, KeyboardEvent } from 'react'
 import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { api, errorMessage } from '../api'
 import { COLUMN_DEFAULT_REM, COLUMN_KEY, rootRemPx, storedColumn } from '../chatColumn'
-import { escapeAction, lastTurnEnd, quoteMarkdown } from '../chatComposer'
+import { escapeAction, lastTurnEnd, quoteMarkdown, stopHeld } from '../chatComposer'
 import type { EscapeAction } from '../chatComposer'
 import { forkDividers, forksKey, lineageDivider } from '../chatDividers'
 import { editBlocked, editRequest, laterMessages, undoRequest } from '../chatEdit'
@@ -75,7 +75,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)
-  const stopping = timeline.turnOpen && stopAsked === lastEnd
+  const stopping = stopHeld({ turnOpen: timeline.turnOpen, starting, stopAsked, lastEnd })
 
   useEffect(() => {
     if (!stopping) return
@@ -196,7 +196,13 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const edit: ChatEdit = { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom }
 
   // Stop cancels a start that is under way; messages sent meanwhile are held, so none is queued for Send now.
-  const stop = () => stopWith(() => (starting ? api.cancelThreadStart(thread.id) : api.chatInterrupt(thread.id)))
+  const cancelling = useRef(false)
+  const stop = () => {
+    if (!starting) return stopWith(() => api.chatInterrupt(thread.id))
+    if (cancelling.current) return
+    cancelling.current = true
+    report(() => api.cancelThreadStart(thread.id).finally(() => (cancelling.current = false)))
+  }
   const sendNow = (message: string) => {
     if (!starting) stopWith(() => api.chatSendNow(thread.id, message))
   }

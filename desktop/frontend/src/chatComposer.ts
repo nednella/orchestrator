@@ -14,6 +14,13 @@ export function escapeAction({ overlay, picker, turnOpen, stopping, queued }: { 
   return queued ? 'send-now' : 'interrupt'
 }
 
+// stopHeld says whether a stop that was asked for still waits for the turn to end: the turn is open and no turn ended
+// since the stop was asked. A thread that starts has no turn of the agent's to stop, and its stop, which cancels the
+// start, is not held, so Stop and Esc work again on the retry.
+export function stopHeld({ turnOpen, starting, stopAsked, lastEnd }: { turnOpen: boolean; starting: boolean; stopAsked: number | null; lastEnd: number }): boolean {
+  return !starting && turnOpen && stopAsked === lastEnd
+}
+
 // composerAction is what the composer's button does: with the turn open and nothing typed it stops the turn, and a
 // message denies the approval that waits, or is queued while the turn runs.
 export function composerAction({ turnOpen, pending }: Pick<Timeline, 'turnOpen' | 'pending'>, draftEmpty: boolean): ComposerAction {

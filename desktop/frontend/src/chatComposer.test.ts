@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { commandMatches, commandToken, composerAction, escapeAction, lastTurnEnd, mentionToken, quoteMarkdown, replyLabel, replyPrefix, sendText, unseenDrafts } from './chatComposer.ts'
+import { commandMatches, commandToken, composerAction, escapeAction, lastTurnEnd, mentionToken, quoteMarkdown, replyLabel, replyPrefix, sendText, stopHeld, unseenDrafts } from './chatComposer.ts'
 import type { Command } from './chatTimeline.ts'
 import type { ChatEvent, Pending } from './types.ts'
 
@@ -150,4 +150,11 @@ test('prefix before contains', () => {
     commandMatches(commands, '').map((c) => c.name),
     ['pr-review', 'compact', 'Review', 'init'],
   )
+})
+
+test('stopHeld: a stop waits for the turn it stops, and a thread that starts holds none', () => {
+  assert.equal(stopHeld({ turnOpen: true, starting: false, stopAsked: 4, lastEnd: 4 }), true)
+  assert.equal(stopHeld({ turnOpen: true, starting: false, stopAsked: 4, lastEnd: 5 }), false, 'a turn ended since')
+  assert.equal(stopHeld({ turnOpen: true, starting: false, stopAsked: null, lastEnd: 4 }), false)
+  assert.equal(stopHeld({ turnOpen: true, starting: true, stopAsked: -1, lastEnd: -1 }), false, 'the cancel of a start is not waited for, so the retry can be stopped at once')
 })
