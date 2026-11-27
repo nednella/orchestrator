@@ -69,6 +69,10 @@ func (v *Service) DeletePlan(id string) DeletePlan { return v.s.DeletePlan(id) }
 // thread's marker, without its host and Claude. [] when it has none.
 func (v *Service) Servers(id string) ([]Server, error) { return v.s.Servers(id) }
 
+// Changes are the lines the thread's folder changes against origin's default branch, committed or not; its base is ""
+// when there is nothing to compare with.
+func (v *Service) Changes(id string) Changes { return v.s.Changes(id) }
+
 // StopServer stops the server pid of thread id. pid is looked up again among the thread's servers first, so no other
 // process is stopped.
 func (v *Service) StopServer(id string, pid int) error { return v.s.StopServer(id, pid) }
