@@ -1,8 +1,11 @@
 package update
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -85,25 +88,54 @@ func parseChange(item string) Change {
 	return c
 }
 
-// PatchNotes returns the releases since the version the app last ran, newest first, and
-// remembers the running one so they show once. On the first run it returns only the running
-// release; a dev build has no notes.
-func (u *Updater) PatchNotes() ([]Release, error) {
+// ReleaseNotes reads the notes of the running version from its GitHub release. The error is a sentence for the
+// owner: a dev build has no release, and GitHub may not answer or know the version.
+func (u *Updater) ReleaseNotes(ctx context.Context) (Release, error) {
+	if u.current == "dev" {
+		return Release{}, errors.New("A development build has no release notes")
+	}
+	body, err := update.Notes(ctx, u.run, u.current)
+	switch {
+	case errors.Is(err, update.ErrNoNotes):
+		return Release{}, fmt.Errorf("There are no release notes for %s", u.current)
+	case err != nil:
+		log.Printf("orchestrator: reading the release notes: %v", err)
+		return Release{}, errors.New("The release notes could not be read. Check the connection")
+	}
+	for _, r := range ParseChangelog(body) {
+		if r.Version == u.current {
+			return r, nil
+		}
+	}
+	// A release body that carries no version heading holds the changes alone.
+	for _, r := range ParseChangelog("## " + u.current + "\n" + body) {
+		if r.Version == u.current && len(r.Sections) > 0 {
+			return r, nil
+		}
+	}
+	return Release{}, fmt.Errorf("There are no release notes for %s", u.current)
+}
+
+// NewReleaseNotes is the notes of the running version when the app has not shown them before, in a list of one, and
+// remembers the version so they show once. It is empty for a dev build and when the notes cannot be read, which
+// leaves the version unseen for the next start.
+func (u *Updater) NewReleaseNotes(ctx context.Context) []Release {
 	path := filepath.Join(u.stateDir, seenFile)
 	raw, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
+		log.Printf("orchestrator: reading the last version shown: %v", err)
+		return []Release{}
 	}
-	seen := strings.TrimSpace(string(raw))
-	notes := []Release{}
-	if seen == u.current || u.current == "dev" {
-		return notes, nil
+	if strings.TrimSpace(string(raw)) == u.current {
+		return []Release{}
 	}
-	for _, r := range ParseChangelog(u.changelog) {
-		since := update.Newer(seen, r.Version) && !update.Newer(u.current, r.Version)
-		if since || (seen == "" && r.Version == u.current) {
-			notes = append(notes, r)
-		}
+	rel, err := u.ReleaseNotes(ctx)
+	if err != nil {
+		return []Release{}
 	}
-	return notes, atomicfile.Write(path, []byte(u.current+"\n"), 0o644)
+	if err := atomicfile.Write(path, []byte(u.current+"\n"), 0o644); err != nil {
+		log.Printf("orchestrator: remembering the last version shown: %v", err)
+		return []Release{}
+	}
+	return []Release{rel}
 }

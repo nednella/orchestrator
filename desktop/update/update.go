@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nednella/orchestrator"
 	"github.com/nednella/orchestrator/internal/update"
 	"github.com/nednella/orchestrator/internal/version"
 )
@@ -58,7 +57,6 @@ type Updater struct {
 	relaunch  func(bundle string) error
 	quit      func()
 	current   string // the running version
-	changelog string // the release notes the app ships with
 	first     time.Duration
 	every     time.Duration
 	after     func(time.Duration) <-chan time.Time
@@ -74,15 +72,12 @@ type Updater struct {
 
 // New makes an updater for the app at bundle. relaunch opens it again once the app has quit.
 func New(run update.Runner, stateDir, bundle string, emit func(string, any), relaunch func(string) error, quit func()) *Updater {
-	return &Updater{run: run, stateDir: stateDir, bundle: bundle, emit: emit, relaunch: relaunch, quit: quit, current: version.Version, changelog: orchestrator.Changelog,
+	return &Updater{run: run, stateDir: stateDir, bundle: bundle, emit: emit, relaunch: relaunch, quit: quit, current: version.Version,
 		first: firstCheck, every: checkEvery, after: time.After, checkWait: checkWait, state: State{Status: idle}}
 }
 
 // SetVersion replaces the running version, for tests: the test binary is always "dev".
 func (u *Updater) SetVersion(v string) { u.current = v }
-
-// SetChangelog replaces the release notes the app ships with, for tests: the real file holds the releases to come.
-func (u *Updater) SetChangelog(text string) { u.changelog = text }
 
 // SetLoop sets how long to wait before the first check, and between checks.
 func (u *Updater) SetLoop(first, every time.Duration) { u.first, u.every = first, every }

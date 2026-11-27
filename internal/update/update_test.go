@@ -327,3 +327,33 @@ func TestInstallZipRefusesABadSum(t *testing.T) {
 		t.Errorf("unpacked %v, the bundle holds %q", unpacked, binary(t, path))
 	}
 }
+
+func notesRunner(out string, err error) Runner {
+	return func(ctx context.Context, name string, args ...string) ([]byte, error) { return []byte(out), err }
+}
+
+func TestNotesReadsTheBodyOfTheRelease(t *testing.T) {
+	got, err := Notes(context.Background(), notesRunner("{\"body\":\"## 1.2.3\\n\\n* a fix\"}\n200", nil), "1.2.3")
+	if err != nil || got != "## 1.2.3\n\n* a fix" {
+		t.Errorf("Notes = %q, %v", got, err)
+	}
+}
+
+func TestNotesTellsAMissingReleaseFromAFailure(t *testing.T) {
+	if _, err := Notes(context.Background(), notesRunner("{\"message\":\"Not Found\"}\n404", nil), "1.2.3"); !errors.Is(err, ErrNoNotes) {
+		t.Errorf("404 = %v, want ErrNoNotes", err)
+	}
+	if _, err := Notes(context.Background(), notesRunner("{\"body\":\"\"}\n200", nil), "1.2.3"); !errors.Is(err, ErrNoNotes) {
+		t.Errorf("empty body = %v, want ErrNoNotes", err)
+	}
+	for name, run := range map[string]Runner{
+		"curl failed": notesRunner("", errors.New("exit 6")),
+		"rate limit":  notesRunner("{}\n403", nil),
+		"no status":   notesRunner("garbage", nil),
+		"not json":    notesRunner("<html>\n200", nil),
+	} {
+		if _, err := Notes(context.Background(), run, "1.2.3"); err == nil || errors.Is(err, ErrNoNotes) {
+			t.Errorf("%s = %v, want a failure", name, err)
+		}
+	}
+}

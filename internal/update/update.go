@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +29,9 @@ const (
 	// only 60 requests an hour from an IP without a token.
 	latestURL   = "https://github.com/" + Repo + "/releases/latest"
 	downloadURL = "https://github.com/" + Repo + "/releases/download/"
-	bundle      = "orchestrator.app"
+	// tagURL is the API's answer for one release; one request when the notes of the running version are read.
+	tagURL = "https://api.github.com/repos/" + Repo + "/releases/tags/"
+	bundle = "orchestrator.app"
 )
 
 // sizeEvery is how often a download's partial file is measured; a var so tests can shorten it.
@@ -61,6 +64,40 @@ func Latest(ctx context.Context, run Runner) (Release, error) {
 		return Release{}, fmt.Errorf("release %s has no %s with its sha256 yet: %w", tag, Asset, err)
 	}
 	return rel, nil
+}
+
+// ErrNoNotes says GitHub has no release for the version asked, or one with no notes.
+var ErrNoNotes = errors.New("there is no release with notes for this version")
+
+// Notes reads the notes of the release of version, as markdown.
+func Notes(ctx context.Context, run Runner, version string) (string, error) {
+	out, err := run(ctx, "curl", "-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", "-w", "\n%{http_code}", tagURL+"v"+version)
+	if err != nil {
+		return "", fmt.Errorf("asking GitHub for the notes of %s: %w", version, err)
+	}
+	// -w appends the status after the body, on a line of its own.
+	i := strings.LastIndex(string(out), "\n")
+	if i < 0 {
+		return "", fmt.Errorf("GitHub answered nothing for the notes of %s", version)
+	}
+	body, code := out[:i], strings.TrimSpace(string(out[i+1:]))
+	switch code {
+	case "200":
+	case "404":
+		return "", ErrNoNotes
+	default:
+		return "", fmt.Errorf("GitHub answered %s for the notes of %s", code, version)
+	}
+	var rel struct {
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal(body, &rel); err != nil {
+		return "", fmt.Errorf("reading the notes of %s: %w", version, err)
+	}
+	if strings.TrimSpace(rel.Body) == "" {
+		return "", ErrNoNotes
+	}
+	return rel.Body, nil
 }
 
 // Newer says whether latest is a higher version than current. A dev build is never behind.

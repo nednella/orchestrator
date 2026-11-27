@@ -22,8 +22,8 @@ func (s *Service) DownloadUpdate() error { return s.u.Download(s.ctx()) }
 // InstallUpdate installs the newest release and relaunches the app.
 func (s *Service) InstallUpdate() error { return s.u.Install(s.ctx()) }
 
-// PatchNotes is the releases since the version the app last ran; it returns them once.
-func (s *Service) PatchNotes() ([]Release, error) { return s.u.PatchNotes() }
+// ReleaseNotes reads the notes of the running version from its release.
+func (s *Service) ReleaseNotes() (Release, error) { return s.u.ReleaseNotes(s.ctx()) }
 
-// Changelog is every release the app shipped with, newest first.
-func (s *Service) Changelog() []Release { return ParseChangelog(s.u.changelog) }
+// NewReleaseNotes is the notes of the running version, once, when the app has not shown them before; else empty.
+func (s *Service) NewReleaseNotes() []Release { return s.u.NewReleaseNotes(s.ctx()) }

@@ -304,6 +304,8 @@ type FakeGH struct {
 	CreateErr     error             // what gh issue create fails with, if set; it still prints Create
 	Delay         time.Duration     // how long gh issue create takes
 	Releases      string            // the latest release's tag; "" fails the check
+	Notes         map[string]string // the body of each release, by version without the v; a version missing has no release
+	NotesErr      error             // what reading a release's notes fails with, if set: GitHub is not reachable
 	pr            string            // what gh pr list prints
 	prByHead      map[string]string // what gh pr list --head <branch> prints instead, by branch
 	PRErr         error             // what gh pr list fails with, if set
@@ -422,6 +424,9 @@ func (f *FakeGH) curl(args []string) ([]byte, error) {
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, "curl "+strings.Join(args, " "))
 	url := args[len(args)-1]
+	if _, tag, ok := strings.Cut(url, "/releases/tags/v"); ok {
+		return f.notes(tag)
+	}
 	switch {
 	case f.Releases == "":
 	case strings.HasSuffix(url, "/releases/latest"):
@@ -430,6 +435,19 @@ func (f *FakeGH) curl(args []string) ([]byte, error) {
 		return nil, nil
 	}
 	return nil, fmt.Errorf("curl: no network in tests: %v", args)
+}
+
+// notes answers the API's release for version as curl prints it with -w "\n%{http_code}".
+func (f *FakeGH) notes(version string) ([]byte, error) {
+	if f.NotesErr != nil {
+		return nil, f.NotesErr
+	}
+	body, ok := f.Notes[version]
+	if !ok {
+		return []byte("{\"message\":\"Not Found\"}\n404"), nil
+	}
+	out, err := json.Marshal(map[string]string{"body": body})
+	return append(out, "\n200"...), err
 }
 
 func (f *FakeGH) IssueCalls() int { return f.Calls("issue list") }
@@ -579,20 +597,22 @@ type Options struct {
 	TopExtra        string        // yaml lines added at the top of the config
 	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick      time.Duration
-	UpdateTick      time.Duration // how often to check the releases; an hour by default, and an hour before the first check
-	Releases        string        // the latest release's tag; "" fails the check
-	Version         string        // the version the app believes it runs; "dev" by default
-	DataDirConfig   bool          // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
-	NoProject       bool          // leave the project out of the config, so the app starts in a folder it does not know
-	AbsentProject   string        // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
-	ClaudeRejects   string        // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
-	CleanupSweep    time.Duration // how often kept clean-ups are tried again; 0 keeps the app's hour
-	PollEvery       time.Duration // how often tmux is listed; 0 keeps the app's 2 seconds
-	StopSettle      time.Duration // how long after a turn's end its usage is counted; 0 keeps the app's second
-	RetryFirst      time.Duration // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
-	ConfigTick      time.Duration // how often the config file is read again; 0 keeps the app's 2 seconds
-	Env             []string      // entries of the environment the app and its sessions run in; the harness's own isolation wins over them
-	PathWithout     []string      // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
+	UpdateTick      time.Duration     // how often to check the releases; an hour by default, and an hour before the first check
+	Releases        string            // the latest release's tag; "" fails the check
+	Notes           map[string]string // the body of each release's notes, by version; see FakeGH.Notes
+	NotesErr        error             // what reading the notes fails with, if set
+	Version         string            // the version the app believes it runs; "dev" by default
+	DataDirConfig   bool              // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
+	NoProject       bool              // leave the project out of the config, so the app starts in a folder it does not know
+	AbsentProject   string            // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
+	ClaudeRejects   string            // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
+	CleanupSweep    time.Duration     // how often kept clean-ups are tried again; 0 keeps the app's hour
+	PollEvery       time.Duration     // how often tmux is listed; 0 keeps the app's 2 seconds
+	StopSettle      time.Duration     // how long after a turn's end its usage is counted; 0 keeps the app's second
+	RetryFirst      time.Duration     // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
+	ConfigTick      time.Duration     // how often the config file is read again; 0 keeps the app's 2 seconds
+	Env             []string          // entries of the environment the app and its sessions run in; the harness's own isolation wins over them
+	PathWithout     []string          // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
 }
 
 // Harness is an app whose Claude sessions run the stand-in claude under the built command's host.
@@ -672,7 +692,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 		t.Fatal(err)
 	}
 	socket := fmt.Sprintf("aostest-%d-%d", os.Getpid(), harnesses.Add(1))
-	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
+	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases, Notes: o.Notes, NotesErr: o.NotesErr}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	start := standInEnv
 	if o.ClaudeRejects != "" {
 		start += rejecting(o.ClaudeRejects)
