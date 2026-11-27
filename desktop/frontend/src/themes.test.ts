@@ -2,14 +2,21 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import type { DarkTheme, LightTheme } from './types.ts'
-import { cardTip, pickedModes, THEME_CARDS, themeHalves, withCard } from './themes.ts'
+import { cardTip, pickedModes, THEME_CARDS, themeHalves, withCard, type ThemeCardDef } from './themes.ts'
 
 const card = (id: string) => THEME_CARDS.find((c) => c.id === id)!
 const standard = { light: 'light', dark: 'black' } as const
 
+const darkOnly: ThemeCardDef = { id: 'solo', label: 'Solo', previews: [{ mode: 'dark', theme: 'midnight' }] }
+
+test('a theme with both appearances takes both halves, or the one picked by its circle', () => {
+  assert.deepEqual(withCard(card('midnight'), standard), { light: 'midnight-light', dark: 'midnight' })
+  assert.deepEqual(withCard(card('linen'), { light: 'light', dark: 'umber' }), { light: 'linen', dark: 'linen-dark' })
+  assert.deepEqual(withCard(card('umber'), standard, 'light'), { light: 'umber-light', dark: 'black' })
+})
+
 test('a theme with one appearance takes only that half', () => {
-  assert.deepEqual(withCard(card('midnight'), standard), { light: 'light', dark: 'midnight' })
-  assert.deepEqual(withCard(card('linen'), { light: 'light', dark: 'umber' }), { light: 'linen', dark: 'umber' })
+  assert.deepEqual(withCard(darkOnly, { light: 'linen', dark: 'black' }), { light: 'linen', dark: 'midnight' })
 })
 
 test('the default card takes both halves back, or the one picked by its circle', () => {
@@ -23,18 +30,21 @@ test('a card rings the appearances that show it', () => {
   const halves = { light: 'light', dark: 'midnight' } as const
   assert.deepEqual(pickedModes(card('default'), halves), ['light'])
   assert.deepEqual(pickedModes(card('midnight'), halves), ['dark'])
+  assert.deepEqual(pickedModes(card('midnight'), { light: 'midnight-light', dark: 'midnight' }), ['light', 'dark'])
   assert.deepEqual(pickedModes(card('umber'), halves), [])
 })
 
 test('a saved theme this build does not have shows the default', () => {
   assert.deepEqual(themeHalves({ lightTheme: 'sepia' as LightTheme, darkTheme: 'violet' as DarkTheme }), standard)
   assert.deepEqual(themeHalves({ lightTheme: 'linen', darkTheme: 'umber' }), { light: 'linen', dark: 'umber' })
+  assert.deepEqual(themeHalves({ lightTheme: 'umber-light', darkTheme: 'linen-dark' }), { light: 'umber-light', dark: 'linen-dark' })
 })
 
 test('a card says which appearances it is for', () => {
   assert.equal(cardTip(card('default')), 'Use for both light and dark')
-  assert.equal(cardTip(card('midnight')), 'Use for dark mode only')
-  assert.equal(cardTip(card('linen')), 'Use for light mode only')
+  assert.equal(cardTip(card('midnight')), 'Use for both light and dark')
+  assert.equal(cardTip(darkOnly), 'Use for dark mode only')
+  assert.equal(cardTip({ ...darkOnly, previews: [{ mode: 'light', theme: 'linen' }] }), 'Use for light mode only')
 })
 
 test('every theme in the library has its colours in tokens.css', () => {

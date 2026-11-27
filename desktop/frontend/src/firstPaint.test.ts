@@ -46,6 +46,14 @@ test('the page wears the saved theme before React loads', () => {
   assert.equal(themeBeforeReact(false), 'linen')
 })
 
+test('the page wears each new half before React loads', () => {
+  data.clear()
+  saveFirstPaint({ theme: 'light', lightTheme: 'umber-light', darkTheme: 'linen-dark', lightAccent: '', darkAccent: '' })
+  assert.equal(themeBeforeReact(true), 'umber-light')
+  saveFirstPaint({ theme: 'dark', lightTheme: 'midnight-light', darkTheme: 'linen-dark', lightAccent: '', darkAccent: '' })
+  assert.equal(themeBeforeReact(false), 'linen-dark')
+})
+
 test('a damaged copy falls back to the system appearance', () => {
   data.clear()
   data.set(FIRST_PAINT_KEY, '{nope')
