@@ -16,6 +16,7 @@ const session = (over: Partial<Session>): Session => ({
   issue: 0,
   model: '',
   effort: '',
+  fast: false,
   history: [],
   branch: '',
   worktree: '',

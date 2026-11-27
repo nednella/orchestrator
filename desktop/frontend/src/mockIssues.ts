@@ -81,7 +81,7 @@ export function moveIssue(issue: Issue, section: string): Issue {
   return { ...issue, section, actions: sections[lane].actions, access: actionAccess(sections[lane].actions[0]), moves: movesFrom(section), labels }
 }
 
-const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
+const efforts = ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
 
 const ignoredBy = (labels: string[]) =>
   labels

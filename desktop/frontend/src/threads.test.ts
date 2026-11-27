@@ -19,6 +19,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Session
     issue: 0,
     model: '',
     effort: '',
+    fast: false,
     history: [],
     branch: '',
     worktree: '',

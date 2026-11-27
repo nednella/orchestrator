@@ -883,8 +883,8 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         const at = list.findIndex((s) => s.id === selected?.id)
         selectSession(list[(at + delta + list.length) % list.length].id)
       },
-      async newThread({ prompt, model, effort }, access, place) {
-        return addSession(await api.newThread('', prompt, model, effort, access, place))
+      async newThread({ prompt, model, effort, fast }, access, place) {
+        return addSession(await api.newThread('', prompt, model, effort, fast, access, place))
       },
       async settleThread(id) {
         await api.settleThread(id)
@@ -943,7 +943,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         setSessions((list) => list.map((s) => (s.id === id ? { ...s, title: trimmed } : s)))
       },
       async startIssue(number, action = '', background = false, start) {
-        return addSession(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort), background)
+        return addSession(await api.startIssue(number, action, start?.prompt, start?.model, start?.effort, start?.fast), background)
       },
       async switchProject(name, homeUnlessRemembered) {
         if (name === projectRef.current?.name) return

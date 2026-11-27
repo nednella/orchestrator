@@ -45,6 +45,7 @@ export function HomeComposer() {
   const [dismissed, setDismissed] = useState(false)
   const [model, setModel] = useState('')
   const [effort, setEffort] = useState('')
+  const [fast, setFast] = useState(false)
   const [commands, setCommands] = useState<{ project: string; list: Command[] } | null>(null)
   const pending = usePendingImages()
   const sending = useRef(false)
@@ -131,7 +132,7 @@ export function HomeComposer() {
           await a.addNote(text, pending.images)
           pending.clear()
         } else {
-          const start = { prompt: text.trim(), model, effort }
+          const start = { prompt: text.trim(), model, effort, fast }
           if (pickedIssue) await a.startIssue(pickedIssue.number, '', false, start)
           else await a.newThread(start, a.composerAccess, '')
           setPicked(null)
@@ -214,10 +215,12 @@ export function HomeComposer() {
             <ComposerModelChip
               model={model}
               effort={effort}
+              fast={fast}
               access={pickedIssue?.access ?? a.composerAccess}
               accessOff={pickedIssue ? `The issue’s action, ${pickedIssue.actions[0]}, sets the access` : ''}
               onModel={setModel}
               onEffort={setEffort}
+              onFast={setFast}
               onAccess={a.setComposerAccess}
             />
           )

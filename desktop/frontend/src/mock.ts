@@ -3,6 +3,7 @@ import { clickAt, newPage, normalizeUrl, pageRects, pageTitle, renderPage, typeT
 import type { PageModel } from './mockBrowser'
 import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
+import { EFFORTS, effortsOf, supportsFast } from './model'
 import { folderName } from './projectPath'
 import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, HistoryEntry, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Session, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
@@ -179,6 +180,7 @@ export function createMock(params: URLSearchParams) {
       issue: s.issue,
       model: s.model,
       effort: s.effort,
+      fast: s.fast,
       history: s.history.map((h) => ({ ...h })),
       branch: s.branch,
       worktree: s.worktree,
@@ -349,6 +351,7 @@ export function createMock(params: URLSearchParams) {
       wokeAt: createdAt,
       issue,
       ...modelFor(owner, issue),
+      fast: false,
       history,
       branch: issue ? `issue-${issue}` : '',
       worktree: issue ? `${owner.dir}/trees/issue-${issue}` : '',
@@ -600,12 +603,13 @@ export function createMock(params: URLSearchParams) {
   const titleFromPrompt = (prompt: string) => prompt.trim().split('\n')[0].trim().slice(0, 60)
 
   // The thread gets its first message through its chat, as the app gives it to the host.
-  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Session, 'branch' | 'worktree'> | null = null): Session {
+  function startSessionFor(title: string, issue: number, prompt: string, action = '', model = '', effort = '', access: Access = 'supervised', where: Pick<Session, 'branch' | 'worktree'> | null = null, fast = false): Session {
     const s = create(title, issue, 'idle', [], Date.now(), current, access)
     if (where) Object.assign(s, where)
     s.action = action
     if (model) s.model = model
     if (effort) s.effort = effort
+    s.fast = fast && supportsFast(s.model)
     chats.start(s.id)
     if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
     publish()
@@ -1140,14 +1144,14 @@ export function createMock(params: URLSearchParams) {
   const backend = {
     Snapshot: async () => snapshot(),
     Awake: async () => data.some((p) => projectView(p).working > 0),
-    NewThread: async (title: string, prompt: string, model: string, effort: string, access: Access, place: Place | '') => {
+    NewThread: async (title: string, prompt: string, model: string, effort: string, fast: boolean, access: Access, place: Place | '') => {
       if (access && !['read', 'supervised', 'full'].includes(access)) throw `access must be read, supervised or full, not "${access}"`
       if (place && !['worktree', 'project'].includes(place)) throw `place must be worktree or project, not "${place}"`
       const name = title.trim() || titleFromPrompt(prompt) || 'agent'
       const acc = access || 'supervised'
-      if ((place || settings.threadPlace || 'worktree') === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc)
+      if ((place || settings.threadPlace || 'worktree') === 'project') return startSessionFor(name, 0, prompt, '', model, effort, acc, null, fast)
       const branch = freeBranch(branchFromTitle(name), (b) => sessions.some((x) => x.branch === b))
-      return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` })
+      return startSessionFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` }, fast)
     },
     // DeleteThread acts as the sessions do: with worktree, the thread's own worktree goes first through a clean-up
     // with the checks, and one they keep refuses the delete; the thread, its chat and its row then go.
@@ -1283,6 +1287,21 @@ export function createMock(params: URLSearchParams) {
         chats.start(id)
       } else if (s.state !== 'settled') chats.mode(id, modeOfAccess[access])
       s.access = access
+      publish()
+    },
+    // SetFast and SetEffort act as the sessions do: the thread's row shows the change, and a settled thread starts with
+    // it at its next wake. Claude refuses ultracode on a model that has none.
+    SetFast: async (id: string, on: boolean) => {
+      const s = find(id)
+      s.fast = on
+      publish()
+    },
+    SetEffort: async (id: string, effort: string) => {
+      if (!effort) throw 'Pick an effort'
+      if (!(effort in EFFORTS)) throw `claude takes an effort of ${Object.keys(EFFORTS).join(', ')}, not "${effort}"`
+      const s = find(id)
+      if (s.state !== 'settled' && !effortsOf(s.model).includes(effort)) throw `ultracode is not available for this session (${s.model} does not support it)`
+      s.effort = effort
       publish()
     },
     RenameSession: async (id: string, title: string) => {
@@ -1421,7 +1440,7 @@ export function createMock(params: URLSearchParams) {
       if (refresh) issueRefreshes.count++
       return refresh ? github(currentIssues(), 700) : delay(currentIssues())
     },
-    StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string) => {
+    StartIssue: async (number: number, action: string, prompt: string, model: string, effort: string, fast: boolean) => {
       const issue = current.issues.find((i) => i.number === number)
       if (!issue) throw 'No such issue'
       const mine = sessions.filter((s) => s.project === current.name && !s.forkOf && s.issue === number)
@@ -1437,7 +1456,7 @@ export function createMock(params: URLSearchParams) {
         return view(settled)
       }
       const short = issue.title.split(' ').slice(0, 3).join(' ')
-      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, actionAccess(name))
+      const session = startSessionFor(`#${number} ${short}`, number, `${command} ${prompt}`.trim(), name, model, effort, actionAccess(name), null, fast)
       emit('issues', { project: current.name, items: currentIssues() })
       return session
     },

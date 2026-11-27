@@ -74,6 +74,7 @@ export type Session = {
   issue: number
   model: string
   effort: string
+  fast: boolean
   history: HistoryEntry[]
   branch: string
   worktree: string
@@ -138,7 +139,7 @@ export type ModelChoice = { model: string; effort: string }
 export type Place = 'worktree' | 'project'
 
 // ThreadStart is what the owner chose for a new thread; empty fields leave the choice to the defaults.
-export type ThreadStart = { prompt: string; model: string; effort: string }
+export type ThreadStart = { prompt: string; model: string; effort: string; fast: boolean }
 
 export type Note = {
   id: string

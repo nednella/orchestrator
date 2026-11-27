@@ -9,7 +9,8 @@ import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkdown'
 import { pickCursor, pickListKey } from '../composerPick'
-import { modelAlias } from '../model'
+import { fastCommand, fastCommands } from '../fastMode'
+import { modelAlias, modelName, supportsFast } from '../model'
 import { sideChatCommands, sideChatQuestion, sideChatReason } from '../sideChat'
 import { attachedTo, detach, setAttached, useAttached } from '../sideChatStore'
 import type { ChatEvent, Session } from '../types'
@@ -75,7 +76,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
     input,
     caret,
     off: dismissed,
-    commands: embedded ? timeline.commands : [...sideChatCommands(sideReason), ...timeline.commands],
+    commands: [...(embedded ? [] : sideChatCommands(sideReason)), ...fastCommands(), ...timeline.commands.filter((c) => c.name !== 'fast')],
     noCommands: 'Commands load when the thread starts',
     listFiles,
     onPicked: () => setCursor(-1),
@@ -130,12 +131,33 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
 
+  // fast is the mode as the app sets it, so /fast reads it from the row.
+  const setFast = (on: boolean) => report(() => api.setFast(id, on))
+
+  // /fast sets fast mode through the app and goes to no one else: Claude refuses to turn it on for a host like this one.
+  const sendFast = (on: boolean) => {
+    update({ ...latest.current, draft: EMPTY_DRAFT })
+    if (on && !supportsFast(session.model)) {
+      pushToast({ tone: 'info', text: 'Fast mode not turned on', detail: `${modelName(session.model) || 'This model'} has no fast mode.` })
+      return
+    }
+    report(async () => {
+      await api.setFast(id, on)
+      pushToast({ tone: 'info', text: on ? 'Fast mode on' : 'Fast mode off' })
+    })
+  }
+
   // /side and /btw start a side chat with the rest of the message, and the images, as its first message. The side chats
   // added to the message go with it, and come back to the composer if it does not go.
   const send = () => {
     const typed = sendText(latest.current.draft.text)
     const images = pending.images
     if (sending || (typed.trim() === '' && images.length === 0)) return
+    const fastTo = images.length === 0 ? fastCommand(typed, session.fast) : null
+    if (fastTo !== null) {
+      sendFast(fastTo)
+      return
+    }
     const question = embedded ? null : sideChatQuestion(typed)
     if (question !== null && sideReason) {
       pushToast({ tone: 'info', text: 'Side chat not started', detail: sideReason })
@@ -252,8 +274,11 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
         <ComposerModelChip
           model={session.model && modelAlias(session.model)}
           effort={session.effort}
+          fast={session.fast}
           access={session.access}
           accessOff={accessDisabled(timeline.turnOpen, timeline.pending !== null, timeline.agentsRunning)}
+          onEffort={(effort) => report(() => api.setEffort(id, effort))}
+          onFast={setFast}
           onAccess={(next) => report(() => setAccess(id, next))}
         />
       }
