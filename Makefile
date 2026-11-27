@@ -15,7 +15,7 @@ desktop: desktop-frontend
 
 APP := bin/orchestrator.app
 
-# Sessions drive their browser tab with agent-browser. The version is pinned: orchestrator binds each session to its tab
+# Threads drive their browser tab with agent-browser. The version is pinned: orchestrator binds each thread to its tab
 # through a file of this version's daemon (desktop/browser/agentbrowser.go), so check that binding before a bump.
 AGENT_BROWSER_VERSION := 0.43.0
 AGENT_BROWSER_SHA256 := 05338a8eeddf0b3f9ebf0c87a6c21aedc10685608c68618e1a8483c43eae9c3f

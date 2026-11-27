@@ -2,7 +2,7 @@
 
 ## Isolation first
 
-Twice a test that used the default tmux socket killed the owner's live sessions. Never run anything that starts the app, a thread or a host against the default socket or the real state folders. Every run outside `go test` MUST set all of these:
+Twice a test that used the default tmux socket killed the owner's live threads. Never run anything that starts the app, a thread or a host against the default socket or the real state folders. Every run outside `go test` MUST set all of these:
 
 ```sh
 S=$(mktemp -d "${TMPDIR:-/tmp}/orc.XXXX")
@@ -10,7 +10,7 @@ export ORCHESTRATOR_TMUX_SOCKET=orc-test-$$      # never "orchestrator", the own
 export ORCHESTRATOR_STATE_DIR=$S                 # never ~/.local/state/orchestrator
 export ORCHESTRATOR_DEV_DATA_DIR=$S/data             # never ~/.local/share/orchestrator (also moves notes and the event log)
 export ORCHESTRATOR_CONFIG=$S/config.yaml        # never ~/.config/orchestrator/config.yaml
-unset ORCHESTRATOR_SESSION ORCHESTRATOR_CONTROL ORCHESTRATOR_PROJECT ORCHESTRATOR_MCP_TOKEN  # a thread has the first two and its tools' server the third, and a shell has ORCHESTRATOR_PROJECT: the live app sets them, so a check run from one of its threads must unset them
+unset ORCHESTRATOR_THREAD ORCHESTRATOR_CONTROL ORCHESTRATOR_PROJECT ORCHESTRATOR_MCP_TOKEN  # a thread has the first two and its tools' server the third, and a shell has ORCHESTRATOR_PROJECT: the live app sets them, so a check run from one of its threads must unset them
 ```
 
 A throwaway config, with `{"model": "haiku"}` in the demo project's `.claude/settings.local.json` so its threads run `claude` on the cheapest model:
@@ -22,7 +22,7 @@ projects:
 
 Clean up afterwards: `tmux -L $ORCHESTRATOR_TMUX_SOCKET kill-server`, kill the app and any browser started on `$S/data/<key>/browser`, `rm -rf $S`. Check with `pgrep -fl "$S"`.
 
-An orchestrator session runs with `TMPDIR` set to its own temp folder, which it may use without asking and which goes when the thread is deleted or cleaned up. Put screenshots and scratch files there, never in `/tmp`.
+An orchestrator thread runs with `TMPDIR` set to its own temp folder, which it may use without asking and which goes when the thread is deleted or cleaned up. Put screenshots and scratch files there, never in `/tmp`.
 
 ## Unit and integration tests
 
@@ -31,7 +31,7 @@ go vet -tags stub ./...
 go test -race -tags stub ./...
 ```
 
-Each `desktop/<pkg>` service has its tests beside it. They build the whole app through `desktop/internal/apptest`, which starts real tmux servers on private sockets (`orctest-<pid>-<n>`, one per harness), real git repos in temp folders, and real headless Chrome for Testing on temp profiles. GitHub and `claude` are always replaced by fake runners (`apptest.FakeGH`, `FakeClaude`); commands run through `desktop/internal/run`. Every session runs a stand-in `claude`, a shell script the harness puts first on PATH, under the built command's host, as a real Claude session does: it answers each message with a reply and each control request with a success, and `Harness.Stdin` and `Harness.Args` give the lines it read and the arguments it was started with. A harness gives the app its own environment, `Harness.Env` (`Options.Env` adds to it, `Options.PathWithout` takes folders off its PATH), and never changes the process's, so tests that use a harness may call `t.Parallel()`; a test that calls `t.Setenv` or changes a package-level variable stays serial. `Options` also shortens the waits a test would sit out: `PollEvery`, `StopSettle`, `RetryFirst` and `ConfigTick`. A harness takes one of a few slots, files under the temp folder that a lock marks, until its test ends, so the test processes of one `go test ./...` never run more apps at once than the machine can serve; `Eventually` gives the app 30 seconds, since a test that waits longer than it needs to is the failure. A test checks what reached Claude there, or in the chat log for a draft, not in the pane. The browser tests skip when Chrome for Testing is not installed; CI points `ORCHESTRATOR_BROWSER` at its Google Chrome. The agent-browser test runs the real `agent-browser` only when `ORCHESTRATOR_AGENT_BROWSER` names it: run `make agent-browser` and set it to `bin/agent-browser`. Run it before a bump of `AGENT_BROWSER_VERSION`, since orchestrator writes a file of agent-browser's own. `desktop` embeds `frontend/dist`; build it first, or run with `-tags stub`, which embeds a small page instead. The host and the tools' server in the tests run the `orchestrator` command built from `./desktop` with that tag: the app's binary is the command. A thread's state follows its host's stream, so a test of the state sends the stand-in a message that makes the stream it needs (`ask`, `tool`, `question`, `work`, `background`, `fails`, `exit`; the comment on `ClaudeDir` lists them); `Harness.Observe` gives a thread a change of state in the names of Claude's hooks, for a test that is not about the stream. The `cli` tests answer from a fake app on a temp control socket. The release check never reaches GitHub: the harness answers curl with `Options.Releases` (the release notes of a version with `Options.Notes`, a failed read with `Options.NotesErr`) and refuses every other download.
+Each `desktop/<pkg>` service has its tests beside it. They build the whole app through `desktop/internal/apptest`, which starts real tmux servers on private sockets (`orctest-<pid>-<n>`, one per harness), real git repos in temp folders, and real headless Chrome for Testing on temp profiles. GitHub and `claude` are always replaced by fake runners (`apptest.FakeGH`, `FakeClaude`); commands run through `desktop/internal/run`. Every thread runs a stand-in `claude`, a shell script the harness puts first on PATH, under the built command's host, as the real Claude does: it answers each message with a reply and each control request with a success, and `Harness.Stdin` and `Harness.Args` give the lines it read and the arguments it was started with. A harness gives the app its own environment, `Harness.Env` (`Options.Env` adds to it, `Options.PathWithout` takes folders off its PATH), and never changes the process's, so tests that use a harness may call `t.Parallel()`; a test that calls `t.Setenv` or changes a package-level variable stays serial. `Options` also shortens the waits a test would sit out: `PollEvery`, `StopSettle`, `RetryFirst` and `ConfigTick`. A harness takes one of a few slots, files under the temp folder that a lock marks, until its test ends, so the test processes of one `go test ./...` never run more apps at once than the machine can serve; `Eventually` gives the app 30 seconds, since a test that waits longer than it needs to is the failure. A test checks what reached Claude there, or in the chat log for a draft, not in the pane. The browser tests skip when Chrome for Testing is not installed; CI points `ORCHESTRATOR_BROWSER` at its Google Chrome. The agent-browser test runs the real `agent-browser` only when `ORCHESTRATOR_AGENT_BROWSER` names it: run `make agent-browser` and set it to `bin/agent-browser`. Run it before a bump of `AGENT_BROWSER_VERSION`, since orchestrator writes a file of agent-browser's own. `desktop` embeds `frontend/dist`; build it first, or run with `-tags stub`, which embeds a small page instead. The host and the tools' server in the tests run the `orchestrator` command built from `./desktop` with that tag: the app's binary is the command. A thread's state follows its host's stream, so a test of the state sends the stand-in a message that makes the stream it needs (`ask`, `tool`, `question`, `work`, `background`, `fails`, `exit`; the comment on `ClaudeDir` lists them); `Harness.Observe` gives a thread a change of state in the names of Claude's hooks, for a test that is not about the stream. The `subcommand` tests answer from a fake app on a temp control socket. The release check never reaches GitHub: the harness answers curl with `Options.Releases` (the release notes of a version with `Options.Notes`, a failed read with `Options.NotesErr`) and refuses every other download.
 
 ## Recorded agents
 
@@ -50,7 +50,7 @@ sleep 2; K=$(sed -n 's/.*[?]k=\([0-9a-f]*\).*/\1/p' $S/app.log | head -1)
 curl -s -XPOST -H 'X-Orchestrator: 1' -H "X-Orchestrator-Token: $K" 127.0.0.1:18772/__call/projects.Service/Snapshot -d '[]'
 ```
 
-A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell session (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with `kill $APP` (SIGTERM) so it stops its browsers, and never by name. Use a port of your own, from 18000 to 18999.
+A thread's tools reach the same app as `orchestrate` requests on its control socket, each with the thread's token (see [The agent tools](#the-agent-tools)). A shell (`ShellNew`) runs `$SHELL -l`; set `SHELL=/bin/sh` and a throwaway `HOME` in tests so no profile of the owner runs. Stop it with `kill $APP` (SIGTERM) so it stops its browsers, and never by name. Use a port of your own, from 18000 to 18999.
 
 ## The agent tools
 
@@ -60,7 +60,7 @@ Claude signs in through its own config folder, so a check with a real Claude wri
 
 ## Driving the page
 
-`scripts/cdp.mjs` opens a page in its own headless Chrome for Testing (its own temp profile, never the owner's) and runs steps: wait, click at a point, type, key, eval JavaScript, screenshot. It starts that Chrome on the fixed DevTools port 9333 with one profile folder, so two runs at once, yours and another session's, would share them. Run a private copy with a port and a profile name of your own:
+`scripts/cdp.mjs` opens a page in its own headless Chrome for Testing (its own temp profile, never the owner's) and runs steps: wait, click at a point, type, key, eval JavaScript, screenshot. It starts that Chrome on the fixed DevTools port 9333 with one profile folder, so two runs at once, yours and another agent's, would share them. Run a private copy with a port and a profile name of your own:
 
 ```sh
 sed -e 's/const port = 9333/const port = 9411/' -e "s/orchestrator-cdp-profile/orchestrator-cdp-profile-9411/" scripts/cdp.mjs > $S/cdp.mjs

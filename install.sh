@@ -70,7 +70,7 @@ if command -v gh >/dev/null; then
 else
     warn "gh is missing; the queue reads your issues with it: ${CYAN}brew install gh && gh auth login${RESET}"
 fi
-if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | awk '{print $1}')"; else warn "Claude Code is missing; orchestrator starts sessions with it: https://docs.claude.com/en/docs/claude-code"; fi
+if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | awk '{print $1}')"; else warn "Claude Code is missing; orchestrator starts threads with it: https://docs.claude.com/en/docs/claude-code"; fi
 
 if pgrep -qf "$APP/Contents/MacOS/orchestrator"; then
     warn "orchestrator is running the old version; quit it and open it again"

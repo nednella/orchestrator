@@ -1,6 +1,6 @@
 // Drives headless Chrome for Testing over the DevTools protocol, for checking the front end without a window.
 // Usage: node scripts/cdp.mjs <url> <width> <height> '[{"wait":500},{"click":[x,y]},{"type":"text"},{"key":{"key":"Enter","code":"Enter"}},{"eval":"js"},{"shot":"name.png"}]'
-// A shot path that is not absolute lands in $TMPDIR, the session's own temp folder.
+// A shot path that is not absolute lands in $TMPDIR, the thread's own temp folder.
 // Drives headless Chrome for Testing over the DevTools protocol: node cdp.mjs <url> <w> <h> <steps-json>
 import { spawn } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'

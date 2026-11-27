@@ -7,7 +7,7 @@
 ```yaml
 data_dir: ~/Library/Mobile Documents/com~apple~CloudDocs/orchestrator   # optional; default ~/.local/share/orchestrator. The settings panel writes it; the app reads it when it starts
 projects_dir: ~/code           # the folder a new project is made in, and where the folder browser of Add project starts; default ~/code (the browser starts in ~/ while unset). The settings panel writes it
-keep_mac_awake: true           # stop the Mac idle-sleeping while a session works; a project may set its own. The settings panel writes it
+keep_mac_awake: true           # stop the Mac idle-sleeping while a thread works; a project may set its own. The settings panel writes it
 app_theme: dark                # light or dark; unset follows the macOS appearance. The settings panel writes it
 app_theme_dark: black          # the theme the dark appearance shows: black (the default); a saved violet, a theme the app no longer has, shows black. The settings panel writes it
 app_theme_light: light         # the theme the light appearance shows: light (the default)
@@ -28,16 +28,16 @@ projects:
     cleanup_mode:              # does the app clean up by itself? Either way a merge or close of the PR of a thread's branch puts the thread to sleep, and a clean-up keeps the thread, asleep, and its branch. The settings panel writes it
       merge: auto              # auto or manual: after the pull request merged, also while the app was closed
       close: manual            # auto or manual: after the pull request closed unmerged, also while the app was closed
-    browser_start_url: ""      # page a session's browser opens first
-    browser_enabled: true      # give sessions the browser tools, and tell them about the browser. The settings panel writes it
+    browser_start_url: ""      # page a thread's browser opens first
+    browser_enabled: true      # give threads the browser tools, and tell them about the browser. The settings panel writes it
     digest_schedule: weekly    # weekly or off. The settings panel writes it
     keep_mac_awake: true       # this project's choice; unset follows the top-level one
     pr_watch_method: ""        # webhook or poll; "" tries gh webhook forward (needs the gh extension and admin rights on the repo) and polls when it does not work
     pr_poll_interval: 10s      # how often to poll the pull requests; at least 1s
-    pr_review_command: ""      # typed into a session whose PR got a review or comment, {n} the PR number, e.g. "/address-review {n}"; "" sends nothing. An approval and the gh user's own comments and replies are not counted; a session in the middle of a turn gets it when the turn ends, and a settled issue thread is woken for it
+    pr_review_command: ""      # typed into a thread whose PR got a review or comment, {n} the PR number, e.g. "/address-review {n}"; "" sends nothing. An approval and the gh user's own comments and replies are not counted; a thread in the middle of a turn gets it when the turn ends, and a settled issue thread is woken for it
     pr_review_drafts: false    # send pr_review_command while the PR is a draft too; when false, comments on a draft count as seen
-    pr_checks_command: ""      # typed into a session whose PR has failing checks, {n} the PR number; "" sends nothing
-    pr_conflict_command: ""    # typed into a session whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
+    pr_checks_command: ""      # typed into a thread whose PR has failing checks, {n} the PR number; "" sends nothing
+    pr_conflict_command: ""    # typed into a thread whose PR conflicts with its base branch, {n} the PR number; "" sends nothing
     setup_dismissed: false     # the app no longer writes it
 ```
 
@@ -51,11 +51,11 @@ projects:
 
 A clean-up the checks kept after the PR of a sleeping thread's branch merged or closed is tried again, with every check, every hour, and at each start of the app when `cleanup_mode` cleans that PR up by itself (`auto`; under `manual` the ask comes back after a restart and stays an ask), so a worktree kept for a running turn, a shell or work not yet pushed goes once that has ended; a clean-up that asks you first is never tried by itself, nor is the clean-up of a thread you woke. *Clean up now* in a thread's right-click menu runs the clean-up at once, with every check: on every kept clean-up, whatever kept it, and on a thread whose worktree is still there while no clean-up runs or asks. *Clean up anyway* forces a kept one.
 
-The text that the app types on its own, an issue action's `command`, the set-up session's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A session gets this text as a message through its host, a pull request action's sentence too.
+The text that the app types on its own, an issue action's `command`, the set-up thread's start and the `pr_*_command`s, starts with `APPLICATION_PROMPT: `, so the agent knows it is not from you. A slash command is typed as it is, since Claude Code runs one only at the start of the prompt. A thread gets this text as a message through its host, a pull request action's sentence too.
 
 ### Queue sections and actions
 
-`queue_sections` groups the queue and says what a session can start from each group. Each section matches issues by label and lists actions.
+`queue_sections` groups the queue and says which threads each group can start. Each section matches issues by label and lists actions.
 
 ```yaml
 queue_sections:
@@ -71,7 +71,7 @@ queue_sections:
       - {name: Plan, command: "/plan {n}", model: opus, effort: high}
   - name: Ready
     labels: [ready]
-    draggable_from: []          # takes no drops: only a session adds "ready"
+    draggable_from: []          # takes no drops: only a thread adds "ready"
     actions:
       - {name: Work, command: "/work {n}"}
   - name: Review
@@ -90,29 +90,29 @@ queue_sections:
 - An issue no section matches goes under one folded row below the last section, `<n> more issues match no section`, with the `Start` action. A last `"*"` section is only needed to give those issues a name or other actions.
 - In a command, `{n}` is the issue number, `{title}` its title and `{branch}` its `issue_branch`, `issue-{n}` when unset. The `Start` action always names the branch. An empty `command` starts the agent with nothing typed. `model` and `effort` are optional and are checked by claude, as below; a config with a value claude would not take does not load.
 - `access` is what the action's thread may do without asking: `read` (Claude plans and asks before it changes anything), `supervised` (the default: your Claude allow rules apply and other tools ask in the chat) or `full` (every tool runs without asking). Every thread follows its branch and pull request, whatever its access. An issue has one thread: starting any action of an issue whose thread runs opens that thread, and one whose thread is asleep wakes it with its own access. The queue row links to it. A config whose action sets `kind` does not load; use `access: read`.
-- A session started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
+- A thread started by an action is titled `#<n> <title>`, with the action's name as a badge beside it.
 - The first action of a section is its default. A section needs a name, an action needs a name, and each is unique in its list; a config that breaks this does not load.
-- Dragging an issue to another section relabels it on GitHub: it loses the labels of the section it left and gains the first label of the section it enters. No session starts. A section with no labels takes an issue only when no label is left.
+- Dragging an issue to another section relabels it on GitHub: it loses the labels of the section it left and gains the first label of the section it enters. No thread starts. A section with no labels takes an issue only when no label is left.
 - A move can be undone from the app; the app remembers the last move of each issue until it quits.
 - `draggable: false` keeps the issues of a section from being dragged out. `draggable_from` lists the sections whose issues may be dropped in; each must be a section other than this one. Issues no section takes count as one section that can be dragged out, and `draggable_from` never lists it.
 - A `"*"` section takes no drops, so it can not have `draggable_from`; a config that sets it does not load.
 - With no `queue_sections` the queue is one list, and each issue has one action, `Start`, which types `Work on issue #<n>: <title>`. A section with no actions has that same action.
 
-### How a session picks its model
+### How a thread picks its model
 
 claude gets `--model` and `--effort` from the first of these that sets a value, model and effort each on their own:
 
 1. the issue's `model:<x>` or `effort:<y>` label (a value claude would not accept is ignored, and the queue row shows the label in red, with the reason when you point at it);
 2. the action's `model` and `effort`;
-3. the agent's own settings, read when the session starts. For claude: `model`, and the effort in `modelSettings.<model>.effortLevel` for the model chosen (an alias such as `opus` takes the newest `claude-opus-…` entry), else `effortLevel`, from the project folder's `.claude/settings.local.json`, then its `.claude/settings.json`, then `settings.json` in `$CLAUDE_CONFIG_DIR` or `~/.claude`.
+3. the agent's own settings, read when the thread starts. For claude: `model`, and the effort in `modelSettings.<model>.effortLevel` for the model chosen (an alias such as `opus` takes the newest `claude-opus-…` entry), else `effortLevel`, from the project folder's `.claude/settings.local.json`, then its `.claude/settings.json`, then `settings.json` in `$CLAUDE_CONFIG_DIR` or `~/.claude`.
 
 claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` and `opusplan`, and any full id that starts with `claude-`, each with or without `[1m]`, at an effort of `low`, `medium`, `high`, `xhigh`, `max` or `ultracode`, which is `xhigh` with Claude's multi-agent workflow on. claude has no command that lists its models, so the aliases are fixed in the app and a full id is taken without a list.
 
-A new session, or one started from a note, has no action and no labels. When nothing sets a value, no flag is passed and the agent uses its own default.
+A new thread, or one started from a note, has no action and no labels. When nothing sets a value, no flag is passed and the agent uses its own default.
 
-The row shows that choice until the agent's first turn. From then on it shows what the agent used last: for claude, the model and effort on the newest line of its transcript, read at the end of each turn, so a `/model` change inside the session shows. The state file keeps them, so a restart of the app shows them without a new turn. The usage events keep the model each turn ran on.
+The row shows that choice until the agent's first turn. From then on it shows what the agent used last: for claude, the model and effort on the newest line of its transcript, read at the end of each turn, so a `/model` change inside the thread shows. The state file keeps them, so a restart of the app shows them without a new turn. The usage events keep the model each turn ran on.
 
-### What a session runs
+### What a thread runs
 
 Every thread runs `claude` under `orchestrator host`, and the app follows the host's stream for the thread's state. `claude` must be on PATH: without it a thread does not start, with the error "claude is not installed: it is not on PATH", and the app shows a warning that names it until it is found. An app started from Finder gets a short PATH; when it lacks `tmux`, `gh` or `claude`, the app takes the PATH of the login shell.
 
@@ -122,7 +122,7 @@ A thread runs in one folder from its start, and a wake starts it there again.
 
 - An issue thread, at every access, runs in its own worktree on the issue's branch, `issue-<n>` unless `issue_branch` names it otherwise.
 - A thread with no issue runs where `new_thread_place` says, at every access. Unset or `worktree`, it runs in its own worktree on a branch named from its title: `Fix the login button!` is `fix-the-login-button`, at most 40 characters, `thread` for a title with no letters or digits, and `fix-the-login-button-2`, `-3`… while a local or origin branch has the name. `project`, it runs in the project folder, on the branch checked out there. This holds for the composer, the `new_thread` tool and a thread started from a note alike. A child runs where `delegate`'s `where` puts it.
-- The set-up session runs in the project folder.
+- The set-up thread runs in the project folder.
 
 The worktree is `<project>/trees/<branch>`. Before it makes the first one, orchestrator adds `/trees/` to the repository's `.git/info/exclude`, which is never committed, so the worktrees stay out of `git status` and `git add -A`; it never edits a `.gitignore`. A branch that exists, locally or on origin (fetched first when this clone has no copy), is checked out there as it is and never reset; a new one comes from `worktree_command`. A branch that a worktree already has checked out, such as one you made by hand, runs the thread in that worktree, and orchestrator never removes it. A branch that another thread works on, running or asleep, is refused with `Thread <n> works on <branch>`. A folder already at `<project>/trees/<branch>` that is no worktree of the branch stops the start, and orchestrator leaves it as it is. A project that is not a git repository runs every thread in its folder.
 
@@ -132,7 +132,7 @@ A thread's branch is the one orchestrator made its worktree on, or the one it re
 
 ### Keeping the Mac awake
 
-While at least one session is working, in any project whose `keep_mac_awake` is on (the project's own setting, else the top-level one, else on), the app runs `caffeinate -i -w <app pid>`: the Mac does not idle-sleep and the display still may. It does not stop a closed lid from sleeping the Mac unless the Mac is in clamshell mode (external display and power connected), and it does not stop a manual sleep or a sleep from low battery.
+While at least one thread is working, in any project whose `keep_mac_awake` is on (the project's own setting, else the top-level one, else on), the app runs `caffeinate -i -w <app pid>`: the Mac does not idle-sleep and the display still may. It does not stop a closed lid from sleeping the Mac unless the Mac is in clamshell mode (external display and power connected), and it does not stop a manual sleep or a sleep from low battery.
 
 ### Where things are stored
 
@@ -142,8 +142,8 @@ While at least one session is working, in any project whose `keep_mac_awake` is 
 |---|---|
 | notes, note images, media, digest | `<data_dir>/<key>/` (`data_dir` defaults to `~/.local/share/orchestrator`) |
 | the event log, which holds all stats: one file of events per machine per day, gzipped from the day before yesterday | `<data_dir>/<key>/events/YYYY-MM-DD.<machine>.jsonl[.gz]` |
-| PR tracking, clean-up log, the worktrees orchestrator made (`worktrees.json`), browser profile, session temp folders, chat logs (`chats/`) | `~/.local/share/orchestrator/<key>/` |
-| state files, sockets (each Claude session's host under `hosts/<first 8 hex characters of the key's SHA-256>/`), tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/orchestrator` |
+| PR tracking, clean-up log, the worktrees orchestrator made (`worktrees.json`), browser profile, thread temp folders, chat logs (`chats/`) | `~/.local/share/orchestrator/<key>/` |
+| state files, sockets (each thread's host under `hosts/<first 8 hex characters of the key's SHA-256>/`), tmux config, last project, release check, this machine's id (`machine-id`) | `~/.local/state/orchestrator` |
 
 ## Agent tools
 
@@ -166,8 +166,8 @@ A Read thread runs every tool but `show` and `track` without asking; for those t
 | Variable | Does |
 |---|---|
 | `ORCHESTRATOR_CONFIG` | the config file to use |
-| `ORCHESTRATOR_BROWSER` | the browser to drive, as a path; by default `Google Chrome for Testing.app` in `~/Applications` or `/Applications`, which `install.sh` installs. agentos uses the same app: the binary is shared, but each project's profile and `browser-port` file live in orchestrator's own folders. orchestrator never falls back to another browser: macOS sends clicked links to any running copy of your default browser's app, and one that orchestrator runs has no window to show them |
-| `ORCHESTRATOR_AGENT_BROWSER` | the `agent-browser` that sessions drive their browser tab with, as a path; by default the one in the app bundle's `Contents/Helpers`. Without one, sessions start with no browser |
+| `ORCHESTRATOR_BROWSER` | the browser to drive, as a path; by default `Google Chrome for Testing.app` in `~/Applications` or `/Applications`, which `install.sh` installs. Another app may use the same one: the binary is shared, but each project's profile and `browser-port` file live in orchestrator's own folders. orchestrator never falls back to another browser: macOS sends clicked links to any running copy of your default browser's app, and one that orchestrator runs has no window to show them |
+| `ORCHESTRATOR_AGENT_BROWSER` | the `agent-browser` that threads drive their browser tab with, as a path; by default the one in the app bundle's `Contents/Helpers`. Without one, threads start with no browser |
 | `ORCHESTRATOR_DIR` | the project folder to start in, instead of the current folder |
 | `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` | the tmux socket, the state folder, and one folder in place of both data folders; for tests |
 | `ORCHESTRATOR_BROWSER_HEADLESS` | `1` starts the browser with no windows; for tests |

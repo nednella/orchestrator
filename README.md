@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/icon.png" alt="orchestrator" width="128">
   <h3><b>orchestrator</b></h3>
-  <p>One desktop window for every coding-agent session you run</p>
+  <p>One desktop window for every coding-agent thread you run</p>
   <p>
     <a href="https://github.com/nednella/orchestrator/releases/latest"><img src="https://img.shields.io/github/v/release/nednella/orchestrator?style=flat-square&color=a78bfa" alt="Latest release"></a>
     <img src="https://img.shields.io/badge/macOS-Apple%20silicon-191d25?style=flat-square&logo=apple" alt="macOS on Apple silicon">
@@ -26,7 +26,7 @@ Needs macOS on Apple silicon, plus:
 curl -fsSL https://raw.githubusercontent.com/nednella/orchestrator/main/install.sh | bash
 ```
 
-The script puts `orchestrator.app` in `~/Applications`, and Chrome for Testing, the agent browser, when it is not there yet; one that is there stays as it is. It then lists anything missing. No sudo. orchestrator runs beside agentos if you have it: the two apps share the one `Google Chrome for Testing.app`, which is only a program, and nothing else.
+The script puts `orchestrator.app` in `~/Applications`, and Chrome for Testing, the agent browser, when it is not there yet; one that is there stays as it is. It then lists anything missing. No sudo. Another app that uses `Google Chrome for Testing.app` shares only that program with orchestrator, and nothing else.
 
 ## Start
 
@@ -39,7 +39,7 @@ The script puts `orchestrator.app` in `~/Applications`, and Chrome for Testing, 
 
 ## Set up a project
 
-Right-click the project in the rail → _Set up project_. For a project with no queue sections it adds an Inbox whose _Work_ action runs `/work <n>`, plus the issue branch name and the PR commands. Then it starts a session that writes the `/work` command, the issue template and `AGENTS.md` with you.
+Right-click the project in the rail → _Set up project_. For a project with no queue sections it adds an Inbox whose _Work_ action runs `/work <n>`, plus the issue branch name and the PR commands. Then it starts a thread that writes the `/work` command, the issue template and `AGENTS.md` with you.
 
 To change the config by hand, edit `~/.config/orchestrator/config.yaml`; the app picks the change up while it runs. `docs/config.md` describes every key.
 

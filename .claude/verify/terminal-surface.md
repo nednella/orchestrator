@@ -2,7 +2,7 @@
 
 ## What exists
 
-The right panel has a Terminal surface. Each group of terminals is one tab of the panel, after the tabs of the views, with the icon of a terminal, the name of its active terminal (the process in front, else "Terminal 2") and the last part of the folder it started in, dimmer. The tabs are the project's: they stay when the thread changes, and each project shows its own. A group holds one to four terminals side by side or stacked. A lone terminal has a floating toolbar at its top right: split side by side, split stacked, new, close. From two terminals the toolbar becomes the header of a 144px list at the right, with one row for each terminal. Closing one terminal asks first. With no terminal the surface shows "No terminal sessions for this project yet" and a New terminal button.
+The right panel has a Terminal surface. Each group of terminals is one tab of the panel, after the tabs of the views, with the icon of a terminal, the name of its active terminal (the process in front, else "Terminal 2") and the last part of the folder it started in, dimmer. The tabs are the project's: they stay when the thread changes, and each project shows its own. A group holds one to four terminals side by side or stacked. A lone terminal has a floating toolbar at its top right: split side by side, split stacked, new, close. From two terminals the toolbar becomes the header of a 144px list at the right, with one row for each terminal. Closing one terminal asks first. With no terminal the surface shows "No terminals for this project yet." and a New terminal button.
 
 ## How a user reaches it
 

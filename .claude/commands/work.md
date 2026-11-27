@@ -33,7 +33,7 @@ Branch from `origin/main`, never from local `main`, so the PR holds only your ch
 ## 4. Verify
 
 - `go vet ./...` and `go test -race ./...` for Go; `cd desktop/frontend && npm run build` for the front end.
-- For anything visible, run the real app in browser mode and look at it, as `docs/testing.md` describes. Always set `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` and `ORCHESTRATOR_CONFIG` to throwaway values: the defaults hold the owner's live sessions.
+- For anything visible, run the real app in browser mode and look at it, as `docs/testing.md` describes. Always set `ORCHESTRATOR_TMUX_SOCKET`, `ORCHESTRATOR_STATE_DIR`, `ORCHESTRATOR_DEV_DATA_DIR` and `ORCHESTRATOR_CONFIG` to throwaway values: the defaults hold the owner's live threads.
 - Never claim something works that you did not run.
 
 ## 5. Deliver
