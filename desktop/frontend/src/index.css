@@ -645,9 +645,20 @@
     background: var(--bg-raised);
   }
 
+  /* A border on an overlay, not an inset shadow: WebKit snaps borders to whole device pixels, so the ring is as thick on
+     the right as on the left when a dragged sidebar puts the card's right edge between two pixels. */
+  .thread-row::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid var(--thread-ring, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
   .thread-row[data-state='waiting'] {
     background: var(--bg-thread-waiting);
-    box-shadow: inset 0 0 0 1.5px var(--border-thread-waiting);
+    --thread-ring: var(--border-thread-waiting);
   }
 
   .thread-row[data-state='waiting']:not([data-selected='true']):is(:hover, [data-menu-open='true']),
@@ -750,6 +761,11 @@
 
   [data-panel][data-focused] .row[data-cursor='true'] {
     box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+
+  [data-panel][data-focused] .thread-row[data-cursor='true'] {
+    box-shadow: none;
+    --thread-ring: var(--accent);
   }
 
   [data-drop] {
