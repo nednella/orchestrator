@@ -2,7 +2,7 @@ import type { PR, Project, Thread, State } from './types'
 
 export type ThreadSections = { waiting: Thread[]; working: Thread[]; idle: Thread[]; settled: Thread[] }
 
-export function splitThreads(threads: Thread[]): ThreadSections {
+function splitThreads(threads: Thread[]): ThreadSections {
   const of = (state: State) => threads.filter((s) => s.state === state)
   return { waiting: of('waiting'), working: of('working'), idle: of('idle'), settled: of('settled').sort((a, b) => b.lastEventAt - a.lastEventAt) }
 }

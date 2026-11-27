@@ -11,7 +11,7 @@ const none: AgentItem[] = []
 const sameAgent = (a: AgentItem, b: AgentItem) => a.id === b.id && a.description === b.description && a.state === b.state && a.startedAt === b.startedAt
 
 // showAgents keeps the thread's subagents, in the order its list shows them; an empty list forgets them.
-export function showAgents(thread: string, agents: AgentItem[]) {
+function showAgents(thread: string, agents: AgentItem[]) {
   const before = shown.get(thread) ?? none
   if (before.length === agents.length && before.every((a, i) => sameAgent(a, agents[i]))) return
   if (agents.length === 0) shown.delete(thread)

@@ -1,6 +1,6 @@
 import type { FolderEntry, FolderListing } from './types'
 
-export const hasTrailingSlash = (path: string) => path.endsWith('/')
+const hasTrailingSlash = (path: string) => path.endsWith('/')
 
 // A path the folder browser lists: absolute, in the home folder, or in the current project.
 export const isBrowsePath = (value: string) => value.startsWith('/') || value.startsWith('~/') || value.startsWith('./') || value.startsWith('../')

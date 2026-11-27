@@ -46,7 +46,7 @@ function tokenMatches(issue: Issue, { field, value }: Token): boolean {
   return value === 'running' && issue.threadId !== ''
 }
 
-export function matchIssue(issue: Issue, parsed: ParsedQuery): boolean {
+function matchIssue(issue: Issue, parsed: ParsedQuery): boolean {
   const haystack = `${issue.number} ${issue.title.toLowerCase()}`
   return (
     parsed.words.every((w) => haystack.includes(w.text) !== w.negate) &&

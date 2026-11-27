@@ -14,7 +14,7 @@ export const SIDEBAR_DEFAULT_REM = 18
 export const SIDEBAR_MIN_REM = 14.6
 export const SIDEBAR_MAX_REM = 32
 // The thread keeps at least this width beside the docked sidebar; a sidebar with no room for it opens over the thread.
-export const THREAD_MIN_REM = 30
+const THREAD_MIN_REM = 30
 // The rail's border and the line beside each side panel.
 const LINES_PX = 3
 

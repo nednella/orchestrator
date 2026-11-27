@@ -1,9 +1,9 @@
 import type { AgentItem } from './chatTimeline'
 import type { PR, Server, Thread } from './types'
 
-export const CARD_WIDTH = 280
-export const CARD_GAP = 12
-export const CHAT_LANE_PAD = 16
+const CARD_WIDTH = 280
+const CARD_GAP = 12
+const CHAT_LANE_PAD = 16
 const CARD_CLEARANCE = 32
 // CARD_ROOM is the width the card takes from the chat beside it: the card, its gap to the edge and its clearance.
 export const CARD_ROOM = CARD_WIDTH + CARD_GAP + CARD_CLEARANCE
@@ -96,7 +96,7 @@ export function lineageLabel(f: CardFacts): string {
 }
 
 // sideChatsHeading heads the thread's side chats: how many of them work now, if any.
-export function sideChatsHeading(sideChats: Thread[]): string {
+function sideChatsHeading(sideChats: Thread[]): string {
   const running = sideChats.filter((s) => s.state === 'working').length
   return running > 0 ? `Side chats · ${running} running` : 'Side chats'
 }
@@ -114,7 +114,7 @@ export function folderName(path: string): string {
 }
 
 // serverProcess is the program a server runs, the first word of its command.
-export function serverProcess(command: string): string {
+function serverProcess(command: string): string {
   return folderName(command.trim().split(/\s+/)[0] ?? '')
 }
 

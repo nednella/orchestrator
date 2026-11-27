@@ -6,7 +6,7 @@ export type PanelViewId = 'notes' | 'files' | 'issues' | 'pulls' | 'browser' | '
 export const PANEL_KEYS: Record<PanelViewId, string> = { notes: 'N', files: 'F', issues: 'I', pulls: 'P', browser: 'B', media: 'M', news: 'W', terminal: 'T' }
 
 // The views the panel lists, in its order.
-export const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media', 'news', 'terminal']
+const PANEL_ORDER: PanelViewId[] = ['notes', 'files', 'issues', 'pulls', 'browser', 'media', 'news', 'terminal']
 
 // What a row of the panel's list does: open a view, or start a side chat of the open thread.
 export type PanelRowTarget = PanelViewId | 'sideChat'
@@ -83,7 +83,7 @@ export function panelStateOf(saved: unknown): PanelState {
 
 // At this window width or less the panel opens over the chat as a sheet, and so it does where the row has no room for
 // the chat's 360 px and the panel's.
-export const SHEET_AT = 980
+const SHEET_AT = 980
 const SHEET_NARROW_AT = 760
 const ROW_MIN = 720
 
