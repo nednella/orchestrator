@@ -2,18 +2,15 @@ package threads
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/nednella/orchestrator/internal/project"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -68,24 +65,8 @@ func (s *Threads) openInEditor(dir, path, of string) error {
 		f.Close()
 		target = real
 	}
-	app := project.DefaultEditorApp
-	if s.editorApp != nil {
-		app = s.editorApp()
-	}
-	label := app
-	if app == project.DefaultEditorApp {
-		label = "VS Code"
-	}
-	ctx, cancel := context.WithTimeout(s.context(), editorTimeout)
-	defer cancel()
-	if _, err := s.run(ctx, "", "open", "-a", app, target); err != nil {
-		log.Printf("orchestrator: opening %s in %s: %v", target, app, err)
-		if strings.Contains(err.Error(), "Unable to find application") {
-			return fmt.Errorf("%s is not installed", label)
-		}
-		return fmt.Errorf("%s did not open", label)
-	}
-	return nil
+	app := s.editor()
+	return s.openApp(app, []string{"-a", app, target})
 }
 
 // threadFolder is the folder the thread works in, which must exist: the worktree the lifecycle follows, else the

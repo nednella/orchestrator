@@ -156,6 +156,15 @@ func (v *Service) Memory() Memory { return v.s.Memory() }
 // opens that file in the folder instead.
 func (v *Service) OpenInEditor(id, path string) error { return v.s.OpenInEditor(id, path) }
 
+// OpenFileInEditor opens the file or folder at path, which may be anywhere on disk, in the editor app, at line when
+// it is above zero and the editor takes one. A relative path starts from the thread's folder.
+func (v *Service) OpenFileInEditor(id, path string, line int) error {
+	return v.s.OpenFileInEditor(id, path, line)
+}
+
+// RevealInFinder shows the file or folder at path in Finder. A relative path starts from the thread's folder.
+func (v *Service) RevealInFinder(id, path string) error { return v.s.RevealInFinder(id, path) }
+
 // OpenProjectInEditor is OpenInEditor for the project's folder, where no thread is open.
 func (v *Service) OpenProjectInEditor(project, path string) error {
 	return v.s.OpenProjectInEditor(project, path)
