@@ -143,6 +143,17 @@ const askedQuestions = [
     multiSelect: false,
   },
   {
+    question: 'Which layout should the checkout use?',
+    header: 'Layout',
+    options: [
+      { label: 'Stepper', description: 'Three routes that share one form state.', preview: '/checkout/address\n/checkout/payment\n/checkout/review' },
+      { label: 'Single page', description: 'One long form with a sticky total.', preview: '<Checkout>\n  <Address /> <Payment />\n</Checkout>' },
+      { label: 'Accordion', description: 'Sections open one at a time, as in the cart.', preview: '![The cart page with its sections open one at a time](/mock/shots/accordion.svg)' },
+      { label: 'Tabs', description: 'Free order, no required sequence.', preview: '<Tabs>\n  <Tab id="address" />\n</Tabs>' },
+    ],
+    multiSelect: false,
+  },
+  {
     question: 'Which pages should I check once it is fixed?',
     header: 'Pages',
     options: [
@@ -153,6 +164,9 @@ const askedQuestions = [
     multiSelect: true,
   },
 ]
+
+// previewShot is the picture a question's preview shows when it names a screenshot of the thread's.
+const previewShot = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360"><rect width="720" height="360" fill="#14161c"/><rect x="24" y="24" width="672" height="40" rx="8" fill="#1e222b"/><rect x="40" y="38" width="120" height="12" rx="6" fill="#6b7385"/><rect x="24" y="84" width="672" height="64" rx="10" fill="#1e222b" stroke="#3b82f6"/><rect x="44" y="104" width="180" height="12" rx="6" fill="#e6e9ef"/><rect x="44" y="124" width="320" height="8" rx="4" fill="#6b7385"/><rect x="24" y="160" width="672" height="40" rx="10" fill="#1e222b"/><rect x="44" y="176" width="140" height="10" rx="5" fill="#8b93a5"/><rect x="24" y="212" width="672" height="40" rx="10" fill="#1e222b"/><rect x="44" y="228" width="160" height="10" rx="5" fill="#8b93a5"/><rect x="560" y="296" width="136" height="40" rx="20" fill="#3b82f6"/></svg>`
 
 const askedPlan = '## Split checkout into three steps\n\n1. Add `/checkout/address`, `/checkout/payment` and `/checkout/review` routes.\n2. Move the form state into a `useCheckout` store so each step reads it.\n3. Keep the cart page as it is.\n\nThe tests for `Checkout.tsx` move with the steps.'
 
@@ -770,6 +784,13 @@ export function mockChat(emit: Emit, thread: (id: string) => MockThread, isProje
     ProjectFiles: async (project: string, query: string) => {
       known(project)
       return rankFiles(files, query)
+    },
+    ChatReadImage: async (id: string, path: string) => {
+      const t = thread(id)
+      if (path.startsWith('/mock/shots/')) return { kind: 'image' as const, text: '', size: previewShot.length, truncated: false, mime: 'image/svg+xml', data: btoa(previewShot) }
+      const file = readFile(path, t.worktree, `thread ${t.n}`)
+      if (file.kind !== 'image') throw 'This file is not an image'
+      return file
     },
     ChatReadFile: async (id: string, path: string) => {
       const t = thread(id)
