@@ -778,12 +778,21 @@
     background: var(--bg-hover);
   }
 
+  /* The cursor's ring is neutral; a card that is also selected shows the selected card's accent ring. */
   [data-panel][data-focused] .row[data-cursor='true'] {
+    box-shadow: inset 0 0 0 1.5px var(--ring-cursor);
+  }
+
+  [data-panel][data-focused] .row[data-cursor='true'][data-selected='true'] {
     box-shadow: inset 0 0 0 1.5px var(--accent);
   }
 
   [data-panel][data-focused] .thread-row[data-cursor='true'] {
     box-shadow: none;
+    --thread-ring: var(--ring-cursor);
+  }
+
+  [data-panel][data-focused] .thread-row[data-cursor='true'][data-selected='true'] {
     --thread-ring: var(--accent);
   }
 
@@ -1527,7 +1536,7 @@
   }
 
   [data-panel][data-focused] .note-card[data-cursor='true'] {
-    border-color: var(--accent);
+    border-color: var(--ring-cursor);
   }
 
   .note-actions {
