@@ -50,7 +50,7 @@ func TestSessionLifecycle(t *testing.T) {
 
 	name := thread.Name{Project: "demo", Token: "a1"}
 	dir := t.TempDir()
-	if err := tmux.NewSession(ctx, name, "first agent", dir, []string{"ORCHESTRATOR_SESSION=demo/a1"}, []string{"sleep", "60"}, 100, 30); err != nil {
+	if err := tmux.NewSession(ctx, name, "first agent", dir, []string{"ORCHESTRATOR_THREAD=demo/a1"}, []string{"sleep", "60"}, 100, 30); err != nil {
 		t.Fatal(err)
 	}
 	other := thread.Name{Project: "demo", Token: "b2"}
@@ -423,7 +423,7 @@ func TestWithEnvReplacesTheProcessEnvironment(t *testing.T) {
 		env  []string
 		want []string
 	}{
-		{"its own", []string{"A=1", "ORCHESTRATOR_SESSION=x/1", "TMUX=/t", "B=2"}, []string{"A=1", "B=2"}},
+		{"its own", []string{"A=1", "ORCHESTRATOR_THREAD=x/1", "TMUX=/t", "B=2"}, []string{"A=1", "B=2"}},
 		{"none", []string{}, []string{}},
 	}
 	for _, tt := range tests {
@@ -447,7 +447,7 @@ func TestWithEnvReplacesTheProcessEnvironment(t *testing.T) {
 
 func TestCleanEnvDropsInheritedSession(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-1/default,1,0")
-	t.Setenv("ORCHESTRATOR_SESSION", "other/abc")
+	t.Setenv("ORCHESTRATOR_THREAD", "other/abc")
 	t.Setenv("ORCHESTRATOR_CONTROL", "/other/control.sock")
 	t.Setenv("ORCHESTRATOR_PROJECT", "other")
 	t.Setenv("ORCHESTRATOR_KEEP", "yes")

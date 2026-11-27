@@ -694,7 +694,7 @@ func TestBranchStatusAfterAMergeThatLeftACommitOut(t *testing.T) {
 
 func TestBranchStatusAfterARebaseMerge(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {merge: manual}\n"})
 	origin := repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -769,7 +769,7 @@ func TestSetupCleanupCommand(t *testing.T) {
 	if set.CleanupCommand != "" || set.RemoveWorktree() != project.DefaultCleanupCommand {
 		t.Fatalf("a set-up project cleans up with %q, want the default %q", set.RemoveWorktree(), project.DefaultCleanupCommand)
 	}
-	h := apptest.New(t) // no session_cleanup_command, as SetUp writes none
+	h := apptest.New(t) // no cleanup_command, as SetUp writes none
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -914,7 +914,7 @@ func TestThreadInTheProjectFolderLosesOnlyItsTempFolder(t *testing.T) {
 
 func TestManualModeAsksAThreadWithNothingToRemove(t *testing.T) {
 	t.Parallel()
-	h, s, ran := projectFolderThread(t, "    session_cleanup_mode: {merge: manual}\n")
+	h, s, ran := projectFolderThread(t, "    cleanup_mode: {merge: manual}\n")
 	name, _ := thread.ParseName(s.ID)
 	tmp := filepath.Join(h.State, "data", name.Project, "tmp", name.Token)
 	openThenMerge(h)
@@ -1228,7 +1228,7 @@ func openThenClose(h *apptest.Harness) {
 
 func TestCleanupMergeManualAsks(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1244,7 +1244,7 @@ func TestCleanupMergeManualAsks(t *testing.T) {
 
 func TestCleanupCloseAuto(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1259,7 +1259,7 @@ func TestCleanupCloseAuto(t *testing.T) {
 
 func TestCleanupCloseAutoKeepsSafetyChecks(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: auto}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {close: auto}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1765,7 +1765,7 @@ func TestQuestionReplyDoesNotKeepTheWorktree(t *testing.T) {
 
 func TestMergedPRSettlesTheThread(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1786,7 +1786,7 @@ func TestMergedPRSettlesTheThread(t *testing.T) {
 
 func TestClosedPRSettlesTheThread(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {close: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {close: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree
@@ -1900,7 +1900,7 @@ func TestCleanupRunsOncePerWorktree(t *testing.T) {
 
 func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_cleanup_mode: {merge: manual}\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    cleanup_mode: {merge: manual}\n"})
 	repoFixture(t, h)
 	s := issueThread(h, t, 7)
 	wt := s.Worktree

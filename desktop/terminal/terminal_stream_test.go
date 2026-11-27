@@ -158,7 +158,7 @@ func TestTerminalAttachesToTheShell(t *testing.T) {
 	// Wide, so the path in the shell's answer, which has random digits in it, never wraps.
 	out := openRead(t, h, id, 300, 30)
 	eventually(t, "shell output", func() bool { return len(out.String()) > 0 })
-	if err := h.TermWrite(id, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_SESSION-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
+	if err := h.TermWrite(id, "echo \"$ORCHESTRATOR_PROJECT|${ORCHESTRATOR_THREAD-unset}|${ORCHESTRATOR_CONTROL-unset}|$(pwd -P)\"\n"); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(h.Dir)

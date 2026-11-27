@@ -145,8 +145,8 @@ func TestNoIssueInTheEnvironment(t *testing.T) {
 	if v, ok := env["ORCHESTRATOR_ISSUE"]; ok {
 		t.Errorf("claude was started with ORCHESTRATOR_ISSUE=%s", v)
 	}
-	if want := filepath.Join(h.State, "control.sock"); env["ORCHESTRATOR_SESSION"] != s.ID || env[mcp.ControlEnv] != want {
-		t.Errorf("claude was started with ORCHESTRATOR_SESSION=%s and %s=%s, want %s and %s", env["ORCHESTRATOR_SESSION"], mcp.ControlEnv, env[mcp.ControlEnv], s.ID, want)
+	if want := filepath.Join(h.State, "control.sock"); env["ORCHESTRATOR_THREAD"] != s.ID || env[mcp.ControlEnv] != want {
+		t.Errorf("claude was started with ORCHESTRATOR_THREAD=%s and %s=%s, want %s and %s", env["ORCHESTRATOR_THREAD"], mcp.ControlEnv, env[mcp.ControlEnv], s.ID, want)
 	}
 }
 

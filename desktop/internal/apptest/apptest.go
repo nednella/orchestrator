@@ -591,9 +591,9 @@ const queueSections = `    queue_sections:
 type Options struct {
 	ProjectExtra    string        // yaml lines added under the project "main"
 	Queue           string        // the project's queue_sections block, in place of the usual one
-	NoBranch        bool          // leave out the project's `session_branch_fallback`, so the default `issue-{n}` applies
-	CleanupCommand  string        // the project's session_cleanup_command; none by default
-	WorktreeCommand string        // the project's session_worktree_command; the default by default
+	NoBranch        bool          // leave out the project's `issue_branch`, so the default `issue-{n}` applies
+	CleanupCommand  string        // the project's cleanup_command; none by default
+	WorktreeCommand string        // the project's worktree_command; the default by default
 	TopExtra        string        // yaml lines added at the top of the config
 	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
 	DigestTick      time.Duration
@@ -666,16 +666,16 @@ func NewWith(t *testing.T, o Options) *Harness {
 		}
 	}
 	confPath := filepath.Join(state, "config.yaml")
-	branch := "    session_branch_fallback: \"issue-{n}\"\n"
+	branch := "    issue_branch: \"issue-{n}\"\n"
 	if o.NoBranch {
 		branch = ""
 	}
 	cleanup := ""
 	if o.CleanupCommand != "" {
-		cleanup = fmt.Sprintf("    session_cleanup_command: %q\n", o.CleanupCommand)
+		cleanup = fmt.Sprintf("    cleanup_command: %q\n", o.CleanupCommand)
 	}
 	if o.WorktreeCommand != "" {
-		cleanup += fmt.Sprintf("    session_worktree_command: %q\n", o.WorktreeCommand)
+		cleanup += fmt.Sprintf("    worktree_command: %q\n", o.WorktreeCommand)
 	}
 	top := o.TopExtra
 	if o.DataDirConfig {
@@ -1269,7 +1269,7 @@ func agentOnPath(t *testing.T, name, first, then string) string {
 	t.Helper()
 	dir := t.TempDir()
 	// The rename makes the args file appear whole, so a test never reads it half written.
-	script := "#!/bin/sh\nf=\"" + dir + "/$(echo \"$ORCHESTRATOR_SESSION\" | tr / _)\"\n" + first +
+	script := "#!/bin/sh\nf=\"" + dir + "/$(echo \"$ORCHESTRATOR_THREAD\" | tr / _)\"\n" + first +
 		"printf '%s\\n' \"$@\" > \"$f.args.tmp\" && mv \"$f.args.tmp\" \"$f.args\"\n" + then
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 		t.Fatal(err)

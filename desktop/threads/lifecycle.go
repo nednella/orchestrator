@@ -1388,7 +1388,7 @@ func shellsUnlisted(err error) string {
 	return fmt.Sprintf("tmux could not list the open shells: %v", err)
 }
 
-// removeWorktree removes the worktree orchestrator made for the thread with the project's session_cleanup_command, and
+// removeWorktree removes the worktree orchestrator made for the thread with the project's cleanup_command, and
 // records it removed. Forced or not, it never runs the command on the project folder, git's main worktree, a folder
 // that holds either, or a worktree that is not the one orchestrator made for the thread, as one a human made again at a path
 // orchestrator used, and it keeps everything when the thread woke since the clean-up settled it. Once nothing keeps the

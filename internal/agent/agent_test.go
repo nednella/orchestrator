@@ -366,7 +366,7 @@ func TestClaudeHeadless(t *testing.T) {
 	if want := []string{"claude", "-p", "find things", "--allowedTools", "WebSearch WebFetch"}; !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
 	}
-	env := ClaudeHeadless.Env([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "DEPLOY_TOKEN=s", "ORCHESTRATOR_SESSION=main/9"})
+	env := ClaudeHeadless.Env([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "DEPLOY_TOKEN=s", "ORCHESTRATOR_THREAD=main/9"})
 	if want := []string{"PATH=/bin", "ANTHROPIC_API_KEY=k"}; !slices.Equal(env, want) {
 		t.Errorf("env = %q, want %q", env, want)
 	}

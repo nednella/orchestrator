@@ -347,7 +347,7 @@ func TestEndingAThreadDropsItsHeldPrompts(t *testing.T) {
 
 func TestResumeDraftsItsPromptWhenSendIsManual(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    prompt_send: manual\n"})
 	repoFixture(t, h)
 	s := startIssueThread(h, t, 12)
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))

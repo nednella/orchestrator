@@ -2606,7 +2606,7 @@ func (s *Threads) reserve(proj project.Project) (thread.Name, context.Context) {
 // thread it works for.
 func (s *Threads) launch(ctx context.Context, p agent.Provider, name thread.Name, title string, proj project.Project, dir, branch string, issue int, model project.Model, conversation, brief, handover string, access thread.Access, action string, fork forkStart, parent string) (err error) {
 	env := []string{
-		"ORCHESTRATOR_SESSION=" + name.String(),
+		"ORCHESTRATOR_THREAD=" + name.String(),
 		mcp.ControlEnv + "=" + control.SocketPath(s.stateDir),
 	}
 	tmp := s.tmpDir(name)

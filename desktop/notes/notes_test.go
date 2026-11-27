@@ -170,7 +170,7 @@ func TestNoteToThread(t *testing.T) {
 
 func TestNoteToThreadKeepsLineBreaksUnsent(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    prompt_send: manual\n"})
 	n, _ := h.AddNote("first line\nsecond line")
 	s, err := h.NoteToThread(n.ID)
 	if err != nil {

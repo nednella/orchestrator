@@ -155,7 +155,7 @@ func TestPromptSend(t *testing.T) {
 	if h.App.Threads().Current().SendsPrompt() {
 		t.Error("the current project still sends the prompt at once")
 	}
-	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# keep me") || !strings.Contains(string(data), "session_prompt_send: manual") {
+	if data, _ := os.ReadFile(h.Conf); !strings.Contains(string(data), "# keep me") || !strings.Contains(string(data), "prompt_send: manual") {
 		t.Errorf("config lost the comment or the value:\n%s", data)
 	}
 	if got, err := h.SetPromptSend("auto"); err != nil || got.Prompt != "auto" {

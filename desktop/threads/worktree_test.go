@@ -253,8 +253,8 @@ func TestWorktreeMadeElsewhereByTheCommandIsRecorded(t *testing.T) {
 func TestFailedWorktreeCommandStartsNoThread(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct{ command, says string }{
-		{"echo no room on the disk >&2; exit 3", "session_worktree_command failed for tidy-up: sh -c: exit status 3: no room on the disk"},
-		{"echo all done", "session_worktree_command made no worktree for tidy-up: all done"},
+		{"echo no room on the disk >&2; exit 3", "worktree_command failed for tidy-up: sh -c: exit status 3: no room on the disk"},
+		{"echo all done", "worktree_command made no worktree for tidy-up: all done"},
 	} {
 		t.Run(tt.command, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{WorktreeCommand: tt.command})

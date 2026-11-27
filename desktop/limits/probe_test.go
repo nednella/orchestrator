@@ -266,7 +266,7 @@ func TestAProbeThatEndsWithoutAnAnswerFails(t *testing.T) {
 
 func TestExec(t *testing.T) {
 	t.Parallel()
-	env := append(os.Environ(), "ORCHESTRATOR_SESSION=main/abcdefgh")
+	env := append(os.Environ(), "ORCHESTRATOR_THREAD=main/abcdefgh")
 	for _, tt := range []struct {
 		name    string
 		argv    []string
@@ -276,7 +276,7 @@ func TestExec(t *testing.T) {
 		waitErr string
 	}{
 		{"reads stdin and writes stdout", []string{"sh", "-c", "read line; echo \"got $line\""}, "hi\n", "got hi\n", false, ""},
-		{"keeps only what Claude needs", []string{"sh", "-c", "echo \"[$ORCHESTRATOR_SESSION] $(basename \"$TMPDIR\")\""}, "", "[] dir\n", false, ""},
+		{"keeps only what Claude needs", []string{"sh", "-c", "echo \"[$ORCHESTRATOR_THREAD] $(basename \"$TMPDIR\")\""}, "", "[] dir\n", false, ""},
 		{"names stderr when it fails", []string{"sh", "-c", "echo broken >&2; exit 3"}, "", "", false, "broken"},
 		{"is stopped when its context ends", []string{"sh", "-c", "sleep 30"}, "", "", true, "killed"},
 	} {

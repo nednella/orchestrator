@@ -63,7 +63,7 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name: "queue sections",
-			path: write("projects:\n  - name: api\n    directory: /srv/api\n    session_prompt_send: manual\n    queue_sections:\n      - {name: Ready, labels: [ready], actions: [{name: Work, command: \"/work {n}\", model: opus, effort: high}, {name: Plan, access: read}]}\n"),
+			path: write("projects:\n  - name: api\n    directory: /srv/api\n    prompt_send: manual\n    queue_sections:\n      - {name: Ready, labels: [ready], actions: [{name: Work, command: \"/work {n}\", model: opus, effort: high}, {name: Plan, access: read}]}\n"),
 			want: Config{Projects: []Project{{Name: "api", Dir: "/srv/api", Send: "manual", QueueSections: []Section{{Name: "Ready", Labels: []string{"ready"}, Actions: []Action{{Name: "Work", Command: "/work {n}", Model: "opus", Effort: "high"}, {Name: "Plan", Access: "read"}}}}}}},
 		},
 		{name: "section without a name", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{labels: [x]}]}\n"), wantErr: true},
@@ -77,7 +77,7 @@ func TestLoad(t *testing.T) {
 		{name: "empty draggable_from on a * section", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: Rest, labels: [\"*\"], draggable_from: []}]}\n"), wantErr: true},
 		{name: "bad action effort", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: A, actions: [{name: X, effort: huge}]}]}\n"), wantErr: true},
 		{name: "unknown action access", path: write("projects:\n  - {name: api, directory: /srv/api, queue_sections: [{name: A, actions: [{name: X, access: write}]}]}\n"), wantErr: true},
-		{name: "unknown prompt send", path: write("projects:\n  - {name: api, directory: /srv/api, session_prompt_send: later}\n"), wantErr: true},
+		{name: "unknown prompt send", path: write("projects:\n  - {name: api, directory: /srv/api, prompt_send: later}\n"), wantErr: true},
 		{name: "theme", path: write("app_theme: dark\n"), want: Config{Theme: "dark"}},
 		{name: "unknown theme", path: write("app_theme: sepia\n"), wantErr: true},
 		{name: "bad yaml", path: write("agent: [\n"), wantErr: true},
@@ -192,7 +192,7 @@ projects:
   # the main one
   - name: api
     directory: ~/code/api   # work
-    note_session_command: "/plan {text}"
+    note_command: "/plan {text}"
   - {name: web, directory: ~/code/web}
 `
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
@@ -252,7 +252,7 @@ projects:
 
 func TestSaveDropsRetiredModelKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := "session_model: haiku\nsession_effort: low\n# keep\nprojects:\n  - name: api\n    directory: /srv/api\n    session_model: opus\n    session_effort: high\n    note_session_command: x\n"
+	original := "session_model: haiku\nsession_effort: low\n# keep\nprojects:\n  - name: api\n    directory: /srv/api\n    session_model: opus\n    session_effort: high\n    note_command: x\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -267,14 +267,14 @@ func TestSaveDropsRetiredModelKeys(t *testing.T) {
 	if strings.Contains(string(got), "session_model") || strings.Contains(string(got), "session_effort") {
 		t.Errorf("the saved file kept a retired key:\n%s", got)
 	}
-	if !strings.Contains(string(got), "# keep") || !strings.Contains(string(got), "note_session_command: x") {
+	if !strings.Contains(string(got), "# keep") || !strings.Contains(string(got), "note_command: x") {
 		t.Errorf("the saved file lost other settings:\n%s", got)
 	}
 }
 
 func TestLoadRejectsAnUnknownCleanupMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("projects:\n  - name: a\n    directory: /a\n    session_cleanup_mode: {merge: now}\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("projects:\n  - name: a\n    directory: /a\n    cleanup_mode: {merge: now}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "auto or manual") {
@@ -473,7 +473,7 @@ func TestCleanupCommandDefault(t *testing.T) {
 
 func TestWorktreeCommandIsKeptOnSave(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := "projects:\n  - name: api\n    directory: /srv/api\n    session_worktree_command: \"git worktree add {worktree} {branch}\" # mine\n"
+	original := "projects:\n  - name: api\n    directory: /srv/api\n    worktree_command: \"git worktree add {worktree} {branch}\" # mine\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +486,7 @@ func TestWorktreeCommandIsKeptOnSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
-	if !strings.Contains(string(got), `session_worktree_command: "git worktree add {worktree} {branch}" # mine`) {
+	if !strings.Contains(string(got), `worktree_command: "git worktree add {worktree} {branch}" # mine`) {
 		t.Errorf("the saved file lost the worktree command:\n%s", got)
 	}
 }

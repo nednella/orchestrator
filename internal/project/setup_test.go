@@ -39,7 +39,7 @@ func TestSaveSetUpKeepsTheEntry(t *testing.T) {
   # the main one
   - name: api
     directory: /srv/api # work
-    session_branch_fallback: "feat/{n}" # ours
+    issue_branch: "feat/{n}" # ours
 `
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestSaveSetUpFillsAnEmptyQueueSections(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
-			original := "projects:\n  # the main one\n  - name: api\n    directory: ~/code/api # work\n" + tt.queue + "    note_session_command: x # ours\n"
+			original := "projects:\n  # the main one\n  - name: api\n    directory: ~/code/api # work\n" + tt.queue + "    note_command: x # ours\n"
 			if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -135,7 +135,7 @@ func TestSetUpWritesNoCleanupCommand(t *testing.T) {
 		name, existing, want string
 	}{
 		{"none written", "", ""},
-		{"an existing one is kept", "    session_cleanup_command: \"git worktree remove {worktree}\" # mine\n", `session_cleanup_command: "git worktree remove {worktree}" # mine`},
+		{"an existing one is kept", "    cleanup_command: \"git worktree remove {worktree}\" # mine\n", `cleanup_command: "git worktree remove {worktree}" # mine`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
@@ -151,7 +151,7 @@ func TestSetUpWritesNoCleanupCommand(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, _ := os.ReadFile(path)
-			if tt.want == "" && strings.Contains(string(got), "session_cleanup_command") {
+			if tt.want == "" && strings.Contains(string(got), "cleanup_command") {
 				t.Errorf("SetUp wrote a clean-up command:\n%s", got)
 			}
 			if tt.want != "" && !strings.Contains(string(got), tt.want) {

@@ -283,7 +283,7 @@ func TestStartLineNamesTheDefaultBranchWhenProjectNamesNone(t *testing.T) {
 
 func TestManualPromptSendDraftsWithoutSending(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    prompt_send: manual\n"})
 	s, err := h.StartIssue(7)
 	if err != nil {
 		t.Fatal(err)

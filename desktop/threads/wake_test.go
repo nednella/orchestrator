@@ -252,7 +252,7 @@ func TestPRReviewWakesASettledThread(t *testing.T) {
 		draft       bool
 	}{
 		{"auto sends", "", false},
-		{"manual drafts", "    session_prompt_send: manual\n", true},
+		{"manual drafts", "    prompt_send: manual\n", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})

@@ -110,7 +110,7 @@ s.listen(5)
 print("ready", flush=True)
 time.sleep(120)`, strconv.Itoa(port))
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		return strings.HasPrefix(kv, "ORCHESTRATOR_SESSION=") || strings.HasPrefix(kv, mcp.ControlEnv+"=")
+		return strings.HasPrefix(kv, "ORCHESTRATOR_THREAD=") || strings.HasPrefix(kv, mcp.ControlEnv+"=")
 	}), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	out, err := cmd.StdoutPipe()
@@ -134,7 +134,7 @@ time.sleep(120)`, strconv.Itoa(port))
 
 // marker is the environment of a process a thread of the harness's app started.
 func marker(h *apptest.Harness, id string) []string {
-	return []string{"ORCHESTRATOR_SESSION=" + id, mcp.ControlEnv + "=" + ctl.SocketPath(h.State)}
+	return []string{"ORCHESTRATOR_THREAD=" + id, mcp.ControlEnv + "=" + ctl.SocketPath(h.State)}
 }
 
 func TestServersListAThreadsListener(t *testing.T) {
@@ -310,7 +310,7 @@ func TestStartStopsTheServersOfSettledThreads(t *testing.T) {
 	started := startOf(pid)
 	_, unknown := listener(t, marker(h, "main/zzzzzzzz")...)
 	unknownStart := startOf(unknown)
-	_, otherApps := listener(t, "ORCHESTRATOR_SESSION="+serving.ID, mcp.ControlEnv+"=/another/app/control.sock")
+	_, otherApps := listener(t, "ORCHESTRATOR_THREAD="+serving.ID, mcp.ControlEnv+"=/another/app/control.sock")
 	otherAppsStart := startOf(otherApps)
 	h.App.Stop() // so only the next app's start sees the thread gone
 	if err := exec.Command("tmux", "-L", h.Socket, "kill-session", "-t", "="+serving.ID).Run(); err != nil {
@@ -388,7 +388,7 @@ func backdate(t *testing.T, h *apptest.Harness, id string) {
 
 func TestShellCarriesNoThreadMarker(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{Env: []string{"ORCHESTRATOR_SESSION=main/aaaaaaaa"}}) // as an app started from a thread's terminal has
+	h := apptest.NewWith(t, apptest.Options{Env: []string{"ORCHESTRATOR_THREAD=main/aaaaaaaa"}}) // as an app started from a thread's terminal has
 	work, err := h.StartThread("work", "")
 	if err != nil {
 		t.Fatal(err)
@@ -407,7 +407,7 @@ func TestShellCarriesNoThreadMarker(t *testing.T) {
 		env = string(data)
 		return err == nil && strings.Contains(env, "ORCHESTRATOR_PROJECT=")
 	})
-	for _, name := range []string{"ORCHESTRATOR_SESSION=", mcp.ControlEnv + "="} {
+	for _, name := range []string{"ORCHESTRATOR_THREAD=", mcp.ControlEnv + "="} {
 		if strings.Contains(env, name) {
 			t.Errorf("the shell has %s:\n%s", name, env)
 		}

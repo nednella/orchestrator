@@ -39,7 +39,7 @@ const wailsReply = `[
 func TestDigestRun(t *testing.T) {
 	t.Parallel()
 	h := apptest.NewWith(t, apptest.Options{Env: []string{
-		"ORCHESTRATOR_SESSION=main/9", // a run must not inherit a thread
+		"ORCHESTRATOR_THREAD=main/9", // a run must not inherit a thread
 		"DEPLOY_TOKEN=secret",
 		"ANTHROPIC_API_KEY=claude-needs-this",
 	}})
@@ -48,7 +48,7 @@ func TestDigestRun(t *testing.T) {
 	}
 	h.Claude.SetReply(wailsReply)
 	h.Claude.SetDo(func(call apptest.DigestCall) {
-		for _, leaked := range []string{"ORCHESTRATOR_SESSION", "DEPLOY_TOKEN", "ORCHESTRATOR_SOCKET", "ORCHESTRATOR_DIGEST_PROJECT"} {
+		for _, leaked := range []string{"ORCHESTRATOR_THREAD", "DEPLOY_TOKEN", "ORCHESTRATOR_SOCKET", "ORCHESTRATOR_DIGEST_PROJECT"} {
 			if envValue(call.Env, leaked) != "" {
 				t.Errorf("%s leaked into the digest run", leaked)
 			}

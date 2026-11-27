@@ -105,7 +105,7 @@ type workPlace struct {
 // makeWorktree gives the thread its worktree on branch. A project that is not a git repository runs the thread in its
 // folder. A branch checked out in a worktree already runs the thread there, unrecorded, so orchestrator never removes it;
 // one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is made by
-// the project's session_worktree_command from base, a commit, or with no base from the default branch on origin,
+// the project's worktree_command from base, a commit, or with no base from the default branch on origin,
 // fetched first, and the worktree is the one git then lists on the branch, wherever the command put it.
 func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
@@ -146,14 +146,14 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 	if !branchFound {
 		out, err := l.projectCommand(ctx, proj, proj.MakeWorktree(), "{branch}", util.ShellQuote(branch), "{worktree}", util.ShellQuote(dir), "{base}", util.ShellQuote(base))
 		if err != nil {
-			return workPlace{}, fmt.Errorf("session_worktree_command failed for %s: %w", branch, err)
+			return workPlace{}, fmt.Errorf("worktree_command failed for %s: %w", branch, err)
 		}
 		if trees, err = l.worktrees(ctx, proj.Dir); err != nil {
 			return workPlace{}, fmt.Errorf("listing the worktrees: %w", err)
 		}
 		made, ok := trees.byBranch[branch]
 		if !ok {
-			return workPlace{}, fmt.Errorf("session_worktree_command made no worktree for %s: %s", branch, cmp.Or(util.FirstLine(strings.TrimSpace(string(out))), "it printed nothing"))
+			return workPlace{}, fmt.Errorf("worktree_command made no worktree for %s: %s", branch, cmp.Or(util.FirstLine(strings.TrimSpace(string(out))), "it printed nothing"))
 		}
 		dir = made
 	}
@@ -194,7 +194,7 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 // restore puts back the worktree orchestrator made for the thread, at the same path on the same branch, when it is gone, so
 // a woken thread never moves folder. A thread with no record has nothing to restore. A folder at the path is left as it
 // is: it is the thread's own worktree only when its marker holds the thread's id, and anything else is an error. The
-// branch is checked out as it is, the local one else origin's, with plain git: session_worktree_command makes a new
+// branch is checked out as it is, the local one else origin's, with plain git: worktree_command makes a new
 // branch, and this one exists. A restore that fails leaves the record as it was.
 func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread string) error {
 	key := proj.Key()

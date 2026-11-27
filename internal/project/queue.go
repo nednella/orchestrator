@@ -130,7 +130,7 @@ func (a Action) Render(number int, title, branch string) string {
 }
 
 // NoteCommand is what a thread for a note types into the agent; the note itself unless the project sets
-// note_session_command.
+// note_command.
 func (p Project) NoteCommand(text string) string {
 	return strings.ReplaceAll(cmp.Or(p.OnNote, "{text}"), "{text}", text)
 }
@@ -155,7 +155,7 @@ func (p Project) PromptSend() string {
 // validateQueue checks the queue settings. An action's model and effort are checked by claude.
 func (p Project) validateQueue() error {
 	if p.Send != "" && p.Send != PromptAuto && p.Send != PromptManual {
-		return fmt.Errorf("session_prompt_send must be %s or %s, not %q", PromptAuto, PromptManual, p.Send)
+		return fmt.Errorf("prompt_send must be %s or %s, not %q", PromptAuto, PromptManual, p.Send)
 	}
 	var sections []string
 	for i, s := range p.QueueSections {
@@ -224,7 +224,7 @@ func (p Project) ConflictCommand(pr int) string {
 	return strings.ReplaceAll(p.OnConflict, "{n}", strconv.Itoa(pr))
 }
 
-// BranchFor is the branch orchestrator makes for an issue thread: session_branch_fallback, else issue-<n>.
+// BranchFor is the branch orchestrator makes for an issue thread: issue_branch, else issue-<n>.
 func (p Project) BranchFor(number int) string {
 	return strings.ReplaceAll(cmp.Or(p.Branch, "issue-{n}"), "{n}", strconv.Itoa(number))
 }
@@ -241,10 +241,10 @@ var Modes = []string{"auto", "manual"}
 
 func (c Cleanup) validate() error {
 	if c.Merge != "" && !slices.Contains(Modes, c.Merge) {
-		return fmt.Errorf("session_cleanup_mode merge must be auto or manual, not %q", c.Merge)
+		return fmt.Errorf("cleanup_mode merge must be auto or manual, not %q", c.Merge)
 	}
 	if c.Close != "" && !slices.Contains(Modes, c.Close) {
-		return fmt.Errorf("session_cleanup_mode close must be auto or manual, not %q", c.Close)
+		return fmt.Errorf("cleanup_mode close must be auto or manual, not %q", c.Close)
 	}
 	return nil
 }

@@ -34,7 +34,7 @@ type report struct {
 // ChildTurnEnded hears of each turn_end a thread's follower takes, and of the exit when the thread settles. When the
 // thread is a child and its turn is over, as a wait counts it, or it was put to sleep in the middle of one, the result
 // goes to its parent once: by the parent's wait on it when one is in flight, else as a message from the child that
-// wakes a parent that sleeps and is sent whatever session_prompt_send says. Then the child goes to sleep, unless a task
+// wakes a parent that sleeps and is sent whatever prompt_send says. Then the child goes to sleep, unless a task
 // of its own still runs in the background; a later message wakes it, and each later turn's result goes to the parent
 // as a later one. A turn that a thread stopped, as stop does, gives none: the stop answered that thread. It runs on the
 // follower, so it looks only at the wait here and gives the result in a goroutine of its own, one child at a time, in

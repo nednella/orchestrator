@@ -294,7 +294,7 @@ func TestUnsentPromptIsADraft(t *testing.T) {
 
 func TestManualPromptIsADraftOnAHostedThread(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    prompt_send: manual\n"})
 	if _, err := h.Threads().CreateBriefed("set up", "write the queue", "brief"); err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestWakeOfAnEndedHostedThread(t *testing.T) {
 		draft       bool
 	}{
 		{"auto sends", "", false},
-		{"manual drafts", "    session_prompt_send: manual\n", true},
+		{"manual drafts", "    prompt_send: manual\n", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n" + tt.extra})
@@ -379,7 +379,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 		work bool
 	}{{"live", false}, {"held while working", true}} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    session_prompt_send: manual\n"})
+			h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    pr_review_command: \"/address-review {n}\"\n    prompt_send: manual\n"})
 			repoFixture(t, h)
 			s, err := h.Threads().Create(h.Threads().Current(), "#12 work", "", false, 12, thread.Supervised)
 			if err != nil {

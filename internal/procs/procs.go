@@ -1,5 +1,5 @@
 // Package procs finds the servers a thread started. A thread's processes are found by the marker the app starts its
-// agent with, which every process the agent starts inherits: the thread's id in ORCHESTRATOR_SESSION and this app's control
+// agent with, which every process the agent starts inherits: the thread's id in ORCHESTRATOR_THREAD and this app's control
 // socket in ORCHESTRATOR_CONTROL. Nothing else names them: a process is never matched by its name, folder, command or port,
 // so a server the owner started by hand, or another app's thread, is never one.
 package procs
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	threadVar = "ORCHESTRATOR_SESSION"
+	threadVar = "ORCHESTRATOR_THREAD"
 	socketVar = "ORCHESTRATOR_CONTROL"
 
 	// stopGrace is how long a server has to exit after SIGTERM before it gets SIGKILL.

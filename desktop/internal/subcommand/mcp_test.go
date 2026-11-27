@@ -212,7 +212,7 @@ func TestMCPIgnoresOrchestratorThread(t *testing.T) {
 		return control.Response{OK: true, Out: "ok"}
 	})
 	t.Setenv("ORCHESTRATOR_MCP_TOKEN", "tok-1")
-	t.Setenv("ORCHESTRATOR_SESSION", "demo/other")
+	t.Setenv("ORCHESTRATOR_THREAD", "demo/other")
 	t.Setenv("ORCHESTRATOR_PROJECT", "other")
 	callTool(t, "threads", `{}`)
 	if got.Cmd != "orchestrate" || got.Thread != "" || got.Project != "" {

@@ -127,7 +127,7 @@ func (t *Tmux) runWith(ctx context.Context, env []string, args ...string) (strin
 // inherited are dropped from the environment the tmux server starts with: TMUX so an app started
 // inside another tmux can still attach, and a session's identity so an app or test started inside
 // an orchestrator session does not pass it on to every session and shell it starts.
-var inherited = []string{"TMUX", "ORCHESTRATOR_SESSION", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}
+var inherited = []string{"TMUX", "ORCHESTRATOR_THREAD", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}
 
 func (t *Tmux) cleanEnv() []string {
 	env := os.Environ()

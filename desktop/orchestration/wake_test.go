@@ -326,7 +326,7 @@ func TestChildTurnRaisesNoRepliedToast(t *testing.T) {
 
 func TestChildResultIgnoresManualSend(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    session_prompt_send: manual\n"})
+	h := apptest.NewWith(t, apptest.Options{ProjectExtra: "    prompt_send: manual\n"})
 	parent := newThread(t, h, "Plan the release").ID
 	c := mustDelegate(t, h, parent, `{"task":"Count the files","title":"Count files","access":"read"}`).ID
 	apptest.Eventually(t, "the result on the parent's stdin", func() bool { return len(resultLines(t, h, parent, c)) > 0 })
