@@ -782,13 +782,19 @@ func (s *Threads) handoverOf(id string) string {
 // first, leaves the thread as it was, asleep when the delete had put it to sleep, and showing again.
 func (s *Threads) Delete(id string, worktree bool) error {
 	family, done, err := s.beginDelete(id)
-	if err != nil || done {
+	if err != nil {
 		return err
+	}
+	if done {
+		s.emit("delete:done", map[string]string{"id": id, "project": thread.ProjectKey(id)})
+		return nil
 	}
 	go func() {
 		if err := s.finishDelete(id, family, worktree); err != nil {
-			s.emit("delete:refused", map[string]string{"id": id, "error": err.Error()})
+			s.emit("delete:refused", map[string]string{"id": id, "project": thread.ProjectKey(id), "error": err.Error()})
+			return
 		}
+		s.emit("delete:done", map[string]string{"id": id, "project": thread.ProjectKey(id)})
 	}()
 	return nil
 }

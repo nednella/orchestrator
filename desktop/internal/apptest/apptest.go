@@ -126,6 +126,18 @@ func (r *Recorder) HasClip(text string) bool {
 	return slices.Contains(r.clips, text)
 }
 
+// LastPayload is the payload of the latest event of that name, nil when it has had none.
+func (r *Recorder) LastPayload(name string) any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range slices.Backward(r.events) {
+		if e.name == name {
+			return e.payload
+		}
+	}
+	return nil
+}
+
 func (r *Recorder) Count(name string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()

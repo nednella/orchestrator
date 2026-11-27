@@ -36,6 +36,10 @@ func TestDeleteReturnsBeforeTheThreadIsStopped(t *testing.T) {
 		t.Error("the thread was stopped before the call returned; the test cannot tell")
 	}
 	eventually(t, "the thread to be gone", func() bool { return !tmuxHas(h, s.ID) && !hasState(t, h, s.ID) && !exists(chatLog) })
+	eventually(t, "the delete to be told as done", func() bool { return h.Rec.Count("delete:done") == 1 })
+	if got := h.Rec.LastPayload("delete:done"); got == nil || got.(map[string]string)["id"] != s.ID || got.(map[string]string)["project"] != "main" {
+		t.Errorf("delete:done = %v, want the thread and its project", got)
+	}
 	if err := h.DeleteThreadAsApp(s.ID, false); err == nil {
 		t.Error("a second delete of the gone thread was taken")
 	}
@@ -55,6 +59,12 @@ func TestRefusedDeleteBringsTheRowBack(t *testing.T) {
 		t.Fatalf("the call = %v, want it to return and the refusal to come after", err)
 	}
 	eventually(t, "the refusal to be told", func() bool { return h.Rec.Count("delete:refused") == 1 })
+	if got, _ := h.Rec.LastPayload("delete:refused").(map[string]string); got["id"] != s.ID || got["project"] != "main" || got["error"] == "" {
+		t.Errorf("delete:refused = %v, want the thread, its project and why", got)
+	}
+	if h.Rec.Count("delete:done") != 0 {
+		t.Error("a refused delete was told as done")
+	}
 	eventually(t, "the row to come back", func() bool {
 		row, listed := h.Thread(s.ID)
 		return listed && row.Cleanup == "blocked"
