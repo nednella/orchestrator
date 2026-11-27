@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLayout } from '../LayoutContext'
 import { useOrchestrator } from '../OrchestratorContext'
 import type { Toast } from '../toastPile'
+import { useLeavingToasts } from '../useLeavingToasts'
 import { useToastTimers } from '../useToastTimers'
 import { ToastCard } from './ToastCard'
 
@@ -13,6 +14,7 @@ export function Toasts() {
   const [focused, setFocused] = useState(false)
   const open = hovered || focused
   useToastTimers(toasts, open, dismissToast)
+  const shown = useLeavingToasts(toasts)
 
   // A toast that goes while the pointer or the focus is on it sends no event of leaving.
   useEffect(() => {
@@ -30,7 +32,7 @@ export function Toasts() {
 
   return (
     <div className="toast-layer" aria-live="polite">
-      {toasts.length > 0 && (
+      {shown.length > 0 && (
         <div
           ref={stack}
           className="toast-stack"
@@ -39,8 +41,8 @@ export function Toasts() {
           onFocus={() => setFocused(true)}
           onBlur={(e) => setFocused(e.currentTarget.contains(e.relatedTarget))}
         >
-          <div className="toast-pile" data-open={open || undefined} data-count={toasts.length}>
-            {[...toasts].reverse().map((toast, depth) => (
+          <div className="toast-pile" data-open={open || undefined} data-count={shown.length}>
+            {[...shown].reverse().map((toast, depth) => (
               <ToastCard key={toast.key} toast={toast} depth={depth} onDismiss={dismissToast} onJump={jump} />
             ))}
           </div>

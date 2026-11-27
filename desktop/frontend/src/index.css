@@ -1681,6 +1681,37 @@
     font-size: var(--fs-small);
   }
 
+  /* A toast that goes mirrors its entrance: it fades and slides up. In the open pile it also gives back its room. */
+  .toast[data-leaving] {
+    pointer-events: none;
+    animation: toast-out 180ms ease-out forwards;
+  }
+
+  .toast-pile[data-open] .toast[data-leaving] {
+    overflow: hidden;
+    animation-name: toast-out-open;
+  }
+
+  @keyframes toast-out {
+    to { opacity: 0; transform: translateY(-0.5rem) scale(0.98); }
+  }
+
+  @keyframes toast-out-open {
+    from { max-height: var(--toast-h); }
+    to { opacity: 0; transform: translateY(-0.5rem) scale(0.98); max-height: 0; min-height: 0; padding-block: 0; border-width: 0; margin-bottom: -0.5rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .toast[data-leaving],
+    .toast-pile[data-open] .toast[data-leaving] {
+      animation: toast-out-still 80ms linear forwards;
+    }
+
+    @keyframes toast-out-still {
+      to { opacity: 0; }
+    }
+  }
+
   @keyframes toast-in {
     from { opacity: 0; transform: translateY(-1rem) scale(0.96); }
   }

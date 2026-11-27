@@ -1,12 +1,13 @@
 import { CircleAlert, CircleCheck, GitPullRequest, Info, TriangleAlert, WifiOff, X } from 'lucide-react'
-import type { ReactNode } from 'react'
-import type { Toast } from '../toastPile'
+import { useLayoutEffect, useRef } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import type { ShownToast } from '../toastLeaving'
 import { Spinner } from './Spinner'
 import { StateDot } from './StateDot'
 
 const GLYPH_SIZE = 16
 
-const GLYPH: Record<Toast['tone'], { color: string; glyph: ReactNode }> = {
+const GLYPH: Record<ShownToast['tone'], { color: string; glyph: ReactNode }> = {
   error: { color: 'text-danger', glyph: <CircleAlert size={GLYPH_SIZE} /> },
   pr: { color: 'text-danger', glyph: <GitPullRequest size={GLYPH_SIZE} /> },
   network: { color: 'text-danger', glyph: <WifiOff size={GLYPH_SIZE} /> },
@@ -19,20 +20,27 @@ const GLYPH: Record<Toast['tone'], { color: string; glyph: ReactNode }> = {
   opened: { color: 'text-idle', glyph: <StateDot state="idle" /> },
 }
 
-const JUMP_LABEL: Partial<Record<Toast['tone'], string>> = { replied: 'Open', opened: 'Open', evidence: 'View' }
+const JUMP_LABEL: Partial<Record<ShownToast['tone'], string>> = { replied: 'Open', opened: 'Open', evidence: 'View' }
 
 type ToastCardProps = {
-  toast: Toast
+  toast: ShownToast
   // How far back in the pile the toast is: 0 is the front.
   depth: number
   onDismiss: (key: number) => void
-  onJump: (toast: Toast) => void
+  onJump: (toast: ShownToast) => void
 }
 
 export function ToastCard({ toast, depth, onDismiss, onJump }: ToastCardProps) {
   const { color, glyph } = GLYPH[toast.tone]
+  // A leaving toast gives back the room it took in the open pile, so the toasts after it slide into place.
+  const card = useRef<HTMLDivElement>(null)
+  const height = useRef(0)
+  useLayoutEffect(() => {
+    if (!toast.leaving && card.current) height.current = card.current.offsetHeight
+  })
+  const leaving = toast.leaving ? ({ '--toast-h': `${height.current}px` } as CSSProperties) : undefined
   return (
-    <div className="toast" data-depth={depth}>
+    <div ref={card} className="toast" data-depth={depth} data-leaving={toast.leaving || undefined} aria-hidden={toast.leaving || undefined} style={leaving}>
       <span className={`flex h-5 w-5 flex-none items-center justify-center ${color}`}>{toast.busy ? <Spinner size={16} /> : glyph}</span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-body font-medium">{toast.text}</span>
