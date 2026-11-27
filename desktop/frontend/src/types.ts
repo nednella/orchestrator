@@ -547,6 +547,8 @@ export type EventMap = {
   issues: ProjectList<Issue>
   cleanups: ProjectList<Cleanup>
   warnings: Warning
+  // 'delete:refused' says a delete that had started was refused, with the reason; the thread's row is back on the list.
+  'delete:refused': { id: string; error: string }
   awake: boolean
   memory: Memory
   network: { online: boolean }

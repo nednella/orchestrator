@@ -88,7 +88,8 @@ type OrchestratorActions = {
   newThread(start: ThreadStart, access: Access, place: Place | ''): Promise<Thread>
   settleThread(id: string): Promise<void>
   // deleteThread stops the thread when it runs and removes it with its chat; with worktree, the worktree orchestrator made
-  // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays.
+  // for it goes too, unless a safety check keeps it, which refuses the delete. The branch stays. It settles once the delete
+  // has started and the rows are off the list; a refusal comes later, as the delete:refused event, with the rows back.
   deleteThread(id: string, worktree: boolean): Promise<void>
   wakeThread(id: string): Promise<Thread>
   // setAccess gives the thread the access between turns; the row shows it once the threads list says so.
@@ -588,6 +589,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   )
   useEffect(() => on('term:exit', ({ id }) => setShells((list) => list.filter((x) => x.id !== id))), [])
   useEffect(() => on('notes', ifCurrent(setNotes)), [])
+  useEffect(() => on('delete:refused', ({ error }) => pushToast({ tone: 'error', text: error })), [pushToast])
   useEffect(() => on('awake', setAwake), [])
   useEffect(() => on('memory', setMemory), [])
   useEffect(() => on('issues', ifCurrent(setRawIssues)), [])

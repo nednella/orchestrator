@@ -1237,15 +1237,25 @@ export function createMock(params: URLSearchParams) {
       const busy = family.find((x) => x.cleanup === 'pending')
       if (busy) throw `Thread ${busy.n} is being cleaned up; delete it when that ends`
       const user = worktree && s.worktree ? worktreeUser(s, family) : undefined
-      if (user) throw `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree`
+      if (user) {
+        setTimeout(() => {
+          emit('delete:refused', { id, error: `Thread ${s.n} keeps its worktree: Thread ${user.title} also works in this worktree. Delete it without the worktree` })
+          publish()
+        }, 400)
+        return
+      }
       const taken = worktree ? takenWorktrees(s) : []
       for (const x of taken) {
         const reason = keptFor(x)
         if (!reason) continue
         Object.assign(x, { cleanup: 'blocked', cleanupReason: reason })
         logCleanup(x, [], reason)
-        publish()
-        throw `Thread ${x.n} keeps its worktree: ${reason}. Untick the box to keep ${taken.length > 1 ? 'the worktrees' : 'the worktree'}, or clean Thread ${x.n} up first`
+        // As the app does, the call settles at once and the refusal comes after, with the rows back.
+        setTimeout(() => {
+          emit('delete:refused', { id, error: `Thread ${x.n} keeps its worktree: ${reason}. Untick the box to keep ${taken.length > 1 ? 'the worktrees' : 'the worktree'}, or clean Thread ${x.n} up first` })
+          publish()
+        }, 400)
+        return
       }
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
