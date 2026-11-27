@@ -4192,10 +4192,11 @@ func (s *Threads) shownState(id string) thread.State {
 // folder that holds the images sent in it and the folder it works in.
 type Chat struct {
 	ID, Project, Log, Socket, Media, Dir string
-	N                                    int  // the number the thread shows
-	Live                                 bool // the thread runs; an ended one has only its log
-	Deleting                             bool // a delete of the thread runs
-	Starting                             bool // the thread's host has not started: it has no chat yet
+	Tmp                                  string // the thread's own temp folder
+	N                                    int    // the number the thread shows
+	Live                                 bool   // the thread runs; an ended one has only its log
+	Deleting                             bool   // a delete of the thread runs
+	Starting                             bool   // the thread's host has not started: it has no chat yet
 }
 
 // ChatOf is the chat of the thread id, live or ended. A deleted thread gives none. It takes mu.
@@ -4239,7 +4240,7 @@ func (s *Threads) chatOf(in term.Info, live bool) Chat {
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
 	starting := s.starting[name.String()]
 	unhosted := starting != nil && !starting.launched
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live && !unhosted, Deleting: s.deleting[name.String()], Starting: unhosted}
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Tmp: s.tmpDir(name), Dir: dir, N: s.nums[name.String()], Live: live && !unhosted, Deleting: s.deleting[name.String()], Starting: unhosted}
 }
 
 // AfterList sets what Refresh runs once it has listed tmux and before it applies the list; a test settles a thread there.
