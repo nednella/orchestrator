@@ -166,7 +166,19 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		case l.ours(ctx, proj.Key(), own, name.String()):
 			return workPlace{dir: own, branch: branch, made: true}, nil
 		case try.prior != "" && own == try.prior && l.unclaimed(ctx, proj.Key(), own, name.String()):
-			return l.adoptWorktree(ctx, proj, name, own, branch, base)
+			state, reason := l.madeState(ctx, proj, own)
+			switch state {
+			case madeWhole:
+				return l.adoptWorktree(ctx, proj, name, own, branch, base)
+			case madeInterrupted:
+				// Git's own lock proves it never finished, so nothing in it is anyone's work: it is made again.
+				if err := l.removeInterrupted(ctx, proj, own); err != nil {
+					return workPlace{}, err
+				}
+				try.prior = ""
+				return l.makeWorktree(ctx, proj, name, branch, base, fresh, try)
+			}
+			return workPlace{}, fmt.Errorf("the worktree %s, which an earlier try began to make, is not whole: %s. Put it right or remove it, then retry", own, reason)
 		}
 		return workPlace{dir: dir, branch: branch}, nil
 	}
@@ -182,7 +194,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	// A branch picked from the title is new, so origin is not asked for it: that would cost a round trip that always fails.
-	branchFound, unreachable, err := l.addWorktree(ctx, proj, dir, branch, !fresh, func() { try.began(dir) })
+	branchFound, unreachable, err := l.addWorktree(ctx, proj, dir, branch, !fresh, func() { try.began(dir) }, func() { try.abandoned(dir) })
 	if err != nil {
 		return workPlace{}, err
 	}
@@ -193,6 +205,7 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 	if !branchFound {
 		try.began(dir)
 		if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "add", "--quiet", "-b", branch, dir, base); err != nil {
+			try.abandoned(dir)
 			return workPlace{}, fmt.Errorf("making the worktree of %s: %w", branch, err)
 		}
 	}
@@ -212,10 +225,75 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 }
 
 // worktreeTry is what a start tells makeWorktree of its earlier tries: prior is the folder one began to make a worktree
-// in, "", and begin hears the folder before git starts to make one.
+// in, "", begin hears the folder before git starts to make one, and clear hears that git failed and left no folder, so a
+// worktree made there by hand later is never taken for the start's.
 type worktreeTry struct {
 	prior string
 	begin func(dir string)
+	clear func()
+}
+
+func (t worktreeTry) abandoned(dir string) {
+	if t.clear != nil && gone(dir) {
+		t.clear()
+	}
+}
+
+// madeState is how far git got with a worktree a start began to make.
+type madeState int
+
+const (
+	madeWhole       madeState = iota // git finished, and nothing in it is changed
+	madeInterrupted                  // git still has it locked as initializing: a quit or a timeout cut it off
+	madeOther                        // anything else: locked for another reason, changed, or unreadable
+)
+
+// madeState says how far git got with the worktree at dir, and for madeOther why it is not taken: a worktree that git
+// lists as locked, or whose status is not clean, is no whole one, and only git's own initializing lock says it never was.
+func (l *Lifecycle) madeState(ctx context.Context, proj project.Project, dir string) (madeState, string) {
+	out, err := l.git(ctx, proj.Dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return madeOther, fmt.Sprintf("git could not list the worktrees: %v", util.FirstLine(err.Error()))
+	}
+	for block := range strings.SplitSeq(string(out), "\n\n") {
+		var path, lock string
+		var locked bool
+		for line := range strings.Lines(block) {
+			line = strings.TrimRight(line, "\n")
+			switch rest, ok := strings.CutPrefix(line, "worktree "); {
+			case ok:
+				path = rest
+			case line == "locked" || strings.HasPrefix(line, "locked "):
+				locked, lock = true, strings.TrimSpace(strings.TrimPrefix(line, "locked"))
+			}
+		}
+		if path == "" || folder.Canonical(path) != dir {
+			continue
+		}
+		switch {
+		case locked && lock == "initializing":
+			return madeInterrupted, ""
+		case locked:
+			return madeOther, "git has it locked: " + lock
+		}
+		status, err := l.git(ctx, dir, "status", "--porcelain")
+		switch {
+		case err != nil:
+			return madeOther, "git cannot read it: " + util.FirstLine(err.Error())
+		case strings.TrimSpace(string(status)) != "":
+			return madeOther, "it has changes: " + util.FirstLine(strings.TrimSpace(string(status)))
+		}
+		return madeWhole, ""
+	}
+	return madeOther, "git does not list it"
+}
+
+// removeInterrupted removes a worktree git began to make and did not finish, which its lock says.
+func (l *Lifecycle) removeInterrupted(ctx context.Context, proj project.Project, dir string) error {
+	if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, "worktree", "remove", "--force", "--force", dir); err != nil {
+		return fmt.Errorf("removing the worktree %s that git did not finish: %w", dir, err)
+	}
+	return nil
 }
 
 func (t worktreeTry) began(dir string) {
@@ -266,7 +344,7 @@ func staleCheckout(branch, dir string) error {
 // addWorktree checks out branch as it is in a new worktree at dir: the local branch, else origin's, fetched when this
 // clone has no copy. When neither has the branch it adds nothing and says branchFound false, and unreachable when that
 // is because origin could not be asked.
-func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool, begin func()) (branchFound, unreachable bool, err error) {
+func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, branch string, askOrigin bool, begin, abandoned func()) (branchFound, unreachable bool, err error) {
 	args := []string{"worktree", "add", "--quiet", dir, branch}
 	switch {
 	case l.hasRef(ctx, proj.Dir, "refs/heads/"+branch):
@@ -289,6 +367,9 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 		begin()
 	}
 	if _, err := l.git(context.WithoutCancel(ctx), proj.Dir, args...); err != nil {
+		if abandoned != nil {
+			abandoned()
+		}
 		return true, false, fmt.Errorf("checking out %s in a worktree: %w", branch, err)
 	}
 	return true, false, nil
@@ -327,7 +408,7 @@ func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread st
 	if err := l.dropEntry(ctx, proj.Dir, trees, w.Path); err != nil {
 		return err
 	}
-	branchFound, _, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true, nil)
+	branchFound, _, err := l.addWorktree(ctx, proj, w.Path, w.Branch, true, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -507,8 +588,18 @@ func (l *Lifecycle) dropStartWorktree(ctx context.Context, proj project.Project,
 	id, key := name.String(), proj.Key()
 	if _, ok := l.threads.made.Of(key, id); !ok && making != "" && !gone(making) && branch != "" {
 		if trees, err := l.worktrees(ctx, proj.Dir); err == nil && folder.Canonical(trees.byBranch[branch]) == making && l.unclaimed(ctx, key, making, id) {
-			if _, err := l.adoptWorktree(ctx, proj, name, making, branch, ""); err != nil {
-				return err.Error()
+			switch state, reason := l.madeState(ctx, proj, making); state {
+			case madeWhole:
+				if _, err := l.adoptWorktree(ctx, proj, name, making, branch, ""); err != nil {
+					return err.Error()
+				}
+			case madeInterrupted:
+				if err := l.removeInterrupted(ctx, proj, making); err != nil {
+					return err.Error()
+				}
+				return ""
+			default:
+				return fmt.Sprintf("the worktree %s, which the start began to make, is not whole: %s", making, reason)
 			}
 		}
 	}

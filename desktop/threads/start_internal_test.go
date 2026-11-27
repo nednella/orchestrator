@@ -416,3 +416,83 @@ func TestAMessageHeldAsTheStartEndsIsNeverLost(t *testing.T) {
 		}
 	}
 }
+
+func TestRetryMakesAgainAWorktreeGitNeverFinishedAndLeavesAnyOtherUncleanOneAlone(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	name := thread.Name{Project: "p", Token: "aaaaaaaa"}
+
+	// A git cut off by a quit or a timeout leaves the worktree locked as initializing, with no checkout.
+	half := filepath.Join(dir, "trees", "feature")
+	gitT(t, dir, "worktree", "add", "--no-checkout", "-b", "feature", half)
+	gitT(t, dir, "worktree", "lock", "--reason", "initializing", half)
+	got, err := l.makeWorktree(t.Context(), proj, name, "feature", "", true, worktreeTry{prior: folder.Canonical(half)})
+	if err != nil || !got.made {
+		t.Fatalf("worktree = %+v, %v; want it made again", got, err)
+	}
+	if !exists(filepath.Join(got.dir, "README")) || gitT(t, got.dir, "status", "--porcelain") != "" {
+		t.Errorf("the worktree has no clean checkout: %q", gitT(t, got.dir, "status", "--porcelain"))
+	}
+
+	for name, spoil := range map[string]func(wt string){
+		"changed":            func(wt string) { _ = os.WriteFile(filepath.Join(wt, "mine.txt"), []byte("x\n"), 0o600) },
+		"locked by an owner": func(wt string) { gitT(t, dir, "worktree", "lock", "--reason", "mine", wt) },
+	} {
+		wt := filepath.Join(dir, "trees", "other-"+strings.ReplaceAll(name, " ", "-"))
+		branch := filepath.Base(wt)
+		gitT(t, dir, "worktree", "add", "-b", branch, wt)
+		spoil(wt)
+		got, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, branch, "", true, worktreeTry{prior: folder.Canonical(wt)})
+		if err == nil || !strings.Contains(err.Error(), "not whole") || got.made {
+			t.Errorf("%s: worktree = %+v, %v; want a refusal that says it is not whole", name, got, err)
+		}
+		if !exists(wt) {
+			t.Errorf("%s: the worktree was removed", name)
+		}
+		if _, ok := l.threads.made.At("p", wt); ok {
+			t.Errorf("%s: the worktree was recorded", name)
+		}
+	}
+}
+
+func TestDropStartWorktreeRemovesAnInterruptedOneAndKeepsAnyOtherUncleanOne(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	name := thread.Name{Project: "p", Token: "aaaaaaaa"}
+	half := filepath.Join(dir, "trees", "feature")
+	gitT(t, dir, "worktree", "add", "--no-checkout", "-b", "feature", half)
+	gitT(t, dir, "worktree", "lock", "--reason", "initializing", half)
+	if reason := l.dropStartWorktree(t.Context(), proj, name, "work", "feature", folder.Canonical(half)); reason != "" || exists(half) {
+		t.Errorf("drop = %q, worktree there: %v; want the unfinished worktree removed", reason, exists(half))
+	}
+	dirty := filepath.Join(dir, "trees", "dirty")
+	gitT(t, dir, "worktree", "add", "-b", "dirty", dirty)
+	if err := os.WriteFile(filepath.Join(dirty, ".env"), []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reason := l.dropStartWorktree(t.Context(), proj, name, "work", "dirty", folder.Canonical(dirty))
+	if !strings.Contains(reason, "not whole") || !exists(filepath.Join(dirty, ".env")) {
+		t.Errorf("drop = %q; want a refusal that keeps the owner's file", reason)
+	}
+}
+
+func TestAWorktreeGitFailedToMakeIsForgottenSoOneMadeByHandIsNeverTaken(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	proj := project.Project{Name: "p", Dir: dir}
+	trees := filepath.Join(dir, "trees")
+	if err := os.Mkdir(trees, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(trees, 0o700) })
+	var began, cleared int
+	try := worktreeTry{begin: func(string) { began++ }, clear: func() { cleared++ }}
+	if _, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "aaaaaaaa"}, "feature", "", true, try); err == nil {
+		t.Skip("git could make a worktree in a folder that cannot be written to")
+	}
+	if began != 1 || cleared != 1 {
+		t.Errorf("began %d times and cleared %d times, want once each", began, cleared)
+	}
+}

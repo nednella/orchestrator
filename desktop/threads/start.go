@@ -451,7 +451,7 @@ func (s *Threads) place(ctx context.Context, st *starting) error {
 			branch, base = st.branch, st.o.Base
 		}
 		var err error
-		try := worktreeTry{prior: st.making, begin: func(dir string) { s.progress(st, func() { st.making = dir }) }}
+		try := worktreeTry{prior: st.making, begin: func(dir string) { s.progress(st, func() { st.making = dir }) }, clear: func() { s.progress(st, func() { st.making = "" }) }}
 		if work, err = s.life.makeWorktree(ctx, st.proj, st.name, branch, base, st.issue == 0, try); err != nil {
 			return err
 		}
