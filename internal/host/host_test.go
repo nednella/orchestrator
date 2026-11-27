@@ -35,13 +35,13 @@ const fakeInit = `{"type":"system","subtype":"init","cwd":"/tmp/rec","session_id
 
 // TestHelperFakeClaude is not a test: the host tests run this binary as Claude.
 func TestHelperFakeClaude(t *testing.T) {
-	if os.Getenv("AOS_FAKE_CLAUDE") != "1" {
+	if os.Getenv("ORC_FAKE_CLAUDE") != "1" {
 		return
 	}
-	if os.Getenv("AOS_FAKE_IGNORE_TERM") == "1" {
+	if os.Getenv("ORC_FAKE_IGNORE_TERM") == "1" {
 		signal.Ignore(syscall.SIGTERM)
 	}
-	if pidFile := os.Getenv("AOS_FAKE_GRANDCHILD"); pidFile != "" {
+	if pidFile := os.Getenv("ORC_FAKE_GRANDCHILD"); pidFile != "" {
 		holder := exec.Command("sleep", "30")
 		holder.Stdout = os.Stdout
 		if err := holder.Start(); err != nil {
@@ -51,14 +51,14 @@ func TestHelperFakeClaude(t *testing.T) {
 		os.WriteFile(pidFile, []byte(fmt.Sprint(holder.Process.Pid)), 0o600)
 	}
 	// Claude fails at its start on a flag it does not know; the flags it is given come after "--".
-	if flag := os.Getenv("AOS_FAKE_REJECT"); flag != "" && slices.Contains(os.Args, flag) {
-		if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_REJECT_AFTER")); err == nil {
+	if flag := os.Getenv("ORC_FAKE_REJECT"); flag != "" && slices.Contains(os.Args, flag) {
+		if wait, err := time.ParseDuration(os.Getenv("ORC_FAKE_REJECT_AFTER")); err == nil {
 			time.Sleep(wait)
 		}
-		fmt.Fprintf(os.Stderr, "error: unknown option '%s'\n", os.Getenv("AOS_FAKE_REJECT_NAMES"))
+		fmt.Fprintf(os.Stderr, "error: unknown option '%s'\n", os.Getenv("ORC_FAKE_REJECT_NAMES"))
 		os.Exit(1)
 	}
-	fakeClaude(os.Stdin, os.Stdout, os.Getenv("AOS_FAKE_STDIN"))
+	fakeClaude(os.Stdin, os.Stdout, os.Getenv("ORC_FAKE_STDIN"))
 	os.Exit(0)
 }
 
@@ -147,10 +147,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		reply(strings.Join(texts, " "))
 		result(false)
 	}
-	// setMode answers a mode change as Claude does: a status line after the reply. With AOS_FAKE_REFUSE_MODE set it
+	// setMode answers a mode change as Claude does: a status line after the reply. With ORC_FAKE_REFUSE_MODE set it
 	// refuses, with the reason Claude gives for bypassPermissions when it was not started with it allowed.
 	setMode := func(l fakeLine) {
-		if os.Getenv("AOS_FAKE_REFUSE_MODE") == "1" {
+		if os.Getenv("ORC_FAKE_REFUSE_MODE") == "1" {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID,
 				"error": "Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions", "error_code": "bypass_not_launched"}})
 			return
@@ -158,9 +158,9 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": map[string]any{"mode": l.Request.Mode}}})
 		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": l.Request.Mode})
 	}
-	// usage answers get_usage as Claude Code 2.1.332 does, shortened; with AOS_FAKE_UNSUPPORTED set it does not know it.
+	// usage answers get_usage as Claude Code 2.1.332 does, shortened; with ORC_FAKE_UNSUPPORTED set it does not know it.
 	usage := func(l fakeLine) {
-		if os.Getenv("AOS_FAKE_UNSUPPORTED") == "1" {
+		if os.Getenv("ORC_FAKE_UNSUPPORTED") == "1" {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID, "error": "Unsupported control request subtype: get_usage"}})
 			return
 		}
@@ -169,10 +169,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		}}})
 	}
 	// rewind answers the rewind requests as Claude Code 2.1.332 does. Its files are the comma-separated paths in
-	// AOS_FAKE_REWIND_FILES, into each of which a rewind that is not a dry run writes "before"; without the checkpoint
-	// setting it kept no checkpoints. With AOS_FAKE_UNSUPPORTED set it knows neither request, with AOS_FAKE_HELD_ELSEWHERE
-	// it holds a later message than any the host names, AOS_FAKE_REWIND_DELAY holds its answer to a conversation
-	// rewind and AOS_FAKE_FILES_DELAY its answer to a rewind of the files that is not a dry run.
+	// ORC_FAKE_REWIND_FILES, into each of which a rewind that is not a dry run writes "before"; without the checkpoint
+	// setting it kept no checkpoints. With ORC_FAKE_UNSUPPORTED set it knows neither request, with ORC_FAKE_HELD_ELSEWHERE
+	// it holds a later message than any the host names, ORC_FAKE_REWIND_DELAY holds its answer to a conversation
+	// rewind and ORC_FAKE_FILES_DELAY its answer to a rewind of the files that is not a dry run.
 	rewind := func(l fakeLine) {
 		answer := func(body map[string]any) {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID, "response": body}})
@@ -180,10 +180,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		fail := func(text string) {
 			print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID, "error": text}})
 		}
-		files := slices.DeleteFunc(strings.Split(os.Getenv("AOS_FAKE_REWIND_FILES"), ","), func(f string) bool { return f == "" })
+		files := slices.DeleteFunc(strings.Split(os.Getenv("ORC_FAKE_REWIND_FILES"), ","), func(f string) bool { return f == "" })
 		at := slices.IndexFunc(taken, func(m fakeLine) bool { return m.UUID == cmp.Or(l.Request.Target, l.Request.UserMessageID) })
 		switch {
-		case os.Getenv("AOS_FAKE_UNSUPPORTED") == "1":
+		case os.Getenv("ORC_FAKE_UNSUPPORTED") == "1":
 			fail("Unsupported control request subtype: " + l.Request.Subtype)
 		case l.Request.Subtype == "rewind_files" && os.Getenv("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING") != "1" && l.Request.DryRun:
 			answer(map[string]any{"canRewind": false, "error": "File rewinding is not enabled."})
@@ -194,7 +194,7 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		case l.Request.Subtype == "rewind_files" && l.Request.DryRun:
 			answer(map[string]any{"canRewind": true, "filesChanged": files, "insertions": 3, "deletions": 1})
 		case l.Request.Subtype == "rewind_files":
-			if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_FILES_DELAY")); err == nil {
+			if wait, err := time.ParseDuration(os.Getenv("ORC_FAKE_FILES_DELAY")); err == nil {
 				time.Sleep(wait)
 			}
 			for _, f := range files {
@@ -203,10 +203,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 			answer(map[string]any{"canRewind": true, "skippedLinks": 0})
 		case at < 0:
 			answer(map[string]any{"rewound": false, "error": "target not found", "reason": "target_not_found"})
-		case l.Request.LastSeen != taken[len(taken)-1].UUID || os.Getenv("AOS_FAKE_HELD_ELSEWHERE") == "1":
+		case l.Request.LastSeen != taken[len(taken)-1].UUID || os.Getenv("ORC_FAKE_HELD_ELSEWHERE") == "1":
 			answer(map[string]any{"rewound": false, "error": "stale target", "reason": "stale_target"})
 		default:
-			if wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_REWIND_DELAY")); err == nil {
+			if wait, err := time.ParseDuration(os.Getenv("ORC_FAKE_REWIND_DELAY")); err == nil {
 				time.Sleep(wait)
 			}
 			text := taken[at].text()
@@ -215,7 +215,7 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 		}
 	}
 	fmt.Fprintln(out, fakeInit)
-	if mode := os.Getenv("AOS_FAKE_MODE"); mode != "" {
+	if mode := os.Getenv("ORC_FAKE_MODE"); mode != "" {
 		print(map[string]any{"type": "system", "subtype": "status", "status": nil, "permissionMode": mode})
 	}
 
@@ -289,7 +289,7 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				usage(l)
 				continue
 			}
-			if l.Request.Subtype == "apply_flag_settings" && os.Getenv("AOS_FAKE_REFUSE_FLAGS") == "1" {
+			if l.Request.Subtype == "apply_flag_settings" && os.Getenv("ORC_FAKE_REFUSE_FLAGS") == "1" {
 				print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID,
 					"error": "apply_flag_settings: ultracode is not available for this session (claude-haiku-4-5 does not support it)"}})
 				continue
@@ -366,7 +366,7 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				print(map[string]any{"type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": "toolu_agent", "status": "completed", "summary": "a.go"})
 			case "background":
 				// A subagent and a shell in the background: the turn ends on their launch. The subagent's own shell ends
-				// first, AOS_FAKE_TASK_WAIT in, then the subagent, whose end Claude tells of in a turn of its own a moment
+				// first, ORC_FAKE_TASK_WAIT in, then the subagent, whose end Claude tells of in a turn of its own a moment
 				// later; Claude's shell runs until Claude exits.
 				background := func(call, id, kind string, more map[string]any) {
 					started := map[string]any{"type": "system", "subtype": "task_started", "task_id": id, "tool_use_id": call, "description": call, "is_backgrounded": true, "task_type": kind}
@@ -390,7 +390,7 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 				}}})
 				result(false)
 				background("toolu_subsh", "b2", chat.TaskShell, map[string]any{"owned_by_subagent": true, "parent_task_id": "a1"})
-				wait, err := time.ParseDuration(os.Getenv("AOS_FAKE_TASK_WAIT"))
+				wait, err := time.ParseDuration(os.Getenv("ORC_FAKE_TASK_WAIT"))
 				if err != nil {
 					wait = 300 * time.Millisecond
 				}
@@ -476,7 +476,7 @@ type testHost struct {
 // socketDir is under /tmp because t.TempDir() on macOS can push a socket path past its 104-byte limit.
 func socketDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "aos")
+	dir, err := os.MkdirTemp("/tmp", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +533,7 @@ func startHostTuned(t *testing.T, log string, flags []string, tune func(*Config)
 		Socket: h.socket,
 		Dir:    dir,
 		Argv:   append([]string{os.Args[0], "-test.run=^TestHelperFakeClaude$", "--"}, flags...),
-		Env:    append(os.Environ(), append([]string{"AOS_FAKE_CLAUDE=1", "AOS_FAKE_STDIN=" + h.stdin}, env...)...),
+		Env:    append(os.Environ(), append([]string{"ORC_FAKE_CLAUDE=1", "ORC_FAKE_STDIN=" + h.stdin}, env...)...),
 		Echo:   h.echo,
 	}
 	if tune != nil {
@@ -654,7 +654,7 @@ func TestSendReachesClaudeAndStreamsBack(t *testing.T) {
 
 func TestClaudeThatDoesNotKnowTheThinkingFlagStartsWithoutIt(t *testing.T) {
 	t.Parallel()
-	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES="+agent.ThinkingDisplay)
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "ORC_FAKE_REJECT="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_NAMES="+agent.ThinkingDisplay)
 	events := subscribe(t, h.socket, 0)
 	if err := Send(ctxT(t), h.socket, "hi"); err != nil {
 		t.Fatal(err)
@@ -689,7 +689,7 @@ func TestClaudeThatDoesNotKnowTheThinkingFlagStartsWithoutIt(t *testing.T) {
 
 func TestALargeReplayDoesNotBlockClaudesOutput(t *testing.T) {
 	t.Parallel()
-	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_AFTER=500ms")
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "ORC_FAKE_REJECT="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_NAMES="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_AFTER=500ms")
 	events := subscribe(t, h.socket, 0)
 	// The first claude reads none of it, so the host gives all of it to the second, which writes each message back
 	// as it reads it: far more than a pipe holds, both ways.
@@ -717,7 +717,7 @@ func TestALargeReplayDoesNotBlockClaudesOutput(t *testing.T) {
 
 func TestAMessageAFailedStartNeverReadIsNotSent(t *testing.T) {
 	t.Parallel()
-	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model", "AOS_FAKE_REJECT_AFTER=500ms")
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "ORC_FAKE_REJECT="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_NAMES=--model", "ORC_FAKE_REJECT_AFTER=500ms")
 	if err := Send(ctxT(t), h.socket, "hi"); err != nil {
 		t.Fatal(err)
 	}
@@ -751,7 +751,7 @@ func TestClaudeThatFailsOnAnotherFlagIsNotStartedAgain(t *testing.T) {
 		Socket: filepath.Join(socketDir(t), "h.sock"),
 		Dir:    dir,
 		Argv:   []string{os.Args[0], "-test.run=^TestHelperFakeClaude$", "--", agent.ThinkingDisplay, "summarized"},
-		Env:    append(os.Environ(), "AOS_FAKE_CLAUDE=1", "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model"),
+		Env:    append(os.Environ(), "ORC_FAKE_CLAUDE=1", "ORC_FAKE_REJECT="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_NAMES=--model"),
 		Echo:   &syncBuffer{},
 	}
 	if err := Run(ctxT(t), c); err == nil {
@@ -832,7 +832,7 @@ func TestBackgroundTasksAreLoggedWithTheSubagentThatStartedThem(t *testing.T) {
 
 func TestABackgroundSubagentKeepsTheHostBusyUntilClaudeHasToldOfItsEnd(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_TASK_WAIT=1s")
+	h := startHost(t, "ORC_FAKE_TASK_WAIT=1s")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	hold := func() bool {
@@ -946,7 +946,7 @@ func TestClaudesListOfItsTasksEndsATaskWhoseEndWasMissed(t *testing.T) {
 
 func TestTasksOpenWhenClaudeExitsEndStopped(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_TASK_WAIT=5s")
+	h := startHost(t, "ORC_FAKE_TASK_WAIT=5s")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	sendMessage(t, h.socket, "background")
@@ -1013,7 +1013,7 @@ func TestApprovalRoundTrip(t *testing.T) {
 
 func TestOrchestratorToolRunsWithoutAnApproval(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_MODE=plan")
+	h := startHost(t, "ORC_FAKE_MODE=plan")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
@@ -1042,7 +1042,7 @@ func TestOrchestratorToolRunsWithoutAnApproval(t *testing.T) {
 
 func TestOtherToolOfAServerNamedOrchestratorAsks(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_MODE=plan")
+	h := startHost(t, "ORC_FAKE_MODE=plan")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
@@ -1061,7 +1061,7 @@ func TestOtherToolOfAServerNamedOrchestratorAsks(t *testing.T) {
 
 func TestWriteToolOfAReadThreadAsksTheOwner(t *testing.T) {
 	t.Parallel()
-	for _, env := range [][]string{{"AOS_FAKE_MODE=plan"}, nil} {
+	for _, env := range [][]string{{"ORC_FAKE_MODE=plan"}, nil} {
 		h := startHost(t, env...)
 		events := subscribe(t, h.socket, 0)
 		waitKind(t, events, chat.KindInit)
@@ -1082,7 +1082,7 @@ func TestWriteToolOfAReadThreadAsksTheOwner(t *testing.T) {
 
 func TestWriteToolRunsWithoutAnApprovalOnceTheModeWrites(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_MODE=default")
+	h := startHost(t, "ORC_FAKE_MODE=default")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
@@ -1626,7 +1626,7 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 			Log:    filepath.Join(dir, "chat.jsonl"),
 			Socket: socket,
 			Argv:   []string{os.Args[0], "-test.run=^TestHelperFakeClaude$"},
-			Env:    append(os.Environ(), "AOS_FAKE_CLAUDE=1", "AOS_FAKE_STDIN="+filepath.Join(dir, "stdin.jsonl")),
+			Env:    append(os.Environ(), "ORC_FAKE_CLAUDE=1", "ORC_FAKE_STDIN="+filepath.Join(dir, "stdin.jsonl")),
 		})
 	}()
 	defer func() {
@@ -1645,7 +1645,7 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 func TestCancelStopsClaude(t *testing.T) {
 	t.Parallel()
 	pidFile := filepath.Join(t.TempDir(), "grandchild.pid")
-	h := startHostTuned(t, "", nil, func(c *Config) { c.StopGrace = shortGrace }, "AOS_FAKE_IGNORE_TERM=1", "AOS_FAKE_GRANDCHILD="+pidFile)
+	h := startHostTuned(t, "", nil, func(c *Config) { c.StopGrace = shortGrace }, "ORC_FAKE_IGNORE_TERM=1", "ORC_FAKE_GRANDCHILD="+pidFile)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	var grandchild int
@@ -2033,7 +2033,7 @@ func TestUnsentKeepsTheBody(t *testing.T) {
 
 func TestAMessageAFailedStartNeverReadKeepsItsBody(t *testing.T) {
 	t.Parallel()
-	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "AOS_FAKE_REJECT="+agent.ThinkingDisplay, "AOS_FAKE_REJECT_NAMES=--model", "AOS_FAKE_REJECT_AFTER=500ms")
+	h := startHostWith(t, []string{agent.ThinkingDisplay, "summarized"}, "ORC_FAKE_REJECT="+agent.ThinkingDisplay, "ORC_FAKE_REJECT_NAMES=--model", "ORC_FAKE_REJECT_AFTER=500ms")
 	if _, err := SendMessage(ctxT(t), h.socket, Message{Text: "APPLICATION_PROMPT: hi", From: "main/aaaaaaaa", Body: "hi"}); err != nil {
 		t.Fatal(err)
 	}
@@ -2443,7 +2443,7 @@ func TestModeIsRefusedDuringATurn(t *testing.T) {
 
 func TestModeReportsClaudesError(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_REFUSE_MODE=1")
+	h := startHost(t, "ORC_FAKE_REFUSE_MODE=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
@@ -2508,7 +2508,7 @@ func TestFlagsApplySettingsAlsoDuringATurn(t *testing.T) {
 
 func TestFlagsReportClaudesReasonWithoutItsRequestName(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_REFUSE_FLAGS=1")
+	h := startHost(t, "ORC_FAKE_REFUSE_FLAGS=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 
@@ -2832,7 +2832,7 @@ func TestRewindPutsTheFilesBackFirst(t *testing.T) {
 	if err := os.WriteFile(file, []byte("after"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+file)
+	h := startHost(t, checkpoints, "ORC_FAKE_REWIND_FILES="+file)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
@@ -2876,7 +2876,7 @@ func TestRewindLeavesFilesOutsideTheFolder(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+inside+","+outsider)
+	h := startHost(t, checkpoints, "ORC_FAKE_REWIND_FILES="+inside+","+outsider)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
@@ -2901,7 +2901,7 @@ func TestRewindLeavesFilesOutsideTheFolder(t *testing.T) {
 func TestRewindWithoutCheckpoints(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	h := startHost(t, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=", "AOS_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt"))
+	h := startHost(t, "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING=", "ORC_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt"))
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
@@ -2923,7 +2923,7 @@ func TestRewindWithoutCheckpoints(t *testing.T) {
 
 func TestRewindToAStaleTarget(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, checkpoints, "AOS_FAKE_HELD_ELSEWHERE=1")
+	h := startHost(t, checkpoints, "ORC_FAKE_HELD_ELSEWHERE=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
@@ -2939,7 +2939,7 @@ func TestRewindToAStaleTarget(t *testing.T) {
 
 func TestRewindClaudeDoesNotKnow(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, checkpoints, "AOS_FAKE_UNSUPPORTED=1")
+	h := startHost(t, checkpoints, "ORC_FAKE_UNSUPPORTED=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
@@ -2981,7 +2981,7 @@ func TestRewindIsRefusedDuringATurn(t *testing.T) {
 
 func TestMessageWaitsOutARewind(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_DELAY=500ms")
+	h := startHost(t, checkpoints, "ORC_FAKE_REWIND_DELAY=500ms")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
@@ -3039,7 +3039,7 @@ func lateCtx(t *testing.T) context.Context {
 
 func TestARewindClaudeConfirmsLateIsLogged(t *testing.T) {
 	t.Parallel()
-	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "AOS_FAKE_REWIND_DELAY="+(shortTimeout+500*time.Millisecond).String())
+	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "ORC_FAKE_REWIND_DELAY="+(shortTimeout+500*time.Millisecond).String())
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one", "two")
@@ -3068,7 +3068,7 @@ func TestAFilesRewindClaudeDoesNotAnswerMayHaveChangedThem(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "a.txt")
-	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "AOS_FAKE_REWIND_FILES="+file, "AOS_FAKE_FILES_DELAY="+(shortTimeout+500*time.Millisecond).String())
+	h := startHostTuned(t, "", nil, func(c *Config) { c.RequestTimeout = shortTimeout }, checkpoints, "ORC_FAKE_REWIND_FILES="+file, "ORC_FAKE_FILES_DELAY="+(shortTimeout+500*time.Millisecond).String())
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
@@ -3090,7 +3090,7 @@ func TestPreviewNamesAFileOutsideTheFolder(t *testing.T) {
 	t.Parallel()
 	dir, elsewhere := t.TempDir(), t.TempDir()
 	outsider := filepath.Join(elsewhere, "b.txt")
-	h := startHost(t, checkpoints, "AOS_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt")+","+outsider)
+	h := startHost(t, checkpoints, "ORC_FAKE_REWIND_FILES="+filepath.Join(dir, "a.txt")+","+outsider)
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 	ids := turns(t, h, events, "one")
@@ -3140,7 +3140,7 @@ func TestUsageAsksClaude(t *testing.T) {
 
 func TestUsageUnsupportedIsSaid(t *testing.T) {
 	t.Parallel()
-	h := startHost(t, "AOS_FAKE_UNSUPPORTED=1")
+	h := startHost(t, "ORC_FAKE_UNSUPPORTED=1")
 	events := subscribe(t, h.socket, 0)
 	waitKind(t, events, chat.KindInit)
 

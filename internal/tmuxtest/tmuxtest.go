@@ -14,12 +14,12 @@ import (
 )
 
 // prefix starts the name of every test socket. Stop touches no other, so it can never reach a socket of a live app.
-const prefix = "aostest"
+const prefix = "orctest"
 
 // Stop kills the tmux server on the named test socket and removes its socket file, which stays behind when the server
 // is killed and when it exits with its last session. It returns once what the panes ran has exited, or after 5 seconds,
 // so a test does not remove its folders while a process still writes in them. A socket that has no server is a no-op.
-// A name that does not start with "aostest" is left alone.
+// A name that does not start with "orctest" is left alone.
 func Stop(socket string) {
 	if !strings.HasPrefix(socket, prefix) || strings.ContainsRune(socket, filepath.Separator) {
 		return

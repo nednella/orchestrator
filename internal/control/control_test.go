@@ -12,7 +12,7 @@ import (
 )
 
 func TestCallAndListen(t *testing.T) {
-	dir, err := os.MkdirTemp("", "aosc")
+	dir, err := os.MkdirTemp("", "orcc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestCloseCancelsCommandsInFlight(t *testing.T) {
-	dir, err := os.MkdirTemp("", "aosc")
+	dir, err := os.MkdirTemp("", "orcc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestCloseCancelsCommandsInFlight(t *testing.T) {
 }
 
 func TestOversizedRequestIsRefused(t *testing.T) {
-	dir, err := os.MkdirTemp("", "aosc")
+	dir, err := os.MkdirTemp("", "orcc")
 	if err != nil {
 		t.Fatal(err)
 	}

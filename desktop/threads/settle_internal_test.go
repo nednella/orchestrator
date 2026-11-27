@@ -20,7 +20,7 @@ func TestSettleClosesNoTerminal(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}
-	socket := fmt.Sprintf("aostest-settle-%d", os.Getpid())
+	socket := fmt.Sprintf("orctest-settle-%d", os.Getpid())
 	t.Cleanup(func() { tmuxtest.Stop(socket) })
 	tmux, err := term.NewTmux(socket, t.TempDir())
 	if err != nil {

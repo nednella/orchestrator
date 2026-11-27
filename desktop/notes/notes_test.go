@@ -364,7 +364,7 @@ func TestNotesLiveInTheDataDir(t *testing.T) {
 	t.Setenv("ORCHESTRATOR_CONFIG", conf)
 	t.Setenv("ORCHESTRATOR_STATE_DIR", filepath.Join(root, "state"))
 	t.Setenv("ORCHESTRATOR_DIR", root)
-	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", "aostest-unused")
+	t.Setenv("ORCHESTRATOR_TMUX_SOCKET", "orctest-unused")
 
 	cfg, err := app.Load()
 	if err != nil || cfg.DataDir != synced {

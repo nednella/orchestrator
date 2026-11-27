@@ -654,7 +654,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 		t.Skip("tmux not installed")
 	}
 	takeSlot(t)
-	state, err := os.MkdirTemp("", "aos")
+	state, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +691,7 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	socket := fmt.Sprintf("aostest-%d-%d", os.Getpid(), harnesses.Add(1))
+	socket := fmt.Sprintf("orctest-%d-%d", os.Getpid(), harnesses.Add(1))
 	h := &Harness{Rec: &Recorder{}, GH: &FakeGH{Releases: o.Releases, Notes: o.Notes, NotesErr: o.NotesErr}, Claude: &FakeClaude{}, Socket: socket, Dir: dir, State: state, Conf: confPath}
 	start := standInEnv
 	if o.ClaudeRejects != "" {
@@ -940,7 +940,7 @@ var (
 func CLIPath(t *testing.T) string {
 	t.Helper()
 	cliOnce.Do(func() {
-		if cliDir, cliErr = os.MkdirTemp("", "aoscli"); cliErr != nil {
+		if cliDir, cliErr = os.MkdirTemp("", "orccli"); cliErr != nil {
 			return
 		}
 		cliBin = filepath.Join(cliDir, "orchestrator")

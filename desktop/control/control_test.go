@@ -17,7 +17,7 @@ func (f fakeThreads) Current() project.Project            { return project.Proje
 func (f fakeThreads) ThreadOfToken(string) (string, bool) { return "", false }
 
 func TestRouterAnswers(t *testing.T) {
-	dir, err := os.MkdirTemp("", "aosrt")
+	dir, err := os.MkdirTemp("", "orcrt")
 	if err != nil {
 		t.Fatal(err)
 	}

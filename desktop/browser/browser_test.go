@@ -18,7 +18,7 @@ import (
 
 func TestStrayBrowserIsReplaced(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aosb")
+	dir, err := os.MkdirTemp("", "orcb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestStrayBrowserIsReplaced(t *testing.T) {
 
 func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aosb")
+	dir, err := os.MkdirTemp("", "orcb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestStartReclaimsARunningBrowserAndItsWindows(t *testing.T) {
 
 func TestStopStraysEndsTheLastRunsBrowsers(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aosb")
+	dir, err := os.MkdirTemp("", "orcb")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,7 +21,7 @@ import (
 // fakeApp answers commands on a socket in a short temp dir, and points the command at it.
 func fakeApp(t *testing.T, handle control.Handler) {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "aosapp")
+	dir, err := os.MkdirTemp("", "orcapp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestMCPWaitRefusesMoreThanAnHour(t *testing.T) {
 }
 
 func TestMCPWithTheAppDownReportsIt(t *testing.T) {
-	dir, err := os.MkdirTemp("", "aosdown")
+	dir, err := os.MkdirTemp("", "orcdown")
 	if err != nil {
 		t.Fatal(err)
 	}

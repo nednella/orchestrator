@@ -108,7 +108,7 @@ func TestFollowerHandsOnTheLogsModeOnlyOfAHostThatListens(t *testing.T) {
 		{"a host that does not", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir, err := os.MkdirTemp("", "aos")
+			dir, err := os.MkdirTemp("", "orc")
 			if err != nil {
 				t.Fatal(err)
 			}

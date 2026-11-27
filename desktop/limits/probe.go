@@ -25,7 +25,7 @@ const (
 	// probeTimeout bounds a probe's run: Claude answers get_usage in about 5 s. With waitDelay the whole probe ends
 	// within 20 s.
 	probeTimeout = 15 * time.Second
-	probeRequest = "aos-usage"
+	probeRequest = "orc-usage"
 	// waitDelay is how long a stopped probe's pipes may stay open.
 	waitDelay = 5 * time.Second
 )

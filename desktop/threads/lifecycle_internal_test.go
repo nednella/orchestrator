@@ -260,7 +260,7 @@ func testTmux(t *testing.T) *term.Tmux {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed")
 	}
-	socket := fmt.Sprintf("aostest-life-%d-%d", os.Getpid(), rand.Uint32())
+	socket := fmt.Sprintf("orctest-life-%d-%d", os.Getpid(), rand.Uint32())
 	t.Cleanup(func() { tmuxtest.Stop(socket) })
 	tmux, err := term.NewTmux(socket, t.TempDir())
 	if err != nil {

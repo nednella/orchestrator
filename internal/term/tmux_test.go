@@ -24,11 +24,11 @@ func newTestTmux(t *testing.T) *Tmux {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux is not installed")
 	}
-	dir, err := os.MkdirTemp("", "aosterm")
+	dir, err := os.MkdirTemp("", "orcterm")
 	if err != nil {
 		t.Fatal(err)
 	}
-	socket := fmt.Sprintf("aostest-term-%d", os.Getpid())
+	socket := fmt.Sprintf("orctest-term-%d", os.Getpid())
 	tmux, err := NewTmux(socket, dir)
 	if err != nil {
 		t.Fatal(err)

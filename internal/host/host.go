@@ -640,7 +640,7 @@ func (h *host) interruptOn(signals <-chan os.Signal, done <-chan struct{}) {
 }
 
 func (h *host) nextID() string {
-	return fmt.Sprintf("aos-%d", h.reqID.Add(1))
+	return fmt.Sprintf("orc-%d", h.reqID.Add(1))
 }
 
 func (h *host) serve(ln net.Listener) {

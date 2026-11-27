@@ -91,7 +91,7 @@ func (f *fakeClaude) seen() (starts, most, waited int, lines []string) {
 	return f.starts, f.most, f.waited, slices.Clone(f.lines)
 }
 
-const usageReply = `{"type":"control_response","response":{"subtype":"success","request_id":"aos-usage","response":` + weekly96 + `}}`
+const usageReply = `{"type":"control_response","response":{"subtype":"success","request_id":"orc-usage","response":` + weekly96 + `}}`
 
 func TestNoLiveThreadStartsAProbe(t *testing.T) {
 	t.Parallel()
@@ -176,10 +176,10 @@ func TestFailedProbeIsNotCached(t *testing.T) {
 		errText     string
 		unsupported bool
 	}{
-		{"Claude's error", `{"type":"control_response","response":{"subtype":"error","request_id":"aos-usage","error":"Not logged in"}}`, "the usage probe: Not logged in", false},
-		{"Claude does not know get_usage", `{"type":"control_response","response":{"subtype":"error","request_id":"aos-usage","error":"Unsupported control request subtype: get_usage"}}`, "", true},
-		{"no plan limits", `{"type":"control_response","response":{"subtype":"success","request_id":"aos-usage","response":{"rate_limits_available":false}}}`, "", false},
-		{"an empty answer", `{"type":"control_response","response":{"subtype":"success","request_id":"aos-usage"}}`, "the usage probe's answer was empty", false},
+		{"Claude's error", `{"type":"control_response","response":{"subtype":"error","request_id":"orc-usage","error":"Not logged in"}}`, "the usage probe: Not logged in", false},
+		{"Claude does not know get_usage", `{"type":"control_response","response":{"subtype":"error","request_id":"orc-usage","error":"Unsupported control request subtype: get_usage"}}`, "", true},
+		{"no plan limits", `{"type":"control_response","response":{"subtype":"success","request_id":"orc-usage","response":{"rate_limits_available":false}}}`, "", false},
+		{"an empty answer", `{"type":"control_response","response":{"subtype":"success","request_id":"orc-usage"}}`, "the usage probe's answer was empty", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &fakeClaude{reply: tt.reply}
@@ -320,7 +320,7 @@ func TestExec(t *testing.T) {
 
 func TestProbeSaysAClaudeWithoutGetUsage(t *testing.T) {
 	t.Parallel()
-	f := &fakeClaude{reply: `{"type":"control_response","response":{"subtype":"error","request_id":"aos-usage","error":"Unsupported control request subtype: get_usage"}}`}
+	f := &fakeClaude{reply: `{"type":"control_response","response":{"subtype":"error","request_id":"orc-usage","error":"Unsupported control request subtype: get_usage"}}`}
 	if _, err := probe(context.Background(), f.start, t.TempDir()); !errors.Is(err, host.ErrNoUsage) {
 		t.Errorf("err = %v, want host.ErrNoUsage", err)
 	}

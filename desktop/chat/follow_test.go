@@ -98,7 +98,7 @@ func (f *fakeHost) subscribedAfter() []int64 {
 
 func TestFollowerResubscribesAfterTheStreamDrops(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func serveUpTo(t *testing.T, ln net.Listener, last int64) {
 
 func TestAWatchBeforeTheStartMissesNothing(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestASubagentClaudesListLeavesOutDoesNotWaitBeforeTheFollowerReadsTheLog(t 
 
 func TestAnOldHostSendsTheTextAndSaysSo(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func serveEvents(t *testing.T, ln net.Listener, events []chatlog.Event) {
 // keptCommands follows a thread of the project main whose log holds a commands list reported at 1000 and whose host
 // then streams more, and says what ProjectCommands gives for main.
 func keptCommands(t *testing.T, more ...chatlog.Event) func() []chat.Command {
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +493,7 @@ func (s switchedThread) Chats() []threads.Chat {
 // channel it returns. Cancelling the context it returns stops the chats, as the app's quit does.
 func awaitable(t *testing.T, logged ...chatlog.Event) (*chat.Chats, switchedThread, chan<- chatlog.Event, context.CancelFunc) {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +648,7 @@ func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
 		{"an exit that is no settle", []chatlog.Event{{Kind: chatlog.KindStart}, user, {Kind: chatlog.KindExit, Error: true}}, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir, err := os.MkdirTemp("", "aos")
+			dir, err := os.MkdirTemp("", "orc")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -695,7 +695,7 @@ func TestALoggedSettleEndsTheTurnOnlyForItsOwnRun(t *testing.T) {
 
 func TestRateLimitEventsAreHandedOn(t *testing.T) {
 	t.Parallel()
-	dir, err := os.MkdirTemp("", "aos")
+	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}

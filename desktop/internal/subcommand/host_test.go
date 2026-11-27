@@ -14,7 +14,7 @@ import (
 func startHost(t *testing.T, argv ...string) (dir string, done <-chan error) {
 	t.Helper()
 	// A short folder under /tmp keeps the socket path inside a unix socket's length limit.
-	dir, err := os.MkdirTemp("/tmp", "aos")
+	dir, err := os.MkdirTemp("/tmp", "orc")
 	if err != nil {
 		t.Fatal(err)
 	}

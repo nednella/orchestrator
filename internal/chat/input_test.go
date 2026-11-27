@@ -58,17 +58,17 @@ func TestControlRequestShapes(t *testing.T) {
 }
 
 func TestGetUsageShape(t *testing.T) {
-	assertLine(t, GetUsage("aos-4"), `{"type":"control_request","request_id":"aos-4","request":{"subtype":"get_usage"}}`)
+	assertLine(t, GetUsage("orc-4"), `{"type":"control_request","request_id":"orc-4","request":{"subtype":"get_usage"}}`)
 }
 
 func TestSetPermissionModeShape(t *testing.T) {
-	assertLine(t, SetPermissionMode("aos-3", "plan"),
-		`{"type":"control_request","request_id":"aos-3","request":{"subtype":"set_permission_mode","mode":"plan"}}`)
+	assertLine(t, SetPermissionMode("orc-3", "plan"),
+		`{"type":"control_request","request_id":"orc-3","request":{"subtype":"set_permission_mode","mode":"plan"}}`)
 }
 
 func TestApplyFlagSettingsShape(t *testing.T) {
-	assertLine(t, ApplyFlagSettings("aos-5", map[string]any{"effortLevel": "xhigh", "ultracode": true, "fastMode": nil}),
-		`{"type":"control_request","request_id":"aos-5","request":{"subtype":"apply_flag_settings","settings":{"effortLevel":"xhigh","fastMode":null,"ultracode":true}}}`)
+	assertLine(t, ApplyFlagSettings("orc-5", map[string]any{"effortLevel": "xhigh", "ultracode": true, "fastMode": nil}),
+		`{"type":"control_request","request_id":"orc-5","request":{"subtype":"apply_flag_settings","settings":{"effortLevel":"xhigh","fastMode":null,"ultracode":true}}}`)
 }
 
 func TestPermissionAnswerShapes(t *testing.T) {
@@ -104,10 +104,10 @@ func TestUserMessageWithImages(t *testing.T) {
 }
 
 func TestRewindRequestShapes(t *testing.T) {
-	assertLine(t, RewindFiles("aos-4", "5d0150ad", true),
-		`{"type":"control_request","request_id":"aos-4","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":true}}`)
-	assertLine(t, RewindFiles("aos-5", "5d0150ad", false),
-		`{"type":"control_request","request_id":"aos-5","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":false}}`)
-	assertLine(t, RewindConversation("aos-6", "5d0150ad", "9d957459"),
-		`{"type":"control_request","request_id":"aos-6","request":{"subtype":"rewind_conversation","target_message_uuid":"5d0150ad","last_seen_user_message_uuid":"9d957459"}}`)
+	assertLine(t, RewindFiles("orc-4", "5d0150ad", true),
+		`{"type":"control_request","request_id":"orc-4","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":true}}`)
+	assertLine(t, RewindFiles("orc-5", "5d0150ad", false),
+		`{"type":"control_request","request_id":"orc-5","request":{"subtype":"rewind_files","user_message_id":"5d0150ad","dry_run":false}}`)
+	assertLine(t, RewindConversation("orc-6", "5d0150ad", "9d957459"),
+		`{"type":"control_request","request_id":"orc-6","request":{"subtype":"rewind_conversation","target_message_uuid":"5d0150ad","last_seen_user_message_uuid":"9d957459"}}`)
 }

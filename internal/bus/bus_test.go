@@ -14,7 +14,7 @@ import (
 func tempDir(t *testing.T) string {
 	t.Helper()
 	// Unix socket paths are short, so not t.TempDir().
-	dir, err := os.MkdirTemp("", "aosbus")
+	dir, err := os.MkdirTemp("", "orcbus")
 	if err != nil {
 		t.Fatal(err)
 	}
