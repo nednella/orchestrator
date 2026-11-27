@@ -1,4 +1,4 @@
-import { Bot, CircleDot, CornerLeftUp, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
+import { Bot, CircleDot, CornerLeftUp, Folder, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
@@ -48,7 +48,7 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
   const row = (r: CardRow) => {
     switch (r.kind) {
       case 'workspace':
-        return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} tip={r.folder} />
+        return <ContextCardRow icon={<Laptop size={16} aria-hidden="true" />} label={r.machine} end={<Folder size={14} aria-hidden="true" />} tip={r.folder} />
       case 'editor':
         return <ContextCardRow icon={<EditorMark editor={r.editor} />} label={editorLabel(r.editor)} onClick={() => a.report(() => a.openInEditor(thread.id))} />
       case 'branch': {
