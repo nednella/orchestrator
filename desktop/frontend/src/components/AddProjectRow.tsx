@@ -8,22 +8,20 @@ type AddProjectRowProps = {
   trailing?: ReactNode
   active?: boolean
   checked?: boolean
-  disabled?: boolean
   onHover?(): void
   onRun?(): void
 }
 
 // A row of the add-project list. Without onRun it only shows something, as the summary of a new project does.
-export function AddProjectRow({ id, icon, title, description, trailing, active, checked, disabled, onHover, onRun }: AddProjectRowProps) {
+export function AddProjectRow({ id, icon, title, description, trailing, active, checked, onHover, onRun }: AddProjectRowProps) {
   return (
     <div
       id={id}
       role={onRun ? 'option' : undefined}
       aria-selected={onRun ? !!active : undefined}
       aria-checked={checked}
-      aria-disabled={disabled || undefined}
       data-row={id}
-      className={`flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5 ${onRun ? 'cursor-pointer' : ''} ${active ? 'bg-(--bg-row-active)' : ''} ${disabled ? 'opacity-60' : ''}`}
+      className={`flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5 ${onRun ? 'cursor-pointer' : ''} ${active ? 'bg-(--bg-row-active)' : ''}`}
       onMouseDown={onRun ? (e) => e.preventDefault() : undefined}
       onMouseMove={onHover}
       onClick={onRun}

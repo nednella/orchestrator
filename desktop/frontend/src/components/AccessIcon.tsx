@@ -3,9 +3,9 @@ import type { Access } from '../types'
 
 const ICONS = { read: Eye, supervised: Lock, full: ShieldOff }
 
-type AccessIconProps = { access: Access; size?: number }
+type AccessIconProps = { access: Access }
 
-export function AccessIcon({ access, size = 14 }: AccessIconProps) {
+export function AccessIcon({ access }: AccessIconProps) {
   const Shape = ICONS[access]
-  return <Shape size={size} className="flex-none" aria-hidden="true" />
+  return <Shape size={14} className="flex-none" aria-hidden="true" />
 }
