@@ -1054,3 +1054,39 @@ func TestRetryAndDeleteLeaveAWorktreeNoStartSaidItWasMaking(t *testing.T) {
 		t.Error("the worktree and its ignored file went, which no start made")
 	}
 }
+
+func TestRestartOfAnAgentThatTookTheFirstMessageShowsItsRealChat(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The host took the message, and the quit came before the app heard.
+	if err := sendToHost(h, s.ID, "first words"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the message with the agent", func() bool { return mentions(userLines(t, h, s.ID), "first words") == 1 })
+	token := strings.TrimPrefix(s.ID, "main/")
+	saved := fmt.Sprintf(`{"name":%q,"number":%d,"rawTitle":"work","title":"work","text":"first words","send":true,"model":{},"access":"supervised","place":"project","created":%d,"placed":true,"launched":true,"delivered":false,"sending":"first","sentBefore":0,"queue":[],"status":"starting"}`, s.ID, s.N, s.CreatedAt)
+	dir := filepath.Join(h.State, "data", "main", "starts")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, token+".json"), []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.BeginQuit()
+	h.App.Stop()
+
+	second := h.Restart(t)
+	if row, ok := second.Thread(s.ID); !ok || row.Start != "" || row.FirstMessage != "" {
+		t.Errorf("the row = %+v, %v; want the thread running, with its real chat", row, ok)
+	}
+	if _, err := os.Stat(filepath.Join(dir, token+".json")); err == nil {
+		t.Error("the saved start is still there")
+	}
+	if n := mentions(userLines(t, second, s.ID), "first words"); n != 1 {
+		t.Errorf("the first message reached the agent %d times, want once", n)
+	}
+}

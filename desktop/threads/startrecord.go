@@ -136,6 +136,16 @@ func (s *Threads) restoreStart(proj project.Project, name thread.Name) bool {
 	}
 	_, ended := s.ended[id]
 	live := slices.ContainsFunc(s.info, func(in term.Info) bool { return in.Name == name })
+	if live {
+		// What the host took before the quit is delivered, whatever its reply said.
+		first := host.Message{Text: rec.Text}
+		if rec.Send && !rec.Done && rec.Text != "" && s.hostHolds(name, first) > rec.Before {
+			rec.Done, rec.Sending = true, ""
+		}
+		if len(rec.Queue) > 0 && rec.Sending == sendingHeld && s.hostHolds(name, rec.Queue[0]) > rec.Before {
+			rec.Queue, rec.Sending = rec.Queue[1:], ""
+		}
+	}
 	if s.starting[id] != nil || s.deleted[id] || ended || live && rec.Done && len(rec.Queue) == 0 {
 		s.dropStartRecord(name)
 		return false
