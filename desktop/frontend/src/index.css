@@ -668,6 +668,7 @@
 
   .thread-row[data-selected='true'] {
     background: var(--bg-hover);
+    --thread-ring: var(--accent);
   }
 
   .thread-row[data-state='settled'] .thread-dim {
