@@ -16,6 +16,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/gittest"
 	"github.com/nednella/orchestrator/internal/prompts"
 )
 
@@ -501,6 +502,24 @@ func TestBranchPushedFromAnotherCloneIsFetched(t *testing.T) {
 	if got := gitIn(t, s.Worktree, "rev-parse", "--abbrev-ref", "@{upstream}"); got != "origin/issue-7" {
 		t.Errorf("the branch tracks %q", got)
 	}
+}
+
+// Not parallel: it sets the process environment, as a git hook and git rebase --exec do.
+func TestGitDirOfTheTestRunIsLeftAlone(t *testing.T) {
+	outer := t.TempDir()
+	gitIn(t, outer, "init")
+	gitIn(t, outer, "commit", "--allow-empty", "-m", "first")
+	t.Cleanup(gittest.Unchanged(t, outer))
+	t.Setenv("GIT_DIR", filepath.Join(outer, ".git"))
+	t.Setenv("GIT_WORK_TREE", outer)
+
+	h := newHarness(t)
+	repoFixture(t, h)
+	s := issueThread(h, t, 7)
+	if got := worktreesOf(t, h.Dir)["issue-7"]; got != realDir(t, s.Worktree) {
+		t.Errorf("the project lists issue-7 at %q, want %s", got, s.Worktree)
+	}
+	cleanedUpAfterAMerge(t, h, s)
 }
 
 // cleanedUpAfterAMerge pushes the thread's work, merges its PR and waits for the clean-up to remove its worktree.
