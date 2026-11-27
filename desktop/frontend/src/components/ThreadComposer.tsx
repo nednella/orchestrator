@@ -1,3 +1,4 @@
+import { Zap } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { Ref, RefObject } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
@@ -9,7 +10,7 @@ import type { ComposerAction, EscapeAction } from '../chatComposer'
 import type { Timeline } from '../chatTimeline'
 import { EMPTY_DRAFT, appendText, draftOf, fromMarkdown } from '../composerMarkdown'
 import { pickCursor, pickListKey } from '../composerPick'
-import { fastCommand, fastCommands } from '../fastMode'
+import { fastCommand, fastCommands, fastModeNote } from '../fastMode'
 import { modelAlias, modelName, supportsFast } from '../model'
 import { sideChatCommands, sideChatQuestion, sideChatReason } from '../sideChat'
 import { attachedTo, detach, setAttached, useAttached } from '../sideChatStore'
@@ -130,6 +131,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
 
   const empty = current.draft.text.trim() === '' && pending.images.length === 0
   const action = composerAction(timeline, empty)
+  const fastNote = fastModeNote(events, session.fast && supportsFast(session.model))
 
   // fast is the mode as the app sets it, so /fast reads it from the row.
   const setFast = (on: boolean) => report(() => api.setFast(id, on))
@@ -224,8 +226,14 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, sess
       sendText={action === 'deny' ? SEND_LABEL.deny : undefined}
       drawer={pickList && <ComposerPickList label={pickList.label} rows={pickList.rows} cursor={highlighted} empty={pickList.empty} onPick={pickList.pick} />}
       banner={
-        (reply !== null || timeline.queued.length > 0) && (
+        (reply !== null || timeline.queued.length > 0 || fastNote !== '') && (
           <>
+            {fastNote !== '' && (
+              <p className="flex items-center gap-2 px-3 py-1.5 text-small text-soft">
+                <Zap size={12} aria-hidden="true" className="flex-none" />
+                <span className="min-w-0 flex-1">{fastNote}</span>
+              </p>
+            )}
             {reply !== null && (
               <div className="flex items-center gap-2 px-3 py-1.5 text-small text-soft">
                 <span className="min-w-0 flex-1 truncate">Replying to: {replyLabel(reply)}</span>
