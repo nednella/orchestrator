@@ -8,14 +8,15 @@ export function Switch({ label, checked, disabled = false, onChange }: SwitchPro
       aria-checked={checked}
       aria-label={label}
       disabled={disabled}
-      className="inline-flex h-[18px] w-[30px] flex-none items-center rounded-full p-0.5 transition-colors duration-150"
+      className="group inline-flex h-[18px] w-[30px] flex-none items-center rounded-full p-0.5 transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-offset-1 focus-visible:ring-offset-(--bg-card) disabled:opacity-64"
       style={{ background: checked ? 'var(--accent)' : 'var(--bg-switch-off)' }}
       onClick={() => onChange(!checked)}
     >
       <span
         aria-hidden="true"
-        className="size-3.5 rounded-full shadow-sm transition-transform duration-150"
-        style={{ background: checked ? 'var(--text-on-accent)' : 'var(--text-soft)', transform: checked ? 'translateX(12px)' : 'none' }}
+        data-checked={checked}
+        className="size-3.5 rounded-full shadow-sm transition-[translate,scale] duration-150 group-active:scale-x-110 data-[checked=true]:translate-x-3"
+        style={{ background: checked ? 'var(--text-on-accent)' : 'var(--text-soft)' }}
       />
     </button>
   )
