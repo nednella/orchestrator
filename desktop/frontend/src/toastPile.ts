@@ -33,3 +33,8 @@ export function addToast(list: Toast[], input: ToastInput, newKey: number): { li
   }
   return { list: next, key }
 }
+
+// staleWaiting are the threads, among those whose needs attention toast is shown, that no longer wait or are gone.
+export function staleWaiting(shown: Iterable<string>, threads: { id: string; state: string }[]): string[] {
+  return [...shown].filter((id) => threads.find((thread) => thread.id === id)?.state !== 'waiting')
+}

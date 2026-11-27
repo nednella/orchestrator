@@ -13,7 +13,7 @@ import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
 import { overlayAtStart } from './whatsNew'
-import { addToast } from './toastPile'
+import { addToast, staleWaiting } from './toastPile'
 import type { Toast, ToastInput } from './toastPile'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Thread, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
@@ -317,6 +317,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const toastsRef = useRef<Toast[]>([])
   const projectEpoch = useRef(0)
   const lastCleanupToast = useRef(0)
+  const waitingToasts = useRef(new Map<string, number>())
   const warningToasts = useRef(new Map<Warning['source'], { message: string; key: number }>())
   const failedBrowserIds = useRef(new Set<string>())
   const detached = useRef(false)
@@ -693,15 +694,24 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
           const current = threadsRef.current.find((s) => s.id === id) ?? thread
           // A child that waits is answered from its top-level thread's row, so the toast names that thread and opens it.
           const top = treeRef.current.top.get(id)
+          if (state === 'waiting' && current.state !== 'waiting') return
           if (state === 'waiting' && top && top.id !== id) {
-            pushToast({ tone: state, text: `${top.title} · ${current.title} needs attention`, threadId: top.id })
+            waitingToasts.current.set(id, pushToast({ tone: state, text: `${top.title} · ${current.title} needs attention`, threadId: top.id, sticky: true }))
             return
           }
-          pushToast({ tone: state, text: `${current.title} ${describe(current)}`, threadId: id, view: state === 'evidence' ? 'media' : undefined })
+          const key = pushToast({ tone: state, text: `${current.title} ${describe(current)}`, threadId: id, view: state === 'evidence' ? 'media' : undefined, sticky: state === 'waiting' })
+          if (state === 'waiting') waitingToasts.current.set(id, key)
         }, 50)
       }),
     [pushToast],
   )
+
+  useEffect(() => {
+    for (const id of staleWaiting(waitingToasts.current.keys(), threads)) {
+      dismissToast(waitingToasts.current.get(id)!)
+      waitingToasts.current.delete(id)
+    }
+  }, [threads, dismissToast])
 
   useEffect(() => {
     if (!selectedId || evidence[selectedId]) return

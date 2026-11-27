@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { addToast, MAX_TOASTS } from './toastPile.ts'
+import { addToast, MAX_TOASTS, staleWaiting } from './toastPile.ts'
 import type { Toast, ToastInput } from './toastPile.ts'
 
 const info = (text: string, more: Partial<ToastInput> = {}): ToastInput => ({ tone: 'info', text, ...more })
@@ -56,4 +56,14 @@ test('a new toast covers a needs attention toast, which stays in the pile', () =
   const list = pile(waiting, info('Copied'))
   assert.deepEqual(texts(list), ['Fix needs attention', 'Copied'])
   assert.equal(list[0]?.sticky, true)
+})
+
+test('a needs attention toast is stale once its thread no longer waits or is gone', () => {
+  const threads = [
+    { id: 'p/a', state: 'waiting' },
+    { id: 'p/b', state: 'idle' },
+    { id: 'p/c', state: 'working' },
+  ]
+  assert.deepEqual(staleWaiting(['p/a', 'p/b', 'p/c', 'p/gone'], threads), ['p/b', 'p/c', 'p/gone'])
+  assert.deepEqual(staleWaiting([], threads), [])
 })
