@@ -202,6 +202,8 @@
   --z-select: 45;
   --z-toast: 50;
   --z-dialog: 50;
+  /* A tooltip shows over anything its element sits in, overlays and dialogs too. */
+  --z-tip: 55;
   --z-splash: 60;
 }
 

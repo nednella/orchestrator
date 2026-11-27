@@ -25,7 +25,7 @@ export function FloatingTip({ anchor, text, below = false }: FloatingTipProps) {
       ref={tip}
       aria-hidden="true"
       className="pointer-events-none fixed rounded-md bg-[var(--bg-glass)] px-2 py-1 text-small whitespace-nowrap text-ink shadow-[var(--shadow-tip)] backdrop-blur-[16px] backdrop-saturate-[1.08]"
-      style={{ zIndex: 'var(--z-popup)', ...(place ?? { left: anchor.left, top: anchor.top, opacity: 0 }) }}
+      style={{ zIndex: 'var(--z-tip)', ...(place ?? { left: anchor.left, top: anchor.top, opacity: 0 }) }}
     >
       {text}
     </span>,
