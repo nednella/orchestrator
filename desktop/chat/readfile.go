@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -68,6 +69,27 @@ func readFile(dir, path, of string) (FileContent, error) {
 	if err != nil {
 		return FileContent{}, err
 	}
+	return contentOf(f, real, path, of)
+}
+
+// ChatReadOutside is the file at the absolute path, read only, wherever it is on disk: the file the owner clicked in the
+// chat, which may lie outside the thread's folder. Only a regular file is read, symlinks resolved, under the limits of
+// ChatReadFile. It never writes and never lists a folder.
+func (v *Service) ChatReadOutside(id, path string) (FileContent, error) {
+	ch, err := v.c.threads.ChatOf(id)
+	if err != nil {
+		return FileContent{}, err
+	}
+	of := fmt.Sprintf("thread %d", ch.N)
+	f, real, err := threads.OpenAbsolute(path, of)
+	if err != nil {
+		return FileContent{}, err
+	}
+	return contentOf(f, real, path, of)
+}
+
+// contentOf is the open file f, at real, as the Files view shows it, and closes it.
+func contentOf(f *os.File, real, path, of string) (FileContent, error) {
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
