@@ -954,7 +954,7 @@ func TestRefreshReadsAStateFileAgainOnlyOnceItChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Threads().Refresh()
-	path := filepath.Join(h.State, "sessions", s.ID+".json")
+	path := filepath.Join(h.State, "threads", s.ID+".json")
 	at := time.Now().Truncate(time.Second)
 	write := func(detail string, at time.Time) {
 		t.Helper()

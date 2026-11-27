@@ -39,7 +39,7 @@ func TestStateFiles(t *testing.T) {
 	if err := WriteState(dir, other); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "sessions", "junk.json"), []byte("not json"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "threads", "junk.json"), []byte("not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	all := ReadAll(dir, nil)

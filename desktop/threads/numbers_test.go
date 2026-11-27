@@ -222,7 +222,7 @@ func TestSettledThreadStays(t *testing.T) {
 	if got, ok := h.Thread(id); !ok || got.State != thread.Settled || got.Title != "old" || got.SettledAt != long.UnixMilli() {
 		t.Errorf("a thread settled 8 days ago = %+v, %v; want its settled row", got, ok)
 	}
-	if !exists(filepath.Join(h.State, "sessions", "main", "old1.json")) || !exists(evidenceDir(h, id)) {
+	if !exists(filepath.Join(h.State, "threads", "main", "old1.json")) || !exists(evidenceDir(h, id)) {
 		t.Error("the state file or the evidence of a thread settled 8 days ago went")
 	}
 }

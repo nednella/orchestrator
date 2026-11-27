@@ -1146,7 +1146,7 @@ func TestFamilyDeleteThatFailsAfterTheStopSaysTheThreadIsAsleep(t *testing.T) {
 	pushWork(t, parent.Worktree)
 	child := childOf(t, h, parent, "Checker", threads.WhereFolder)
 	putToSleep(t, h, child.ID)
-	if err := os.WriteFile(broken, []byte(filepath.Join(h.State, "sessions", child.ID+".json")), 0o600); err != nil {
+	if err := os.WriteFile(broken, []byte(filepath.Join(h.State, "threads", child.ID+".json")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

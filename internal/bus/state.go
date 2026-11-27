@@ -27,7 +27,7 @@ func DefaultDir(env []string) (string, error) {
 }
 
 func stateFile(dir, name string) string {
-	return filepath.Join(dir, "sessions", name+".json")
+	return filepath.Join(dir, "threads", name+".json")
 }
 
 // WriteState saves rec.
@@ -66,7 +66,7 @@ func RemoveState(dir, name string) error {
 // Unreadable files are skipped.
 func ReadAll(dir string, skip func(name string, info fs.FileInfo) bool) map[string]thread.Record {
 	out := map[string]thread.Record{}
-	root := filepath.Join(dir, "sessions")
+	root := filepath.Join(dir, "threads")
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") {
 			return nil

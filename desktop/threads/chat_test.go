@@ -158,7 +158,7 @@ func wakesAsRead(t *testing.T, edit func(file map[string]any)) {
 	}
 	eventually(t, "the thread settled", func() bool { got, _ := h.Thread(s.ID); return got.State == "settled" })
 	h.App.Stop()
-	path := filepath.Join(h.State, "sessions", s.ID+".json")
+	path := filepath.Join(h.State, "threads", s.ID+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
