@@ -18,13 +18,17 @@ type Service struct {
 func NewService(s *Threads, ctx func() context.Context) *Service { return &Service{s: s, ctx: ctx} }
 
 // NewThread starts a thread in the current project with the access given, read, supervised or full, and sends it the
-// prompt once it is ready. A blank title is the first line of the prompt. A model or effort that is not empty is
+// prompt once it is ready. It returns as soon as the thread is listed, with its start field set: its worktree, its
+// agent and its first message follow, and its row says how far they got, or why one failed (see RetryThreadStart). A blank title is the first line of the prompt. A model or effort that is not empty is
 // passed to the agent, and fast runs it in its faster mode; a blank access is supervised. place is worktree, a worktree orchestrator makes on a branch named
 // from the title, or project, the project folder; blank is a worktree for a thread that writes and the project folder
 // for a read one.
 func (v *Service) NewThread(title, prompt, model, effort string, fast bool, access, place string) (Thread, error) {
 	return v.s.CreateThread(title, StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}, Access: thread.Access(access), Place: Place(place)})
 }
+
+// RetryThreadStart goes on with the start of a thread that failed to start, from the step that failed.
+func (v *Service) RetryThreadStart(id string) error { return v.s.RetryStart(id) }
 
 // ModelChoice is a model and an effort; "" where nothing sets one.
 type ModelChoice struct {

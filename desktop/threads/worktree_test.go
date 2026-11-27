@@ -269,8 +269,8 @@ func TestFailedWorktreeCommandStartsNoThread(t *testing.T) {
 			if records := madeRecords(t, h); len(records) != 0 {
 				t.Errorf("records = %+v", records)
 			}
-			if rows := h.Threads().List(); len(rows) != 0 {
-				t.Errorf("rows = %+v", rows)
+			if rows := h.Threads().List(); len(rows) != 1 || rows[0].Start != threads.StartFailed || rows[0].StartError != tt.says {
+				t.Errorf("rows = %+v, want the one thread that failed to start", rows)
 			}
 		})
 	}

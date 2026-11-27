@@ -606,6 +606,7 @@ type Options struct {
 	DataDirConfig   bool              // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
 	NoProject       bool              // leave the project out of the config, so the app starts in a folder it does not know
 	AbsentProject   string            // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
+	ClaudeStartup   string            // shell the stand-in claude runs once it started, before it reads its first line: "sleep 2" is a Claude that is slow to get ready
 	ClaudeRejects   string            // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
 	CleanupSweep    time.Duration     // how often kept clean-ups are tried again; 0 keeps the app's hour
 	PollEvery       time.Duration     // how often tmux is listed; 0 keeps the app's 2 seconds
@@ -697,6 +698,9 @@ func NewWith(t *testing.T, o Options) *Harness {
 	start := standInEnv
 	if o.ClaudeRejects != "" {
 		start += rejecting(o.ClaudeRejects)
+	}
+	if o.ClaudeStartup != "" {
+		start += o.ClaudeStartup + "\n"
 	}
 	h.claudeDir = agentOnPath(t, "claude", start, fakeClaudeTurns)
 	env := environ.With(gittest.Env(), o.Env...)
@@ -1356,13 +1360,44 @@ func (h *Harness) CreateProject(name string) (projects.NewProject, error) {
 func (h *Harness) PublishProject(key string) (string, error) { return h.projects.PublishProject(key) }
 func (h *Harness) SetUpProject() (threads.Thread, error)     { return h.projects.SetUpProject() }
 
+// started waits for the start of a thread the app lists at once to end, so a test that goes on from a thread that runs
+// finds it so; an error is a start that failed. A thread the call did not start has no start to wait for.
+func (h *Harness) started(v threads.Thread, err error) (threads.Thread, error) {
+	if err != nil || v.Start == "" {
+		return v, err
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, row := range h.Threads().List() {
+			switch {
+			case row.ID != v.ID:
+			case row.Start == threads.StartFailed:
+				return row, errors.New(row.StartError)
+			case row.Start == "":
+				return row, nil
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return v, fmt.Errorf("thread %s did not finish starting", v.ID)
+}
+
+// NewThreadLater starts a thread as the app's new thread does and returns as the call does, with the thread listed as
+// starting.
+func (h *Harness) NewThreadLater(title, prompt string) (threads.Thread, error) {
+	return h.threads.NewThread(title, prompt, "", "", false, "supervised", "")
+}
+
+// RetryThreadStart goes on with a thread whose start failed.
+func (h *Harness) RetryThreadStart(id string) error { return h.threads.RetryThreadStart(id) }
+
 func (h *Harness) NewThread(title, prompt, model, effort, access string) (threads.Thread, error) {
-	return h.threads.NewThread(title, prompt, model, effort, false, access, "")
+	return h.started(h.threads.NewThread(title, prompt, model, effort, false, access, ""))
 }
 
 // NewThreadFast starts a Supervised thread with the model and effort given and fast mode as given.
 func (h *Harness) NewThreadFast(title, model, effort string, fast bool) (threads.Thread, error) {
-	return h.threads.NewThread(title, "", model, effort, fast, "supervised", "")
+	return h.started(h.threads.NewThread(title, "", model, effort, fast, "supervised", ""))
 }
 
 func (h *Harness) SetFast(id string, on bool) error  { return h.threads.SetFast(id, on) }
@@ -1370,7 +1405,7 @@ func (h *Harness) SetEffort(id, effort string) error { return h.threads.SetEffor
 
 // NewThreadIn starts a thread with the access given in the place given: worktree, project, or "" for the default.
 func (h *Harness) NewThreadIn(title, prompt, access, place string) (threads.Thread, error) {
-	return h.threads.NewThread(title, prompt, "", "", false, access, place)
+	return h.started(h.threads.NewThread(title, prompt, "", "", false, access, place))
 }
 
 func (h *Harness) DefaultModel(model string) threads.ModelChoice {
@@ -1379,12 +1414,12 @@ func (h *Harness) DefaultModel(model string) threads.ModelChoice {
 
 // StartThread starts a Supervised thread.
 func (h *Harness) StartThread(title, prompt string) (threads.Thread, error) {
-	return h.threads.NewThread(title, prompt, "", "", false, "supervised", "")
+	return h.started(h.threads.NewThread(title, prompt, "", "", false, "supervised", ""))
 }
 
 // StartThreadWith starts a Supervised thread with the model and effort given.
 func (h *Harness) StartThreadWith(title, prompt, model, effort string) (threads.Thread, error) {
-	return h.threads.NewThread(title, prompt, model, effort, false, "supervised", "")
+	return h.started(h.threads.NewThread(title, prompt, model, effort, false, "supervised", ""))
 }
 func (h *Harness) ShellNew(id string) (threads.ShellInfo, error) { return h.threads.ShellNew(id) }
 func (h *Harness) ShellClose(id string) error                    { return h.threads.ShellClose(id) }
@@ -1479,13 +1514,19 @@ func (h *Harness) TermClose(id string) { h.terminal.TermClose(id) }
 
 func (h *Harness) Issues(refresh bool) ([]issues.Issue, error) { return h.issues.Issues(refresh) }
 func (h *Harness) StartIssue(number int) (threads.Thread, error) {
+	return h.started(h.issues.StartIssue(number, "", "", "", "", false))
+}
+
+// StartIssueLater starts the issue's thread as the app does and returns as the call does, with the thread listed as
+// starting.
+func (h *Harness) StartIssueLater(number int) (threads.Thread, error) {
 	return h.issues.StartIssue(number, "", "", "", "", false)
 }
 func (h *Harness) StartIssueWith(number int, action string) (threads.Thread, error) {
-	return h.issues.StartIssue(number, action, "", "", "", false)
+	return h.started(h.issues.StartIssue(number, action, "", "", "", false))
 }
 func (h *Harness) StartIssueOwn(number int, action, prompt, model, effort string) (threads.Thread, error) {
-	return h.issues.StartIssue(number, action, prompt, model, effort, false)
+	return h.started(h.issues.StartIssue(number, action, prompt, model, effort, false))
 }
 func (h *Harness) MoveIssue(number int, section string) error {
 	return h.issues.MoveIssue(number, section)

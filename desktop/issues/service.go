@@ -30,7 +30,7 @@ func (s *Service) Issues(refresh bool) ([]Issue, error) {
 // and fast runs the agent in its faster mode.
 // An issue that has a live thread gets it back, and neither the prompt nor the model reaches it.
 func (s *Service) StartIssue(number int, action, prompt, model, effort string, fast bool) (threads.Thread, error) {
-	v, _, err := s.issues.Start(s.ctx(), s.issues.threads.Current(), number, action, "", threads.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}})
+	v, _, err := s.issues.Start(s.ctx(), s.issues.threads.Current(), number, action, "", threads.StartOptions{Prompt: prompt, Model: project.Model{Model: model, Effort: effort, Fast: fast}, Later: true})
 	return v, err
 }
 

@@ -388,6 +388,9 @@ func (v *Service) live(id string) (threads.Chat, error) {
 	if err != nil {
 		return threads.Chat{}, err
 	}
+	if ch.Starting {
+		return threads.Chat{}, fmt.Errorf("Thread %s is still starting", id)
+	}
 	if !ch.Live {
 		return threads.Chat{}, fmt.Errorf("Thread %s is asleep", id)
 	}
@@ -398,6 +401,9 @@ func (v *Service) live(id string) (threads.Chat, error) {
 // that wake's chat, once its host listens.
 func (v *Service) awake(id string) (threads.Chat, error) {
 	ch, err := v.c.threads.ChatOf(id)
+	if err == nil && ch.Starting {
+		return threads.Chat{}, fmt.Errorf("Thread %s is still starting", id)
+	}
 	if err != nil || ch.Live {
 		return ch, err
 	}

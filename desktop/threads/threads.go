@@ -101,6 +101,10 @@ type Thread struct {
 	Memory int64 `json:"memory"` // bytes held by the processes under the thread's pane, rounded up; 0 when not known
 
 	Subagents int `json:"subagents"` // the tasks other than shells that its Claude runs in the background, which a settle stops
+
+	Start        StartState `json:"start"`        // "" once the thread runs; else how far its start has got, while its row is shown as working or waiting
+	StartError   string     `json:"startError"`   // why the start failed, "" unless Start is failed
+	FirstMessage string     `json:"firstMessage"` // the message the thread starts with, shown as sent while it starts; "" when none
 }
 
 // Project is a project as the front end sees it.
@@ -130,6 +134,7 @@ type Threads struct {
 	issueMu   sync.Mutex           // one issue check-and-create at a time: two starts at once would both find no thread and start two
 	childMu   sync.Mutex           // one child check-and-create at a time: two delegations at once would both pass the limits
 	sideMu    sync.Mutex           // one side chat start at a time
+	treeMu    sync.Mutex           // one new thread picks its branch and makes its worktree at a time
 
 	settling map[string]chan struct{} // under mu, the threads a settle stops now, each closed once that settle ends: one settle of a thread at a time
 
@@ -147,7 +152,8 @@ type Threads struct {
 	keepAwake  func(projectKey string) bool
 	editorApp  func() string
 	newPlace   func() string
-	info       []term.Info             // the live threads under a host
+	info       []term.Info             // the live threads under a host, and those that are still starting
+	starting   map[string]*starting    // under mu, the threads whose start runs or failed, until their agent runs and has its first message
 	shells     []term.Shell            // every project's shells
 	sentShells map[string][]Shell      // by project key, the shells last sent
 	known      map[string]term.Info    // the last info of every thread seen, for when it ends
@@ -277,6 +283,7 @@ func newThreads(o Options) *Threads {
 		known: map[string]term.Info{}, ended: map[string]*endedThread{}, deleted: map[string]bool{}, deleting: map[string]bool{}, waking: map[string]bool{},
 		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{}, shellStart: map[thread.Name]time.Time{},
 		records:    map[string]thread.Record{},
+		starting:   map[string]*starting{},
 		cwds:       map[string]string{},
 		seen:       map[string]thread.State{},
 		history:    map[string][]thread.Change{},
@@ -367,7 +374,7 @@ func (s *Threads) Refresh() {
 		e := s.ended[in.Name.String()]
 		return e != nil && e.at.After(listing)
 	})
-	s.info = infos
+	s.info = s.listedStarts(infos)
 	// A shell started while tmux was listed is not in the list.
 	for name, at := range s.shellStart {
 		i := slices.IndexFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
@@ -764,6 +771,9 @@ func (s *Threads) Delete(id string, worktree bool) error {
 	if name.IsShell() {
 		return errNotThread
 	}
+	if s.abortStart(id) {
+		return nil
+	}
 	family, err := s.startDelete(id)
 	if err != nil {
 		return err
@@ -946,9 +956,18 @@ func (s *Threads) dropThread(name thread.Name) error {
 	if err := bus.RemoveState(s.stateDir, id); err != nil {
 		return fmt.Errorf("deleting the thread: %w", err)
 	}
+	s.forgetDeleted(name)
+	s.sync()
+	return nil
+}
+
+// forgetDeleted marks the thread deleted and drops everything the app holds for it. It needs mu.
+func (s *Threads) forgetDeleted(name thread.Name) {
+	id := name.String()
 	s.deleted[id] = true
 	delete(s.deleting, id)
 	delete(s.ended, id)
+	delete(s.starting, id)
 	delete(s.history, id)
 	delete(s.known, id)
 	delete(s.nums, id)
@@ -962,8 +981,6 @@ func (s *Threads) dropThread(name thread.Name) error {
 	delete(s.stateRead, id)
 	s.life.forget(id)
 	s.forgetToken(name)
-	s.sync()
-	return nil
 }
 
 // settleToDelete settles the thread when it runs. It holds createMu, so a refresh with a list read before the settle
@@ -1327,6 +1344,10 @@ func (s *Threads) sync() {
 	for _, in := range s.info {
 		id := in.Name.String()
 		live[id] = true
+		// A thread whose agent has not started has no identity to save and no start to record yet; register does both.
+		if st := s.starting[id]; st != nil && !st.launched {
+			continue
+		}
 		s.known[id] = in
 		state, at := s.stateOf(id), time.Now()
 		if rec, ok := s.records[id]; ok {
@@ -1542,7 +1563,7 @@ func (s *Threads) list() []Thread {
 	byName := map[thread.Name]term.Info{}
 	for _, in := range s.info {
 		byName[in.Name] = in
-		ss := thread.Thread{Name: in.Name, N: s.nums[in.Name.String()], State: s.stateOf(in.Name.String())}
+		ss := thread.Thread{Name: in.Name, N: s.nums[in.Name.String()], State: s.shownState(in.Name.String())}
 		if rec, ok := s.records[in.Name.String()]; ok {
 			ss.At, ss.Detail = rec.At, rec.Detail
 		}
@@ -1579,6 +1600,10 @@ func (s *Threads) list() []Thread {
 		}
 		view.Memory = s.held[id]
 		view.Subagents = s.background[id].Subagents
+		if st := s.starting[id]; st != nil {
+			view.Start, view.StartError, view.FirstMessage = st.status, st.failure, st.shownText()
+			view.Detail = cmp.Or(st.failure, "Starting")
+		}
 		out = append(out, view)
 	}
 	return out
@@ -1798,6 +1823,9 @@ type StartOptions struct {
 	Asker  string
 	Parent string
 	Base   string
+	// Later lists the thread at once and starts it after: its worktree, its host, its agent and its first message,
+	// each of which may take seconds, come after the call returns, and the thread's row says how far they have got.
+	Later bool
 
 	dir string // the folder a thread in the project place runs in, "" for the project folder
 }
@@ -1830,7 +1858,7 @@ func (s *Threads) CreateThread(title string, o StartOptions) (Thread, error) {
 		return Thread{}, err
 	}
 	title = cmp.Or(strings.TrimSpace(title), titleFromPrompt(o.Prompt))
-	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, "", "", "", forkStart{}, StartOptions{Model: o.Model, Access: access, Place: placeFor(s.placeSetting(), 0, place)})
+	return s.createIn(s.Current(), title, strings.TrimSpace(o.Prompt), true, 0, "", "", "", forkStart{}, StartOptions{Model: o.Model, Access: access, Place: placeFor(s.placeSetting(), 0, place), Later: true})
 }
 
 // CreateBriefed is Create for a Supervised thread with a job of its own, in the project folder: brief is added to the
@@ -1881,7 +1909,7 @@ func (s *Threads) CreateIssue(proj project.Project, title, text string, issue in
 			access = asker
 		}
 	}
-	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, access, action.Name, o.Asker, place)
+	view, did, err = s.createForIssue(proj, title, text, proj.SendsPrompt(), issue, model, handover, access, action.Name, o.Asker, place, o.Later)
 	if err != nil || did == Created {
 		return view, did, err
 	}
@@ -2316,7 +2344,7 @@ func (s *Threads) Provider() agent.Provider { return s.agents.Provider() }
 
 // createForIssue starts a thread for the issue, in place or where placeFor says, unless the project has a live one for
 // it, which it names, or a settled one, which it wakes with the handover and gives text to, and names.
-func (s *Threads) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access thread.Access, action, asker string, place Place) (Thread, IssueStart, error) {
+func (s *Threads) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access thread.Access, action, asker string, place Place, later bool) (Thread, IssueStart, error) {
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
 	if live := s.liveIssueThread(proj.Key(), issue); live != "" {
@@ -2347,7 +2375,7 @@ func (s *Threads) createForIssue(proj project.Project, title, text string, send 
 	if err := s.mayGive(asker, access); err != nil {
 		return Thread{}, Kept, err
 	}
-	view, err := s.createIn(proj, title, text, send, issue, "", handover, action, forkStart{}, StartOptions{Model: model, Access: access, Place: placeFor(s.placeSetting(), issue, place)})
+	view, err := s.createIn(proj, title, text, send, issue, "", handover, action, forkStart{}, StartOptions{Model: model, Access: access, Place: placeFor(s.placeSetting(), issue, place), Later: later})
 	return view, Created, err
 }
 
@@ -2383,50 +2411,14 @@ func FromApp(text string) string {
 // branch, or on a new one named from its title that starts at o.Base; else it runs in the project folder, or in the
 // folder o names, on no branch.
 func (s *Threads) createIn(proj project.Project, title, text string, send bool, issue int, brief, handover, action string, fork forkStart, o StartOptions) (Thread, error) {
-	s.createMu.Lock()
-	defer s.createMu.Unlock()
-
-	p := s.Provider()
-	var err error
-	if err := s.agents.CheckInstalled(p); err != nil {
+	st, err := s.begin(proj, title, text, send, issue, brief, handover, action, fork, o)
+	if err != nil {
 		return Thread{}, err
 	}
-	model := fill(p, proj.Dir, o.Model)
-	name, ctx := s.reserve(proj)
-	work := workPlace{dir: cmp.Or(o.dir, proj.Dir)}
-	if o.Place == InWorktree {
-		branch, base := proj.BranchFor(issue), ""
-		if issue == 0 {
-			branch, base = s.life.freeBranch(ctx, proj.Dir, branchFromTitle(title)), o.Base
-		}
-		if work, err = s.life.makeWorktree(ctx, proj, name, branch, base); err != nil {
-			return Thread{}, err
-		}
+	if o.Later {
+		return s.startLater(st), nil
 	}
-	restore := func() {}
-	if fork.at != "" {
-		if restore, err = s.copyChat(fork, name); err != nil {
-			s.life.undoWorktree(ctx, proj, name, work)
-			return Thread{}, err
-		}
-	}
-	created := time.Now()
-	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
-	tctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
-	defer cancel()
-	if err := s.launch(tctx, p, name, title, proj, work.dir, work.branch, issue, model, fork.conversation, brief, handover, o.Access, action, fork, o.Parent); err != nil {
-		restore()
-		s.life.undoWorktree(ctx, proj, name, work)
-		return Thread{}, err
-	}
-	view := s.register(name, title, work, issue, model, created, o.Access, action, fork, o.Parent)
-	if text != "" {
-		go s.giveHost(ctx, name, text, send)
-	}
-	if work.branch != "" {
-		s.life.ensureWatchers(ctx)
-	}
-	return view, nil
+	return s.startNow(st)
 }
 
 // DefaultModel is the model and effort a new thread in the current project gets from the agent's own settings
@@ -2765,8 +2757,11 @@ func (s *Threads) register(name thread.Name, title string, work workPlace, issue
 	if issue > 0 {
 		in.Issue = strconv.Itoa(issue)
 	}
-	if !slices.ContainsFunc(s.info, func(i term.Info) bool { return i.Name == name }) {
+	if i := slices.IndexFunc(s.info, func(i term.Info) bool { return i.Name == name }); i < 0 {
 		s.info = append(s.info, in)
+	} else if st := s.starting[name.String()]; st != nil {
+		s.info[i] = in
+		st.launched = true
 	}
 	s.number()
 	s.sync()
@@ -3435,7 +3430,12 @@ func (s *Threads) Settle(id string) error { return s.settleWithSideChats(id, "")
 
 // SettleAsOwner is Settle at the owner's word, which the exit in the thread's log records: a parent hears that the
 // owner put its child to sleep.
-func (s *Threads) SettleAsOwner(id string) error { return s.settleWithSideChats(id, chat.ByOwner) }
+func (s *Threads) SettleAsOwner(id string) error {
+	if err := s.startingError(id); err != nil {
+		return err
+	}
+	return s.settleWithSideChats(id, chat.ByOwner)
+}
 
 // settleWithSideChats is settleBy, then a delete of the thread's side chats, which serve the thread only while it runs.
 func (s *Threads) settleWithSideChats(id, by string) error {
@@ -3626,6 +3626,9 @@ const (
 func (s *Threads) SetAccess(id string, access thread.Access) error {
 	name, err := thread.ParseName(id)
 	if err != nil {
+		return err
+	}
+	if err := s.startingError(id); err != nil {
 		return err
 	}
 	// A delegation checks the parent's access under childMu and starts the child under it.
@@ -3871,6 +3874,9 @@ func (s *Threads) Rename(id, title string) error {
 		return errNotThread
 	}
 	title = cmp.Or(strings.TrimSpace(title), defaultTitle)
+	if s.renameStarting(name, title) {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(s.context(), tmuxTimeout)
 	defer cancel()
 	if err := s.tmux.Rename(ctx, name, title); err != nil {
@@ -4170,6 +4176,18 @@ func (s *Threads) stateOf(id string) thread.State {
 	return state
 }
 
+// shownState is the state the list shows for the thread: one that starts is working, and one whose start failed waits
+// for the owner. It needs mu.
+func (s *Threads) shownState(id string) thread.State {
+	switch st := s.starting[id]; {
+	case st == nil:
+		return s.stateOf(id)
+	case st.status == StartFailed:
+		return thread.Waiting
+	}
+	return thread.Working
+}
+
 // Chat is a thread whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on, the
 // folder that holds the images sent in it and the folder it works in.
 type Chat struct {
@@ -4177,6 +4195,7 @@ type Chat struct {
 	N                                    int  // the number the thread shows
 	Live                                 bool // the thread runs; an ended one has only its log
 	Deleting                             bool // a delete of the thread runs
+	Starting                             bool // the thread's host has not started: it has no chat yet
 }
 
 // ChatOf is the chat of the thread id, live or ended. A deleted thread gives none. It takes mu.
@@ -4207,7 +4226,9 @@ func (s *Threads) Chats() []Chat {
 	defer s.mu.Unlock()
 	var out []Chat
 	for _, in := range s.info {
-		out = append(out, s.chatOf(in, true))
+		if ch := s.chatOf(in, true); !ch.Starting {
+			out = append(out, ch)
+		}
 	}
 	return out
 }
@@ -4216,7 +4237,9 @@ func (s *Threads) Chats() []Chat {
 func (s *Threads) chatOf(in term.Info, live bool) Chat {
 	name := in.Name
 	dir := cmp.Or(s.life.fields(name.String()).worktree, in.Path)
-	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live, Deleting: s.deleting[name.String()]}
+	starting := s.starting[name.String()]
+	unhosted := starting != nil && !starting.launched
+	return Chat{ID: name.String(), Project: name.Project, Log: s.chatLogPath(name), Socket: s.hostSocket(name), Media: s.chatMediaDir(name), Dir: dir, N: s.nums[name.String()], Live: live && !unhosted, Deleting: s.deleting[name.String()], Starting: unhosted}
 }
 
 // AfterList sets what Refresh runs once it has listed tmux and before it applies the list; a test settles a thread there.

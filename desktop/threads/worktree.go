@@ -346,6 +346,8 @@ func (l *Lifecycle) undoWorktree(ctx context.Context, proj project.Project, name
 
 // removeUnstarted removes a worktree orchestrator just made for a thread that did not start, and records it gone.
 func (l *Lifecycle) removeUnstarted(ctx context.Context, proj project.Project, dir string) {
+	// A start stopped halfway has a cancelled ctx, and its worktree must go all the same.
+	ctx = context.WithoutCancel(ctx)
 	if _, err := l.git(ctx, proj.Dir, "worktree", "remove", dir); err != nil {
 		log.Printf("orchestrator: removing the worktree %s of a thread that did not start: %v", dir, err)
 		return

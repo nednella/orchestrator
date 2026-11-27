@@ -38,6 +38,9 @@ func (s *Threads) setFlags(id, what string, settings map[string]any, change func
 	if err != nil {
 		return err
 	}
+	if err := s.startingError(id); err != nil {
+		return err
+	}
 	if name.IsShell() {
 		return errNotThread
 	}
