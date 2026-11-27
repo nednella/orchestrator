@@ -370,6 +370,8 @@ export type Cleanup = {
   threadTitle: string
   issue: number
   pr: number
+  // url is the PR's page; '' for a clean-up with no PR.
+  url: string
   merged: boolean
   status: 'done' | 'blocked'
   removed: string[]

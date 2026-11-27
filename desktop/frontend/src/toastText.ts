@@ -13,11 +13,12 @@ export function threadName(title: string, issue: number): { name: string; full?:
   return { name, full: name === whole ? undefined : whole }
 }
 
-export function cleanupToast(entry: Cleanup): ToastInput {
+// cleanupToast has an Open action for the PR the clean-up was for, which open runs with the PR's address.
+export function cleanupToast(entry: Cleanup, open: (url: string) => void): ToastInput {
   const { name, full } = threadName(entry.threadTitle, entry.issue)
   const pr = entry.pr > 0 ? `PR #${entry.pr} ${entry.merged ? 'merged' : 'closed'}` : ''
   const removed = entry.removed.some((item) => item.startsWith('worktree ')) ? 'Worktree and branch removed' : 'Thread put to sleep'
-  return { tone: 'success', text: `Cleaned up ${name}`, hint: full, detail: [pr, removed].filter(Boolean).join(' · ') }
+  return { tone: 'success', text: `Cleaned up ${name}`, hint: full, detail: [pr, removed].filter(Boolean).join(' · '), action: entry.url ? { label: 'Open', run: () => open(entry.url) } : undefined }
 }
 
 const WARNING_SOURCES: Record<Warning['source'], string> = { tmux: 'tmux', github: 'GitHub', 'pull requests': 'pull requests', worktrees: 'worktrees', config: 'config', agent: 'the agent' }

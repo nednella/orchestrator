@@ -152,7 +152,7 @@ export function createMock(params: URLSearchParams) {
   const termReaders = new Map<string, { onData: (bytes: Uint8Array) => void; onEnd: () => void }>()
   const threads: Thread[] = []
   const data: ProjectData[] = [
-    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, threadTitle: '#412 locale sweep', issue: 412, pr: 441, merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, threadTitle: '#371 old banner', issue: 371, pr: 440, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, threadTitle: '#366 retry copy', issue: 366, pr: 431, merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
+    { name: 'storefront', dir: '~/code/acme/storefront', repo: 'acme/storefront', notes: seedNotes(noteTexts), issues: buildIssues('acme/storefront'), cleanups: [{ at: Date.now() - 2 * 3_600_000, threadTitle: '#412 locale sweep', issue: 412, pr: 441, url: 'https://github.com/acme/storefront/pull/441', merged: true, status: 'blocked', removed: [], reason: 'the worktree of issue-412 has uncommitted changes' }, { at: Date.now() - 5 * 3_600_000, threadTitle: '#371 old banner', issue: 371, pr: 440, url: 'https://github.com/acme/storefront/pull/440', merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-371', 'thread put to sleep', 'temp folder'], reason: '' }, { at: Date.now() - 26 * 3_600_000, threadTitle: '#366 retry copy', issue: 366, pr: 431, url: 'https://github.com/acme/storefront/pull/431', merged: true, status: 'done', removed: ['worktree ~/code/acme/storefront/trees/issue-366', 'thread put to sleep', 'temp folder'], reason: '' }] },
     { name: 'orchestrator', dir: '~/code/orchestrator', repo: 'nednella/orchestrator', notes: seedNotes(noteTexts.slice(0, 3)), issues: unsorted(buildIssues('nednella/orchestrator')), cleanups: [], needsSetup: true },
     { name: 'scratch', dir: '~/scratch', repo: '', notes: [], issues: [], cleanups: [] },
   ]
@@ -582,11 +582,11 @@ export function createMock(params: URLSearchParams) {
   if (flags.cleanup) {
     setTimeout(() => {
       const entry: Record<string, Partial<Cleanup>> = {
-        merged: { threadTitle: '#412 Sweep unused locale keys', issue: 412, pr: 441, merged: true, removed: ['worktree ~/code/acme/storefront/trees/issue-412', 'thread put to sleep', 'temp folder'] },
-        closed: { threadTitle: '#454 Split the product page into sections and move the shared product gallery into its own package', issue: 454, pr: 457, merged: false, removed: ['worktree ~/code/acme/storefront/trees/issue-454', 'thread put to sleep'] },
-        plain: { threadTitle: 'test', issue: 0, pr: 0, merged: false, removed: ['thread put to sleep', 'temp folder'] },
+        merged: { threadTitle: '#412 Sweep unused locale keys', issue: 412, pr: 441, url: 'https://github.com/acme/storefront/pull/441', merged: true, removed: ['worktree ~/code/acme/storefront/trees/issue-412', 'thread put to sleep', 'temp folder'] },
+        closed: { threadTitle: '#454 Split the product page into sections and move the shared product gallery into its own package', issue: 454, pr: 457, url: 'https://github.com/acme/storefront/pull/457', merged: false, removed: ['worktree ~/code/acme/storefront/trees/issue-454', 'thread put to sleep'] },
+        plain: { threadTitle: 'test', issue: 0, pr: 0, url: '', merged: false, removed: ['thread put to sleep', 'temp folder'] },
       }
-      current.cleanups.unshift({ at: Date.now(), threadTitle: '', issue: 0, pr: 0, merged: false, status: 'done', removed: [], reason: '', ...entry[flags.cleanup ?? ''] })
+      current.cleanups.unshift({ at: Date.now(), threadTitle: '', issue: 0, pr: 0, url: '', merged: false, status: 'done', removed: [], reason: '', ...entry[flags.cleanup ?? ''] })
       emit('cleanups', { project: current.name, items: [...current.cleanups] })
     }, 1500)
   }
@@ -851,7 +851,7 @@ export function createMock(params: URLSearchParams) {
 
   function logCleanup(s: Thread, removed: string[], reason: string) {
     const target = owner(s)
-    target.cleanups.unshift({ at: Date.now(), threadTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
+    target.cleanups.unshift({ at: Date.now(), threadTitle: s.title, issue: s.issue, pr: s.pr?.number ?? 0, url: s.pr?.url ?? '', merged: s.pr?.state === 'merged', status: reason ? 'blocked' : 'done', removed, reason })
     if (target === current) emit('cleanups', { project: target.name, items: [...target.cleanups] })
   }
 

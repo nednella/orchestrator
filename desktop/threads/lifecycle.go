@@ -76,6 +76,7 @@ type Cleanup struct {
 	ThreadTitle string   `json:"threadTitle"`
 	Issue       int      `json:"issue"`
 	PR          int      `json:"pr"`
+	URL         string   `json:"url"` // the PR's page, or "" for a clean-up with no PR
 	Merged      bool     `json:"merged"`
 	Status      string   `json:"status"`
 	Removed     []string `json:"removed"`
@@ -1148,7 +1149,7 @@ func (l *Lifecycle) logCleanup(ctx context.Context, t target, pr *PR, removed []
 	}
 	entry := Cleanup{At: time.Now().UnixMilli(), ThreadTitle: t.title, Issue: t.issue, Status: "done", Removed: removed, Reason: reason}
 	if pr != nil {
-		entry.PR, entry.Merged = pr.Number, pr.State == "merged"
+		entry.PR, entry.URL, entry.Merged = pr.Number, pr.URL, pr.State == "merged"
 	}
 	if reason != "" {
 		entry.Status = "blocked"

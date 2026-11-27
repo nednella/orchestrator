@@ -673,10 +673,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
           const entry = list[0]
           if (!entry || entry.status !== 'done' || entry.at === lastCleanupToast.current) return
           lastCleanupToast.current = entry.at
-          pushToast(cleanupToast(entry))
+          pushToast(cleanupToast(entry, (url) => report(() => api.openURL(url))))
         }),
       ),
-    [pushToast],
+    [pushToast, report],
   )
   useEffect(
     () =>

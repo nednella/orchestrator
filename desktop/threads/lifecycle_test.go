@@ -170,7 +170,7 @@ func TestCleanupMerged(t *testing.T) {
 		t.Errorf("worktree exists: %v, branches: %q", exists(wt), branches(t, h.Dir))
 	}
 	log := h.Cleanups()
-	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 7 || log[0].PR != 12 || !log[0].Merged || log[0].ThreadTitle != "#7 work" {
+	if len(log) != 1 || log[0].Status != "done" || log[0].Issue != 7 || log[0].PR != 12 || !log[0].Merged || log[0].URL == "" || log[0].ThreadTitle != "#7 work" {
 		t.Fatalf("log = %+v", log)
 	}
 	if want := []string{"worktree " + wt, "thread put to sleep", "temp folder"}; !slices.Equal(log[0].Removed, want) {
