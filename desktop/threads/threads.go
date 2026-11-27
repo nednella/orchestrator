@@ -159,20 +159,21 @@ type Threads struct {
 	keepAwake  func(projectKey string) bool
 	editorApp  func() string
 	newPlace   func() string
-	info       []term.Info             // the live threads under a host, and those that are still starting
-	setups     map[string]*setupRun    // under mu, the set-up command of each thread that runs one or whose command failed
-	hidden     map[string]bool         // under mu, the threads a delete takes off the list before it has run
-	starting   map[string]*starting    // under mu, the threads whose start runs or failed, until their agent runs and has its first message
-	shells     []term.Shell            // every project's shells
-	sentShells map[string][]Shell      // by project key, the shells last sent
-	known      map[string]term.Info    // the last info of every thread seen, for when it ends
-	afterList  func()                  // see AfterList
-	ended      map[string]*endedThread // settled threads, whose tmux session is gone, until deleted
-	nums       map[string]int          // the number each thread shows: its state file's
-	lastNum    map[string]int          // the highest number given or recorded in each project
-	deleted    map[string]bool         // the threads the owner deleted in this run: nothing brings them back
-	deleting   map[string]bool         // the threads a delete runs for: they are not woken, forked or given children
-	waking     map[string]bool         // the threads a wake runs for: no clean-up starts on them
+	info       []term.Info              // the live threads under a host, and those that are still starting
+	setups     map[string]*setupRun     // under mu, the set-up command of each thread that runs one or whose command failed
+	deleteWait map[string]chan struct{} // under mu, for each thread a delete runs for, the channel closed when that delete ends
+	hidden     map[string]bool          // under mu, the threads a delete takes off the list before it has run
+	starting   map[string]*starting     // under mu, the threads whose start runs or failed, until their agent runs and has its first message
+	shells     []term.Shell             // every project's shells
+	sentShells map[string][]Shell       // by project key, the shells last sent
+	known      map[string]term.Info     // the last info of every thread seen, for when it ends
+	afterList  func()                   // see AfterList
+	ended      map[string]*endedThread  // settled threads, whose tmux session is gone, until deleted
+	nums       map[string]int           // the number each thread shows: its state file's
+	lastNum    map[string]int           // the highest number given or recorded in each project
+	deleted    map[string]bool          // the threads the owner deleted in this run: nothing brings them back
+	deleting   map[string]bool          // the threads a delete runs for: they are not woken, forked or given children
+	waking     map[string]bool          // the threads a wake runs for: no clean-up starts on them
 	records    map[string]thread.Record
 	cwds       map[string]string // the working directory each thread's last event reported
 	seen       map[string]thread.State
@@ -294,6 +295,7 @@ func newThreads(o Options) *Threads {
 		records:    map[string]thread.Record{},
 		starting:   map[string]*starting{},
 		hidden:     map[string]bool{},
+		deleteWait: map[string]chan struct{}{},
 		setups:     map[string]*setupRun{},
 		cwds:       map[string]string{},
 		seen:       map[string]thread.State{},
@@ -825,8 +827,10 @@ func (s *Threads) beginDelete(id string) (family []string, done bool, err error)
 		return nil, false, err
 	}
 	s.mu.Lock()
+	ended := make(chan struct{})
 	for _, d := range family {
 		s.hidden[d] = true
+		s.deleteWait[d] = ended
 	}
 	s.sync()
 	s.mu.Unlock()
@@ -939,6 +943,14 @@ func (s *Threads) endDelete(family []string) {
 	for _, d := range family {
 		delete(s.deleting, d)
 		delete(s.hidden, d)
+		if ended, ok := s.deleteWait[d]; ok {
+			delete(s.deleteWait, d)
+			select {
+			case <-ended:
+			default:
+				close(ended)
+			}
+		}
 	}
 }
 
@@ -2439,6 +2451,7 @@ func (s *Threads) Provider() agent.Provider { return s.agents.Provider() }
 // createForIssue starts a thread for the issue, in place or where placeFor says, unless the project has a live one for
 // it, which it names, or a settled one, which it wakes with the handover and gives text to, and names.
 func (s *Threads) createForIssue(proj project.Project, title, text string, send bool, issue int, model project.Model, handover string, access thread.Access, action, asker string, place Place, later bool) (Thread, IssueStart, error) {
+	s.awaitIssueDelete(proj.Key(), issue)
 	s.issueMu.Lock()
 	defer s.issueMu.Unlock()
 	if live := s.liveIssueThread(proj.Key(), issue); live != "" {

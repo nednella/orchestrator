@@ -518,3 +518,38 @@ func (s *Threads) listedStarts(infos []term.Info) []term.Info {
 	}
 	return infos
 }
+
+// issueDeleteWait is the longest a start of an issue waits for the delete of the issue's thread.
+const issueDeleteWait = 30 * time.Second
+
+// awaitIssueDelete waits until no delete runs for a thread of the issue, so a start of the issue after a delete sees
+// the issue free, as the queue shows it, and makes a new thread. When the delete is refused the thread is still there
+// and the start gives it back. It waits at most issueDeleteWait, and then the start finds what it finds: the thread being
+// deleted, which refuses it. It does not hold issueMu, so the starts of other issues go on.
+func (s *Threads) awaitIssueDelete(key string, issue int) {
+	deadline := time.After(issueDeleteWait)
+	for {
+		ended := s.issueDeleting(key, issue)
+		if ended == nil {
+			return
+		}
+		select {
+		case <-ended:
+		case <-deadline:
+			return
+		}
+	}
+}
+
+// issueDeleting is the channel that closes when a delete of a thread of the issue ends, nil when none runs. It takes mu.
+func (s *Threads) issueDeleting(key string, issue int) chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, ended := range s.deleteWait {
+		in, ok := s.infoOf(id)
+		if ok && in.Name.Project == key && in.Issue == strconv.Itoa(issue) && in.Fork == "" {
+			return ended
+		}
+	}
+	return nil
+}

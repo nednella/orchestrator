@@ -124,3 +124,29 @@ func TestDeleteWithTheWorktreeIsNotRefusedForTheThreadsOwnTurn(t *testing.T) {
 		})
 	}
 }
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestStartOfTheIssueWaitsForTheDeleteOfItsThread(t *testing.T) {
+	h := newHarness(t)
+	repoFixture(t, h)
+	old := issueThread(h, t, 7)
+	newFakeTmux(t).slowKill(t, "2")
+
+	if err := h.DeleteThreadAsApp(old.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	began := time.Now()
+	got, err := h.StartIssue(7)
+	if err != nil {
+		t.Fatalf("the start of the issue = %v, want it to wait for the delete and start a new thread", err)
+	}
+	if got.ID == old.ID || got.Issue != 7 || got.State == "settled" {
+		t.Errorf("the start gave %+v, want a new thread of issue 7, not %s", got, old.ID)
+	}
+	if time.Since(began) < time.Second {
+		t.Errorf("the start came after %v, before the delete could have ended", time.Since(began))
+	}
+	if rows := h.Threads().List(); len(rows) != 1 || rows[0].ID != got.ID {
+		t.Errorf("rows = %+v, want only the new thread", rows)
+	}
+}
