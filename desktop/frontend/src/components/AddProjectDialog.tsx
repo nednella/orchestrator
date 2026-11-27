@@ -11,7 +11,7 @@ import { AddProjectCheck } from './AddProjectCheck'
 import { AddProjectFooter } from './AddProjectFooter'
 import { AddProjectRow } from './AddProjectRow'
 import { AddProjectSubmit } from './AddProjectSubmit'
-import { Icon } from './Icon'
+import { GithubMark } from './GithubMark'
 
 type View = 'sources' | 'create' | 'browse'
 
@@ -114,7 +114,7 @@ function AddProjectPopup() {
                 rows: [
                   {
                     id: 'create:publish',
-                    icon: <Icon name="mark-github" size={ICON} />,
+                    icon: <GithubMark size={ICON} />,
                     title: 'Create private repository on GitHub',
                     description: repository,
                     trailing: <AddProjectCheck checked={publish} />,
