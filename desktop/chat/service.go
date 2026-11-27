@@ -89,9 +89,19 @@ func (v *Service) send(id, text string, images []Image, sideChats []string, wait
 	if err != nil {
 		return Sent{}, err
 	}
-	// A thread whose agent has not started holds the message, which goes after its first one.
-	if len(images) == 0 && attached == "" && v.c.threads.QueueDuringStart(id, text) {
-		return Sent{}, nil
+	// A thread whose agent has not started holds every message, with its images saved, in order after its first one.
+	if v.c.threads.Starts(id) {
+		ch, err := v.c.threads.ChatOf(id)
+		if err != nil {
+			return Sent{}, err
+		}
+		files, err := saveImages(ch.Media, images)
+		if err != nil {
+			return Sent{}, err
+		}
+		if v.c.threads.QueueDuringStart(id, messageOf(text, files, attached)) {
+			return Sent{}, nil
+		}
 	}
 	ch, err := v.awake(id)
 	if err != nil {
@@ -105,10 +115,7 @@ func (v *Service) send(id, text string, images []Image, sideChats []string, wait
 	ready, cancel := context.WithTimeout(ctx, wait)
 	err = host.Ready(ready, ch.Socket)
 	cancel()
-	m := host.Message{Text: text, Files: files}
-	if attached != "" {
-		m.Text, m.Body = strings.Join(slices.DeleteFunc([]string{text, attached}, func(s string) bool { return s == "" }), "\n\n"), text
-	}
+	m := messageOf(text, files, attached)
 	var msg string
 	if err == nil {
 		msg, err = host.SendMessage(ctx, ch.Socket, m)
@@ -123,6 +130,15 @@ func (v *Service) send(id, text string, images []Image, sideChats []string, wait
 		log.Printf("orchestrator: naming side chat %s: %v", id, err)
 	}
 	return Sent{ID: msg}, nil
+}
+
+// messageOf is the message for the host: the text with the side chats' block after it, which the chat shows without.
+func messageOf(text string, files []string, attached string) host.Message {
+	m := host.Message{Text: text, Files: files}
+	if attached != "" {
+		m.Text, m.Body = strings.Join(slices.DeleteFunc([]string{text, attached}, func(s string) bool { return s == "" }), "\n\n"), text
+	}
+	return m
 }
 
 // SideChatStart starts a side chat of the thread parent, a fork of its conversation at its latest finished reply, and

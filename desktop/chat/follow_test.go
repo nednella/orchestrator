@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/nednella/orchestrator/internal/host"
 	"io"
 	"net"
 	"os"
@@ -41,7 +42,8 @@ func (o oneThread) StartSideChat(string) (threads.Thread, error) { return thread
 func (o oneThread) DeleteSideChat(string, bool) error            { return nil }
 func (o oneThread) NameSideChat(string, string) error            { return nil }
 func (o oneThread) SideChatsOf(string) []string                  { return nil }
-func (o oneThread) QueueDuringStart(string, string) bool         { return false }
+func (o oneThread) QueueDuringStart(string, host.Message) bool   { return false }
+func (o oneThread) Starts(string) bool                           { return false }
 
 // noProject knows no project.
 func noProject(string) string { return "" }

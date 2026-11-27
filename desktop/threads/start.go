@@ -67,7 +67,7 @@ type starting struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	step     string   // the step that runs, for the row
-	queue    []string // what the owner sent while it started, oldest first
+	queue    []host.Message // what the owner sent while it started, oldest first
 }
 
 // shownText is the first message as the thread shows it while it starts: what the owner sent, and nothing when it is
@@ -243,16 +243,23 @@ func (s *Threads) setStep(st *starting, step string) {
 
 // QueueDuringStart holds a message the owner sends to a thread whose start has not ended, to go to the agent after its
 // first message, and says whether it did. The row shows it as queued.
-func (s *Threads) QueueDuringStart(id, text string) bool {
+func (s *Threads) QueueDuringStart(id string, m host.Message) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.starting[id]
 	if st == nil {
 		return false
 	}
-	st.queue = append(st.queue, text)
+	st.queue = append(st.queue, m)
 	s.sync()
 	return true
+}
+
+// Starts says whether the thread's start has not ended.
+func (s *Threads) Starts(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.starting[id] != nil
 }
 
 // deliverQueued gives the agent the messages that came while it started, in order, until none is left. A message that
@@ -266,7 +273,7 @@ func (s *Threads) deliverQueued(ctx context.Context, st *starting) error {
 		}
 		next := st.queue[0]
 		s.mu.Unlock()
-		if _, err := host.SendMessage(ctx, s.hostSocket(st.name), host.Message{Text: next}); err != nil {
+		if _, err := host.SendMessage(ctx, s.hostSocket(st.name), next); err != nil {
 			log.Printf("orchestrator: thread %s did not get a message sent while it started: %v", st.name, err)
 			if refused := (*host.Refused)(nil); errors.As(err, &refused) {
 				return err

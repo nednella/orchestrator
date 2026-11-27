@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nednella/orchestrator/desktop/chat"
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
@@ -383,5 +384,42 @@ func TestSetupCommandStartsAfterTheAgent(t *testing.T) {
 	})
 	if !strings.Contains(string(data), s.ID) {
 		t.Errorf("the sessions when the set-up started = %q, want the thread's own, %s", data, s.ID)
+	}
+}
+
+const startDot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
+func TestMessageWithAnImageDoesNotJumpTheQueueWhileTheThreadStarts(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 2*time.Second)
+	s, err := h.StartIssueLater(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, send := range []func() error{
+		func() error { _, err := h.ChatSend(s.ID, "text one"); return err },
+		func() error {
+			_, err := h.ChatSend(s.ID, "with an image", chat.Image{Base64: startDot, Mime: "image/png"})
+			return err
+		},
+		func() error { _, err := h.ChatSend(s.ID, "text two"); return err },
+	} {
+		if err := send(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if row, _ := h.Thread(s.ID); len(row.StartQueue) != 3 {
+		t.Errorf("the row holds %v, want the three messages", row.StartQueue)
+	}
+	eventually(t, "all four messages", func() bool { return len(userLines(t, h, s.ID)) >= 4 })
+	users := userLines(t, h, s.ID)
+	for i, want := range []string{"/ship 7", "text one", "with an image", "text two"} {
+		if i >= len(users) || !strings.Contains(users[i], want) {
+			t.Fatalf("message %d = %q, want it to hold %q; all: %v", i, users[i], want, users)
+		}
+	}
+	if !strings.Contains(users[2], `"media_type":"image/png"`) {
+		t.Errorf("the third message = %s, want its image", users[2])
 	}
 }

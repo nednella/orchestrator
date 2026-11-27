@@ -1617,7 +1617,9 @@ func (s *Threads) list() []Thread {
 		}
 		if st := s.starting[id]; st != nil {
 			view.Start, view.StartError, view.FirstMessage = st.status, st.failure, st.shownText()
-			view.StartQueue = append([]string{}, st.queue...)
+			for _, m := range st.queue {
+				view.StartQueue = append(view.StartQueue, cmp.Or(m.Body, m.Text))
+			}
 			view.Detail = cmp.Or(st.failure, st.step, "Starting")
 		}
 		out = append(out, view)
