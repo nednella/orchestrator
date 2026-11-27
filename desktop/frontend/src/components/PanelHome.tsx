@@ -43,7 +43,7 @@ const BACK = ['ArrowUp', 'ArrowLeft']
 // side chat starts only from a thread that can fork.
 export function PanelHome({ session }: PanelHomeProps) {
   const layout = useLayout()
-  const orchestrator = useOrchestrator('project', 'selectedId', 'shells', 'report')
+  const orchestrator = useOrchestrator('project', 'selectedId', 'shells', 'report', 'digestUnseenCount')
   const sideChat = useSideChat()
   const chatReason = useSideChatReason(session?.id ?? '')
   const sideReason = sideChatReason(session) || chatReason
@@ -81,7 +81,7 @@ export function PanelHome({ session }: PanelHomeProps) {
             <section key={group.heading} className="flex flex-col gap-0.5 not-first:mt-1">
               <h4 className="flex min-h-8 items-center px-2.5 text-label font-medium text-soft">{group.heading}</h4>
               {group.rows.map((row) => (
-                <PanelHomeRow key={row.label} row={row} reason={reasonShut(row)} onOpen={() => open(row.target)} />
+                <PanelHomeRow key={row.label} row={row} reason={reasonShut(row)} unseen={row.target === 'news' ? orchestrator.digestUnseenCount : 0} onOpen={() => open(row.target)} />
               ))}
             </section>
           ))}
