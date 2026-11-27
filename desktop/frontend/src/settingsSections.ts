@@ -8,7 +8,7 @@ export type SettingsSectionEntry = { id: SettingsSectionId; label: string; icon:
 export type SettingsNavGroup = { heading?: string; sections: SettingsSectionEntry[] }
 
 export const SETTINGS_NAV: SettingsNavGroup[] = [
-  { sections: [{ id: 'appearance', label: 'Appearance', icon: Palette }] },
+  { heading: 'General', sections: [{ id: 'appearance', label: 'Appearance', icon: Palette }] },
   {
     heading: 'Agents',
     sections: [
