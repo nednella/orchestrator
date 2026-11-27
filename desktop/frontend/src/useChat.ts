@@ -55,8 +55,9 @@ function later(run: () => void): () => void {
 
 // useChat is the thread's chat: its history, then its live events, as a timeline, and the logged events it is built
 // from. state is the thread's row state: a settled thread that wakes is watched again. A side chat's timeline leaves
-// out the chat it was forked with, which is its thread's.
-export function useChat(id: string, state: State, side = false): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
+// out the chat it was forked with, which is its thread's. A thread that starts has no host to watch yet: it is watched
+// once starting ends.
+export function useChat(id: string, state: State, side = false, starting = false): { timeline: Timeline; events: ChatEvent[]; loading: boolean; error: string } {
   const [view, setView] = useState(() => startOf(id))
   const latest = useLatestOrchestrator()
   const seen = useRef<{ id: string; state: State }>({ id, state })
@@ -75,6 +76,7 @@ export function useChat(id: string, state: State, side = false): { timeline: Tim
   useEffect(() => {
     const start = startOf(id)
     setView(start)
+    if (starting) return
     let gone = false
     const feed = chatFeed(start.state, {
       history: (after) => api.chatHistory(id, after),
@@ -104,7 +106,7 @@ export function useChat(id: string, state: State, side = false): { timeline: Tim
       off()
       inTurn(id, () => api.chatUnwatch(id)).catch(() => undefined)
     }
-  }, [id, latest, wakes])
+  }, [id, latest, wakes, starting])
 
   return { timeline, events, loading: shown.loading, error: shown.error }
 }

@@ -14,6 +14,7 @@ import { sideChatAsked, sideChatReason } from '../sideChat'
 import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Thread } from '../types'
+import { startTimeline } from '../startTimeline'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
 import { ChatChildApprovals } from './ChatChildApprovals'
@@ -41,7 +42,16 @@ const noFiles: FilesRewind = { offered: false, reason: '', files: [], insertions
 export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const { project, report, forkThread, threadDraft, setThreadDraft } = useOrchestrator('project', 'report', 'forkThread', 'threadDraft', 'setThreadDraft')
   const latest = useLatestOrchestrator()
-  const { timeline, events, loading, error } = useChat(thread.id, thread.state, embedded)
+  const starting = thread.start !== ''
+  const chat = useChat(thread.id, thread.state, embedded, starting)
+  // A thread that starts shows the chat it will have once its agent takes the message, and keeps it until the chat has
+  // loaded, so the message does not leave and come back.
+  const frozen = useRef<ReturnType<typeof startTimeline> | null>(null)
+  const current = useMemo(() => (starting ? startTimeline(thread) : null), [starting, thread])
+  if (current) frozen.current = current
+  else if (!chat.loading) frozen.current = null
+  const early = current ?? frozen.current
+  const { timeline, events, loading, error } = early ? { ...early, loading: false, error: '' } : chat
   const empty = timeline.items.length === 0
   const forks = useOrchestratorSelector((s) => forksKey(thread.id, s.threads))
   const { id: threadId, forkOf, forkAt, parent } = thread
@@ -62,7 +72,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)
-  const stopping = timeline.turnOpen && stopAsked === lastEnd
+  const stopping = timeline.turnOpen && (starting || stopAsked === lastEnd)
 
   useEffect(() => {
     if (!stopping) return

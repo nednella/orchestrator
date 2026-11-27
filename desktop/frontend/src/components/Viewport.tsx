@@ -5,7 +5,6 @@ import { CARD_ROOM } from '../contextCard'
 import { useCardPlacement, useContextCard } from '../contextCardOpen'
 import { viewedAgent } from '../navHistory'
 import { useFocusRequest } from '../useFocusRequest'
-import { ChatStarting } from './ChatStarting'
 import { ChatView } from './ChatView'
 import { SubagentView } from './SubagentView'
 import { ThreadContextCard } from './ThreadContextCard'
@@ -37,7 +36,7 @@ export function Viewport() {
     <section ref={panel} data-panel="thread" data-state={selected.state} tabIndex={-1} className="relative h-full min-h-0 min-w-0 overflow-hidden bg-app">
       {/* The chat's scroller spans the whole width, so its scroll bar stays at the edge; its rows keep clear of the card. */}
       <div className="h-full" style={cardInline ? clearOfCard : undefined}>
-        {selected.start !== '' ? <ChatStarting key={selected.id} thread={selected} /> : agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} thread={selected} />}
+        {agent ? <SubagentView key={`${selected.id}/${agent}`} parent={selected} agent={agent} /> : <ChatView key={selected.id} thread={selected} />}
       </div>
       {cardInline && <ThreadContextCard id={selected.id} className="absolute top-3 right-3 z-20 max-h-[calc(100%-1.5rem)]" />}
     </section>

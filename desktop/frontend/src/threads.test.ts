@@ -41,6 +41,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     start: '',
     startError: '',
     firstMessage: '',
+    startQueue: [],
   }
 }
 

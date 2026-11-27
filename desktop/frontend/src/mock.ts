@@ -205,6 +205,7 @@ export function createMock(params: URLSearchParams) {
       start: s.start,
       startError: s.startError,
       firstMessage: s.firstMessage,
+      startQueue: [...s.startQueue],
     }
   }
 
@@ -364,6 +365,7 @@ export function createMock(params: URLSearchParams) {
       start: '',
       startError: '',
       firstMessage: '',
+      startQueue: [],
       project: owner.name,
     }
     threads.push(s)
@@ -398,6 +400,13 @@ export function createMock(params: URLSearchParams) {
   // block of its questions and answers after the words, which the chat shows alone, and a side chat's first message
   // names it.
   async function sendTo(id: string, text: string, images: ChatImage[], sideChats: string[]) {
+    // A thread that starts holds the message, which goes after the first one.
+    const starting = threads.find((x) => x.id === id)
+    if (starting?.start && images.length === 0 && sideChats.length === 0) {
+      starting.startQueue.push(text)
+      publish()
+      return { id: '' }
+    }
     const blocks = sideChats.map((side) => {
       const s = threads.find((x) => x.id === side)
       if (!s || deleted.has(side) || !s.side || s.forkOf !== id) throw `${side} is not a side chat of this thread`
@@ -604,7 +613,7 @@ export function createMock(params: URLSearchParams) {
     // As the Go side does, the thread is listed at once, starting, and its agent and first message come after.
     s.start = 'starting'
     s.state = 'working'
-    s.detail = 'Starting'
+    s.detail = s.worktree ? 'Setting up the worktree' : 'Starting Claude'
     s.firstMessage = prompt
     const attempt = () => {
       starts.set(
@@ -619,13 +628,14 @@ export function createMock(params: URLSearchParams) {
           }
           Object.assign(s, { start: '', startError: '', firstMessage: '', state: 'idle', detail: pick(details.idle) })
           chats.start(s.id)
-          if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
+          const queued = s.startQueue.splice(0)
+          for (const text of [prompt, ...queued]) if (text) void chats.backend.ChatSend(s.id, text, [])
           publish()
         }, flags.startMs),
       )
     }
     retries.set(s.id, () => {
-      Object.assign(s, { start: 'starting', startError: '', state: 'working', detail: 'Starting' })
+      Object.assign(s, { start: 'starting', startError: '', state: 'working', detail: s.worktree ? 'Setting up the worktree' : 'Starting Claude' })
       attempt()
       publish()
     })
