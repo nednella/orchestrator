@@ -43,6 +43,14 @@ export const THEME_CARDS: ThemeCardDef[] = [
       { mode: 'dark', theme: 'linen-dark' },
     ],
   },
+  {
+    id: 'upscope',
+    label: 'Upscope',
+    previews: [
+      { mode: 'light', theme: 'upscope-light' },
+      { mode: 'dark', theme: 'upscope-dark' },
+    ],
+  },
 ]
 
 const known = (mode: Appearance): string[] => THEME_CARDS.flatMap((card) => card.previews.filter((p) => p.mode === mode).map((p) => p.theme))

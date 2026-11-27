@@ -13,6 +13,7 @@ test('a theme with both appearances takes both halves, or the one picked by its 
   assert.deepEqual(withCard(card('midnight'), standard), { light: 'midnight-light', dark: 'midnight' })
   assert.deepEqual(withCard(card('linen'), { light: 'light', dark: 'umber' }), { light: 'linen', dark: 'linen-dark' })
   assert.deepEqual(withCard(card('umber'), standard, 'light'), { light: 'umber-light', dark: 'black' })
+  assert.deepEqual(withCard(card('upscope'), standard), { light: 'upscope-light', dark: 'upscope-dark' })
 })
 
 test('a theme with one appearance takes only that half', () => {
@@ -38,6 +39,7 @@ test('a saved theme this build does not have shows the default', () => {
   assert.deepEqual(themeHalves({ lightTheme: 'sepia' as LightTheme, darkTheme: 'violet' as DarkTheme }), standard)
   assert.deepEqual(themeHalves({ lightTheme: 'linen', darkTheme: 'umber' }), { light: 'linen', dark: 'umber' })
   assert.deepEqual(themeHalves({ lightTheme: 'umber-light', darkTheme: 'linen-dark' }), { light: 'umber-light', dark: 'linen-dark' })
+  assert.deepEqual(themeHalves({ lightTheme: 'upscope-light', darkTheme: 'upscope-dark' }), { light: 'upscope-light', dark: 'upscope-dark' })
 })
 
 test('a card says which appearances it is for', () => {
