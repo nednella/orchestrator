@@ -118,6 +118,8 @@ export function createMock(params: URLSearchParams) {
     // digest=empty is a News that never ran, digest=failed one whose last run failed.
     digest: params.get('digest'),
     toast: params.has('toast'),
+    // cleanup=merged|closed|plain shows the toast of a thread cleaned up after a merged PR, a closed PR or no PR.
+    cleanup: params.get('cleanup'),
     done: params.has('done'),
     warn: params.has('warn'),
     offline: params.has('offline'),
@@ -575,6 +577,18 @@ export function createMock(params: URLSearchParams) {
       emit('warnings', { source: 'github', message: 'gh could not name the repo' })
     }, 1500)
     setTimeout(() => emit('warnings', { source: 'github', message: '' }), 9000)
+  }
+
+  if (flags.cleanup) {
+    setTimeout(() => {
+      const entry: Record<string, Partial<Cleanup>> = {
+        merged: { threadTitle: '#412 Sweep unused locale keys', issue: 412, pr: 441, merged: true, removed: ['worktree ~/code/acme/storefront/trees/issue-412', 'thread put to sleep', 'temp folder'] },
+        closed: { threadTitle: '#454 Split the product page into sections and move the shared product gallery into its own package', issue: 454, pr: 457, merged: false, removed: ['worktree ~/code/acme/storefront/trees/issue-454', 'thread put to sleep'] },
+        plain: { threadTitle: 'test', issue: 0, pr: 0, merged: false, removed: ['thread put to sleep', 'temp folder'] },
+      }
+      current.cleanups.unshift({ at: Date.now(), threadTitle: '', issue: 0, pr: 0, merged: false, status: 'done', removed: [], reason: '', ...entry[flags.cleanup ?? ''] })
+      emit('cleanups', { project: current.name, items: [...current.cleanups] })
+    }, 1500)
   }
 
   if (flags.toast) {
