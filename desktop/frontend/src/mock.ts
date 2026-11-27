@@ -90,45 +90,22 @@ const accessOfMode: Record<string, Access> = { plan: 'read', default: 'supervise
 
 const pick = <T,>(items: T[]): T => items[Math.floor(Math.random() * items.length)]
 
-const PATCH_NOTES: Release[] = [
-  {
-    version: '0.14.0',
-    date: '2026-10-07',
-    sections: [
-      { title: 'Features', changes: [{ scope: 'desktop', text: 'let agents close their browser window', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' }] },
-      {
-        title: 'Bug Fixes',
-        changes: [
-          { scope: 'desktop', text: 'forget browser whose connection dropped', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
-          { scope: 'desktop', text: "start browser without last run's pages", issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
-          { scope: 'desktop', text: 'stop browser once its last window closes', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
-        ],
-      },
-    ],
-  },
-  {
-    version: '0.13.0',
-    date: '2026-10-07',
-    sections: [
-      {
-        title: 'Features',
-        changes: [
-          { scope: 'cli', text: 'add --prompt to orchestrator new', issue: 0, url: '' },
-          { scope: 'desktop', text: 'tell claude sessions how to start a session', issue: 0, url: '' },
-        ],
-      },
-    ],
-  },
-  {
-    version: '0.12.0',
-    date: '2026-10-07',
-    sections: [
-      { title: 'Features', changes: [{ scope: 'build', text: 'draw terminal prompt app icon', issue: 0, url: '' }] },
-      { title: 'Bug Fixes', changes: [{ scope: 'ui', text: 'pad top of queue list', issue: 0, url: '' }] },
-      { title: 'Performance Improvements', changes: [{ scope: 'desktop', text: 'start chrome-devtools-mcp straight from the npx cache', issue: 0, url: '' }] },
-    ],
-  },
-]
+const RELEASE_NOTES: Release = {
+  version: '0.14.0',
+  date: '2026-10-07',
+  sections: [
+    { title: 'Features', changes: [{ scope: 'desktop', text: 'let agents close their browser window', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' }] },
+    {
+      title: 'Bug Fixes',
+      changes: [
+        { scope: 'desktop', text: 'forget browser whose connection dropped', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
+        { scope: 'desktop', text: "start browser without last run's pages", issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
+        { scope: 'desktop', text: 'stop browser once its last window closes', issue: 218, url: 'https://github.com/nednella/orchestrator/issues/218' },
+      ],
+    },
+    { title: 'Performance Improvements', changes: [{ scope: 'desktop', text: 'start chrome-devtools-mcp straight from the npx cache', issue: 0, url: '' }] },
+  ],
+}
 
 export function createMock(params: URLSearchParams) {
   // ?slow=<ms> adds that long to every answer, so a loading state stays on screen to be looked at.
@@ -143,7 +120,8 @@ export function createMock(params: URLSearchParams) {
     warn: params.has('warn'),
     offline: params.has('offline'),
     update: params.get('update'),
-    patchNotes: params.has('patchnotes'),
+    // whatsnew opens the dialog at the start; whatsnew=offline and whatsnew=none make the notes unreadable.
+    whatsNew: params.get('whatsnew'),
     fullDataDir: params.has('fulldata'),
     noModel: params.has('nomodel'),
     // nogithub is a gh that is not signed in.
@@ -1704,8 +1682,12 @@ export function createMock(params: URLSearchParams) {
     CheckUpdate: () => runUpdateAction('check', checkUpdate),
     DownloadUpdate: () => runUpdateAction('download', downloadUpdate),
     InstallUpdate: installUpdate,
-    PatchNotes: async () => (flags.patchNotes ? PATCH_NOTES : []),
-    Changelog: async () => PATCH_NOTES,
+    NewReleaseNotes: async () => (flags.whatsNew === 'show' ? [RELEASE_NOTES] : []),
+    ReleaseNotes: async () => {
+      if (flags.whatsNew === 'offline') throw 'The release notes could not be read. Check the connection'
+      if (flags.whatsNew === 'none') throw `There are no release notes for ${RELEASE_NOTES.version}`
+      return RELEASE_NOTES
+    },
     Limits: async () => limits,
     RefreshLimits: async () => {
       limits = await delay(limitsNow(), 900)

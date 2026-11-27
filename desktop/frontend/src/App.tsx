@@ -9,7 +9,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { OfflineSplash } from './components/OfflineSplash'
 import { PanelOverlay } from './components/PanelOverlay'
 import { RightPanel } from './components/RightPanel'
-import { PatchNotes } from './components/PatchNotes'
+import { WhatsNew } from './components/WhatsNew'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { Toasts } from './components/Toasts'
@@ -59,7 +59,7 @@ export function App() {
         <AddProjectDialog />
         <ShortcutsSheet />
         <SettingsPanel />
-        <PatchNotes />
+        <WhatsNew />
         <Toasts />
       </div>
       <UsageModal />

@@ -13,6 +13,7 @@ import type { ComposerDraft } from './composerMarkdown'
 import { readStored, removeStored, writeStored } from './storage'
 import { descendantsOf, firstThread, goneThreads, nextThread, sidebarThreads, splitSideChats, threadTreeOf, urgentThreads } from './threads'
 import type { ThreadTree } from './threads'
+import { overlayAtStart } from './whatsNew'
 import type { Access, Place, BrowserState, Cleanup, CleanupEvent, CleanupMode, DarkTheme, Digest, DigestSchedule, Evidence, Issue, LightTheme, Memory, Note, NewProject, Pending, Project, Release, Session, Shell, PromptSend, Settings, Snapshot, ThemeSetting, UpdateState, Warning, ProjectList, ThreadStart } from './types'
 
 export type Toast = {
@@ -26,7 +27,7 @@ export type Toast = {
   action?: { label: string; run(): void }
 }
 
-export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'patch-notes' | 'changelog' | null
+export type Overlay = 'shortcuts' | 'add-project' | 'settings' | 'changelog' | null
 export type FocusTarget = 'thread' | 'sidebar' | 'right' | 'thread-search' | 'queue-filter' | 'note-jot' | 'composer'
 export type ComposerMode = 'thread' | 'note'
 export type PendingImage = { base64: string; mime: string }
@@ -76,7 +77,7 @@ type OrchestratorState = {
   version: string
   machine: string
   update: UpdateState
-  patchNotes: Release[]
+  startNotes: Release[]
 }
 
 // The actions keep their identity for the app's whole life, so picking one never renders a component again.
@@ -302,7 +303,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
   const [version, setVersion] = useState('')
   const [machine, setMachine] = useState('')
   const [update, setUpdate] = useState<UpdateState>({ status: 'idle', version: '', percent: 0, failedStep: '', error: '' })
-  const [patchNotes, setPatchNotes] = useState<Release[]>([])
+  const [startNotes, setStartNotes] = useState<Release[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [overlay, setOverlay] = useState<Overlay>((devFlags.overlay as Overlay) ?? null)
   const [composerDraft, setComposerDraftState] = useState(EMPTY_DRAFT)
@@ -584,10 +585,9 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       setComposerAccess(newThreadAccess(loaded.threadAccess))
     })
     report(async () => {
-      const notes = await api.patchNotes()
-      if (notes.length === 0) return
-      setPatchNotes(notes)
-      setOverlay((current) => current ?? 'patch-notes')
+      const notes = await api.newReleaseNotes()
+      setStartNotes(notes)
+      setOverlay((current) => overlayAtStart(current, notes))
     })
   }, [enterFrom, report])
 
@@ -1193,10 +1193,10 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       version,
       machine,
       update,
-      patchNotes,
+      startNotes,
       ...actions,
     }),
-    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, patchNotes, actions],
+    [project, projects, sessions, sideChats, projectSessions, threadTree, selectedId, viewHistory, canGoBack, canGoForward, issues, issuesLoading, issuesDisabled, issueFilter, notes, cleanups, evidence, browserStates, pending, digest, digestError, digestSeen, digestUnseenCount, awake, memory, settings, toasts, overlay, composerDraft, composerMode, composerAccess, focusRequest, shells, version, machine, update, startNotes, actions],
   )
 
   const [store] = useState(() => createStore(value))

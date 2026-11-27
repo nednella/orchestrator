@@ -4,16 +4,16 @@ import { SettingsRow } from './SettingsRow'
 import { SettingsSection } from './SettingsSection'
 
 export function AboutSettings() {
-  const { version, setOverlay } = useOrchestrator('version', 'setOverlay')
+  const { setOverlay } = useOrchestrator('setOverlay')
   return (
     <SettingsPage>
       <SettingsSection title="App">
         <SettingsRow
-          title="Version"
-          description={version ? `orchestrator ${version}` : 'A development build'}
+          title="What's new"
+          description="The changes in the version you run."
           control={
             <button className="btn h-7 flex-none px-2.5" onClick={() => setOverlay('changelog')}>
-              Patch notes
+              Open
             </button>
           }
         />

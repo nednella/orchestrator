@@ -98,8 +98,8 @@ type Backend = {
   CheckUpdate(): Promise<void>
   DownloadUpdate(): Promise<void>
   InstallUpdate(): Promise<void>
-  PatchNotes(): Promise<Release[]>
-  Changelog(): Promise<Release[]>
+  NewReleaseNotes(): Promise<Release[]>
+  ReleaseNotes(): Promise<Release>
   Limits(): Promise<Limits[]>
   RefreshLimits(): Promise<Limits[]>
   Awake(): Promise<boolean>
@@ -146,7 +146,7 @@ const namespaces = {
   evidence: ['Evidence', 'DeleteEvidence'],
   browser: ['BrowserOpen', 'BrowserGoto', 'BrowserShow', 'BrowserState', 'BrowserScreenshot', 'BrowserClose'],
   digest: ['Digest', 'RunDigest', 'DigestToNote', 'DismissDigestItem'],
-  update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'PatchNotes', 'Changelog'],
+  update: ['UpdateState', 'CheckUpdate', 'DownloadUpdate', 'InstallUpdate', 'NewReleaseNotes', 'ReleaseNotes'],
   limits: ['Limits', 'RefreshLimits'],
   awake: ['Awake'],
   settings: ['Settings', 'SetTheme', 'SetThemes', 'SetCleanup', 'SetTextScale', 'SetKeepAwake', 'SetPromptSend', 'SetBrowserEnabled', 'SetDigestSchedule', 'SetThreadPlace', 'SetThreadAccess', 'SetProjectsDir', 'PickDataDir', 'SetDataDir'],
@@ -298,8 +298,8 @@ export const api = {
   checkUpdate: () => backend.CheckUpdate(),
   downloadUpdate: () => backend.DownloadUpdate(),
   installUpdate: () => backend.InstallUpdate(),
-  patchNotes: () => backend.PatchNotes(),
-  changelog: () => backend.Changelog(),
+  newReleaseNotes: () => backend.NewReleaseNotes(),
+  releaseNotes: () => backend.ReleaseNotes(),
   limits: () => backend.Limits(),
   // Reads the limits now: from a live thread, else by a short probe when the values are over 5 minutes old.
   refreshLimits: () => backend.RefreshLimits(),
