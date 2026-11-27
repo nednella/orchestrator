@@ -66,7 +66,7 @@ type Config struct {
 	ProjectsDir  string        `yaml:"projects_dir,omitempty"`      // the folder a new project is made in; unset is DefaultProjectsDir
 	KeepAwake    *bool         `yaml:"keep_mac_awake,omitempty"`    // hold off idle sleep while a thread works; on unless false
 	Theme        string        `yaml:"app_theme,omitempty"`         // light or dark; unset follows the system
-	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default), midnight or umber
+	ThemeDark    string        `yaml:"app_theme_dark,omitempty"`    // the dark theme: black (default), midnight, umber, linen-dark or upscope-dark
 	ThemeLight   string        `yaml:"app_theme_light,omitempty"`   // the light theme: light (default) or linen
 	AccentDark   string        `yaml:"app_accent_dark,omitempty"`   // the dark appearance's accent as #rrggbb; unset is the theme's own
 	AccentLight  string        `yaml:"app_accent_light,omitempty"`  // the light appearance's accent as #rrggbb; unset is the theme's own
@@ -105,8 +105,8 @@ var Themes = []string{"light", "dark"}
 
 // DarkThemes and LightThemes are the named themes each appearance can show; the first is the default.
 var (
-	DarkThemes  = []string{"black", "midnight", "umber"}
-	LightThemes = []string{"light", "linen"}
+	DarkThemes  = []string{"black", "midnight", "umber", "linen-dark", "upscope-dark"}
+	LightThemes = []string{"light", "linen", "midnight-light", "umber-light", "upscope-light"}
 )
 
 // DarkTheme is the theme shown in the dark appearance.

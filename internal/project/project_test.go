@@ -413,10 +413,16 @@ func TestThemeKeysValidate(t *testing.T) {
 	if _, err := load("app_theme_dark: linen\n"); err == nil || !strings.Contains(err.Error(), "app_theme_dark") {
 		t.Errorf("linen as dark: err = %v, want one naming app_theme_dark", err)
 	}
-	for _, dark := range []string{"midnight", "umber"} {
+	for _, dark := range []string{"midnight", "umber", "linen-dark", "upscope-dark"} {
 		cfg, err := load("app_theme_dark: " + dark + "\napp_theme_light: linen\n")
 		if err != nil || cfg.DarkTheme() != dark || cfg.LightTheme() != "linen" {
 			t.Errorf("%s and linen = %q, %q, %v", dark, cfg.DarkTheme(), cfg.LightTheme(), err)
+		}
+	}
+	for _, light := range []string{"midnight-light", "umber-light", "upscope-light"} {
+		cfg, err := load("app_theme_light: " + light + "\n")
+		if err != nil || cfg.LightTheme() != light {
+			t.Errorf("%s = %q, %v", light, cfg.LightTheme(), err)
 		}
 	}
 	cfg, err = load("projects: []\n")

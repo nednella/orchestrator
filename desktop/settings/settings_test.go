@@ -254,7 +254,7 @@ func TestThemes(t *testing.T) {
 	if got := h.Restart(t).Settings().DarkTheme; got != "black" {
 		t.Errorf("dark theme after restart = %q", got)
 	}
-	for _, dark := range []string{"midnight", "umber"} {
+	for _, dark := range []string{"midnight", "umber", "linen-dark", "upscope-dark"} {
 		if got, err := h.SetThemes(dark, "linen"); err != nil || got.DarkTheme != dark || got.LightTheme != "linen" {
 			t.Fatalf("SetThemes(%s, linen) = %+v, %v", dark, got, err)
 		}
@@ -262,7 +262,18 @@ func TestThemes(t *testing.T) {
 			t.Errorf("config after %s and linen = %q, %q, %v", dark, cfg.ThemeDark, cfg.ThemeLight, err)
 		}
 	}
-	if got := h.Restart(t).Settings(); got.DarkTheme != "umber" || got.LightTheme != "linen" {
+	for _, light := range []string{"midnight-light", "umber-light", "upscope-light"} {
+		if got, err := h.SetThemes("black", light); err != nil || got.LightTheme != light {
+			t.Fatalf("SetThemes(black, %s) = %+v, %v", light, got, err)
+		}
+	}
+	if _, err := h.SetThemes("black", "midnight"); err == nil {
+		t.Error("midnight was accepted as the light theme")
+	}
+	if _, err := h.SetThemes("upscope-dark", "upscope-light"); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.Restart(t).Settings(); got.DarkTheme != "upscope-dark" || got.LightTheme != "upscope-light" {
 		t.Errorf("themes after restart = %q, %q", got.DarkTheme, got.LightTheme)
 	}
 	if _, err := h.SetThemes("violet", "light"); err == nil {

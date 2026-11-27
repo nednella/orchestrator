@@ -53,7 +53,7 @@ type Current interface {
 // Settings is what the settings panel shows.
 type Settings struct {
 	Theme        string          `json:"theme"`          // system, light or dark
-	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black, midnight or umber
+	DarkTheme    string          `json:"darkTheme"`      // the named theme of the dark appearance: black, midnight, umber, linen-dark or upscope-dark
 	LightTheme   string          `json:"lightTheme"`     // the named theme of the light appearance: light or linen
 	DarkAccent   string          `json:"darkAccent"`     // the dark appearance's accent as #rrggbb; "" is the theme's own
 	LightAccent  string          `json:"lightAccent"`    // the light appearance's accent as #rrggbb; "" is the theme's own
