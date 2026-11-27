@@ -354,7 +354,7 @@ func TestClaudeTranscript(t *testing.T) {
 }
 
 func TestBrowserPromptNamesTheTool(t *testing.T) {
-	for _, want := range []string{"The `browser` tool's text has the rules", "`open`", "`front`", "`screenshot`", "`close`"} {
+	for _, want := range []string{"The `browser` tool's text has the rules", "`agent-browser` commands", "`snapshot -i -c`", "`screenshot`"} {
 		if !strings.Contains(prompts.Browser(), want) {
 			t.Errorf("the prompt lacks %q", want)
 		}
