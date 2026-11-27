@@ -38,6 +38,8 @@ SIGN_IDENTITY ?= -
 # A local build gets its own name so it never passes for the installed orchestrator.app.
 desktop-app: bin/orchestrator-dev.app
 
+# The dock icon of each theme, desktop/build/themes/icon-<theme>.png, is its SVG drawn by Chrome for Testing: --headless=new --default-background-color=00000000 --window-size=1024,1024 --force-device-scale-factor=0.5 --screenshot=icon-<theme>.png icon-<theme>.svg
+
 bin/%.app: desktop $(AGENT_BROWSER)
 	rm -rf $@ bin/icon.iconset
 	mkdir -p $@/Contents/MacOS $@/Contents/Helpers $@/Contents/Resources bin/icon.iconset
