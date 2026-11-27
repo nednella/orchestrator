@@ -72,7 +72,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       )
     case 'reply': {
       const next = items[index + 1]
-      return <ChatReplyRow uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && next.endedAt === null} onReply={onReply} onFork={onFork} />
+      return <ChatReplyRow thread={thread} uuid={item.uuid} text={item.text} at={item.at} streaming={item.streaming} ended={item.ended} toolsAfter={next?.kind === 'work' && next.endedAt === null} onReply={onReply} onFork={onFork} />
     }
     case 'notice':
       return <ChatNotice text={item.text} error={item.error} />
