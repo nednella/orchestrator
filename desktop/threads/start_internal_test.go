@@ -496,3 +496,25 @@ func TestAWorktreeGitFailedToMakeIsForgottenSoOneMadeByHandIsNeverTaken(t *testi
 		t.Errorf("began %d times and cleared %d times, want once each", began, cleared)
 	}
 }
+
+func TestEachQuestionToOriginHasItsOwnTime(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	gitT(t, dir, "remote", "add", "origin", t.TempDir())
+	real := l.run
+	l.run = func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+		if name == "git" && (slices.Contains(args, "ls-remote") || slices.Contains(args, "fetch")) {
+			select {
+			case <-time.After(70 * time.Millisecond):
+				return nil, nil
+			case <-ctx.Done():
+				return nil, fmt.Errorf("git: %w", ctx.Err())
+			}
+		}
+		return real(ctx, dir, name, args...)
+	}
+	l.originWait = 100 * time.Millisecond
+	if _, _, err := l.onOrigin(t.Context(), dir, "issue-7"); err != nil {
+		t.Errorf("onOrigin = %v; want each of the two questions to have its own 100 ms, so 70 ms each is in time", err)
+	}
+}

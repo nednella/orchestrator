@@ -489,18 +489,27 @@ func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) (found, un
 	if !l.hasOrigin(ctx, dir) {
 		return false, false, nil
 	}
-	asked, cancel := context.WithTimeout(ctx, cmp.Or(l.originWait, gitTimeout))
-	defer cancel()
-	_, err = l.git(asked, dir, "ls-remote", "--exit-code", "origin", "refs/heads/"+branch)
+	// Each question to origin has the time to itself.
+	timedOut := false
+	ask := func(args ...string) error {
+		asked, cancel := context.WithTimeout(ctx, cmp.Or(l.originWait, gitTimeout))
+		defer cancel()
+		_, err := l.git(asked, dir, args...)
+		if err != nil && asked.Err() != nil && ctx.Err() == nil {
+			timedOut = true
+		}
+		return err
+	}
+	err = ask("ls-remote", "--exit-code", "origin", "refs/heads/"+branch)
 	if err == nil {
-		_, err = l.git(asked, dir, "fetch", "--quiet", "origin", branch)
+		err = ask("fetch", "--quiet", "origin", branch)
 	}
 	switch exit := (*exec.ExitError)(nil); {
 	case err == nil:
 		return l.hasRef(ctx, dir, ref), false, nil
 	case ctx.Err() != nil:
 		return false, false, ctx.Err()
-	case asked.Err() != nil:
+	case timedOut:
 		return false, false, errors.New("origin did not answer in time")
 	case errors.As(err, &exit) && exit.ExitCode() == 2:
 		return false, false, nil
