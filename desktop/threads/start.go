@@ -167,13 +167,14 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 			continue
 		}
 		cancelled := err != nil && st.cancelled && !st.aborted
-		s.mu.Unlock()
 		kept := ""
 		if cancelled {
+			s.mu.Unlock()
 			kept = s.undoCancelled(st)
+			s.mu.Lock()
 		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
+		// The start ends under the lock that found no message held, so one that comes next is not lost: it is told
+		// that the thread runs, and goes to its agent.
 		st.running = false
 		switch {
 		case err == nil:
@@ -181,6 +182,7 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 			s.dropStartRecord(st.name)
 		// A start the app's quit stopped is saved as it was, and listed as failed when the app starts again.
 		case st.aborted || st.app.Err() != nil:
+			s.mu.Unlock()
 			return
 		case cancelled:
 			st.status, st.failure = StartCancelled, "Start cancelled"
@@ -192,6 +194,7 @@ func (s *Threads) runStart(ctx context.Context, st *starting) {
 			st.status, st.failure = StartFailed, startFailure(err)
 		}
 		s.sync()
+		s.mu.Unlock()
 		return
 	}
 }

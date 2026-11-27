@@ -1,6 +1,7 @@
 package threads
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,7 +24,7 @@ import (
 
 // startedAt is a threads whose host for the thread listens, answering nobody, and a start whose agent runs and whose
 // worktree is placed: the steps a retry skips. The chat log is the host's.
-func startedAt(t *testing.T) (*Threads, *starting) {
+func startedAt(t *testing.T, listen ...bool) (*Threads, *starting) {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "orc")
 	if err != nil {
@@ -35,20 +37,22 @@ func startedAt(t *testing.T) (*Threads, *starting) {
 	if err := os.MkdirAll(filepath.Dir(socket), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ln, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { ln.Close() })
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			conn.Close()
+	if len(listen) == 0 || listen[0] {
+		ln, err := net.Listen("unix", socket)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}()
+		t.Cleanup(func() { ln.Close() })
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				conn.Close()
+			}
+		}()
+	}
 	if err := os.MkdirAll(filepath.Dir(s.chatLogPath(name)), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -356,5 +360,59 @@ func TestOriginThatDoesNotAnswerInTimeFailsTheLookupNeitherFindingNorMissingTheB
 	stop()
 	if _, _, err := l.onOrigin(stopped, dir, "issue-7"); !errors.Is(err, context.Canceled) {
 		t.Errorf("onOrigin after a stop = %v, want the stop", err)
+	}
+}
+
+// answeringHost makes the host of the thread at socket answer each message with ok, and counts them.
+func answeringHost(t *testing.T, socket string) *atomic.Int64 {
+	t.Helper()
+	var got atomic.Int64
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				if line, err := bufio.NewReader(conn).ReadBytes('\n'); err == nil && strings.Contains(string(line), `"op":"send"`) {
+					got.Add(1)
+					_, _ = conn.Write([]byte(`{"ok":true,"id":"m"}` + "\n"))
+				}
+			}()
+		}
+	}()
+	return &got
+}
+
+func TestAMessageHeldAsTheStartEndsIsNeverLost(t *testing.T) {
+	t.Parallel()
+	for i := range 60 {
+		s, st := startedAt(t, false)
+		got := answeringHost(t, s.hostSocket(st.name))
+		st.delivered = true
+		s.mu.Lock()
+		s.starting[st.name.String()] = st
+		st.status, st.running, st.done = Starting, true, make(chan struct{})
+		s.mu.Unlock()
+		go s.runStart(t.Context(), st)
+		// A bounded run of messages, so the start can end; the one that comes as it does is the one that was lost.
+		var held int64
+		for range 40 {
+			if !s.QueueDuringStart(st.name.String(), host.Message{Text: "more"}) {
+				break
+			}
+			held++
+			time.Sleep(time.Duration(i%7) * 50 * time.Microsecond)
+		}
+		<-st.done
+		if got.Load() != held {
+			t.Fatalf("round %d: %d messages were held and %d reached the host", i, held, got.Load())
+		}
 	}
 }
