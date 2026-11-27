@@ -15,10 +15,10 @@ const MARGIN = 8
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
 export function ThreadCard({ id, thread, anchor }: ThreadCardProps) {
-  const { machine, issues } = useOrchestrator('machine', 'issues')
+  const { machine, issues, memory } = useOrchestrator('machine', 'issues', 'memory')
   const card = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
-  const lines = threadCardLines(thread, machine, issues.find((i) => i.number === thread.issue)?.title ?? '')
+  const lines = threadCardLines(thread, machine, issues.find((i) => i.number === thread.issue)?.title ?? '', memory?.machine ?? 0)
 
   useLayoutEffect(() => {
     const el = card.current

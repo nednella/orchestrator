@@ -1,3 +1,4 @@
+import { gigabytes } from './memory.ts'
 import type { PR, Thread } from './types.ts'
 
 export type CardIcon = 'machine' | 'git-branch' | 'git-pull-request' | 'git-pull-request-draft' | 'git-merge' | 'git-pull-request-closed' | 'circle-dot' | 'claude'
@@ -24,10 +25,12 @@ export function middleTruncate(text: string, max: number): string {
   return `${chars.slice(0, head).join('')}…${chars.slice(chars.length - (keep - head)).join('')}`
 }
 
-// threadCardLines is what the hover card shows besides the title, in this order and each only with a value.
-export function threadCardLines(s: Thread, machine: string, issueTitle: string): CardLine[] {
+// threadCardLines is what the hover card shows besides the title, in this order and each only with a value. The machine
+// line carries the thread's memory, out of the machine's when that is known.
+export function threadCardLines(s: Thread, machine: string, issueTitle: string, machineMemory = 0): CardLine[] {
   const lines: CardLine[] = []
-  if (machine) lines.push({ key: 'machine', icon: 'machine', text: machine })
+  const memory = s.memory > 0 ? `${gigabytes(s.memory)}${machineMemory > 0 ? ` of ${gigabytes(machineMemory, 0)}` : ''} memory` : ''
+  if (machine || memory) lines.push({ key: 'machine', icon: 'machine', text: machine || memory, ...(machine && memory ? { detail: memory } : {}) })
   if (s.branch) lines.push({ key: 'branch', icon: 'git-branch', text: middleTruncate(s.branch, BRANCH_MAX) })
   if (s.pr) {
     const look = PR_LOOK[s.pr.state]

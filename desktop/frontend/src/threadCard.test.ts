@@ -52,3 +52,11 @@ test('lines keep their order', () => {
   assert.equal(line.detail, 'Draft')
   assert.deepEqual(keys(thread(), 'Mac'), ['machine'])
 })
+
+test('the machine line carries the thread\'s memory out of the machine\'s', () => {
+  const GB = 2 ** 30
+  const line = threadCardLines(thread({ memory: 0.2 * GB }), 'Mac', '', 36 * GB)[0]
+  assert.deepEqual([line.key, line.text, line.detail], ['machine', 'Mac', '0.2 GB of 36 GB memory'])
+  assert.equal(threadCardLines(thread({ memory: 0.2 * GB }), '', '')[0].text, '0.2 GB memory', 'no machine name: the memory alone')
+  assert.equal(threadCardLines(thread(), 'Mac', '', 36 * GB)[0].detail, undefined, 'no memory sampled: the name alone')
+})
