@@ -97,6 +97,14 @@ func (v *Service) SetAccess(id, access string) error {
 	return v.s.SetAccess(id, a)
 }
 
+// SetFast turns fast mode on or off for the thread: a settled thread wakes with it, and a live one runs its next turn
+// with it.
+func (v *Service) SetFast(id string, on bool) error { return v.s.SetFast(id, on) }
+
+// SetEffort gives the thread the effort, ultracode among them: a settled thread wakes with it, and a live one runs its
+// next turn with it.
+func (v *Service) SetEffort(id, effort string) error { return v.s.SetEffort(id, effort) }
+
 // ForkSession starts a thread that continues the conversation of the thread id up to its reply at, the uuid of the
 // reply's last block, as a new conversation.
 func (v *Service) ForkSession(id, at string) (Session, error) { return v.s.Fork(id, at) }

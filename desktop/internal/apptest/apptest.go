@@ -1002,6 +1002,15 @@ func (h *Harness) RewindAs(t *testing.T, id, mode string, files ...string) {
 }
 
 // standIn is the path of the stand-in claude's file of the session with that extension.
+// RefuseFlags makes the session's stand-in claude refuse a change of its settings with reason, as Claude does for
+// ultracode on a model that has none.
+func (h *Harness) RefuseFlags(t *testing.T, id, reason string) {
+	t.Helper()
+	if err := os.WriteFile(h.standIn(id, ".refuse-flags"), []byte(reason), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (h *Harness) standIn(id, ext string) string {
 	return filepath.Join(h.claudeDir, strings.ReplaceAll(id, "/", "_")+ext)
 }
@@ -1229,6 +1238,13 @@ while IFS= read -r line; do
 		mode=$(printf '%s' "$line" | sed -n 's/.*"mode":"\([^"]*\)".*/\1/p')
 		printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"mode":"%s"}}}\n' "$id" "$mode"
 		printf '{"type":"system","subtype":"status","status":null,"permissionMode":"%s"}\n' "$mode" ;;
+	*'"subtype":"apply_flag_settings"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+		if [ -f "$f.refuse-flags" ]; then
+			printf '{"type":"control_response","response":{"subtype":"error","request_id":"%s","error":"apply_flag_settings: %s"}}\n' "$id" "$(cat "$f.refuse-flags")"
+		else
+			printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$id"
+		fi ;;
 	*'"subtype":"interrupt"'*)
 		printf '%s\n' '{"type":"control_cancel_request","request_id":"ask-1"}' '{"type":"control_cancel_request","request_id":"plan-1"}' \
 			'{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.01}'
@@ -1347,6 +1363,9 @@ func (h *Harness) NewThread(title, prompt, model, effort, access string) (sessio
 func (h *Harness) NewThreadFast(title, model, effort string, fast bool) (sessions.Session, error) {
 	return h.sessions.NewThread(title, "", model, effort, fast, "supervised", "")
 }
+
+func (h *Harness) SetFast(id string, on bool) error  { return h.sessions.SetFast(id, on) }
+func (h *Harness) SetEffort(id, effort string) error { return h.sessions.SetEffort(id, effort) }
 
 // NewThreadIn starts a thread with the access given in the place given: worktree, project, or "" for the default.
 func (h *Harness) NewThreadIn(title, prompt, access, place string) (sessions.Session, error) {
