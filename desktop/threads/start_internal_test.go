@@ -130,13 +130,42 @@ func TestMakeWorktreeFindsTheOneAnEarlierTryOfTheSameThreadMade(t *testing.T) {
 	if n := len(strings.Split(strings.TrimSpace(gitT(t, dir, "worktree", "list")), "\n")); n != 2 {
 		t.Errorf("git lists %d worktrees, want 2", n)
 	}
-	// Another thread's start is not told the worktree is its own to remove.
-	other, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "feature", "", true)
+	// Another thread's start of an issue's branch is not told the worktree is its own to remove.
+	other, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "feature", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if other.made {
 		t.Errorf("worktree for another thread = %+v, want it unrecorded", other)
+	}
+}
+
+func TestMakeWorktreeTakesForItsOwnTheOneAQuitLeftUnrecorded(t *testing.T) {
+	t.Parallel()
+	l, dir, _ := madeRepo(t)
+	wt := filepath.Join(dir, "trees", "feature")
+	gitT(t, dir, "worktree", "add", "-b", "feature", wt)
+	proj := project.Project{Name: "p", Dir: dir}
+	name := thread.Name{Project: "p", Token: "aaaaaaaa"}
+	got, err := l.makeWorktree(t.Context(), proj, name, "feature", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.dir != folder.Canonical(wt) || !got.made {
+		t.Fatalf("worktree = %+v, want %s taken as the thread's own", got, wt)
+	}
+	if w, ok := l.threads.made.Of("p", name.String()); !ok || w.Path != folder.Canonical(wt) || w.Branch != "feature" || w.BaseOid == "" || !l.ours(t.Context(), "p", got.dir, name.String()) {
+		t.Errorf("record = %+v, %v; want it recorded and marked for the thread", w, ok)
+	}
+	// An issue's branch, which the thread did not pick, stays a worktree it merely runs in.
+	issue := filepath.Join(dir, "trees", "issue-7")
+	gitT(t, dir, "worktree", "add", "-b", "issue-7", issue)
+	run, err := l.makeWorktree(t.Context(), proj, thread.Name{Project: "p", Token: "bbbbbbbb"}, "issue-7", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.made {
+		t.Errorf("worktree = %+v, want an issue's own worktree left unrecorded", run)
 	}
 }
 

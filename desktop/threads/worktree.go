@@ -128,8 +128,14 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 			return workPlace{}, staleCheckout(branch, dir)
 		}
 		// The worktree an earlier try of this thread's start made is the thread's own: a retry never makes a second.
-		if own := folder.Canonical(dir); l.ours(ctx, proj.Key(), own, name.String()) {
+		own := folder.Canonical(dir)
+		switch {
+		case l.ours(ctx, proj.Key(), own, name.String()):
 			return workPlace{dir: own, branch: branch, made: true}, nil
+		case fresh:
+			// No branch is free to be picked while a worktree has it, so this is one an earlier try made and a quit cut
+			// short before it was recorded.
+			return l.adoptWorktree(ctx, proj, name, own, branch, base)
 		}
 		return workPlace{dir: dir, branch: branch}, nil
 	}
@@ -171,6 +177,23 @@ func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name
 		return workPlace{}, err
 	}
 	return workPlace{dir: dir, branch: branch, made: true, note: note}, nil
+}
+
+// adoptWorktree records the worktree at dir, on branch, as the one orchestrator made for the thread, which git made
+// before the record was written.
+func (l *Lifecycle) adoptWorktree(ctx context.Context, proj project.Project, name thread.Name, dir, branch, base string) (workPlace, error) {
+	base, baseOid, err := l.startOf(ctx, proj.Dir, base)
+	if err != nil {
+		return workPlace{}, err
+	}
+	w := Made{Path: dir, Branch: branch, Base: base, BaseOid: baseOid, Thread: name.String(), Created: time.Now().UnixMilli()}
+	if err := l.threads.made.Add(proj.Key(), w); err != nil {
+		return workPlace{}, err
+	}
+	if err := l.mark(ctx, dir, name.String()); err != nil {
+		return workPlace{}, err
+	}
+	return workPlace{dir: dir, branch: branch, made: true}, nil
 }
 
 // staleCheckout is the error for a branch that git lists as checked out in dir, a folder that is gone.
