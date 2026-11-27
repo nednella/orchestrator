@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
@@ -93,6 +94,29 @@ func TestShellFromNoThreadStartsInTheProjectFolder(t *testing.T) {
 	}
 	if got := shellFolder(t, h, id); got != resolved(h.Dir) {
 		t.Errorf("the project shell starts in %s, want the project folder %s", got, h.Dir)
+	}
+}
+
+func TestRefreshKeepsAShellStartedWhileTmuxWasListed(t *testing.T) {
+	t.Parallel()
+	h := shellHarness(t)
+	var once sync.Once
+	var first string
+	start := func() {
+		shell, err := h.ShellNew("")
+		if err != nil {
+			t.Error(err)
+		}
+		first = shell.ID
+	}
+	h.Threads().AfterList(func() { once.Do(start) })
+	h.Threads().Refresh()
+	once.Do(start)
+	if got := shellIDs(h); !slices.Contains(got, first) {
+		t.Errorf("shells after a refresh whose list was read before %s started = %q", first, got)
+	}
+	if second := newShell(t, h, ""); second == first {
+		t.Errorf("the next shell is %s again", first)
 	}
 }
 

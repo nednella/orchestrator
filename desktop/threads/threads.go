@@ -143,6 +143,8 @@ type Threads struct {
 
 	settling map[string]chan struct{} // under mu, the threads a settle stops now, each closed once that settle ends: one settle of a thread at a time
 
+	shellStart map[thread.Name]time.Time // under mu, when startShell added each shell it started since a refresh's list was read
+
 	mu         sync.Mutex
 	ctx        context.Context
 	project    project.Project
@@ -282,7 +284,7 @@ func newThreads(o Options) *Threads {
 		project: o.Current, configured: o.Projects, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
 		known: map[string]term.Info{}, ended: map[string]*endedThread{}, deleted: map[string]bool{}, deleting: map[string]bool{}, waking: map[string]bool{},
-		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{},
+		nums: map[string]int{}, lastNum: map[string]int{}, restarting: map[string]bool{}, shellStart: map[thread.Name]time.Time{},
 		records:    map[string]thread.Record{},
 		cwds:       map[string]string{},
 		seen:       map[string]thread.State{},
@@ -375,6 +377,16 @@ func (s *Threads) Refresh() {
 		return e != nil && e.at.After(listing)
 	})
 	s.info = infos
+	// A shell started while tmux was listed is not in the list.
+	for name, at := range s.shellStart {
+		i := slices.IndexFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
+		switch {
+		case !at.After(listing):
+			delete(s.shellStart, name)
+		case i >= 0 && !slices.ContainsFunc(shells, func(sh term.Shell) bool { return sh.Name == name }):
+			shells = append(shells, s.shells[i])
+		}
+	}
 	s.shells = shells
 	s.announceShells()
 	for _, in := range s.info {
@@ -4656,6 +4668,7 @@ func (s *Threads) startShell(proj project.Project, dir string) (string, error) {
 	// A refresh may have listed the shell before it was added here.
 	s.shells = slices.DeleteFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name })
 	s.shells = append(s.shells, term.Shell{Name: name, Folder: dir})
+	s.shellStart[name] = time.Now()
 	s.announceShells()
 	return name.String(), nil
 }
