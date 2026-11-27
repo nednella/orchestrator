@@ -760,7 +760,7 @@ export function createMock(params: URLSearchParams) {
       { project: 'storefront', issue: 0, thread: 'storefront/k3j2h4g5', title: 'Look into the flaky login test', threads: 1, tokens: 6_700_000, cost: 3.31, lastAt: hoursAgo(26) },
       { project: 'orchestrator', issue: 309, thread: '', title: '#309 Empty states for thread groups', threads: 3, tokens: 31_900_000, cost: 15.6, lastAt: hoursAgo(50) },
     ]
-    const usage = { totals: usageRow('', '', 1, totals.threads), tasks: usageRow('', '', 0.92, totals.threads), byModel, pricesAsOf: '2026-10-06' }
+    const usage = { totals: usageRow('', '', 1, totals.threads), byModel, pricesAsOf: '2026-10-06' }
     const weight = shape.reduce((a, d) => a + d.weight, 0) || 1
     const perDay = shape.map((d) => ({ day: d.day, prompts: Math.round((totals.prompts * d.weight) / weight), workMs: Math.round((totals.workMs * d.weight) / weight), cost: (totals.cost * d.weight) / weight }))
     const before = (n: number) => Math.round(n * 0.88)

@@ -318,7 +318,7 @@ export type Ledger = {
   projects: LedgerRow[]
   previous: LedgerRow
   perDay: DayFigures[]
-  usage: { totals: UsageRow; tasks: UsageRow; byModel: UsageRow[]; pricesAsOf: string }
+  usage: { totals: UsageRow; byModel: UsageRow[]; pricesAsOf: string }
   work: WorkRow[]
 }
 
