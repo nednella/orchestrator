@@ -49,6 +49,12 @@
     font-size: calc(16px * var(--ui-scale, 1));
   }
 
+  /* Icons are drawn at a pixel size; zoom scales them with the text size, as rem scales the text. */
+  .lucide,
+  .ui-icon {
+    zoom: var(--ui-scale, 1);
+  }
+
   body {
     font-size: var(--fs-body);
   }

@@ -6,7 +6,7 @@ type ClaudeMarkProps = { size?: number }
 
 export function ClaudeMark({ size = 16 }: ClaudeMarkProps) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className="flex-none" style={{ fill: 'var(--claude-mark)' }} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} className="ui-icon flex-none" style={{ fill: 'var(--claude-mark)' }} aria-hidden="true">
       <path d={MARK} />
     </svg>
   )

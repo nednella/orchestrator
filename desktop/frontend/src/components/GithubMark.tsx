@@ -6,7 +6,7 @@ type GithubMarkProps = { size: number }
 
 export function GithubMark({ size }: GithubMarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <svg className="ui-icon" width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d={MARK} />
     </svg>
   )

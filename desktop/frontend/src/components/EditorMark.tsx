@@ -11,7 +11,7 @@ type EditorMarkProps = { editor: string; size?: number }
 export function EditorMark({ editor, size = 16 }: EditorMarkProps) {
   if (editor !== VS_CODE_APP) return <SquareArrowOutUpRight size={size} aria-hidden="true" />
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className="flex-none" style={{ fill: 'var(--vscode-mark)' }} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} className="ui-icon flex-none" style={{ fill: 'var(--vscode-mark)' }} aria-hidden="true">
       <path d={VS_CODE} />
     </svg>
   )
