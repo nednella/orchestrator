@@ -14,6 +14,7 @@ import { sideChatAsked, sideChatReason } from '../sideChat'
 import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Thread } from '../types'
+import { withSetup } from '../setupLine'
 import { startTimeline } from '../startTimeline'
 import { useChat } from '../useChat'
 import { isTyping } from '../useListNav'
@@ -51,7 +52,9 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   if (current) frozen.current = current
   else if (!chat.loading) frozen.current = null
   const early = current ?? frozen.current
-  const { timeline, events, loading, error } = early ? { ...early, loading: false, error: '' } : chat
+  const { timeline: shownTimeline, events, loading, error } = early ? { ...early, loading: false, error: '' } : chat
+  const { setup, setupExit, setupShell } = thread
+  const timeline = useMemo(() => (embedded ? shownTimeline : withSetup(shownTimeline, { setup, setupExit, setupShell })), [embedded, shownTimeline, setup, setupExit, setupShell])
   const empty = timeline.items.length === 0
   const forks = useOrchestratorSelector((s) => forksKey(thread.id, s.threads))
   const { id: threadId, forkOf, forkAt, parent } = thread

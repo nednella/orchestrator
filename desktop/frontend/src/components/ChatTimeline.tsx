@@ -19,6 +19,7 @@ import { ChatPlanCard } from './ChatPlanCard'
 import { ChatQuestionCard } from './ChatQuestionCard'
 import { ChatQuoteButton } from './ChatQuoteButton'
 import { ChatReplyRow } from './ChatReplyRow'
+import { ChatSetupRow } from './ChatSetupRow'
 import { ChatStartFailed } from './ChatStartFailed'
 import { ChatThinkingRow } from './ChatThinkingRow'
 import { ChatUserRow } from './ChatUserRow'
@@ -98,6 +99,8 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
       return <ChatWorkingRow startedAt={item.startedAt} />
     case 'thinking':
       return <ChatThinkingRow label={item.label} />
+    case 'setup':
+      return <ChatSetupRow text={item.text} failed={item.failed} shell={item.shell} />
     case 'startFailed':
       return <ChatStartFailed thread={thread} text={item.text} />
     case 'approval':

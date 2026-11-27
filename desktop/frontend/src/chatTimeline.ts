@@ -47,6 +47,8 @@ export type TimelineItem =
   | { kind: 'thinking'; key: string; label: string }
   // startFailed is the reason a new thread's start failed, in the working row's place, with a retry.
   | { kind: 'startFailed'; key: string; text: string }
+  // setup is the project's set-up command of a new worktree: running quietly, or failed with its terminal to open.
+  | { kind: 'setup'; key: string; text: string; failed: boolean; shell: string }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }
   | ({ kind: 'question' } & Ask)
   | ({ kind: 'plan' } & Ask)

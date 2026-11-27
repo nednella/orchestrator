@@ -42,6 +42,9 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     startError: '',
     firstMessage: '',
     startQueue: [],
+    setup: '',
+    setupExit: 0,
+    setupShell: '',
   }
 }
 

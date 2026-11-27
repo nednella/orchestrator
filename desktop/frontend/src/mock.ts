@@ -142,6 +142,8 @@ export function createMock(params: URLSearchParams) {
     // startms=<ms> is how long a new thread takes to start, as its worktree and its agent do; startfail has the first start of each thread fail, so its retry can be tried.
     startMs: Number(params.get('startms') ?? 1200),
     startFail: params.has('startfail'),
+    // setup=ok or setup=fail gives a new worktree a set-up command that runs for 3 seconds and ends with 0 or with 3.
+    setup: params.get('setup'),
   }
   const handlers = new Map<string, Set<Handler>>()
   // The reader of each open terminal's output, as GET /term/<id> has one.
@@ -206,6 +208,9 @@ export function createMock(params: URLSearchParams) {
       startError: s.startError,
       firstMessage: s.firstMessage,
       startQueue: [...s.startQueue],
+      setup: s.setup,
+      setupExit: s.setupExit,
+      setupShell: s.setupShell,
     }
   }
 
@@ -366,6 +371,9 @@ export function createMock(params: URLSearchParams) {
       startError: '',
       firstMessage: '',
       startQueue: [],
+      setup: '',
+      setupExit: 0,
+      setupShell: '',
       project: owner.name,
     }
     threads.push(s)
@@ -628,6 +636,13 @@ export function createMock(params: URLSearchParams) {
           }
           Object.assign(s, { start: '', startError: '', firstMessage: '', state: 'idle', detail: pick(details.idle) })
           chats.start(s.id)
+          if (flags.setup) {
+            Object.assign(s, { setup: 'running', setupExit: 0, setupShell: `${s.project}/s1` })
+            setTimeout(() => {
+              Object.assign(s, flags.setup === 'fail' ? { setup: 'failed', setupExit: 3 } : { setup: '', setupShell: '' })
+              publish()
+            }, 3000)
+          }
           const queued = s.startQueue.splice(0)
           for (const text of [prompt, ...queued]) if (text) void chats.backend.ChatSend(s.id, text, [])
           publish()
