@@ -1,12 +1,16 @@
 package tmuxtest
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestStopKillsTheServerAndRemovesItsSocketFile(t *testing.T) {
@@ -44,15 +48,23 @@ func TestStopWaitsForWhatThePanesRan(t *testing.T) {
 		t.Skip("tmux is not installed")
 	}
 	socket := fmt.Sprintf("orctest-tmuxtest-wait-%d", os.Getpid())
-	done := filepath.Join(t.TempDir(), "done")
-	// The pane ignores the hangup kill-server sends and writes a file a moment later, as a host that is still closing does.
-	script := "trap '' HUP; sleep 0.5; touch '" + done + "'"
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	// The pane ignores the signals a kill-server may send and lives on a moment, as a host that is still closing does.
+	script := "trap '' HUP TERM INT; echo $$ > '" + pidFile + "'; sleep 0.5"
 	if out, err := exec.Command("tmux", "-L", socket, "new-session", "-d", "-s", "x", "sh", "-c", script).CombinedOutput(); err != nil {
 		t.Fatalf("starting a server: %v: %s", err, out)
 	}
+	var pid int
+	for deadline := time.Now().Add(5 * time.Second); pid == 0 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		b, _ := os.ReadFile(pidFile)
+		pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+	}
+	if pid == 0 {
+		t.Fatal("the pane never started")
+	}
 	Stop(socket)
-	if _, err := os.Stat(done); err != nil {
-		t.Errorf("Stop returned while the pane's process still ran: %v", err)
+	if err := syscall.Kill(-pid, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Errorf("Stop returned while the pane's process group %d still ran: %v", pid, err)
 	}
 }
 
