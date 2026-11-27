@@ -232,3 +232,23 @@ func TestLastLineWithoutNewlineIsDropped(t *testing.T) {
 		t.Fatalf("%d lines, want 2", n)
 	}
 }
+
+func TestReopenAfterAWholeLineThatDoesNotParse(t *testing.T) {
+	p := logPath(t)
+	l := openLog(t, p)
+	mustAppend(t, l, Event{Kind: KindUser})
+	mustAppend(t, l, Event{Kind: KindMessage})
+	l.Close()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("{\"seq\":3,\"kind\n")
+	f.Close()
+
+	l = openLog(t, p)
+	defer l.Close()
+	if got := l.Last(); got != 2 {
+		t.Fatalf("Last = %d, want 2", got)
+	}
+}

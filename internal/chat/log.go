@@ -32,7 +32,7 @@ func OpenLog(path string) (*Log, error) {
 		f.Close()
 		return nil, err
 	}
-	events, end, err := readEvents(f)
+	last, end, err := lastSeq(f)
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -41,11 +41,32 @@ func OpenLog(path string) (*Log, error) {
 		f.Close()
 		return nil, err
 	}
-	l := &Log{f: f, size: end}
-	if n := len(events); n > 0 {
-		l.last = events[n-1].Seq
+	return &Log{f: f, last: last, size: end}, nil
+}
+
+// lastSeq returns the Seq of the log's last event that parses, and the offset where its last whole line ends. It
+// decodes only the last line, unless that line does not parse.
+func lastSeq(f *os.File) (int64, int64, error) {
+	var tail []byte
+	end, err := eachLine(f, func(line []byte) { tail = line })
+	if err != nil {
+		return 0, 0, err
 	}
-	return l, nil
+	var e Event
+	if tail == nil || json.Unmarshal(tail, &e) == nil {
+		return e.Seq, end, nil
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, 0, err
+	}
+	var last int64
+	_, err = eachLine(f, func(line []byte) {
+		var e Event
+		if json.Unmarshal(line, &e) == nil {
+			last = e.Seq
+		}
+	})
+	return last, end, err
 }
 
 // Append adds e to the log. A persisted event gets the next Seq and is written; a delta keeps Seq 0 and is not.
@@ -96,36 +117,31 @@ func ReadLog(path string, after int64) ([]Event, error) {
 		return nil, err
 	}
 	defer f.Close()
-	events, _, err := readEvents(f)
-	if err != nil {
-		return nil, err
-	}
 	out := []Event{}
-	for _, e := range events {
-		if e.Seq > after {
+	if _, err := eachLine(f, func(line []byte) {
+		var e Event
+		if json.Unmarshal(line, &e) == nil && e.Seq > after {
 			out = append(out, e)
 		}
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
-// readEvents parses every whole line and returns the offset where the last whole line ends.
-func readEvents(r io.Reader) ([]Event, int64, error) {
-	br := bufio.NewReader(r)
-	var events []Event
+// eachLine calls fn with each whole line of r, which fn may keep, and returns the offset where the last whole line ends.
+func eachLine(r io.Reader, fn func(line []byte)) (int64, error) {
+	br := bufio.NewReaderSize(r, 1<<16)
 	var end int64
 	for {
 		line, err := br.ReadBytes('\n')
 		if err == io.EOF {
-			return events, end, nil
+			return end, nil
 		}
 		if err != nil {
-			return nil, 0, err
+			return 0, err
 		}
 		end += int64(len(line))
-		var e Event
-		if json.Unmarshal(line, &e) == nil {
-			events = append(events, e)
-		}
+		fn(line)
 	}
 }
