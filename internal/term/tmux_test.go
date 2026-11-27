@@ -462,6 +462,26 @@ func TestCleanEnvDropsInheritedThread(t *testing.T) {
 	}
 }
 
+func TestPanesGetNoGitRepoOfTheApp(t *testing.T) {
+	dir := t.TempDir()
+	// An app started by a git hook has these.
+	tmux := newTestTmux(t).WithEnv(append(os.Environ(), "GIT_DIR=/elsewhere/.git", "GIT_WORK_TREE=/elsewhere", "GIT_INDEX_FILE=/elsewhere/.git/index"))
+	script := `echo "${GIT_DIR-none} ${GIT_WORK_TREE-none} ${GIT_INDEX_FILE-none}" > git; sleep 60`
+	if err := tmux.NewSession(context.Background(), thread.Name{Project: "demo", Token: "a1"}, "first", dir, nil, []string{"sh", "-c", script}, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	var got []byte
+	for range 50 {
+		if got, _ = os.ReadFile(filepath.Join(dir, "git")); len(got) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if strings.TrimSpace(string(got)) != "none none none" {
+		t.Errorf("the pane got the app's git repo: %q", got)
+	}
+}
+
 func TestShellPathsNamesEachShellsFolder(t *testing.T) {
 	tmux := newTestTmux(t)
 	ctx := context.Background()

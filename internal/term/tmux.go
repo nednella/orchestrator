@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nednella/orchestrator/internal/environ"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -125,19 +126,17 @@ func (t *Tmux) runWith(ctx context.Context, env []string, args ...string) (strin
 }
 
 // inherited are dropped from the environment the tmux server starts with: TMUX so an app started
-// inside another tmux can still attach, and a thread's identity so an app or test started inside
-// an orchestrator thread does not pass it on to every thread and shell it starts.
-var inherited = []string{"TMUX", "ORCHESTRATOR_THREAD", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}
+// inside another tmux can still attach, a thread's identity so an app or test started inside
+// an orchestrator thread does not pass it on to every thread and shell it starts, and GIT_DIR and its kin so an app
+// started by a git hook does not point the git of every thread and shell at that repo.
+var inherited = slices.Concat([]string{"TMUX", "ORCHESTRATOR_THREAD", "ORCHESTRATOR_CONTROL", "ORCHESTRATOR_PROJECT"}, environ.GitRepo)
 
 func (t *Tmux) cleanEnv() []string {
 	env := os.Environ()
 	if t.env != nil {
-		env = slices.Clone(t.env)
+		env = t.env
 	}
-	return slices.DeleteFunc(env, func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains(inherited, name)
-	})
+	return environ.Without(env, inherited...)
 }
 
 // ListAll returns the agent sessions and the shell sessions.
