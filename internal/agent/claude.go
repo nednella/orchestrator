@@ -51,6 +51,32 @@ func WithoutFlag(argv []string, flag string) []string {
 	return slices.Concat(argv[:i], argv[min(i+2, len(argv)):])
 }
 
+// Ultracode is the effort that runs claude at xhigh with its multi-agent workflow on. claude takes it as a setting, not
+// as an effort, so everywhere else it is an effort like the others.
+const Ultracode = "ultracode"
+
+// effortArg is the effort claude's --effort flag gets for effort.
+func effortArg(effort string) string {
+	if effort == Ultracode {
+		return "xhigh"
+	}
+	return effort
+}
+
+// FastSettings is what a running claude is told to turn its fast mode on or off. Claude takes the setting out to turn
+// it off.
+func FastSettings(on bool) map[string]any {
+	if on {
+		return map[string]any{"fastMode": true}
+	}
+	return map[string]any{"fastMode": nil}
+}
+
+// EffortSettings is what a running claude is told to run at effort.
+func EffortSettings(effort string) map[string]any {
+	return map[string]any{"effortLevel": effortArg(effort), "ultracode": effort == Ultracode}
+}
+
 // Command is claude's command line, run headless for orchestrator host.
 func (c Claude) Command(l Launch) []string {
 	type permissions struct {
@@ -58,13 +84,15 @@ func (c Claude) Command(l Launch) []string {
 	}
 	settings, _ := json.Marshal(struct {
 		Permissions permissions `json:"permissions"`
-	}{permissions{c.Dirs}})
+		FastMode    bool        `json:"fastMode,omitempty"`
+		Ultracode   bool        `json:"ultracode,omitempty"`
+	}{permissions{c.Dirs}, l.Fast, l.Effort == Ultracode})
 	argv := append([]string{"claude", "--settings", string(settings)}, headless...)
 	if l.Model != "" {
 		argv = append(argv, "--model", modelArg(l.Model))
 	}
 	if l.Effort != "" {
-		argv = append(argv, "--effort", l.Effort)
+		argv = append(argv, "--effort", effortArg(l.Effort))
 	}
 	if l.Resume != "" {
 		argv = append(argv, "--resume", l.Resume)
@@ -134,8 +162,9 @@ func (c Claude) Env(l Launch) []string {
 // claudeAliases are the names claude takes for its latest models besides their full ids.
 var claudeAliases = []string{"default", "best", "fable", "opus", "sonnet", "haiku", "opusplan"}
 
-// claudeEfforts are the efforts claude takes, for every model.
-var claudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+// claudeEfforts are the efforts claude takes, for every model. Which model gives fast mode and ultracode its effect
+// is for claude to say, and the front end lists the models that do.
+var claudeEfforts = []string{"low", "medium", "high", "xhigh", "max", Ultracode}
 
 // Models are claude's aliases. claude has no command that lists its models, so a full id, which starts with
 // "claude-", is taken without a list: a new model works before orchestrator knows of it.

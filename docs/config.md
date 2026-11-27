@@ -106,7 +106,7 @@ claude gets `--model` and `--effort` from the first of these that sets a value, 
 2. the action's `model` and `effort`;
 3. the agent's own settings, read when the session starts. For claude: `model`, and the effort in `modelSettings.<model>.effortLevel` for the model chosen (an alias such as `opus` takes the newest `claude-opus-…` entry), else `effortLevel`, from the project folder's `.claude/settings.local.json`, then its `.claude/settings.json`, then `settings.json` in `$CLAUDE_CONFIG_DIR` or `~/.claude`.
 
-claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` and `opusplan`, and any full id that starts with `claude-`, each with or without `[1m]`, at an effort of `low`, `medium`, `high`, `xhigh` or `max`. claude has no command that lists its models, so the aliases are fixed in the app and a full id is taken without a list.
+claude takes the aliases `default`, `best`, `fable`, `opus`, `sonnet`, `haiku` and `opusplan`, and any full id that starts with `claude-`, each with or without `[1m]`, at an effort of `low`, `medium`, `high`, `xhigh`, `max` or `ultracode`, which is `xhigh` with Claude's multi-agent workflow on. claude has no command that lists its models, so the aliases are fixed in the app and a full id is taken without a list.
 
 A new session, or one started from a note, has no action and no labels. When nothing sets a value, no flag is passed and the agent uses its own default.
 

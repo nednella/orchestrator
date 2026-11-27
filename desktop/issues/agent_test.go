@@ -68,7 +68,7 @@ func TestTheQueueSaysWhichLabelsClaudeIgnores(t *testing.T) {
 	}
 	want := map[int][]string{
 		7: {},
-		8: {`model:other-model is ignored: claude has no model "other-model"`, `effort:hgih is ignored: claude takes an effort of low, medium, high, xhigh, max, not "hgih"`},
+		8: {`model:other-model is ignored: claude has no model "other-model"`, `effort:hgih is ignored: claude takes an effort of low, medium, high, xhigh, max, ultracode, not "hgih"`},
 	}
 	for _, is := range list {
 		if !slices.Equal(is.Ignored, want[is.Number]) || is.Ignored == nil {

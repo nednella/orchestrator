@@ -14,7 +14,7 @@ import (
 )
 
 // Launch is what a session is started with besides its name. An empty field leaves the choice to the agent.
-// Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
+// Fast says the agent runs in its faster mode, for a model that has one. Resume is a conversation to continue. ForkAt is the message of that conversation a new conversation forks at: it
 // continues the conversation up to there under a new id. Access is what the agent may do without asking. Prompt is
 // the text orchestrator adds to the agent's system prompt. Browser says the session drives its browser tab with
 // agent-browser. TmpDir is the session's own temp folder. MCPConfig is the file that starts the orchestrator tools' server
@@ -22,6 +22,7 @@ import (
 type Launch struct {
 	Model, Effort, Resume string
 	ForkAt                string
+	Fast                  bool
 	Access                session.Access
 	Browser               bool
 	Prompt                string

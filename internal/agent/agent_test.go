@@ -40,6 +40,44 @@ func TestNoHookInTheSettings(t *testing.T) {
 	}
 }
 
+func TestFastModeAndUltracodeAreStartSettings(t *testing.T) {
+	tests := []struct {
+		name string
+		l    Launch
+		want string
+	}{
+		{"neither", Launch{Effort: "high"}, `{"permissions":{"additionalDirectories":["/d"]}}`},
+		{"fast", Launch{Fast: true}, `{"permissions":{"additionalDirectories":["/d"]},"fastMode":true}`},
+		{"ultracode", Launch{Effort: Ultracode}, `{"permissions":{"additionalDirectories":["/d"]},"ultracode":true}`},
+		{"both", Launch{Fast: true, Effort: Ultracode}, `{"permissions":{"additionalDirectories":["/d"]},"fastMode":true,"ultracode":true}`},
+	}
+	for _, tt := range tests {
+		argv := Claude{Dirs: []string{"/d"}}.Command(tt.l)
+		if argv[2] != tt.want {
+			t.Errorf("%s: settings = %s, want %s", tt.name, argv[2], tt.want)
+		}
+	}
+}
+
+func TestLiveSettings(t *testing.T) {
+	tests := []struct {
+		name string
+		got  map[string]any
+		want string
+	}{
+		{"fast on", FastSettings(true), `{"fastMode":true}`},
+		{"fast off takes the setting out", FastSettings(false), `{"fastMode":null}`},
+		{"ultracode", EffortSettings(Ultracode), `{"effortLevel":"xhigh","ultracode":true}`},
+		{"an effort turns ultracode off", EffortSettings("high"), `{"effortLevel":"high","ultracode":false}`},
+	}
+	for _, tt := range tests {
+		got, _ := json.Marshal(tt.got)
+		if string(got) != tt.want {
+			t.Errorf("%s: %s, want %s", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestWithoutFlagDropsItsValue(t *testing.T) {
 	argv := Claude{}.Command(Launch{})
 	got := WithoutFlag(argv, ThinkingDisplay)
@@ -79,6 +117,8 @@ func TestClaudeLaunch(t *testing.T) {
 		{"model", Launch{Model: "opus"}, append([]string{"--model", "opus"}, supervised...)},
 		{"effort", Launch{Effort: "high"}, append([]string{"--effort", "high"}, supervised...)},
 		{"both", Launch{Model: "sonnet", Effort: "medium"}, append([]string{"--model", "sonnet", "--effort", "medium"}, supervised...)},
+		{"ultracode is xhigh", Launch{Effort: Ultracode}, append([]string{"--effort", "xhigh"}, supervised...)},
+		{"fast mode is a setting", Launch{Fast: true}, supervised},
 		{"resume", Launch{Resume: "abc"}, append([]string{"--resume", "abc"}, supervised...)},
 		{"read haiku is the full id", Launch{Model: "haiku", Access: session.Read}, []string{"--model", "claude-haiku-5-5", "--permission-mode", "plan", "--allowedTools", tools}},
 		{"haiku supervised is the full id", Launch{Model: "haiku"}, append([]string{"--model", "claude-haiku-5-5"}, supervised...)},
@@ -395,6 +435,7 @@ func TestClaudeValidModel(t *testing.T) {
 		{"a full id with the long context", "claude-opus-5-5[1m]", "", true},
 		{"another provider's model", "other-model", "", false},
 		{"an effort alone", "", "xhigh", true},
+		{"ultracode", "haiku", "ultracode", true},
 		{"a misspelt effort", "", "hgih", false},
 		{"a flag", "--x", "", false},
 		{"nothing", "", "", true},
