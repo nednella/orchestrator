@@ -682,7 +682,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
         const thread = threadsRef.current.find((s) => s.id === id)
         if (!thread) return
         const describe = (current: Thread) => {
-          if (state === 'waiting') return 'needs you'
+          if (state === 'waiting') return 'needs attention'
           if (state === 'replied') return 'replied'
           if (state === 'opened') return current.pr ? `opened PR #${current.pr.number}` : 'opened a PR'
           if (state === 'evidence') return 'has something to show'
@@ -694,7 +694,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
           // A child that waits is answered from its top-level thread's row, so the toast names that thread and opens it.
           const top = treeRef.current.top.get(id)
           if (state === 'waiting' && top && top.id !== id) {
-            pushToast({ tone: state, text: `${top.title} · ${current.title} needs you`, threadId: top.id })
+            pushToast({ tone: state, text: `${top.title} · ${current.title} needs attention`, threadId: top.id })
             return
           }
           pushToast({ tone: state, text: `${current.title} ${describe(current)}`, threadId: id, view: state === 'evidence' ? 'media' : undefined })
@@ -1050,7 +1050,7 @@ export function OrchestratorProvider({ children }: OrchestratorProviderProps) {
       },
       nextAttention() {
         const urgent = urgentThreads(projectsRef.current, threadsRef.current, treeRef.current)
-        if (urgent.length === 0) throw 'Nothing needs you right now'
+        if (urgent.length === 0) throw 'Nothing needs attention right now'
         const selected = treeRef.current.top.get(selectedRef.current ?? '')
         const at = urgent.findIndex((s) => s.id === selected?.id)
         selectThread(urgent[(at + 1) % urgent.length].id)

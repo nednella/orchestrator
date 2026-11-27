@@ -48,7 +48,7 @@ export const threadActions = ({ a, layout, current }: ActionContext): Action[] =
   },
   {
     id: 'next-attention',
-    label: 'Next that needs you',
+    label: 'Next that needs attention',
     shortcut: { key: 'e' },
     run() {
       a.nextAttention()
