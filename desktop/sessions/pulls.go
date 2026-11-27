@@ -21,14 +21,17 @@ const (
 
 // RepoPull is an open pull request of the repository.
 type RepoPull struct {
-	Number    int    `json:"number"`
-	Title     string `json:"title"`
-	Draft     bool   `json:"draft"`
-	Branch    string `json:"branch"`
-	URL       string `json:"url"`
-	Author    string `json:"author"`
-	UpdatedAt int64  `json:"updatedAt"`
-	Thread    string `json:"thread"` // the thread that tracks the branch, "" when none
+	Number    int      `json:"number"`
+	Title     string   `json:"title"`
+	Draft     bool     `json:"draft"`
+	Branch    string   `json:"branch"`
+	URL       string   `json:"url"`
+	Author    string   `json:"author"`
+	CreatedAt int64    `json:"createdAt"`
+	UpdatedAt int64    `json:"updatedAt"`
+	Labels    []string `json:"labels"`
+	Asked     []string `json:"asked"`  // the people whose review is asked for
+	Thread    string   `json:"thread"` // the thread that tracks the branch, "" when none
 }
 
 // RepoPulls is what PullRequests answers: the last list it knows, and why the latest read failed, "" when it did not.
@@ -51,7 +54,14 @@ func openOf(list []listedPull) []RepoPull {
 		if pr.State != "open" {
 			continue
 		}
-		out = append(out, RepoPull{Number: pr.Number, Title: pr.Title, Draft: pr.Draft, Branch: pr.Head.Ref, URL: pr.HTMLURL, Author: pr.User.Login, UpdatedAt: util.Millis(pr.UpdatedAt)})
+		pull := RepoPull{Number: pr.Number, Title: pr.Title, Draft: pr.Draft, Branch: pr.Head.Ref, URL: pr.HTMLURL, Author: pr.User.Login, CreatedAt: util.Millis(pr.CreatedAt), UpdatedAt: util.Millis(pr.UpdatedAt), Labels: []string{}, Asked: []string{}}
+		for _, l := range pr.Labels {
+			pull.Labels = append(pull.Labels, l.Name)
+		}
+		for _, a := range pr.Asked {
+			pull.Asked = append(pull.Asked, a.Login)
+		}
+		out = append(out, pull)
 	}
 	slices.SortStableFunc(out, func(a, b RepoPull) int { return cmp.Compare(b.UpdatedAt, a.UpdatedAt) })
 	return out

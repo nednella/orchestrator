@@ -12,6 +12,7 @@ type Backend = {
   DeletePlan(id: string): Promise<DeletePlan>
   Servers(id: string): Promise<Server[]>
   PullRequests(): Promise<RepoPulls>
+  Viewer(): Promise<string>
   StopServer(id: string, pid: number): Promise<void>
   OpenServer(port: number): Promise<void>
   WakeThread(id: string): Promise<Session>
@@ -137,7 +138,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'SideChatDelete', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  sessions: ['NewThread', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'OpenInEditor', 'OpenProjectInEditor', 'ForkSession', 'SideChatDelete', 'RenameSession', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ProjectReadFile', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -181,6 +182,7 @@ export const api = {
   deletePlan: (id: string) => backend.DeletePlan(id),
   servers: (id: string) => backend.Servers(id),
   pullRequests: () => backend.PullRequests(),
+  viewer: () => backend.Viewer(),
   // The Go side stops pid only once it finds it among the thread's servers again.
   stopServer: (id: string, pid: number) => backend.StopServer(id, pid),
   openServer: (port: number) => backend.OpenServer(port),

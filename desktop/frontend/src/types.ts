@@ -29,7 +29,11 @@ export type RepoPull = {
   branch: string
   url: string
   author: string
+  createdAt: number
   updatedAt: number
+  labels: string[]
+  // asked is the logins whose review is asked for.
+  asked: string[]
   thread: string
 }
 

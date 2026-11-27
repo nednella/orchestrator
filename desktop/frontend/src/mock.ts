@@ -11,6 +11,7 @@ type Handler = (payload: never) => void
 type ProjectData = { name: string; dir: string; repo: string; notes: Note[]; issues: Issue[]; cleanups: Cleanup[]; needsSetup?: boolean; setupDismissed?: boolean }
 
 const minute = 60_000
+const day = 86_400_000
 // The reply of the seeded #444 chat that its mock fork is cut at.
 const FORK_AT = 'r-2'
 
@@ -1185,13 +1186,14 @@ export function createMock(params: URLSearchParams) {
     PullRequests: async (): Promise<RepoPulls> => {
       const tracked = sessions
         .filter((x) => x.project === current.name && x.pr && (x.pr.state === 'open' || x.pr.state === 'draft'))
-        .map((x): RepoPull => ({ number: x.pr!.number, title: x.pr!.title, draft: x.pr!.state === 'draft', branch: x.branch, url: x.pr!.url, author: 'ned', updatedAt: x.pr!.updatedAt, thread: x.id }))
+        .map((x): RepoPull => ({ number: x.pr!.number, title: x.pr!.title, draft: x.pr!.state === 'draft', branch: x.branch, url: x.pr!.url, author: 'nednella', createdAt: x.pr!.updatedAt - 2 * day, updatedAt: x.pr!.updatedAt, labels: [], asked: [], thread: x.id }))
       const others: RepoPull[] = [
-        { number: 460, title: 'Bump the image CDN client', draft: false, branch: 'dependabot/cdn-client', url: 'https://github.com/acme/storefront/pull/460', author: 'dependabot', updatedAt: Date.now() - 50 * minute, thread: '' },
-        { number: 455, title: 'Draft the loyalty banner', draft: true, branch: 'amy/loyalty-banner', url: 'https://github.com/acme/storefront/pull/455', author: 'amy', updatedAt: Date.now() - 9 * 3_600_000, thread: '' },
+        { number: 460, title: 'Bump the image CDN client', draft: false, branch: 'dependabot/cdn-client', url: 'https://github.com/acme/storefront/pull/460', author: 'dependabot', createdAt: Date.now() - 3 * day, updatedAt: Date.now() - 50 * minute, labels: ['dependencies'], asked: ['nednella'], thread: '' },
+        { number: 455, title: 'Draft the loyalty banner', draft: true, branch: 'amy/loyalty-banner', url: 'https://github.com/acme/storefront/pull/455', author: 'amy', createdAt: Date.now() - 6 * day, updatedAt: Date.now() - 9 * 3_600_000, labels: ['feature'], asked: [], thread: '' },
       ]
       return { pulls: [...tracked, ...others].sort((a, b) => b.updatedAt - a.updatedAt), error: '' }
     },
+    Viewer: async () => 'nednella',
     Servers: async (id: string) => [...(servers.get(find(id).id) ?? [])].sort((a, b) => a.port - b.port),
     StopServer: async (id: string, pid: number) => {
       const list = servers.get(find(id).id) ?? []

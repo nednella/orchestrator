@@ -265,14 +265,17 @@ func (l *Lifecycle) changedBranches(ctx context.Context, proj project.Project, r
 
 // listedPull is one entry of the repo's REST pull request list.
 type listedPull struct {
-	Number    int                    `json:"number"`
-	Title     string                 `json:"title"`
-	Draft     bool                   `json:"draft"`
-	State     string                 `json:"state"`
-	HTMLURL   string                 `json:"html_url"`
-	User      struct{ Login string } `json:"user"`
-	Head      struct{ Ref string }   `json:"head"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	Number    int                      `json:"number"`
+	Title     string                   `json:"title"`
+	Draft     bool                     `json:"draft"`
+	State     string                   `json:"state"`
+	HTMLURL   string                   `json:"html_url"`
+	User      struct{ Login string }   `json:"user"`
+	Head      struct{ Ref string }     `json:"head"`
+	CreatedAt time.Time                `json:"created_at"`
+	UpdatedAt time.Time                `json:"updated_at"`
+	Labels    []struct{ Name string }  `json:"labels"`
+	Asked     []struct{ Login string } `json:"requested_reviewers"`
 }
 
 // listPulls reads the repo's pull request list with the ETag of the last answer and keeps the open pull requests

@@ -124,6 +124,15 @@ func (v *Service) Cleanups() []Cleanup { return v.s.life.Cleanups(v.s.Current().
 // PullRequests is the current project's open pull requests, newest update first.
 func (v *Service) PullRequests() RepoPulls { return v.s.PullRequests() }
 
+// Viewer is the login of the GitHub user the lists mark as the owner's own.
+func (v *Service) Viewer() (string, error) {
+	me, err := v.s.life.login(v.ctx(), v.s.Current().Dir)
+	if err != nil {
+		return "", errors.New("Could not read your GitHub login.")
+	}
+	return me, nil
+}
+
 // Memory is what orchestrator and its agents held at the last sample.
 func (v *Service) Memory() Memory { return v.s.Memory() }
 

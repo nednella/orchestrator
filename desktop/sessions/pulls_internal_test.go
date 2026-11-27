@@ -34,7 +34,7 @@ func (g *listGH) run(_ context.Context, _, _ string, args ...string) ([]byte, er
 	case etag == `W/"one"`:
 		return nil, errors.New("gh api: exit status 1: gh: HTTP 304")
 	}
-	return []byte("HTTP/2.0 200 OK\r\nEtag: W/\"one\"\r\n\r\n" + `[{"number":5,"title":"T","state":"open","html_url":"u","user":{"login":"amy"},"head":{"ref":"b"},"updated_at":"2026-10-01T12:00:00Z"}]`), nil
+	return []byte("HTTP/2.0 200 OK\r\nEtag: W/\"one\"\r\n\r\n" + `[{"number":5,"title":"T","state":"open","html_url":"u","user":{"login":"amy"},"head":{"ref":"b"},"created_at":"2026-09-30T12:00:00Z","updated_at":"2026-10-01T12:00:00Z","labels":[{"name":"bug"}],"requested_reviewers":[{"login":"bo"}]}]`), nil
 }
 
 func (g *listGH) count() int {
@@ -145,5 +145,14 @@ func TestAPollWatcherKeepsItsETagToItself(t *testing.T) {
 	f.ask()
 	if f.l.etags[f.proj.Key()] != "" {
 		t.Errorf("an on-demand read took the ETag the poll needs: %q", f.l.etags[f.proj.Key()])
+	}
+}
+
+func TestOpenPullsCarryTheirLabelsCreationAndAskedPeople(t *testing.T) {
+	t.Parallel()
+	f := newListFixture(t)
+	got := f.ask().Pulls
+	if len(got) != 1 || !slices.Equal(got[0].Labels, []string{"bug"}) || !slices.Equal(got[0].Asked, []string{"bo"}) || got[0].CreatedAt == 0 || got[0].CreatedAt >= got[0].UpdatedAt {
+		t.Errorf("pull = %+v", got)
 	}
 }

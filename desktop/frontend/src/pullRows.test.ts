@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { pullRows, pullsShown } from './pullRows.ts'
 import type { RepoPull, Session } from './types.ts'
 
-const pull = (number: number, thread: string): RepoPull => ({ number, title: `PR ${number}`, draft: false, branch: `b${number}`, url: '', author: 'amy', updatedAt: number, thread })
+const pull = (number: number, thread: string): RepoPull => ({ number, title: `PR ${number}`, draft: false, branch: `b${number}`, url: '', author: 'amy', createdAt: number, updatedAt: number, labels: [], asked: [], thread })
 const thread = { id: 'p/aaaaaaaa' } as Session
 
 test("the thread's PR comes first", () => {
