@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/nednella/orchestrator/cli"
 	"github.com/nednella/orchestrator/desktop/awake"
 	"github.com/nednella/orchestrator/desktop/devhttp"
 	"github.com/nednella/orchestrator/desktop/internal/app"
 	"github.com/nednella/orchestrator/desktop/internal/run"
+	"github.com/nednella/orchestrator/desktop/internal/subcommand"
 	"github.com/nednella/orchestrator/desktop/projects"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -28,7 +28,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	if err := cli.Execute(ctx, launch); err != nil {
+	if err := subcommand.Execute(ctx, launch); err != nil {
 		fmt.Fprintln(os.Stderr, "orchestrator:", err)
 		os.Exit(1)
 	}

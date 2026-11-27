@@ -1,5 +1,5 @@
-// Package cli holds the binary's entry points: the app, and the hidden commands the app and its agents start.
-package cli
+// Package subcommand holds the binary's entry points: the app, and the hidden commands the app and its agents start.
+package subcommand
 
 import (
 	"context"
