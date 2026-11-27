@@ -203,6 +203,12 @@ const askedQuestions = [
         preview:
           '```html\n<body style="margin:0"><div style="font-family:var(--font-ui);color:var(--text);background:var(--bg-surface);height:100vh;padding:32px;box-sizing:border-box">\n  <div style="display:flex;gap:8px;margin-bottom:24px">\n    <span style="padding:8px 18px;border-radius:999px;background:var(--accent);color:var(--text-on-accent)">Address</span>\n    <span style="padding:8px 18px;border-radius:999px;background:var(--bg-segment-on)">Payment</span>\n    <span style="padding:8px 18px;border-radius:999px;background:var(--bg-segment-on)">Review</span>\n  </div>\n  <div style="border:1px solid var(--border-strong);border-radius:12px;padding:20px;background:var(--bg-raised)">\n    <div style="color:var(--text-dim);margin-bottom:8px">Shipping address</div>\n    <div style="height:36px;border-radius:8px;background:var(--bg-segment-on);margin-bottom:10px"></div>\n    <div style="height:36px;border-radius:8px;background:var(--bg-segment-on);width:60%"></div>\n  </div>\n</div></body>\n```',
       },
+      {
+        label: 'Long page',
+        description: 'Every step of the form on one scrolling page.',
+        preview:
+          '```html\n<body style="margin:0"><div style="font-family:var(--font-ui);color:var(--text);background:var(--bg-surface);padding:32px;box-sizing:border-box">' + Array.from({ length: 12 }, (_, i) => `<div style="padding:24px;margin-bottom:16px;border-radius:12px;background:var(--bg-raised)"><b>Step ${i + 1}</b><div style="color:var(--text-dim)">Fields of step ${i + 1}</div></div>`).join('') + '</div></body>\n```',
+      },
     ],
     multiSelect: false,
   },
