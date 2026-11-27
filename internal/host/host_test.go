@@ -254,6 +254,10 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 						usage(l)
 						continue
 					}
+					if l.Request.Subtype == "apply_flag_settings" {
+						print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": l.RequestID}})
+						continue
+					}
 					still := []string{}
 					held = slices.DeleteFunc(held, func(h fakeLine) bool { return h.text() == "lost" })
 					for _, h := range held {
@@ -283,6 +287,11 @@ func fakeClaude(in io.Reader, out io.Writer, stdinLog string) {
 			}
 			if l.Request.Subtype == "get_usage" {
 				usage(l)
+				continue
+			}
+			if l.Request.Subtype == "apply_flag_settings" && os.Getenv("AOS_FAKE_REFUSE_FLAGS") == "1" {
+				print(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "error", "request_id": l.RequestID,
+					"error": "apply_flag_settings: ultracode is not available for this session (claude-haiku-4-5 does not support it)"}})
 				continue
 			}
 			if l.Request.Subtype != "interrupt" {
@@ -2462,6 +2471,64 @@ func TestModeTakesOnlyPlanOrDefault(t *testing.T) {
 	}
 	if got := modeRequests(t, h.stdin); len(got) != 0 {
 		t.Errorf("stdin = %q, want no mode request", got)
+	}
+}
+
+func flagRequests(t *testing.T, stdin string) []string {
+	t.Helper()
+	var out []string
+	for _, l := range stdinLines(t, stdin) {
+		if strings.Contains(l, `"subtype":"apply_flag_settings"`) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func TestFlagsApplySettingsAlsoDuringATurn(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	sendMessage(t, h.socket, "slow")
+	waitKind(t, events, chat.KindMessage)
+	if err := ApplyFlags(ctxT(t), h.socket, map[string]any{"fastMode": true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyFlags(ctxT(t), h.socket, map[string]any{"fastMode": nil, "effortLevel": "xhigh", "ultracode": false}); err != nil {
+		t.Fatal(err)
+	}
+	waitKind(t, events, chat.KindTurnEnd)
+	got := flagRequests(t, h.stdin)
+	if len(got) != 2 || !strings.Contains(got[0], `"settings":{"fastMode":true}`) || !strings.Contains(got[1], `"settings":{"effortLevel":"xhigh","fastMode":null,"ultracode":false}`) {
+		t.Fatalf("stdin = %q, want the two requests", got)
+	}
+}
+
+func TestFlagsReportClaudesReasonWithoutItsRequestName(t *testing.T) {
+	t.Parallel()
+	h := startHost(t, "AOS_FAKE_REFUSE_FLAGS=1")
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	err := ApplyFlags(ctxT(t), h.socket, map[string]any{"ultracode": true})
+	if refused := (*Refused)(nil); !errors.As(err, &refused) || refused.Reason != "ultracode is not available for this session (claude-haiku-4-5 does not support it)" {
+		t.Fatalf("err = %v, want Claude's reason", err)
+	}
+}
+
+func TestFlagsTakeSettings(t *testing.T) {
+	t.Parallel()
+	h := startHost(t)
+	events := subscribe(t, h.socket, 0)
+	waitKind(t, events, chat.KindInit)
+
+	if err := ApplyFlags(ctxT(t), h.socket, nil); err == nil {
+		t.Error("the host took no settings")
+	}
+	if got := flagRequests(t, h.stdin); len(got) != 0 {
+		t.Errorf("stdin = %q, want no request", got)
 	}
 }
 

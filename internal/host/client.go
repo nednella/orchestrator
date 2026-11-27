@@ -111,6 +111,13 @@ func SetMode(ctx context.Context, socket, mode string) error {
 	return err
 }
 
+// ApplyFlags changes Claude's settings, such as its effort or fast mode, for the rest of its run, also while a turn
+// runs: Claude uses them from its next turn. A refusal is Claude's own reason.
+func ApplyFlags(ctx context.Context, socket string, settings map[string]any) error {
+	_, err := call(ctx, socket, request{Op: opFlags, Settings: settings})
+	return err
+}
+
 // Hold says whether the host is idle, with no turn running, no approval waiting and no message it was given still to
 // run, and when it is, holds it: the host then refuses every send, answer and mode change until it exits. A restart
 // holds the host before it stops it.

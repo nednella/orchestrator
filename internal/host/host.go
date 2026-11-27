@@ -739,6 +739,8 @@ func (h *host) do(req request) (string, error) {
 		return "", h.answer(req.ID, req.Allow, req.Message, req.Input)
 	case opMode:
 		return "", h.setMode(req.Mode)
+	case opFlags:
+		return "", h.applyFlags(req.Settings)
 	case opStop:
 		return "", h.planStop(req.Reason, req.Text)
 	case opRelease:
@@ -937,6 +939,7 @@ var (
 	errFilesUnknown       = errors.New("The files may have been put back; check them before you edit again")
 	errApprovalWaits      = errors.New("This thread waits on an approval")
 	errNoUsage            = errors.New("This version of Claude Code does not report plan usage")
+	errNoFlags            = errors.New("This version of Claude Code cannot change these settings in a running thread")
 	// errUnsupported is Claude answering that it does not know a control request, as a Claude Code release from before
 	// or after the one orchestrator was built for may.
 	errUnsupported = errors.New("This version of Claude Code cannot rewind a thread")
@@ -1034,6 +1037,30 @@ func (h *host) setMode(mode string) error {
 		return errors.New(cmp.Or(r.Text, "Claude did not change its mode"))
 	}
 	h.modeIs(mode)
+	return nil
+}
+
+// applyFlags asks Claude to merge settings into the ones it runs with. Claude takes them in at once and uses them from
+// its next turn, so a turn that runs is no reason to wait. It prefixes its reasons with the request's name.
+func (h *host) applyFlags(settings map[string]any) error {
+	if len(settings) == 0 {
+		return errors.New("the flags op needs settings")
+	}
+	h.mu.Lock()
+	holding := h.holding
+	h.mu.Unlock()
+	if holding {
+		return errRestarting
+	}
+	r, err := h.ask(func(id string) []byte { return chat.ApplyFlagSettings(id, settings) }, nil)
+	switch {
+	case errors.Is(err, errUnsupported):
+		return errNoFlags
+	case err != nil:
+		return err
+	case r.Error:
+		return errors.New(cmp.Or(strings.TrimPrefix(r.Text, "apply_flag_settings: "), "Claude did not change its settings"))
+	}
 	return nil
 }
 

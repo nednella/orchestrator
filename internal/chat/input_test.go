@@ -66,6 +66,11 @@ func TestSetPermissionModeShape(t *testing.T) {
 		`{"type":"control_request","request_id":"aos-3","request":{"subtype":"set_permission_mode","mode":"plan"}}`)
 }
 
+func TestApplyFlagSettingsShape(t *testing.T) {
+	assertLine(t, ApplyFlagSettings("aos-5", map[string]any{"effortLevel": "xhigh", "ultracode": true, "fastMode": nil}),
+		`{"type":"control_request","request_id":"aos-5","request":{"subtype":"apply_flag_settings","settings":{"effortLevel":"xhigh","fastMode":null,"ultracode":true}}}`)
+}
+
 func TestPermissionAnswerShapes(t *testing.T) {
 	assertLine(t, Allow("ffd4", json.RawMessage(`{"command":"ls"}`)),
 		`{"type":"control_response","response":{"subtype":"success","request_id":"ffd4","response":{"behavior":"allow","updatedInput":{"command":"ls"}}}}`)

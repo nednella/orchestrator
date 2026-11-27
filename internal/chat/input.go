@@ -48,6 +48,11 @@ type requestBody struct {
 	SpareBackgroundTasks bool   `json:"spare_background_tasks,omitempty"`
 }
 
+type flagSettingsBody struct {
+	Subtype  string         `json:"subtype"`
+	Settings map[string]any `json:"settings"`
+}
+
 type rewindFilesBody struct {
 	Subtype       string `json:"subtype"`
 	UserMessageID string `json:"user_message_id"`
@@ -125,6 +130,12 @@ func SetPermissionMode(id, mode string) []byte {
 // GetUsage asks claude for the plan's usage and limits, which it reads from the account with no turn.
 func GetUsage(id string) []byte {
 	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: requestBody{Subtype: "get_usage"}})
+}
+
+// ApplyFlagSettings asks claude to merge settings into the ones it was started with, as it runs. A null value takes a
+// setting back out.
+func ApplyFlagSettings(id string, settings map[string]any) []byte {
+	return encodeLine(controlRequest{Type: "control_request", RequestID: id, Request: flagSettingsBody{Subtype: "apply_flag_settings", Settings: settings}})
 }
 
 // RewindFiles asks claude to put the files that its turns edited back as they were before the user message: with

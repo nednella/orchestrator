@@ -11,6 +11,8 @@ const (
 	opInterrupt = "interrupt"
 	opAnswer    = "answer"
 	opMode      = "mode"
+	// opFlags changes Claude's settings for the rest of the run, such as its effort or fast mode.
+	opFlags     = "flags"
 	opHold      = "hold"
 	opRelease   = "release"
 	opStop      = "stop"
@@ -32,10 +34,12 @@ type request struct {
 	Input   json.RawMessage `json:"input,omitempty"`
 	After   int64           `json:"after,omitempty"`
 	Mode    string          `json:"mode,omitempty"`
-	Reason  string          `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
-	From    string          `json:"from,omitempty"`   // the send and interrupt ops': the thread that sends or stops, "" for the owner or the app
-	Body    string          `json:"body,omitempty"`   // the send op's: the bare words that Text frames for Claude
-	Result  bool            `json:"result,omitempty"` // the send op's: the message is a child's result
+	// Settings is the flags op's: the settings Claude merges into the ones it runs with, a null taking one out.
+	Settings map[string]any `json:"settings,omitempty"`
+	Reason   string         `json:"reason,omitempty"` // the stop op's: chat.StopSettle or chat.StopRestart
+	From     string         `json:"from,omitempty"`   // the send and interrupt ops': the thread that sends or stops, "" for the owner or the app
+	Body     string         `json:"body,omitempty"`   // the send op's: the bare words that Text frames for Claude
+	Result   bool           `json:"result,omitempty"` // the send op's: the message is a child's result
 	// Within is the rewind op's: the folder that holds every file the rewind puts back, "" to leave the files as they are;
 	// the rewind_preview op's: the folder outside which a file is a reason not to rewind the files.
 	Within string `json:"within,omitempty"`
