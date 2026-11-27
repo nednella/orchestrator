@@ -95,7 +95,7 @@ func TestThreadLifecycle(t *testing.T) {
 		}
 		eventually(t, "the killed thread to show as settled", func() bool {
 			s := h.Rec.LastThreads()
-			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "settled" && s[1].SettledAt > 0
+			return len(s) == 2 && s[1].ID == first.ID && s[1].State == "settled"
 		})
 		if got := h.Snapshot().Threads; len(got) != 2 || got[0].ID != second.ID || got[1].State != "settled" || got[1].Title != "first" {
 			t.Errorf("threads after kill = %+v", got)
@@ -122,7 +122,7 @@ func TestThreadLifecycle(t *testing.T) {
 		}
 		eventually(t, "the row to turn ended", func() bool {
 			s := h.Rec.LastThreads()
-			return len(s) == 1 && s[0].State == "settled" && s[0].SettledAt > 0 && s[0].Title == "renamed"
+			return len(s) == 1 && s[0].State == "settled" && s[0].Title == "renamed"
 		})
 		// A new thread does not take the ended one's number.
 		third, err := h.StartThread("third", "")
@@ -887,7 +887,7 @@ func TestSettledThreadsSurviveARestart(t *testing.T) {
 	if err := h.SettleThread(s.ID); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "settled after the process is gone", func() bool { got, ok := h.Thread(s.ID); return ok && got.State == "settled" && got.SettledAt > 0 })
+	eventually(t, "settled after the process is gone", func() bool { got, ok := h.Thread(s.ID); return ok && got.State == "settled" })
 
 	fresh := h.Restart(t)
 	var got threads.Thread
@@ -896,7 +896,7 @@ func TestSettledThreadsSurviveARestart(t *testing.T) {
 			got = v
 		}
 	}
-	if got.State != "settled" || got.Title != "keep me" || got.SettledAt == 0 {
+	if got.State != "settled" || got.Title != "keep me" || got.LastEventAt == 0 {
 		t.Errorf("after a restart = %+v", got)
 	}
 	if err := fresh.DeleteThread(s.ID, false); err != nil {

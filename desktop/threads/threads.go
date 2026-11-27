@@ -74,7 +74,6 @@ type Thread struct {
 	Detail      string        `json:"detail"`
 	LastEventAt int64         `json:"lastEventAt"`
 	CreatedAt   int64         `json:"createdAt"` // when the thread first started
-	WokeAt      int64         `json:"wokeAt"`    // when it last started: its first start, or its latest wake
 	Issue       int           `json:"issue"`
 	Access      thread.Access `json:"access"`
 	Action      string        `json:"action"` // the queue action the thread was started with, "" when none
@@ -95,8 +94,6 @@ type Thread struct {
 	PRAttention   string        `json:"prAttention"`
 	Cleanup       string        `json:"cleanup"`
 	CleanupReason string        `json:"cleanupReason"`
-
-	SettledAt int64 `json:"settledAt"` // unix ms; 0 while the thread runs
 
 	Tokens int64   `json:"tokens"` // what the agent used in this run of the app, 0 when not known
 	Cost   float64 `json:"cost"`   // what those tokens cost at list prices, in US dollars
@@ -1561,18 +1558,15 @@ func (s *Threads) list() []Thread {
 		in := byName[ss.Name]
 		id := ss.Name.String()
 		issue, _ := strconv.Atoi(in.Issue)
-		created, woke := s.startsOf(id, in)
+		created, _ := s.startsOf(id, in)
 		view := Thread{
 			ID: id, Project: ss.Name.Project, N: ss.N, Title: cmp.Or(in.Title, defaultTitle),
 			State: ss.State, Detail: ss.Detail,
-			CreatedAt: created.UnixMilli(), WokeAt: woke.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
+			CreatedAt: created.UnixMilli(), Issue: issue, Access: in.Access, Action: in.Action, ForkOf: in.Fork, Side: in.Side, Parent: in.Parent, Model: in.Model, Effort: in.Effort, Fast: in.Fast, Evidence: s.evidence.Count(id), Browser: s.browsers.Has(id),
 			ForkAt: s.forkAtOf(id),
 		}
 		if !ss.At.IsZero() {
 			view.LastEventAt = ss.At.UnixMilli()
-		}
-		if ss.State == thread.Settled {
-			view.SettledAt = ss.At.UnixMilli()
 		}
 		f := s.life.fields(id)
 		view.Branch, view.PR, view.Git = in.Branch, f.pr, f.git

@@ -15,7 +15,6 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     detail: '',
     lastEventAt,
     createdAt: 0,
-    wokeAt: 0,
     issue: 0,
     model: '',
     effort: '',

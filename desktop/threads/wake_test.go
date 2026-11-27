@@ -104,8 +104,11 @@ func TestWakeKeepsTheThreadID(t *testing.T) {
 		t.Fatal(err)
 	}
 	woken, ok := h.Thread(before.ID)
-	if !ok || woken.State == "settled" || woken.N != before.N || woken.CreatedAt != before.CreatedAt || woken.WokeAt <= before.CreatedAt {
+	if !ok || woken.State == "settled" || woken.N != before.N || woken.CreatedAt != before.CreatedAt {
 		t.Fatalf("woken row = %+v (%v), from %+v", woken, ok, before)
+	}
+	if rec, err := bus.ReadState(h.State, before.ID); err != nil || rec.Woke <= before.CreatedAt {
+		t.Errorf("the wake's start = %d, %v; want one after the first start %d", rec.Woke, err, before.CreatedAt)
 	}
 	if list := h.Threads().List(); len(list) != 1 {
 		t.Errorf("rows = %+v, want the one thread", list)

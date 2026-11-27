@@ -176,7 +176,6 @@ export function createMock(params: URLSearchParams) {
       detail: s.detail,
       lastEventAt: s.lastEventAt,
       createdAt: s.createdAt,
-      wokeAt: s.wokeAt,
       issue: s.issue,
       model: s.model,
       effort: s.effort,
@@ -335,7 +334,6 @@ export function createMock(params: URLSearchParams) {
       detail: pick(details[initial]),
       lastEventAt,
       createdAt,
-      wokeAt: createdAt,
       issue,
       ...modelFor(owner, issue),
       fast: false,
@@ -417,7 +415,6 @@ export function createMock(params: URLSearchParams) {
   // wake starts a settled thread again under its id, as the threads service does.
   function wake(s: Thread) {
     if (s.state !== 'settled') throw `Thread ${s.id} is not asleep`
-    s.wokeAt = Date.now()
     setState(s, 'idle')
     chats.start(s.id)
   }

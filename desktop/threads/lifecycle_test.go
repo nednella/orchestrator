@@ -1895,7 +1895,7 @@ func TestWakeKeepsTheAskOfAPRThatMergedWhileSettled(t *testing.T) {
 	h.GH.SetPR(prJSON("OPEN", false, "[]", 0, 0))
 	h.RefreshPRs()
 	ended(t, h, s)
-	pastMilli(t, max(s.CreatedAt, s.WokeAt)) // the merge must come after the start, and the wake after the merge
+	pastMilli(t, s.CreatedAt) // the merge must come after the start, and the wake after the merge
 	merged := time.Now()
 	h.GH.SetPR(closedAt(prJSON("MERGED", false, "[]", 0, 0), merged))
 	h.RefreshPRs()

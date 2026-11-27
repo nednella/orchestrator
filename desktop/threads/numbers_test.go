@@ -203,7 +203,7 @@ func TestSettledThreadStays(t *testing.T) {
 	}
 	eventually(t, "the row to settle", func() bool {
 		got, ok := h.Thread(s.ID)
-		return ok && got.State == thread.Settled && got.SettledAt > 0
+		return ok && got.State == thread.Settled
 	})
 	if err, want := h.SettleThread(s.ID), "Thread "+s.ID+" is asleep"; err == nil || err.Error() != want {
 		t.Errorf("a second Settle = %v, want %q", err, want)
@@ -219,7 +219,7 @@ func TestSettledThreadStays(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Threads().Refresh()
-	if got, ok := h.Thread(id); !ok || got.State != thread.Settled || got.Title != "old" || got.SettledAt != long.UnixMilli() {
+	if got, ok := h.Thread(id); !ok || got.State != thread.Settled || got.Title != "old" || got.LastEventAt != long.UnixMilli() {
 		t.Errorf("a thread settled 8 days ago = %+v, %v; want its settled row", got, ok)
 	}
 	if !exists(filepath.Join(h.State, "threads", "main", "old1.json")) || !exists(evidenceDir(h, id)) {
