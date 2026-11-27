@@ -102,6 +102,8 @@ type Thread struct {
 
 	Subagents int `json:"subagents"` // the tasks other than shells that its Claude runs in the background, which a settle stops
 
+	WorkingSince int64 `json:"workingSince"` // when the stretch of work it shows began, in unix ms; 0 unless its state is working
+
 	Start        StartState `json:"start"`        // "" once the thread runs; else how far its start has got, while its row is shown as working or waiting
 	StartError   string     `json:"startError"`   // why the start failed, "" unless Start is failed
 	FirstMessage string     `json:"firstMessage"` // the message the thread starts with, shown as sent while it starts; "" when none
@@ -1597,6 +1599,9 @@ func (s *Threads) list() []Thread {
 		}
 		if !ss.At.IsZero() {
 			view.LastEventAt = ss.At.UnixMilli()
+		}
+		if ss.State == thread.Working {
+			view.WorkingSince = s.workingSince(id)
 		}
 		f := s.life.fields(id)
 		view.Branch, view.PR, view.Git = in.Branch, f.pr, f.git
@@ -4200,6 +4205,27 @@ func (s *Threads) shownState(id string) thread.State {
 		return thread.Waiting
 	}
 	return thread.Working
+}
+
+// workingSince is when the stretch of work the thread shows as working began. A start in progress began at its
+// creation. Otherwise it is the latest state change to working; while only its Claude's background work keeps it
+// working, it is the start of the turn that ended just before, since that work began in it. It needs mu.
+func (s *Threads) workingSince(id string) int64 {
+	if st := s.starting[id]; st != nil {
+		return st.created.UnixMilli()
+	}
+	rec, ok := s.records[id]
+	if !ok {
+		return 0
+	}
+	since := rec.At.UnixMilli()
+	if n := len(rec.Changes); n > 0 {
+		since = rec.Changes[n-1].At
+		if rec.State != thread.Working && n > 1 && rec.Changes[n-2].State == thread.Working {
+			since = rec.Changes[n-2].At
+		}
+	}
+	return since
 }
 
 // Chat is a thread whose agent runs, or ran, under a host: the chat log the host keeps, the socket it listens on, the
