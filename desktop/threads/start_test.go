@@ -1090,3 +1090,39 @@ func TestRestartOfAnAgentThatTookTheFirstMessageShowsItsRealChat(t *testing.T) {
 		t.Errorf("the first message reached the agent %d times, want once", n)
 	}
 }
+
+func TestStopEndsAStartThatWaitsForAnotherStartsWorktree(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	slowOrigin(t, h, repoFixture(t, h), 3*time.Second)
+	first, err := h.StartIssueLater(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := h.StartIssueLater(8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	began := time.Now()
+	if err := h.CancelThreadStart(second.ID); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took > time.Second {
+		t.Errorf("the stop took %v, which the start in front of it holds up", took)
+	}
+	if row, _ := h.Thread(second.ID); row.Start != threads.StartCancelled {
+		t.Errorf("the row = %+v, want a cancelled start", row)
+	}
+	eventually(t, "the first start to end", func() bool {
+		row, _ := h.Thread(first.ID)
+		return row.Start == ""
+	})
+	if err := h.RetryThreadStart(second.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the retried start to end", func() bool {
+		row, _ := h.Thread(second.ID)
+		return row.Start == "" && row.Branch == "issue-8"
+	})
+}

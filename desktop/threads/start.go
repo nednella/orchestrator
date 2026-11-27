@@ -420,8 +420,22 @@ func (s *Threads) hostTook(st *starting, what string, m host.Message) bool {
 // place finds or makes the folder the thread runs in, and the chat a fork starts with. One place at a time, so two
 // threads never pick the same new branch.
 func (s *Threads) place(ctx context.Context, st *starting) error {
-	s.treeMu.Lock()
-	defer s.treeMu.Unlock()
+	// A start that waits its turn can be stopped meanwhile.
+	locked := make(chan struct{})
+	go func() {
+		s.treeMu.Lock()
+		close(locked)
+	}()
+	select {
+	case <-locked:
+		defer s.treeMu.Unlock()
+	case <-ctx.Done():
+		go func() {
+			<-locked
+			s.treeMu.Unlock()
+		}()
+		return ctx.Err()
+	}
 	work := workPlace{dir: cmp.Or(st.o.dir, st.proj.Dir)}
 	if st.o.Place == InWorktree {
 		branch, base := st.proj.BranchFor(st.issue), ""
