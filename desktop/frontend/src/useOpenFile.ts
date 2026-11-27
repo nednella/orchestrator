@@ -6,7 +6,8 @@ type Read = { key: string; path: string; content: FileContent } | { key: string;
 
 export type OpenFile = { status: 'loading' } | { status: 'error'; error: string; retry(): void } | { status: 'ready'; content: FileContent }
 
-// useOpenFile reads the file at path in the thread's folder, or in the project's with no thread. It reads the file again
+// useOpenFile reads the file at path in the thread's folder, or in the project's with no thread; an absolute path is a
+// file outside the folder of a thread, which is read, read only, as it is. It reads the file again
 // when the thread's state moves, as at a turn's end, when its agent may have written it, or when retry is called.
 export function useOpenFile(key: string, thread: string | undefined, project: string, path: string | null, state: string | undefined): OpenFile | null {
   const [read, setRead] = useState<Read | null>(null)
@@ -15,7 +16,7 @@ export function useOpenFile(key: string, thread: string | undefined, project: st
   useEffect(() => {
     if (path === null) return
     let stale = false
-    const file = thread ? api.chatReadFile(thread, path) : api.projectReadFile(project, path)
+    const file = thread ? (path.startsWith('/') ? api.chatReadOutside(thread, path) : api.chatReadFile(thread, path)) : api.projectReadFile(project, path)
     file.then(
       (content) => !stale && setRead({ key, path, content }),
       (err) => !stale && setRead({ key, path, error: errorMessage(err) }),

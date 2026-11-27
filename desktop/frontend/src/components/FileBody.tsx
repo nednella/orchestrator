@@ -1,3 +1,4 @@
+import type { FilePlace } from '../filesView'
 import { formatBytes, isMarkdownPath, withoutFrontMatter } from '../fileTree'
 import type { FileContent } from '../types'
 import { ChatMarkdown } from './ChatMarkdown'
@@ -10,10 +11,11 @@ type FileBodyProps = {
   content: FileContent
   rendered: boolean
   wrap: boolean
+  place: FilePlace | null
 }
 
 // FileBody is the open file as its kind shows it: an image, a note that it is binary, rendered markdown, or its code.
-export function FileBody({ linksFrom, content, rendered, wrap }: FileBodyProps) {
+export function FileBody({ linksFrom, content, rendered, wrap, place }: FileBodyProps) {
   const { path } = linksFrom
   if (content.kind === 'image') return <FileImageView key={path} path={path} content={content} />
   if (content.kind === 'binary') return <Notice title="The file is binary and cannot be displayed as text." hint={formatBytes(content.size)} centered />
@@ -34,7 +36,7 @@ export function FileBody({ linksFrom, content, rendered, wrap }: FileBodyProps) 
           Preview limited to the first 1 MB of a {content.size.toLocaleString()} byte file.
         </p>
       )}
-      <FileCodeView key={path} path={path} text={content.text} wrap={wrap} />
+      <FileCodeView key={path} path={path} text={content.text} wrap={wrap} place={place} />
     </>
   )
 }

@@ -49,20 +49,35 @@ export function linkTarget(from: string, path: string): string {
   return parts.join('/')
 }
 
-// The file each Files view was asked to show, by its thread's id or by filesKey for Home, while the app runs.
-const picked = new Map<string, string>()
+// FilePlace is the line of a file, and the lines to its end, that a link points at; col is a column of the first line.
+export type FilePlace = { line: number; col?: number; endLine?: number }
+
+// FilesPick is what a Files view was asked to show: a file, with the place in it to scroll to, or a folder of its tree.
+// A new pick is a new object, so that a view shows even the one it showed before.
+export type FilesPick = { path: string | null; folder: string | null; place: FilePlace | null }
+
+// The pick each Files view was asked for, by its thread's id or by filesKey for Home, while the app runs.
+const picked = new Map<string, FilesPick>()
 const listeners = new Set<() => void>()
 
 export const filesKey = (thread: string | undefined, project: string) => thread ?? `project:${project}`
 
-// pickFile opens the file at path in the Files view of key; null closes the file open there.
-export function pickFile(key: string, path: string | null) {
+// pickFile opens the file at path in the Files view of key, at place when it has one; null closes the file open there.
+export function pickFile(key: string, path: string | null, place?: FilePlace) {
   if (path === null) picked.delete(key)
-  else picked.set(key, path)
+  else picked.set(key, { path, folder: null, place: place ?? null })
   listeners.forEach((listener) => listener())
 }
 
-export const pickedFile = (key: string): string | null => picked.get(key) ?? null
+// pickFolder closes the file open in the Files view of key and shows the folder in its tree.
+export function pickFolder(key: string, folder: string) {
+  picked.set(key, { path: null, folder, place: null })
+  listeners.forEach((listener) => listener())
+}
+
+export const pickedFile = (key: string): string | null => picked.get(key)?.path ?? null
+
+export const pickOf = (key: string): FilesPick | null => picked.get(key) ?? null
 
 export function onPicked(listener: () => void) {
   listeners.add(listener)

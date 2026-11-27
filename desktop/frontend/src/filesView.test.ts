@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { imageTarget, linkTarget, onPicked, pickedFile, pickFile, planPath } from './filesView.ts'
+import { imageTarget, linkTarget, onPicked, pickedFile, pickFile, pickFolder, pickOf, planPath } from './filesView.ts'
 
 test('a relative markdown link is a file', () => {
   assert.equal(planPath('docs/plan.md'), 'docs/plan.md')
@@ -61,4 +61,23 @@ test('a picked file opens in its own view, and null closes it there only', () =>
   assert.equal(heard, 3, 'each pick and the close are heard')
   stop()
   pickFile('thread-b', null)
+})
+
+test('a pick keeps the place in the file and a folder pick closes the file', () => {
+  pickFile('thread-p', 'src/a.ts', { line: 4, endLine: 9 })
+  assert.deepEqual(pickOf('thread-p'), { path: 'src/a.ts', folder: null, place: { line: 4, endLine: 9 } })
+  pickFile('thread-p', 'src/a.ts')
+  assert.equal(pickOf('thread-p')?.place, null)
+  const before = pickOf('thread-p')
+  pickFile('thread-p', 'src/a.ts')
+  assert.equal(pickOf('thread-p') !== before, true, 'the same file picked again is a new pick')
+  let heard = 0
+  const off = onPicked(() => heard++)
+  pickFolder('thread-p', 'src')
+  assert.deepEqual(pickOf('thread-p'), { path: null, folder: 'src', place: null })
+  assert.equal(pickedFile('thread-p'), null)
+  assert.equal(heard, 1)
+  off()
+  pickFile('thread-p', null)
+  assert.equal(pickOf('thread-p'), null)
 })

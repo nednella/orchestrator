@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useOrchestrator, useOrchestratorSelector } from '../OrchestratorContext'
 import { api } from '../api'
 import { isMarkdownPath, relativeTo, withFolders } from '../fileTree'
-import { FILES_RENDERED_KEY, FILES_TREE_KEY, FILES_TREE_WIDTH_KEY, FILES_WRAP_KEY, filesKey, onPicked, pickedFile, pickFile } from '../filesView'
+import { FILES_RENDERED_KEY, FILES_TREE_KEY, FILES_TREE_WIDTH_KEY, FILES_WRAP_KEY, filesKey, onPicked, pickFile, pickOf } from '../filesView'
 import type { PanelViewProps } from '../panelViews'
 import { readStored, writeStored } from '../storage'
 import { useElementWidth } from '../useElementWidth'
@@ -13,6 +13,8 @@ import { CenteredSpinner } from './CenteredSpinner'
 import { FileBody } from './FileBody'
 import { FileCrumbs } from './FileCrumbs'
 import { FileHeader } from './FileHeader'
+import { FileOutsideCrumbs } from './FileOutsideCrumbs'
+import { FileOutsideNote } from './FileOutsideNote'
 import { FileTreeDivider } from './FileTreeDivider'
 import { FileTreePane } from './FileTreePane'
 
@@ -30,8 +32,11 @@ export function FilesView({ thread }: PanelViewProps) {
   const projectKey = project?.key ?? ''
   const key = filesKey(threadId, projectKey)
   const folder = thread?.worktree || project?.dir || ''
-  const picked = useSyncExternalStore(onPicked, () => pickedFile(key))
-  const path = picked === null ? null : relativeTo(folder, picked)
+  const pick = useSyncExternalStore(onPicked, () => pickOf(key))
+  const path = pick?.path == null ? null : relativeTo(folder, pick.path)
+  // A path that is still absolute is a file outside the thread's folder, which the view shows read only.
+  const outside = path !== null && path.startsWith('/')
+  const place = pick?.place ?? null
   const [listing, actions] = useFileListing(threadId, projectKey, thread?.state)
   const entries = useMemo(() => (listing.status === 'ready' ? withFolders(listing.entries) : []), [listing])
   const file = useOpenFile(key, threadId, projectKey, path, thread?.state)
@@ -40,6 +45,10 @@ export function FilesView({ thread }: PanelViewProps) {
   const [rendered, setRendered] = useState(() => readStored(FILES_RENDERED_KEY, false))
   const [wrap, setWrap] = useState(() => readStored(FILES_WRAP_KEY, true))
   const [reveal, setReveal] = useState<{ path: string; n: number } | null>(null)
+  const folderPick = pick?.folder ?? null
+  useEffect(() => {
+    if (folderPick !== null) setReveal((r) => ({ path: folderPick, n: (r?.n ?? 0) + 1 }))
+  }, [pick, folderPick])
   const box = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const room = useElementWidth(box)
@@ -57,8 +66,14 @@ export function FilesView({ thread }: PanelViewProps) {
   const content = file?.status === 'ready' ? file.content : null
   const text = content?.kind === 'text' ? content : null
   const canRender = text !== null && text.text !== '' && !text.truncated && isMarkdownPath(path ?? '')
-  const showsLines = text !== null && text.text !== '' && !(canRender && rendered)
-  const openInEditor = (target: string) => report(() => (threadId ? api.openInEditor(threadId, target) : api.openProjectInEditor(projectKey, target)))
+  // A link to a line shows the source, which has lines.
+  const showRendered = rendered && place === null
+  const showsLines = text !== null && text.text !== '' && !(canRender && showRendered)
+  const openInEditor = (target: string) =>
+    report(() => {
+      if (threadId && target.startsWith('/')) return api.openFileInEditor(threadId, target, place?.line)
+      return threadId ? api.openInEditor(threadId, target) : api.openProjectInEditor(projectKey, target)
+    })
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f' || e.shiftKey || e.altKey) return
@@ -87,34 +102,42 @@ export function FilesView({ thread }: PanelViewProps) {
         <section tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none" aria-label="File" onKeyDown={onFileKeyDown}>
           <FileHeader
             crumbs={
-              <FileCrumbs
-                project={project?.name ?? ''}
-                path={path}
-                entries={entries}
-                onOpen={open}
-                onShowFolder={(folder) => {
-                  close()
-                  setReveal((r) => ({ path: folder, n: (r?.n ?? 0) + 1 }))
-                }}
-                onReveal={(to) => {
-                  setTreeOpen(true)
-                  writeStored(FILES_TREE_KEY, true)
-                  setReveal((r) => ({ path: to, n: (r?.n ?? 0) + 1 }))
-                }}
-                onRefresh={actions.refresh}
-              />
+              outside ? (
+                <FileOutsideCrumbs path={path} />
+              ) : (
+                <FileCrumbs
+                  project={project?.name ?? ''}
+                  path={path}
+                  entries={entries}
+                  onOpen={open}
+                  onShowFolder={(folder) => {
+                    close()
+                    setReveal((r) => ({ path: folder, n: (r?.n ?? 0) + 1 }))
+                  }}
+                  onReveal={(to) => {
+                    setTreeOpen(true)
+                    writeStored(FILES_TREE_KEY, true)
+                    setReveal((r) => ({ path: to, n: (r?.n ?? 0) + 1 }))
+                  }}
+                  onRefresh={actions.refresh}
+                />
+              )
             }
             editor={settings.editorApp}
-            rendered={canRender ? rendered : null}
+            rendered={canRender ? showRendered : null}
             wrap={showsLines ? wrap : null}
             copyable={text !== null && !text.truncated && text.text !== '' ? text.text : null}
             treeOpen={treeOpen}
             onOpenInEditor={() => openInEditor(path)}
-            onRendered={remember(setRendered, FILES_RENDERED_KEY)}
+            onRendered={(on) => {
+              if (on) pickFile(key, pick?.path ?? null)
+              remember(setRendered, FILES_RENDERED_KEY)(on)
+            }}
             onWrap={remember(setWrap, FILES_WRAP_KEY)}
             onTree={remember(setTreeOpen, FILES_TREE_KEY)}
             onClose={close}
           />
+          {outside && <FileOutsideNote path={path} />}
           {file?.status === 'loading' && <CenteredSpinner />}
           {file?.status === 'error' && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
@@ -124,7 +147,7 @@ export function FilesView({ thread }: PanelViewProps) {
               </button>
             </div>
           )}
-          {content && <FileBody linksFrom={{ key, path }} content={content} rendered={rendered} wrap={wrap} />}
+          {content && <FileBody linksFrom={{ key, path }} content={content} rendered={showRendered} wrap={wrap} place={place} />}
         </section>
       )}
       <aside className={`flex min-w-0 ${path === null ? 'flex-1' : 'flex-none'}`} style={path === null ? undefined : { width: shownTree }} hidden={!showTree} aria-label="File explorer">
@@ -135,7 +158,7 @@ export function FilesView({ thread }: PanelViewProps) {
           entries={entries}
           listing={listing}
           actions={actions}
-          openPath={path}
+          openPath={outside ? null : path}
           reveal={reveal}
           onOpen={open}
           onOpenInEditor={openInEditor}
