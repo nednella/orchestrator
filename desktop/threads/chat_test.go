@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/nednella/orchestrator/desktop/internal/apptest"
-	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/activity"
 	"github.com/nednella/orchestrator/internal/bus"
+	"github.com/nednella/orchestrator/internal/prompts"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -402,7 +402,7 @@ func TestManualWakeIsADraft(t *testing.T) {
 	}
 }
 
-func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
+func TestOnlyAReadThreadGetsTheReadTextInItsPrompt(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	read, err := h.NewThread("read", "", "", "", "read")
@@ -426,10 +426,11 @@ func TestEveryAccessGetsTheSamePrompt(t *testing.T) {
 		return strings.Join(args[i+1:], "\n")
 	}
 	want := prompt(supervised.ID)
-	for _, other := range []threads.Thread{read, full} {
-		if got := prompt(other.ID); got != want {
-			t.Errorf("a %s thread and a Supervised thread get different prompts:\n%s\n---\n%s", other.Access, got, want)
-		}
+	if got := prompt(full.ID); got != want {
+		t.Errorf("a Full thread and a Supervised thread get different prompts:\n%s\n---\n%s", got, want)
+	}
+	if got, wantRead := prompt(read.ID), strings.Replace(want, prompts.Base(), prompts.Base()+"\n\n"+prompts.Read(), 1); got != wantRead {
+		t.Errorf("a Read thread's prompt is not the Supervised one with the Read text after the base:\n%s\n---\n%s", got, wantRead)
 	}
 }
 

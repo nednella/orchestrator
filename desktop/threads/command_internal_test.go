@@ -62,7 +62,7 @@ func TestClaudeGetsTheBrowserToolsAndPrompt(t *testing.T) {
 			if prompt < 0 {
 				t.Fatalf("argv = %q", argv)
 			}
-			if !strings.HasPrefix(argv[prompt+1], prompts.Base()+"\n\n"+prompts.Thread()) {
+			if !strings.HasPrefix(argv[prompt+1], prompts.Base()) {
 				t.Errorf("system prompt = %q", argv[prompt+1])
 			}
 			if strings.Contains(argv[prompt+1], prompts.Browser()) != tt.want {
@@ -135,7 +135,7 @@ func TestCommandEndsATasksPromptWithTheHandover(t *testing.T) {
 	t.Parallel()
 	s := &Threads{browsers: fakeBrowsers{}}
 	argv := s.commandFor(project.Project{Name: "p"}, project.Model{}, "", "", "the patch is in /tmp/x", thread.Supervised)
-	want := prompts.Base() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
+	want := prompts.Base() + "\n\n" + prompts.Handover("the patch is in /tmp/x")
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != want {
 		t.Errorf("argv = %q", argv)
 	}
@@ -152,7 +152,7 @@ func TestCommandStartsAReadThreadInPlanModeWithTheBrowser(t *testing.T) {
 	if got := allowedTools(argv); got != tools {
 		t.Errorf("allowed tools = %q", got)
 	}
-	want := prompts.Base() + "\n\n" + prompts.Thread() + "\n\n" + prompts.Browser()
+	want := prompts.Base() + "\n\n" + prompts.Read() + "\n\n" + prompts.Browser()
 	if i := slices.Index(argv, "--append-system-prompt"); i < 0 || argv[i+1] != want {
 		t.Errorf("system prompt = %q", argv)
 	}

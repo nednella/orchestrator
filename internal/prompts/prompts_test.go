@@ -18,8 +18,8 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		hash string
 	}{
 		{"browser", Browser(), "eaa2c696c1572510d631edd9644c5635af7848e1f885bc230cfa1d8baeae1a21"},
-		{"base", Base(), "93d878b641fe120996689a687b2a1c5c964583a8202df25c97e505b7668fab12"},
-		{"thread", Thread(), "9537c98996d32f40f2b10c86bff1a096250bdb00b977424ae3431df5f18d9f22"},
+		{"base", Base(), "3b6d5a90720d57953b5ce14e39165eb50b0caba7d096da9b402bed72ea44784e"},
+		{"read", Read(), "2585aa2b08aed1e04cdc23b85176eb3fb2404c68976f5eaf6b392eb6f8ba3901"},
 		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
 		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
 		{"fork", Fork("{title}"), "c999c7a2388875deb9fbfc2fe23145aa55c10eb9ec0089c78622ad63303dd55d"},
@@ -53,8 +53,8 @@ func TestIssueNamesItsNumber(t *testing.T) {
 	if got, want := Issue(42), "This thread works on GitHub issue #42."; got != want {
 		t.Errorf("Issue(42) = %q, want %q", got, want)
 	}
-	if strings.Contains(Thread(), "ORCHESTRATOR_ISSUE") {
-		t.Error("the thread text still names the variable")
+	if strings.Contains(Base(), "ORCHESTRATOR_ISSUE") {
+		t.Error("the base text names the variable")
 	}
 }
 
@@ -223,14 +223,33 @@ func TestToolTextsNameTheTools(t *testing.T) {
 		name, text string
 		want       []string
 	}{
-		{"base", Base(), []string{"`note`", "`issue`", "`new_thread`", "`refresh`"}},
-		{"thread", Thread(), []string{"`issue`", "`note`", "`show`", "`track`", "`delegate`", "`wait`", "A child never gets more access than you have"}},
+		{"read", Read(), []string{"`issue`", "`note`", "gh issue create", "plan mode"}},
+		{"tool issue", Tool("issue"), []string{"gh issue create", "rebase once that pull request merges"}},
+		{"tool delegate", Tool("delegate"), []string{"never gets more", "can run without your context"}},
+		{"tool track", Tool("track"), []string{"git branch --show-current", "a Read thread"}},
 		{"tool browser", Tool("browser"), []string{"`open`", "`screenshot`", "`close`", "--pin-tab", "dialog accept", "5 seconds"}},
 	} {
 		for _, want := range tt.want {
 			if !strings.Contains(tt.text, want) {
 				t.Errorf("%s lacks %q:\n%s", tt.name, want, tt.text)
 			}
+		}
+	}
+}
+
+func TestBaseIsASlimBlockForEveryThread(t *testing.T) {
+	got := Base()
+	if n := len(strings.Fields(got)); n < 150 || n > 250 {
+		t.Errorf("Base has %d words, want 150 to 250", n)
+	}
+	for _, want := range []string{"Ordinary coding needs none of them", "when the owner asks", "`AskUserQuestion`", "`preview`", "Never commit on the default branch", "Never make a worktree", "`APPLICATION_PROMPT:`", "TMPDIR"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Base lacks %q", want)
+		}
+	}
+	for _, not := range []string{"Write:", "Full access", "`track`", "`show`", "`delegate`", "worktree `", "branch `", "{"} {
+		if strings.Contains(got, not) {
+			t.Errorf("Base holds %q, which belongs to a tool's text or a text for some threads", not)
 		}
 	}
 }

@@ -28,8 +28,8 @@ var (
 	startIssueBranch string
 	//go:embed base.md
 	base string
-	//go:embed thread.md
-	thread string
+	//go:embed read.md
+	read string
 	//go:embed issue.md
 	issue string
 	//go:embed worktree.md
@@ -98,26 +98,26 @@ func Digest(dependencies []string) string {
 // Browser is appended to a thread's system prompt when it has a browser.
 func Browser() string { return body(browser) }
 
-// Base starts the system prompt of every Claude thread: where it runs and the tools every thread uses.
+// Base starts the system prompt of every Claude thread: where it runs, when to use the orchestrator tools, and the rules every thread keeps.
 func Base() string { return body(base) }
 
-// Thread follows Base in the system prompt of every thread, whatever its access: what each access allows and the rules for branches.
-func Thread() string { return body(thread) }
+// Read follows Base in the system prompt of a thread that starts in plan mode: what it may do and how it hands work on.
+func Read() string { return body(read) }
 
-// Issue follows Thread in the system prompt of a thread that works on the GitHub issue number.
+// Issue follows Base in the system prompt of a thread that works on the GitHub issue number.
 func Issue(number int) string {
 	return strings.Replace(body(issue), "{number}", strconv.Itoa(number), 1)
 }
 
-// Worktree follows Thread in the system prompt of a thread that orchestrator started in the worktree it made, on branch.
+// Worktree follows Base in the system prompt of a thread that orchestrator started in the worktree it made, on branch.
 func Worktree(branch, dir string) string {
 	return strings.NewReplacer("{branch}", branch, "{worktree}", dir).Replace(body(worktree))
 }
 
-// Fork follows Thread in the system prompt of a fork of the thread called title: it has no branch of its own.
+// Fork follows Base in the system prompt of a fork of the thread called title: it has no branch of its own.
 func Fork(title string) string { return strings.Replace(body(fork), "{title}", quotable(title), 1) }
 
-// Child follows Thread, and Worktree when there is one, in the system prompt of a thread that the thread called parent
+// Child follows Base, and Worktree when there is one, in the system prompt of a thread that the thread called parent
 // started with delegate: its first message is its task, and its last reply of each turn is its result.
 func Child(parent string) string {
 	return strings.Replace(body(child), "{parent}", quotable(parent), 1)

@@ -30,7 +30,7 @@ func TestWorktreeThreadIsToldItsBranchAndFolder(t *testing.T) {
 	if !strings.Contains(got, "`/p/trees/issue-7`") || !strings.Contains(got, "`issue-7`") {
 		t.Errorf("system prompt lacks the worktree and branch:\n%s", got)
 	}
-	if want := prompts.Thread() + "\n\n" + prompts.Worktree("issue-7", "/p/trees/issue-7"); !strings.Contains(got, want) {
+	if want := prompts.Base() + "\n\n" + prompts.Worktree("issue-7", "/p/trees/issue-7"); !strings.Contains(got, want) {
 		t.Errorf("the worktree text does not follow the thread text:\n%s", got)
 	}
 }
@@ -43,13 +43,15 @@ func TestProjectFolderThreadGetsNoWorktreeText(t *testing.T) {
 	}
 }
 
-func TestEveryAccessGetsTheSamePromptInAWorktree(t *testing.T) {
+func TestOnlyAReadThreadGetsTheReadText(t *testing.T) {
 	t.Parallel()
 	tree := workTree{branch: "issue-7", dir: "/p/trees/issue-7"}
-	read := systemPrompt(t, thread.Read, tree)
+	if got := systemPrompt(t, thread.Read, tree); !strings.Contains(got, prompts.Base()+"\n\n"+prompts.Read()) {
+		t.Errorf("a Read thread lacks the Read text:\n%s", got)
+	}
 	for _, write := range []thread.Access{thread.Supervised, thread.Full} {
-		if got := systemPrompt(t, write, tree); got != read {
-			t.Errorf("a Read and a %s thread get different prompts:\n%s\n---\n%s", write, read, got)
+		if got := systemPrompt(t, write, tree); strings.Contains(got, prompts.Read()) {
+			t.Errorf("a %s thread gets the Read text:\n%s", write, got)
 		}
 	}
 }

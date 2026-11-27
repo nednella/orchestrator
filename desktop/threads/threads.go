@@ -4713,7 +4713,10 @@ func launchFor(model project.Model, conversation, brief, handover string, access
 		l.Prompt = brief
 		return l
 	}
-	l.Prompt = prompts.Base() + "\n\n" + prompts.Thread()
+	l.Prompt = prompts.Base()
+	if access == thread.Read {
+		l.Prompt += "\n\n" + prompts.Read()
+	}
 	if issue > 0 {
 		l.Prompt += "\n\n" + prompts.Issue(issue)
 	}
