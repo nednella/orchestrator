@@ -455,10 +455,14 @@ func (l *Lifecycle) base(ctx context.Context, dir string) (ref, oid string, err 
 // fetchBase brings origin's copy of the default branch up to date, which the next new branch starts from. A fetch that
 // fails is only logged.
 func (l *Lifecycle) fetchBase(ctx context.Context, dir string) {
-	branch := l.mainBranch(ctx, dir)
-	if _, err := l.git(ctx, dir, "fetch", "--quiet", "origin", branch); err != nil {
+	if branch, err := l.updateBase(ctx, dir); err != nil {
 		log.Printf("orchestrator: fetching %s after a new worktree was made from the copy of it there was: %v", branch, err)
 	}
+}
+
+func (l *Lifecycle) updateBase(ctx context.Context, dir string) (branch string, err error) {
+	branch = l.mainBranch(ctx, dir)
+	return branch, l.fetch(ctx, dir, "--quiet", "origin", branch)
 }
 
 // startOf is what a new branch starts from, and the commit it is at: base when it is set, else what l.base gives.
@@ -494,7 +498,12 @@ func (l *Lifecycle) onOrigin(ctx context.Context, dir, branch string) (found, un
 	ask := func(args ...string) error {
 		asked, cancel := context.WithTimeout(ctx, cmp.Or(l.originWait, gitTimeout))
 		defer cancel()
-		_, err := l.git(asked, dir, args...)
+		var err error
+		if args[0] == "fetch" {
+			err = l.fetch(asked, dir, args[1:]...)
+		} else {
+			_, err = l.git(asked, dir, args...)
+		}
 		if err != nil && asked.Err() != nil && ctx.Err() == nil {
 			timedOut = true
 		}

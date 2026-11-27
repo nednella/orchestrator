@@ -156,6 +156,9 @@ type Lifecycle struct {
 	activity   Activity
 	repos      Repos
 
+	fetchMu    sync.Mutex
+	fetchSlots map[string]chan struct{} // under fetchMu, the right to fetch into each repository, one fetch at a time
+
 	pollMu sync.Mutex // one reconcile at a time
 	logMu  sync.Mutex // the clean-up log files
 
@@ -187,7 +190,7 @@ func newLifecycle(runner run.Runner, stream run.Streamer, dataDir, stateDir stri
 	return &Lifecycle{
 		run: runner, stream: stream, dataDir: dataDir, stateDir: stateDir, threads: s, activity: activity, emit: emit, warn: warn.New(emit), repos: noRepos{},
 		tracks: map[string]*track{}, gone: map[string]bool{}, files: map[string]*prsFile{}, etags: map[string]string{}, watchers: map[string]*watcher{}, lists: map[string]openPulls{}, polling: map[string]bool{}, now: time.Now, logins: map[string]string{},
-		polled: make(chan struct{}), sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
+		fetchSlots: map[string]chan struct{}{}, polled: make(chan struct{}), sweepEvery: cleanupSweep, stopped: stopped, stopClean: stop,
 	}
 }
 
@@ -1589,7 +1592,26 @@ func (l *Lifecycle) merged(ctx context.Context, dir, head, base string, pr *PR) 
 // fetchOrigin brings every branch on origin up to date and drops the ones origin deleted, so a
 // commit that only a deleted or force-pushed branch held no longer counts as pushed.
 func (l *Lifecycle) fetchOrigin(ctx context.Context, dir string) error {
-	_, err := l.git(ctx, dir, "fetch", "--quiet", "--prune", "origin")
+	return l.fetch(ctx, dir, "--quiet", "--prune", "origin")
+}
+
+// fetch runs git fetch with args in the repository at dir, one fetch at a time per repository: two at once that bring
+// in the same branch fail, one of them with cannot lock ref.
+func (l *Lifecycle) fetch(ctx context.Context, dir string, args ...string) error {
+	l.fetchMu.Lock()
+	slot, ok := l.fetchSlots[dir]
+	if !ok {
+		slot = make(chan struct{}, 1)
+		l.fetchSlots[dir] = slot
+	}
+	l.fetchMu.Unlock()
+	select {
+	case slot <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-slot }()
+	_, err := l.git(ctx, dir, append([]string{"fetch"}, args...)...)
 	return err
 }
 
