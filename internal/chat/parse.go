@@ -27,6 +27,8 @@ type line struct {
 	Errors         []string        `json:"errors"`
 	RateLimitInfo  json.RawMessage `json:"rate_limit_info"`
 	PermissionMode string          `json:"permissionMode"`
+	// FastModeDisabledReason is an init's: why claude runs without fast mode, "" when it runs with it or names none.
+	FastModeDisabledReason string `json:"fast_mode_disabled_reason"`
 	// ParentToolUseID is the Agent call whose subagent wrote the line, on an assistant, user or stream event.
 	ParentToolUseID string `json:"parent_tool_use_id"`
 	// ToolUseID, Status and Summary are a task's end: the call that started it, completed, failed or stopped, and its
@@ -71,7 +73,7 @@ func Parse(data []byte) ([]Event, error) {
 	case "system":
 		switch l.Subtype {
 		case "init":
-			return []Event{{Kind: KindInit, ID: l.SessionID, Cwd: l.Cwd, Origin: cmp.Or(l.OriginalCwd, l.Cwd), Model: l.Model}}, nil
+			return []Event{{Kind: KindInit, ID: l.SessionID, Cwd: l.Cwd, Origin: cmp.Or(l.OriginalCwd, l.Cwd), Model: l.Model, Text: l.FastModeDisabledReason}}, nil
 		case "compact_boundary":
 			return []Event{{Kind: KindCompact}}, nil
 		case "status":

@@ -687,3 +687,23 @@ func TestInitCarriesTheFoldersAndTheModel(t *testing.T) {
 		t.Errorf("init with no original_cwd = %+v, %v", events, err)
 	}
 }
+
+func TestParseInitGivesWhyFastModeIsOff(t *testing.T) {
+	init := func(extra string) Event {
+		t.Helper()
+		events, err := Parse([]byte(`{"type":"system","subtype":"init","session_id":"s1","cwd":"/w","model":"claude-opus-5-5"` + extra + `}`))
+		if err != nil || len(events) != 1 {
+			t.Fatalf("Parse = %+v, %v", events, err)
+		}
+		return events[0]
+	}
+	if e := init(`,"fast_mode_state":"off","fast_mode_disabled_reason":"extra_usage_disabled"`); e.Kind != KindInit || e.Text != "extra_usage_disabled" {
+		t.Errorf("event = %+v, want the reason as its text", e)
+	}
+	if e := init(`,"fast_mode_state":"on"`); e.Text != "" {
+		t.Errorf("event = %+v, want no text for fast mode on", e)
+	}
+	if e := init(``); e.Text != "" {
+		t.Errorf("event = %+v, want no text from a Claude that says nothing of fast mode", e)
+	}
+}

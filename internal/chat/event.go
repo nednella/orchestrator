@@ -124,7 +124,7 @@ type Event struct {
 	Body   string `json:"body,omitempty"`
 	Result bool   `json:"result,omitempty"`
 	// Cwd, Origin and Model are an init's: the folder Claude works in, the folder it started in, which names its
-	// transcript's folder, and the model it runs.
+	// transcript's folder, and the model it runs. Its Text is the reason Claude gives for running without fast mode.
 	Cwd    string `json:"cwd,omitempty"`
 	Origin string `json:"origin,omitempty"`
 	Model  string `json:"model,omitempty"`
