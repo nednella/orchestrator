@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { STATE_LABEL } from './stateMeta.ts'
-import { cleanupNote, threadGoal, descendantsOf, firstThread, goneThreads, isTopLevel, needsOwner, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
+import { cleanupNote, threadGoal, descendantsOf, firstThread, goneThreads, isTopLevel, nextThread, shortAgo, sidebarThreads, sortThreads, splitSideChats, threadTreeOf, urgentThreads, waitingByProject } from './threads.ts'
 import type { Project } from './types.ts'
 import type { PR, Thread, State } from './types.ts'
 
@@ -152,22 +152,21 @@ test('a waiting grandchild puts its top thread in attention', () => {
     ['lead', 'busy'],
   )
   assert.equal(threadTreeOf(threads).attention.get('lead')?.id, 'grandchild')
-  assert.equal(needsOwner(threads[1], threads)?.id, 'grandchild')
   assert.deepEqual(
     descendantsOf('lead', threads).map((s) => s.id),
     ['child', 'grandchild'],
   )
 })
 
-test('needsOwner prefers the thread itself', () => {
+test('a thread that waits needs the owner before its children', () => {
   const threads = [thread('lead', 'waiting'), thread('child', 'waiting', 0, 'lead')]
-  assert.equal(needsOwner(threads[0], threads)?.id, 'lead')
-  assert.equal(needsOwner(thread('alone', 'idle'), [thread('alone', 'idle')]), undefined)
+  assert.equal(threadTreeOf(threads).attention.get('lead')?.id, 'lead')
+  assert.equal(threadTreeOf([thread('alone', 'idle')]).attention.get('alone'), undefined)
 })
 
-test('needsOwner takes the nearest waiting descendant', () => {
+test('a thread needs the owner for its nearest waiting descendant', () => {
   const threads = [thread('lead', 'working'), thread('a', 'working', 0, 'lead'), thread('deep', 'waiting', 0, 'a'), thread('b', 'waiting', 0, 'lead')]
-  assert.equal(needsOwner(threads[0], threads)?.id, 'b')
+  assert.equal(threadTreeOf(threads).attention.get('lead')?.id, 'b')
 })
 
 test('rail counts a child in its parent\'s project', () => {

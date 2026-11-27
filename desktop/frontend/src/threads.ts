@@ -51,11 +51,6 @@ export function descendantsOf(id: string, threads: Thread[]): Thread[] {
 
 const nearestWaiting = (s: Thread, descendants: Thread[]) => (s.state === 'waiting' ? s : descendants.find((d) => d.state === 'waiting'))
 
-// needsOwner is the thread the owner must answer for s: s when it waits, else its nearest waiting descendant.
-export function needsOwner(s: Thread, threads: Thread[]): Thread | undefined {
-  return nearestWaiting(s, descendantsOf(s.id, threads))
-}
-
 // ThreadTree is what the sidebar needs of the threads' families, built once per list: the top-level thread of every
 // thread, itself for a top-level one, and for each top-level thread that needs the owner, the thread that waits.
 export type ThreadTree = { top: Map<string, Thread>; attention: Map<string, Thread> }
