@@ -25,7 +25,7 @@ test('a failed start ends the turn with the reason, the message still shown as s
   const { timeline } = startTimeline({ ...starting, start: 'failed', startError: 'the set-up failed', detail: 'the set-up failed' })
   assert.deepEqual(
     timeline.items.map((i) => i.kind),
-    ['user', 'working', 'startFailed'],
+    ['user', 'startFailed'],
   )
   assert.equal(timeline.turnOpen, false)
 })
@@ -38,13 +38,13 @@ test('a start with no message has the step alone', () => {
   )
 })
 
-test('a cancelled start keeps the first message and the held ones, and offers the retry in the working row', () => {
+test('a cancelled start keeps the first message and the held ones, ends the timer of the working row and offers the retry', () => {
   const { timeline } = startTimeline({ ...starting, start: 'cancelled', startError: 'Start cancelled', detail: 'Start cancelled', startQueue: ['and the signup form'] })
   assert.deepEqual(
     timeline.items.map((i) => i.kind),
-    ['user', 'working', 'startFailed'],
+    ['user', 'startFailed'],
   )
-  const failed = timeline.items[2]
+  const failed = timeline.items[timeline.items.length - 1]
   assert.equal(failed.kind === 'startFailed' && failed.cancelled, true)
   assert.equal(failed.kind === 'startFailed' && failed.text, 'Start cancelled')
   assert.deepEqual(timeline.queued.map((q) => q.text), ['and the signup form'])
