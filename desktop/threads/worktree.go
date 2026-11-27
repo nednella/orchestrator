@@ -103,9 +103,9 @@ type workPlace struct {
 
 // makeWorktree gives the thread its worktree on branch. A project that is not a git repository runs the thread in its
 // folder. A branch checked out in a worktree already runs the thread there, unrecorded, so orchestrator never removes it;
-// one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is made by
-// the project's worktree_command from base, a commit, or with no base from the default branch on origin,
-// fetched first, and the worktree is the one git then lists on the branch, wherever the command put it.
+// one that another thread has is refused. An existing branch is checked out as it is, never reset; a new one is cut by
+// git from base, a commit, or with no base from the local copy of the default branch on origin, with no fetch first. A
+// fresh branch is one the thread's title named, which origin is not asked for.
 func (l *Lifecycle) makeWorktree(ctx context.Context, proj project.Project, name thread.Name, branch, base string, fresh bool) (workPlace, error) {
 	top, err := l.git(ctx, proj.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
@@ -185,7 +185,7 @@ func (l *Lifecycle) addWorktree(ctx context.Context, proj project.Project, dir, 
 // restore puts back the worktree orchestrator made for the thread, at the same path on the same branch, when it is gone, so
 // a woken thread never moves folder. A thread with no record has nothing to restore. A folder at the path is left as it
 // is: it is the thread's own worktree only when its marker holds the thread's id, and anything else is an error. The
-// branch is checked out as it is, the local one else origin's, with plain git: worktree_command makes a new
+// branch is checked out as it is, the local one else origin's, with plain git: a start makes a new
 // branch, and this one exists. A restore that fails leaves the record as it was.
 func (l *Lifecycle) restore(ctx context.Context, proj project.Project, thread string) error {
 	key := proj.Key()

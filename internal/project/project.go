@@ -26,26 +26,26 @@ func (p Project) RemoveWorktree() string { return cmp.Or(p.CleanupCommand, Defau
 
 // Project is the unit orchestrator is scoped to: a name and the folder agents start in.
 type Project struct {
-	Name            string    `yaml:"name"`
-	Dir             string    `yaml:"directory"`
-	QueueSections   []Section `yaml:"queue_sections,omitempty"`      // the groups of the queue, each with the actions that start a thread
-	OnNote          string    `yaml:"note_command,omitempty"`        // typed into a thread started from a note; {text} is the note, the note itself when unset
-	Send            string    `yaml:"prompt_send,omitempty"`         // auto (the default) sends what a thread starts with at once; manual waits for Enter
-	Branch          string    `yaml:"issue_branch,omitempty"`        // branch of an issue's work when the thread reports none; {n} is the number
-	CleanupCommand  string    `yaml:"cleanup_command,omitempty"`     // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
-	WorktreeCommand string    `yaml:"worktree_command,omitempty"`    // shell command that sets up a new worktree, run in a terminal in it while the agent already works; {branch}, {worktree}, {dir} and {base}
-	CleanupMode     Cleanup   `yaml:"cleanup_mode,omitempty"`        // whether the app cleans up by itself, per event
-	URL             string    `yaml:"browser_start_url,omitempty"`   // the page a thread's browser opens first
-	Browser         *bool     `yaml:"browser_enabled,omitempty"`     // give threads the browser and evidence commands; on unless false
-	Digest          string    `yaml:"digest_schedule,omitempty"`     // weekly (the default) or off
-	PRWatch         string    `yaml:"pr_watch_method,omitempty"`     // webhook or poll; unset tries the webhook and polls when it does not work
-	PRPoll          string    `yaml:"pr_poll_interval,omitempty"`    // how often to poll pull requests, "10s" by default
-	KeepAwake       *bool     `yaml:"keep_mac_awake,omitempty"`      // overrides the config's keep_mac_awake for this project
-	OnReview        string    `yaml:"pr_review_command,omitempty"`   // typed into a thread whose PR got a review or comment; {n} is the PR number
-	ReviewDrafts    bool      `yaml:"pr_review_drafts,omitempty"`    // send pr_review_command while the PR is a draft too
-	OnChecks        string    `yaml:"pr_checks_command,omitempty"`   // typed into a thread whose PR has failing checks; {n} is the PR number
-	OnConflict      string    `yaml:"pr_conflict_command,omitempty"` // typed into a thread whose PR conflicts with its base branch; {n} is the PR number
-	SetupDismissed  bool      `yaml:"setup_dismissed,omitempty"`     // the owner turned down the offer to set the project up
+	Name           string    `yaml:"name"`
+	Dir            string    `yaml:"directory"`
+	QueueSections  []Section `yaml:"queue_sections,omitempty"`      // the groups of the queue, each with the actions that start a thread
+	OnNote         string    `yaml:"note_command,omitempty"`        // typed into a thread started from a note; {text} is the note, the note itself when unset
+	Send           string    `yaml:"prompt_send,omitempty"`         // auto (the default) sends what a thread starts with at once; manual waits for Enter
+	Branch         string    `yaml:"issue_branch,omitempty"`        // branch of an issue's work when the thread reports none; {n} is the number
+	CleanupCommand string    `yaml:"cleanup_command,omitempty"`     // shell command that removes the worktree orchestrator made; {worktree}, {branch}, {dir} and {force}
+	SetupCommand   string    `yaml:"setup_command,omitempty"`       // shell command that sets up a new worktree, run in a terminal in it while the agent already works; {branch}, {worktree}, {dir} and {base}
+	CleanupMode    Cleanup   `yaml:"cleanup_mode,omitempty"`        // whether the app cleans up by itself, per event
+	URL            string    `yaml:"browser_start_url,omitempty"`   // the page a thread's browser opens first
+	Browser        *bool     `yaml:"browser_enabled,omitempty"`     // give threads the browser and evidence commands; on unless false
+	Digest         string    `yaml:"digest_schedule,omitempty"`     // weekly (the default) or off
+	PRWatch        string    `yaml:"pr_watch_method,omitempty"`     // webhook or poll; unset tries the webhook and polls when it does not work
+	PRPoll         string    `yaml:"pr_poll_interval,omitempty"`    // how often to poll pull requests, "10s" by default
+	KeepAwake      *bool     `yaml:"keep_mac_awake,omitempty"`      // overrides the config's keep_mac_awake for this project
+	OnReview       string    `yaml:"pr_review_command,omitempty"`   // typed into a thread whose PR got a review or comment; {n} is the PR number
+	ReviewDrafts   bool      `yaml:"pr_review_drafts,omitempty"`    // send pr_review_command while the PR is a draft too
+	OnChecks       string    `yaml:"pr_checks_command,omitempty"`   // typed into a thread whose PR has failing checks; {n} is the PR number
+	OnConflict     string    `yaml:"pr_conflict_command,omitempty"` // typed into a thread whose PR conflicts with its base branch; {n} is the PR number
+	SetupDismissed bool      `yaml:"setup_dismissed,omitempty"`     // the owner turned down the offer to set the project up
 }
 
 // Present says whether the project's folder exists on this machine.
@@ -456,7 +456,7 @@ func editInPlace(seq *yaml.Node, p Project) int {
 	syncScalar(entry, "digest_schedule", p.Digest, nil)
 	syncScalar(entry, "issue_branch", p.Branch, nil)
 	syncScalar(entry, "cleanup_command", p.CleanupCommand, nil)
-	syncScalar(entry, "worktree_command", p.WorktreeCommand, nil)
+	syncScalar(entry, "setup_command", p.SetupCommand, nil)
 	syncScalar(entry, "pr_review_command", p.OnReview, nil)
 	syncScalar(entry, "pr_checks_command", p.OnChecks, nil)
 	syncScalar(entry, "pr_conflict_command", p.OnConflict, nil)

@@ -590,31 +590,31 @@ const queueSections = `    queue_sections:
 
 // Options changes the harness's config.
 type Options struct {
-	ProjectExtra    string        // yaml lines added under the project "main"
-	Queue           string        // the project's queue_sections block, in place of the usual one
-	NoBranch        bool          // leave out the project's `issue_branch`, so the default `issue-{n}` applies
-	CleanupCommand  string        // the project's cleanup_command; none by default
-	WorktreeCommand string        // the project's worktree_command, the set-up of a new worktree; none by default
-	TopExtra        string        // yaml lines added at the top of the config
-	DigestFirst     time.Duration // wait before the first automatic digest check; an hour by default
-	DigestTick      time.Duration
-	UpdateTick      time.Duration     // how often to check the releases; an hour by default, and an hour before the first check
-	Releases        string            // the latest release's tag; "" fails the check
-	Notes           map[string]string // the body of each release's notes, by version; see FakeGH.Notes
-	NotesErr        error             // what reading the notes fails with, if set
-	Version         string            // the version the app believes it runs; "dev" by default
-	DataDirConfig   bool              // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
-	NoProject       bool              // leave the project out of the config, so the app starts in a folder it does not know
-	AbsentProject   string            // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
-	ClaudeStartup   string            // shell the stand-in claude runs once it started, before it reads its first line: "sleep 2" is a Claude that is slow to get ready
-	ClaudeRejects   string            // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
-	CleanupSweep    time.Duration     // how often kept clean-ups are tried again; 0 keeps the app's hour
-	PollEvery       time.Duration     // how often tmux is listed; 0 keeps the app's 2 seconds
-	StopSettle      time.Duration     // how long after a turn's end its usage is counted; 0 keeps the app's second
-	RetryFirst      time.Duration     // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
-	ConfigTick      time.Duration     // how often the config file is read again; 0 keeps the app's 2 seconds
-	Env             []string          // entries of the environment the app and its threads run in; the harness's own isolation wins over them
-	PathWithout     []string          // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
+	ProjectExtra   string        // yaml lines added under the project "main"
+	Queue          string        // the project's queue_sections block, in place of the usual one
+	NoBranch       bool          // leave out the project's `issue_branch`, so the default `issue-{n}` applies
+	CleanupCommand string        // the project's cleanup_command; none by default
+	SetupCommand   string        // the project's setup_command, the set-up of a new worktree; none by default
+	TopExtra       string        // yaml lines added at the top of the config
+	DigestFirst    time.Duration // wait before the first automatic digest check; an hour by default
+	DigestTick     time.Duration
+	UpdateTick     time.Duration     // how often to check the releases; an hour by default, and an hour before the first check
+	Releases       string            // the latest release's tag; "" fails the check
+	Notes          map[string]string // the body of each release's notes, by version; see FakeGH.Notes
+	NotesErr       error             // what reading the notes fails with, if set
+	Version        string            // the version the app believes it runs; "dev" by default
+	DataDirConfig  bool              // put the data folder in the config's data_dir, not ORCHESTRATOR_DEV_DATA_DIR, and home in the state dir
+	NoProject      bool              // leave the project out of the config, so the app starts in a folder it does not know
+	AbsentProject  string            // with NoProject: the folder is named so, and the config holds a project of that name whose folder is missing here
+	ClaudeStartup  string            // shell the stand-in claude runs once it started, before it reads its first line: "sleep 2" is a Claude that is slow to get ready
+	ClaudeRejects  string            // a flag the stand-in claude does not know: started with it, it fails at once as Claude does
+	CleanupSweep   time.Duration     // how often kept clean-ups are tried again; 0 keeps the app's hour
+	PollEvery      time.Duration     // how often tmux is listed; 0 keeps the app's 2 seconds
+	StopSettle     time.Duration     // how long after a turn's end its usage is counted; 0 keeps the app's second
+	RetryFirst     time.Duration     // the first pause before a child's result the parent could not take goes again; 0 keeps the app's second
+	ConfigTick     time.Duration     // how often the config file is read again; 0 keeps the app's 2 seconds
+	Env            []string          // entries of the environment the app and its threads run in; the harness's own isolation wins over them
+	PathWithout    []string          // commands whose folders the environment's PATH leaves out; the stand-in claude is added to it
 }
 
 // Harness is an app whose Claude threads run the stand-in claude under the built command's host.
@@ -676,8 +676,8 @@ func NewWith(t *testing.T, o Options) *Harness {
 	if o.CleanupCommand != "" {
 		cleanup = fmt.Sprintf("    cleanup_command: %q\n", o.CleanupCommand)
 	}
-	if o.WorktreeCommand != "" {
-		cleanup += fmt.Sprintf("    worktree_command: %q\n", o.WorktreeCommand)
+	if o.SetupCommand != "" {
+		cleanup += fmt.Sprintf("    setup_command: %q\n", o.SetupCommand)
 	}
 	top := o.TopExtra
 	if o.DataDirConfig {

@@ -531,9 +531,9 @@ func TestCleanupCommandDefault(t *testing.T) {
 	}
 }
 
-func TestWorktreeCommandIsKeptOnSave(t *testing.T) {
+func TestSetupCommandIsKeptOnSave(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	original := "projects:\n  - name: api\n    directory: /srv/api\n    worktree_command: \"git worktree add {worktree} {branch}\" # mine\n"
+	original := "projects:\n  - name: api\n    directory: /srv/api\n    setup_command: \"git worktree add {worktree} {branch}\" # mine\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestWorktreeCommandIsKeptOnSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
-	if !strings.Contains(string(got), `worktree_command: "git worktree add {worktree} {branch}" # mine`) {
+	if !strings.Contains(string(got), `setup_command: "git worktree add {worktree} {branch}" # mine`) {
 		t.Errorf("the saved file lost the worktree command:\n%s", got)
 	}
 }

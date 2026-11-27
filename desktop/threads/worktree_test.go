@@ -213,10 +213,10 @@ func TestThreadBranchIsNamedFromItsTitle(t *testing.T) {
 	}
 }
 
-func TestWorktreeCommandRunsInTheNewWorktreeWithItsPlaceholders(t *testing.T) {
+func TestSetupCommandRunsInTheNewWorktreeWithItsPlaceholders(t *testing.T) {
 	t.Parallel()
 	got := filepath.Join(t.TempDir(), "placeholders")
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "printf '%s\\n' {branch} {worktree} {dir} {base} \"$(pwd -P)\" > " + got})
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "printf '%s\\n' {branch} {worktree} {dir} {base} \"$(pwd -P)\" > " + got})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {
@@ -239,7 +239,7 @@ func TestWorktreeCommandRunsInTheNewWorktreeWithItsPlaceholders(t *testing.T) {
 
 func TestFailedSetupCommandKeepsItsTerminalAndStopsNothing(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "echo no room on the disk >&2; exit 3"})
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "echo no room on the disk >&2; exit 3"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {
@@ -260,7 +260,7 @@ func TestFailedSetupCommandKeepsItsTerminalAndStopsNothing(t *testing.T) {
 
 func TestSetupCommandThatEndsWellLeavesNoLine(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "echo all done"})
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "echo all done"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {
@@ -278,7 +278,7 @@ func TestSetupCommandThatEndsWellLeavesNoLine(t *testing.T) {
 
 func TestDeleteStopsASetupCommandThatRuns(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 60"})
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "sleep 60"})
 	repoFixture(t, h)
 	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
 	if err != nil {

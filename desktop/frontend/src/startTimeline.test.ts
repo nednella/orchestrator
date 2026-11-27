@@ -22,7 +22,7 @@ test('messages sent while it starts wait in the queue', () => {
 })
 
 test('a failed start ends the turn with the reason, the message still shown as sent', () => {
-  const { timeline } = startTimeline({ ...starting, start: 'failed', startError: 'worktree_command failed', detail: 'worktree_command failed' })
+  const { timeline } = startTimeline({ ...starting, start: 'failed', startError: 'the set-up failed', detail: 'the set-up failed' })
   assert.deepEqual(
     timeline.items.map((i) => i.kind),
     ['user', 'working', 'startFailed'],

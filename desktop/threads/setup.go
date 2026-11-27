@@ -37,11 +37,11 @@ const (
 	setupGrace = 5 * time.Second // before a terminal that is not listed is taken for one the owner closed
 )
 
-// startSetup runs the project's worktree_command, the set-up of a worktree, in a terminal in the thread's worktree.
+// startSetup runs the project's setup_command, the set-up of a worktree, in a terminal in the thread's worktree.
 // The agent does not wait for it. It runs once, for a worktree orchestrator made. A command that cannot start is
 // logged and shown as failed.
 func (s *Threads) startSetup(st *starting) {
-	command := strings.TrimSpace(st.proj.WorktreeCommand)
+	command := strings.TrimSpace(st.proj.SetupCommand)
 	if command == "" || !st.work.made || st.setupStarted {
 		return
 	}

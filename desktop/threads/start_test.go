@@ -86,7 +86,7 @@ func TestNewThreadStartsWithoutWaitingForTheNetwork(t *testing.T) {
 
 func TestSlowSetupCommandDoesNotHoldTheAgent(t *testing.T) {
 	t.Parallel()
-	h := apptest.NewWith(t, apptest.Options{WorktreeCommand: "sleep 30"})
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "sleep 30"})
 	repoFixture(t, h)
 	s, err := h.NewThreadLater("Fix login", "make it faster")
 	if err != nil {
