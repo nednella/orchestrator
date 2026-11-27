@@ -88,13 +88,14 @@ func launch() error {
 	}, run.Exec, run.Stream, run.ExecEnv)
 	quitOnSignal(a)
 
+	darkTheme, lightTheme := cfg.Registry.Themes()
 	return wails.Run(&options.App{
 		Title:            "orchestrator",
 		Width:            1500,
 		Height:           950,
 		MinWidth:         420,
 		MinHeight:        360,
-		BackgroundColour: &options.RGBA{R: 7, G: 9, B: 13, A: 255},
+		BackgroundColour: windowColour(cfg.Registry.Theme(), darkTheme, lightTheme, systemIsDark()),
 		AssetServer:      &assetserver.Options{Assets: assets, Handler: a.Assets()},
 		OnStartup: func(c context.Context) {
 			window.Store(&c)
