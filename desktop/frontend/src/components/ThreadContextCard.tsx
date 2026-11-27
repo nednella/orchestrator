@@ -1,9 +1,9 @@
-import { Bot, CircleDot, CornerLeftUp, Folder, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
+import { Bot, CircleDot, CornerLeftUp, Folder, FileDiff, GitBranch, GitFork, GitMerge, GitPullRequestArrow, GitPullRequestClosed, GitPullRequestDraft, Globe, Laptop, MessagesSquare } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { splitBranch } from '../branchLabel'
-import { editorLabel } from '../contextCard'
+import { changesTip, editorLabel } from '../contextCard'
 import type { CardRow } from '../contextCard'
 import { closeCardPopover } from '../contextCardOpen'
 import { askToReadIssue } from '../issueReadRequest'
@@ -60,6 +60,21 @@ export function ThreadContextCard({ id, className }: ThreadContextCardProps) {
           </span>
         )
         return <ContextCardRow icon={<GitBranch size={16} aria-hidden="true" />} label={label} end={copied && 'Copied'} title={`${r.branch}\nRight-click to copy`} onContextMenu={copy} />
+      }
+      case 'changes': {
+        const { base, added, removed } = r.changes
+        const label = (
+          <span className="truncate">
+            Changes <span className="font-normal text-soft">vs {base}</span>
+          </span>
+        )
+        const end = (
+          <>
+            <span className="text-(--diff-added)">+{added}</span>
+            <span className="text-(--diff-removed)">−{removed}</span>
+          </>
+        )
+        return <ContextCardRow icon={<FileDiff size={16} aria-hidden="true" />} label={label} end={end} tip={changesTip(base)} />
       }
       case 'pr': {
         const PRIcon = PR_ICON[r.pr.state]

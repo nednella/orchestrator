@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AgentItem } from './chatTimeline.ts'
-import { cardLineage, cardPlacement, cardSections, editorLabel, lineageLabel, serverMeta, VS_CODE_APP } from './contextCard.ts'
+import { cardLineage, cardPlacement, cardSections, changesTip, editorLabel, lineageLabel, serverMeta, VS_CODE_APP } from './contextCard.ts'
 import type { CardFacts } from './contextCard.ts'
 import type { PR, Thread } from './types.ts'
 
@@ -40,7 +40,7 @@ const thread = (over: Partial<Thread> = {}): Thread => ({
   ...over,
 })
 
-const facts = (over: Partial<CardFacts> = {}): CardFacts => ({ machine: '', folder: '', editor: '', issueTitle: '', servers: [], agents: [], children: [], parent: null, forks: [], sideChats: [], ...over })
+const facts = (over: Partial<CardFacts> = {}): CardFacts => ({ machine: '', folder: '', editor: '', issueTitle: '', changes: null, servers: [], agents: [], children: [], parent: null, forks: [], sideChats: [], ...over })
 
 const pr: PR = {
   number: 618,
@@ -75,6 +75,14 @@ test('a thread with no PR has no PR row', () => {
     false,
   )
   assert.deepEqual(kinds(thread({ branch: 'issue-612', pr }), facts()), [['branch', 'pr']])
+})
+
+test('the changes row sits under the branch and shows only with a base', () => {
+  const t = thread({ branch: 'issue-612', pr })
+  assert.deepEqual(kinds(t, facts({ changes: { base: 'origin/main', added: 12, removed: 3 } })), [['branch', 'changes', 'pr']])
+  assert.deepEqual(kinds(t, facts({ changes: { base: '', added: 0, removed: 0 } })), [['branch', 'pr']])
+  assert.deepEqual(kinds(t, facts()), [['branch', 'pr']])
+  assert.equal(changesTip('origin/main'), 'Lines this branch changes against origin/main, committed or not. New files count once they are added.')
 })
 
 test('an empty section is dropped', () => {

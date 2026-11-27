@@ -108,6 +108,8 @@
   --pr-draft: #5a6270;
   --pr-merged: #8957e5;
   --pr-closed: #da3633;
+  --diff-added: #3fb950;
+  --diff-removed: var(--danger);
 
   --type-feature: #6ea8ff;
   --type-bug: #f5586a;
@@ -270,6 +272,8 @@
   --pr-draft: #6e7781;
   --pr-merged: #8957e5;
   --pr-closed: #da3633;
+  --diff-added: #1a7f37;
+  --diff-removed: var(--danger);
 
   --type-feature: #2a6fe0;
   --type-bug: #d02a3e;
@@ -370,6 +374,8 @@
   --pr-draft: oklch(0.494 0.025 261.7);
   --pr-merged: oklch(0.584 0.205 295.6);
   --pr-closed: oklch(0.586 0.201 26.8);
+  --diff-added: oklch(0.72 0.17 148);
+  --diff-removed: var(--danger);
   --type-feature: oklch(0.729 0.141 258.3);
   --type-bug: oklch(0.674 0.192 17.3);
   --type-refactor: oklch(0.737 0.142 299.4);
@@ -466,6 +472,8 @@
   --pr-draft: oklch(0.494 0.025 261.7);
   --pr-merged: oklch(0.584 0.205 295.6);
   --pr-closed: oklch(0.586 0.201 26.8);
+  --diff-added: oklch(0.72 0.17 148);
+  --diff-removed: var(--danger);
   --type-feature: oklch(0.729 0.141 258.3);
   --type-bug: oklch(0.674 0.192 17.3);
   --type-refactor: oklch(0.737 0.142 299.4);
@@ -567,6 +575,8 @@
   --pr-draft: oklch(0.565 0.019 251);
   --pr-merged: oklch(0.584 0.205 295.6);
   --pr-closed: oklch(0.586 0.201 26.8);
+  --diff-added: oklch(0.55 0.15 148);
+  --diff-removed: var(--danger);
   --type-feature: oklch(0.563 0.186 260);
   --type-bug: oklch(0.561 0.2 20.9);
   --type-refactor: oklch(0.569 0.197 299.3);

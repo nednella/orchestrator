@@ -1,6 +1,6 @@
 import type { AgentItem } from './chatTimeline'
 import { folderName } from './terminalGroups.ts'
-import type { PR, Server, Thread } from './types'
+import type { Changes, PR, Server, Thread } from './types'
 
 const CARD_WIDTH = 280
 const CARD_GAP = 12
@@ -19,6 +19,7 @@ export type CardFacts = {
   folder: string
   editor: string
   issueTitle: string
+  changes: Changes | null
   servers: Server[]
   agents: AgentItem[]
   children: Thread[]
@@ -31,6 +32,7 @@ export type CardRow =
   | { kind: 'workspace'; key: string; machine: string; folder: string; worktree: string }
   | { kind: 'editor'; key: string; editor: string }
   | { kind: 'branch'; key: string; branch: string }
+  | { kind: 'changes'; key: string; changes: Changes }
   | { kind: 'pr'; key: string; pr: PR }
   | { kind: 'issue'; key: string; number: number; title: string }
   | { kind: 'server'; key: string; server: Server }
@@ -51,6 +53,7 @@ export function cardSections(s: Thread, f: CardFacts): CardSection[] {
   ]
   const git: (CardRow | false)[] = [
     s.branch !== '' && { kind: 'branch', key: 'branch', branch: s.branch },
+    f.changes !== null && f.changes.base !== '' && { kind: 'changes', key: 'changes', changes: f.changes },
     s.pr !== null && { kind: 'pr', key: 'pr', pr: s.pr },
     s.issue > 0 && { kind: 'issue', key: 'issue', number: s.issue, title: f.issueTitle },
   ]
@@ -88,6 +91,11 @@ export const VS_CODE_APP = 'Visual Studio Code'
 // editorLabel names the editor row: the editor by its short name, or just "editor" while the card does not know which.
 export function editorLabel(editor: string): string {
   return `Open in ${editor === VS_CODE_APP ? 'VS Code' : editor || 'editor'}`
+}
+
+// changesTip explains the changes row's numbers, which leave out files git does not track yet.
+export function changesTip(base: string): string {
+  return `Lines this branch changes against ${base}, committed or not. New files count once they are added.`
 }
 
 // lineageLabel heads the lineage: how many of the thread's delegated children and subagents work now, if any.
