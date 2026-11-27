@@ -9,6 +9,7 @@ import { BrowserSettings } from './BrowserSettings'
 import { MaintenanceSettings } from './MaintenanceSettings'
 import { Overlay } from './Overlay'
 import { SettingsNav } from './SettingsNav'
+import { StorageSettings } from './StorageSettings'
 import { ThreadsSettings } from './ThreadsSettings'
 import { WorktreesSettings } from './WorktreesSettings'
 
@@ -17,6 +18,7 @@ const PAGES: Record<SettingsSectionId, () => JSX.Element> = {
   threads: ThreadsSettings,
   browser: BrowserSettings,
   worktrees: WorktreesSettings,
+  data: StorageSettings,
   maintenance: MaintenanceSettings,
   about: AboutSettings,
 }

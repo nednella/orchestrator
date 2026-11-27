@@ -1,7 +1,7 @@
-import { Globe, Info, FolderTree, MessagesSquare, Palette, Wrench } from 'lucide-react'
+import { Globe, HardDrive, Info, FolderTree, MessagesSquare, Palette, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export type SettingsSectionId = 'appearance' | 'threads' | 'browser' | 'worktrees' | 'maintenance' | 'about'
+export type SettingsSectionId = 'appearance' | 'threads' | 'browser' | 'worktrees' | 'data' | 'maintenance' | 'about'
 
 export type SettingsSectionEntry = { id: SettingsSectionId; label: string; icon: LucideIcon }
 
@@ -17,6 +17,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     ],
   },
   { heading: 'Code', sections: [{ id: 'worktrees', label: 'Worktrees', icon: FolderTree }] },
+  { heading: 'Storage', sections: [{ id: 'data', label: 'Data', icon: HardDrive }] },
   {
     sections: [
       { id: 'maintenance', label: 'Maintenance', icon: Wrench },

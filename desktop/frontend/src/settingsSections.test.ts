@@ -10,11 +10,11 @@ test('the nav lists each panel once, About last', () => {
 })
 
 test('the panels come in the order of the groups', () => {
-  assert.deepEqual(ids, ['appearance', 'threads', 'browser', 'worktrees', 'maintenance', 'about'])
+  assert.deepEqual(ids, ['appearance', 'threads', 'browser', 'worktrees', 'data', 'maintenance', 'about'])
 })
 
 test('Appearance sits under General at the top, Maintenance and About under no heading', () => {
-  assert.deepEqual(SETTINGS_NAV.map((group) => group.heading), ['General', 'Agents', 'Code', undefined])
+  assert.deepEqual(SETTINGS_NAV.map((group) => group.heading), ['General', 'Agents', 'Code', 'Storage', undefined])
   assert.equal(SETTINGS_NAV[0].sections[0].id, 'appearance')
 })
 

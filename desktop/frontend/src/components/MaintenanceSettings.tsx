@@ -1,7 +1,6 @@
 import { useOrchestrator } from '../OrchestratorContext'
 import { SETTING_DEFAULTS } from '../settingsDefaults'
 import type { DigestSchedule } from '../types'
-import { DataDirRow } from './DataDirRow'
 import { SelectMenu } from './SelectMenu'
 import type { SelectOption } from './SelectMenu'
 import { SettingsPage } from './SettingsPage'
@@ -32,9 +31,6 @@ export function MaintenanceSettings() {
             control={<SelectMenu label="News schedule" options={SCHEDULES} value={settings.digestSchedule} onChange={(value) => report(() => setDigestSchedule(value))} />}
           />
         )}
-      </SettingsSection>
-      <SettingsSection title="Storage">
-        <DataDirRow dir={settings.dataDir} fixed={settings.dataDirFixed} />
       </SettingsSection>
     </SettingsPage>
   )
