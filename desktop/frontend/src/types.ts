@@ -108,6 +108,12 @@ export type Server = {
   started: number
 }
 
+export type Changes = {
+  base: string
+  added: number
+  removed: number
+}
+
 export type Memory = {
   app: number
   browsers: number

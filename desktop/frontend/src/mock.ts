@@ -5,7 +5,7 @@ import { mockChat } from './mockChat'
 import { branchFromTitle, freeBranch } from './branch'
 import { EFFORTS, effortsOf, supportsFast } from './model'
 import { folderName } from './projectPath'
-import type { Access, BrowserState, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
+import type { Access, BrowserState, Changes, ChatImage, Cleanup, CleanupEvent, CleanupMode, DarkTheme, DeletePlan, Digest, DigestItem, DigestSchedule, EventMap, Evidence, Issue, LightTheme, Ledger, LedgerRow, Limits, Memory, Note, BranchStatus, Place, PR, Project, Release, RepoPull, RepoPulls, Server, Thread, PromptSend, Settings, Snapshot, State, ThemeSetting, UpdateState, UsageRow, WorkRow } from './types'
 
 type Handler = (payload: never) => void
 
@@ -1181,6 +1181,10 @@ export function createMock(params: URLSearchParams) {
     },
     Viewer: async () => 'nednella',
     Servers: async (id: string) => [...(servers.get(find(id).id) ?? [])].sort((a, b) => a.port - b.port),
+    Changes: async (id: string): Promise<Changes> => {
+      const t = find(id)
+      return t.branch ? { base: 'origin/main', added: 120 + t.n * 13, removed: 14 + t.n * 3 } : { base: '', added: 0, removed: 0 }
+    },
     StopServer: async (id: string, pid: number) => {
       const list = servers.get(find(id).id) ?? []
       if (!list.some((server) => server.pid === pid)) throw 'That server is not running'
