@@ -66,10 +66,7 @@ func (s *Threads) SampleMemory() {
 			machine, _ = strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
 		}
 	}
-	var browsers int64
-	for _, pid := range s.browsers.PIDs() {
-		browsers += procs.held(pid)
-	}
+	app, browsers := procs.appAndBrowsers(os.Getpid(), s.browsers.PIDs())
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,7 +78,7 @@ func (s *Threads) SampleMemory() {
 		}
 	}
 	m := Memory{
-		App:      roundUp(max(procs.held(os.Getpid())-browsers, 0)),
+		App:      roundUp(app),
 		Browsers: roundUp(browsers),
 		Threads:  roundUp(procs.held(server)),
 		Machine:  machine,
@@ -99,14 +96,14 @@ func (s *Threads) SampleMemory() {
 
 // processes is the process tree ps reported, and how much memory a process uses.
 type processes struct {
-	pids     map[int]bool
+	parent   map[int]int
 	children map[int][]int
 	size     func(pid int) int64
 }
 
 // readProcesses reads lines of `ps -axo pid=,ppid=`.
 func readProcesses(out []byte, size func(pid int) int64) processes {
-	p := processes{pids: map[int]bool{}, children: map[int][]int{}, size: size}
+	p := processes{parent: map[int]int{}, children: map[int][]int{}, size: size}
 	for line := range bytes.Lines(out) {
 		f := strings.Fields(string(line))
 		if len(f) != 2 {
@@ -117,7 +114,7 @@ func readProcesses(out []byte, size func(pid int) int64) processes {
 		if err1 != nil || err2 != nil {
 			continue
 		}
-		p.pids[pid] = true
+		p.parent[pid] = ppid
 		if pid != ppid {
 			p.children[ppid] = append(p.children[ppid], pid)
 		}
@@ -126,7 +123,36 @@ func readProcesses(out []byte, size func(pid int) int64) processes {
 }
 
 // has says whether pid is running.
-func (p processes) has(pid int) bool { return p.pids[pid] }
+func (p processes) has(pid int) bool {
+	_, ok := p.parent[pid]
+	return ok
+}
+
+// appAndBrowsers is what the app, self, holds without the browsers it started, and what the browsers hold. A browser
+// the app took over from an earlier run is not under it, so it is not taken off the app's figure.
+func (p processes) appAndBrowsers(self int, browsers []int) (app, all int64) {
+	app = p.held(self)
+	for _, pid := range browsers {
+		held := p.held(pid)
+		all += held
+		if p.under(pid, self) {
+			app -= held
+		}
+	}
+	return max(app, 0), all
+}
+
+// under says whether pid is root or runs under it.
+func (p processes) under(pid, root int) bool {
+	for pid != root {
+		parent, ok := p.parent[pid]
+		if !ok || parent == pid {
+			return false
+		}
+		pid = parent
+	}
+	return true
+}
 
 // held is what pid and every process under it use; 0 when pid is gone.
 func (p processes) held(pid int) int64 {
