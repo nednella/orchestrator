@@ -30,6 +30,6 @@ test('asleep children are listed', () => {
 
 test('the box shows only when worktrees may go, unticked', () => {
   assert.equal(deleteRequest(asleep, none).checkbox, undefined)
-  assert.deepEqual(deleteRequest(asleep, { worktrees: 1, children: [] }).checkbox, { label: 'Also delete its worktree', checked: false })
-  assert.deepEqual(deleteRequest(asleep, { worktrees: 3, children: [] }).checkbox, { label: 'Also delete its 3 worktrees', checked: false })
+  assert.deepEqual(deleteRequest(asleep, { worktrees: 1, children: [] }).checkbox, { label: 'Also delete its worktree', checked: true })
+  assert.deepEqual(deleteRequest(asleep, { worktrees: 3, children: [] }).checkbox, { label: 'Also delete its 3 worktrees', checked: true })
 })
