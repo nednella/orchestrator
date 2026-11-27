@@ -219,14 +219,14 @@
   --skeleton: color-mix(in srgb, var(--text-dim) 15%, transparent);
   color-scheme: light;
 
-  --bg-app: #f4f5f8;
+  --bg-app: #fcfcfc;
   --bg-surface: #ffffff;
   --bg-raised: #eceef3;
   --bg-hover: #e3e6ed;
   --bg-toast: var(--bg-surface);
   --bg-term: #fbfbfd;
   --bg-overlay: rgba(30, 34, 44, 0.35);
-  --bg-overlay-strong: rgba(244, 245, 248, 0.94);
+  --bg-overlay-strong: rgba(252, 252, 252, 0.94);
   --bg-code: rgba(0, 0, 0, 0.05);
   --bg-composer: #ffffff;
   --bg-segment: rgba(212, 212, 216, 0.4);
@@ -241,12 +241,12 @@
   --scrollbar-thumb: rgb(217, 217, 217);
   --scrollbar-thumb-hover: rgb(191, 191, 191);
 
-  --border: #dcdfe7;
+  --border: #e4e4e7;
   --border-strong: #c4c9d6;
 
-  --text: #1c2029;
-  --text-soft: #4a5263;
-  --text-dim: #6b7385;
+  --text: #18181b;
+  --text-soft: #71717a;
+  --text-dim: #8b8b94;
 
   --waiting: #d93a2b;
   --finished: #1a8a55;

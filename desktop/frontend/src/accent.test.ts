@@ -62,6 +62,6 @@ test('each preset reads on its appearance: dark ones on Black, light ones on Lig
     const light = token(presetToken('light', id)) ?? ''
     assert.equal(dark !== '' && light !== '', true, `${id} has a #rrggbb token for each appearance`)
     for (const bg of ['#000000', '#121212']) assert.equal(contrast(dark, bg) >= 4.5, true, `dark ${id} on ${bg}: ${contrast(dark, bg).toFixed(2)}`)
-    for (const bg of ['#f4f5f8', '#ffffff', '#eceef3']) assert.equal(contrast(light, bg) >= 4.5, true, `light ${id} on ${bg}: ${contrast(light, bg).toFixed(2)}`)
+    for (const bg of ['#fcfcfc', '#ffffff', '#eceef3']) assert.equal(contrast(light, bg) >= 4.5, true, `light ${id} on ${bg}: ${contrast(light, bg).toFixed(2)}`)
   }
 })

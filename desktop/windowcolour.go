@@ -16,7 +16,7 @@ var themeBackground = map[string]options.RGBA{
 	"umber":          {R: 25, G: 20, B: 16, A: 255},
 	"linen-dark":     {R: 25, G: 23, B: 18, A: 255},
 	"upscope-dark":   {R: 3, G: 3, B: 4, A: 255},
-	"light":          {R: 244, G: 245, B: 248, A: 255},
+	"light":          {R: 252, G: 252, B: 252, A: 255},
 	"linen":          {R: 246, G: 243, B: 237, A: 255},
 	"midnight-light": {R: 239, G: 244, B: 252, A: 255},
 	"umber-light":    {R: 247, G: 238, B: 231, A: 255},
