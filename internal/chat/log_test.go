@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -250,5 +251,44 @@ func TestReopenAfterAWholeLineThatDoesNotParse(t *testing.T) {
 	defer l.Close()
 	if got := l.Last(); got != 2 {
 		t.Fatalf("Last = %d, want 2", got)
+	}
+}
+
+func TestReadLogAfterKeepsWhatAFullReadKeeps(t *testing.T) {
+	p := logPath(t)
+	l := openLog(t, p)
+	for range 4 {
+		mustAppend(t, l, Event{Kind: KindMessage, Text: "x"})
+	}
+	l.Close()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("{\"at\":1,\"seq\":2,\"kind\":\"user\"}\n{\"seq\":9,\"kind\n{\"at\":1,\"seq\":7,\"kind\":\"user\"}\n{\"seq\":08,\"kind\":\"user\"}\n")
+	f.Close()
+
+	all, err := ReadLog(p, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, after := range []int64{0, 1, 2, 3, 6, 7, 8, 9} {
+		var want []int64
+		for _, e := range all {
+			if e.Seq > after {
+				want = append(want, e.Seq)
+			}
+		}
+		got, err := ReadLog(p, after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var seqs []int64
+		for _, e := range got {
+			seqs = append(seqs, e.Seq)
+		}
+		if !slices.Equal(seqs, want) {
+			t.Errorf("after %d: seqs %v, want %v", after, seqs, want)
+		}
 	}
 }

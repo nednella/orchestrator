@@ -2,11 +2,13 @@ package chat
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -108,6 +110,8 @@ func (l *Log) Close() error {
 }
 
 // ReadLog returns the events with Seq above after. A line that does not parse is skipped, and so is a last line with no newline.
+// A line whose Seq is at or below after is skipped undecoded, so reading the tail of a long log costs little more than
+// reading the file.
 func ReadLog(path string, after int64) ([]Event, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -119,6 +123,9 @@ func ReadLog(path string, after int64) ([]Event, error) {
 	defer f.Close()
 	out := []Event{}
 	if _, err := eachLine(f, func(line []byte) {
+		if seq, ok := seqOf(line); ok && seq <= after {
+			return
+		}
 		var e Event
 		if json.Unmarshal(line, &e) == nil && e.Seq > after {
 			out = append(out, e)
@@ -144,4 +151,18 @@ func eachLine(r io.Reader, fn func(line []byte)) (int64, error) {
 		end += int64(len(line))
 		fn(line)
 	}
+}
+
+// seqOf reads the Seq a line starts with, as Append writes it. It reports false for a line that starts otherwise.
+func seqOf(line []byte) (int64, bool) {
+	digits, ok := bytes.CutPrefix(line, []byte(`{"seq":`))
+	if !ok {
+		return 0, false
+	}
+	n := 0
+	for n < len(digits) && '0' <= digits[n] && digits[n] <= '9' {
+		n++
+	}
+	seq, err := strconv.ParseInt(string(digits[:n]), 10, 64)
+	return seq, err == nil
 }
