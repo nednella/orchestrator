@@ -1017,3 +1017,23 @@ func TestNameOfAClosedSetupTerminalIsNotTheSetupOfThatThreadAnyMore(t *testing.T
 		t.Errorf("the owner's shell did not survive the delete: %+v", shells)
 	}
 }
+
+func TestOnlyARunningSetupIsExemptAndNotFromTheRewindCheck(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{SetupCommand: "sleep 60"})
+	repoFixture(t, h)
+	s, err := h.NewThreadIn("Tidy up", "", "supervised", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the set-up to run", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Setup == threads.SetupRunning
+	})
+	if _, _, reason := h.Threads().FilesRewind(s.ID); reason != runningReason {
+		t.Errorf("rewind reason = %q, want %q: a running set-up may write the files", reason, runningReason)
+	}
+	if err := h.Threads().Delete(s.ID, true); err != nil {
+		t.Errorf("a delete with a set-up that runs = %v, want it to stop the set-up and go on", err)
+	}
+}

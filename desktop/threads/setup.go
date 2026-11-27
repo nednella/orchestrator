@@ -152,12 +152,12 @@ func (s *Threads) dropSetup(id string, run *setupRun) {
 }
 
 // runsSetup says whether the shell is the terminal of a set-up command that still runs, which a clean-up or a delete may
-// stop.
+// stop. A failed one is an ordinary shell.
 func (s *Threads) runsSetup(name thread.Name) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, run := range s.setups {
-		if run.shell == name && slices.ContainsFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name && sh.Setup == id }) {
+		if run.shell == name && run.status == SetupRunning && slices.ContainsFunc(s.shells, func(sh term.Shell) bool { return sh.Name == name && sh.Setup == id }) {
 			return true
 		}
 	}
@@ -178,7 +178,8 @@ func (s *Threads) forgetSetupShell(name thread.Name) {
 	}
 }
 
-// stopSetup stops the thread's set-up command and closes its terminal.
+// stopSetup stops the thread's set-up command when it runs and closes its terminal. A failed one is left to its
+// terminal, an ordinary shell, and only the record goes.
 func (s *Threads) stopSetup(id string) {
 	s.mu.Lock()
 	run := s.setups[id]
@@ -188,6 +189,9 @@ func (s *Threads) stopSetup(id string) {
 		return
 	}
 	run.cancel()
+	if run.status != SetupRunning {
+		return
+	}
 	if err := s.stopShell(run.shell); err != nil {
 		log.Printf("orchestrator: closing the set-up terminal %s of thread %s: %v", run.shell, id, err)
 	}

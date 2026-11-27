@@ -1368,7 +1368,7 @@ func (l *Lifecycle) shellIn(ctx context.Context, key, worktree string) string {
 	s := l.threads
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	in, err := s.shellsInTree(ctx, key, worktree)
+	in, err := s.shellsInTree(ctx, key, worktree, true)
 	switch {
 	case err != nil:
 		return shellsUnlisted(err)

@@ -4464,7 +4464,7 @@ type worktreeShells struct {
 
 // shellsInTree lists the shells in the folder worktree, and whether a shell of the project key is in an unknown folder.
 // It needs shellMu.
-func (s *Threads) shellsInTree(ctx context.Context, key, worktree string) (worktreeShells, error) {
+func (s *Threads) shellsInTree(ctx context.Context, key, worktree string, exemptSetup bool) (worktreeShells, error) {
 	var in worktreeShells
 	ctx, cancel := context.WithTimeout(ctx, tmuxTimeout)
 	defer cancel()
@@ -4481,7 +4481,12 @@ func (s *Threads) shellsInTree(ctx context.Context, key, worktree string) (workt
 		case sh.Path == "":
 			in.unknown = in.unknown || sh.Name.Project == key
 		case folder.Inside(sh.Path, worktree):
-			if slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) }) && !s.runsSetup(sh.Name) {
+			busy := slices.ContainsFunc(running, func(r term.Shell) bool { return r.Name == sh.Name && shellBusy(r) })
+			// The terminal of a set-up command that runs is busy, but a clean-up or a delete stops it, so it keeps neither.
+			if s.runsSetup(sh.Name) {
+				busy = !exemptSetup
+			}
+			if busy {
 				in.busy = append(in.busy, sh.Name)
 			} else {
 				in.idle = append(in.idle, sh.Name)
@@ -4497,7 +4502,7 @@ func (s *Threads) shellsInTree(ctx context.Context, key, worktree string) (workt
 func (s *Threads) closeShellsIn(ctx context.Context, key, worktree string, force bool) string {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	in, err := s.shellsInTree(ctx, key, worktree)
+	in, err := s.shellsInTree(ctx, key, worktree, true)
 	switch {
 	case err != nil:
 		return shellsUnlisted(err)
@@ -4517,7 +4522,7 @@ func (s *Threads) closeShellsIn(ctx context.Context, key, worktree string, force
 func (s *Threads) busyShellIn(ctx context.Context, key, worktree string) string {
 	s.shellMu.Lock()
 	defer s.shellMu.Unlock()
-	in, err := s.shellsInTree(ctx, key, worktree)
+	in, err := s.shellsInTree(ctx, key, worktree, false)
 	switch {
 	case err != nil:
 		return shellsUnlisted(err)
