@@ -925,9 +925,9 @@ func (h *Harness) Thread(id string) (threads.Thread, bool) {
 // harnesses numbers the harnesses of this process, so each has a tmux socket of its own.
 var harnesses atomic.Int64
 
-// startEnv is the environment the tests started in. The command is built in it, not in one a test changed: under a
-// throwaway HOME, go would fetch every module again.
-var startEnv = os.Environ()
+// startEnv is the environment the tests started in, without what a parent git set. The command is built in it, not in
+// one a test changed: under a throwaway HOME, go would fetch every module again.
+var startEnv = gittest.Env()
 
 var (
 	cliOnce sync.Once
