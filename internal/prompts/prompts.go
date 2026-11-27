@@ -32,8 +32,6 @@ var (
 	read string
 	//go:embed issue.md
 	issue string
-	//go:embed worktree.md
-	worktree string
 	//go:embed fork.md
 	fork string
 	//go:embed child.md
@@ -109,15 +107,10 @@ func Issue(number int) string {
 	return strings.Replace(body(issue), "{number}", strconv.Itoa(number), 1)
 }
 
-// Worktree follows Base in the system prompt of a thread that orchestrator started in the worktree it made, on branch.
-func Worktree(branch, dir string) string {
-	return strings.NewReplacer("{branch}", branch, "{worktree}", dir).Replace(body(worktree))
-}
-
 // Fork follows Base in the system prompt of a fork of the thread called title: it has no branch of its own.
 func Fork(title string) string { return strings.Replace(body(fork), "{title}", quotable(title), 1) }
 
-// Child follows Base, and Worktree when there is one, in the system prompt of a thread that the thread called parent
+// Child follows Base in the system prompt of a thread that the thread called parent
 // started with delegate: its first message is its task, and its last reply of each turn is its result.
 func Child(parent string) string {
 	return strings.Replace(body(child), "{parent}", quotable(parent), 1)

@@ -14,9 +14,9 @@ import (
 	"github.com/nednella/orchestrator/internal/util"
 )
 
-func systemPrompt(t *testing.T, access thread.Access, tree workTree) string {
+func systemPrompt(t *testing.T, access thread.Access) string {
 	t.Helper()
-	argv := agent.Claude{}.Command(launchFor(project.Model{}, "", "", "", access, false, forkStart{}, tree, "", 0))
+	argv := agent.Claude{}.Command(launchFor(project.Model{}, "", "", "", access, false, forkStart{}, "", 0))
 	i := slices.Index(argv, "--append-system-prompt")
 	if i < 0 {
 		t.Fatalf("argv = %q", argv)
@@ -24,34 +24,14 @@ func systemPrompt(t *testing.T, access thread.Access, tree workTree) string {
 	return argv[i+1]
 }
 
-func TestWorktreeThreadIsToldItsBranchAndFolder(t *testing.T) {
-	t.Parallel()
-	got := systemPrompt(t, thread.Supervised, workTree{branch: "issue-7", dir: "/p/trees/issue-7"})
-	if !strings.Contains(got, "`/p/trees/issue-7`") || !strings.Contains(got, "`issue-7`") {
-		t.Errorf("system prompt lacks the worktree and branch:\n%s", got)
-	}
-	if want := prompts.Base() + "\n\n" + prompts.Worktree("issue-7", "/p/trees/issue-7"); !strings.Contains(got, want) {
-		t.Errorf("the worktree text does not follow the thread text:\n%s", got)
-	}
-}
-
-func TestProjectFolderThreadGetsNoWorktreeText(t *testing.T) {
-	t.Parallel()
-	got := systemPrompt(t, thread.Supervised, workTree{})
-	if strings.Contains(got, "This thread runs in the worktree") {
-		t.Errorf("system prompt holds the worktree text:\n%s", got)
-	}
-}
-
 func TestOnlyAReadThreadGetsTheReadText(t *testing.T) {
 	t.Parallel()
-	tree := workTree{branch: "issue-7", dir: "/p/trees/issue-7"}
-	if got := systemPrompt(t, thread.Read, tree); !strings.Contains(got, prompts.Base()+"\n\n"+prompts.Read()) {
-		t.Errorf("a Read thread lacks the Read text:\n%s", got)
+	if got := systemPrompt(t, thread.Read); got != prompts.Base()+"\n\n"+prompts.Read() {
+		t.Errorf("a Read thread's prompt:\n%s", got)
 	}
 	for _, write := range []thread.Access{thread.Supervised, thread.Full} {
-		if got := systemPrompt(t, write, tree); strings.Contains(got, prompts.Read()) {
-			t.Errorf("a %s thread gets the Read text:\n%s", write, got)
+		if got := systemPrompt(t, write); got != prompts.Base() {
+			t.Errorf("a %s thread's prompt:\n%s", write, got)
 		}
 	}
 }

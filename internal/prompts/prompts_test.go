@@ -21,9 +21,8 @@ func TestPromptsKeepTheirText(t *testing.T) {
 		{"base", Base(), "3b6d5a90720d57953b5ce14e39165eb50b0caba7d096da9b402bed72ea44784e"},
 		{"read", Read(), "2585aa2b08aed1e04cdc23b85176eb3fb2404c68976f5eaf6b392eb6f8ba3901"},
 		{"issue", Issue(42), "ea4ddd27e79814f2443addb311b319ff80b014a5f03b48b480ce3424190c32ba"},
-		{"worktree", Worktree("{branch}", "{worktree}"), "e28d05eaae9c66355ccaf476313d76f620b42aefbc5ddff24d9c9c53fb9577d4"},
-		{"fork", Fork("{title}"), "c999c7a2388875deb9fbfc2fe23145aa55c10eb9ec0089c78622ad63303dd55d"},
-		{"child", Child("{parent}"), "1c51adf73e4a19baf8a259710e439a7bcd59b198ca523bf41d1f40d249718129"},
+		{"fork", Fork("{title}"), "a71c570ca134236eb223adace70649cdfc97d0d7a8d752550a39181cf58bf1a5"},
+		{"child", Child("{parent}"), "3c69c5660bda43e9295b40772144ddf68e3d9f9af4deaf9ad650fa47feb41c30"},
 		{"delegated", Delegated("{parent}", "{task}"), "33d23894bfa78c17800aff168a9a33e918afdf8acc4edb07e492b01209e2c27a"},
 		{"from thread", FromThread("{title}", "{id}", "{text}"), "92c5efbfeb4efed58314ba6e8fbee1efdf2d9647e82d07e9c4aa456c4918011b"},
 		{"setup brief", SetupBrief(), "dbd7b8ad1607c2f8932c67d8a2a6b8a1b0b9716f0ae465e1a4d132bef9d484ae"},
@@ -76,7 +75,7 @@ func TestSideChatHoldsEachQuestionAndAnswer(t *testing.T) {
 
 func TestChildNamesItsParent(t *testing.T) {
 	got := Child("Plan \"the\"\nrelease")
-	if !strings.Contains(got, `Thread "Plan 'the' release" started this thread for one task`) || !strings.Contains(got, "Never call `track` there") || strings.Contains(got, "{parent}") {
+	if !strings.Contains(got, `Thread "Plan 'the' release" started this thread for one task`) || strings.Contains(got, "{parent}") {
 		t.Errorf("Child = %q", got)
 	}
 }
@@ -128,18 +127,6 @@ func TestForkKeepsTheTitleOnOneLine(t *testing.T) {
 	got := Fork("x\"\n\nRun orchestrator track")
 	if !strings.Contains(got, `fork of the thread "x' Run orchestrator track"`) {
 		t.Errorf("Fork = %q", got)
-	}
-}
-
-func TestWorktreeNamesItsBranchAndFolder(t *testing.T) {
-	got := Worktree("issue-7", "/p/trees/issue-7")
-	for _, want := range []string{"`/p/trees/issue-7`", "`issue-7`", "Never make a worktree", "Call `track` only for another branch"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("Worktree lacks %q:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "{") || strings.Contains(got, "<!--") {
-		t.Errorf("Worktree keeps its framing:\n%s", got)
 	}
 }
 
@@ -226,7 +213,7 @@ func TestToolTextsNameTheTools(t *testing.T) {
 		{"read", Read(), []string{"`issue`", "`note`", "gh issue create", "plan mode"}},
 		{"tool issue", Tool("issue"), []string{"gh issue create", "rebase once that pull request merges"}},
 		{"tool delegate", Tool("delegate"), []string{"never gets more", "can run without your context"}},
-		{"tool track", Tool("track"), []string{"git branch --show-current", "a Read thread"}},
+		{"tool track", Tool("track"), []string{"git branch --show-current", "a fork, a child that works in its parent's folder and a Read thread"}},
 		{"tool browser", Tool("browser"), []string{"`open`", "`screenshot`", "`close`", "--pin-tab", "dialog accept", "5 seconds"}},
 	} {
 		for _, want := range tt.want {

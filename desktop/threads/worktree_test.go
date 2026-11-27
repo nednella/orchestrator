@@ -17,7 +17,6 @@ import (
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
 	"github.com/nednella/orchestrator/internal/gittest"
-	"github.com/nednella/orchestrator/internal/prompts"
 )
 
 // panePath is the folder the thread's tmux session started in.
@@ -85,7 +84,15 @@ func systemPrompt(t *testing.T, h *apptest.Harness, id string) string {
 	return strings.Join(args[i+1:], "\n")
 }
 
-const worktreeText = "This thread runs in the worktree"
+func noPromptNames(t *testing.T, h *apptest.Harness, id string, facts ...string) {
+	t.Helper()
+	got := systemPrompt(t, h, id)
+	for _, fact := range facts {
+		if strings.Contains(got, fact) {
+			t.Errorf("the system prompt names %q:\n%s", fact, got)
+		}
+	}
+}
 
 func TestWriteThreadStartsInAWorktreeOrchestratorMade(t *testing.T) {
 	t.Parallel()
@@ -117,9 +124,7 @@ func TestWriteThreadStartsInAWorktreeOrchestratorMade(t *testing.T) {
 	if s.Branch != branch || s.Worktree != dir {
 		t.Errorf("row branch %q, worktree %q", s.Branch, s.Worktree)
 	}
-	if got := systemPrompt(t, h, s.ID); !strings.Contains(got, prompts.Worktree(branch, dir)) {
-		t.Errorf("the system prompt does not name the worktree and branch:\n%s", got)
-	}
+	noPromptNames(t, h, s.ID, branch, dir)
 }
 
 func TestNewThreadStartsWhereTheSettingSays(t *testing.T) {
@@ -153,9 +158,6 @@ func TestNewThreadStartsWhereTheSettingSays(t *testing.T) {
 	if s.Branch != "" || s.Worktree != "" {
 		t.Errorf("row branch %q, worktree %q", s.Branch, s.Worktree)
 	}
-	if got := systemPrompt(t, h, s.ID); strings.Contains(got, worktreeText) {
-		t.Errorf("the system prompt names a worktree:\n%s", got)
-	}
 
 	issue, err := h.StartIssueWith(7, "Work")
 	if err != nil {
@@ -186,9 +188,7 @@ func TestIssueThreadGetsTheIssueBranch(t *testing.T) {
 			if got := worktreesOf(t, h.Dir)["issue-7"]; got != dir {
 				t.Errorf("git lists issue-7 at %q", got)
 			}
-			if got := systemPrompt(t, h, s.ID); !strings.Contains(got, prompts.Worktree("issue-7", dir)) {
-				t.Errorf("the system prompt does not name the worktree and branch:\n%s", got)
-			}
+			noPromptNames(t, h, s.ID, "issue-7", dir)
 		})
 	}
 }

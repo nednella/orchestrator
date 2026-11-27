@@ -2601,15 +2601,11 @@ func (s *Threads) launch(ctx context.Context, p agent.Provider, name thread.Name
 		}
 		env = append(env, agentEnv...)
 	}
-	tree := workTree{}
-	if branch != "" {
-		tree = workTree{branch: branch, dir: dir}
-	}
 	parentTitle := ""
 	if parent != "" {
 		parentTitle = s.titleOf(parent)
 	}
-	l := launchFor(model, conversation, brief, handover, access, browser, fork, tree, parentTitle, issue)
+	l := launchFor(model, conversation, brief, handover, access, browser, fork, parentTitle, issue)
 	l.TmpDir, l.ForkAt, l.MCPConfig = tmp, fork.at, s.mcpConfigPath(name)
 	if err := p.Prepare(l); err != nil {
 		return err
@@ -4699,15 +4695,11 @@ func (s *Threads) hasBrowser(proj project.Project, brief string) bool {
 	return brief == "" && proj.BrowserOn() && s.browsers.AgentReady()
 }
 
-// workTree is the worktree orchestrator made for a thread, and the branch it holds. The zero value is a thread in the
-// project folder.
-type workTree struct{ branch, dir string }
-
-// launchFor is what the thread's agent starts with. The agent learns where it runs and the commands that reach the
-// app, and about the browser when it has one; a thread with a brief learns only the brief. A child learns the title
+// launchFor is what the thread's agent starts with. The agent learns when to use the app's tools, what plan mode asks of a Read thread,
+// and about the browser when it has one; a thread with a brief learns only the brief. A child learns the title
 // of its parent, the thread it works for. A thread for an issue learns the issue's number. A thread started by another
 // thread gets that thread's handover last.
-func launchFor(model project.Model, conversation, brief, handover string, access thread.Access, browser bool, fork forkStart, tree workTree, parent string, issue int) agent.Launch {
+func launchFor(model project.Model, conversation, brief, handover string, access thread.Access, browser bool, fork forkStart, parent string, issue int) agent.Launch {
 	l := agent.Launch{Model: model.Model, Effort: model.Effort, Fast: model.Fast, Resume: conversation, Access: access}
 	if brief != "" {
 		l.Prompt = brief
@@ -4719,9 +4711,6 @@ func launchFor(model project.Model, conversation, brief, handover string, access
 	}
 	if issue > 0 {
 		l.Prompt += "\n\n" + prompts.Issue(issue)
-	}
-	if tree.branch != "" {
-		l.Prompt += "\n\n" + prompts.Worktree(tree.branch, tree.dir)
 	}
 	if fork.of != "" {
 		l.Prompt += "\n\n" + prompts.Fork(fork.title)

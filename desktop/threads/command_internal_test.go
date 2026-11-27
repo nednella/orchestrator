@@ -27,7 +27,7 @@ func (f fakeBrowsers) AgentDaemon(string) (int, time.Time)       { return 0, tim
 
 // commandFor is the argv claude starts with.
 func (s *Threads) commandFor(proj project.Project, model project.Model, conversation, brief, handover string, access thread.Access) []string {
-	return agent.Claude{}.Command(launchFor(model, conversation, brief, handover, access, s.hasBrowser(proj, brief), forkStart{}, workTree{}, "", 0))
+	return agent.Claude{}.Command(launchFor(model, conversation, brief, handover, access, s.hasBrowser(proj, brief), forkStart{}, "", 0))
 }
 
 // allowedTools is the --allowedTools value in argv, "" when there is none.
