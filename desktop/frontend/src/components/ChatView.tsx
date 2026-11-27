@@ -53,8 +53,8 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   else if (!chat.loading) frozen.current = null
   const early = current ?? frozen.current
   const { timeline: shownTimeline, events, loading, error } = early ? { ...early, loading: false, error: '' } : chat
-  const { setup, setupExit, setupShell } = thread
-  const timeline = useMemo(() => (embedded ? shownTimeline : withSetup(shownTimeline, { setup, setupExit, setupShell })), [embedded, shownTimeline, setup, setupExit, setupShell])
+  const { setup, setupExit, setupShell, setupProblem } = thread
+  const timeline = useMemo(() => (embedded ? shownTimeline : withSetup(shownTimeline, { setup, setupExit, setupShell, setupProblem })), [embedded, shownTimeline, setup, setupExit, setupShell, setupProblem])
   const empty = timeline.items.length === 0
   const forks = useOrchestratorSelector((s) => forksKey(thread.id, s.threads))
   const { id: threadId, forkOf, forkAt, parent } = thread
@@ -75,7 +75,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const lastEnd = lastTurnEnd(events)
   // The last turn end before the stop was asked for: the stop holds until a later one.
   const [stopAsked, setStopAsked] = useState<number | null>(null)
-  const stopping = timeline.turnOpen && (starting || stopAsked === lastEnd)
+  const stopping = timeline.turnOpen && stopAsked === lastEnd
 
   useEffect(() => {
     if (!stopping) return
@@ -84,7 +84,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   }, [stopping])
 
   const stopWith = (call: () => Promise<void>) => {
-    if (stopping) return
+    if (stopping || starting) return
     setStopAsked(lastEnd)
     report(() =>
       call().catch((err) => {
@@ -243,7 +243,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
               </div>
             )}
             {!embedded && <ChatChildApprovals parent={thread.id} />}
-            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} thread={thread} timeline={timeline} events={events} embedded={embedded} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} thread={thread} timeline={timeline} events={events} embedded={embedded} stopping={stopping || starting} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
       </div>

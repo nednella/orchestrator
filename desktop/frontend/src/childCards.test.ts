@@ -42,6 +42,7 @@ const thread = (over: Partial<Thread>): Thread => ({
   setup: '',
   setupExit: 0,
   setupShell: '',
+  setupProblem: '',
   ...over,
 })
 

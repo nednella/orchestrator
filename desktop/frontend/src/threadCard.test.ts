@@ -6,7 +6,7 @@ import type { PR, Thread } from './types.ts'
 const thread = (over: Partial<Thread> = {}): Thread => ({
   id: 'shop/abcd2345', project: 'shop', n: 7, title: 'Flaky test', state: 'working', detail: '', lastEventAt: 0, createdAt: 0,
   issue: 0, model: '', effort: '', fast: false, branch: '', worktree: '', pr: null, git: null, prAttention: '', cleanup: '', cleanupReason: '',
-  browser: false, evidence: 0, access: 'supervised', action: '', forkOf: '', forkAt: '', parent: '', side: false, tokens: 0, cost: 0, memory: 0, subagents: 0, start: '', startError: '', firstMessage: '', startQueue: [], setup: '', setupExit: 0, setupShell: '', ...over,
+  browser: false, evidence: 0, access: 'supervised', action: '', forkOf: '', forkAt: '', parent: '', side: false, tokens: 0, cost: 0, memory: 0, subagents: 0, start: '', startError: '', firstMessage: '', startQueue: [], setup: '', setupExit: 0, setupShell: '', setupProblem: '', ...over,
 })
 
 const pr: PR = {

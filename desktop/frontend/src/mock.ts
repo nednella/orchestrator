@@ -211,6 +211,7 @@ export function createMock(params: URLSearchParams) {
       setup: s.setup,
       setupExit: s.setupExit,
       setupShell: s.setupShell,
+      setupProblem: s.setupProblem,
     }
   }
 
@@ -374,6 +375,7 @@ export function createMock(params: URLSearchParams) {
       setup: '',
       setupExit: 0,
       setupShell: '',
+      setupProblem: '',
       project: owner.name,
     }
     threads.push(s)

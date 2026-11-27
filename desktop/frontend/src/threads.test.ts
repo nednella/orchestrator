@@ -45,6 +45,7 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     setup: '',
     setupExit: 0,
     setupShell: '',
+    setupProblem: '',
   }
 }
 
