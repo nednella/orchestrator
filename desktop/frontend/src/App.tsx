@@ -6,7 +6,6 @@ import { UsageModal } from './components/UsageModal'
 import { Divider } from './components/Divider'
 import { Home } from './components/Home'
 import { LeftSidebar } from './components/LeftSidebar'
-import { OfflineSplash } from './components/OfflineSplash'
 import { PanelOverlay } from './components/PanelOverlay'
 import { RightPanel } from './components/RightPanel'
 import { WhatsNew } from './components/WhatsNew'
@@ -27,9 +26,9 @@ import { useNetwork } from './useNetwork'
 import { useShortcuts } from './useShortcuts'
 
 export function App() {
-  const network = useNetwork()
+  useNetwork()
   const confirming = useConfirming()
-  useShortcuts(network.online && !confirming)
+  useShortcuts(!confirming)
   useDigestToasts()
   useFocusedPanel()
   useDockIcon()
@@ -43,7 +42,6 @@ export function App() {
         className="flex h-full flex-col bg-app"
         style={{ '--title-inset': fullscreen ? 'var(--corner-pad)' : 'var(--traffic-light-zone)' } as CSSProperties}
         data-mode={mode}
-        {...(network.online ? {} : { inert: '' })}
       >
         <div className="relative flex min-h-0 flex-1">
           {docked.sidebar && sidebarOpen && <LeftSidebar />}
@@ -68,7 +66,6 @@ export function App() {
       <UsageModal />
       <ConfirmHost />
       <StartSplash />
-      {!network.online && <OfflineSplash retrying={network.retrying} onRetry={() => void network.retry()} />}
     </>
   )
 }
