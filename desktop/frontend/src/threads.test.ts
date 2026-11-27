@@ -38,6 +38,9 @@ function thread(id: string, state: State, lastEventAt = 0, parent = ''): Thread 
     cost: 0,
     memory: 0,
     subagents: 0,
+    start: '',
+    startError: '',
+    firstMessage: '',
   }
 }
 

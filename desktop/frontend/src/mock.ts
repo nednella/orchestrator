@@ -139,6 +139,9 @@ export function createMock(params: URLSearchParams) {
     limits: params.get('limits'),
     // providers=2 adds a made-up second provider to the usage.
     secondProvider: params.get('providers') === '2',
+    // startms=<ms> is how long a new thread takes to start, as its worktree and its agent do; startfail has the first start of each thread fail, so its retry can be tried.
+    startMs: Number(params.get('startms') ?? 1200),
+    startFail: params.has('startfail'),
   }
   const handlers = new Map<string, Set<Handler>>()
   // The reader of each open terminal's output, as GET /term/<id> has one.
@@ -199,6 +202,9 @@ export function createMock(params: URLSearchParams) {
       cost: s.cost,
       memory: s.state === 'settled' ? 0 : s.memory,
       subagents: s.state === 'settled' ? 0 : s.subagents,
+      start: s.start,
+      startError: s.startError,
+      firstMessage: s.firstMessage,
     }
   }
 
@@ -355,6 +361,9 @@ export function createMock(params: URLSearchParams) {
       ...usageFor(createdAt),
       memory: (4 + (nextN % 5) * 3) * tenthGB,
       subagents: 0,
+      start: '',
+      startError: '',
+      firstMessage: '',
       project: owner.name,
     }
     threads.push(s)
@@ -592,11 +601,41 @@ export function createMock(params: URLSearchParams) {
     if (model) s.model = model
     if (effort) s.effort = effort
     s.fast = fast && supportsFast(s.model)
-    chats.start(s.id)
-    if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
+    // As the Go side does, the thread is listed at once, starting, and its agent and first message come after.
+    s.start = 'starting'
+    s.state = 'working'
+    s.detail = 'Starting'
+    s.firstMessage = prompt
+    const attempt = () => {
+      starts.set(
+        s.id,
+        setTimeout(() => {
+          starts.delete(s.id)
+          if (flags.startFail && !failedOnce.has(s.id)) {
+            failedOnce.add(s.id)
+            Object.assign(s, { start: 'failed', startError: 'The agent did not take the first message in time', state: 'waiting', detail: 'The agent did not take the first message in time' })
+            publish()
+            return
+          }
+          Object.assign(s, { start: '', startError: '', firstMessage: '', state: 'idle', detail: pick(details.idle) })
+          chats.start(s.id)
+          if (prompt) void chats.backend.ChatSend(s.id, prompt, [])
+          publish()
+        }, flags.startMs),
+      )
+    }
+    retries.set(s.id, () => {
+      Object.assign(s, { start: 'starting', startError: '', state: 'working', detail: 'Starting' })
+      attempt()
+      publish()
+    })
+    attempt()
     publish()
     return view(s)
   }
+  const starts = new Map<string, ReturnType<typeof setTimeout>>()
+  const retries = new Map<string, () => void>()
+  const failedOnce = new Set<string>()
 
   function switchTo(next: ProjectData): Snapshot {
     current = next
@@ -1135,6 +1174,11 @@ export function createMock(params: URLSearchParams) {
       const branch = freeBranch(branchFromTitle(name), (b) => threads.some((x) => x.branch === b))
       return startThreadFor(name, 0, prompt, '', model, effort, acc, { branch, worktree: `${current.dir}/trees/${branch}` }, fast)
     },
+    RetryThreadStart: async (id: string) => {
+      const retry = retries.get(id)
+      if (find(id).start !== 'failed' || !retry) throw `Thread ${id} has no failed start to retry`
+      retry()
+    },
     // DeleteThread acts as the threads service does: with worktree, the thread's own worktree goes first through a clean-up
     // with the checks, and one they keep refuses the delete; the thread, its chat and its row then go.
     DeleteThread: async (id: string, worktree: boolean) => {
@@ -1160,7 +1204,8 @@ export function createMock(params: URLSearchParams) {
       for (const x of taken) logCleanup(x, [`worktree ${x.worktree}`, 'thread put to sleep', ...(x.browser ? ['browser window'] : []), 'temp folder'], '')
       for (const x of family) {
         dropSideChats(x)
-        if (x.state !== 'settled') chats.end(x.id, 'settle')
+        if (x.start) clearTimeout(starts.get(x.id))
+        else if (x.state !== 'settled') chats.end(x.id, 'settle')
         deleted.add(x.id)
         servers.delete(x.id)
         threads.splice(threads.indexOf(x), 1)

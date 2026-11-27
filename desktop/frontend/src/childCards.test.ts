@@ -35,6 +35,9 @@ const thread = (over: Partial<Thread>): Thread => ({
   cost: 0,
   memory: 0,
   subagents: 0,
+  start: '',
+  startError: '',
+  firstMessage: '',
   ...over,
 })
 

@@ -1,5 +1,9 @@
 export type State = 'waiting' | 'working' | 'idle' | 'settled'
 
+// How far the start of a thread has got: '' once it runs, 'starting' while its worktree, its agent or its first message
+// is on the way, and 'failed' when a step failed, which a retry goes on from.
+export type StartState = '' | 'starting' | 'failed'
+
 // Access is what a thread may do without asking the owner.
 export type Access = 'read' | 'supervised' | 'full'
 
@@ -91,6 +95,9 @@ export type Thread = {
   cost: number
   memory: number
   subagents: number // the subagents its Claude runs in the background, which a settle stops
+  start: StartState // a thread that starts shows as working, and one whose start failed as waiting
+  startError: string // why the start failed, '' unless start is 'failed'
+  firstMessage: string // the message the thread starts with, shown as sent in its chat until the thread runs
 }
 
 // What a delete of a thread would take with it, as DeletePlan says.
