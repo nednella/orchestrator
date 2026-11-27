@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useSyncExternalStore } from 'react'
 import type { RefObject } from 'react'
 import { cardPlacement } from './contextCard'
 import { readStored, writeStored } from './storage'
@@ -57,24 +57,3 @@ export function useCardPlacement(area: RefObject<HTMLElement | null>, mounted: b
   }, [area, mounted])
 }
 
-// useCardPopoverDismiss closes the popover at a click outside root, which holds its button and the popover, or at Esc.
-export function useCardPopoverDismiss(root: RefObject<HTMLElement | null>, open: boolean) {
-  useEffect(() => {
-    if (!open) return
-    const outside = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) closeCardPopover()
-    }
-    const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopPropagation()
-      closeCardPopover()
-    }
-    window.addEventListener('mousedown', outside)
-    window.addEventListener('keydown', escape, true)
-    return () => {
-      window.removeEventListener('mousedown', outside)
-      window.removeEventListener('keydown', escape, true)
-    }
-  }, [root, open])
-}

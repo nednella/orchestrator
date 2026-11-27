@@ -1,8 +1,9 @@
 import { ChevronUp } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { ACCESSES, ACCESS_HINT, ACCESS_NAME } from '../access'
 import type { Access } from '../types'
+import { useDismiss } from '../useDismiss'
 import { AccessIcon } from './AccessIcon'
 import { SegmentedControl } from './SegmentedControl'
 
@@ -20,25 +21,8 @@ export function PermissionsMenu({ access, accessOff, onAccess }: PermissionsMenu
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const outside = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false)
-    }
-    // Esc closes this popover and leaves the model menu open.
-    const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopPropagation()
-      setOpen(false)
-    }
-    window.addEventListener('mousedown', outside)
-    window.addEventListener('keydown', escape, true)
-    return () => {
-      window.removeEventListener('mousedown', outside)
-      window.removeEventListener('keydown', escape, true)
-    }
-  }, [open])
+  // Esc closes this popover and leaves the model menu open.
+  useDismiss(root, open, () => setOpen(false))
 
   const arrows = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return

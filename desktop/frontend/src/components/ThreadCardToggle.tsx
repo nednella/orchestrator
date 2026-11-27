@@ -2,9 +2,10 @@ import { SquareMenu } from 'lucide-react'
 import { useRef } from 'react'
 import { useOrchestrator, useOrchestratorSelector, useLatestOrchestrator } from '../OrchestratorContext'
 import { actionsFor, withShortcut } from '../actions'
-import { useCardPopoverDismiss, useContextCard } from '../contextCardOpen'
+import { closeCardPopover, useContextCard } from '../contextCardOpen'
 import { useLayout } from '../LayoutContext'
 import { selectedCardHasRows } from '../useCardFacts'
+import { useDismiss } from '../useDismiss'
 import { ThreadContextCard } from './ThreadContextCard'
 import { titleBarButton } from './TitleBarButton'
 
@@ -17,7 +18,7 @@ export function ThreadCardToggle() {
   const card = useContextCard()
   const root = useRef<HTMLDivElement>(null)
   const popover = card.placement === 'popover' && card.popover
-  useCardPopoverDismiss(root, popover)
+  useDismiss(root, popover, closeCardPopover)
   if (selectedId === null || !hasRows) return null
 
   const toggle = actionsFor(latestOrchestrator(), layout).find((a) => a.id === 'toggle-context-card')!
