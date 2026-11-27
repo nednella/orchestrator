@@ -1386,10 +1386,6 @@ func numberedPR(n int, state string) string {
 	return strings.Replace(prJSON(state, false, "[]", 0, 0), `"number":12`, fmt.Sprintf(`"number":%d`, n), 1)
 }
 
-func onBranch(h *apptest.Harness, id, branch string) func() bool {
-	return func() bool { got, ok := h.Thread(id); return ok && got.Branch == branch }
-}
-
 func TestRebasingWorktreeBlocksTheCleanup(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
