@@ -42,7 +42,11 @@ case " $* " in
   *"@orchestrator-access"*) if [ -e %[1]s/fail-access ]; then echo "no space for the option" >&2; exit 1; fi ;;
   *" kill-session "*)
     if [ -e %[1]s/fail-kill ]; then echo "no server running" >&2; exit 1; fi
-    if [ -e %[1]s/fail-slow-kill ]; then sleep "$(cat %[1]s/fail-slow-kill)"; fi ;;
+    if [ -e %[1]s/fail-slow-kill ]; then
+      n=$(( $(cat %[1]s/fail-slow-kill) * 10 ))
+      while [ "$n" -gt 0 ] && [ -e %[1]s/fail-slow-kill ]; do sleep 0.1; n=$((n - 1)); done
+      if [ ! -e %[1]s/fail-slow-kill ]; then echo "released" >&2; exit 1; fi
+    fi ;;
 esac
 exec %[2]s "$@"
 `, dir, real)
@@ -53,10 +57,18 @@ exec %[2]s "$@"
 	return fakeTmux{dir}
 }
 
-// slowKill makes every kill-session wait the seconds before it kills, as a host that is slow to stop does.
+// slowKill makes every kill-session wait the seconds before it kills, as a host that is slow to stop does. releaseKill
+// ends the wait, and the kill fails.
 func (f fakeTmux) slowKill(t *testing.T, seconds string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(f.dir, "fail-slow-kill"), []byte(seconds), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f fakeTmux) releaseKill(t *testing.T) {
+	t.Helper()
+	if err := os.Remove(filepath.Join(f.dir, "fail-slow-kill")); err != nil {
 		t.Fatal(err)
 	}
 }

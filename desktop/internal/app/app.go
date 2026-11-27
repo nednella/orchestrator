@@ -246,6 +246,8 @@ func (a *App) followConfig(ctx context.Context) {
 // Stop closes the terminal streams, stops answering the command line and ends what Start began: Wails never
 // cancels the context it starts the app with.
 func (a *App) Stop() {
+	// A delete that runs ends first, on the context and the commands it started with.
+	a.threads.QuitDeletes()
 	if cancel := a.cancel.Load(); cancel != nil {
 		(*cancel)()
 	}

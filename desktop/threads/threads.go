@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -161,6 +162,8 @@ type Threads struct {
 	newPlace   func() string
 	info       []term.Info              // the live threads under a host, and those that are still starting
 	setups     map[string]*setupRun     // under mu, the set-up command of each thread that runs one or whose command failed
+	quitWait   time.Duration            // how long a quit waits for them
+	deletes    sync.WaitGroup           // the deletes that run, which a quit lets end first
 	deleteWait map[string]chan struct{} // under mu, for each thread a delete runs for, the channel closed when that delete ends
 	hidden     map[string]bool          // under mu, the threads a delete takes off the list before it has run
 	starting   map[string]*starting     // under mu, the threads whose start runs or failed, until their agent runs and has its first message
@@ -272,6 +275,30 @@ func New(o Options) *Threads {
 // Stop ends the clean-ups that are running and waits for them.
 func (s *Threads) Stop() { s.life.stopCleanups() }
 
+// DeleteQuitWait is the longest a quit waits for the deletes that run, which it lets end before it cancels what they
+// run on. A delete that takes longer stops where it is, and its thread stays as it was or asleep.
+const DeleteQuitWait = 5 * time.Second
+
+// SetDeleteQuitWait sets how long a quit waits for the deletes that run, DeleteQuitWait by default.
+func (s *Threads) SetDeleteQuitWait(wait time.Duration) { s.quitWait = wait }
+
+// QuitDeletes is what a quit does with the deletes that run: it waits for them, for the time set.
+func (s *Threads) QuitDeletes() { s.FinishDeletes(s.quitWait) }
+
+// FinishDeletes waits for the deletes that run to end, for at most wait.
+func (s *Threads) FinishDeletes(wait time.Duration) {
+	ended := make(chan struct{})
+	go func() {
+		s.deletes.Wait()
+		close(ended)
+	}()
+	select {
+	case <-ended:
+	case <-time.After(wait):
+		log.Printf("orchestrator: a delete is still running after %v; the quit goes on without it", wait)
+	}
+}
+
 // Hook sets what the threads ask of the issues: the repo of a folder, a nudge when the
 // threads tied to issues change, and what the pull request watch needs.
 func (s *Threads) Hook(repoOf func(dir string) string, onIssues func(), repos Repos) {
@@ -286,7 +313,7 @@ func (s *Threads) Touch() { s.changed() }
 
 func newThreads(o Options) *Threads {
 	return &Threads{
-		pollEvery: defaultPollEvery, stopSettle: defaultStopSettle,
+		pollEvery: defaultPollEvery, stopSettle: defaultStopSettle, quitWait: DeleteQuitWait,
 		tmux: o.Tmux, agents: o.Agents, binary: o.Binary, run: o.Run, stateDir: o.StateDir, localDir: o.LocalDir, emit: o.Emit, warn: warn.New(o.Emit),
 		project: o.Current, configured: o.Projects, activity: o.Activity, closeTerm: o.CloseTerminal, evidence: o.Evidence, browsers: o.Browsers, awake: o.Awake, keepAwake: o.KeepAwake, editorApp: o.EditorApp, newPlace: o.ThreadPlace,
 		repoOf: func(string) string { return "" }, onIssues: func() {},
@@ -791,7 +818,9 @@ func (s *Threads) Delete(id string, worktree bool) error {
 		s.emit("delete:done", map[string]string{"id": id, "project": thread.ProjectKey(id)})
 		return nil
 	}
+	s.deletes.Add(1)
 	go func() {
+		defer s.deletes.Done()
 		if err := s.finishDelete(id, family, worktree); err != nil {
 			s.emit("delete:refused", map[string]string{"id": id, "project": thread.ProjectKey(id), "error": err.Error()})
 			return
@@ -842,6 +871,10 @@ func (s *Threads) beginDelete(id string) (family []string, done bool, err error)
 func (s *Threads) finishDelete(id string, family []string, worktree bool) (err error) {
 	defer s.endDelete(family)
 	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("orchestrator: the delete of thread %s failed: %v\n%s", id, r, debug.Stack())
+			err = errors.New("The delete failed unexpectedly")
+		}
 		if err != nil {
 			s.unhide(family)
 		}

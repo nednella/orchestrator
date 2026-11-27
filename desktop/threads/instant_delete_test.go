@@ -79,23 +79,70 @@ func TestRefusedDeleteBringsTheRowBack(t *testing.T) {
 }
 
 // Not parallel: it puts a fake tmux on the process PATH.
+func TestQuitLetsTheDeleteThatRunsEnd(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.StartThread("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newFakeTmux(t).slowKill(t, "1")
+	if err := h.DeleteThreadAsApp(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	h.App.Stop()
+	if tmuxHas(h, s.ID) || hasState(t, h, s.ID) {
+		t.Errorf("the quit did not wait for the delete: the thread runs %v, its state file is there %v", tmuxHas(h, s.ID), hasState(t, h, s.ID))
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
+func TestQuitDoesNotWaitLongerThanItsBoundForADelete(t *testing.T) {
+	h := newHarness(t)
+	s, err := h.StartThread("work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Threads().SetDeleteQuitWait(300 * time.Millisecond)
+	tmux := newFakeTmux(t)
+	tmux.slowKill(t, "20")
+	defer tmux.releaseKill(t)
+	if err := h.DeleteThreadAsApp(s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	began := time.Now()
+	h.App.Stop()
+	if took := time.Since(began); took > 5*time.Second {
+		t.Errorf("the quit took %v, over its bound for a delete", took)
+	}
+}
+
+// Not parallel: it puts a fake tmux on the process PATH.
 func TestDeleteTheAppDidNotFinishLeavesTheThreadAsItWas(t *testing.T) {
 	h := newHarness(t)
 	s, err := h.StartThread("work", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	newFakeTmux(t).slowKill(t, "8")
+	h.Threads().SetDeleteQuitWait(200 * time.Millisecond)
+	tmux := newFakeTmux(t)
+	tmux.slowKill(t, "20")
 	if err := h.DeleteThreadAsApp(s.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, listed := h.Thread(s.ID); listed {
 		t.Fatal("the row is still listed while the delete runs")
 	}
-	// The app quits while the stop is still on its way.
+	// The app quits while the stop is still on its way, which the quit does not wait for past its bound.
+	h.App.Stop()
+	// The stop of the thread, which the quit did not wait for, fails; the delete then ends and leaves nothing running.
+	tmux.releaseKill(t)
+	h.Threads().FinishDeletes(10 * time.Second)
+	if !tmuxHas(h, s.ID) || !hasState(t, h, s.ID) {
+		t.Fatalf("after the quit the thread runs %v, its state file is there %v: want it as it was", tmuxHas(h, s.ID), hasState(t, h, s.ID))
+	}
 	second := h.Restart(t)
 	row, listed := second.Thread(s.ID)
-	if !listed || row.State == "settled" || !hasState(t, h, s.ID) {
+	if !listed || row.State == "settled" {
 		t.Errorf("after the restart the thread is %+v, listed %v: want it as it was, running", row, listed)
 	}
 }
