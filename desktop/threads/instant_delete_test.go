@@ -89,3 +89,28 @@ func TestDeleteTheAppDidNotFinishLeavesTheThreadAsItWas(t *testing.T) {
 		t.Errorf("after the restart the thread is %+v, listed %v: want it as it was, running", row, listed)
 	}
 }
+
+func TestDeleteWithTheWorktreeIsNotRefusedForTheThreadsOwnTurn(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ name, message, state string }{
+		{"a reply that ends in a question", "question", "waiting"},
+		{"a turn that runs", "tool wait", "working"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			repoFixture(t, h)
+			s := issueThread(h, t, 7)
+			if _, err := h.ChatSend(s.ID, tt.message); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "the thread to be "+tt.state, func() bool { return stateOf(h, s.ID) == tt.state })
+
+			if err := h.DeleteThread(s.ID, true); err != nil {
+				t.Fatalf("Delete = %v, want the thread's own turn not to keep its worktree", err)
+			}
+			if _, listed := h.Thread(s.ID); listed || exists(s.Worktree) {
+				t.Errorf("the thread is listed: %v, its worktree is there: %v", listed, exists(s.Worktree))
+			}
+		})
+	}
+}

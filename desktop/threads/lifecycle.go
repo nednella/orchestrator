@@ -1350,8 +1350,11 @@ func (l *Lifecycle) planFor(ctx context.Context, t target, pr *PR, force, unchan
 			return p, reason
 		}
 	}
-	if reason := l.threads.pending(t.id); reason != "" {
-		return p, reason
+	// A delete stops the thread, and drops what waits for it, so its own turn does not keep its worktree.
+	if !slices.Contains(family, t.id) {
+		if reason := l.threads.pending(t.id); reason != "" {
+			return p, reason
+		}
 	}
 	ours := slices.Concat(family, []string{t.id}, l.threads.SideChatsOf(t.id))
 	if user := l.threads.usersOf(w.Path, false, ours...); user != "" {

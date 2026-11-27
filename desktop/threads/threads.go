@@ -3028,7 +3028,9 @@ func (s *Threads) turnRuns(id string) bool {
 
 // awaitsOwner says whether the thread waits on the owner in the middle of its turn, for a permission or a question tool.
 func awaitsOwner(rec thread.Record) bool {
-	return rec.State == thread.Waiting && !endsTurn(rec.Event)
+	// Only a prompt waits in the middle of a turn. A thread that waits after a reply that asks keeps its waiting state
+	// through events that change no state, such as its Claude's exit, which are no prompt.
+	return rec.State == thread.Waiting && rec.Event == "Notification"
 }
 
 // asks says whether an approval of the thread waits on the owner's answer, which a message from a thread would deny:
