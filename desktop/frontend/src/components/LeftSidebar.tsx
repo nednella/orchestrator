@@ -18,7 +18,7 @@ export function LeftSidebar() {
         <div className="flex flex-none items-center border-b border-line text-ink [contain:inline-size]" style={{ ...drag, height: 'var(--topbar-h)' }}>
           <span className="flex-1" style={{ minWidth: 'var(--title-inset)' }} />
           <span className="min-w-0 truncate font-brand text-title font-bold">
-            orchestrator<span className="text-accent">.</span>
+            orchestrator<span className="text-[1.4em] leading-none font-black text-accent">.</span>
           </span>
           <span className="flex flex-1 justify-end pr-1.5">
             <HistoryButtons />
