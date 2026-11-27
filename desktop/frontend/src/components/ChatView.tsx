@@ -14,6 +14,7 @@ import { sideChatAsked, sideChatReason } from '../sideChat'
 import { noteSideChatReason } from '../sideChatStore'
 import { readStored, writeStored } from '../storage'
 import type { FilesRewind, Thread } from '../types'
+import { withHeldError } from '../heldLine'
 import { withSetup } from '../setupLine'
 import { startTimeline } from '../startTimeline'
 import { useChat } from '../useChat'
@@ -53,8 +54,11 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   else if (!chat.loading) frozen.current = null
   const early = current ?? frozen.current
   const { timeline: shownTimeline, events, loading, error } = early ? { ...early, loading: false, error: '' } : chat
-  const { setup, setupExit, setupShell, setupProblem } = thread
-  const timeline = useMemo(() => (embedded ? shownTimeline : withSetup(shownTimeline, { setup, setupExit, setupShell, setupProblem })), [embedded, shownTimeline, setup, setupExit, setupShell, setupProblem])
+  const { setup, setupExit, setupShell, setupProblem, start, startError, lastEventAt } = thread
+  const timeline = useMemo(
+    () => (embedded ? shownTimeline : withHeldError(withSetup(shownTimeline, { setup, setupExit, setupShell, setupProblem }), { start, startError, lastEventAt })),
+    [embedded, shownTimeline, setup, setupExit, setupShell, setupProblem, start, startError, lastEventAt],
+  )
   const empty = timeline.items.length === 0
   const forks = useOrchestratorSelector((s) => forksKey(thread.id, s.threads))
   const { id: threadId, forkOf, forkAt, parent } = thread

@@ -1,6 +1,7 @@
 package threads_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/nednella/orchestrator/desktop/threads"
 	"github.com/nednella/orchestrator/internal/bus"
 	chatlog "github.com/nednella/orchestrator/internal/chat"
+	"github.com/nednella/orchestrator/internal/host"
 	"github.com/nednella/orchestrator/internal/thread"
 )
 
@@ -1134,4 +1136,105 @@ func TestStopEndsAStartThatWaitsForAnotherStartsWorktree(t *testing.T) {
 		row, _ := h.Thread(second.ID)
 		return row.Start == "" && row.Branch == "issue-8"
 	})
+}
+
+// restartWithHeldMessages leaves the saved start of a running thread whose agent took the first message and whose
+// held messages (held) were not sent, quits the app, and starts it again. prepare runs between the quit's start and
+// the new app, for a change to the host.
+func restartWithHeldMessages(t *testing.T, h *apptest.Harness, held []string, prepare func(socket string)) (*apptest.Harness, string, string) {
+	t.Helper()
+	s, err := h.Threads().Create(h.Threads().Current(), "work", "", false, 0, thread.Supervised)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first app's own start ends, and drops its record, before the saved one stands in for a quit mid-start.
+	eventually(t, "the first app's start ended", func() bool { return !h.Threads().Starts(s.ID) })
+	if err := sendToHost(h, s.ID, "first words"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first message with the agent", func() bool { return mentions(userLines(t, h, s.ID), "first words") == 1 })
+	queue := make([]string, len(held))
+	for i, text := range held {
+		queue[i] = fmt.Sprintf(`{"Text":%q}`, text)
+	}
+	token := strings.TrimPrefix(s.ID, "main/")
+	saved := fmt.Sprintf(`{"name":%q,"number":%d,"rawTitle":"work","title":"work","text":"first words","send":true,"model":{},"access":"supervised","place":"project","created":%d,"placed":true,"launched":true,"delivered":true,"sending":"","sentBefore":0,"queue":[%s],"status":"starting"}`, s.ID, s.N, s.CreatedAt, strings.Join(queue, ","))
+	dir := filepath.Join(h.State, "data", "main", "starts")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	record := filepath.Join(dir, token+".json")
+	if err := os.WriteFile(record, []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if prepare != nil {
+		_, socket := hostFiles(h, s.ID)
+		prepare(socket)
+	}
+	h.BeginQuit()
+	h.App.Stop()
+	return h.Restart(t), s.ID, record
+}
+
+func TestRestartSendsHeldMessagesToARunningAgentOnce(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	second, id, record := restartWithHeldMessages(t, h, []string{"held one", "held two"}, nil)
+
+	eventually(t, "both held messages with the agent", func() bool {
+		lines := userLines(t, second, id)
+		return mentions(lines, "held one") == 1 && mentions(lines, "held two") == 1
+	})
+	eventually(t, "the saved start gone", func() bool { _, err := os.Stat(record); return err != nil })
+	row, ok := second.Thread(id)
+	if !ok || row.Start != "" || row.StartError != "" || row.FirstMessage != "" {
+		t.Errorf("the row = %+v, %v; want the thread running, with its real chat", row, ok)
+	}
+	if n := mentions(userLines(t, second, id), "first words"); n != 1 {
+		t.Errorf("the first message reached the agent %d times, want once", n)
+	}
+}
+
+func TestRestartKeepsHeldMessagesAndSaysWhyWhenTheAgentRefuses(t *testing.T) {
+	t.Parallel()
+	h := apptest.New(t)
+	second, id, record := restartWithHeldMessages(t, h, []string{"held one"}, func(socket string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		// A host holds only once its turn has ended.
+		eventually(t, "the host held", func() bool {
+			idle, err := host.Hold(ctx, socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return idle
+		})
+	})
+
+	eventually(t, "the reason in the row", func() bool { row, ok := second.Thread(id); return ok && row.StartError != "" })
+	row, _ := second.Thread(id)
+	if row.Start != "" {
+		t.Errorf("start = %q, want the real chat and no failed-start view", row.Start)
+	}
+	if _, err := os.Stat(record); err != nil {
+		t.Errorf("the held message was dropped: %v", err)
+	}
+	if n := mentions(userLines(t, second, id), "held one"); n != 0 {
+		t.Errorf("the refused message reached the agent %d times", n)
+	}
+	// The agent takes messages again: the owner's next message sends the held one first.
+	_, socket := hostFiles(second, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := host.Release(ctx, socket); err != nil {
+		t.Fatal(err)
+	}
+	if !second.Threads().QueueDuringStart(id, host.Message{Text: "after"}) {
+		t.Fatal("the held messages were gone")
+	}
+	eventually(t, "both messages with the agent", func() bool {
+		lines := userLines(t, second, id)
+		return mentions(lines, "held one") == 1 && mentions(lines, "after") == 1
+	})
+	eventually(t, "the saved start gone", func() bool { _, err := os.Stat(record); return err != nil })
 }

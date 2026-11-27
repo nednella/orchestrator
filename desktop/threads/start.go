@@ -73,10 +73,13 @@ type starting struct {
 	launched  bool
 	aborted   bool
 	cancelled bool // the owner stopped the start
-	cancel    context.CancelFunc
-	done      chan struct{}
-	step      string         // the step that runs, for the row
-	queue     []host.Message // what the owner sent while it started, oldest first
+	// quiet is a start restored with its agent running and only held messages left: its thread shows its real chat, and
+	// a failed delivery shows only its reason there.
+	quiet  bool
+	cancel context.CancelFunc
+	done   chan struct{}
+	step   string         // the step that runs, for the row
+	queue  []host.Message // what the owner sent while it started, oldest first
 }
 
 // shownText is the first message as the thread shows it while it starts: what the owner sent, and nothing when it is
@@ -334,6 +337,9 @@ func (s *Threads) QueueDuringStart(id string, m host.Message) bool {
 		return false
 	}
 	st.queue = append(st.queue, m)
+	if st.quiet && !st.running && st.status == StartFailed {
+		s.rerun(st)
+	}
 	s.sync()
 	return true
 }
@@ -591,14 +597,19 @@ func (s *Threads) RetryStart(id string) error {
 	if st == nil || st.status != StartFailed && st.status != StartCancelled || st.running || st.aborted {
 		return fmt.Errorf("Thread %s has no failed start to retry", id)
 	}
+	s.rerun(st)
+	s.sync()
+	return nil
+}
+
+// rerun runs the steps of a failed or cancelled start again, from the one it stopped at. It needs mu.
+func (s *Threads) rerun(st *starting) {
 	st.status, st.failure, st.running, st.cancelled = Starting, "", true, false
 	st.setupTried = false
 	st.done = make(chan struct{})
 	var run context.Context
 	run, st.cancel = context.WithCancel(st.app)
-	s.sync()
 	go s.runStart(run, st)
-	return nil
 }
 
 // CancelStart stops the start of the thread id that is under way, at the owner's word. It stops the set-up command and

@@ -103,7 +103,7 @@ export type Thread = {
   memory: number
   subagents: number // the subagents its Claude runs in the background, which a settle stops
   start: StartState // a thread that starts shows as working, and one whose start failed as waiting
-  startError: string // why the start failed, or 'Start cancelled' and what keeps its worktree; '' unless start is 'failed' or 'cancelled'
+  startError: string // why the start failed, or 'Start cancelled' and what keeps its worktree; '' unless start is 'failed' or 'cancelled', or the thread runs and the messages held for it were not sent
   setup: '' | 'running' | 'failed' // the project's set-up command in the new worktree, which runs in a terminal while the agent works
   setupExit: number // the exit code of a failed set-up command
   setupProblem: string // why a set-up command that could not start did not, '' otherwise

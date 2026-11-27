@@ -99,7 +99,8 @@ func (s *Threads) dropStartRecord(name thread.Name) {
 
 // restoreStarts brings back the starts that the app's quit cut short: each is listed as a failed start with its first
 // message and the messages it held, for a retry, which goes on from the worktree the start made. A start whose agent
-// runs under tmux still is that thread's row, and a retry sends what the agent did not take.
+// runs under tmux still is that thread's row, and a retry sends what the agent did not take. When the agent took the
+// first message, the held ones go to it at once, and the thread shows its real chat.
 func (s *Threads) restoreStarts() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -158,7 +159,11 @@ func (s *Threads) restoreStart(proj project.Project, name thread.Name) bool {
 		delivered: rec.Done, sending: rec.Sending, sentBefore: rec.Before, queue: rec.Queue, status: rec.Status, failure: rec.Failure,
 		saved: data,
 	}
-	if st.status != StartCancelled {
+	switch {
+	case live && rec.Status != StartCancelled && (rec.Done || rec.Text == "") && len(rec.Queue) > 0:
+		// The agent runs and took the first message: the held ones go to it now, behind the thread's real chat.
+		st.quiet = true
+	case st.status != StartCancelled:
 		st.status, st.failure = StartFailed, quitFailure
 	}
 	st.info = st.placeholder()
@@ -166,6 +171,9 @@ func (s *Threads) restoreStart(proj project.Project, name thread.Name) bool {
 		st.info.Path, st.info.Branch = st.work.dir, st.work.branch
 	}
 	s.starting[id] = st
+	if st.quiet {
+		s.rerun(st)
+	}
 	if !live {
 		s.info = append(s.info, st.info)
 	}
