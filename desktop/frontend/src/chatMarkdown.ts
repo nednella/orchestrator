@@ -40,3 +40,10 @@ export function textCache<V>(limit: number) {
     },
   }
 }
+
+// lastLine is the number of the last line of a block's text, the line a block being written is still writing.
+export const lastLine = (text: string) => text.trimEnd().split('\n').length
+
+// settled says a link or code span that ends at line end is whole: the block it is in is not being written, writing 0,
+// or it is above the line being written, which closes an open code span and so makes a path of every prefix.
+export const settled = (writing: number, end: number | undefined) => writing === 0 || (end !== undefined && end < writing)

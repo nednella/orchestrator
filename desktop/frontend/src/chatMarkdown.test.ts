@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
-import { codeLanguage, markdownProps, textCache } from './chatMarkdown.ts'
+import { codeLanguage, lastLine, markdownProps, settled, textCache } from './chatMarkdown.ts'
 
 const render = (children: string) => renderToStaticMarkup(createElement(Markdown, { ...markdownProps, children }))
 
@@ -59,4 +59,13 @@ test('textCache keeps no text over a quarter of its limit', () => {
   const cache = textCache<number>(40)
   cache.set('a'.repeat(11), 1)
   assert.equal(cache.get('a'.repeat(11)), undefined)
+})
+
+test('only what is above the line being written is whole', () => {
+  assert.equal(lastLine('one\ntwo `src/a'), 2)
+  assert.equal(lastLine('one\n'), 1)
+  assert.equal(settled(0, 5), true, 'a block that is not being written')
+  assert.equal(settled(2, 1), true)
+  assert.equal(settled(2, 2), false)
+  assert.equal(settled(2, undefined), false)
 })

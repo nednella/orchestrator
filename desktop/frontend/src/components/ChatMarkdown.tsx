@@ -5,8 +5,8 @@ import type { Components, UrlTransform } from 'react-markdown'
 import { useOrchestrator } from '../OrchestratorContext'
 import { api } from '../api'
 import { createChipScope } from '../chipScope'
-import { codeLanguage, markdownProps, textCache } from '../chatMarkdown'
-import { ChatChips, InsideLink } from '../fileChips'
+import { codeLanguage, lastLine, markdownProps, settled, textCache } from '../chatMarkdown'
+import { ChatChips, InsideLink, WritingLine } from '../fileChips'
 import { codeRef, linkRef } from '../filePaths'
 import { filesKey, imageTarget, linkTarget, pickFile, planPath } from '../filesView'
 import { useLayout } from '../LayoutContext'
@@ -29,13 +29,14 @@ const textOf = (node: ReactNode): string =>
     .join('')
 
 const components: Components = {
-  a: function MarkdownLink({ href, children }) {
+  a: function MarkdownLink({ href, children, node }) {
     const { report, selectedId, project } = useOrchestrator('report', 'selectedId', 'project')
     const { showPanelView } = useLayout()
     const from = useContext(FileLinks)
     const chats = useContext(ChatChips)
+    const writing = useContext(WritingLine)
     if (!href) return <>{children}</>
-    const ref = chats ? linkRef(href) : null
+    const ref = chats && settled(writing, node?.position?.end.line) ? linkRef(href) : null
     if (ref) return <FileChip fileRef={ref} fallback={children} />
     const file = planPath(href)
     // The text keeps the address of a file for a chip, which a text with no thread has no use for.
@@ -64,11 +65,12 @@ const components: Components = {
       </a>
     )
   },
-  code: function MarkdownCode({ className, children }) {
+  code: function MarkdownCode({ className, children, node }) {
     const chats = useContext(ChatChips)
+    const writing = useContext(WritingLine)
     const inLink = useContext(InsideLink)
     const text = textOf(children)
-    const ref = chats && !inLink && !className && !text.includes('\n') ? codeRef(text) : null
+    const ref = chats && settled(writing, node?.position?.end.line) && !inLink && !className && !text.includes('\n') ? codeRef(text) : null
     const code = <code className={className}>{children}</code>
     return ref ? <FileChip fileRef={ref} fallback={code} /> : code
   },
@@ -119,11 +121,12 @@ function parseCached(text: string, page: boolean) {
   return tree
 }
 
-type MarkdownBlockProps = { text: string; writing: boolean; page: boolean }
+// line is the last line of the text as it is written, 0 for a block that is done.
+type MarkdownBlockProps = { text: string; line: number; page: boolean }
 
 // The block still being written changes on every update, so it is neither cached nor kept.
-const MarkdownBlock = memo(function MarkdownBlock({ text, writing, page }: MarkdownBlockProps) {
-  return writing ? parse(text, page) : parseCached(text, page)
+const MarkdownBlock = memo(function MarkdownBlock({ text, line, page }: MarkdownBlockProps) {
+  return line > 0 ? <WritingLine.Provider value={line}>{parse(text, page)}</WritingLine.Provider> : parseCached(text, page)
 })
 
 // A reply renders block by block: a streaming update parses only its last block, and the finished reply takes its other
@@ -137,7 +140,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ text, streaming = false
     <ChatChips.Provider value={chats}>
       <FileLinks.Provider value={file ?? null}>
         <div className={page ? 'markdown markdown-page' : 'markdown text-body'}>
-          {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} writing page={page} /> : <MarkdownBlock key={i} text={block} writing={false} page={page} />))}
+          {blocks.map((block, i) => (streaming && i === last ? <MarkdownBlock key={i} text={steadyBlock(block)} line={lastLine(block)} page={page} /> : <MarkdownBlock key={i} text={block} line={0} page={page} />))}
         </div>
       </FileLinks.Provider>
     </ChatChips.Provider>

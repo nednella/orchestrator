@@ -7,3 +7,6 @@ export const ChatChips = createContext<{ thread: string; scope: ChipScope } | nu
 
 // InsideLink is set in the text of a link, where a chip would be a button inside a link.
 export const InsideLink = createContext(false)
+
+// WritingLine is the last line of the block of a reply that is being written, 0 for a block that is not: a path on that line may be cut short.
+export const WritingLine = createContext(0)
