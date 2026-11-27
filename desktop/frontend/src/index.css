@@ -647,7 +647,7 @@
 
   .thread-row[data-state='waiting'] {
     background: var(--bg-thread-waiting);
-    box-shadow: inset 0 0 0 1px var(--border-thread-waiting);
+    box-shadow: inset 0 0 0 1.5px var(--border-thread-waiting);
   }
 
   .thread-row[data-state='waiting']:not([data-selected='true']):is(:hover, [data-menu-open='true']),
@@ -749,7 +749,7 @@
   }
 
   [data-panel][data-focused] .row[data-cursor='true'] {
-    box-shadow: inset 0 0 0 1px var(--accent);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
   }
 
   [data-drop] {
