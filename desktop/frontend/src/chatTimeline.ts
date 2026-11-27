@@ -45,8 +45,8 @@ export type TimelineItem =
   // thinking ends the turn that runs while nothing in it streams or waits on the owner: Claude thinks, a call runs, or
   // the subagents it left running after its reply work.
   | { kind: 'thinking'; key: string; label: string }
-  // startFailed is the reason a new thread's start failed, in the working row's place, with a retry.
-  | { kind: 'startFailed'; key: string; text: string }
+  // startFailed is the reason a new thread's start failed, or that the owner cancelled it, in the working row's place, with a retry.
+  | { kind: 'startFailed'; key: string; text: string; cancelled: boolean }
   // setup is the project's set-up command of a new worktree: running quietly, or failed with its terminal to open.
   | { kind: 'setup'; key: string; text: string; failed: boolean; shell: string }
   | { kind: 'approval'; key: string; at: number; request: string; tool: string; input: unknown; expired: boolean }

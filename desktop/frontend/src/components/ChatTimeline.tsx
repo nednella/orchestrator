@@ -102,7 +102,7 @@ function rowOf(items: TimelineItem[], index: number, thread: string, folder: str
     case 'setup':
       return <ChatSetupRow text={item.text} failed={item.failed} shell={item.shell} />
     case 'startFailed':
-      return <ChatStartFailed thread={thread} text={item.text} />
+      return <ChatStartFailed thread={thread} text={item.text} cancelled={item.cancelled} />
     case 'approval':
       return <ChatApprovalCard thread={thread} request={item.request} tool={item.tool} input={item.input} expired={item.expired} folder={folder} />
     case 'question':

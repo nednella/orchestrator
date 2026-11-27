@@ -10,6 +10,7 @@ type Backend = {
   SettleThread(id: string): Promise<void>
   DeleteThread(id: string, worktree: boolean): Promise<void>
   RetryThreadStart(id: string): Promise<void>
+  CancelThreadStart(id: string): Promise<void>
   DeletePlan(id: string): Promise<DeletePlan>
   Servers(id: string): Promise<Server[]>
   Changes(id: string): Promise<Changes>
@@ -149,7 +150,7 @@ declare global {
 // The Go side binds one service per package; window.go.<namespace>.Service.<Method>.
 const namespaces = {
   projects: ['Snapshot', 'SwitchProject', 'PickFolder', 'AddProjectDir', 'NewProjectOptions', 'GitHubOwner', 'ListFolders', 'CreateProject', 'PublishProject', 'SetUpProject'],
-  threads: ['NewThread', 'RetryThreadStart', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'Changes', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'OpenFileInEditor', 'RevealInFinder', 'ForkThread', 'SideChatDelete', 'RenameThread', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
+  threads: ['NewThread', 'RetryThreadStart', 'CancelThreadStart', 'SettleThread', 'DeleteThread', 'DeletePlan', 'Servers', 'Changes', 'PullRequests', 'Viewer', 'StopServer', 'OpenServer', 'WakeThread', 'SetAccess', 'SetFast', 'SetEffort', 'OpenInEditor', 'OpenProjectInEditor', 'OpenFileInEditor', 'RevealInFinder', 'ForkThread', 'SideChatDelete', 'RenameThread', 'TypeInto', 'RefreshPRs', 'AckPR', 'Cleanup', 'Cleanups', 'ShellNew', 'ShellClose', 'Memory', 'DefaultModel'],
   chat: ['ChatHistory', 'ChatWatch', 'ChatUnwatch', 'ChatSend', 'SideChatStart', 'ChatInterrupt', 'ChatSendNow', 'ChatAnswer', 'ChatAnswerInput', 'ChatPending', 'ChatFiles', 'RewindFilesOffer', 'RewindPreview', 'RewindTo', 'RewindOff', 'ProjectFiles', 'ProjectCommands', 'ChatReadFile', 'ChatReadImage', 'ProjectReadFile', 'ChatReadOutside', 'ChatFileChips', 'ChatFileTree', 'ProjectFileTree', 'ChatFileDir', 'ProjectFileDir'],
   terminal: ['TermOpen', 'TermWrite', 'TermResize', 'TermClose'],
   issues: ['Issues', 'StartIssue', 'MoveIssue', 'UndoMove', 'IssueDetail'],
@@ -191,6 +192,7 @@ export const api = {
   settleThread: (id: string) => backend.SettleThread(id),
   deleteThread: (id: string, worktree: boolean) => backend.DeleteThread(id, worktree),
   retryThreadStart: (id: string) => backend.RetryThreadStart(id),
+  cancelThreadStart: (id: string) => backend.CancelThreadStart(id),
   deletePlan: (id: string) => backend.DeletePlan(id),
   servers: (id: string) => backend.Servers(id),
   changes: (id: string) => backend.Changes(id),

@@ -84,7 +84,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   }, [stopping])
 
   const stopWith = (call: () => Promise<void>) => {
-    if (stopping || starting) return
+    if (stopping) return
     setStopAsked(lastEnd)
     report(() =>
       call().catch((err) => {
@@ -195,13 +195,16 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
   const folder = thread.worktree || project?.dir || ''
   const edit: ChatEdit = { blocked: (uuid) => editBlocked(uuid, rewindOff, timeline), onOpen: editFrom }
 
-  const stop = () => stopWith(() => api.chatInterrupt(thread.id))
-  const sendNow = (message: string) => stopWith(() => api.chatSendNow(thread.id, message))
+  // Stop cancels a start that is under way; messages sent meanwhile are held, so none is queued for Send now.
+  const stop = () => stopWith(() => (starting ? api.cancelThreadStart(thread.id) : api.chatInterrupt(thread.id)))
+  const sendNow = (message: string) => {
+    if (!starting) stopWith(() => api.chatSendNow(thread.id, message))
+  }
 
   // Esc never sends what is typed in the composer: it stays there.
   const escape = (picker: boolean): EscapeAction => {
     const queued = timeline.queued[0]
-    const action = escapeAction({ overlay: latest().overlay !== null, picker, turnOpen: timeline.turnOpen, stopping, queued: queued !== undefined })
+    const action = escapeAction({ overlay: latest().overlay !== null, picker, turnOpen: timeline.turnOpen, stopping, queued: queued !== undefined && !starting })
     if (action === 'send-now') sendNow(queued.id)
     if (action === 'interrupt') stop()
     return action
@@ -243,7 +246,7 @@ export function ChatView({ thread, embedded = false, onAsked }: ChatViewProps) {
               </div>
             )}
             {!embedded && <ChatChildApprovals parent={thread.id} />}
-            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} thread={thread} timeline={timeline} events={events} embedded={embedded} stopping={stopping || starting} onStop={stop} onSendNow={sendNow} onEscape={escape} />
+            <ThreadComposer inputRef={input} draftRef={draft} reply={reply} onReply={setReply} thread={thread} timeline={timeline} events={events} embedded={embedded} stopping={stopping} onStop={stop} onSendNow={sendNow} onEscape={escape} />
           </div>
         </div>
       </div>

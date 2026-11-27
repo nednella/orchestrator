@@ -241,7 +241,7 @@ export function ThreadComposer({ inputRef: input, draftRef, reply, onReply, thre
                 </button>
               </div>
             )}
-            {timeline.queued.length > 0 && <ChatQueued queued={timeline.queued} stopping={stopping} onSendNow={onSendNow} />}
+            {timeline.queued.length > 0 && <ChatQueued queued={timeline.queued} stopping={stopping || thread.start !== ''} onSendNow={onSendNow} />}
           </>
         )
       }

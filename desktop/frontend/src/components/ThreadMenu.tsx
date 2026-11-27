@@ -57,7 +57,7 @@ export function ThreadMenu({ thread, selected, at, onClose, onRename, onDelete }
         CLEANUP_LABEL[thread.cleanup] !== '' && { label: CLEANUP_LABEL[thread.cleanup], run: () => a.report(cleanUp) },
         { label: panelShown ? 'Hide right panel' : 'Show right panel', run: toggleOwnPanel },
         openInEditor !== undefined && { label: openInEditor.label, run: () => a.report(() => openInEditor.run()) },
-        thread.start === 'failed' && { label: 'Retry start', separated: true, run: () => a.report(() => api.retryThreadStart(thread.id)) },
+        (thread.start === 'failed' || thread.start === 'cancelled') && { label: 'Retry start', separated: true, run: () => a.report(() => api.retryThreadStart(thread.id)) },
         settled && { label: 'Wake', separated: true, run: () => a.report(() => a.wakeThread(thread.id)) },
         !settled && thread.start === '' && { label: 'Sleep', danger: true, separated: true, detail: subagentsWorking(thread.subagents), run: () => a.report(() => a.settleThread(thread.id)) },
         { label: 'Delete', danger: true, run: onDelete },

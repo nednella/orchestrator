@@ -671,8 +671,15 @@ export function createMock(params: URLSearchParams) {
       )
     }
     retries.set(s.id, () => {
+      if (where) Object.assign(s, where)
       Object.assign(s, { start: 'starting', startError: '', state: 'working', workingSince: Date.now(), detail: s.worktree ? 'Setting up the worktree' : 'Starting Claude' })
       attempt()
+      publish()
+    })
+    cancels.set(s.id, () => {
+      clearTimeout(starts.get(s.id))
+      starts.delete(s.id)
+      Object.assign(s, { start: 'cancelled', startError: 'Start cancelled', state: 'waiting', workingSince: 0, detail: 'Start cancelled', worktree: '', branch: '' })
       publish()
     })
     attempt()
@@ -681,6 +688,7 @@ export function createMock(params: URLSearchParams) {
   }
   const starts = new Map<string, ReturnType<typeof setTimeout>>()
   const retries = new Map<string, () => void>()
+  const cancels = new Map<string, () => void>()
   const failedOnce = new Set<string>()
 
   function switchTo(next: ProjectData): Snapshot {
@@ -1222,8 +1230,14 @@ export function createMock(params: URLSearchParams) {
     },
     RetryThreadStart: async (id: string) => {
       const retry = retries.get(id)
-      if (find(id).start !== 'failed' || !retry) throw `Thread ${id} has no failed start to retry`
+      const start = find(id).start
+      if ((start !== 'failed' && start !== 'cancelled') || !retry) throw `Thread ${id} has no failed start to retry`
       retry()
+    },
+    CancelThreadStart: async (id: string) => {
+      const cancel = cancels.get(id)
+      if (find(id).start !== 'starting' || !cancel) throw `Thread ${id} has no start to cancel`
+      cancel()
     },
     // DeleteThread acts as the threads service does: with worktree, the thread's own worktree goes first through a clean-up
     // with the checks, and one they keep refuses the delete; the thread, its chat and its row then go.

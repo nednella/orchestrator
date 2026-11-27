@@ -37,3 +37,22 @@ test('a start with no message has the step alone', () => {
     ['thinking'],
   )
 })
+
+test('a cancelled start keeps the first message and the held ones, and offers the retry in the working row', () => {
+  const { timeline } = startTimeline({ ...starting, start: 'cancelled', startError: 'Start cancelled', detail: 'Start cancelled', startQueue: ['and the signup form'] })
+  assert.deepEqual(
+    timeline.items.map((i) => i.kind),
+    ['user', 'working', 'startFailed'],
+  )
+  const failed = timeline.items[2]
+  assert.equal(failed.kind === 'startFailed' && failed.cancelled, true)
+  assert.equal(failed.kind === 'startFailed' && failed.text, 'Start cancelled')
+  assert.deepEqual(timeline.queued.map((q) => q.text), ['and the signup form'])
+  assert.equal(timeline.turnOpen, false)
+})
+
+test('a failed start is not a cancelled one', () => {
+  const { timeline } = startTimeline({ ...starting, start: 'failed', startError: 'no room for a session' })
+  const failed = timeline.items.at(-1)
+  assert.equal(failed?.kind === 'startFailed' && failed.cancelled, false)
+})

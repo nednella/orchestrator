@@ -1,8 +1,8 @@
 export type State = 'waiting' | 'working' | 'idle' | 'settled'
 
 // How far the start of a thread has got: '' once it runs, 'starting' while its worktree, its agent or its first message
-// is on the way, and 'failed' when a step failed, which a retry goes on from.
-export type StartState = '' | 'starting' | 'failed'
+// is on the way, 'failed' when a step failed and 'cancelled' when the owner stopped it, which a retry goes on from.
+export type StartState = '' | 'starting' | 'failed' | 'cancelled'
 
 // Access is what a thread may do without asking the owner.
 export type Access = 'read' | 'supervised' | 'full'
@@ -103,7 +103,7 @@ export type Thread = {
   memory: number
   subagents: number // the subagents its Claude runs in the background, which a settle stops
   start: StartState // a thread that starts shows as working, and one whose start failed as waiting
-  startError: string // why the start failed, '' unless start is 'failed'
+  startError: string // why the start failed, or 'Start cancelled' and what keeps its worktree; '' unless start is 'failed' or 'cancelled'
   setup: '' | 'running' | 'failed' // the project's set-up command in the new worktree, which runs in a terminal while the agent works
   setupExit: number // the exit code of a failed set-up command
   setupProblem: string // why a set-up command that could not start did not, '' otherwise
