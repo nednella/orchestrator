@@ -60,7 +60,7 @@ export function PanelTabStrip() {
   }
 
   return (
-    <div className="flex h-[52px] flex-none items-center gap-1 border-b border-line pl-2" style={{ paddingRight: 'var(--corner-pad)' }}>
+    <div className="flex h-[52px] flex-none items-center gap-1 pl-2" style={{ paddingRight: 'var(--corner-pad)' }}>
       <button className={titleBarButton} style={pressedColor(panel.active === null)} title="All views" aria-label="All views" aria-pressed={panel.active === null} onClick={showPanelList}>
         <List {...iconProps} />
       </button>

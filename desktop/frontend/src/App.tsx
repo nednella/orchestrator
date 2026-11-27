@@ -45,20 +45,16 @@ export function App() {
         <div className="relative flex min-h-0 flex-1">
           {docked.sidebar && sidebarOpen && <LeftSidebar />}
           {docked.sidebar && sidebarOpen && <Divider panel="sidebar" />}
-          <div className="flex min-w-0 flex-1 flex-col">
+          {/* The expanded panel takes the thread's room; the thread stays mounted, so it comes back as it was. */}
+          <div className={`flex min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
             <TopBar />
-            <main className="relative flex min-h-0 min-w-0 flex-1">
-              {/* The expanded panel takes the chat's room; the chat stays mounted, so it comes back as it was. */}
-              <div className={`flex min-h-0 min-w-0 flex-col ${panelExpanded ? 'w-0 flex-none overflow-hidden' : 'flex-1'}`} {...(panelExpanded ? { inert: '' } : {})}>
-                <div className="relative min-h-0 flex-1">
-                  <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
-                  {overlay && <PanelOverlay panel={overlay} />}
-                </div>
-              </div>
-              {docked.right && rightOpen && !panelExpanded && <Divider panel="right" />}
-              {docked.right && rightOpen && <RightPanel />}
+            <main className="relative min-h-0 min-w-0 flex-1">
+              <CentreBoundary>{selectedId ? <Viewport /> : <Home />}</CentreBoundary>
+              {overlay && <PanelOverlay panel={overlay} />}
             </main>
           </div>
+          {docked.right && rightOpen && !panelExpanded && <Divider panel="right" />}
+          {docked.right && rightOpen && <RightPanel />}
         </div>
         <AddProjectDialog />
         <ShortcutsSheet />
