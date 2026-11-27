@@ -149,7 +149,12 @@ const askedQuestions = [
       { label: 'Stepper', description: 'Three routes that share one form state.', preview: '/checkout/address\n/checkout/payment\n/checkout/review' },
       { label: 'Single page', description: 'One long form with a sticky total.', preview: '<Checkout>\n  <Address /> <Payment />\n</Checkout>' },
       { label: 'Accordion', description: 'Sections open one at a time, as in the cart.', preview: '![The cart page with its sections open one at a time](/mock/shots/accordion.svg)' },
-      { label: 'Tabs', description: 'Free order, no required sequence.', preview: '<Tabs>\n  <Tab id="address" />\n</Tabs>' },
+      {
+        label: 'Tabs',
+        description: 'Free order, no required sequence.',
+        preview:
+          '```html\n<body style="margin:0"><div style="font-family:var(--font-ui);color:var(--text);background:var(--bg-surface);height:100vh;padding:32px;box-sizing:border-box">\n  <div style="display:flex;gap:8px;margin-bottom:24px">\n    <span style="padding:8px 18px;border-radius:999px;background:var(--accent);color:var(--text-on-accent)">Address</span>\n    <span style="padding:8px 18px;border-radius:999px;background:var(--bg-segment-on)">Payment</span>\n    <span style="padding:8px 18px;border-radius:999px;background:var(--bg-segment-on)">Review</span>\n  </div>\n  <div style="border:1px solid var(--border-strong);border-radius:12px;padding:20px;background:var(--bg-raised)">\n    <div style="color:var(--text-dim);margin-bottom:8px">Shipping address</div>\n    <div style="height:36px;border-radius:8px;background:var(--bg-segment-on);margin-bottom:10px"></div>\n    <div style="height:36px;border-radius:8px;background:var(--bg-segment-on);width:60%"></div>\n  </div>\n</div></body>\n```',
+      },
     ],
     multiSelect: false,
   },
