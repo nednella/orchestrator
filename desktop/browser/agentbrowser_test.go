@@ -168,6 +168,33 @@ func TestTheEndOfAThreadWithNoWindowStopsItsDaemonThatRuns(t *testing.T) {
 	}
 }
 
+func TestCloseAllStopsEveryAgentBrowserThatRuns(t *testing.T) {
+	t.Parallel()
+	b := New(t.TempDir(), func(string, any) {}, testEnv())
+	log := fakeAgentBrowser(t, b)
+	if err := os.MkdirAll(b.agentDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gone := exec.Command("true")
+	if err := gone.Run(); err != nil {
+		t.Fatal(err)
+	}
+	for token, pid := range map[string]string{"runs2345": strconv.Itoa(os.Getpid()), "gone2345": strconv.Itoa(gone.Process.Pid), "odd22345": "?"} {
+		if err := os.WriteFile(filepath.Join(b.agentDir(), token+".pid"), []byte(pid+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(b.agentDir(), "none2345.target"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b.CloseAll()
+	got := calls(t, log)
+	slices.Sort(got)
+	if want := []string{"odd22345 " + b.agentDir() + " close", "runs2345 " + b.agentDir() + " close"}; !slices.Equal(got, want) {
+		t.Errorf("calls = %q, want the daemons that run, and the one whose pid file this app cannot read", got)
+	}
+}
+
 func TestAThreadWithoutAgentBrowserIsLeftAlone(t *testing.T) {
 	t.Parallel()
 	b, ctx := newTestBrowsers(t)

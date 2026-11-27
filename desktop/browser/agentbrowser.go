@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/nednella/orchestrator/internal/atomicfile"
 	"github.com/nednella/orchestrator/internal/environ"
@@ -105,8 +108,8 @@ func (b *Browsers) bindAgent(ctx context.Context, id, targetID string) error {
 	if !ok {
 		return nil
 	}
-	if err := b.stopAgent(ctx, name); err != nil {
-		return err
+	if err := b.stopAgent(ctx, name.Token); err != nil {
+		return fmt.Errorf("stopping the agent-browser of %s: %w", name, err)
 	}
 	return b.writeBinding(name, targetID)
 }
@@ -121,14 +124,14 @@ func (b *Browsers) agentThread(id string) (thread.Name, bool) {
 	return name, err == nil
 }
 
-// stopAgent stops the thread's agent-browser daemon, which leaves its tab alone.
-func (b *Browsers) stopAgent(ctx context.Context, name thread.Name) error {
+// stopAgent stops the agent-browser daemon of the session token, which leaves its tab alone.
+func (b *Browsers) stopAgent(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, stopLimit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, b.agentBrowser, "close")
-	cmd.Env = append(slices.Clone(b.env), "AGENT_BROWSER_SESSION="+name.Token, "AGENT_BROWSER_SOCKET_DIR="+b.agentDir())
+	cmd.Env = append(slices.Clone(b.env), "AGENT_BROWSER_SESSION="+token, "AGENT_BROWSER_SOCKET_DIR="+b.agentDir())
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("stopping the agent-browser of %s: %v: %s", name, err, out)
+		return fmt.Errorf("%v: %s", err, out)
 	}
 	return nil
 }
@@ -140,22 +143,46 @@ func (b *Browsers) agentRuns(id string) bool {
 	if !ok {
 		return false
 	}
-	pid := b.agentDaemon(name.Token)
+	pid, _ := b.agentDaemon(name.Token)
 	return pid > 0 && processRuns(pid)
 }
 
-// agentDaemon is the pid in <token>.pid, the file in which agent-browser's daemon of the session token keeps its own;
-// 0 when there is no file or it holds no pid.
-func (b *Browsers) agentDaemon(token string) int {
-	data, err := os.ReadFile(filepath.Join(b.agentDir(), token+".pid"))
+// agentDaemon is the pid in <token>.pid, the file in which agent-browser's daemon of the session token keeps its own,
+// and when the file was written; 0 when there is no file or it holds no pid.
+func (b *Browsers) agentDaemon(token string) (int, time.Time) {
+	path := filepath.Join(b.agentDir(), token+".pid")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0
+		return 0, time.Time{}
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || pid <= 0 {
-		return 0
+	info, err := os.Stat(path)
+	pid, perr := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || perr != nil || pid <= 0 {
+		return 0, time.Time{}
 	}
-	return pid
+	return pid, info.ModTime()
+}
+
+// stopAgents stops every thread's agent-browser daemon that runs, at once: the app quits, and its browsers with it. A
+// pid file that names no pid still gets a stop, since agent-browser may write it otherwise than this app reads it.
+func (b *Browsers) stopAgents() {
+	if b.agentBrowser == "" {
+		return
+	}
+	files, _ := filepath.Glob(filepath.Join(b.agentDir(), "*.pid"))
+	var wg sync.WaitGroup
+	for _, f := range files {
+		token := strings.TrimSuffix(filepath.Base(f), ".pid")
+		if pid, _ := b.agentDaemon(token); pid > 0 && !processRuns(pid) {
+			continue
+		}
+		wg.Go(func() {
+			if err := b.stopAgent(context.Background(), token); err != nil {
+				log.Printf("orchestrator: stopping agent-browser session %s: %v", token, err)
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // Forget closes the thread's window and removes its agent-browser files: the thread is gone.

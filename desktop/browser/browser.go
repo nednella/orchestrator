@@ -824,8 +824,9 @@ func (b *Browsers) stopIfIdle(p *browserProc) {
 	}
 }
 
-// CloseAll stops every browser: the app is quitting.
+// CloseAll stops every thread's agent-browser daemon and every browser: the app is quitting.
 func (b *Browsers) CloseAll() {
+	b.stopAgents()
 	b.mu.Lock()
 	procs := slices.Collect(maps.Values(b.procs))
 	// Forgotten first, so reconnect does not take a stopping browser for one that dropped its connection.
