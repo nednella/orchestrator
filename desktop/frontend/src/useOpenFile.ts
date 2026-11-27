@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
+import { api, errorMessage } from './api'
 import type { FileContent } from './types'
-
-const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 type Read = { key: string; path: string; content: FileContent } | { key: string; path: string; error: string }
 
@@ -20,7 +18,7 @@ export function useOpenFile(key: string, thread: string | undefined, project: st
     const file = thread ? api.chatReadFile(thread, path) : api.projectReadFile(project, path)
     file.then(
       (content) => !stale && setRead({ key, path, content }),
-      (err) => !stale && setRead({ key, path, error: reason(err) }),
+      (err) => !stale && setRead({ key, path, error: errorMessage(err) }),
     )
     return () => {
       stale = true

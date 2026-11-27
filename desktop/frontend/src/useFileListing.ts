@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api } from './api'
+import { api, errorMessage } from './api'
 import type { FileEntry } from './types'
 
 // The folders the Files view lists at once.
 const PARALLEL = 4
-
-const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 // What each folder git ignores holds, once the owner has opened it, by the folder's path.
 type Folders = Record<string, FileEntry[]>
@@ -63,7 +61,7 @@ export function useFileListing(thread: string | undefined, project: string, stat
         mine.folders = folders
         setLoaded({ listing: { key, entries: top.entries, truncated: top.truncated, folders } })
       })
-      .catch((err) => !stale && setLoaded({ key, error: reason(err) }))
+      .catch((err) => !stale && setLoaded({ key, error: errorMessage(err) }))
       .finally(() => !stale && setRefreshing(false))
     return () => {
       stale = true

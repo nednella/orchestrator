@@ -1,11 +1,9 @@
 import { useContext, useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, errorMessage } from '../api'
 import { imageTarget } from '../filesView'
 import { FileLinks } from './fileLinks'
 
 type FileMarkdownImageProps = { src?: string; alt?: string }
-
-const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 // FileMarkdownImage is an image a markdown file names by a path in its own folder, read as any file of the folder is, so
 // a path out of the folder, or of a file that is no image, shows its text and not the image.
@@ -20,7 +18,7 @@ export function FileMarkdownImage({ src, alt }: FileMarkdownImageProps) {
     const read = from.key.startsWith('project:') ? api.projectReadFile(from.key.slice('project:'.length), path) : api.chatReadFile(from.key, path)
     read.then(
       (c) => !stale && setShown(c.kind === 'image' ? { src, url: `data:${c.mime};base64,${c.data}` } : { src, error: 'This file is not an image' }),
-      (err) => !stale && setShown({ src, error: reason(err) }),
+      (err) => !stale && setShown({ src, error: errorMessage(err) }),
     )
     return () => {
       stale = true

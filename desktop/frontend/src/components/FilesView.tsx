@@ -20,8 +20,6 @@ const TREE_WIDTH = { default: 256, min: 160, max: 560 }
 // The open file keeps at least this much of the panel's width.
 const FILE_MIN_WIDTH = 256
 
-const reason = (err: unknown) => (err instanceof Error ? err.message : String(err))
-
 // FilesView is the files of the thread's folder, its worktree else the project's, or of the project's on Home: the open
 // file on the left and the tree of the folder on the right, which fills the view while no file is open.
 export function FilesView({ thread }: PanelViewProps) {
@@ -105,7 +103,7 @@ export function FilesView({ thread }: PanelViewProps) {
           {file?.status === 'loading' && <CenteredSpinner />}
           {file?.status === 'error' && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
-              <p className="text-small text-danger">{reason(file.error)}</p>
+              <p className="text-small text-danger">{file.error}</p>
               <button className="btn" onClick={file.retry}>
                 Try again
               </button>
