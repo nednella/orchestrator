@@ -1,4 +1,5 @@
 import type { AgentItem } from './chatTimeline'
+import { folderName } from './terminalGroups.ts'
 import type { PR, Server, Thread } from './types'
 
 const CARD_WIDTH = 280
@@ -106,11 +107,6 @@ function sideChatsHeading(sideChats: Thread[]): string {
 export function cardPlacement(chatWidth: number, height: number): 'inline' | 'popover' {
   const left = chatWidth - CARD_ROOM - 2 * CHAT_LANE_PAD
   return left >= MIN_CHAT_WIDTH && height >= MIN_HEIGHT ? 'inline' : 'popover'
-}
-
-// folderName is the last part of a path.
-export function folderName(path: string): string {
-  return path.replace(/\/+$/, '').split('/').pop() ?? path
 }
 
 // serverProcess is the program a server runs, the first word of its command.
