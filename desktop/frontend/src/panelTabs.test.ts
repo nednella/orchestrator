@@ -47,25 +47,25 @@ test('letters open their views, and S starts a side chat', () => {
   for (const key of ['a', 'e', 'Enter', 'ArrowDown', '1', '']) assert.equal(targetForKey(key), null, `${key}: no view`)
 })
 
-test('the width keeps 360 px of chat', () => {
-  assert.deepEqual(panelWidth(1512, 1512), { min: 360, max: 1058, def: 540 }, '70% of the window, in whole px')
-  assert.deepEqual(panelWidth(1512, 1100), { min: 360, max: 740, def: 540 }, 'the row less 360 px')
+test('the width keeps 360 px of chat and is never under 300 px', () => {
+  assert.deepEqual(panelWidth(1512, 1512), { min: 300, max: 1058, def: 540 }, '70% of the window, in whole px')
+  assert.deepEqual(panelWidth(1512, 1100), { min: 300, max: 740, def: 540 }, 'the row less 360 px')
   assert.equal(panelFit(1512, 1100, null).width, 540, 'the default')
   assert.equal(panelFit(1512, 1100, 900).width, 740, 'a saved width that would leave the chat under 360 px')
-  assert.equal(panelFit(1512, 1100, 200).width, 360, 'never under 360 px')
-  assert.deepEqual(panelFit(1000, 720, null), { docked: true, width: 360 }, 'room for both at their least')
-  assert.deepEqual(panelFit(1000, 719, null), { docked: false, width: 420 }, 'no room for both: a sheet')
+  assert.equal(panelFit(1512, 1100, 200).width, 300, 'never under 300 px')
+  assert.deepEqual(panelFit(1000, 660, null), { docked: true, width: 300 }, 'room for both at their least')
+  assert.deepEqual(panelFit(1000, 659, null), { docked: false, width: 420 }, 'no room for both: a sheet')
 })
 
 test('the open sidebar sends the panel over the chat where the chat would get under 360 px', () => {
   const row = (windowPx: number, sidebar: number) => windowPx - sidebarBesidePx(sidebarFit(windowPx, sidebar, 16), true, 16) - 1
   assert.equal(panelFit(981, row(981, 18), null).docked, false, '981 px with an 18rem sidebar')
-  assert.equal(panelFit(1057, row(1057, 18), null).docked, false, '1057 px with an 18rem sidebar')
-  assert.deepEqual(panelFit(1058, row(1058, 18), null), { docked: true, width: 360 }, 'from 1058 px both fit')
-  assert.equal(panelFit(1281, row(1281, 32), null).docked, false, '1281 px with a 32rem sidebar')
-  assert.deepEqual(panelFit(1282, row(1282, 32), null), { docked: true, width: 360 })
-  for (const windowPx of [981, 1000, 1057, 1058, 1100, 1281, 1282, 1512]) {
-    for (const sidebar of [13, 18, 32]) {
+  assert.equal(panelFit(997, row(997, 18), null).docked, false, '997 px with an 18rem sidebar')
+  assert.deepEqual(panelFit(998, row(998, 18), null), { docked: true, width: 300 }, 'from 998 px both fit')
+  assert.equal(panelFit(1221, row(1221, 32), null).docked, false, '1221 px with a 32rem sidebar')
+  assert.deepEqual(panelFit(1222, row(1222, 32), null), { docked: true, width: 300 })
+  for (const windowPx of [981, 997, 998, 1000, 1100, 1221, 1222, 1512]) {
+    for (const sidebar of [15.75, 18, 32]) {
       const r = row(windowPx, sidebar)
       const fit = panelFit(windowPx, r, null)
       if (fit.docked) assert.equal(r - fit.width >= 360, true, `${windowPx} px, ${sidebar}rem: the chat keeps ${r - fit.width} px`)

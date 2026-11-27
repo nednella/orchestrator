@@ -81,16 +81,20 @@ export function panelStateOf(saved: unknown): PanelState {
   return { tabs: kept, active: known(shown) && (kept.includes(shown) || shown === 'terminal') ? shown : null, expanded: expanded === true }
 }
 
+// The least widths, in px at the default text size, of the chat and of the panel beside it.
+const CHAT_MIN = 360
+const PANEL_MIN = 300
+
 // At this window width or less the panel opens over the chat as a sheet, and so it does where the row has no room for
-// the chat's 360 px and the panel's.
+// the chat and the panel at their least.
 const SHEET_AT = 980
 const SHEET_NARROW_AT = 760
-const ROW_MIN = 720
+const ROW_MIN = CHAT_MIN + PANEL_MIN
 
 // panelWidth is how wide the panel beside the chat can be, in px at the default text size, for a window viewport wide
-// and a row, the room the chat and the panel share: the chat keeps 360 px.
-export function panelWidth(viewport: number, row: number): { min: 360; max: number; def: 540 } {
-  return { min: 360, max: Math.floor(Math.min(0.7 * viewport, row - 360)), def: 540 }
+// and a row, the room the chat and the panel share: the chat keeps CHAT_MIN.
+export function panelWidth(viewport: number, row: number): { min: number; max: number; def: number } {
+  return { min: PANEL_MIN, max: Math.floor(Math.min(0.7 * viewport, row - CHAT_MIN)), def: 540 }
 }
 
 // panelFit says whether the panel sits beside the chat and how wide it is, in px at the default text size, for its
