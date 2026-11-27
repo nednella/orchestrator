@@ -423,3 +423,21 @@ func TestMessageWithAnImageDoesNotJumpTheQueueWhileTheThreadStarts(t *testing.T)
 		t.Errorf("the third message = %s, want its image", users[2])
 	}
 }
+
+func TestMessageHeldWithNoFirstMessageWaitsForTheHost(t *testing.T) {
+	t.Parallel()
+	h := apptest.NewWith(t, apptest.Options{})
+	slowOrigin(t, h, repoFixture(t, h), 1*time.Second)
+	s, err := h.NewThreadLater("Fix login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ChatSend(s.ID, "only message"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the held message", func() bool { return mentions(userLines(t, h, s.ID), "only message") == 1 })
+	eventually(t, "the start to end", func() bool {
+		row, _ := h.Thread(s.ID)
+		return row.Start == "" && len(row.StartQueue) == 0
+	})
+}

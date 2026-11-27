@@ -265,6 +265,19 @@ func (s *Threads) Starts(id string) bool {
 // deliverQueued gives the agent the messages that came while it started, in order, until none is left. A message that
 // is not taken stays at the head of the queue for a retry.
 func (s *Threads) deliverQueued(ctx context.Context, st *starting) error {
+	s.mu.Lock()
+	held := len(st.queue) > 0
+	s.mu.Unlock()
+	if held {
+		// With no first message nothing has waited for the host yet.
+		ready, cancel := context.WithTimeout(ctx, hostWait)
+		err := host.Ready(ready, s.hostSocket(st.name))
+		cancel()
+		if err != nil {
+			log.Printf("orchestrator: thread %s did not get a message sent while it started: %v", st.name, err)
+			return errNotDelivered
+		}
+	}
 	for {
 		s.mu.Lock()
 		if len(st.queue) == 0 {
