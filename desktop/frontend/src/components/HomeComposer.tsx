@@ -186,7 +186,7 @@ export function HomeComposer() {
             : pickedIssue && (
                 <span className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-small" style={{ boxShadow: 'inset 0 0 0 1px var(--border-strong)' }}>
                   <TypeMark type={pickedIssue.type} />
-                  <span className="mono flex-none text-dim">{pickedIssue.number}</span>
+                  <span className="flex-none text-dim tabular-nums">{pickedIssue.number}</span>
                   <span className="min-w-0 truncate">{pickedIssue.title}</span>
                   <button className="flex-none text-dim hover:text-ink" aria-label="Remove issue" onClick={() => setPicked(null)}>
                     <X size={11} aria-hidden="true" />

@@ -17,7 +17,7 @@ export function PanelHomeRow({ row, reason, unseen = 0, onOpen }: PanelHomeRowPr
       <row.icon size={16} className="flex-none" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{row.label}</span>
       {unseen > 0 && (
-        <span className="mono flex-none text-small text-accent" aria-label={`${unseen} new`}>
+        <span className="flex-none text-small text-accent tabular-nums" aria-label={`${unseen} new`}>
           {unseen}
         </span>
       )}

@@ -26,7 +26,7 @@ function PullRow({ pull, threadTitle, onOpen }: PullRowProps) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body">
-          <span className="mono text-soft">#{pull.number}</span> {pull.title}
+          <span className="tabular-nums text-soft">#{pull.number}</span> {pull.title}
         </span>
         <span className="truncate text-label text-dim">{meta}</span>
       </span>
@@ -52,7 +52,7 @@ function PullDetail({ pull, onBack }: PullDetailProps) {
       <header className="flex flex-none flex-col gap-2 border-b border-line px-3 pt-2 pb-3">
         <BackButton onBack={onBack} />
         <h2 className="text-title font-semibold break-words">
-          <span className="mono mr-1.5 text-soft">#{pull.number}</span>
+          <span className="mr-1.5 tabular-nums text-soft">#{pull.number}</span>
           {pull.title}
         </h2>
         <p className="text-label text-dim">

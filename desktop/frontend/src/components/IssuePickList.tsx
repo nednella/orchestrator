@@ -10,7 +10,7 @@ export function IssuePickList({ issues, cursor, onPick }: IssuePickListProps) {
     icon: (
       <>
         <TypeMark type={issue.type} />
-        <span className="mono flex-none text-label text-dim">{issue.number}</span>
+        <span className="flex-none text-label text-dim tabular-nums">{issue.number}</span>
       </>
     ),
     name: issue.title,

@@ -15,7 +15,7 @@ export function IssueChips({ issues, picked, onPick }: IssueChipsProps) {
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPick(issue.number)}
         >
-          <span className="mono flex-none text-dim">#{issue.number}</span>
+          <span className="flex-none text-dim tabular-nums">#{issue.number}</span>
           <span className="truncate">{issue.title}</span>
         </button>
       ))}

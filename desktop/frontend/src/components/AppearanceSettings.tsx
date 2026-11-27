@@ -31,7 +31,7 @@ export function AppearanceSettings() {
               <button className="btn btn-ghost h-7 w-7 justify-center px-0" aria-label="Smaller text" onClick={() => zoom(-1)}>
                 −
               </button>
-              <button className="btn btn-ghost mono h-7 w-14 justify-center px-0" title="Reset text size" aria-label="Reset text size" onClick={() => zoom(0)}>
+              <button className="btn btn-ghost tabular-nums h-7 w-14 justify-center px-0" title="Reset text size" aria-label="Reset text size" onClick={() => zoom(0)}>
                 {Math.round(scale * 100)}%
               </button>
               <button className="btn btn-ghost h-7 w-7 justify-center px-0" aria-label="Larger text" onClick={() => zoom(1)}>
